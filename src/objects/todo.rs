@@ -59,12 +59,11 @@ impl TryFrom<&IcalTodo> for Todo {
             .ok_or_else(|| anyhow!("UID property value missing"))?
             .clone();
 
-        let Some(stamp) = value.get_property("DTSTAMP") else {
-            return Err(anyhow!("DTSTAMP property missing"));
-        };
-        let stamp_date: ICalDate = stamp.try_into()?;
-        todo.created = stamp_date.clone();
-        todo.last_mod = stamp_date;
+        if let Some(stamp) = value.get_property("DTSTAMP") {
+            let stamp_date: ICalDate = stamp.try_into()?;
+            todo.created = stamp_date.clone();
+            todo.last_mod = stamp_date;
+        }
 
         if let Some(date) = value.get_property("CREATED") {
             todo.created = date.try_into()?;
