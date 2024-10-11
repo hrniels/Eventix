@@ -27,7 +27,7 @@ impl FromStr for TodoStatus {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Todo {
     uid: String,
     created: ICalDate,
