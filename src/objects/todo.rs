@@ -1,39 +1,15 @@
-use std::str::FromStr;
-
 use anyhow::anyhow;
 use ical::parser::{ical::component::IcalTodo, Component};
 
-use super::date::ICalDate;
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum TodoStatus {
-    NeedsAction,
-    Completed,
-    InProcess,
-    Cancelled,
-}
-
-impl FromStr for TodoStatus {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_uppercase().as_str() {
-            "NEEDS-ACTION" => Ok(Self::NeedsAction),
-            "COMPLETED" => Ok(Self::Completed),
-            "IN-PROCESS" => Ok(Self::InProcess),
-            "CANCELLED" => Ok(Self::Cancelled),
-            _ => Err(anyhow!("Invalid status {}", s)),
-        }
-    }
-}
+use super::{date::ICalDate, ICalStatus};
 
 #[derive(Default, Debug)]
-pub struct Todo {
+pub struct ICalTodo {
     uid: String,
     created: ICalDate,
     last_mod: ICalDate,
     categories: Vec<String>,
-    status: Option<TodoStatus>,
+    status: Option<ICalStatus>,
     completed: Option<ICalDate>,
     summary: Option<String>,
     desc: Option<String>,
@@ -44,11 +20,11 @@ pub struct Todo {
     percent: Option<u8>,
 }
 
-impl TryFrom<&IcalTodo> for Todo {
+impl TryFrom<&IcalTodo> for ICalTodo {
     type Error = anyhow::Error;
 
     fn try_from(value: &IcalTodo) -> Result<Self, Self::Error> {
-        let mut todo = Todo::default();
+        let mut todo = ICalTodo::default();
 
         let Some(uid) = value.get_property("UID") else {
             return Err(anyhow!("UID property missing"));
@@ -132,9 +108,9 @@ mod tests {
     use chrono::{Local, NaiveDate, TimeZone, Utc};
     use ical::IcalParser;
 
-    use crate::objects::{date::ICalDate, todo::TodoStatus};
+    use crate::objects::{date::ICalDate, todo::ICalStatus};
 
-    use super::Todo;
+    use super::ICalTodo;
 
     #[test]
     fn basics() {
@@ -154,7 +130,7 @@ END:VCALENDAR
         let mut reader = IcalParser::new(todo_str.as_bytes());
         let cal = reader.next().unwrap().unwrap();
         let todo = &cal.todos[0];
-        let todo: Todo = todo.try_into().unwrap();
+        let todo: ICalTodo = todo.try_into().unwrap();
 
         assert_eq!(&todo.uid, "20070313T123432Z-456553@example.com");
         assert_eq!(
@@ -175,7 +151,7 @@ END:VCALENDAR
             Some(ICalDate::Date(NaiveDate::from_ymd_opt(2007, 5, 1).unwrap()))
         );
 
-        assert_eq!(todo.status, Some(TodoStatus::NeedsAction));
+        assert_eq!(todo.status, Some(ICalStatus::NeedsAction));
         assert_eq!(
             todo.categories,
             vec!["FAMILY".to_string(), "FINANCE".to_string()]
