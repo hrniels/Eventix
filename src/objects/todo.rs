@@ -3,7 +3,7 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use ical::parser::{ical::component::IcalTodo, Component};
 
-use super::ICalDate;
+use super::date::ICalDate;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TodoStatus {
@@ -133,7 +133,7 @@ mod tests {
     use chrono::{Local, NaiveDate, TimeZone, Utc};
     use ical::IcalParser;
 
-    use crate::objects::{todo::TodoStatus, ICalDate};
+    use crate::objects::{date::ICalDate, todo::TodoStatus};
 
     use super::Todo;
 
