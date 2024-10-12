@@ -1,28 +1,25 @@
-use crate::objects::ICalTodo;
-use std::{
-    fs::{read_dir, File},
-    io::BufReader,
-};
+use anyhow::Context;
+use icalendar::Component;
+use objects::{CalSource, CalStore};
 
 mod objects;
 
-fn main() {
+fn main() -> Result<(), anyhow::Error> {
     let dir = std::env::args().nth(1).unwrap();
 
-    let mut todos = Vec::<ICalTodo>::new();
-    for e in read_dir(dir).expect("Unable to read directory") {
-        let buf = BufReader::new(File::open(e.unwrap().path()).unwrap());
-        let reader = ical::IcalParser::new(buf);
+    let mut store = CalStore::default();
+    store.add(CalSource::new_from_dir(dir.into()).context("Unable to parse calendar source")?);
 
-        for line in reader {
-            let cal = line.unwrap();
-            for todo in &cal.todos {
-                todos.push(todo.try_into().unwrap());
-            }
-        }
+    println!("TODOs:");
+    for todo in store.items().map(|i| i.todos()).flatten() {
+        println!("  {:?}", todo.get_summary());
+    }
+    println!();
+
+    println!("Events:");
+    for todo in store.items().map(|i| i.events()).flatten() {
+        println!("  {:?}", todo.get_summary());
     }
 
-    for t in &todos {
-        println!("{:?}", t);
-    }
+    Ok(())
 }
