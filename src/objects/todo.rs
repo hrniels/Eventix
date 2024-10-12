@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use ical::parser::{ical::component::IcalTodo, Component};
 
-use super::{date::ICalDate, ICalStatus};
+use super::{ICalDate, ICalStatus};
 
 #[derive(Default, Debug)]
 pub struct ICalTodo {
