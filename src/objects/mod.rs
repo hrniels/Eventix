@@ -2,10 +2,12 @@ use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 mod item;
+mod recur;
 mod source;
 mod store;
 
 pub use item::CalItem;
+pub use recur::{Frequency, RecurrenceRule};
 pub use source::CalSource;
 pub use store::CalStore;
 
