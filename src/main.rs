@@ -1,5 +1,5 @@
 use anyhow::Context;
-use chrono::{Duration, Utc};
+use chrono::{Duration, Local, Utc};
 use icalendar::Component;
 use objects::{CalSource, CalStore};
 
@@ -22,7 +22,8 @@ fn main() -> Result<(), anyhow::Error> {
     //     println!("  {:?}", todo.get_summary());
     // }
 
-    let end = Utc::now();
+    let now = Local::now();
+    let end = now.with_timezone(&chrono_tz::Europe::Berlin);
     let start = end - Duration::days(30);
     for ev in store.items_within(start, end) {
         if let Some(ev) = ev.as_event() {

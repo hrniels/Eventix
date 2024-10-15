@@ -1,43 +1,14 @@
 use std::path::PathBuf;
 
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::DateTime;
 use chrono_tz::Tz;
-use icalendar::{CalendarComponent, CalendarDateTime, Component, DatePerhapsTime};
+use icalendar::{CalendarComponent, Component, DatePerhapsTime};
 
-use super::Id;
-
-fn ical_datetime_to_utc(ical: CalendarDateTime) -> DateTime<Utc> {
-    match ical {
-        CalendarDateTime::Utc(dt) => dt,
-        CalendarDateTime::WithTimezone {
-            date_time: dt,
-            tzid,
-        } => {
-            let tz = if let Ok(tz) = tzid.parse::<Tz>() {
-                tz
-            } else {
-                // we fall back to UTC for all weird values that we see
-                Tz::UTC
-            };
-            tz.from_utc_datetime(&dt).to_utc()
-        }
-        CalendarDateTime::Floating(dt) => {
-            let local = Local.from_utc_datetime(&dt);
-            local.to_utc()
-        }
-    }
-}
-
-fn ical_date_to_utc(ical: DatePerhapsTime) -> DateTime<Utc> {
-    match ical {
-        DatePerhapsTime::Date(date) => Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap()),
-        DatePerhapsTime::DateTime(datetime) => ical_datetime_to_utc(datetime),
-    }
-}
+use super::{ical_date_to_tz, Id};
 
 fn is_within(
-    start: DateTime<Utc>,
-    end: DateTime<Utc>,
+    start: DateTime<Tz>,
+    end: DateTime<Tz>,
     ev_start: Option<DatePerhapsTime>,
     ev_end: Option<DatePerhapsTime>,
     rrule: Option<&str>,
@@ -48,12 +19,12 @@ fn is_within(
     }
 
     if let Some(ev_start) = ev_start {
-        if ical_date_to_utc(ev_start) > end {
+        if ical_date_to_tz(&ev_start, &start.timezone()) > end {
             return false;
         }
     }
     if let Some(ev_end) = ev_end {
-        if ical_date_to_utc(ev_end) < start {
+        if ical_date_to_tz(&ev_end, &start.timezone()) < start {
             return false;
         }
     }
@@ -95,8 +66,8 @@ impl CalItem {
 
     pub fn items_within(
         &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
     ) -> impl Iterator<Item = &icalendar::CalendarComponent> {
         self.item.components.iter().filter(move |item| match item {
             CalendarComponent::Event(ev) => is_within(
@@ -136,13 +107,15 @@ impl CalItem {
 
 #[cfg(test)]
 mod tests {
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, TimeZone};
     use icalendar::EventLike;
 
     use super::*;
 
-    fn new_date(year: i32, month: u32, day: u32) -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(year, month, day, 0, 0, 0).unwrap()
+    fn new_date(year: i32, month: u32, day: u32) -> DateTime<Tz> {
+        chrono_tz::Europe::Berlin
+            .with_ymd_and_hms(year, month, day, 0, 0, 0)
+            .unwrap()
     }
 
     fn new_allday_event(date: NaiveDate, uid: &str) -> icalendar::Event {
@@ -176,7 +149,9 @@ mod tests {
             "yes2",
         ));
         cal.push(new_allday_event(
-            NaiveDate::from_ymd_opt(2024, 10, 31).unwrap(),
+            // TODO 2024-10-31 does not work; what does DATE=... mean exactly? doesn't that have a
+            // different meaning in different time zones?
+            NaiveDate::from_ymd_opt(2024, 10, 30).unwrap(),
             "yes3",
         ));
         cal.push(new_allday_event(

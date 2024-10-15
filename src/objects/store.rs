@@ -1,4 +1,5 @@
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
+use chrono_tz::Tz;
 
 use super::{CalItem, CalSource};
 
@@ -22,8 +23,8 @@ impl CalStore {
 
     pub fn items_within(
         &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
     ) -> impl Iterator<Item = &icalendar::CalendarComponent> {
         self.sources
             .iter()
