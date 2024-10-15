@@ -1,5 +1,8 @@
 use anyhow::anyhow;
-use chrono::{DateTime, Datelike, Duration, Months, NaiveDateTime, TimeZone, Utc, Weekday};
+use chrono::{
+    DateTime, Datelike, Duration, Months, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc,
+    Weekday,
+};
 use chrono_tz::Tz;
 use icalendar::DatePerhapsTime;
 use std::fmt::Debug;
@@ -180,6 +183,16 @@ pub struct RecurrenceRule {
     wk_st: Option<Weekday>,
 }
 
+fn month_days(year: i32, month: u32) -> u32 {
+    if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap()
+    }
+    .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
+    .num_days() as u32
+}
+
 impl RecurrenceRule {
     fn is_included(&self, date: DateTime<Tz>) -> bool {
         if let Some(by_month) = &self.by_month {
@@ -190,18 +203,51 @@ impl RecurrenceRule {
             }
         }
 
-        if let Some(by_day) = &self.by_day {
+        if let Some(by_mday) = &self.by_mon_day {
             if self.freq <= Frequency::Daily {
-                if by_day
-                    .iter()
-                    .filter(|wd| wd.matches(date, self.freq))
-                    .count()
-                    == 0
-                {
+                if !by_mday.iter().any(|wd| match wd.side {
+                    Side::Front => wd.num as u32 == date.day(),
+                    Side::Back => {
+                        let days = month_days(date.year(), date.month());
+                        days - (wd.num - 1) as u32 == date.day()
+                    }
+                }) {
                     return false;
                 }
             }
         }
+        if let Some(by_day) = &self.by_day {
+            if self.freq <= Frequency::Daily {
+                // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
+                if !by_day.iter().any(|wd| wd.day == date.weekday()) {
+                    return false;
+                }
+            }
+        }
+
+        // TODO ignore if event has DTSTART=DATE
+        if let Some(by_hour) = &self.by_hour {
+            if self.freq <= Frequency::Hourly {
+                if !by_hour.iter().any(|&h| h as u32 == date.hour()) {
+                    return false;
+                }
+            }
+        }
+        if let Some(by_min) = &self.by_minute {
+            if self.freq <= Frequency::Minutely {
+                if !by_min.iter().any(|&m| m as u32 == date.minute()) {
+                    return false;
+                }
+            }
+        }
+        if let Some(by_sec) = &self.by_second {
+            if self.freq <= Frequency::Secondly {
+                if !by_sec.iter().any(|&s| s as u32 == date.second()) {
+                    return false;
+                }
+            }
+        }
+
         true
     }
 
@@ -516,6 +562,40 @@ mod tests {
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 16, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 23, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 30, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_hour_min_sec_limit() {
+        let start = ny_datetime(2024, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=SECONDLY;COUNT=5;BYHOUR=10,12;BYMINUTE=20,30,40;BYSECOND=10"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::weeks(4));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 20, 10));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 30, 10));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 40, 10));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 12, 20, 10));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 12, 30, 10));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_monthday_limit() {
+        let start = ny_datetime(2024, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=DAILY;COUNT=7;BYMONTHDAY=3,10,-1"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::weeks(12));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 3, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 10, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 30, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 10, 3, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 10, 10, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 10, 31, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 11, 3, 9, 0, 0));
         assert_eq!(iter.next(), None);
     }
 }
