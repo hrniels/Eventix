@@ -325,7 +325,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn weekday_desc() {
+    fn parse_weekday_desc() {
         assert_eq!(
             "MO".parse::<WeekdayDesc>().unwrap(),
             WeekdayDesc::new(Weekday::Mon, None)
@@ -345,7 +345,7 @@ mod tests {
     }
 
     #[test]
-    fn day_desc() {
+    fn parse_day_desc() {
         assert_eq!(
             "4".parse::<DayDesc>().unwrap(),
             DayDesc::new(4, Side::Front)
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn recur_count() {
+    fn parse_recur_count() {
         let mut rule = RecurrenceRule::default();
         rule.freq = Frequency::Daily;
         rule.count = Some(10);
@@ -376,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn recur_interval() {
+    fn parse_recur_interval() {
         let mut rule = RecurrenceRule::default();
         rule.freq = Frequency::Monthly;
         rule.interval = Some(2);
@@ -387,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn recur_until() {
+    fn parse_recur_until() {
         let mut rule = RecurrenceRule::default();
         rule.freq = Frequency::Daily;
         rule.until = Some(DatePerhapsTime::DateTime(CalendarDateTime::Utc(
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn recur_by() {
+    fn parse_recur_by() {
         let mut rule = RecurrenceRule::default();
         rule.freq = Frequency::Yearly;
         rule.by_month = Some(vec![1]);
