@@ -91,16 +91,61 @@ pub struct WeekdayDesc {
     nth: Option<(u8, Side)>,
 }
 
+fn nth_weekday_of_month_front(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
+    NaiveDate::from_weekday_of_month_opt(date.year(), date.month(), day, n)
+}
+
+fn nth_weekday_of_month_back(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
+    let (year, month) = if date.month() == 12 {
+        (date.year() + 1, 1)
+    } else {
+        (date.year(), date.month() + 1)
+    };
+    let next_month = NaiveDate::from_ymd_opt(year, month, 1)?;
+    let last = next_month.pred_opt()?;
+    let last_weekday = last.weekday();
+    let last_day = last.day();
+    let first_to_dow = (7 + last_weekday.number_from_monday() - day.number_from_monday()) % 7;
+    let day = last_day - ((n - 1) as u32 * 7 + first_to_dow);
+    NaiveDate::from_ymd_opt(date.year(), date.month(), day)
+}
+
 impl WeekdayDesc {
     #[cfg(test)]
     pub fn new(day: Weekday, nth: Option<(u8, Side)>) -> Self {
         Self { day, nth }
     }
 
-    pub fn matches(&self, date: DateTime<Tz>, freq: Frequency) -> bool {
+    pub fn matches(&self, date: DateTime<Tz>, rrule: &RecurrenceRule) -> bool {
         match self.nth {
             None => self.day == date.weekday(),
-            Some((n, side)) => false,
+            Some((n, side)) => {
+                match rrule.freq {
+                    // offset within the year
+                    Frequency::Yearly
+                        if (rrule.by_month.is_some() || rrule.by_week_no.is_some()) =>
+                    {
+                        unimplemented!();
+                    }
+
+                    // offset within the month
+                    Frequency::Monthly | Frequency::Yearly => {
+                        let nth_date = match side {
+                            Side::Front => nth_weekday_of_month_front(date, self.day, n),
+                            Side::Back => nth_weekday_of_month_back(date, self.day, n),
+                        };
+                        match nth_date {
+                            Some(ndate) => ndate == date.date_naive(),
+                            None => false,
+                        }
+                    }
+
+                    Frequency::Weekly => self.day == date.weekday(),
+
+                    // anything else is invalid
+                    _ => false,
+                }
+            }
         }
     }
 }
@@ -205,6 +250,21 @@ fn month_days(year: i32, month: u32) -> u32 {
     }
     .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
     .num_days() as u32
+}
+
+fn next_date(date: DateTime<Tz>, freq: Frequency, interval: u32) -> DateTime<Tz> {
+    // we basically want to ignore DST here, in the sense that all recurrences of an event
+    // that started at 9:00 AM should always be at 9:00 AM as well, regardless of whether
+    // DST is on or off. For that reason, we build a NaiveDateTime from the date in the
+    // selected timezone, advance it accordingly, and turn it back into a DateTime.
+    for i in 1.. {
+        let next = freq.advance(date.naive_local(), interval * i);
+        // if the date is not representable in our timezone, just skip it
+        if let LocalResult::Single(localdate) = next.and_local_timezone(date.timezone()) {
+            return localdate;
+        }
+    }
+    unreachable!();
 }
 
 impl RecurrenceRule {
@@ -329,6 +389,54 @@ impl RecurrenceRule {
             }
         }
 
+        if self.freq >= Frequency::Weekly && self.by_day.is_some() {
+            let end = match self.freq {
+                Frequency::Weekly => Some(date + Duration::days(7)),
+                Frequency::Monthly => {
+                    if date.month() == 12 {
+                        date.with_year(date.year() + 1)
+                            .and_then(|date| date.with_month(1))
+                    } else {
+                        date.with_month(date.month() + 1)
+                    }
+                }
+                Frequency::Yearly | _ => date.with_year(date.year() + 1),
+            };
+            let Some(end) = end else {
+                return false;
+            };
+
+            let by_day = self.by_day.as_ref().unwrap();
+            let mut cur = date;
+            while cur < end {
+                for h in hours {
+                    for m in mins {
+                        for s in secs {
+                            if by_day.iter().any(|d| d.matches(cur, self)) {
+                                if let Some(ndate) = cur.with_hour(*h as u32) {
+                                    if let Some(ndate) = ndate.with_minute(*m as u32) {
+                                        if let Some(ndate) = ndate.with_second(*s as u32) {
+                                            if ndate >= start {
+                                                res.push(ndate);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if let Some(count) = self.count {
+                                if res.len() >= count as usize {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                cur = next_date(cur, Frequency::Daily, 1);
+            }
+            return false;
+        }
+
         for mon in months {
             for d in &mon_days {
                 for h in hours {
@@ -380,18 +488,7 @@ impl RecurrenceRule {
                 }
             }
 
-            // we basically want to ignore DST here, in the sense that all recurrences of an event
-            // that started at 9:00 AM should always be at 9:00 AM as well, regardless of whether
-            // DST is on or off. For that reason, we build a NaiveDateTime from the date in the
-            // selected timezone, advance it accordingly, and turn it back into a DateTime.
-            for i in 1.. {
-                let next = self.freq.advance(date.naive_local(), interval * i);
-                // if the date is not representable in our timezone, just skip it
-                if let LocalResult::Single(localdate) = next.and_local_timezone(start.timezone()) {
-                    date = localdate;
-                    break;
-                }
-            }
+            date = next_date(date, self.freq, interval);
         }
         dates
     }
@@ -792,6 +889,40 @@ mod tests {
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 10, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 11, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2025, 10, 2, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_day_weekly() {
+        let start = ny_datetime(2024, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=WEEKLY;COUNT=6;BYDAY=MO,2TU"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 3, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 10, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 16, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 17, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_day_monthly() {
+        let start = ny_datetime(2024, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=MONTHLY;COUNT=6;BYDAY=MO,2TU,-1WE"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 10, 9, 0, 0)); // 2TU
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 16, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 23, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 25, 9, 0, 0)); // -1WE
         assert_eq!(iter.next(), None);
     }
 }
