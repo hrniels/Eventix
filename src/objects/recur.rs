@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use chrono::offset::LocalResult;
 use chrono::{
     DateTime, Datelike, Duration, Months, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc,
     Weekday,
@@ -183,6 +184,19 @@ pub struct RecurrenceRule {
     wk_st: Option<Weekday>,
 }
 
+fn year_day(date: DateTime<Tz>) -> u32 {
+    date.date_naive()
+        .signed_duration_since(NaiveDate::from_ymd_opt(date.year() - 1, 12, 31).unwrap())
+        .num_days() as u32
+}
+
+fn year_days(year: i32) -> u32 {
+    NaiveDate::from_ymd_opt(year + 1, 1, 1)
+        .unwrap()
+        .signed_duration_since(NaiveDate::from_ymd_opt(year, 1, 1).unwrap())
+        .num_days() as u32
+}
+
 fn month_days(year: i32, month: u32) -> u32 {
     if month == 12 {
         NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
@@ -203,6 +217,19 @@ impl RecurrenceRule {
             }
         }
 
+        if let Some(by_yday) = &self.by_year_day {
+            if self.freq <= Frequency::Hourly {
+                if !by_yday.iter().any(|yd| match yd.side {
+                    Side::Front => yd.num as u32 == year_day(date),
+                    Side::Back => {
+                        let days = year_days(date.year());
+                        days - (yd.num - 1) as u32 == year_day(date)
+                    }
+                }) {
+                    return false;
+                }
+            }
+        }
         if let Some(by_mday) = &self.by_mon_day {
             if self.freq <= Frequency::Daily {
                 if !by_mday.iter().any(|wd| match wd.side {
@@ -216,6 +243,7 @@ impl RecurrenceRule {
                 }
             }
         }
+
         if let Some(by_day) = &self.by_day {
             if self.freq <= Frequency::Daily {
                 // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
@@ -596,6 +624,21 @@ mod tests {
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 10, 10, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 10, 31, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 11, 3, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_yearday_limit() {
+        let start = ny_datetime(2023, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=HOURLY;COUNT=4;BYYEARDAY=2,35,-10;BYHOUR=12"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(500));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 12, 22, 12, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 1, 2, 12, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 2, 4, 12, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 12, 22, 12, 0, 0));
         assert_eq!(iter.next(), None);
     }
 }
