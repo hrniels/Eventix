@@ -304,8 +304,14 @@ impl RecurrenceRule {
             // that started at 9:00 AM should always be at 9:00 AM as well, regardless of whether
             // DST is on or off. For that reason, we build a NaiveDateTime from the date in the
             // selected timezone, advance it accordingly, and turn it back into a DateTime.
-            let next = self.freq.advance(date.naive_local(), interval);
-            date = next.and_local_timezone(start.timezone()).unwrap();
+            for i in 1.. {
+                let next = self.freq.advance(date.naive_local(), interval * i);
+                // if the date is not representable in our timezone, just skip it
+                if let LocalResult::Single(localdate) = next.and_local_timezone(start.timezone()) {
+                    date = localdate;
+                    break;
+                }
+            }
         }
         dates
     }
