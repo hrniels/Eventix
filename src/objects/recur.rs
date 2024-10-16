@@ -208,11 +208,11 @@ fn month_days(year: i32, month: u32) -> u32 {
 }
 
 impl RecurrenceRule {
-    fn is_included(&self, date: DateTime<Tz>) -> bool {
+    fn limited(&self, date: DateTime<Tz>) -> bool {
         if let Some(by_month) = &self.by_month {
             if self.freq <= Frequency::Monthly {
                 if !by_month.contains(&(date.month() as u8)) {
-                    return false;
+                    return true;
                 }
             }
         }
@@ -226,7 +226,7 @@ impl RecurrenceRule {
                         days - (yd.num - 1) as u32 == year_day(date)
                     }
                 }) {
-                    return false;
+                    return true;
                 }
             }
         }
@@ -239,7 +239,7 @@ impl RecurrenceRule {
                         days - (wd.num - 1) as u32 == date.day()
                     }
                 }) {
-                    return false;
+                    return true;
                 }
             }
         }
@@ -248,7 +248,7 @@ impl RecurrenceRule {
             if self.freq <= Frequency::Daily {
                 // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
                 if !by_day.iter().any(|wd| wd.day == date.weekday()) {
-                    return false;
+                    return true;
                 }
             }
         }
@@ -257,26 +257,108 @@ impl RecurrenceRule {
         if let Some(by_hour) = &self.by_hour {
             if self.freq <= Frequency::Hourly {
                 if !by_hour.iter().any(|&h| h as u32 == date.hour()) {
-                    return false;
+                    return true;
                 }
             }
         }
         if let Some(by_min) = &self.by_minute {
             if self.freq <= Frequency::Minutely {
                 if !by_min.iter().any(|&m| m as u32 == date.minute()) {
-                    return false;
+                    return true;
                 }
             }
         }
         if let Some(by_sec) = &self.by_second {
             if self.freq <= Frequency::Secondly {
                 if !by_sec.iter().any(|&s| s as u32 == date.second()) {
-                    return false;
+                    return true;
                 }
             }
         }
 
-        true
+        false
+    }
+
+    fn expand(&self, start: DateTime<Tz>, date: DateTime<Tz>, res: &mut Vec<DateTime<Tz>>) -> bool {
+        let months = [date.month() as u8];
+        let mut months = months.as_slice();
+        let mut mon_days = vec![date.day() as u16];
+        let hours = [date.hour() as u8];
+        let mut hours = hours.as_slice();
+        let mins = [date.minute() as u8];
+        let mut mins = mins.as_slice();
+        let secs = [date.second() as u8];
+        let mut secs = secs.as_slice();
+
+        if self.by_year_day.is_some() && self.freq > Frequency::Monthly {
+            unimplemented!("BYYEARDAY expansion is not supported");
+        }
+        if self.by_week_no.is_some() && self.freq > Frequency::Monthly {
+            unimplemented!("BYWEEKNO expansion is not supported");
+        }
+
+        if let Some(by_month) = &self.by_month {
+            if self.freq > Frequency::Monthly {
+                months = by_month.as_slice();
+            }
+        }
+        if let Some(by_mon_day) = &self.by_mon_day {
+            if self.freq >= Frequency::Monthly {
+                mon_days = by_mon_day
+                    .iter()
+                    .map(|md| match md.side {
+                        Side::Front => md.num,
+                        Side::Back => month_days(date.year(), date.month()) as u16 - (md.num - 1),
+                    })
+                    .collect();
+            }
+        }
+        if let Some(by_hour) = &self.by_hour {
+            if self.freq > Frequency::Hourly {
+                hours = by_hour.as_slice();
+            }
+        }
+        if let Some(by_min) = &self.by_minute {
+            if self.freq > Frequency::Minutely {
+                mins = by_min.as_slice();
+            }
+        }
+        if let Some(by_sec) = &self.by_second {
+            if self.freq > Frequency::Secondly {
+                secs = by_sec.as_slice();
+            }
+        }
+
+        for mon in months {
+            for d in &mon_days {
+                for h in hours {
+                    for m in mins {
+                        for s in secs {
+                            if let Some(ndate) = date.with_month(*mon as u32) {
+                                if let Some(ndate) = ndate.with_day(*d as u32) {
+                                    if let Some(ndate) = ndate.with_hour(*h as u32) {
+                                        if let Some(ndate) = ndate.with_minute(*m as u32) {
+                                            if let Some(ndate) = ndate.with_second(*s as u32) {
+                                                if ndate >= start {
+                                                    res.push(ndate);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if let Some(count) = self.count {
+                                if res.len() >= count as usize {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 
     pub fn dates_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> Vec<DateTime<Tz>> {
@@ -289,14 +371,12 @@ impl RecurrenceRule {
         };
         let interval = self.interval.unwrap_or(1) as u32;
 
-        while date <= end {
-            if self.is_included(date) {
-                dates.push(date);
+        assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
 
-                if let Some(count) = self.count {
-                    if dates.len() >= count as usize {
-                        break;
-                    }
+        while date <= end {
+            if !self.limited(date) {
+                if self.expand(start, date, &mut dates) {
+                    break;
                 }
             }
 
@@ -645,6 +725,73 @@ mod tests {
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 1, 2, 12, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 2, 4, 12, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 12, 22, 12, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_min_and_sec_expand() {
+        let start = ny_datetime(2023, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=HOURLY;COUNT=8;BYMINUTE=4,5;BYSECOND=10,20,30"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(1));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 10));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 20));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 30));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 5, 10));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 5, 20));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 5, 30));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 10, 4, 10));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 10, 4, 20));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_hour_expand() {
+        let start = ny_datetime(2023, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=DAILY;COUNT=5;BYHOUR=4,8"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(5));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 3, 4, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 3, 8, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 4, 4, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 4, 8, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 5, 4, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_monthday_expand() {
+        let start = ny_datetime(2023, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=MONTHLY;COUNT=5;BYMONTHDAY=1,-1"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(100));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 30, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 1, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 31, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 11, 1, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 11, 30, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_month_expand() {
+        let start = ny_datetime(2023, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=YEARLY;COUNT=5;BYMONTH=10,11"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 2, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 11, 2, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 10, 2, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 11, 2, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2025, 10, 2, 9, 0, 0));
         assert_eq!(iter.next(), None);
     }
 }
