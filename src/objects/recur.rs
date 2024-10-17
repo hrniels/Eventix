@@ -284,9 +284,14 @@ fn next_date(date: DateTime<Tz>, freq: Frequency, interval: u32) -> DateTime<Tz>
 }
 
 impl RecurrenceRule {
-    pub fn dates_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> Vec<DateTime<Tz>> {
+    pub fn dates_within(
+        &self,
+        dtstart: DateTime<Tz>,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+    ) -> Vec<DateTime<Tz>> {
         let mut dates = Vec::new();
-        let mut date = start.clone();
+        let mut date = dtstart.clone();
         let end = if let Some(ref until) = self.until {
             ical_date_to_tz(until, &start.timezone()).min(end)
         } else {
@@ -297,9 +302,10 @@ impl RecurrenceRule {
         assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
         assert!(self.week_start.is_none(), "WKST is not supported");
 
+        let mut count = 0;
         while date <= end {
             if !self.limited(date) {
-                if self.expand(start, date, &mut dates) {
+                if self.expand(dtstart, start, date, &mut count, &mut dates) {
                     break;
                 }
             }
@@ -380,7 +386,14 @@ impl RecurrenceRule {
         false
     }
 
-    fn expand(&self, start: DateTime<Tz>, date: DateTime<Tz>, res: &mut Vec<DateTime<Tz>>) -> bool {
+    fn expand(
+        &self,
+        dtstart: DateTime<Tz>,
+        start: DateTime<Tz>,
+        date: DateTime<Tz>,
+        count: &mut usize,
+        res: &mut Vec<DateTime<Tz>>,
+    ) -> bool {
         let months = [date.month() as u8];
         let mut months = months.as_slice();
         let mut mon_days = vec![date.day() as u16];
@@ -476,16 +489,19 @@ impl RecurrenceRule {
                                     if let Some(ndate) = cur.with_hour(*h as u32) {
                                         if let Some(ndate) = ndate.with_minute(*m as u32) {
                                             if let Some(ndate) = ndate.with_second(*s as u32) {
-                                                if ndate >= start {
-                                                    res.push(ndate);
+                                                if ndate >= dtstart {
+                                                    if ndate >= start {
+                                                        res.push(ndate);
+                                                    }
+                                                    *count += 1;
                                                 }
                                             }
                                         }
                                     }
                                 }
 
-                                if let Some(count) = self.count {
-                                    if res.len() >= count as usize {
+                                if let Some(rcount) = self.count {
+                                    if *count >= rcount as usize {
                                         return true;
                                     }
                                 }
@@ -508,8 +524,11 @@ impl RecurrenceRule {
                                     if let Some(ndate) = ndate.with_hour(*h as u32) {
                                         if let Some(ndate) = ndate.with_minute(*m as u32) {
                                             if let Some(ndate) = ndate.with_second(*s as u32) {
-                                                if ndate >= start {
-                                                    res.push(ndate);
+                                                if ndate >= dtstart {
+                                                    if ndate >= start {
+                                                        res.push(ndate);
+                                                    }
+                                                    *count += 1;
                                                 }
                                             }
                                         }
@@ -517,8 +536,8 @@ impl RecurrenceRule {
                                 }
                             }
 
-                            if let Some(count) = self.count {
-                                if res.len() >= count as usize {
+                            if let Some(rcount) = self.count {
+                                if *count >= rcount as usize {
                                     return true;
                                 }
                             }
@@ -732,11 +751,24 @@ mod tests {
     fn range_with_count() {
         let start = ny_datetime(1997, 9, 2, 9, 0, 0);
         let rrule = "FREQ=DAILY;COUNT=3".parse::<RecurrenceRule>().unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(20));
+        let dates = rrule.dates_within(start, start, start + Duration::days(20));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 3, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 4, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_with_count_dtstart() {
+        let dtstart = ny_datetime(1997, 9, 2, 9, 0, 0);
+        let start = ny_datetime(1997, 9, 4, 9, 0, 0);
+        let rrule = "FREQ=DAILY;COUNT=5".parse::<RecurrenceRule>().unwrap();
+        let dates = rrule.dates_within(dtstart, start, start + Duration::days(20));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 4, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 5, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 6, 9, 0, 0));
         assert_eq!(iter.next(), None);
     }
 
@@ -746,7 +778,7 @@ mod tests {
         let rrule = "FREQ=DAILY;UNTIL=19971027T000000Z"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(20));
+        let dates = rrule.dates_within(start, start, start + Duration::days(20));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 25, 9, 0, 0)); // EDT
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 26, 9, 0, 0)); // EST
@@ -757,7 +789,7 @@ mod tests {
     fn range_every_other_day() {
         let start = ny_datetime(1997, 10, 25, 9, 0, 0);
         let rrule = "FREQ=DAILY;INTERVAL=2".parse::<RecurrenceRule>().unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(10));
+        let dates = rrule.dates_within(start, start, start + Duration::days(10));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 25, 9, 0, 0)); // EDT
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 27, 9, 0, 0)); // EST
@@ -773,7 +805,7 @@ mod tests {
         let rrule = "FREQ=DAILY;INTERVAL=10;COUNT=5"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(100));
+        let dates = rrule.dates_within(start, start, start + Duration::days(100));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 12, 9, 0, 0));
@@ -787,7 +819,7 @@ mod tests {
     fn range_weekly() {
         let start = ny_datetime(1997, 9, 2, 9, 0, 0);
         let rrule = "FREQ=WEEKLY;COUNT=10".parse::<RecurrenceRule>().unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 9, 9, 0, 0));
@@ -803,7 +835,7 @@ mod tests {
         let rrule = "FREQ=DAILY;COUNT=5;BYDAY=MO"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0));
@@ -819,7 +851,7 @@ mod tests {
         let rrule = "FREQ=SECONDLY;COUNT=5;BYHOUR=10,12;BYMINUTE=20,30,40;BYSECOND=10"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 20, 10));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 30, 10));
@@ -835,7 +867,7 @@ mod tests {
         let rrule = "FREQ=DAILY;COUNT=7;BYMONTHDAY=3,10,-1"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(12));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(12));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 3, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 10, 9, 0, 0));
@@ -853,7 +885,7 @@ mod tests {
         let rrule = "FREQ=HOURLY;COUNT=4;BYYEARDAY=2,35,-10;BYHOUR=12"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(500));
+        let dates = rrule.dates_within(start, start, start + Duration::days(500));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 12, 22, 12, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 1, 2, 12, 0, 0));
@@ -868,7 +900,7 @@ mod tests {
         let rrule = "FREQ=HOURLY;COUNT=8;BYMINUTE=4,5;BYSECOND=10,20,30"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(1));
+        let dates = rrule.dates_within(start, start, start + Duration::days(1));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 10));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 20));
@@ -887,7 +919,7 @@ mod tests {
         let rrule = "FREQ=DAILY;COUNT=5;BYHOUR=4,8"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(5));
+        let dates = rrule.dates_within(start, start, start + Duration::days(5));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 3, 4, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 3, 8, 0, 0));
@@ -903,7 +935,7 @@ mod tests {
         let rrule = "FREQ=MONTHLY;COUNT=5;BYMONTHDAY=1,-1"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(100));
+        let dates = rrule.dates_within(start, start, start + Duration::days(100));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 30, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 1, 9, 0, 0));
@@ -919,7 +951,7 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=5;BYMONTH=10,11"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 11, 2, 9, 0, 0));
@@ -935,7 +967,7 @@ mod tests {
         let rrule = "FREQ=WEEKLY;COUNT=6;BYDAY=MO,2TU"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 3, 9, 0, 0));
@@ -952,7 +984,7 @@ mod tests {
         let rrule = "FREQ=WEEKLY;INTERVAL=2;COUNT=6;BYDAY=TU,TH"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 4, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 16, 9, 0, 0));
@@ -969,7 +1001,7 @@ mod tests {
         let rrule = "FREQ=MONTHLY;COUNT=6;BYDAY=MO,2TU,-1WE"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0)); // MO
@@ -986,7 +1018,7 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=6;BYMONTH=9;BYDAY=MO,2TU,-1WE"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0)); // MO
@@ -1003,7 +1035,7 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=6;BYDAY=5MO,-1FR"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::days(2000));
+        let dates = rrule.dates_within(start, start, start + Duration::days(2000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 12, 27, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2025, 2, 3, 9, 0, 0));
@@ -1020,7 +1052,7 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=5;BYMONTH=1;BYDAY=SU,MO,TU,WE,TH,FR,SA"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 1, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 2, 9, 0, 0));
@@ -1036,7 +1068,7 @@ mod tests {
         let rrule = "FREQ=WEEKLY;COUNT=5;INTERVAL=2"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(12));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(12));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 16, 9, 0, 0));
@@ -1052,7 +1084,7 @@ mod tests {
         let rrule = "FREQ=MONTHLY;INTERVAL=2;COUNT=5;BYDAY=1SU,-1SU"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(100));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(100));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 7, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 28, 9, 0, 0));
@@ -1068,7 +1100,7 @@ mod tests {
         let rrule = "FREQ=MONTHLY;INTERVAL=18;COUNT=5;BYMONTHDAY=10,11,15"
             .parse::<RecurrenceRule>()
             .unwrap();
-        let dates = rrule.dates_within(start, start + Duration::weeks(1000));
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 10, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 11, 9, 0, 0));

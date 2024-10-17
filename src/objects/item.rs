@@ -14,8 +14,11 @@ fn dates_within(
     rrule: Option<&str>,
 ) -> Vec<DateTime<Tz>> {
     if let Some(rrule) = rrule {
+        let Some(dtstart) = ev_start else {
+            return vec![];
+        };
         let rrule = rrule.parse::<RecurrenceRule>().unwrap();
-        return rrule.dates_within(start, end);
+        return rrule.dates_within(ical_date_to_tz(&dtstart, &start.timezone()), start, end);
     }
 
     match (ev_start, ev_end) {
