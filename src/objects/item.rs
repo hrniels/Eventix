@@ -98,7 +98,12 @@ impl CalItem {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> Vec<(&icalendar::CalendarComponent, DateTime<Tz>)> {
-        let Some(first) = self.item.components.first() else {
+        let Some(first) = self
+            .item
+            .components
+            .iter()
+            .find(|c| matches!(c, CalendarComponent::Event(_) | CalendarComponent::Todo(_)))
+        else {
             return vec![];
         };
 
@@ -121,6 +126,7 @@ impl CalItem {
         }
         .iter()
         .map(|d| (first, *d))
+        // TODO update/remove this list based on the other items in this calendar
         .collect()
     }
 
