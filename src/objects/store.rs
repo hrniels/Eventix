@@ -25,7 +25,7 @@ impl CalStore {
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = &icalendar::CalendarComponent> {
+    ) -> impl Iterator<Item = (&icalendar::CalendarComponent, DateTime<Tz>)> {
         self.sources
             .iter()
             .map(|c| c.items().iter())
