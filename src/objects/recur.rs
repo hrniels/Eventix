@@ -110,6 +110,22 @@ fn nth_weekday_of_month_back(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<
     NaiveDate::from_ymd_opt(date.year(), date.month(), day)
 }
 
+fn nth_weekday_of_year_front(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
+    let year_start = NaiveDate::from_ymd_opt(date.year(), 1, 1)?;
+    let first_weekday = year_start.weekday();
+    let first_to_dow = (7 + day.number_from_monday() - first_weekday.number_from_monday()) % 7;
+    let day = (n - 1) as u32 * 7 + first_to_dow;
+    Some(year_start + Duration::days(day as i64))
+}
+
+fn nth_weekday_of_year_back(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
+    let year_end = NaiveDate::from_ymd_opt(date.year(), 12, 31)?;
+    let last_weekday = year_end.weekday();
+    let first_to_dow = (7 + last_weekday.number_from_monday() - day.number_from_monday()) % 7;
+    let day = (n - 1) as u32 * 7 + first_to_dow;
+    Some(year_end - Duration::days(day as i64))
+}
+
 impl WeekdayDesc {
     #[cfg(test)]
     pub fn new(day: Weekday, nth: Option<(u8, Side)>) -> Self {
@@ -120,30 +136,30 @@ impl WeekdayDesc {
         match self.nth {
             None => self.day == date.weekday(),
             Some((n, side)) => {
-                match rrule.freq {
-                    // offset within the year
-                    Frequency::Yearly
-                        if (rrule.by_month.is_some() || rrule.by_week_no.is_some()) =>
-                    {
-                        unimplemented!();
+                // offset within the month
+                if rrule.freq == Frequency::Monthly
+                    || (rrule.freq == Frequency::Yearly && rrule.by_month.is_some())
+                {
+                    match side {
+                        Side::Front => nth_weekday_of_month_front(date, self.day, n),
+                        Side::Back => nth_weekday_of_month_back(date, self.day, n),
                     }
-
-                    // offset within the month
-                    Frequency::Monthly | Frequency::Yearly => {
-                        let nth_date = match side {
-                            Side::Front => nth_weekday_of_month_front(date, self.day, n),
-                            Side::Back => nth_weekday_of_month_back(date, self.day, n),
-                        };
-                        match nth_date {
-                            Some(ndate) => ndate == date.date_naive(),
-                            None => false,
-                        }
+                    .map(|d| d == date.date_naive())
+                    .unwrap_or(false)
+                }
+                // offset within the year
+                else if rrule.freq == Frequency::Yearly {
+                    match side {
+                        Side::Front => nth_weekday_of_year_front(date, self.day, n),
+                        Side::Back => nth_weekday_of_year_back(date, self.day, n),
                     }
-
-                    Frequency::Weekly => self.day == date.weekday(),
-
+                    .map(|d| d == date.date_naive())
+                    .unwrap_or(false)
+                } else if rrule.freq == Frequency::Weekly {
+                    self.day == date.weekday()
+                } else {
                     // anything else is invalid
-                    _ => false,
+                    false
                 }
             }
         }
@@ -409,24 +425,27 @@ impl RecurrenceRule {
             let by_day = self.by_day.as_ref().unwrap();
             let mut cur = date;
             while cur < end {
-                for h in hours {
-                    for m in mins {
-                        for s in secs {
-                            if by_day.iter().any(|d| d.matches(cur, self)) {
-                                if let Some(ndate) = cur.with_hour(*h as u32) {
-                                    if let Some(ndate) = ndate.with_minute(*m as u32) {
-                                        if let Some(ndate) = ndate.with_second(*s as u32) {
-                                            if ndate >= start {
-                                                res.push(ndate);
+                // limit by month if BYMONTH is present
+                if self.by_month.is_none() || months.contains(&(cur.month() as u8)) {
+                    for h in hours {
+                        for m in mins {
+                            for s in secs {
+                                if by_day.iter().any(|d| d.matches(cur, self)) {
+                                    if let Some(ndate) = cur.with_hour(*h as u32) {
+                                        if let Some(ndate) = ndate.with_minute(*m as u32) {
+                                            if let Some(ndate) = ndate.with_second(*s as u32) {
+                                                if ndate >= start {
+                                                    res.push(ndate);
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            if let Some(count) = self.count {
-                                if res.len() >= count as usize {
-                                    return true;
+                                if let Some(count) = self.count {
+                                    if res.len() >= count as usize {
+                                        return true;
+                                    }
                                 }
                             }
                         }
@@ -923,6 +942,56 @@ mod tests {
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 16, 9, 0, 0)); // MO
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 23, 9, 0, 0)); // MO
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 25, 9, 0, 0)); // -1WE
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_day_yearly_by_month() {
+        let start = ny_datetime(2024, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=YEARLY;COUNT=6;BYMONTH=9;BYDAY=MO,2TU,-1WE"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 10, 9, 0, 0)); // 2TU
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 16, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 23, 9, 0, 0)); // MO
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 25, 9, 0, 0)); // -1WE
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_day_yearly() {
+        let start = ny_datetime(2024, 9, 2, 9, 0, 0);
+        let rrule = "FREQ=YEARLY;COUNT=6;BYDAY=5MO,-1FR"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::days(1000));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 12, 27, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2025, 2, 3, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2025, 12, 26, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2026, 2, 2, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2026, 12, 25, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(2027, 2, 1, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_every_day_in_january() {
+        let start = ny_datetime(1998, 1, 1, 9, 0, 0);
+        let rrule = "FREQ=YEARLY;COUNT=5;BYMONTH=1;BYDAY=SU,MO,TU,WE,TH,FR,SA"
+            .parse::<RecurrenceRule>()
+            .unwrap();
+        let dates = rrule.dates_within(start, start + Duration::weeks(4));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 1, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 2, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 3, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 4, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 5, 9, 0, 0));
         assert_eq!(iter.next(), None);
     }
 }
