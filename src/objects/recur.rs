@@ -300,7 +300,9 @@ impl RecurrenceRule {
         let interval = self.interval.unwrap_or(1) as u32;
 
         assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
-        assert!(self.week_start.is_none(), "WKST is not supported");
+        if self.week_start.is_some() {
+            eprintln!("WARNING: WKST is not supported");
+        }
 
         let mut count = 0;
         while date <= end {
