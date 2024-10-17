@@ -18,13 +18,9 @@ fn main() -> Result<(), anyhow::Error> {
     println!();
 
     println!("Events:");
-    // for todo in store.events() {
-    //     println!("  {:?}", todo.get_summary());
-    // }
-
     let now = Local::now();
-    let end = now.with_timezone(&chrono_tz::Europe::Berlin);
-    let start = end - Duration::days(30);
+    let start = now.with_timezone(&chrono_tz::Europe::Berlin);
+    let end = start + Duration::days(7);
     for (ev, date) in store.items_within(start, end) {
         if let Some(ev) = ev.as_event() {
             println!("  {:?} ({:?})", ev.get_summary(), date);
