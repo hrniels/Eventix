@@ -10,7 +10,7 @@ mod source;
 mod store;
 
 pub use item::CalItem;
-pub use recur::{Frequency, RecurrenceRule};
+pub use recur::RecurrenceRule;
 pub use source::CalSource;
 pub use store::CalStore;
 
@@ -37,9 +37,10 @@ pub fn ical_datetime_to_tz(ical: &CalendarDateTime, tz: &Tz) -> DateTime<Tz> {
                 // we fall back to UTC for all weird values that we see
                 Tz::UTC
             };
-            date_tz.from_utc_datetime(&dt).with_timezone(tz)
+            date_tz.from_local_datetime(&dt).unwrap().with_timezone(tz)
         }
         CalendarDateTime::Floating(dt) => {
+            // TODO that's certainly not correct
             let local = Local.from_utc_datetime(&dt);
             local.with_timezone(tz)
         }
