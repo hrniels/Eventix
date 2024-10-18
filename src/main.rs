@@ -1,9 +1,9 @@
 use anyhow::Context;
-use chrono::{Duration, Local, Utc};
-use icalendar::Component;
+use chrono::{Duration, Local};
 use objects::{CalSource, CalStore};
 
 mod objects;
+mod parser;
 
 fn main() -> Result<(), anyhow::Error> {
     let dir = std::env::args().nth(1).unwrap();
@@ -13,7 +13,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     println!("TODOs:");
     for todo in store.todos() {
-        println!("  {:?}", todo.get_summary());
+        println!("  {:?}", todo.summary());
     }
     println!();
 
@@ -23,7 +23,7 @@ fn main() -> Result<(), anyhow::Error> {
     let end = start + Duration::days(7);
     for (ev, date) in store.items_within(start, end) {
         if let Some(ev) = ev.as_event() {
-            println!("  {:?} ({:?})", ev.get_summary(), date);
+            println!("  {:?} ({:?})", ev.summary(), date);
         }
     }
 

@@ -1,15 +1,13 @@
 use anyhow::anyhow;
 use chrono::offset::LocalResult;
-use chrono::{
-    DateTime, Datelike, Duration, Months, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc,
-    Weekday,
-};
+use chrono::{DateTime, Datelike, Duration, Months, NaiveDate, NaiveDateTime, Timelike, Weekday};
 use chrono_tz::Tz;
-use icalendar::DatePerhapsTime;
 use std::fmt::Debug;
 use std::str::FromStr;
 
-use super::ical_date_to_tz;
+use crate::parser::Property;
+
+use super::CalDate;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Frequency {
@@ -230,7 +228,7 @@ impl FromStr for DayDesc {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RecurrenceRule {
     freq: Frequency,
-    until: Option<DatePerhapsTime>,
+    until: Option<CalDate>,
     count: Option<u8>,
     interval: Option<u8>,
     by_second: Option<Vec<u8>>,
@@ -293,7 +291,7 @@ impl RecurrenceRule {
         let mut dates = Vec::new();
         let mut date = dtstart.clone();
         let end = if let Some(ref until) = self.until {
-            ical_date_to_tz(until, &start.timezone()).min(end)
+            until.as_end_with_tz(&start.timezone()).min(end)
         } else {
             end
         };
@@ -581,13 +579,8 @@ impl FromStr for RecurrenceRule {
                     rrule.freq = value.parse()?;
                 }
                 "UNTIL" => {
-                    rrule.until = Some(if value.len() <= 8 {
-                        DatePerhapsTime::Date(value.parse()?)
-                    } else {
-                        DatePerhapsTime::DateTime(
-                            value.parse().map_err(|_| anyhow!("Invalid datetime"))?,
-                        )
-                    });
+                    let prop: Property = format!("UNTIL:{}", value).parse()?;
+                    rrule.until = Some(prop.try_into()?);
                 }
                 "COUNT" => {
                     rrule.count = Some(value.parse()?);
@@ -635,7 +628,8 @@ impl FromStr for RecurrenceRule {
 #[cfg(test)]
 mod tests {
     use chrono::{TimeZone, Utc, Weekday};
-    use icalendar::CalendarDateTime;
+
+    use crate::objects::date::CalDateTime;
 
     use super::*;
 
@@ -705,7 +699,7 @@ mod tests {
     fn parse_recur_until() {
         let mut rule = RecurrenceRule::default();
         rule.freq = Frequency::Daily;
-        rule.until = Some(DatePerhapsTime::DateTime(CalendarDateTime::Utc(
+        rule.until = Some(CalDate::DateTime(CalDateTime::Utc(
             Utc.with_ymd_and_hms(1997, 12, 24, 0, 0, 0).unwrap(),
         )));
         assert_eq!(

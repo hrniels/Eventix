@@ -1,18 +1,24 @@
-use chrono::{DateTime, Local, TimeZone, Utc};
-use chrono_tz::Tz;
-use icalendar::{CalendarDateTime, DatePerhapsTime};
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
+mod calendar;
+mod date;
+mod event;
 mod item;
 mod recur;
 mod source;
+mod status;
 mod store;
+mod todo;
 
+pub use date::CalDate;
+pub use event::Event;
 pub use item::CalItem;
 pub use recur::RecurrenceRule;
 pub use source::CalSource;
+pub use status::Status;
 pub use store::CalStore;
+pub use todo::Todo;
 
 pub type Id = u64;
 
@@ -22,36 +28,4 @@ pub fn generate_id() -> Id {
     let res = *next + 1;
     *next += 1;
     res
-}
-
-pub fn ical_datetime_to_tz(ical: &CalendarDateTime, tz: &Tz) -> DateTime<Tz> {
-    match ical {
-        CalendarDateTime::Utc(dt) => dt.with_timezone(tz),
-        CalendarDateTime::WithTimezone {
-            date_time: dt,
-            tzid,
-        } => {
-            let date_tz = if let Ok(date_tz) = tzid.parse::<Tz>() {
-                date_tz
-            } else {
-                // we fall back to UTC for all weird values that we see
-                Tz::UTC
-            };
-            date_tz.from_local_datetime(&dt).unwrap().with_timezone(tz)
-        }
-        CalendarDateTime::Floating(dt) => {
-            // TODO that's certainly not correct
-            let local = Local.from_utc_datetime(&dt);
-            local.with_timezone(tz)
-        }
-    }
-}
-
-pub fn ical_date_to_tz(ical: &DatePerhapsTime, tz: &Tz) -> DateTime<Tz> {
-    match ical {
-        DatePerhapsTime::Date(date) => Utc
-            .from_utc_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
-            .with_timezone(tz),
-        DatePerhapsTime::DateTime(datetime) => ical_datetime_to_tz(datetime, tz),
-    }
 }

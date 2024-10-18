@@ -7,7 +7,10 @@ use std::{
     path::PathBuf,
 };
 
-use super::{CalItem, Id};
+use super::{
+    calendar::{Calendar, Component},
+    CalItem, Id,
+};
 
 pub struct CalSource {
     id: Id,
@@ -36,7 +39,7 @@ impl CalSource {
             let mut input = String::new();
             File::open(filename.as_path())?.read_to_string(&mut input)?;
 
-            let cal = input.parse::<icalendar::Calendar>().map_err(|e| {
+            let cal = input.parse::<Calendar>().map_err(|e| {
                 anyhow!("Parsing calendar in {:?} failed: {}", filename.as_path(), e)
             })?;
             let cal = CalItem::new(id, filename, cal);
@@ -62,7 +65,7 @@ impl CalSource {
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = (&icalendar::CalendarComponent, DateTime<Tz>)> {
+    ) -> impl Iterator<Item = (&Component, DateTime<Tz>)> {
         self.items
             .iter()
             .map(move |i| i.items_within(start, end))
