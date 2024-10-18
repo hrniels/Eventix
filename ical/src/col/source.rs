@@ -5,7 +5,8 @@ use std::fs::{read_dir, File};
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::objects::{CalComponent, CalItem, Calendar, Id};
+use crate::col::{CalItem, Id};
+use crate::objects::{CalComponent, Calendar};
 
 pub struct CalSource {
     id: Id,

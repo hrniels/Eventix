@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::objects::{CalComponent, CalDate, CalEvent, CalRRule, CalTodo, Calendar, Id};
+use crate::col::Id;
+use crate::objects::{CalComponent, CalDate, CalEvent, CalRRule, CalTodo, Calendar};
 
 fn dates_within(
     start: DateTime<Tz>,
@@ -138,7 +139,7 @@ impl CalItem {
 mod tests {
     use chrono::{NaiveDate, TimeZone};
 
-    use crate::objects::CalSource;
+    use crate::col::CalSource;
 
     use super::*;
 

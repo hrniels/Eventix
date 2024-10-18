@@ -1,7 +1,8 @@
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::objects::{CalComponent, CalEvent, CalItem, CalSource, CalTodo};
+use crate::col::{CalItem, CalSource};
+use crate::objects::{CalComponent, CalEvent, CalTodo};
 
 #[derive(Default)]
 pub struct CalStore {

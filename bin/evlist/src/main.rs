@@ -1,6 +1,7 @@
 use anyhow::Context;
 use chrono::{Duration, Local};
-use ical::objects::{CalComponent, CalSource, CalStore};
+use ical::col::{CalSource, CalStore};
+use ical::objects::CalComponent;
 
 fn main() -> Result<(), anyhow::Error> {
     let dir = std::env::args().nth(1).unwrap();
