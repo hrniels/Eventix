@@ -18,7 +18,6 @@ fn main() -> Result<(), anyhow::Error> {
     let now = Local::now();
     let start = now.with_timezone(&chrono_tz::Europe::Berlin);
     let end = start + Duration::days(7);
-    println!("Events between {} and {}:", start, end);
 
     let mut events = store
         .items_within(start, end)
@@ -28,6 +27,8 @@ fn main() -> Result<(), anyhow::Error> {
         })
         .collect::<Vec<_>>();
     events.sort_by(|(_, a), (_, b)| a.cmp(b));
+
+    println!("Events between {} and {}:", start, end);
     for (ev, date) in events {
         println!("  {:?} ({:?})", ev.summary(), date);
     }
