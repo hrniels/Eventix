@@ -57,6 +57,7 @@ pub struct CalItem {
 }
 
 impl CalItem {
+    #[cfg(test)]
     fn new_simple(item: Calendar) -> Self {
         Self {
             id: super::generate_id(),

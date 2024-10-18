@@ -11,7 +11,7 @@ mod status;
 mod store;
 mod todo;
 
-pub use calendar::{CalComponent, Calendar};
+pub use calendar::{CalComponent, Calendar, Other};
 pub use date::{CalDate, CalDateTime};
 pub use event::CalEvent;
 pub use item::CalItem;

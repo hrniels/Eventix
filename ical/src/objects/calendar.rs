@@ -111,7 +111,7 @@ impl FromStr for Calendar {
 }
 
 #[derive(Debug)]
-struct Other {
+pub struct Other {
     name: String,
     props: Vec<Property>,
 }

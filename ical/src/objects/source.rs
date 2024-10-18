@@ -48,6 +48,10 @@ impl CalSource {
         self.id
     }
 
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
     pub fn add(&mut self, item: CalItem) {
         self.items.push(item);
     }
