@@ -2,14 +2,14 @@ use anyhow::anyhow;
 use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum Status {
+pub enum CalStatus {
     NeedsAction,
     Completed,
     InProcess,
     Cancelled,
 }
 
-impl FromStr for Status {
+impl FromStr for CalStatus {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {

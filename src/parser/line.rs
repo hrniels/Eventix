@@ -53,7 +53,7 @@ impl<R: BufRead> Iterator for LineReader<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::LineReader;
+    use super::*;
 
     #[test]
     fn basics() {

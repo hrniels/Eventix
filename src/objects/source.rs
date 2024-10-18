@@ -1,16 +1,11 @@
 use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
-use std::{
-    fs::{read_dir, File},
-    io::Read,
-    path::PathBuf,
-};
+use std::fs::{read_dir, File};
+use std::io::Read;
+use std::path::PathBuf;
 
-use super::{
-    calendar::{Calendar, Component},
-    CalItem, Id,
-};
+use crate::objects::{CalComponent, CalItem, Calendar, Id};
 
 pub struct CalSource {
     id: Id,
@@ -65,7 +60,7 @@ impl CalSource {
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = (&Component, DateTime<Tz>)> {
+    ) -> impl Iterator<Item = (&CalComponent, DateTime<Tz>)> {
         self.items
             .iter()
             .map(move |i| i.items_within(start, end))

@@ -3,17 +3,14 @@ use std::path::PathBuf;
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use super::{
-    calendar::{Calendar, Component},
-    CalDate, Event, Id, RecurrenceRule, Todo,
-};
+use crate::objects::{CalComponent, CalDate, CalEvent, CalRRule, CalTodo, Calendar, Id};
 
 fn dates_within(
     start: DateTime<Tz>,
     end: DateTime<Tz>,
     ev_start: Option<&CalDate>,
     ev_end: Option<&CalDate>,
-    rrule: Option<&RecurrenceRule>,
+    rrule: Option<&CalRRule>,
 ) -> Vec<DateTime<Tz>> {
     if let Some(rrule) = rrule {
         let Some(dtstart) = ev_start else {
@@ -98,19 +95,19 @@ impl CalItem {
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> Vec<(&Component, DateTime<Tz>)> {
+    ) -> Vec<(&CalComponent, DateTime<Tz>)> {
         let Some(first) = self
             .item
             .components()
             .iter()
-            .find(|c| matches!(c, Component::Event(_) | Component::Todo(_)))
+            .find(|c| matches!(c, CalComponent::Event(_) | CalComponent::Todo(_)))
         else {
             return vec![];
         };
 
         match first {
-            Component::Event(ev) => dates_within(start, end, ev.start(), ev.end(), ev.rrule()),
-            Component::Todo(ev) => dates_within(start, end, ev.start(), ev.due(), ev.rrule()),
+            CalComponent::Event(ev) => dates_within(start, end, ev.start(), ev.end(), ev.rrule()),
+            CalComponent::Todo(ev) => dates_within(start, end, ev.start(), ev.due(), ev.rrule()),
             _ => vec![],
         }
         .iter()
@@ -119,19 +116,19 @@ impl CalItem {
         .collect()
     }
 
-    pub fn todos(&self) -> impl Iterator<Item = &Todo> {
+    pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
         self.item
             .components()
             .iter()
-            .filter(|&c| matches!(c, Component::Todo(_)))
+            .filter(|&c| matches!(c, CalComponent::Todo(_)))
             .map(|t| t.as_todo().unwrap())
     }
 
-    pub fn events(&self) -> impl Iterator<Item = &Event> {
+    pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
         self.item
             .components()
             .iter()
-            .filter(|&c| matches!(c, Component::Event(_)))
+            .filter(|&c| matches!(c, CalComponent::Event(_)))
             .map(|e| e.as_event().unwrap())
     }
 }
@@ -146,7 +143,7 @@ mod tests {
 
     #[derive(Default)]
     struct EventBuilder {
-        ev: Event,
+        ev: CalEvent,
     }
 
     impl EventBuilder {
@@ -165,7 +162,7 @@ mod tests {
             self
         }
 
-        fn done(self) -> Event {
+        fn done(self) -> CalEvent {
             self.ev
         }
     }
@@ -176,7 +173,7 @@ mod tests {
             .unwrap()
     }
 
-    fn new_allday_event(date: NaiveDate, uid: &str) -> Event {
+    fn new_allday_event(date: NaiveDate, uid: &str) -> CalEvent {
         EventBuilder::default()
             .uid(uid)
             .start(CalDate::Date(date))
@@ -184,19 +181,19 @@ mod tests {
             .done()
     }
 
-    fn new_item(event: Event) -> CalItem {
+    fn new_item(event: CalEvent) -> CalItem {
         let mut cal = Calendar::default();
-        cal.add(Component::Event(event));
+        cal.add(CalComponent::Event(event));
         CalItem::new_simple(cal)
     }
 
     fn new_allday_item(date: NaiveDate, uid: &str) -> CalItem {
         let mut cal = Calendar::default();
-        cal.add(Component::Event(new_allday_event(date, uid)));
+        cal.add(CalComponent::Event(new_allday_event(date, uid)));
         CalItem::new_simple(cal)
     }
 
-    fn has_uids<'a, I: Iterator<Item = (&'a Component, DateTime<Tz>)>>(
+    fn has_uids<'a, I: Iterator<Item = (&'a CalComponent, DateTime<Tz>)>>(
         result: I,
         uids: &[&str],
     ) -> bool {

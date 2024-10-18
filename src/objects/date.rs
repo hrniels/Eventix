@@ -67,6 +67,7 @@ impl CalDateTime {
         }
     }
 }
+
 impl TryFrom<Property> for CalDate {
     type Error = anyhow::Error;
 

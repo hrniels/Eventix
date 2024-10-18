@@ -1,7 +1,7 @@
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use super::{calendar::Component, CalItem, CalSource, Event, Todo};
+use crate::objects::{CalComponent, CalEvent, CalItem, CalSource, CalTodo};
 
 #[derive(Default)]
 pub struct CalStore {
@@ -25,7 +25,7 @@ impl CalStore {
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = (&Component, DateTime<Tz>)> {
+    ) -> impl Iterator<Item = (&CalComponent, DateTime<Tz>)> {
         self.sources
             .iter()
             .map(|c| c.items().iter())
@@ -34,11 +34,11 @@ impl CalStore {
             .flatten()
     }
 
-    pub fn todos(&self) -> impl Iterator<Item = &Todo> {
+    pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
         self.items().map(|i| i.todos()).flatten()
     }
 
-    pub fn events(&self) -> impl Iterator<Item = &Event> {
+    pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
         self.items().map(|i| i.events()).flatten()
     }
 }

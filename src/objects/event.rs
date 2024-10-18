@@ -1,21 +1,21 @@
 use anyhow::anyhow;
 use std::io::BufRead;
 
-use crate::objects::{CalDate, RecurrenceRule};
+use crate::objects::{CalDate, CalRRule};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Default, Debug)]
-pub struct Event {
+pub struct CalEvent {
     uid: String,
     created: CalDate,
     summary: Option<String>,
     start: Option<CalDate>,
     end: Option<CalDate>,
-    rrule: Option<RecurrenceRule>,
+    rrule: Option<CalRRule>,
     props: Vec<Property>,
 }
 
-impl Event {
+impl CalEvent {
     pub fn uid(&self) -> &String {
         &self.uid
     }
@@ -40,7 +40,7 @@ impl Event {
         self.end = Some(end);
     }
 
-    pub fn rrule(&self) -> Option<&RecurrenceRule> {
+    pub fn rrule(&self) -> Option<&CalRRule> {
         self.rrule.as_ref()
     }
 
@@ -49,7 +49,7 @@ impl Event {
     }
 }
 
-impl PropertyConsumer for Event {
+impl PropertyConsumer for CalEvent {
     fn from_lines<R: BufRead>(
         lines: &mut LineReader<R>,
         _prop: Property,

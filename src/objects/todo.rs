@@ -1,29 +1,29 @@
 use anyhow::anyhow;
 use std::io::BufRead;
 
-use crate::objects::{CalDate, RecurrenceRule, Status};
+use crate::objects::{CalDate, CalRRule, CalStatus};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Default, Debug)]
-pub struct Todo {
+pub struct CalTodo {
     uid: String,
     created: CalDate,
     last_mod: CalDate,
     categories: Vec<String>,
-    status: Option<Status>,
+    status: Option<CalStatus>,
     completed: Option<CalDate>,
     summary: Option<String>,
     desc: Option<String>,
     start: Option<CalDate>,
     due: Option<CalDate>,
-    rrule: Option<RecurrenceRule>,
+    rrule: Option<CalRRule>,
     // 0 = undefined; 1 = highest, 9 = lowest
     priority: Option<u8>,
     percent: Option<u8>,
     props: Vec<Property>,
 }
 
-impl Todo {
+impl CalTodo {
     pub fn uid(&self) -> &String {
         &self.uid
     }
@@ -36,7 +36,7 @@ impl Todo {
         self.due.as_ref()
     }
 
-    pub fn rrule(&self) -> Option<&RecurrenceRule> {
+    pub fn rrule(&self) -> Option<&CalRRule> {
         self.rrule.as_ref()
     }
 
@@ -45,7 +45,7 @@ impl Todo {
     }
 }
 
-impl PropertyConsumer for Todo {
+impl PropertyConsumer for CalTodo {
     fn from_lines<R: BufRead>(
         lines: &mut LineReader<R>,
         _prop: Property,
@@ -135,7 +135,7 @@ impl PropertyConsumer for Todo {
 mod tests {
     use chrono::{NaiveDate, TimeZone, Utc};
 
-    use crate::objects::{calendar::Calendar, date::CalDateTime, CalDate, Status};
+    use crate::objects::{CalDate, CalDateTime, CalStatus, Calendar};
 
     #[test]
     fn basics() {
@@ -172,7 +172,7 @@ END:VCALENDAR";
             Some(CalDate::Date(NaiveDate::from_ymd_opt(2007, 5, 1).unwrap()))
         );
 
-        assert_eq!(todo.status, Some(Status::NeedsAction));
+        assert_eq!(todo.status, Some(CalStatus::NeedsAction));
         assert_eq!(
             todo.categories,
             vec!["FAMILY".to_string(), "FINANCE".to_string()]

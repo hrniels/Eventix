@@ -2,25 +2,25 @@ use anyhow::anyhow;
 use std::io::BufRead;
 use std::str::FromStr;
 
-use crate::objects::{Event, Todo};
+use crate::objects::{CalEvent, CalTodo};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Debug)]
-pub enum Component {
-    Event(Event),
-    Todo(Todo),
+pub enum CalComponent {
+    Event(CalEvent),
+    Todo(CalTodo),
     Other(Other),
 }
 
-impl Component {
-    pub fn as_event(&self) -> Option<&Event> {
+impl CalComponent {
+    pub fn as_event(&self) -> Option<&CalEvent> {
         match self {
             Self::Event(ev) => Some(ev),
             _ => None,
         }
     }
 
-    pub fn as_todo(&self) -> Option<&Todo> {
+    pub fn as_todo(&self) -> Option<&CalTodo> {
         match self {
             Self::Todo(todo) => Some(todo),
             _ => None,
@@ -30,7 +30,7 @@ impl Component {
 
 #[derive(Default, Debug)]
 pub struct Calendar {
-    comps: Vec<Component>,
+    comps: Vec<CalComponent>,
     props: Vec<Property>,
 }
 
@@ -39,11 +39,11 @@ impl Calendar {
         &self.props
     }
 
-    pub fn components(&self) -> &[Component] {
+    pub fn components(&self) -> &[CalComponent] {
         &self.comps
     }
 
-    pub fn add(&mut self, comp: Component) {
+    pub fn add(&mut self, comp: CalComponent) {
         self.comps.push(comp);
     }
 }
@@ -65,15 +65,15 @@ impl PropertyConsumer for Calendar {
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
                 "BEGIN" if prop.value() == "VTODO" => {
-                    let todo = Component::Todo(Todo::from_lines(lines, prop)?);
+                    let todo = CalComponent::Todo(CalTodo::from_lines(lines, prop)?);
                     cal.comps.push(todo);
                 }
                 "BEGIN" if prop.value() == "VEVENT" => {
-                    let event = Component::Event(Event::from_lines(lines, prop)?);
+                    let event = CalComponent::Event(CalEvent::from_lines(lines, prop)?);
                     cal.comps.push(event);
                 }
                 "BEGIN" => {
-                    let other = Component::Other(Other::from_lines(lines, prop)?);
+                    let other = CalComponent::Other(Other::from_lines(lines, prop)?);
                     cal.comps.push(other);
                 }
                 "END" => {
@@ -154,9 +154,8 @@ impl PropertyConsumer for Other {
 mod tests {
     use chrono::NaiveDate;
 
-    use super::{Calendar, Component};
     use crate::{
-        objects::{date::CalDateTime, CalDate},
+        objects::{CalComponent, CalDate, CalDateTime, Calendar},
         parser::Property,
     };
 
@@ -179,8 +178,8 @@ END:VCALENDAR";
         assert_eq!(ical.props.len(), 1);
         assert_eq!(ical.props[0], Property::new("VERSION", vec![], "2.0"));
         assert_eq!(ical.comps.len(), 1);
-        assert!(matches!(ical.comps[0], Component::Todo(_)));
-        let Component::Todo(ref todo) = ical.comps[0] else {
+        assert!(matches!(ical.comps[0], CalComponent::Todo(_)));
+        let CalComponent::Todo(ref todo) = ical.comps[0] else {
             panic!("Expecting TODO");
         };
         assert_eq!(todo.uid().as_str(), "1234-5678");

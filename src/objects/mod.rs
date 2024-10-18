@@ -11,14 +11,15 @@ mod status;
 mod store;
 mod todo;
 
-pub use date::CalDate;
-pub use event::Event;
+pub use calendar::{CalComponent, Calendar};
+pub use date::{CalDate, CalDateTime};
+pub use event::CalEvent;
 pub use item::CalItem;
-pub use recur::RecurrenceRule;
+pub use recur::CalRRule;
 pub use source::CalSource;
-pub use status::Status;
+pub use status::CalStatus;
 pub use store::CalStore;
-pub use todo::Todo;
+pub use todo::CalTodo;
 
 pub type Id = u64;
 
