@@ -95,21 +95,17 @@ impl FromStr for Calendar {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut lines = LineReader::new(s.as_bytes());
-        loop {
-            let Some(line) = lines.next() else {
-                break Err(anyhow!("Unexpected EOF"));
-            };
+        let Some(line) = lines.next() else {
+            return Err(anyhow!("Unexpected EOF"));
+        };
 
-            let prop = line.parse::<Property>()?;
-            match prop.name().as_str() {
-                "BEGIN" if prop.value() == "VCALENDAR" => {
-                    let cal = Calendar::from_lines(&mut lines, prop)?;
-                    break Ok(cal);
-                }
-                _ => {
-                    break Err(anyhow!("Unexpected property: {:?}", prop));
-                }
+        let prop = line.parse::<Property>()?;
+        match prop.name().as_str() {
+            "BEGIN" if prop.value() == "VCALENDAR" => {
+                let cal = Calendar::from_lines(&mut lines, prop)?;
+                Ok(cal)
             }
+            _ => Err(anyhow!("Unexpected property: {:?}", prop)),
         }
     }
 }

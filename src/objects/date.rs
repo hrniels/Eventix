@@ -57,11 +57,11 @@ impl CalDateTime {
                     // we fall back to UTC for all weird values that we see
                     Tz::UTC
                 };
-                date_tz.from_local_datetime(&dt).unwrap().with_timezone(tz)
+                date_tz.from_local_datetime(dt).unwrap().with_timezone(tz)
             }
             Self::Floating(dt) => {
                 // TODO that's certainly not correct
-                let local = Local.from_utc_datetime(&dt);
+                let local = Local.from_utc_datetime(dt);
                 local.with_timezone(tz)
             }
         }
@@ -99,16 +99,14 @@ impl TryFrom<Property> for CalDate {
             .and_then(|d| d.and_hms_opt(hour, min, sec))
             .ok_or_else(|| anyhow!("Invalid datetime: {datetime}"))?;
 
-        if let Some(tz) = prop.param("TZID") {
-            return Ok(CalDate::DateTime(CalDateTime::Timezone(
-                date,
-                tz.value().clone(),
-            )));
-        }
-        if datetime.ends_with('Z') {
-            return Ok(CalDate::DateTime(CalDateTime::Utc(date.and_utc())));
-        }
-        return Ok(CalDate::DateTime(CalDateTime::Floating(date)));
+        let res = if let Some(tz) = prop.param("TZID") {
+            CalDateTime::Timezone(date, tz.value().clone())
+        } else if datetime.ends_with('Z') {
+            CalDateTime::Utc(date.and_utc())
+        } else {
+            CalDateTime::Floating(date)
+        };
+        Ok(CalDate::DateTime(res))
     }
 }
 

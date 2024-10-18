@@ -28,10 +28,10 @@ impl Property {
     }
 
     pub fn has_param_value(&self, name: &str, value: &str) -> bool {
-        match self.params.iter().find(|p| p.name() == name) {
-            Some(param) if param.value() == value => true,
-            _ => false,
-        }
+        matches!(
+            self.params.iter().find(|p| p.name() == name),
+            Some(param) if param.value() == value
+        )
     }
 
     pub fn params(&self) -> &[Parameter] {

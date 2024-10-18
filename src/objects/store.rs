@@ -18,7 +18,7 @@ impl CalStore {
     }
 
     pub fn items(&self) -> impl Iterator<Item = &CalItem> {
-        self.sources.iter().map(|c| c.items().iter()).flatten()
+        self.sources.iter().flat_map(|c| c.items().iter())
     }
 
     pub fn items_within(
@@ -28,17 +28,15 @@ impl CalStore {
     ) -> impl Iterator<Item = (&CalComponent, DateTime<Tz>)> {
         self.sources
             .iter()
-            .map(|c| c.items().iter())
-            .flatten()
-            .map(move |i| i.items_within(start, end))
-            .flatten()
+            .flat_map(|c| c.items().iter())
+            .flat_map(move |i| i.items_within(start, end))
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
-        self.items().map(|i| i.todos()).flatten()
+        self.items().flat_map(|i| i.todos())
     }
 
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
-        self.items().map(|i| i.events()).flatten()
+        self.items().flat_map(|i| i.events())
     }
 }

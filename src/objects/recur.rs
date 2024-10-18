@@ -163,35 +163,30 @@ impl WeekdayDesc {
     }
 }
 
-fn parse_desc_prefix(s: &str) -> Result<(&str, Option<(u8, Side)>), anyhow::Error> {
-    let (s, side) = if s.starts_with('-') || s.starts_with('+') {
-        (&s[1..], s.parse::<Side>()?)
-    } else {
-        (s, Side::Front)
-    };
-
-    let mut rest = s;
-    while rest.as_bytes()[0].is_ascii_digit() {
-        rest = &rest[1..];
-    }
-
-    let (s, nth) = if rest.len() == s.len() {
-        (s, None)
-    } else {
-        (
-            rest,
-            Some((s[0..s.len() - rest.len()].parse::<u8>()?, side)),
-        )
-    };
-
-    Ok((s, nth))
-}
-
 impl FromStr for WeekdayDesc {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (s, nth) = parse_desc_prefix(s)?;
+        let (s, side) = if s.starts_with('-') || s.starts_with('+') {
+            (&s[1..], s.parse::<Side>()?)
+        } else {
+            (s, Side::Front)
+        };
+
+        let mut rest = s;
+        while rest.as_bytes()[0].is_ascii_digit() {
+            rest = &rest[1..];
+        }
+
+        let (s, nth) = if rest.len() == s.len() {
+            (s, None)
+        } else {
+            (
+                rest,
+                Some((s[0..s.len() - rest.len()].parse::<u8>()?, side)),
+            )
+        };
+
         let day = parse_weekday(s)?;
         Ok(Self { day, nth })
     }
@@ -288,7 +283,7 @@ impl CalRRule {
         end: DateTime<Tz>,
     ) -> Vec<DateTime<Tz>> {
         let mut dates = Vec::new();
-        let mut date = dtstart.clone();
+        let mut date = dtstart;
         let end = if let Some(ref until) = self.until {
             until.as_end_with_tz(&start.timezone()).min(end)
         } else {
@@ -303,10 +298,8 @@ impl CalRRule {
 
         let mut count = 0;
         while date <= end {
-            if !self.limited(date) {
-                if self.expand(dtstart, start, date, &mut count, &mut dates) {
-                    break;
-                }
+            if !self.limited(date) && self.expand(dtstart, start, date, &mut count, &mut dates) {
+                break;
             }
 
             date = next_date(date, self.freq, interval);
@@ -316,69 +309,63 @@ impl CalRRule {
 
     fn limited(&self, date: DateTime<Tz>) -> bool {
         if let Some(by_month) = &self.by_month {
-            if self.freq <= Frequency::Monthly {
-                if !by_month.contains(&(date.month() as u8)) {
-                    return true;
-                }
+            if self.freq <= Frequency::Monthly && !by_month.contains(&(date.month() as u8)) {
+                return true;
             }
         }
 
         if let Some(by_yday) = &self.by_year_day {
-            if self.freq <= Frequency::Hourly {
-                if !by_yday.iter().any(|yd| match yd.side {
+            if self.freq <= Frequency::Hourly
+                && !by_yday.iter().any(|yd| match yd.side {
                     Side::Front => yd.num as u32 == year_day(date),
                     Side::Back => {
                         let days = year_days(date.year());
                         days - (yd.num - 1) as u32 == year_day(date)
                     }
-                }) {
-                    return true;
-                }
+                })
+            {
+                return true;
             }
         }
         if let Some(by_mday) = &self.by_mon_day {
-            if self.freq <= Frequency::Daily {
-                if !by_mday.iter().any(|wd| match wd.side {
+            if self.freq <= Frequency::Daily
+                && !by_mday.iter().any(|wd| match wd.side {
                     Side::Front => wd.num as u32 == date.day(),
                     Side::Back => {
                         let days = month_days(date.year(), date.month());
                         days - (wd.num - 1) as u32 == date.day()
                     }
-                }) {
-                    return true;
-                }
+                })
+            {
+                return true;
             }
         }
 
         if let Some(by_day) = &self.by_day {
-            if self.freq <= Frequency::Daily {
-                // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
-                if !by_day.iter().any(|wd| wd.day == date.weekday()) {
-                    return true;
-                }
+            // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
+            if self.freq <= Frequency::Daily && !by_day.iter().any(|wd| wd.day == date.weekday()) {
+                return true;
             }
         }
 
         // TODO ignore if event has DTSTART=DATE
         if let Some(by_hour) = &self.by_hour {
-            if self.freq <= Frequency::Hourly {
-                if !by_hour.iter().any(|&h| h as u32 == date.hour()) {
-                    return true;
-                }
+            if self.freq <= Frequency::Hourly && !by_hour.iter().any(|&h| h as u32 == date.hour()) {
+                return true;
             }
         }
         if let Some(by_min) = &self.by_minute {
-            if self.freq <= Frequency::Minutely {
-                if !by_min.iter().any(|&m| m as u32 == date.minute()) {
-                    return true;
-                }
+            if self.freq <= Frequency::Minutely
+                && !by_min.iter().any(|&m| m as u32 == date.minute())
+            {
+                return true;
             }
         }
         if let Some(by_sec) = &self.by_second {
-            if self.freq <= Frequency::Secondly {
-                if !by_sec.iter().any(|&s| s as u32 == date.second()) {
-                    return true;
-                }
+            if self.freq <= Frequency::Secondly
+                && !by_sec.iter().any(|&s| s as u32 == date.second())
+            {
+                return true;
             }
         }
 
@@ -464,7 +451,7 @@ impl CalRRule {
                     };
                     (Some(cur), end)
                 }
-                Frequency::Yearly | _ => {
+                _ => {
                     // start at beginning of year (same as above)
                     let cur = date.with_month(1).unwrap().with_day(1).unwrap();
                     (Some(cur), cur.with_year(cur.year() + 1))

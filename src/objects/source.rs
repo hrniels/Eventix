@@ -63,7 +63,6 @@ impl CalSource {
     ) -> impl Iterator<Item = (&CalComponent, DateTime<Tz>)> {
         self.items
             .iter()
-            .map(move |i| i.items_within(start, end))
-            .flatten()
+            .flat_map(move |i| i.items_within(start, end))
     }
 }
