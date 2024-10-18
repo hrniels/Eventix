@@ -17,10 +17,10 @@ fn main() -> Result<(), anyhow::Error> {
     }
     println!();
 
-    println!("Events:");
     let now = Local::now();
     let start = now.with_timezone(&chrono_tz::Europe::Berlin);
     let end = start + Duration::days(7);
+    println!("Events between {} and {}:", start, end);
     for (ev, date) in store.items_within(start, end) {
         if let Some(ev) = ev.as_event() {
             println!("  {:?} ({:?})", ev.summary(), date);
