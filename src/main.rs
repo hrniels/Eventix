@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::{Duration, Local};
-use objects::{CalSource, CalStore};
+use objects::{CalComponent, CalSource, CalStore};
 
 mod objects;
 mod parser;
@@ -21,10 +21,17 @@ fn main() -> Result<(), anyhow::Error> {
     let start = now.with_timezone(&chrono_tz::Europe::Berlin);
     let end = start + Duration::days(7);
     println!("Events between {} and {}:", start, end);
-    for (ev, date) in store.items_within(start, end) {
-        if let Some(ev) = ev.as_event() {
-            println!("  {:?} ({:?})", ev.summary(), date);
-        }
+
+    let mut events = store
+        .items_within(start, end)
+        .filter_map(|(i, date)| match i {
+            CalComponent::Event(ev) => Some((ev, date)),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    events.sort_by(|(_, a), (_, b)| a.cmp(b));
+    for (ev, date) in events {
+        println!("  {:?} ({:?})", ev.summary(), date);
     }
 
     Ok(())
