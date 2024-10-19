@@ -1,0 +1,77 @@
+mod error;
+mod html;
+mod locale;
+mod pages;
+mod state;
+
+use axum::{http::Request, response::IntoResponse, Router};
+use clap::Parser;
+use error::HTMLError;
+use std::env;
+use tower_http::{
+    services::{ServeDir, ServeFile},
+    trace::{DefaultOnResponse, TraceLayer},
+    LatencyUnit,
+};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::pages::overview;
+
+async fn error_handler() -> impl IntoResponse {
+    HTMLError::from(anyhow::Error::msg("no such route"))
+}
+
+/// A website to aggregate and analyse finance transactions
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// the address for the webserver
+    #[arg(long, default_value = "0.0.0.0")]
+    address: String,
+
+    /// the port number for the webserver
+    #[arg(long, default_value_t = 8081)]
+    port: u16,
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            env::var("RUST_LOG").unwrap_or_default(),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let args = Args::parse();
+
+    let state = state::State::new();
+    let app = Router::new()
+        .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
+        .nest_service("/static", ServeDir::new("static"))
+        .nest(overview::path(), overview::router(state.clone()))
+        .fallback(error_handler)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<_>| {
+                    static NEXT_REQ: std::sync::Mutex<u64> = std::sync::Mutex::new(1);
+
+                    // display a unique id to every request
+                    let id = *NEXT_REQ.lock().unwrap();
+                    *NEXT_REQ.lock().unwrap() = id + 1;
+
+                    tracing::debug_span!(
+                        "request",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        id = id,
+                    )
+                })
+                .on_response(DefaultOnResponse::new().latency_unit(LatencyUnit::Micros)),
+        );
+
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.address, args.port))
+        .await
+        .unwrap();
+    axum::serve(listener, app).await.unwrap();
+}

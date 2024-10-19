@@ -1,0 +1,353 @@
+/* ------------ GENERAL ------------ */
+
+body {
+	font-family: verdana, helvetica, arial, sans-serif;
+	font-size: .8em;
+}
+
+div#ajax_wait_bar {
+	left: 0px;
+	text-align: center;
+	background-color: #008000;
+	color: white;
+	font-size: .9em;
+	font-weight: bold;
+	padding: 4px;
+	border: 1px dotted #fff;
+}
+
+input,select,textarea {
+	font-size: 1em;
+	padding: 2px;
+}
+
+.keyword {
+	background-color: #FFFF00;
+	color: #000;
+}
+
+img {
+	border: 0;
+}
+
+/* links */
+a {
+	text-decoration: none;
+	color: #3F5E88;
+}
+a:hover {
+	text-decoration: underline;
+}
+
+/* ------------ PADDING ------------ */
+
+.ev_padtop {
+	margin-top: 0.9em;
+}
+
+.ev_paddouble {
+	margin-top: 2em;
+}
+
+.ev_padbottom {
+	margin-bottom: 0.9em;
+}
+
+.ev_padbottom_big {
+	margin-bottom: 1.5em;
+}
+
+/* ------------ FORMULARS ------------ */
+
+fieldset.ev_form {
+	padding: 0;
+	margin: 0;
+	border: 0;
+}
+
+fieldset.ev_form dl {
+	padding: 0;
+	margin: 0;
+	margin-top: 1px;
+	background-color: #dbdbdb;
+}
+
+fieldset.ev_form dt {
+	display: block;
+	margin: 0;
+	float: left;
+	padding: 0.5em;
+	width: 21%;
+	font-weight: bold;
+	text-align: left;
+	vertical-align: middle;
+}
+
+fieldset.ev_form dd {
+	display: block;
+	margin: 0;
+	padding: 0.5em;
+	margin-left: 23%;
+	background-color: #ebebeb;
+	vertical-align: middle;
+}
+
+/* ------------ PAGINATION ------------ */
+
+.ev_pageno {
+	background-color: #f0f0f0;
+	border: 1px solid #ccc;
+}
+
+.ev_pagecurrent {
+	padding: 0px 4px;
+	font-weight: bold;
+}
+
+.ev_pageno a {
+	padding: 1px 4px;
+}
+
+.ev_pageno a:hover {
+	background-color: #3F5E88;
+	color: #fff;
+	text-decoration: none;
+}
+
+/* ------------ ROW-HOVER ------------ */
+
+td.ev_hlcol {
+	padding: 0.4em;
+	background-color: #ebebeb;
+}
+td.ev_hlcol_sel {
+	background-color: #FFBE5C !important;
+}
+
+tr.ev_hlrow:hover td.ev_hlcol {
+	background-color: #f5f5f5;
+}
+
+tr.ev_hlrow_sel td.ev_hlcol {
+	background-color: #FFBE5C !important;
+}
+
+/* ------------ THE DIFFERENT CONTENT-STYLES ------------ */
+
+/* for the main content */
+.ev_main {
+	padding: 0.3em;
+	background-color: #f6f6f6;
+}
+
+/* the columns on the left (if 2 column-layout) */
+.ev_left {
+	padding: 0.3em;
+	font-size: 0.9em;
+	background-color: #DBDBDB;
+	font-weight: bold;
+}
+
+.ev_topic {
+	font-size: 1.1em;
+	font-weight: bold;
+	color: #fff;
+	padding: 0.8em;
+	background-color: #637591;
+	text-align: center;
+}
+h1.ev_topic {
+	margin: 0;
+	padding: 0.8em;
+}
+
+.ev_topic a {
+	color: #fff;
+	text-decoration: underline;
+}
+.ev_topic a:hover {
+	text-decoration: none;
+}
+
+.ev_desc {
+	padding-top: 0.3em;
+	font-size: 0.9em;
+}
+
+.ev_red {
+	background-color: #fbcbc0 !important;
+}
+.ev_green {
+	background-color: #bbfbbd !important;
+}
+
+/* ------------ TABLES ------------ */
+
+table.ev_noborder td, td.ev_noborder {
+    border: none !important;
+    padding: 0em !important;
+}
+table.ev_table {
+	border-collapse: collapse;
+	border-spacing: 2px;
+}
+table.ev_table td {
+	border: 1px solid #bbb;
+	padding: 0.5em;
+}
+table.ev_table th {
+	background-color: #637591;
+	border: 1px solid #bbb;
+	color: #fff;
+	padding: 0.8em;
+	font-size: 1.1em;
+}
+table.ev_table th a {
+	color: #fff;
+	text-decoration: underline;
+}
+table.ev_table th a:hover {
+	color: #fff;
+	text-decoration: none;
+}
+td.ev_coldesc {
+	font-weight: bold;
+	background-color: #f0f0f0;
+}
+
+.ev_highlight {
+	border: 2px solid #7a8ba9;
+}
+
+/* ------------ TABLE BORDER ------------ */
+
+.ev_border {
+	border-radius: 2px;
+	-moz-border-radius: 2px;
+	-khtml-border-radius: 2px;
+	-webkit-border-radius: 2px;
+	padding: 1px;
+	border: 1px solid #7F90AE;
+}
+
+.ev_code {
+	margin: 0.3em;
+	padding: 0.3em;
+	border: 1px dotted #999;
+	background-color: #fff;
+	font-family: monospace;
+}
+
+/* ------------ LISTS ------------ */
+
+ul.ev_source {
+	padding: 35px;
+}
+ul.ev_source li {
+	margin: 0;
+	padding: 0;
+}
+
+/* ------------ STATUS ------------ */
+
+td.ev_status_open {
+	padding: 4px 4px 4px 4px;
+	background-color: #F8B4B4;
+}
+
+td.ev_status_running {
+	padding: 4px 4px 4px 4px;
+	background-color: #fff366;
+}
+
+td.ev_status_not_tested {
+	padding: 4px 4px 4px 4px;
+	background-color: #a8d742;
+}
+
+td.ev_status_fixed {
+	padding: 4px 4px 4px 4px;
+	background-color: #cceedd;
+}
+
+td.ev_status_not_reproducable {
+	padding: 4px 4px 4px 4px;
+	background-color: #CC99CC;
+}
+
+td.ev_status_need_info {
+	padding: 4px 4px 4px 4px;
+	background-color: #FF6633;
+}
+
+/* ------------ BUTTONS ------------ */
+
+a.ev_button {
+	background-image: url(images/button.gif);
+	background-repeat: no-repeat;
+	width: 80px;
+	height: 20px;
+	line-height: 20px;
+	white-space: nowrap;
+	margin: 0px 2px 0px 2px;
+	display: block;
+	float: right;
+	text-align: center;
+	font-size: .8em;
+	text-decoration: none;
+	font-weight: bold;
+	color: #000000;
+}
+a.ev_button:hover {
+	color: #3F5E88;
+}
+
+a.ev_button_big {
+	background-image: url(images/button_big.gif);
+	background-repeat: no-repeat;
+	width: 120px;
+	height: 20px;
+	line-height: 20px;
+	white-space: nowrap;
+	margin: 0px 2px 0px 2px;
+	display: block;
+	float: right;
+	text-align: center;
+	font-size: .8em;
+	text-decoration: none;
+	font-weight: bold;
+	color: #000000;
+}
+a.ev_button_big:hover {
+	color: #3F5E88;
+}
+
+input.ev_btn_okay {
+	vertical-align: middle;
+	color: #008000;
+	width: 23px;
+	height: 23px;
+}
+
+input.ev_btn_cancel {
+	vertical-align: middle;
+	color: #800000;
+	width: 23px;
+	height: 23px;
+}
+
+/* ------------ MESSAGES ------------ */
+
+h1.ev_error {
+    background: #d70e0e;
+    color: #ffffff;
+}
+
+h1.ev_info {
+    background: #0041b9;
+    color: #ffffff;
+}
+
+span.ev_msg_error span.ev_msg_info {
+	font-weight: bold;
+}
