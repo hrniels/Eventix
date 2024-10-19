@@ -1,12 +1,13 @@
 use anyhow::anyhow;
 use chrono::offset::LocalResult;
-use chrono::{DateTime, Datelike, Duration, Months, NaiveDate, NaiveDateTime, Timelike, Weekday};
+use chrono::{DateTime, Datelike, Duration, Months, NaiveDateTime, Timelike, Weekday};
 use chrono_tz::Tz;
 use std::fmt::Debug;
 use std::str::FromStr;
 
 use crate::objects::CalDate;
 use crate::parser::Property;
+use crate::util;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Frequency {
@@ -88,41 +89,6 @@ pub struct WeekdayDesc {
     nth: Option<(u8, Side)>,
 }
 
-fn nth_weekday_of_month_front(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
-    NaiveDate::from_weekday_of_month_opt(date.year(), date.month(), day, n)
-}
-
-fn nth_weekday_of_month_back(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
-    let (year, month) = if date.month() == 12 {
-        (date.year() + 1, 1)
-    } else {
-        (date.year(), date.month() + 1)
-    };
-    let next_month = NaiveDate::from_ymd_opt(year, month, 1)?;
-    let last = next_month.pred_opt()?;
-    let last_weekday = last.weekday();
-    let last_day = last.day();
-    let first_to_dow = (7 + last_weekday.number_from_monday() - day.number_from_monday()) % 7;
-    let day = last_day - ((n - 1) as u32 * 7 + first_to_dow);
-    NaiveDate::from_ymd_opt(date.year(), date.month(), day)
-}
-
-fn nth_weekday_of_year_front(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
-    let year_start = NaiveDate::from_ymd_opt(date.year(), 1, 1)?;
-    let first_weekday = year_start.weekday();
-    let first_to_dow = (7 + day.number_from_monday() - first_weekday.number_from_monday()) % 7;
-    let day = (n - 1) as u32 * 7 + first_to_dow;
-    Some(year_start + Duration::days(day as i64))
-}
-
-fn nth_weekday_of_year_back(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
-    let year_end = NaiveDate::from_ymd_opt(date.year(), 12, 31)?;
-    let last_weekday = year_end.weekday();
-    let first_to_dow = (7 + last_weekday.number_from_monday() - day.number_from_monday()) % 7;
-    let day = (n - 1) as u32 * 7 + first_to_dow;
-    Some(year_end - Duration::days(day as i64))
-}
-
 impl WeekdayDesc {
     #[cfg(test)]
     pub fn new(day: Weekday, nth: Option<(u8, Side)>) -> Self {
@@ -138,8 +104,8 @@ impl WeekdayDesc {
                     || (rrule.freq == Frequency::Yearly && rrule.by_month.is_some())
                 {
                     match side {
-                        Side::Front => nth_weekday_of_month_front(date, self.day, n),
-                        Side::Back => nth_weekday_of_month_back(date, self.day, n),
+                        Side::Front => util::nth_weekday_of_month_front(date, self.day, n),
+                        Side::Back => util::nth_weekday_of_month_back(date, self.day, n),
                     }
                     .map(|d| d == date.date_naive())
                     .unwrap_or(false)
@@ -147,8 +113,8 @@ impl WeekdayDesc {
                 // offset within the year
                 else if rrule.freq == Frequency::Yearly {
                     match side {
-                        Side::Front => nth_weekday_of_year_front(date, self.day, n),
-                        Side::Back => nth_weekday_of_year_back(date, self.day, n),
+                        Side::Front => util::nth_weekday_of_year_front(date, self.day, n),
+                        Side::Back => util::nth_weekday_of_year_back(date, self.day, n),
                     }
                     .map(|d| d == date.date_naive())
                     .unwrap_or(false)
@@ -237,29 +203,6 @@ pub struct CalRRule {
     week_start: Option<Weekday>,
 }
 
-fn year_day(date: DateTime<Tz>) -> u32 {
-    date.date_naive()
-        .signed_duration_since(NaiveDate::from_ymd_opt(date.year() - 1, 12, 31).unwrap())
-        .num_days() as u32
-}
-
-fn year_days(year: i32) -> u32 {
-    NaiveDate::from_ymd_opt(year + 1, 1, 1)
-        .unwrap()
-        .signed_duration_since(NaiveDate::from_ymd_opt(year, 1, 1).unwrap())
-        .num_days() as u32
-}
-
-fn month_days(year: i32, month: u32) -> u32 {
-    if month == 12 {
-        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
-    } else {
-        NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap()
-    }
-    .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
-    .num_days() as u32
-}
-
 fn next_date(date: DateTime<Tz>, freq: Frequency, interval: u32) -> DateTime<Tz> {
     // we basically want to ignore DST here, in the sense that all recurrences of an event
     // that started at 9:00 AM should always be at 9:00 AM as well, regardless of whether
@@ -317,10 +260,10 @@ impl CalRRule {
         if let Some(by_yday) = &self.by_year_day {
             if self.freq <= Frequency::Hourly
                 && !by_yday.iter().any(|yd| match yd.side {
-                    Side::Front => yd.num as u32 == year_day(date),
+                    Side::Front => yd.num as u32 == util::year_day(date),
                     Side::Back => {
-                        let days = year_days(date.year());
-                        days - (yd.num - 1) as u32 == year_day(date)
+                        let days = util::year_days(date.year());
+                        days - (yd.num - 1) as u32 == util::year_day(date)
                     }
                 })
             {
@@ -332,7 +275,7 @@ impl CalRRule {
                 && !by_mday.iter().any(|wd| match wd.side {
                     Side::Front => wd.num as u32 == date.day(),
                     Side::Back => {
-                        let days = month_days(date.year(), date.month());
+                        let days = util::month_days(date.year(), date.month());
                         days - (wd.num - 1) as u32 == date.day()
                     }
                 })
@@ -408,7 +351,9 @@ impl CalRRule {
                     .iter()
                     .map(|md| match md.side {
                         Side::Front => md.num,
-                        Side::Back => month_days(date.year(), date.month()) as u16 - (md.num - 1),
+                        Side::Back => {
+                            util::month_days(date.year(), date.month()) as u16 - (md.num - 1)
+                        }
                     })
                     .collect();
             }
