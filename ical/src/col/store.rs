@@ -1,8 +1,8 @@
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::col::{CalItem, CalSource};
-use crate::objects::{CalComponent, CalEvent, CalTodo};
+use crate::col::{CalItem, CalSource, Id, Occurrence};
+use crate::objects::{CalEvent, CalTodo};
 
 #[derive(Default)]
 pub struct CalStore {
@@ -14,6 +14,10 @@ impl CalStore {
         self.sources.push(source);
     }
 
+    pub fn source(&self, id: Id) -> Option<&CalSource> {
+        self.sources.iter().find(|s| s.id() == id)
+    }
+
     pub fn sources(&self) -> &[CalSource] {
         &self.sources
     }
@@ -22,15 +26,15 @@ impl CalStore {
         self.sources.iter().flat_map(|c| c.items().iter())
     }
 
-    pub fn items_within(
+    pub fn components_within(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = (&CalComponent, DateTime<Tz>)> {
+    ) -> impl Iterator<Item = Occurrence<'_>> {
         self.sources
             .iter()
             .flat_map(|c| c.items().iter())
-            .flat_map(move |i| i.items_within(start, end))
+            .flat_map(move |i| i.occurrences_within(start, end))
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {

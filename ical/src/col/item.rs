@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::col::Id;
+use crate::col::{Id, Occurrence};
 use crate::objects::{CalComponent, CalDate, CalEvent, CalRRule, CalTodo, Calendar};
 
 fn dates_within(
@@ -54,26 +54,26 @@ pub struct CalItem {
     id: Id,
     source: Id,
     path: PathBuf,
-    item: Calendar,
+    cal: Calendar,
 }
 
 impl CalItem {
     #[cfg(test)]
-    fn new_simple(item: Calendar) -> Self {
+    fn new_simple(cal: Calendar) -> Self {
         Self {
             id: super::generate_id(),
             source: 0,
             path: PathBuf::default(),
-            item,
+            cal,
         }
     }
 
-    pub fn new(source: Id, path: PathBuf, item: Calendar) -> Self {
+    pub fn new(source: Id, path: PathBuf, cal: Calendar) -> Self {
         Self {
             id: super::generate_id(),
             source,
             path,
-            item,
+            cal,
         }
     }
 
@@ -89,17 +89,17 @@ impl CalItem {
         &self.path
     }
 
-    pub fn item(&self) -> &Calendar {
-        &self.item
+    pub fn calendar(&self) -> &Calendar {
+        &self.cal
     }
 
-    pub fn items_within(
+    pub fn occurrences_within(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> Vec<(&CalComponent, DateTime<Tz>)> {
+    ) -> Vec<Occurrence<'_>> {
         let Some(first) = self
-            .item
+            .cal
             .components()
             .iter()
             .find(|c| matches!(c, CalComponent::Event(_) | CalComponent::Todo(_)))
@@ -113,13 +113,13 @@ impl CalItem {
             _ => vec![],
         }
         .iter()
-        .map(|d| (first, *d))
+        .map(|d| Occurrence::new(self.source, first, *d))
         // TODO update/remove this list based on the other items in this calendar
         .collect()
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
-        self.item
+        self.cal
             .components()
             .iter()
             .filter(|&c| matches!(c, CalComponent::Todo(_)))
@@ -127,7 +127,7 @@ impl CalItem {
     }
 
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
-        self.item
+        self.cal
             .components()
             .iter()
             .filter(|&c| matches!(c, CalComponent::Event(_)))
@@ -195,16 +195,13 @@ mod tests {
         CalItem::new_simple(cal)
     }
 
-    fn has_uids<'a, I: Iterator<Item = (&'a CalComponent, DateTime<Tz>)>>(
-        result: I,
-        uids: &[&str],
-    ) -> bool {
+    fn has_uids<'a, I: Iterator<Item = Occurrence<'a>>>(result: I, uids: &[&str]) -> bool {
         let result = result.collect::<Vec<_>>();
         assert_eq!(result.len(), uids.len());
         for uid in uids {
             if result
                 .iter()
-                .find(|(c, _date)| c.as_event().unwrap().uid() == *uid)
+                .find(|o| o.component().as_event().unwrap().uid() == *uid)
                 .is_none()
             {
                 return false;
@@ -239,9 +236,8 @@ mod tests {
             "no2",
         ));
 
-        let items = source.items_within(new_date(2024, 10, 1), new_date(2024, 10, 31));
-        // assert!(has_uids(items, &["yes1", "yes2", "yes3"]));
-        println!("{:#?}", items.collect::<Vec<_>>());
+        let comps = source.components_within(new_date(2024, 10, 1), new_date(2024, 10, 31));
+        assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
     }
 
     #[test]
@@ -279,7 +275,7 @@ mod tests {
                 .done(),
         ));
 
-        let items = source.items_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
-        assert!(has_uids(items, &["yes1", "yes2", "yes3", "yes4"]));
+        let comps = source.components_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
+        assert!(has_uids(comps, &["yes1", "yes2", "yes3", "yes4"]));
     }
 }

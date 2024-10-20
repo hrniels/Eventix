@@ -24,6 +24,10 @@ impl CalEvent {
         self.uid = uid.to_string();
     }
 
+    pub fn is_all_day(&self) -> bool {
+        matches!(self.start, Some(CalDate::Date(_)))
+    }
+
     pub fn start(&self) -> Option<&CalDate> {
         self.start.as_ref()
     }

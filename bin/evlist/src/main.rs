@@ -1,13 +1,15 @@
 use anyhow::Context;
 use chrono::{Duration, Local};
 use ical::col::{CalSource, CalStore};
-use ical::objects::CalComponent;
 
 fn main() -> Result<(), anyhow::Error> {
     let dir = std::env::args().nth(1).unwrap();
 
     let mut store = CalStore::default();
-    store.add(CalSource::new_from_dir(dir.into()).context("Unable to parse calendar source")?);
+    store.add(
+        CalSource::new_from_dir(dir.into(), "".to_string())
+            .context("Unable to parse calendar source")?,
+    );
 
     println!("TODOs:");
     for todo in store.todos() {
@@ -16,21 +18,28 @@ fn main() -> Result<(), anyhow::Error> {
     println!();
 
     let now = Local::now();
-    let start = now.with_timezone(&chrono_tz::Europe::Berlin);
+    let start = now.with_timezone(&chrono_tz::Europe::Berlin) - Duration::days(8);
     let end = start + Duration::days(7);
 
-    let mut events = store
-        .items_within(start, end)
-        .filter_map(|(i, date)| match i {
-            CalComponent::Event(ev) => Some((ev, date)),
-            _ => None,
-        })
+    let mut occurrences = store
+        .components_within(start, end)
+        .filter(|o| o.component().is_event())
         .collect::<Vec<_>>();
-    events.sort_by(|(_, a), (_, b)| a.cmp(b));
+    occurrences.sort_by(|a, b| a.start().cmp(&b.start()));
 
     println!("Events between {} and {}:", start, end);
-    for (ev, date) in events {
-        println!("  {:?} ({:?})", ev.summary(), date);
+    for occ in occurrences {
+        let ev = occ.component().as_event().unwrap();
+        println!(
+            "  {:?} ({:?} for {})",
+            ev.summary(),
+            occ.start(),
+            if let Some(dur) = occ.duration() {
+                format!("{} min", dur.num_minutes())
+            } else {
+                format!("??")
+            }
+        );
     }
 
     Ok(())

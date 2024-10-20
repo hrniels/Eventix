@@ -7,7 +7,8 @@ mod state;
 use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
-use std::env;
+use ical::col::{CalSource, CalStore};
+use std::{env, path::PathBuf, sync::Arc};
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::{DefaultOnResponse, TraceLayer},
@@ -45,7 +46,25 @@ async fn main() {
 
     let args = Args::parse();
 
-    let state = state::State::new();
+    let mut store = CalStore::default();
+    store.add(
+        CalSource::new_from_dir(
+            PathBuf::from(
+                "/home/hrniels/.config/vdirsyncer/calendars/calendar~jt7D6iFxhujcnk_A7SJmbFq",
+            ),
+            "scriptsolution".to_string(),
+        )
+        .expect("Loading calendar failed"),
+    );
+    store.add(
+        CalSource::new_from_dir(
+            PathBuf::from("/home/hrniels/.config/vdirsyncer/outlook-calendars/calendar"),
+            "bi".to_string(),
+        )
+        .expect("Loading calendar failed"),
+    );
+
+    let state = state::State::new(Arc::new(store));
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
         .nest_service("/static", ServeDir::new("static"))

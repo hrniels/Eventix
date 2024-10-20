@@ -292,6 +292,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-targets",
 ]
@@ -398,7 +399,9 @@ dependencies = [
  "askama",
  "axum",
  "chrono",
+ "chrono-tz",
  "clap",
+ "ical",
  "itertools",
  "numfmt",
  "once_cell",

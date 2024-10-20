@@ -13,6 +13,14 @@ pub enum CalComponent {
 }
 
 impl CalComponent {
+    pub fn is_event(&self) -> bool {
+        matches!(self, Self::Event(_))
+    }
+
+    pub fn is_todo(&self) -> bool {
+        matches!(self, Self::Todo(_))
+    }
+
     pub fn as_event(&self) -> Option<&CalEvent> {
         match self {
             Self::Event(ev) => Some(ev),

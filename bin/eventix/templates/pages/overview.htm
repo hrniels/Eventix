@@ -2,4 +2,58 @@
 
 {% block content %}
 
+<table width="100%" class="ev_table">
+    <tr>
+        <th align="left"><a href="?month={{ prev_month }}">&lt;&lt;</a></th>
+        <th colspan="5" align="center">{{ month }}</th>
+        <th align="right"><a href="?month={{ next_month }}">&gt;&gt;</a></th>
+    </tr>
+    <tr>
+        {% for wday in weekdays %}
+        <td align="center"><b>{{ wday }}</b></td>
+        {% endfor %}
+    </tr>
+    {% for (idx, day) in days.iter().enumerate() %}
+    {% if idx % 7 == 0 %}
+    <tr>
+    {% endif %}
+        <td width="14%" class="ev_month_td">
+            <div class="ev_month_cell">
+                <div class="
+                    ev_month_day_header
+                    {% if day.cur_month %}ev_cur_month{% endif %}
+                    ">
+                    {% if day.date == today %}<span class="ev_today">{% endif %}
+                    {% if day.show_month %}
+                    {{ day.date.format("%b %-d") }}
+                    {% else %}
+                    {{ day.date.format("%-d") }}
+                    {% endif %}
+                    {% if day.date == today %}</span>{% endif %}
+                </div>
+                {% for occ in day.occurrences %}
+                {% match occ.component() %}
+                {% when CalComponent::Event with (ev) %}
+                <div class="ev_cal_src_{{ store.source(occ.source()).unwrap().class() }}">
+                    {% if !ev.is_all_day() %}
+                    {{ occ.start().format("%H:%M") }}:
+                    {% else %}
+                    <center>
+                    {% endif %}
+                    {{ ev.summary().unwrap() }}
+                    {% if ev.is_all_day() %}
+                    </center>
+                    {% endif %}
+                </div>
+                {% when _ %}
+                {% endmatch %}
+                {% endfor %}
+            </div>
+        </td>
+    {% if idx % 7 == 6 %}
+    </tr>
+    {% endif %}
+    {% endfor %}
+</table>
+
 {% endblock %}

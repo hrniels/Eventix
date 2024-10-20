@@ -5,12 +5,13 @@ use std::fs::{read_dir, File};
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::col::{CalItem, Id};
-use crate::objects::{CalComponent, Calendar};
+use crate::col::{CalItem, Id, Occurrence};
+use crate::objects::Calendar;
 
 pub struct CalSource {
     id: Id,
     path: PathBuf,
+    class: String,
     items: Vec<CalItem>,
 }
 
@@ -19,13 +20,14 @@ impl Default for CalSource {
         Self {
             id: super::generate_id(),
             path: PathBuf::default(),
+            class: String::default(),
             items: Vec::new(),
         }
     }
 }
 
 impl CalSource {
-    pub fn new_from_dir(path: PathBuf) -> Result<Self, anyhow::Error> {
+    pub fn new_from_dir(path: PathBuf, class: String) -> Result<Self, anyhow::Error> {
         let id = super::generate_id();
 
         let mut items = Vec::new();
@@ -42,7 +44,12 @@ impl CalSource {
             items.push(cal);
         }
 
-        Ok(Self { id, path, items })
+        Ok(Self {
+            id,
+            path,
+            class,
+            items,
+        })
     }
 
     pub fn id(&self) -> Id {
@@ -53,6 +60,10 @@ impl CalSource {
         &self.path
     }
 
+    pub fn class(&self) -> &String {
+        &self.class
+    }
+
     pub fn add(&mut self, item: CalItem) {
         self.items.push(item);
     }
@@ -61,13 +72,13 @@ impl CalSource {
         &self.items
     }
 
-    pub fn items_within(
+    pub fn components_within(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = (&CalComponent, DateTime<Tz>)> {
+    ) -> impl Iterator<Item = Occurrence<'_>> {
         self.items
             .iter()
-            .flat_map(move |i| i.items_within(start, end))
+            .flat_map(move |i| i.occurrences_within(start, end))
     }
 }

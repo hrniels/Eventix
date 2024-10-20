@@ -351,3 +351,55 @@ h1.ev_info {
 span.ev_msg_error span.ev_msg_info {
 	font-weight: bold;
 }
+
+/* ------------ MONTH VIEW ------------ */
+
+.ev_month_td {
+    max-width: 5cm;
+    height: 3cm;
+    vertical-align: top;
+    padding: 0px !important;
+}
+
+.ev_month_day_header {
+    text-align: right;
+    background-color: #f0f0f0;
+    color: #555;
+}
+.ev_cur_month {
+    background-color: #ddd;
+    color: #000 !important;
+}
+.ev_today {
+    border-radius: 50%;
+    background-color: #3584e4;
+    padding: 2px;
+    color: #fff;
+    font-weight: bold;
+}
+
+.ev_month_cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.ev_month_cell div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: .2em;
+}
+
+/* ------------ CALENDAR SOURCES ------------ */
+
+div.ev_cal_src_bi {
+    border: 1px solid #fff;
+    background-color: #1d77c0;
+    color: #fff;
+}
+
+div.ev_cal_src_scriptsolution {
+    border: 1px solid #fff;
+    background-color: #2ec17d;
+    color: #fff;
+}
