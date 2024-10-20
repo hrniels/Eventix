@@ -9,7 +9,7 @@ use axum::{
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ical::{
     col::{CalStore, Occurrence},
-    objects::CalComponent,
+    objects::{CalComponent, CalEventStatus},
     util,
 };
 use serde::Deserialize;

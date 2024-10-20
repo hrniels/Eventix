@@ -1,8 +1,8 @@
 /* ------------ GENERAL ------------ */
 
 body {
-	font-family: verdana, helvetica, arial, sans-serif;
-	font-size: .8em;
+	font-family: 'Linux Biolinum', 'Georgia', verdana, arial, sans-serif;
+	font-size: .9em;
 }
 
 div#ajax_wait_bar {
@@ -376,6 +376,11 @@ span.ev_msg_error span.ev_msg_info {
     padding: 2px;
     color: #fff;
     font-weight: bold;
+}
+
+.ev_cal_cancelled {
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
 }
 
 .ev_month_cell {

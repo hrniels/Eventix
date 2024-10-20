@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use std::io::BufRead;
 
-use crate::objects::{CalDate, CalRRule, CalStatus};
+use crate::objects::{CalDate, CalRRule, CalTodoStatus};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Default, Debug)]
@@ -10,7 +10,7 @@ pub struct CalTodo {
     created: CalDate,
     last_mod: CalDate,
     categories: Vec<String>,
-    status: Option<CalStatus>,
+    status: Option<CalTodoStatus>,
     completed: Option<CalDate>,
     summary: Option<String>,
     desc: Option<String>,
@@ -135,7 +135,7 @@ impl PropertyConsumer for CalTodo {
 mod tests {
     use chrono::{NaiveDate, TimeZone, Utc};
 
-    use crate::objects::{CalDate, CalDateTime, CalStatus, Calendar};
+    use crate::objects::{CalDate, CalDateTime, CalTodoStatus, Calendar};
 
     #[test]
     fn basics() {
@@ -172,7 +172,7 @@ END:VCALENDAR";
             Some(CalDate::Date(NaiveDate::from_ymd_opt(2007, 5, 1).unwrap()))
         );
 
-        assert_eq!(todo.status, Some(CalStatus::NeedsAction));
+        assert_eq!(todo.status, Some(CalTodoStatus::NeedsAction));
         assert_eq!(
             todo.categories,
             vec!["FAMILY".to_string(), "FINANCE".to_string()]

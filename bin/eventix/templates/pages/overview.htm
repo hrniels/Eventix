@@ -34,7 +34,14 @@
                 {% for occ in day.occurrences %}
                 {% match occ.component() %}
                 {% when CalComponent::Event with (ev) %}
-                <div class="ev_cal_src_{{ store.source(occ.source()).unwrap().class() }}">
+                <div class="
+                    ev_cal_src_{{ store.source(occ.source()).unwrap().class() }}
+                    {% match ev.status() %}
+                    {% when Some(CalEventStatus::Cancelled) %}
+                    ev_cal_cancelled
+                    {% when _ %}
+                    {% endmatch %}
+                    ">
                     {% if !ev.is_all_day() %}
                     {{ occ.start().format("%H:%M") }}:
                     {% else %}

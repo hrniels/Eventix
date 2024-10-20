@@ -18,7 +18,7 @@ fn main() -> Result<(), anyhow::Error> {
     println!();
 
     let now = Local::now();
-    let start = now.with_timezone(&chrono_tz::Europe::Berlin) - Duration::days(8);
+    let start = now.with_timezone(&chrono_tz::Europe::Berlin) - Duration::days(16);
     let end = start + Duration::days(7);
 
     let mut occurrences = store

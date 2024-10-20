@@ -28,8 +28,16 @@ impl<'c> Occurrence<'c> {
         self.comp
     }
 
+    pub fn set_component(&mut self, comp: &'c CalComponent) {
+        self.comp = comp;
+    }
+
     pub fn start(&self) -> DateTime<Tz> {
         self.start
+    }
+
+    pub fn set_start(&mut self, start: DateTime<Tz>) {
+        self.start = start;
     }
 
     pub fn end(&self) -> Option<DateTime<Tz>> {

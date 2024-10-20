@@ -2,14 +2,14 @@ use anyhow::anyhow;
 use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum CalStatus {
+pub enum CalTodoStatus {
     NeedsAction,
     Completed,
     InProcess,
     Cancelled,
 }
 
-impl FromStr for CalStatus {
+impl FromStr for CalTodoStatus {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -18,6 +18,26 @@ impl FromStr for CalStatus {
             "COMPLETED" => Ok(Self::Completed),
             "IN-PROCESS" => Ok(Self::InProcess),
             "CANCELLED" => Ok(Self::Cancelled),
+            _ => Err(anyhow!("Invalid status {}", s)),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CalEventStatus {
+    Tentative,
+    Confirmed,
+    Cancelled,
+}
+
+impl FromStr for CalEventStatus {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "TENTATIVE" => Ok(Self::Tentative),
+            "CANCELLED" => Ok(Self::Cancelled),
+            "CONFIRMED" => Ok(Self::Confirmed),
             _ => Err(anyhow!("Invalid status {}", s)),
         }
     }

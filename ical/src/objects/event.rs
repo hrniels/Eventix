@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use std::io::BufRead;
 
-use crate::objects::{CalDate, CalRRule};
+use crate::objects::{CalDate, CalEventStatus, CalRRule};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Default, Debug)]
@@ -9,9 +9,11 @@ pub struct CalEvent {
     uid: String,
     created: CalDate,
     summary: Option<String>,
+    status: Option<CalEventStatus>,
     start: Option<CalDate>,
     end: Option<CalDate>,
     rrule: Option<CalRRule>,
+    rid: Option<CalDate>,
     props: Vec<Property>,
 }
 
@@ -26,6 +28,10 @@ impl CalEvent {
 
     pub fn is_all_day(&self) -> bool {
         matches!(self.start, Some(CalDate::Date(_)))
+    }
+
+    pub fn status(&self) -> Option<CalEventStatus> {
+        self.status
     }
 
     pub fn start(&self) -> Option<&CalDate> {
@@ -46,6 +52,10 @@ impl CalEvent {
 
     pub fn rrule(&self) -> Option<&CalRRule> {
         self.rrule.as_ref()
+    }
+
+    pub fn rid(&self) -> Option<&CalDate> {
+        self.rid.as_ref()
     }
 
     pub fn summary(&self) -> Option<&String> {
@@ -81,6 +91,9 @@ impl PropertyConsumer for CalEvent {
                 "SUMMARY" => {
                     comp.summary = Some(prop.take_value());
                 }
+                "STATUS" => {
+                    comp.status = Some(prop.value().parse()?);
+                }
                 "DTSTART" => {
                     comp.start = Some(prop.try_into()?);
                 }
@@ -89,6 +102,9 @@ impl PropertyConsumer for CalEvent {
                 }
                 "RRULE" => {
                     comp.rrule = Some(prop.value().parse()?);
+                }
+                "RECURRENCE-ID" => {
+                    comp.rid = Some(prop.try_into()?);
                 }
                 _ => {
                     comp.props.push(prop);

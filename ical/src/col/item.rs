@@ -107,15 +107,38 @@ impl CalItem {
             return vec![];
         };
 
-        match first {
+        let mut occs = match first {
             CalComponent::Event(ev) => dates_within(start, end, ev.start(), ev.end(), ev.rrule()),
             CalComponent::Todo(ev) => dates_within(start, end, ev.start(), ev.due(), ev.rrule()),
             _ => vec![],
         }
         .iter()
         .map(|d| Occurrence::new(self.source, first, *d))
-        // TODO update/remove this list based on the other items in this calendar
-        .collect()
+        .collect::<Vec<_>>();
+
+        // update occurrences from components that references specific occurrences
+        if occs.len() > 0 {
+            for c in self.cal.components() {
+                if let CalComponent::Event(ev) = c {
+                    if let Some(rid) = ev.rid() {
+                        let rid_tz = rid.as_start_with_tz(&start.timezone());
+                        if let Some(occ) = occs.iter_mut().find(|o| o.start() == rid_tz) {
+                            if let Some(ev_start) = ev.start() {
+                                occ.set_start(ev_start.as_start_with_tz(&start.timezone()));
+                            }
+                            occ.set_component(c);
+                        } else {
+                            // otherwise this recurrence should be outside of the range
+                            assert!(
+                                !(rid.as_start_with_tz(&start.timezone()) >= start
+                                    && rid.as_end_with_tz(&start.timezone()) <= end)
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        occs
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
