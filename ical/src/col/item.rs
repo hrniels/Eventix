@@ -4,7 +4,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{Id, Occurrence};
-use crate::objects::{CalEvent, CalTodo, Calendar};
+use crate::objects::{CalComponent, CalEvent, CalTodo, Calendar};
 
 pub struct CalItem {
     id: Id,
@@ -47,6 +47,13 @@ impl CalItem {
 
     pub fn calendar(&self) -> &Calendar {
         &self.cal
+    }
+
+    pub fn component_by_uid<S: AsRef<str>>(&self, uid: S) -> Option<&CalComponent> {
+        self.cal
+            .components()
+            .iter()
+            .find(|c| c.uid() == uid.as_ref() && c.rid().is_none())
     }
 
     pub fn occurrences_within(
@@ -247,5 +254,12 @@ mod tests {
 
         let comps = source.components_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
         assert!(has_uids(comps, &["yes1", "yes2", "yes3", "yes4"]));
+        let uid_yes1 = source.component_by_uid("yes1").unwrap();
+        assert_eq!(uid_yes1.uid(), "yes1");
+        let uid_yes2 = source.component_by_uid("yes2").unwrap();
+        assert_eq!(uid_yes2.uid(), "yes2");
+        let uid_no2 = source.component_by_uid("no2").unwrap();
+        assert_eq!(uid_no2.uid(), "no2");
+        assert!(source.component_by_uid("not-found").is_none());
     }
 }

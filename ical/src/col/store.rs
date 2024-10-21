@@ -2,7 +2,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{CalItem, CalSource, Id, Occurrence};
-use crate::objects::{CalEvent, CalTodo};
+use crate::objects::{CalComponent, CalEvent, CalTodo};
 
 #[derive(Default)]
 pub struct CalStore {
@@ -24,6 +24,13 @@ impl CalStore {
 
     pub fn items(&self) -> impl Iterator<Item = &CalItem> {
         self.sources.iter().flat_map(|c| c.items().iter())
+    }
+
+    pub fn component_by_uid<S: AsRef<str>>(&self, uid: S) -> Option<&CalComponent> {
+        let uid_str = uid.as_ref();
+        self.sources
+            .iter()
+            .find_map(|c| c.component_by_uid(uid_str))
     }
 
     pub fn components_within(

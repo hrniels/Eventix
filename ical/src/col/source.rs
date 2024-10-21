@@ -6,7 +6,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use crate::col::{CalItem, Id, Occurrence};
-use crate::objects::Calendar;
+use crate::objects::{CalComponent, Calendar};
 
 pub struct CalSource {
     id: Id,
@@ -70,6 +70,11 @@ impl CalSource {
 
     pub fn items(&self) -> &[CalItem] {
         &self.items
+    }
+
+    pub fn component_by_uid<S: AsRef<str>>(&self, uid: S) -> Option<&CalComponent> {
+        let uid_str = uid.as_ref();
+        self.items.iter().find_map(|c| c.component_by_uid(uid_str))
     }
 
     pub fn components_within(
