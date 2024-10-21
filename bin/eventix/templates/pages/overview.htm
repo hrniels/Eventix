@@ -32,28 +32,24 @@
                     {% if day.date == today %}</span>{% endif %}
                 </div>
                 {% for occ in day.occurrences %}
-                {% match occ.component() %}
-                {% when CalComponent::Event with (ev) %}
                 <div class="
                     ev_cal_src_{{ store.source(occ.source()).unwrap().class() }}
-                    {% match ev.status() %}
-                    {% when Some(CalEventStatus::Cancelled) %}
-                    ev_cal_cancelled
+                    {% match occ.status_class() %}
+                    {% when Some with (cl) %}
+                    ev_status_{{ cl }}
                     {% when _ %}
                     {% endmatch %}
                     ">
-                    {% if !ev.is_all_day() %}
+                    {% if !occ.component().is_all_day() %}
                     {{ occ.start().format("%H:%M") }}:
                     {% else %}
                     <center>
                     {% endif %}
-                    {{ ev.summary().unwrap() }}
-                    {% if ev.is_all_day() %}
+                    {{ occ.component().summary().unwrap() }}
+                    {% if occ.component().is_all_day() %}
                     </center>
                     {% endif %}
                 </div>
-                {% when _ %}
-                {% endmatch %}
                 {% endfor %}
             </div>
         </td>

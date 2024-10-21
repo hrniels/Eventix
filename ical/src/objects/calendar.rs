@@ -2,44 +2,14 @@ use anyhow::anyhow;
 use std::io::BufRead;
 use std::str::FromStr;
 
-use crate::objects::{CalEvent, CalTodo};
+use crate::objects::{CalComponent, CalEvent, CalTodo};
 use crate::parser::{LineReader, Property, PropertyConsumer};
-
-#[derive(Debug)]
-pub enum CalComponent {
-    Event(CalEvent),
-    Todo(CalTodo),
-    Other(Other),
-}
-
-impl CalComponent {
-    pub fn is_event(&self) -> bool {
-        matches!(self, Self::Event(_))
-    }
-
-    pub fn is_todo(&self) -> bool {
-        matches!(self, Self::Todo(_))
-    }
-
-    pub fn as_event(&self) -> Option<&CalEvent> {
-        match self {
-            Self::Event(ev) => Some(ev),
-            _ => None,
-        }
-    }
-
-    pub fn as_todo(&self) -> Option<&CalTodo> {
-        match self {
-            Self::Todo(todo) => Some(todo),
-            _ => None,
-        }
-    }
-}
 
 #[derive(Default, Debug)]
 pub struct Calendar {
     comps: Vec<CalComponent>,
     props: Vec<Property>,
+    other: Vec<Other>,
 }
 
 impl Calendar {
@@ -81,8 +51,8 @@ impl PropertyConsumer for Calendar {
                     cal.comps.push(event);
                 }
                 "BEGIN" => {
-                    let other = CalComponent::Other(Other::from_lines(lines, prop)?);
-                    cal.comps.push(other);
+                    let other = Other::from_lines(lines, prop)?;
+                    cal.other.push(other);
                 }
                 "END" => {
                     if prop.value() != "VCALENDAR" {

@@ -9,22 +9,46 @@ use axum::{
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ical::{
     col::{CalStore, Occurrence},
-    objects::{CalComponent, CalEventStatus},
+    objects::CalComponent,
     util,
 };
 use serde::Deserialize;
-use std::{cmp::Ordering, str::FromStr, sync::Arc};
+use std::{cmp::Ordering, ops::Deref, str::FromStr, sync::Arc};
 
 use super::Page;
 use crate::error::HTMLError;
 use crate::html::filters;
 use crate::locale::{self, Locale};
 
+struct DayOccurrence<'a> {
+    inner: Occurrence<'a>,
+}
+
+impl<'a> DayOccurrence<'a> {
+    fn new(inner: Occurrence<'a>) -> Self {
+        Self { inner }
+    }
+
+    fn status_class(&self) -> Option<String> {
+        match self.inner.component() {
+            CalComponent::Event(ev) => ev.status().map(|st| format!("{:?}", st)),
+            CalComponent::Todo(td) => td.status().map(|st| format!("{:?}", st)),
+        }
+    }
+}
+
+impl<'a> Deref for DayOccurrence<'a> {
+    type Target = Occurrence<'a>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 struct Day<'a> {
     date: NaiveDate,
     show_month: bool,
     cur_month: bool,
-    occurrences: Vec<&'a Occurrence<'a>>,
+    occurrences: Vec<&'a DayOccurrence<'a>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,6 +115,7 @@ async fn handler(
         .store()
         .components_within(mstart, mend)
         .filter(|occ| occ.component().is_event())
+        .map(|occ| DayOccurrence::new(occ))
         .collect::<Vec<_>>();
 
     let mut days = Vec::new();
@@ -106,16 +131,13 @@ async fn handler(
             .iter()
             .filter(|o| o.overlaps(day_start, day_end))
             .collect::<Vec<_>>();
-        day_occs.sort_by(|a, b| {
-            match (
-                a.component().as_event().unwrap().is_all_day(),
-                b.component().as_event().unwrap().is_all_day(),
-            ) {
+        day_occs.sort_by(
+            |a, b| match (a.component().is_all_day(), b.component().is_all_day()) {
                 (true, true) | (false, false) => a.start().cmp(&b.start()),
                 (true, false) => Ordering::Less,
                 (false, true) => Ordering::Greater,
-            }
-        });
+            },
+        );
 
         days.push(Day {
             date,

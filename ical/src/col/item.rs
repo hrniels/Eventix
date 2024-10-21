@@ -4,51 +4,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{Id, Occurrence};
-use crate::objects::{CalComponent, CalDate, CalEvent, CalRRule, CalTodo, Calendar};
-
-fn dates_within(
-    start: DateTime<Tz>,
-    end: DateTime<Tz>,
-    ev_start: Option<&CalDate>,
-    ev_end: Option<&CalDate>,
-    rrule: Option<&CalRRule>,
-) -> Vec<DateTime<Tz>> {
-    if let Some(rrule) = rrule {
-        let Some(dtstart) = ev_start else {
-            return vec![];
-        };
-        return rrule.dates_within(dtstart.as_start_with_tz(&start.timezone()), start, end);
-    }
-
-    match (ev_start, ev_end) {
-        (Some(ev_start), Some(ev_end)) => {
-            let tzstart = ev_start.as_start_with_tz(&start.timezone());
-            let tzend = ev_end.as_end_with_tz(&start.timezone());
-            if tzstart > end || tzend < start {
-                vec![]
-            } else {
-                vec![tzstart]
-            }
-        }
-        (Some(ev_start), None) => {
-            let tzstart = ev_start.as_start_with_tz(&start.timezone());
-            if tzstart > end {
-                vec![]
-            } else {
-                vec![end]
-            }
-        }
-        (None, Some(ev_end)) => {
-            let tzend = ev_end.as_end_with_tz(&start.timezone());
-            if tzend < start {
-                vec![]
-            } else {
-                vec![start]
-            }
-        }
-        (None, None) => vec![start],
-    }
-}
+use crate::objects::{CalComponent, CalEvent, CalTodo, Calendar};
 
 pub struct CalItem {
     id: Id,
@@ -107,33 +63,28 @@ impl CalItem {
             return vec![];
         };
 
-        let mut occs = match first {
-            CalComponent::Event(ev) => dates_within(start, end, ev.start(), ev.end(), ev.rrule()),
-            CalComponent::Todo(ev) => dates_within(start, end, ev.start(), ev.due(), ev.rrule()),
-            _ => vec![],
-        }
-        .iter()
-        .map(|d| Occurrence::new(self.source, first, *d))
-        .collect::<Vec<_>>();
+        let mut occs = first
+            .dates_within(start, end)
+            .iter()
+            .map(|d| Occurrence::new(self.source, first, *d))
+            .collect::<Vec<_>>();
 
         // update occurrences from components that references specific occurrences
         if occs.len() > 0 {
             for c in self.cal.components() {
-                if let CalComponent::Event(ev) = c {
-                    if let Some(rid) = ev.rid() {
-                        let rid_tz = rid.as_start_with_tz(&start.timezone());
-                        if let Some(occ) = occs.iter_mut().find(|o| o.start() == rid_tz) {
-                            if let Some(ev_start) = ev.start() {
-                                occ.set_start(ev_start.as_start_with_tz(&start.timezone()));
-                            }
-                            occ.set_component(c);
-                        } else {
-                            // otherwise this recurrence should be outside of the range
-                            assert!(
-                                !(rid.as_start_with_tz(&start.timezone()) >= start
-                                    && rid.as_end_with_tz(&start.timezone()) <= end)
-                            );
+                if let Some(rid) = c.rid() {
+                    let rid_tz = rid.as_start_with_tz(&start.timezone());
+                    if let Some(occ) = occs.iter_mut().find(|o| o.start() == rid_tz) {
+                        if let Some(cstart) = c.start() {
+                            occ.set_start(cstart.as_start_with_tz(&start.timezone()));
                         }
+                        occ.set_component(c);
+                    } else {
+                        // otherwise this recurrence should be outside of the range
+                        assert!(
+                            !(rid.as_start_with_tz(&start.timezone()) >= start
+                                && rid.as_end_with_tz(&start.timezone()) <= end)
+                        );
                     }
                 }
             }
@@ -163,6 +114,7 @@ mod tests {
     use chrono::{NaiveDate, TimeZone};
 
     use crate::col::CalSource;
+    use crate::objects::{CalComponent, CalDate};
 
     use super::*;
 

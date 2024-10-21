@@ -60,7 +60,6 @@ impl<'c> Occurrence<'c> {
                 ),
                 _ => None,
             },
-            _ => None,
         }
     }
 

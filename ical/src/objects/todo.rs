@@ -1,47 +1,52 @@
 use anyhow::anyhow;
 use std::io::BufRead;
+use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalRRule, CalTodoStatus};
+use crate::objects::{CalDate, CalTodoStatus, EventLike};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Default, Debug)]
 pub struct CalTodo {
-    uid: String,
-    created: CalDate,
-    last_mod: CalDate,
-    categories: Vec<String>,
+    inner: EventLike,
+    due: Option<CalDate>,
     status: Option<CalTodoStatus>,
     completed: Option<CalDate>,
-    summary: Option<String>,
-    desc: Option<String>,
-    start: Option<CalDate>,
-    due: Option<CalDate>,
-    rrule: Option<CalRRule>,
-    // 0 = undefined; 1 = highest, 9 = lowest
-    priority: Option<u8>,
     percent: Option<u8>,
-    props: Vec<Property>,
 }
 
 impl CalTodo {
-    pub fn uid(&self) -> &String {
-        &self.uid
-    }
-
-    pub fn start(&self) -> Option<&CalDate> {
-        self.start.as_ref()
+    pub(crate) fn inner(&self) -> &EventLike {
+        &self.inner
     }
 
     pub fn due(&self) -> Option<&CalDate> {
         self.due.as_ref()
     }
 
-    pub fn rrule(&self) -> Option<&CalRRule> {
-        self.rrule.as_ref()
+    pub fn status(&self) -> Option<CalTodoStatus> {
+        self.status
     }
 
-    pub fn summary(&self) -> Option<&String> {
-        self.summary.as_ref()
+    pub fn completed(&self) -> Option<&CalDate> {
+        self.completed.as_ref()
+    }
+
+    pub fn percent(&self) -> Option<u8> {
+        self.percent
+    }
+}
+
+impl Deref for CalTodo {
+    type Target = EventLike;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for CalTodo {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
@@ -67,54 +72,14 @@ impl PropertyConsumer for CalTodo {
                     }
                     break Ok(comp);
                 }
-                "UID" => {
-                    comp.uid = prop.take_value();
-                }
-                "CREATED" => {
-                    comp.created = prop.try_into()?;
-                }
-                "LAST-MODIFIED" => {
-                    comp.last_mod = prop.try_into()?;
-                }
                 "COMPLETED" => {
                     comp.completed = Some(prop.try_into()?);
-                }
-                "DTSTAMP" => {
-                    let stamp_date: CalDate = prop.try_into()?;
-                    comp.created = stamp_date.clone();
-                    comp.last_mod = stamp_date.clone();
-                }
-                "SUMMARY" => {
-                    comp.summary = Some(prop.take_value());
-                }
-                "DESCRIPTION" => {
-                    comp.desc = Some(prop.take_value());
-                }
-                "CATEGORIES" => {
-                    comp.categories = prop
-                        .value()
-                        .split(',')
-                        .map(|v| v.trim().to_string())
-                        .collect();
-                }
-                "DTSTART" => {
-                    comp.start = Some(prop.try_into()?);
                 }
                 "DUE" => {
                     comp.due = Some(prop.try_into()?);
                 }
                 "STATUS" => {
                     comp.status = Some(prop.value().parse()?);
-                }
-                "RRULE" => {
-                    comp.rrule = Some(prop.value().parse()?);
-                }
-                "PRIORITY" => {
-                    let prio = prop.value().parse()?;
-                    if prio >= 10 {
-                        return Err(anyhow!("Invalid priority: {}", prio));
-                    }
-                    comp.priority = Some(prio);
                 }
                 "PERCENT-COMPLETE" => {
                     let percent = prop.value().parse()?;
@@ -124,7 +89,7 @@ impl PropertyConsumer for CalTodo {
                     comp.percent = Some(percent);
                 }
                 _ => {
-                    comp.props.push(prop);
+                    comp.inner.parse_prop(prop)?;
                 }
             }
         }
@@ -153,19 +118,19 @@ PERCENT-COMPLETE:10
 END:VTODO
 END:VCALENDAR";
         let cal = todo_str.parse::<Calendar>().unwrap();
-        let todo = &cal.components()[0].as_todo().unwrap();
+        let todo = cal.components()[0].as_todo().unwrap();
 
-        assert_eq!(&todo.uid, "20070313T123432Z-456553@example.com");
+        assert_eq!(todo.uid(), "20070313T123432Z-456553@example.com");
         assert_eq!(
-            todo.summary,
-            Some("Submit Quebec Income Tax Return for 2006".to_string())
+            todo.summary(),
+            Some(&"Submit Quebec Income Tax Return for 2006".to_string())
         );
 
         let stamp = CalDate::DateTime(CalDateTime::Utc(
             Utc.with_ymd_and_hms(2007, 3, 13, 12, 34, 32).unwrap(),
         ));
-        assert_eq!(todo.created, stamp);
-        assert_eq!(todo.last_mod, stamp);
+        assert_eq!(todo.created(), &stamp);
+        assert_eq!(todo.last_modified(), &stamp);
 
         assert_eq!(
             todo.due,
@@ -174,7 +139,7 @@ END:VCALENDAR";
 
         assert_eq!(todo.status, Some(CalTodoStatus::NeedsAction));
         assert_eq!(
-            todo.categories,
+            todo.categories(),
             vec!["FAMILY".to_string(), "FINANCE".to_string()]
         );
 

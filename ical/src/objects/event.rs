@@ -1,45 +1,24 @@
 use anyhow::anyhow;
 use std::io::BufRead;
+use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalEventStatus, CalRRule};
+use crate::objects::{CalDate, CalEventStatus, EventLike};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Default, Debug)]
 pub struct CalEvent {
-    uid: String,
-    created: CalDate,
-    summary: Option<String>,
+    inner: EventLike,
     status: Option<CalEventStatus>,
-    start: Option<CalDate>,
     end: Option<CalDate>,
-    rrule: Option<CalRRule>,
-    rid: Option<CalDate>,
-    props: Vec<Property>,
 }
 
 impl CalEvent {
-    pub fn uid(&self) -> &String {
-        &self.uid
-    }
-
-    pub fn set_uid<T: ToString>(&mut self, uid: T) {
-        self.uid = uid.to_string();
-    }
-
-    pub fn is_all_day(&self) -> bool {
-        matches!(self.start, Some(CalDate::Date(_)))
+    pub(crate) fn inner(&self) -> &EventLike {
+        &self.inner
     }
 
     pub fn status(&self) -> Option<CalEventStatus> {
         self.status
-    }
-
-    pub fn start(&self) -> Option<&CalDate> {
-        self.start.as_ref()
-    }
-
-    pub fn set_start(&mut self, start: CalDate) {
-        self.start = Some(start);
     }
 
     pub fn end(&self) -> Option<&CalDate> {
@@ -49,17 +28,19 @@ impl CalEvent {
     pub fn set_end(&mut self, end: CalDate) {
         self.end = Some(end);
     }
+}
 
-    pub fn rrule(&self) -> Option<&CalRRule> {
-        self.rrule.as_ref()
+impl Deref for CalEvent {
+    type Target = EventLike;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
+}
 
-    pub fn rid(&self) -> Option<&CalDate> {
-        self.rid.as_ref()
-    }
-
-    pub fn summary(&self) -> Option<&String> {
-        self.summary.as_ref()
+impl DerefMut for CalEvent {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
@@ -82,32 +63,14 @@ impl PropertyConsumer for CalEvent {
                 "END" if prop.value() == "VEVENT" => {
                     break Ok(comp);
                 }
-                "UID" => {
-                    comp.uid = prop.take_value();
-                }
-                "CREATED" => {
-                    comp.created = prop.try_into()?;
-                }
-                "SUMMARY" => {
-                    comp.summary = Some(prop.take_value());
-                }
                 "STATUS" => {
                     comp.status = Some(prop.value().parse()?);
-                }
-                "DTSTART" => {
-                    comp.start = Some(prop.try_into()?);
                 }
                 "DTEND" => {
                     comp.end = Some(prop.try_into()?);
                 }
-                "RRULE" => {
-                    comp.rrule = Some(prop.value().parse()?);
-                }
-                "RECURRENCE-ID" => {
-                    comp.rid = Some(prop.try_into()?);
-                }
                 _ => {
-                    comp.props.push(prop);
+                    comp.inner.parse_prop(prop)?;
                 }
             }
         }
