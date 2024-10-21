@@ -25,7 +25,7 @@ fn main() -> Result<(), anyhow::Error> {
         .components_within(start, end)
         .filter(|o| o.component().is_event())
         .collect::<Vec<_>>();
-    occurrences.sort_by(|a, b| a.start().cmp(&b.start()));
+    occurrences.sort_by_key(|a| a.start());
 
     println!("Events between {} and {}:", start, end);
     for occ in occurrences {
@@ -37,7 +37,7 @@ fn main() -> Result<(), anyhow::Error> {
             if let Some(dur) = occ.duration() {
                 format!("{} min", dur.num_minutes())
             } else {
-                format!("??")
+                "??".to_string()
             }
         );
     }

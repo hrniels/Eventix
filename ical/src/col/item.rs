@@ -4,7 +4,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{Id, Occurrence};
-use crate::objects::{CalComponent, CalEvent, CalTodo, Calendar};
+use crate::objects::{CalEvent, CalTodo, Calendar};
 
 pub struct CalItem {
     id: Id,
@@ -54,12 +54,7 @@ impl CalItem {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> Vec<Occurrence<'_>> {
-        let Some(first) = self
-            .cal
-            .components()
-            .iter()
-            .find(|c| matches!(c, CalComponent::Event(_) | CalComponent::Todo(_)))
-        else {
+        let Some(first) = self.cal.components().iter().find(|c| c.rid().is_none()) else {
             return vec![];
         };
 
@@ -70,7 +65,7 @@ impl CalItem {
             .collect::<Vec<_>>();
 
         // update occurrences from components that references specific occurrences
-        if occs.len() > 0 {
+        if !occs.is_empty() {
             for c in self.cal.components() {
                 if let Some(rid) = c.rid() {
                     let rid_tz = rid.as_start_with_tz(&start.timezone());
@@ -96,7 +91,7 @@ impl CalItem {
         self.cal
             .components()
             .iter()
-            .filter(|&c| matches!(c, CalComponent::Todo(_)))
+            .filter(|&c| c.is_todo())
             .map(|t| t.as_todo().unwrap())
     }
 
@@ -104,7 +99,7 @@ impl CalItem {
         self.cal
             .components()
             .iter()
-            .filter(|&c| matches!(c, CalComponent::Event(_)))
+            .filter(|&c| c.is_event())
             .map(|e| e.as_event().unwrap())
     }
 }
