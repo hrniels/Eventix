@@ -1,3 +1,4 @@
+pub mod event;
 pub mod overview;
 
 use std::time::{Duration, Instant};

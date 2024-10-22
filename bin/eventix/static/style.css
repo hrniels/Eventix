@@ -394,6 +394,9 @@ span.ev_msg_error span.ev_msg_info {
     text-overflow: ellipsis;
     padding: .2em;
 }
+.ev_event_occurrence {
+    cursor: pointer;
+}
 
 /* ------------ CALENDAR SOURCES ------------ */
 

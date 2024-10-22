@@ -32,7 +32,10 @@
                     {% if day.date == today %}</span>{% endif %}
                 </div>
                 {% for occ in day.occurrences %}
-                <div class="
+                <div onclick="openPopup('{{ occ.component().uid() }}', 'ev_id_{{ occ.js_uid() }}', '{{ occ.id }}')"
+                     id="{{ occ.id }}" class="
+                    ev_event_occurrence
+                    ev_id_{{ occ.js_uid() }}
                     ev_cal_src_{{ store.source(occ.source()).unwrap().class() }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}
@@ -58,5 +61,95 @@
     {% endif %}
     {% endfor %}
 </table>
+
+<div id="popup" class="ev_popup"></div>
+
+<script type="text/javascript">
+var selected = null;
+
+$(document).click(function(e) {
+    if(selected != null && !inBoundingBox(e, 'popup'))
+        deselect(selected, null, null, null);
+});
+$(document).keydown(function(e) {
+    if(e.key == 'Escape' && selected != null)
+        deselect(selected, null, null, null);
+});
+
+$.fn.slideFadeToggle = function(easing, callback) {
+    return this.animate({ opacity: 'toggle' }, 100, easing, callback);
+};
+
+function openPopup(uid, jsuid, id) {
+    if(selected != null)
+        deselect(selected, uid, jsuid, id);
+    else
+        select(uid, jsuid, id);
+}
+
+function select(uid, jsuid, id) {
+    var e = $('.' + jsuid);
+    e.addClass('ev_selected');
+
+    var el = document.getElementById(id);
+    var elRect = el.getBoundingClientRect();
+    var popup = $('#popup');
+    var popWidth = 400;
+    if(elRect.right + popWidth > window.innerWidth)
+        popup.css('left', elRect.left - popWidth);
+    else
+        popup.css('left', elRect.right);
+    popup.css('top', elRect.top);
+    popup.css("position", "absolute");
+    popup.slideFadeToggle(null, function() {
+        selected = jsuid;
+    });
+
+    loadEvent(uid);
+}
+
+function deselect(olduid, newuid, newjsuid, newid) {
+    selected = null;
+    $('#popup').slideFadeToggle(function() {
+        var old = $('.' + olduid);
+        old.removeClass('ev_selected');
+        if(olduid != newjsuid && newjsuid != null)
+            select(newuid, newjsuid, newid);
+    });
+}
+
+function inBoundingBox(e, id) {
+    var box = document.getElementById(id).getBoundingClientRect();
+    return e.pageX >= box.left && e.pageX <= box.left + box.width &&
+        e.pageY >= box.top && e.pageY <= box.top + box.height;
+}
+
+function loadEvent(uid) {
+    $.ajax({
+        type: 'GET',
+        url: '{{ page.path() }}event?uid=' + uid,
+        dataType: 'json',
+        success: function(data) {
+            $('#popup').html(data.html);
+        }
+    });
+}
+</script>
+
+<style type="text/css">
+div.ev_selected {
+  border: 1px solid #555;
+  font-weight: bold;
+}
+
+.ev_popup {
+  background-color: #ffffff;
+  border: 1px solid #555;
+  cursor: default;
+  display: none;
+  width: 400px;
+  z-index: 50;
+}
+</style>
 
 {% endblock %}

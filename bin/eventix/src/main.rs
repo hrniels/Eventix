@@ -8,6 +8,7 @@ use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
+use pages::event;
 use std::{env, path::PathBuf, sync::Arc};
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -69,6 +70,7 @@ async fn main() {
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
         .nest_service("/static", ServeDir::new("static"))
         .nest(overview::path(), overview::router(state.clone()))
+        .nest(event::path(), event::router(state.clone()))
         .fallback(error_handler)
         .layer(
             TraceLayer::new_for_http()

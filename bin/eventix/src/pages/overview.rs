@@ -12,8 +12,14 @@ use ical::{
     objects::CalComponent,
     util,
 };
+use once_cell::sync::Lazy;
 use serde::Deserialize;
-use std::{cmp::Ordering, ops::Deref, str::FromStr, sync::Arc};
+use std::{
+    cmp::Ordering,
+    ops::Deref,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 use super::Page;
 use crate::error::HTMLError;
@@ -21,12 +27,26 @@ use crate::html::filters;
 use crate::locale::{self, Locale};
 
 struct DayOccurrence<'a> {
-    inner: Occurrence<'a>,
+    id: u64,
+    inner: &'a Occurrence<'a>,
 }
 
 impl<'a> DayOccurrence<'a> {
-    fn new(inner: Occurrence<'a>) -> Self {
-        Self { inner }
+    fn new(inner: &'a Occurrence<'a>) -> Self {
+        static NEXT_ID: Lazy<Mutex<u64>> = Lazy::new(|| Mutex::new(0));
+        let mut next = NEXT_ID.lock().unwrap();
+        let id = *next + 1;
+        *next += 1;
+        Self { id, inner }
+    }
+
+    fn js_uid(&self) -> String {
+        self.inner
+            .component()
+            .uid()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect()
     }
 
     fn status_class(&self) -> Option<String> {
@@ -48,7 +68,7 @@ struct Day<'a> {
     date: NaiveDate,
     show_month: bool,
     cur_month: bool,
-    occurrences: Vec<&'a DayOccurrence<'a>>,
+    occurrences: Vec<DayOccurrence<'a>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,7 +135,6 @@ async fn handler(
         .store()
         .components_within(mstart, mend)
         .filter(|occ| occ.component().is_event())
-        .map(|occ| DayOccurrence::new(occ))
         .collect::<Vec<_>>();
 
     let mut days = Vec::new();
@@ -130,6 +149,7 @@ async fn handler(
         let mut day_occs = ev_occs
             .iter()
             .filter(|o| o.overlaps(day_start, day_end))
+            .map(|o| DayOccurrence::new(o))
             .collect::<Vec<_>>();
         day_occs.sort_by(
             |a, b| match (a.component().is_all_day(), b.component().is_all_day()) {
