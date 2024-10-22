@@ -39,6 +39,15 @@ impl CalDate {
     }
 }
 
+impl ToString for CalDate {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Date(date) => date.format("%Y%m%d").to_string(),
+            Self::DateTime(datetime) => datetime.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CalDateTime {
     Floating(NaiveDateTime),
@@ -63,6 +72,18 @@ impl CalDateTime {
                 // TODO that's certainly not correct
                 let local = Local.from_utc_datetime(dt);
                 local.with_timezone(tz)
+            }
+        }
+    }
+}
+
+impl ToString for CalDateTime {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Floating(date) => date.format("%Y%m%dT%H%M%S").to_string(),
+            Self::Utc(datetime) => datetime.format("%Y%m%dT%H%M%SZ").to_string(),
+            Self::Timezone(datetime, tz) => {
+                format!("TZID={}:{}", tz, datetime.format("TZID={}:%Y%m%dT%H%M%S"))
             }
         }
     }
