@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
@@ -7,6 +7,7 @@ use axum::Router;
 use ical::col::{CalSource, Occurrence};
 use ical::objects::{CalPartStat, CalRole, EventLike};
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use ical::objects::{CalAttendee, CalDate};
@@ -14,7 +15,6 @@ use ical::objects::{CalAttendee, CalDate};
 use crate::error::HTMLError;
 use crate::html::filters;
 use crate::locale::{self, Locale};
-use crate::pages::Page;
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -30,7 +30,6 @@ struct Response {
 #[derive(Template)]
 #[template(path = "pages/event.htm")]
 struct EventTemplate<'a> {
-    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     source: &'a CalSource,
     occ: Occurrence<'a>,
@@ -52,6 +51,15 @@ fn attendee_icon(att: &CalAttendee) -> String {
     format!("bi bi-person{}{}", role, status)
 }
 
+fn attendees_sorted<'a>(occ: &Occurrence<'a>) -> Vec<CalAttendee> {
+    let mut att = occ.attendees().to_vec();
+    att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
+        (Some(cn1), Some(cn2)) => cn1.cmp(&cn2),
+        _ => Ordering::Equal,
+    });
+    att
+}
+
 fn attendee_title(att: &CalAttendee) -> String {
     let mut res = String::new();
     if let Some(role) = att.role() {
@@ -70,7 +78,6 @@ pub async fn handler(
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let page = Page::new(path().to_string());
     let locale = locale::default();
 
     let rid = req.rid.as_ref().and_then(|rid| rid.parse::<CalDate>().ok());
@@ -85,7 +92,6 @@ pub async fn handler(
     let source = state.store().source(occ.source()).unwrap();
 
     let html = EventTemplate {
-        page,
         locale,
         source,
         occ,

@@ -47,7 +47,7 @@
             <td width="70%">
                 <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
                     <ul class="ev_iconlist">
-                    {% for att in occ.attendees() %}
+                    {% for att in self::attendees_sorted(occ) %}
                         <li>
                             <i title="{{ self::attendee_title(att) }}"
                                class="{{ self::attendee_icon(att) }}"></i>
