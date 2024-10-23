@@ -36,6 +36,10 @@ impl<'c> Occurrence<'c> {
         self.base.is_todo()
     }
 
+    pub fn is_overwritten(&self) -> bool {
+        self.occ.is_some()
+    }
+
     pub fn event_status(&self) -> Option<CalEventStatus> {
         match self.occ {
             Some(c) => c.as_event().and_then(|ev| ev.status()),
