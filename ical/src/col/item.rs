@@ -4,7 +4,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{Id, Occurrence};
-use crate::objects::{CalComponent, CalEvent, CalTodo, Calendar};
+use crate::objects::{CalDate, CalEvent, CalTodo, Calendar, EventLike};
 
 pub struct CalItem {
     id: Id,
@@ -49,11 +49,31 @@ impl CalItem {
         &self.cal
     }
 
-    pub fn component_by_uid<S: AsRef<str>>(&self, uid: S) -> Option<&CalComponent> {
-        self.cal
+    pub fn occurrence_by_id<S: AsRef<str>>(
+        &self,
+        uid: S,
+        rid: Option<&CalDate>,
+        tz: &Tz,
+    ) -> Option<Occurrence<'_>> {
+        let Some(first) = self
+            .cal
             .components()
             .iter()
             .find(|c| c.uid() == uid.as_ref() && c.rid().is_none())
+        else {
+            return None;
+        };
+
+        let mut res = Occurrence::new(self.source, first, first.start()?.as_start_with_tz(tz));
+        if let Some(rid) = rid {
+            let occ = self
+                .cal
+                .components()
+                .iter()
+                .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid))?;
+            res.set_occurrence(occ);
+        }
+        Some(res)
     }
 
     pub fn occurrences_within(
@@ -76,11 +96,8 @@ impl CalItem {
             for c in self.cal.components() {
                 if let Some(rid) = c.rid() {
                     let rid_tz = rid.as_start_with_tz(&start.timezone());
-                    if let Some(occ) = occs.iter_mut().find(|o| o.start() == rid_tz) {
-                        if let Some(cstart) = c.start() {
-                            occ.set_start(cstart.as_start_with_tz(&start.timezone()));
-                        }
-                        occ.set_component(c);
+                    if let Some(occ) = occs.iter_mut().find(|o| o.occurrence_start() == rid_tz) {
+                        occ.set_occurrence(c);
                     } else {
                         // otherwise this recurrence should be outside of the range
                         assert!(
@@ -176,11 +193,7 @@ mod tests {
         let result = result.collect::<Vec<_>>();
         assert_eq!(result.len(), uids.len());
         for uid in uids {
-            if result
-                .iter()
-                .find(|o| o.component().as_event().unwrap().uid() == *uid)
-                .is_none()
-            {
+            if result.iter().find(|o| o.uid() == *uid).is_none() {
                 return false;
             }
         }
@@ -213,7 +226,7 @@ mod tests {
             "no2",
         ));
 
-        let comps = source.components_within(new_date(2024, 10, 1), new_date(2024, 10, 31));
+        let comps = source.occurrences_within(new_date(2024, 10, 1), new_date(2024, 10, 31));
         assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
     }
 
@@ -224,17 +237,16 @@ mod tests {
             NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(),
             "yes1",
         ));
-        source.add(new_item(EventBuilder::default().uid("yes2").done()));
         source.add(new_item(
             EventBuilder::default()
                 .start(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 5).unwrap()))
-                .uid("yes3")
+                .uid("yes2")
                 .done(),
         ));
         source.add(new_item(
             EventBuilder::default()
                 .end(CalDate::Date(NaiveDate::from_ymd_opt(1990, 10, 1).unwrap()))
-                .uid("yes4")
+                .uid("yes3")
                 .done(),
         ));
         source.add(new_item(
@@ -245,6 +257,7 @@ mod tests {
         ));
         source.add(new_item(
             EventBuilder::default()
+                .start(CalDate::Date(NaiveDate::from_ymd_opt(1988, 2, 1).unwrap()))
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1989, 12, 31).unwrap(),
                 ))
@@ -252,14 +265,17 @@ mod tests {
                 .done(),
         ));
 
-        let comps = source.components_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
-        assert!(has_uids(comps, &["yes1", "yes2", "yes3", "yes4"]));
-        let uid_yes1 = source.component_by_uid("yes1").unwrap();
-        assert_eq!(uid_yes1.uid(), "yes1");
-        let uid_yes2 = source.component_by_uid("yes2").unwrap();
-        assert_eq!(uid_yes2.uid(), "yes2");
-        let uid_no2 = source.component_by_uid("no2").unwrap();
-        assert_eq!(uid_no2.uid(), "no2");
-        assert!(source.component_by_uid("not-found").is_none());
+        let tz = &chrono_tz::Europe::Berlin;
+        let comps = source.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
+        assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
+        assert_eq!(
+            source.occurrence_by_id("yes1", None, tz).unwrap().uid(),
+            "yes1"
+        );
+        assert_eq!(
+            source.occurrence_by_id("no2", None, tz).unwrap().uid(),
+            "no2"
+        );
+        assert!(source.occurrence_by_id("not-found", None, tz).is_none());
     }
 }

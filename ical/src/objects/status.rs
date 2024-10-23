@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalTodoStatus {
@@ -23,6 +23,12 @@ impl FromStr for CalTodoStatus {
     }
 }
 
+impl Display for CalTodoStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalEventStatus {
     Tentative,
@@ -40,5 +46,11 @@ impl FromStr for CalEventStatus {
             "CONFIRMED" => Ok(Self::Confirmed),
             _ => Err(anyhow!("Invalid status {}", s)),
         }
+    }
+}
+
+impl Display for CalEventStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }

@@ -1,6 +1,7 @@
 use anyhow::Context;
 use chrono::{Duration, Local};
 use ical::col::{CalSource, CalStore};
+use ical::objects::EventLike;
 
 fn main() -> Result<(), anyhow::Error> {
     let dir = std::env::args().nth(1).unwrap();
@@ -22,17 +23,16 @@ fn main() -> Result<(), anyhow::Error> {
     let end = start + Duration::days(7);
 
     let mut occurrences = store
-        .components_within(start, end)
-        .filter(|o| o.component().is_event())
+        .occurrences_within(start, end)
+        .filter(|o| o.is_event())
         .collect::<Vec<_>>();
-    occurrences.sort_by_key(|a| a.start());
+    occurrences.sort_by_key(|a| a.occurrence_start());
 
     println!("Events between {} and {}:", start, end);
     for occ in occurrences {
-        let ev = occ.component().as_event().unwrap();
         println!(
             "  {:?} ({:?} for {})",
-            ev.summary(),
+            occ.summary(),
             occ.start(),
             if let Some(dur) = occ.duration() {
                 format!("{} min", dur.num_minutes())

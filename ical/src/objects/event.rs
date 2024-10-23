@@ -2,21 +2,19 @@ use anyhow::anyhow;
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalEventStatus, EventLike};
+use crate::objects::{CalDate, CalEventStatus};
 use crate::parser::{LineReader, Property, PropertyConsumer};
+
+use super::component::EventLikeComponent;
 
 #[derive(Default, Debug)]
 pub struct CalEvent {
-    inner: EventLike,
+    pub(crate) inner: EventLikeComponent,
     status: Option<CalEventStatus>,
     end: Option<CalDate>,
 }
 
 impl CalEvent {
-    pub(crate) fn inner(&self) -> &EventLike {
-        &self.inner
-    }
-
     pub fn status(&self) -> Option<CalEventStatus> {
         self.status
     }
@@ -31,7 +29,7 @@ impl CalEvent {
 }
 
 impl Deref for CalEvent {
-    type Target = EventLike;
+    type Target = EventLikeComponent;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -60,6 +58,16 @@ impl PropertyConsumer for CalEvent {
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
+                "BEGIN" => {
+                    // TODO support alarms
+                    assert_eq!(prop.value(), "VALARM");
+                    while let Some(line) = lines.next() {
+                        let prop = line.parse::<Property>()?;
+                        if prop.name() == "END" && prop.value() == "VALARM" {
+                            break;
+                        }
+                    }
+                }
                 "END" if prop.value() == "VEVENT" => {
                     break Ok(comp);
                 }

@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use chrono::offset::LocalResult;
-use chrono::{DateTime, Datelike, Duration, Months, NaiveDateTime, Timelike, Weekday};
+use chrono::{DateTime, Datelike, Duration, Month, Months, NaiveDateTime, Timelike, Weekday};
 use chrono_tz::Tz;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
 use crate::objects::CalDate;
@@ -158,6 +158,26 @@ impl FromStr for WeekdayDesc {
     }
 }
 
+impl Display for WeekdayDesc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let wday = Weekday::try_from(self.day).unwrap();
+        if let Some((num, side)) = self.nth {
+            match side {
+                Side::Front => write!(f, "{} {}", util::nth(num as u64), wday),
+                Side::Back => {
+                    if num == 1 {
+                        write!(f, "last {}", wday)
+                    } else {
+                        write!(f, "{} to last {}", util::nth(num as u64), wday)
+                    }
+                }
+            }
+        } else {
+            write!(f, "{:?}", wday)
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct DayDesc {
     num: u16,
@@ -182,6 +202,21 @@ impl FromStr for DayDesc {
         };
         let num = s.parse::<u16>()?;
         Ok(Self { num, side })
+    }
+}
+
+impl Display for DayDesc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.side {
+            Side::Front => write!(f, "{}", util::nth(self.num as u64)),
+            Side::Back => {
+                if self.num == 1 {
+                    write!(f, "last")
+                } else {
+                    write!(f, "{} to last", util::nth(self.num as u64))
+                }
+            }
+        }
     }
 }
 
@@ -481,6 +516,91 @@ impl CalRRule {
     }
 }
 
+impl Display for CalRRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Occurs ")?;
+        match self.interval {
+            Some(interval) if interval > 1 => {
+                write!(f, "every ")?;
+                match self.freq {
+                    Frequency::Yearly => write!(f, "{} years", interval)?,
+                    Frequency::Monthly => write!(f, "{} months", interval)?,
+                    Frequency::Weekly => write!(f, "{} weeks", interval)?,
+                    Frequency::Daily => write!(f, "{} days", interval)?,
+                    Frequency::Hourly => write!(f, "{} hours", interval)?,
+                    Frequency::Minutely => write!(f, "{} minutes", interval)?,
+                    Frequency::Secondly => write!(f, "{} seconds", interval)?,
+                }
+            }
+            _ => {
+                let freq = format!("{:?}", self.freq);
+                write!(f, "{}", freq.to_lowercase())?;
+            }
+        }
+
+        if let Some(by_month) = &self.by_month {
+            let months = by_month
+                .iter()
+                .map(|no| format!("{:?}", Month::try_from(*no).unwrap()))
+                .collect::<Vec<_>>();
+            write!(f, ", in {}", util::human_list(&months))?;
+        }
+
+        if let Some(by_day) = &self.by_day {
+            let days = by_day.iter().map(|d| format!("{}", d)).collect::<Vec<_>>();
+            write!(f, ", on {}", util::human_list(&days))?;
+        }
+
+        if let Some(by_mon_day) = &self.by_mon_day {
+            let days = by_mon_day
+                .iter()
+                .map(|d| format!("{}", d))
+                .collect::<Vec<_>>();
+            write!(f, ", on the {} day of the month", util::human_list(&days))?;
+        }
+
+        if let Some(by_year_day) = &self.by_year_day {
+            let days = by_year_day
+                .iter()
+                .map(|d| format!("{}", d))
+                .collect::<Vec<_>>();
+            write!(f, ", on the {} day of the year", util::human_list(&days))?;
+        }
+
+        if let Some(by_hour) = &self.by_hour {
+            let hours = by_hour.iter().map(|d| format!("{}", d)).collect::<Vec<_>>();
+            write!(f, ", at hour(s) {}", util::human_list(&hours))?;
+        }
+
+        if let Some(by_minute) = &self.by_minute {
+            let mins = by_minute
+                .iter()
+                .map(|d| format!("{}", d))
+                .collect::<Vec<_>>();
+            write!(f, ", at minute(s) {}", util::human_list(&mins))?;
+        }
+
+        if let Some(by_second) = &self.by_second {
+            let secs = by_second
+                .iter()
+                .map(|d| format!("{}", d))
+                .collect::<Vec<_>>();
+            write!(f, ", at second(s) {}", util::human_list(&secs))?;
+        }
+
+        if let Some(until) = &self.until {
+            write!(
+                f,
+                "\nRepeats until {}",
+                until.as_naive_date().format("%B %d, %Y")
+            )?;
+        } else if let Some(count) = self.count {
+            write!(f, "\nRepeats {} times", count)?;
+        }
+        Ok(())
+    }
+}
+
 fn parse_list<T: FromStr>(s: &str) -> Result<Vec<T>, anyhow::Error> {
     let mut list = Vec::new();
     for item in s.split(',') {
@@ -610,6 +730,10 @@ mod tests {
         rule.freq = Frequency::Daily;
         rule.count = Some(10);
         assert_eq!("FREQ=DAILY;COUNT=10".parse::<CalRRule>().unwrap(), rule);
+        assert_eq!(
+            format!("{}", rule),
+            "Occurs daily\nRepeats 10 times".to_string()
+        );
     }
 
     #[test]
@@ -618,6 +742,7 @@ mod tests {
         rule.freq = Frequency::Monthly;
         rule.interval = Some(2);
         assert_eq!("FREQ=MONTHLY;INTERVAL=2".parse::<CalRRule>().unwrap(), rule);
+        assert_eq!(format!("{}", rule), "Occurs every 2 months".to_string());
     }
 
     #[test]
@@ -660,6 +785,10 @@ mod tests {
                 .unwrap(),
             rule
         );
+        assert_eq!(
+            format!("{}", rule),
+            "Occurs yearly, in January, on Sun, Mon, Tue, Wed, Thu, Fri, and Sat".to_string()
+        );
     }
 
     fn ny_datetime(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> DateTime<Tz> {
@@ -672,6 +801,10 @@ mod tests {
     fn range_with_count() {
         let start = ny_datetime(1997, 9, 2, 9, 0, 0);
         let rrule = "FREQ=DAILY;COUNT=3".parse::<CalRRule>().unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs daily\nRepeats 3 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(20));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
@@ -685,6 +818,10 @@ mod tests {
         let dtstart = ny_datetime(1997, 9, 2, 9, 0, 0);
         let start = ny_datetime(1997, 9, 4, 9, 0, 0);
         let rrule = "FREQ=DAILY;COUNT=5".parse::<CalRRule>().unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs daily\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(dtstart, start, start + Duration::days(20));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 4, 9, 0, 0));
@@ -699,6 +836,10 @@ mod tests {
         let rrule = "FREQ=DAILY;UNTIL=19971027T000000Z"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs daily\nRepeats until October 27, 1997".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(20));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 25, 9, 0, 0)); // EDT
@@ -711,6 +852,7 @@ mod tests {
         let start = ny_datetime(1997, 10, 25, 9, 0, 0);
         let rrule = "FREQ=DAILY;INTERVAL=2".parse::<CalRRule>().unwrap();
         let dates = rrule.dates_within(start, start, start + Duration::days(10));
+        assert_eq!(format!("{}", rrule), "Occurs every 2 days".to_string());
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 25, 9, 0, 0)); // EDT
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 27, 9, 0, 0)); // EST
@@ -726,6 +868,10 @@ mod tests {
         let rrule = "FREQ=DAILY;INTERVAL=10;COUNT=5"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs every 10 days\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(100));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
@@ -740,6 +886,10 @@ mod tests {
     fn range_weekly() {
         let start = ny_datetime(1997, 9, 2, 9, 0, 0);
         let rrule = "FREQ=WEEKLY;COUNT=10".parse::<CalRRule>().unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs weekly\nRepeats 10 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
@@ -754,6 +904,10 @@ mod tests {
     fn range_every_monday() {
         let start = ny_datetime(2024, 9, 2, 9, 0, 0);
         let rrule = "FREQ=DAILY;COUNT=5;BYDAY=MO".parse::<CalRRule>().unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs daily, on Mon\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0));
@@ -770,6 +924,11 @@ mod tests {
         let rrule = "FREQ=SECONDLY;COUNT=5;BYHOUR=10,12;BYMINUTE=20,30,40;BYSECOND=10"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs secondly, at hour(s) 10 and 12, at minute(s) 20, 30, and 40, at second(s) 10\nRepeats 5 times"
+                .to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 20, 10));
@@ -786,6 +945,11 @@ mod tests {
         let rrule = "FREQ=DAILY;COUNT=7;BYMONTHDAY=3,10,-1"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs daily, on the 3rd, 10th, and last day of the month\nRepeats 7 times"
+                .to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(12));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 3, 9, 0, 0));
@@ -804,6 +968,11 @@ mod tests {
         let rrule = "FREQ=HOURLY;COUNT=4;BYYEARDAY=2,35,-10;BYHOUR=12"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs hourly, on the 2nd, 35th, and 10th to last day of the year, at hour(s) 12\nRepeats 4 times"
+                .to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(500));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 12, 22, 12, 0, 0));
@@ -819,6 +988,11 @@ mod tests {
         let rrule = "FREQ=HOURLY;COUNT=8;BYMINUTE=4,5;BYSECOND=10,20,30"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs hourly, at minute(s) 4 and 5, at second(s) 10, 20, and 30\nRepeats 8 times"
+                .to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(1));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 10));
@@ -836,6 +1010,10 @@ mod tests {
     fn range_by_hour_expand() {
         let start = ny_datetime(2023, 9, 2, 9, 0, 0);
         let rrule = "FREQ=DAILY;COUNT=5;BYHOUR=4,8".parse::<CalRRule>().unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs daily, at hour(s) 4 and 8\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(5));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 3, 4, 0, 0));
@@ -852,6 +1030,10 @@ mod tests {
         let rrule = "FREQ=MONTHLY;COUNT=5;BYMONTHDAY=1,-1"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs monthly, on the 1st and last day of the month\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(100));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 30, 9, 0, 0));
@@ -868,6 +1050,10 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=5;BYMONTH=10,11"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs yearly, in October and November\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 2, 9, 0, 0));
@@ -884,6 +1070,10 @@ mod tests {
         let rrule = "FREQ=WEEKLY;COUNT=6;BYDAY=MO,2TU"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs weekly, on Mon and 2nd Tue\nRepeats 6 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0));
@@ -901,6 +1091,10 @@ mod tests {
         let rrule = "FREQ=WEEKLY;INTERVAL=2;COUNT=6;BYDAY=TU,TH"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs every 2 weeks, on Tue and Thu\nRepeats 6 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 4, 9, 0, 0));
@@ -918,6 +1112,10 @@ mod tests {
         let rrule = "FREQ=MONTHLY;COUNT=6;BYDAY=MO,2TU,-1WE"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs monthly, on Mon, 2nd Tue, and last Wed\nRepeats 6 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
@@ -935,6 +1133,11 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=6;BYMONTH=9;BYDAY=MO,2TU,-1WE"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs yearly, in September, on Mon, 2nd Tue, and last Wed\nRepeats 6 times"
+                .to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
@@ -952,6 +1155,10 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=6;BYDAY=5MO,-1FR"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs yearly, on 5th Mon and last Fri\nRepeats 6 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::days(2000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 12, 27, 9, 0, 0));
@@ -969,6 +1176,11 @@ mod tests {
         let rrule = "FREQ=YEARLY;COUNT=5;BYMONTH=1;BYDAY=SU,MO,TU,WE,TH,FR,SA"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs yearly, in January, on Sun, Mon, Tue, Wed, Thu, Fri, and Sat\nRepeats 5 times"
+                .to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 1, 9, 0, 0));
@@ -985,6 +1197,10 @@ mod tests {
         let rrule = "FREQ=WEEKLY;COUNT=5;INTERVAL=2"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs every 2 weeks\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(12));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
@@ -1001,6 +1217,10 @@ mod tests {
         let rrule = "FREQ=MONTHLY;INTERVAL=2;COUNT=5;BYDAY=1SU,-1SU"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs every 2 months, on 1st Sun and last Sun\nRepeats 5 times".to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(100));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 7, 9, 0, 0));
@@ -1017,6 +1237,11 @@ mod tests {
         let rrule = "FREQ=MONTHLY;INTERVAL=18;COUNT=5;BYMONTHDAY=10,11,15"
             .parse::<CalRRule>()
             .unwrap();
+        assert_eq!(
+            format!("{}", rrule),
+            "Occurs every 18 months, on the 10th, 11th, and 15th day of the month\nRepeats 5 times"
+                .to_string()
+        );
         let dates = rrule.dates_within(start, start, start + Duration::weeks(1000));
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 10, 9, 0, 0));

@@ -94,6 +94,10 @@ impl FromStr for Property {
         };
 
         let value = s[val_start..].to_string();
+        let value = value.replace(r"\n", "\n");
+        let value = value.replace(r"\,", ",");
+        let value = value.replace(r"\;", ";");
+        let value = value.replace(r"\\", "\\");
 
         Ok(Self {
             name,

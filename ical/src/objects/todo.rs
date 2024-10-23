@@ -2,12 +2,12 @@ use anyhow::anyhow;
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalTodoStatus, EventLike};
+use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent};
 use crate::parser::{LineReader, Property, PropertyConsumer};
 
 #[derive(Default, Debug)]
 pub struct CalTodo {
-    inner: EventLike,
+    pub(crate) inner: EventLikeComponent,
     due: Option<CalDate>,
     status: Option<CalTodoStatus>,
     completed: Option<CalDate>,
@@ -15,10 +15,6 @@ pub struct CalTodo {
 }
 
 impl CalTodo {
-    pub(crate) fn inner(&self) -> &EventLike {
-        &self.inner
-    }
-
     pub fn due(&self) -> Option<&CalDate> {
         self.due.as_ref()
     }
@@ -37,7 +33,7 @@ impl CalTodo {
 }
 
 impl Deref for CalTodo {
-    type Target = EventLike;
+    type Target = EventLikeComponent;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -66,6 +62,16 @@ impl PropertyConsumer for CalTodo {
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
+                "BEGIN" => {
+                    // TODO support alarms
+                    assert_eq!(prop.value(), "VALARM");
+                    while let Some(line) = lines.next() {
+                        let prop = line.parse::<Property>()?;
+                        if prop.name() == "END" && prop.value() == "VALARM" {
+                            break;
+                        }
+                    }
+                }
                 "END" => {
                     if prop.value() != "VTODO" {
                         return Err(anyhow!("Unexpected END:{}", prop.value()));
@@ -100,7 +106,7 @@ impl PropertyConsumer for CalTodo {
 mod tests {
     use chrono::{NaiveDate, TimeZone, Utc};
 
-    use crate::objects::{CalDate, CalDateTime, CalTodoStatus, Calendar};
+    use crate::objects::{CalDate, CalDateTime, CalTodoStatus, Calendar, EventLike};
 
     #[test]
     fn basics() {

@@ -8,7 +8,7 @@ mod status;
 mod todo;
 
 pub use calendar::{Calendar, Other};
-pub use component::CalComponent;
+pub use component::{CalComponent, EventLikeComponent};
 pub use date::{CalDate, CalDateTime};
 pub use event::CalEvent;
 pub use evlike::EventLike;

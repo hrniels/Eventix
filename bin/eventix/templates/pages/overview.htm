@@ -32,24 +32,31 @@
                     {% if day.date == today %}</span>{% endif %}
                 </div>
                 {% for occ in day.occurrences %}
-                <div onclick="openPopup('{{ occ.component().uid() }}', 'ev_id_{{ occ.js_uid() }}', '{{ occ.id }}')"
+                <div onclick="openPopup('{{ occ.uid() }}',
+                                        'ev_id_{{ occ.js_uid() }}',
+                                        {% if let Some(rid) = occ.rid() %}
+                                        '{{ rid.to_string() }}',
+                                        {% else %}
+                                        null,
+                                        {% endif %}
+                                        '{{ occ.id }}')"
                      id="{{ occ.id }}" class="
                     ev_event_occurrence
                     ev_id_{{ occ.js_uid() }}
-                    ev_cal_src_{{ store.source(occ.source()).unwrap().class() }}
+                    ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}
                     ev_status_{{ cl }}
                     {% when _ %}
                     {% endmatch %}
                     ">
-                    {% if !occ.component().is_all_day() %}
-                    {{ occ.start().format("%H:%M") }}:
+                    {% if !occ.is_all_day() %}
+                    {{ occ.occurrence_start().format("%H:%M") }}:
                     {% else %}
                     <center>
                     {% endif %}
-                    {{ occ.component().summary().unwrap() }}
-                    {% if occ.component().is_all_day() %}
+                    {{ occ.summary().unwrap() }}
+                    {% if occ.is_all_day() %}
                     </center>
                     {% endif %}
                 </div>
@@ -69,32 +76,32 @@ var selected = null;
 
 $(document).click(function(e) {
     if(selected != null && !inBoundingBox(e, 'popup'))
-        deselect(selected, null, null, null);
+        deselect(selected, null, null, null, null);
 });
 $(document).keydown(function(e) {
     if(e.key == 'Escape' && selected != null)
-        deselect(selected, null, null, null);
+        deselect(selected, null, null, null, null);
 });
 
 $.fn.slideFadeToggle = function(easing, callback) {
     return this.animate({ opacity: 'toggle' }, 100, easing, callback);
 };
 
-function openPopup(uid, jsuid, id) {
+function openPopup(uid, jsuid, rid, id) {
     if(selected != null)
-        deselect(selected, uid, jsuid, id);
+        deselect(selected, uid, jsuid, rid, id);
     else
-        select(uid, jsuid, id);
+        select(uid, jsuid, rid, id);
 }
 
-function select(uid, jsuid, id) {
+function select(uid, jsuid, rid, id) {
     var e = $('.' + jsuid);
     e.addClass('ev_selected');
 
     var el = document.getElementById(id);
     var elRect = el.getBoundingClientRect();
     var popup = $('#popup');
-    var popWidth = 400;
+    var popWidth = 500;
     if(elRect.right + popWidth > window.innerWidth)
         popup.css('left', elRect.left - popWidth);
     else
@@ -105,16 +112,16 @@ function select(uid, jsuid, id) {
         selected = jsuid;
     });
 
-    loadEvent(uid);
+    loadOccurrence(uid, rid);
 }
 
-function deselect(olduid, newuid, newjsuid, newid) {
+function deselect(olduid, newuid, newjsuid, newrid, newid) {
     selected = null;
     $('#popup').slideFadeToggle(function() {
         var old = $('.' + olduid);
         old.removeClass('ev_selected');
         if(olduid != newjsuid && newjsuid != null)
-            select(newuid, newjsuid, newid);
+            select(newuid, newjsuid, newrid, newid);
     });
 }
 
@@ -124,10 +131,10 @@ function inBoundingBox(e, id) {
         e.pageY >= box.top && e.pageY <= box.top + box.height;
 }
 
-function loadEvent(uid) {
+function loadOccurrence(uid, rid) {
     $.ajax({
         type: 'GET',
-        url: '{{ page.path() }}event?uid=' + uid,
+        url: '{{ page.path() }}event?uid=' + uid + (rid != null ? '&rid=' + rid : ''),
         dataType: 'json',
         success: function(data) {
             $('#popup').html(data.html);
@@ -145,9 +152,10 @@ div.ev_selected {
 .ev_popup {
   background-color: #ffffff;
   border: 1px solid #555;
+  box-shadow: 2px 2px 3px #555;
   cursor: default;
   display: none;
-  width: 400px;
+  width: 500px;
   z-index: 50;
 }
 </style>

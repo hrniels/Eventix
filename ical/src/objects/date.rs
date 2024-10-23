@@ -1,10 +1,13 @@
+use std::str::FromStr;
+
 use anyhow::anyhow;
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::Tz;
+use serde::{Deserialize, Serialize};
 
 use crate::parser::Property;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDate {
     Date(NaiveDate),
     DateTime(CalDateTime),
@@ -17,6 +20,28 @@ impl Default for CalDate {
 }
 
 impl CalDate {
+    pub fn fmt_start_with_tz(&self, tz: &Tz) -> String {
+        self.fmt_date(self.as_start_with_tz(tz))
+    }
+
+    pub fn fmt_end_with_tz(&self, tz: &Tz) -> String {
+        self.fmt_date(self.as_end_with_tz(tz))
+    }
+
+    fn fmt_date(&self, dt: DateTime<Tz>) -> String {
+        match self {
+            Self::Date(_) => dt.format("%B %d, %Y").to_string(),
+            Self::DateTime(_) => dt.format("%A, %B %d, %Y %H:%M").to_string(),
+        }
+    }
+
+    pub fn as_naive_date(&self) -> NaiveDate {
+        match self {
+            Self::Date(date) => *date,
+            Self::DateTime(datetime) => datetime.as_naive_date(),
+        }
+    }
+
     pub fn as_start_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Date(date) => tz
@@ -48,7 +73,7 @@ impl ToString for CalDate {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDateTime {
     Floating(NaiveDateTime),
     Utc(DateTime<Utc>),
@@ -56,6 +81,19 @@ pub enum CalDateTime {
 }
 
 impl CalDateTime {
+    pub fn fmt_with_tz(&self, tz: &Tz) -> String {
+        let datetime = self.with_tz(tz);
+        datetime.format("%A, %B %d, %Y %H:%M").to_string()
+    }
+
+    pub fn as_naive_date(&self) -> NaiveDate {
+        match self {
+            Self::Utc(dt) => dt.date_naive(),
+            Self::Timezone(dt, _tzid) => dt.date(),
+            Self::Floating(dt) => dt.date(),
+        }
+    }
+
     pub fn with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Utc(dt) => dt.with_timezone(tz),
@@ -86,6 +124,15 @@ impl ToString for CalDateTime {
                 format!("TZID={}:{}", tz, datetime.format("TZID={}:%Y%m%dT%H%M%S"))
             }
         }
+    }
+}
+
+impl FromStr for CalDate {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let prop = format!("X:{}", s).parse::<Property>()?;
+        prop.try_into()
     }
 }
 

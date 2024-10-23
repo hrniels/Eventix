@@ -129,7 +129,7 @@ mod tests {
     use chrono::NaiveDate;
 
     use crate::{
-        objects::{CalComponent, CalDate, CalDateTime, Calendar},
+        objects::{CalComponent, CalDate, CalDateTime, Calendar, EventLike},
         parser::Property,
     };
 
@@ -140,8 +140,8 @@ VERSION:2.0
 BEGIN:VTODO
 DTSTART;TZID=\"My:TZ\":20241024T090000
 SUMMARY:foo bar
- test with
-  multiple
+ test with\\n
+  multiple\\;\\,
   lines
 UID:1234-5678
 TEST;FOO=bar;A=B:\"value\"
@@ -169,7 +169,7 @@ END:VCALENDAR";
         );
         assert_eq!(
             todo.summary(),
-            Some(&"foo bartest with multiple lines".to_string())
+            Some(&"foo bartest with\n multiple;, lines".to_string())
         );
     }
 }

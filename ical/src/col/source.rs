@@ -6,12 +6,12 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use crate::col::{CalItem, Id, Occurrence};
-use crate::objects::{CalComponent, Calendar};
+use crate::objects::{CalComponent, CalDate, Calendar};
 
 pub struct CalSource {
     id: Id,
     path: PathBuf,
-    class: String,
+    name: String,
     items: Vec<CalItem>,
 }
 
@@ -20,14 +20,14 @@ impl Default for CalSource {
         Self {
             id: super::generate_id(),
             path: PathBuf::default(),
-            class: String::default(),
+            name: String::default(),
             items: Vec::new(),
         }
     }
 }
 
 impl CalSource {
-    pub fn new_from_dir(path: PathBuf, class: String) -> Result<Self, anyhow::Error> {
+    pub fn new_from_dir(path: PathBuf, name: String) -> Result<Self, anyhow::Error> {
         let id = super::generate_id();
 
         let mut items = Vec::new();
@@ -47,7 +47,7 @@ impl CalSource {
         Ok(Self {
             id,
             path,
-            class,
+            name,
             items,
         })
     }
@@ -60,8 +60,8 @@ impl CalSource {
         &self.path
     }
 
-    pub fn class(&self) -> &String {
-        &self.class
+    pub fn name(&self) -> &String {
+        &self.name
     }
 
     pub fn add(&mut self, item: CalItem) {
@@ -72,12 +72,19 @@ impl CalSource {
         &self.items
     }
 
-    pub fn component_by_uid<S: AsRef<str>>(&self, uid: S) -> Option<&CalComponent> {
+    pub fn occurrence_by_id<S: AsRef<str>>(
+        &self,
+        uid: S,
+        rid: Option<&CalDate>,
+        tz: &Tz,
+    ) -> Option<Occurrence<'_>> {
         let uid_str = uid.as_ref();
-        self.items.iter().find_map(|c| c.component_by_uid(uid_str))
+        self.items
+            .iter()
+            .find_map(|c| c.occurrence_by_id(uid_str, rid, tz))
     }
 
-    pub fn components_within(
+    pub fn occurrences_within(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,

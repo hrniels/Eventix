@@ -1,3 +1,59 @@
-<div style="padding: 20px">
-    {{ event.summary().unwrap() }}
+<div>
+    <table width="100%" class="ev_table">
+        <tr>
+            <th colspan="2" align="center">
+                {{ occ.summary().unwrap() }}
+                <span style="float: right">
+                    <div class="ev_cal_src_{{ source.name() }}"
+                         style="width: 20px; height: 20px"
+                         title="{{ source.name() }}">
+                    </div>
+                </span>
+            </th>
+        </tr>
+        {% if let Some(start) = occ.start() %}
+        <tr>
+            <td width="30%">{{ "Start date"|t(locale) }}:</td>
+            <td width="70%">{{ start.fmt_start_with_tz(locale.timezone()) }}</td>
+        </tr>
+        {% endif %}
+        {% if let Some(end) = occ.end_or_due() %}
+        <tr>
+            <td width="30%">{{ "End date"|t(locale) }}:</td>
+            <td width="70%">{{ end.fmt_end_with_tz(locale.timezone()) }}</td>
+        </tr>
+        {% endif %}
+        {% if let Some(loc) = occ.location() %}
+        <tr>
+            <td width="30%">{{ "Location"|t(locale) }}:</td>
+            <td width="70%">{{ loc }}</td>
+        </tr>
+        {% endif %}
+        {% if let Some(status) = occ.event_status() %}
+        <tr>
+            <td width="30%">{{ "Status"|t(locale) }}:</td>
+            <td width="70%">{{ status }}</td>
+        </tr>
+        {% endif %}
+        {% if let Some(rrule) = occ.rrule() %}
+        <tr>
+            <td width="30%">{{ "Repeats"|t(locale) }}:</td>
+            <td width="70%">{{ rrule|newlines()|safe }}</td>
+        </tr>
+        {% endif %}
+        {% if let Some(desc) = occ.description() %}
+        <tr>
+            <td width="30%">{{ "Description"|t(locale) }}:</td>
+            <td width="70%">
+                <div style="max-width: 350px;
+                            max-height: 300px;
+                            overflow-x: hidden;
+                            overflow-y: scroll;
+                            text-overflow: ellipsis;">
+                    {{ desc|trim|newlines()|safe }}
+                </div>
+            </td>
+        </tr>
+        {% endif %}
+    </table>
 </div>

@@ -9,7 +9,7 @@ use axum::{
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ical::{
     col::{CalStore, Occurrence},
-    objects::CalComponent,
+    objects::{CalComponent, EventLike},
     util,
 };
 use once_cell::sync::Lazy;
@@ -42,7 +42,6 @@ impl<'a> DayOccurrence<'a> {
 
     fn js_uid(&self) -> String {
         self.inner
-            .component()
             .uid()
             .chars()
             .filter(|c| c.is_ascii_alphanumeric())
@@ -50,10 +49,7 @@ impl<'a> DayOccurrence<'a> {
     }
 
     fn status_class(&self) -> Option<String> {
-        match self.inner.component() {
-            CalComponent::Event(ev) => ev.status().map(|st| format!("{:?}", st)),
-            CalComponent::Todo(td) => td.status().map(|st| format!("{:?}", st)),
-        }
+        self.inner.event_status().map(|st| format!("{:?}", st))
     }
 }
 
@@ -96,7 +92,7 @@ async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = Page::new(path().to_string());
     let locale = locale::default();
-    let timezone = chrono_tz::Europe::Berlin;
+    let timezone = locale.timezone().clone();
 
     let weekdays = vec![
         locale.translate("Monday"),
@@ -133,8 +129,8 @@ async fn handler(
 
     let ev_occs = state
         .store()
-        .components_within(mstart, mend)
-        .filter(|occ| occ.component().is_event())
+        .occurrences_within(mstart, mend)
+        .filter(|occ| occ.is_event())
         .collect::<Vec<_>>();
 
     let mut days = Vec::new();
@@ -151,13 +147,11 @@ async fn handler(
             .filter(|o| o.overlaps(day_start, day_end))
             .map(|o| DayOccurrence::new(o))
             .collect::<Vec<_>>();
-        day_occs.sort_by(
-            |a, b| match (a.component().is_all_day(), b.component().is_all_day()) {
-                (true, true) | (false, false) => a.start().cmp(&b.start()),
-                (true, false) => Ordering::Less,
-                (false, true) => Ordering::Greater,
-            },
-        );
+        day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
+            (true, true) | (false, false) => a.occurrence_start().cmp(&b.occurrence_start()),
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+        });
 
         days.push(Day {
             date,
