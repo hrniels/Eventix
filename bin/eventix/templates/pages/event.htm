@@ -45,11 +45,7 @@
         <tr>
             <td width="30%">{{ "Attendees"|t(locale) }}:</td>
             <td width="70%">
-                <div style="max-width: 350px;
-                            max-height: 100px;
-                            overflow-x: hidden;
-                            overflow-y: scroll;
-                            text-overflow: ellipsis;">
+                <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
                     <ul>
                     {% for att in occ.attendees() %}
                         <li>
@@ -71,11 +67,7 @@
         <tr>
             <td width="30%">{{ "Description"|t(locale) }}:</td>
             <td width="70%">
-                <div style="max-width: 350px;
-                            max-height: 300px;
-                            overflow-x: hidden;
-                            overflow-y: scroll;
-                            text-overflow: ellipsis;">
+                <div class="ev_vscrollbox" style="max-width: 350px; max-height: 300px;">
                     {{ desc|trim|newlines()|safe }}
                 </div>
             </td>

@@ -361,6 +361,14 @@ span.ev_msg_error span.ev_msg_info {
     padding: 0px !important;
 }
 
+.ev_vscrollbox {
+    max-width: 350px;
+    max-height: 100px;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    text-overflow: ellipsis;
+}
+
 .ev_month_day_header {
     text-align: right;
     background-color: #f0f0f0;
