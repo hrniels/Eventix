@@ -248,6 +248,14 @@ ul.ev_source li {
 	padding: 0;
 }
 
+ul.ev_tightlist {
+    margin-left: 1em;
+    margin-right: .1em;
+    margin-top: .1em;
+    margin-bottom: .1em;
+    padding-left: .1em
+}
+
 /* ------------ STATUS ------------ */
 
 td.ev_status_open {

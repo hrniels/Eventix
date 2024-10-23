@@ -46,7 +46,7 @@
             <td width="30%">{{ "Attendees"|t(locale) }}:</td>
             <td width="70%">
                 <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
-                    <ul>
+                    <ul class="ev_tightlist">
                     {% for att in occ.attendees() %}
                         <li>
                         <a href="{{ att.address() }}">
