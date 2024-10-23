@@ -41,6 +41,32 @@
             <td width="70%">{{ rrule|newlines()|safe }}</td>
         </tr>
         {% endif %}
+        {% if !occ.attendees().is_empty() %}
+        <tr>
+            <td width="30%">{{ "Attendees"|t(locale) }}:</td>
+            <td width="70%">
+                <div style="max-width: 350px;
+                            max-height: 100px;
+                            overflow-x: hidden;
+                            overflow-y: scroll;
+                            text-overflow: ellipsis;">
+                    <ul>
+                    {% for att in occ.attendees() %}
+                        <li>
+                        <a href="{{ att.address() }}">
+                        {% if let Some(cn) = att.common_name() %}
+                        {{ cn }}
+                        {% else %}
+                        {{ att.address() }}
+                        {% endif %}
+                        </a>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </td>
+        </tr>
+        {% endif %}
         {% if let Some(desc) = occ.description() %}
         <tr>
             <td width="30%">{{ "Description"|t(locale) }}:</td>

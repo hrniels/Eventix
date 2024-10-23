@@ -1,3 +1,4 @@
+mod attendee;
 mod calendar;
 mod component;
 mod date;
@@ -7,6 +8,7 @@ mod recur;
 mod status;
 mod todo;
 
+pub use attendee::{CalAttendee, CalPartStat, CalRole};
 pub use calendar::{Calendar, Other};
 pub use component::{CalComponent, EventLikeComponent};
 pub use date::{CalDate, CalDateTime};

@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::objects::{CalDate, CalEvent, CalRRule, CalTodo, EventLike};
+use crate::objects::{CalAttendee, CalDate, CalEvent, CalRRule, CalTodo, EventLike};
 use crate::parser::Property;
 
 #[derive(Default, Debug)]
@@ -15,6 +15,7 @@ pub struct EventLikeComponent {
     desc: Option<String>,
     location: Option<String>,
     categories: Vec<String>,
+    attendees: Vec<CalAttendee>,
     // 0 = undefined; 1 = highest, 9 = lowest
     priority: Option<u8>,
     rrule: Option<CalRRule>,
@@ -65,6 +66,12 @@ impl EventLikeComponent {
                     .split(',')
                     .map(|v| v.trim().to_string())
                     .collect();
+            }
+            "ATTENDEE" => {
+                let att: CalAttendee = prop.try_into()?;
+                if !self.attendees.iter().any(|a| a.address() == att.address()) {
+                    self.attendees.push(att);
+                }
             }
             "PRIORITY" => {
                 let prio = prop.value().parse()?;
@@ -122,6 +129,10 @@ impl EventLike for EventLikeComponent {
 
     fn categories(&self) -> &[String] {
         self.categories.as_ref()
+    }
+
+    fn attendees(&self) -> &[CalAttendee] {
+        self.attendees.as_ref()
     }
 
     fn rrule(&self) -> Option<&CalRRule> {
@@ -248,6 +259,10 @@ impl EventLike for CalComponent {
 
     fn categories(&self) -> &[String] {
         with_ev_or_todo!(self, categories)
+    }
+
+    fn attendees(&self) -> &[CalAttendee] {
+        with_ev_or_todo!(self, attendees)
     }
 
     fn rrule(&self) -> Option<&CalRRule> {

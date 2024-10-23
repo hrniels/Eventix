@@ -78,4 +78,12 @@ END:VCALENDAR";
         assert_eq!(reader.next(), Some("END:VCALENDAR".to_string()));
         assert_eq!(reader.next(), None);
     }
+
+    #[test]
+    fn more_props() {
+        let att_str = "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=TENTATIVE;CN=Henry
+  Cabot:mailto:hcabot@example.com";
+        let mut reader = LineReader::new(att_str.as_bytes());
+        assert_eq!(reader.next(), Some("ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=TENTATIVE;CN=Henry Cabot:mailto:hcabot@example.com".to_string()));
+    }
 }

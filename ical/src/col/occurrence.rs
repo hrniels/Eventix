@@ -2,9 +2,7 @@ use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 
 use crate::col::Id;
-use crate::objects::{
-    CalComponent, CalDate, CalEvent, CalEventStatus, CalRRule, CalTodo, EventLike,
-};
+use crate::objects::{CalAttendee, CalComponent, CalDate, CalEventStatus, CalRRule, EventLike};
 
 #[derive(Debug)]
 pub struct Occurrence<'c> {
@@ -142,6 +140,10 @@ impl EventLike for Occurrence<'_> {
 
     fn categories(&self) -> &[String] {
         occ_or_base!(self, categories)
+    }
+
+    fn attendees(&self) -> &[CalAttendee] {
+        occ_or_base!(self, attendees)
     }
 
     fn rrule(&self) -> Option<&CalRRule> {

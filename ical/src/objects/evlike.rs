@@ -1,4 +1,4 @@
-use crate::objects::{CalDate, CalRRule};
+use crate::objects::{CalAttendee, CalDate, CalRRule};
 
 pub trait EventLike {
     fn uid(&self) -> &String;
@@ -15,6 +15,7 @@ pub trait EventLike {
     fn description(&self) -> Option<&String>;
     fn location(&self) -> Option<&String>;
     fn categories(&self) -> &[String];
+    fn attendees(&self) -> &[CalAttendee];
 
     fn rrule(&self) -> Option<&CalRRule>;
     fn rid(&self) -> Option<&CalDate>;
