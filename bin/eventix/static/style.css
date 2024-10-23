@@ -248,12 +248,13 @@ ul.ev_source li {
 	padding: 0;
 }
 
-ul.ev_tightlist {
-    margin-left: 1em;
+ul.ev_iconlist {
     margin-right: .1em;
     margin-top: .1em;
     margin-bottom: .1em;
-    padding-left: .1em
+    margin-left: 0px;
+    padding-left: 0px;
+    list-style-type: none;
 }
 
 /* ------------ STATUS ------------ */

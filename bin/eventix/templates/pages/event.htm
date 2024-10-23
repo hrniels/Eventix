@@ -46,16 +46,18 @@
             <td width="30%">{{ "Attendees"|t(locale) }}:</td>
             <td width="70%">
                 <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
-                    <ul class="ev_tightlist">
+                    <ul class="ev_iconlist">
                     {% for att in occ.attendees() %}
                         <li>
-                        <a href="{{ att.address() }}">
-                        {% if let Some(cn) = att.common_name() %}
-                        {{ cn }}
-                        {% else %}
-                        {{ att.address() }}
-                        {% endif %}
-                        </a>
+                            <i title="{{ self::attendee_title(att) }}"
+                               class="{{ self::attendee_icon(att) }}"></i>
+                            <a href="{{ att.address() }}">
+                            {% if let Some(cn) = att.common_name() %}
+                            {{ cn }}
+                            {% else %}
+                            {{ att.address() }}
+                            {% endif %}
+                            </a>
                         </li>
                     {% endfor %}
                     </ul>

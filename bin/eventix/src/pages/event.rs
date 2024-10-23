@@ -5,11 +5,11 @@ use axum::response::{IntoResponse, Json};
 use axum::routing::get;
 use axum::Router;
 use ical::col::{CalSource, Occurrence};
-use ical::objects::EventLike;
+use ical::objects::{CalPartStat, CalRole, EventLike};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use ical::objects::CalDate;
+use ical::objects::{CalAttendee, CalDate};
 
 use crate::error::HTMLError;
 use crate::html::filters;
@@ -34,6 +34,36 @@ struct EventTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     source: &'a CalSource,
     occ: Occurrence<'a>,
+}
+
+fn attendee_icon(att: &CalAttendee) -> String {
+    let role = match att.role() {
+        Some(CalRole::Required) => "-fill",
+        Some(CalRole::Optional) | _ => "",
+    };
+
+    let status = match att.part_stat() {
+        Some(CalPartStat::Accepted) => "-check",
+        Some(CalPartStat::Declined) => "-slash",
+        Some(CalPartStat::Tentative) => "-exclamation",
+        _ => "",
+    };
+
+    format!("bi bi-person{}{}", role, status)
+}
+
+fn attendee_title(att: &CalAttendee) -> String {
+    let mut res = String::new();
+    if let Some(role) = att.role() {
+        res.push_str(&format!("{:?}", role));
+    }
+    if let Some(status) = att.part_stat() {
+        if att.role().is_some() {
+            res.push_str(", ");
+        }
+        res.push_str(&format!("{:?}", status));
+    }
+    res
 }
 
 pub async fn handler(
