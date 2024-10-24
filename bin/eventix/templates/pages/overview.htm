@@ -37,7 +37,7 @@
                                         {% if let Some(rid) = occ.rid() %}
                                         '{{ rid.to_string() }}',
                                         {% else %}
-                                        null,
+                                        '{{ occ.occurrence_start()|as_ref|to_utc }}',
                                         {% endif %}
                                         '{{ occ.id }}')"
                      id="{{ occ.id }}" class="

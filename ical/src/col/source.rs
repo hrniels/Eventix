@@ -75,7 +75,7 @@ impl CalSource {
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
-        rid: Option<&CalDate>,
+        rid: &CalDate,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let uid_str = uid.as_ref();

@@ -19,7 +19,7 @@ use crate::locale::{self, Locale};
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: Option<String>,
+    rid: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -80,11 +80,14 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
-    let rid = req.rid.as_ref().and_then(|rid| rid.parse::<CalDate>().ok());
+    let rid = req
+        .rid
+        .parse::<CalDate>()
+        .context(format!("Invalid rid date: {}", req.rid))?;
 
     let occ = state
         .store()
-        .occurrence_by_id(&req.uid, rid.as_ref(), locale.timezone())
+        .occurrence_by_id(&req.uid, &rid, locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
             &req.uid, req.rid

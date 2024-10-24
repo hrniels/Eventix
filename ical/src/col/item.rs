@@ -52,7 +52,7 @@ impl CalItem {
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
-        rid: Option<&CalDate>,
+        rid: &CalDate,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let Some(first) = self
@@ -64,13 +64,13 @@ impl CalItem {
             return None;
         };
 
-        let mut res = Occurrence::new(self.source, first, first.start()?.as_start_with_tz(tz));
-        if let Some(rid) = rid {
-            let occ = self
-                .cal
-                .components()
-                .iter()
-                .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid))?;
+        let mut res = Occurrence::new(self.source, first, rid.as_start_with_tz(tz));
+        let occ = self
+            .cal
+            .components()
+            .iter()
+            .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid));
+        if let Some(occ) = occ {
             res.set_occurrence(occ);
         }
         Some(res)
@@ -266,16 +266,17 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
+        let start = CalDate::Date(NaiveDate::from_ymd_opt(1995, 10, 2).unwrap());
         let comps = source.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
         assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
         assert_eq!(
-            source.occurrence_by_id("yes1", None, tz).unwrap().uid(),
+            source.occurrence_by_id("yes1", &start, tz).unwrap().uid(),
             "yes1"
         );
         assert_eq!(
-            source.occurrence_by_id("no2", None, tz).unwrap().uid(),
+            source.occurrence_by_id("no2", &start, tz).unwrap().uid(),
             "no2"
         );
-        assert!(source.occurrence_by_id("not-found", None, tz).is_none());
+        assert!(source.occurrence_by_id("not-found", &start, tz).is_none());
     }
 }

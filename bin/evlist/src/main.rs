@@ -19,8 +19,8 @@ fn main() -> Result<(), anyhow::Error> {
     println!();
 
     let now = Local::now();
-    let start = now.with_timezone(&chrono_tz::Europe::Berlin) - Duration::days(16);
-    let end = start + Duration::days(7);
+    let start = now.with_timezone(&chrono_tz::Europe::Berlin);
+    let end = start + Duration::days(14);
 
     let mut occurrences = store
         .occurrences_within(start, end)
@@ -33,7 +33,7 @@ fn main() -> Result<(), anyhow::Error> {
         println!(
             "  {:?} ({:?} for {})",
             occ.summary(),
-            occ.start(),
+            occ.occurrence_start(),
             if let Some(dur) = occ.duration() {
                 format!("{} min", dur.num_minutes())
             } else {

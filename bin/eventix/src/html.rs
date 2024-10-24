@@ -2,7 +2,8 @@ use std::time::Duration;
 
 pub mod filters {
     use askama::{Html, MarkupDisplay};
-    use chrono::NaiveDate;
+    use chrono::DateTime;
+    use chrono_tz::Tz;
     use std::{fmt::Display, sync::Arc};
 
     use crate::locale::Locale;
@@ -32,21 +33,21 @@ pub mod filters {
     }
 
     pub fn date(
-        date: &NaiveDate,
+        date: &DateTime<Tz>,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> ::askama::Result<String> {
         Ok(locale.format_date(date))
     }
 
-    pub fn neutral_date(date: &Option<NaiveDate>) -> ::askama::Result<String> {
-        Ok(match date {
-            Some(d) => format!("{}", d.format("%Y-%m-%d")),
-            None => String::new(),
-        })
+    pub fn datetime(
+        date: &DateTime<Tz>,
+        locale: &Arc<dyn Locale + Send + Sync>,
+    ) -> ::askama::Result<String> {
+        Ok(locale.format_datetime(date))
     }
 
-    pub fn currency(num: &f64, locale: &Arc<dyn Locale + Send + Sync>) -> ::askama::Result<String> {
-        Ok(locale.format_currency(*num))
+    pub fn to_utc(date: &DateTime<Tz>) -> ::askama::Result<String> {
+        Ok(date.to_utc().format("%Y%m%dT%H%M%SZ").to_string())
     }
 }
 
