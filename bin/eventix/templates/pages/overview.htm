@@ -82,11 +82,11 @@ var selected = null;
 
 $(document).click(function(e) {
     if(selected != null && !inBoundingBox(e, 'popup'))
-        deselect(selected, null, null, null, null);
+        deselect(selected, null);
 });
 $(document).keydown(function(e) {
     if(e.key == 'Escape' && selected != null)
-        deselect(selected, null, null, null, null);
+        deselect(selected, null);
 });
 
 $.fn.slideFadeToggle = function(easing, callback) {
@@ -94,17 +94,23 @@ $.fn.slideFadeToggle = function(easing, callback) {
 };
 
 function openPopup(uid, jsuid, rid, id) {
+    var newid = {
+        'uid': uid,
+        'jsuid': jsuid,
+        'rid': rid,
+        'id': id,
+    };
     if(selected != null)
-        deselect(selected, uid, jsuid, rid, id);
+        deselect(selected, newid);
     else
-        select(uid, jsuid, rid, id);
+        select(newid);
 }
 
-function select(uid, jsuid, rid, id) {
-    var e = $('.' + jsuid);
+function select(newid) {
+    var e = $('.' + newid.jsuid);
     e.addClass('ev_selected');
 
-    var el = document.getElementById(id);
+    var el = document.getElementById(newid.id);
     var elRect = el.getBoundingClientRect();
     var popup = $('#popup');
     var popWidth = 500;
@@ -115,19 +121,19 @@ function select(uid, jsuid, rid, id) {
     popup.css('top', elRect.top);
     popup.css("position", "absolute");
     popup.slideFadeToggle(null, function() {
-        selected = jsuid;
+        selected = newid;
     });
 
-    loadOccurrence(uid, rid);
+    loadOccurrence(newid.uid, newid.rid);
 }
 
-function deselect(olduid, newuid, newjsuid, newrid, newid) {
+function deselect(oldid, newid) {
     selected = null;
     $('#popup').slideFadeToggle(function() {
-        var old = $('.' + olduid);
+        var old = $('.' + oldid.jsuid);
         old.removeClass('ev_selected');
-        if(olduid != newjsuid && newjsuid != null)
-            select(newuid, newjsuid, newrid, newid);
+        if(newid != null)
+            select(newid);
     });
 }
 
