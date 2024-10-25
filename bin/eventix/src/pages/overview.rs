@@ -6,10 +6,11 @@ use axum::{
     routing::get,
     Router,
 };
-use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
+use chrono_tz::Tz;
 use ical::{
     col::{CalStore, Occurrence},
-    objects::{CalComponent, EventLike},
+    objects::EventLike,
     util,
 };
 use once_cell::sync::Lazy;
@@ -84,6 +85,32 @@ struct OverviewTemplate<'a> {
     prev_month: String,
     next_month: String,
     store: &'a CalStore,
+    next_days: Vec<Day<'a>>,
+}
+
+fn get_day_occurrences<'a>(
+    ev_occs: &'a Vec<Occurrence<'a>>,
+    date: NaiveDate,
+    timezone: &Tz,
+) -> Vec<DayOccurrence<'a>> {
+    let day_start = timezone
+        .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+        .unwrap();
+    let day_end = timezone
+        .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+        .unwrap();
+
+    let mut day_occs = ev_occs
+        .iter()
+        .filter(|o| o.overlaps(day_start, day_end))
+        .map(|o| DayOccurrence::new(o))
+        .collect::<Vec<_>>();
+    day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
+        (true, true) | (false, false) => a.occurrence_start().cmp(&b.occurrence_start()),
+        (true, false) => Ordering::Less,
+        (false, true) => Ordering::Greater,
+    });
+    day_occs
 }
 
 async fn handler(
@@ -135,24 +162,7 @@ async fn handler(
 
     let mut days = Vec::new();
     while date < end {
-        let day_start = timezone
-            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
-            .unwrap();
-        let day_end = timezone
-            .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
-            .unwrap();
-
-        let mut day_occs = ev_occs
-            .iter()
-            .filter(|o| o.overlaps(day_start, day_end))
-            .map(|o| DayOccurrence::new(o))
-            .collect::<Vec<_>>();
-        day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
-            (true, true) | (false, false) => a.occurrence_start().cmp(&b.occurrence_start()),
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
-        });
-
+        let day_occs = get_day_occurrences(&ev_occs, date, &timezone);
         days.push(Day {
             date,
             show_month: date.day() == 1
@@ -160,6 +170,33 @@ async fn handler(
             cur_month: date >= month_start && date < month_end,
             occurrences: day_occs,
         });
+
+        date += Duration::days(1);
+    }
+
+    let now = Local::now();
+    let start = now.with_timezone(locale.timezone());
+    let end = start + Duration::days(7);
+
+    let next_occs = state
+        .store()
+        .occurrences_within(start, end)
+        .filter(|o| o.is_event())
+        .collect::<Vec<_>>();
+
+    let mut next_days = Vec::new();
+    let mut date = start.date_naive();
+    let end = end.date_naive();
+    while date < end {
+        let day_occs = get_day_occurrences(&next_occs, date, &timezone);
+        if !day_occs.is_empty() {
+            next_days.push(Day {
+                date,
+                show_month: false,
+                cur_month: false,
+                occurrences: day_occs,
+            });
+        }
 
         date += Duration::days(1);
     }
@@ -174,6 +211,7 @@ async fn handler(
         today: Utc::now().with_timezone(&timezone).date_naive(),
         store: state.store(),
         days,
+        next_days,
     }
     .render()
     .context("overview template")?;

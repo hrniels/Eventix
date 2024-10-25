@@ -378,6 +378,33 @@ span.ev_msg_error span.ev_msg_info {
     text-overflow: ellipsis;
 }
 
+.ev_box {
+	border: 1px solid #bbb;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.ev_box > div {
+	border: 1px solid #fff;
+    padding: .4em;
+}
+.ev_header {
+	background-color: #637591;
+	border: 1px solid #bbb;
+	color: #fff;
+    padding: .8em !important;
+	font-size: 1.1em;
+    font-weight: bold;
+    text-align: center;
+}
+.ev_next_day_header {
+    background-color: #f0f0f0;
+	border-top: 1px solid #bbb !important;
+	border-bottom: 1px solid #bbb !important;
+    padding: .3em;
+    font-weight: bold;
+}
+
 .ev_month_day_header {
     text-align: right;
     background-color: #f0f0f0;
@@ -423,8 +450,24 @@ div.ev_cal_src_bi {
     color: #fff;
 }
 
+span.ev_cal_src_bi {
+  height: 15px;
+  width: 15px;
+  background-color: #1d77c0;
+  border-radius: 50%;
+  display: inline-block;
+}
+
 div.ev_cal_src_scriptsolution {
     border: 1px solid #fff;
     background-color: #2ec17d;
     color: #fff;
+}
+
+span.ev_cal_src_scriptsolution {
+  height: 15px;
+  width: 15px;
+  background-color: #2ec17d;
+  border-radius: 50%;
+  display: inline-block;
 }
