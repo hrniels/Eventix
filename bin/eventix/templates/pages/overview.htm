@@ -154,7 +154,8 @@ function select(newid) {
     e.addClass('ev_selected');
 
     var el = document.getElementById(newid.id);
-    var elRect = el.getBoundingClientRect();
+    var elRect = pageBoundingBox(el);
+
     var popup = $('#popup');
     var popWidth = 500;
     if(elRect.right + popWidth > window.innerWidth)
@@ -180,8 +181,22 @@ function deselect(oldid, newid) {
     });
 }
 
+function pageBoundingBox(el) {
+    var rect = el.getBoundingClientRect();
+    var doc = document.documentElement;
+    var left = (window.pageXOffset || doc.scrollLeft) - (doc.clientLeft || 0);
+    var top = (window.pageYOffset || doc.scrollTop)  - (doc.clientTop || 0);
+    rect.x += left;
+    rect.y += top;
+    rect.top += top;
+    rect.bottom += top;
+    rect.left += left;
+    rect.right += left;
+    return rect;
+}
+
 function inBoundingBox(e, id) {
-    var box = document.getElementById(id).getBoundingClientRect();
+    var box = pageBoundingBox(document.getElementById(id));
     return e.pageX >= box.left && e.pageX <= box.left + box.width &&
         e.pageY >= box.top && e.pageY <= box.top + box.height;
 }
