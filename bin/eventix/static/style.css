@@ -387,6 +387,11 @@ span.ev_msg_error span.ev_msg_info {
 .ev_box > div {
 	border: 1px solid #fff;
     padding: .4em;
+    white-space: nowrap;
+}
+.ev_box .ev_summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .ev_header {
 	background-color: #637591;
@@ -456,6 +461,7 @@ span.ev_cal_src_bi {
   background-color: #1d77c0;
   border-radius: 50%;
   display: inline-block;
+  flex: 0 0 15px; /* minimum width */
 }
 
 div.ev_cal_src_scriptsolution {
@@ -470,4 +476,5 @@ span.ev_cal_src_scriptsolution {
   background-color: #2ec17d;
   border-radius: 50%;
   display: inline-block;
+  flex: 0 0 15px; /* minimum width */
 }
