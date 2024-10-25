@@ -364,7 +364,7 @@ span.ev_msg_error span.ev_msg_info {
 /* ------------ MONTH VIEW ------------ */
 
 .ev_month_td {
-    max-width: 5cm;
+    max-width: 3cm;
     height: 3cm;
     vertical-align: top;
     padding: 0px !important;
