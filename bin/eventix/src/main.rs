@@ -59,6 +59,13 @@ async fn main() {
     );
     store.add(
         CalSource::new_from_dir(
+            PathBuf::from("/home/hrniels/.config/vdirsyncer/tasks/tasks~h26VsoBEVm_nzi6FeDvGvES"),
+            "scriptsolution_tasks".to_string(),
+        )
+        .expect("Loading calendar failed"),
+    );
+    store.add(
+        CalSource::new_from_dir(
             PathBuf::from("/home/hrniels/.config/vdirsyncer/outlook-calendars/calendar"),
             "bi".to_string(),
         )
