@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{cmp::Ordering, str::FromStr};
 
 use anyhow::anyhow;
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
@@ -61,6 +61,20 @@ impl CalDate {
             }
             Self::DateTime(datetime) => datetime.with_tz(tz),
         }
+    }
+}
+
+impl PartialOrd for CalDate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let a = self.as_start_with_tz(&chrono_tz::UTC);
+        let b = other.as_start_with_tz(&chrono_tz::UTC);
+        Some(a.cmp(&b))
+    }
+}
+
+impl Ord for CalDate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 
