@@ -6,7 +6,7 @@ use axum::{
     routing::get,
     Router,
 };
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use ical::{
     col::{CalStore, Occurrence},
@@ -117,7 +117,6 @@ fn get_overlapping_occurrences<'a>(
 fn get_due_occurrences<'a>(
     ev_occs: &'a Vec<Occurrence<'a>>,
     date: NaiveDate,
-    timezone: &Tz,
 ) -> Vec<DayOccurrence<'a>> {
     let mut day_occs = ev_occs
         .iter()
@@ -245,7 +244,7 @@ async fn handler(
     let mut cur_date = start.date_naive();
     let end_date = end.date_naive();
     while cur_date < end_date {
-        let day_occs = get_due_occurrences(&next_td_occs, cur_date, &timezone);
+        let day_occs = get_due_occurrences(&next_td_occs, cur_date);
         if !day_occs.is_empty() {
             next_tasks.push(Day {
                 date: Some(cur_date),

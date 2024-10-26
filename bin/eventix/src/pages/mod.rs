@@ -10,6 +10,7 @@ pub struct Breadcrumb {
 }
 
 impl Breadcrumb {
+    #[allow(dead_code)]
     pub fn new<S: ToString>(url: S, name: S) -> Self {
         Self {
             url: url.to_string(),
@@ -45,6 +46,7 @@ impl Page {
         &self.breadcrumbs
     }
 
+    #[allow(dead_code)]
     pub fn add_breadcrumb(&mut self, breadcrumb: Breadcrumb) {
         self.breadcrumbs.push(breadcrumb);
     }
@@ -71,6 +73,7 @@ impl Page {
         &self.infos
     }
 
+    #[allow(dead_code)]
     pub fn add_info<S: ToString>(&mut self, message: S) {
         self.infos.push(message.to_string());
     }
