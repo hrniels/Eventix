@@ -89,8 +89,20 @@ impl CalSource {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> impl Iterator<Item = Occurrence<'_>> {
+        self.filtered_occurrences_within(start, end, |_| true)
+    }
+
+    pub fn filtered_occurrences_within<F>(
+        &self,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+        filter: F,
+    ) -> impl Iterator<Item = Occurrence<'_>>
+    where
+        F: Fn(&CalComponent) -> bool + Clone,
+    {
         self.items
             .iter()
-            .flat_map(move |i| i.occurrences_within(start, end))
+            .flat_map(move |i| i.filtered_occurrences_within(start, end, filter.clone()))
     }
 }

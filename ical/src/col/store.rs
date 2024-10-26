@@ -2,7 +2,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{CalItem, CalSource, Id, Occurrence};
-use crate::objects::{CalDate, CalEvent, CalTodo};
+use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo};
 
 #[derive(Default)]
 pub struct CalStore {
@@ -43,10 +43,22 @@ impl CalStore {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> impl Iterator<Item = Occurrence<'_>> {
+        self.filtered_occurrences_within(start, end, |_| true)
+    }
+
+    pub fn filtered_occurrences_within<F>(
+        &self,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+        filter: F,
+    ) -> impl Iterator<Item = Occurrence<'_>>
+    where
+        F: Fn(&CalComponent) -> bool + Clone,
+    {
         self.sources
             .iter()
             .flat_map(|c| c.items().iter())
-            .flat_map(move |i| i.occurrences_within(start, end))
+            .flat_map(move |i| i.filtered_occurrences_within(start, end, filter.clone()))
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {

@@ -4,7 +4,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{Id, Occurrence};
-use crate::objects::{CalDate, CalEvent, CalTodo, Calendar, EventLike};
+use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo, Calendar, EventLike};
 
 pub struct CalItem {
     id: Id,
@@ -81,7 +81,27 @@ impl CalItem {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> Vec<Occurrence<'_>> {
-        let Some(first) = self.cal.components().iter().find(|c| c.rid().is_none()) else {
+        self.filtered_occurrences_within(start, end, |_| true)
+    }
+
+    pub fn filtered_occurrences_within<F>(
+        &self,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+        filter: F,
+    ) -> Vec<Occurrence<'_>>
+    where
+        F: Fn(&CalComponent) -> bool,
+    {
+        // we currently assume here that there is just a single uid per calendar. that is, if there
+        // are multiple events, they all have the same uid and one is the base event with rid =
+        // None and the others overwrite specific occurrences of that base event.
+        let Some(first) = self
+            .cal
+            .components()
+            .iter()
+            .find(|c| c.rid().is_none() && filter(c))
+        else {
             return vec![];
         };
 
