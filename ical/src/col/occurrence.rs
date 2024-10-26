@@ -2,7 +2,9 @@ use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 
 use crate::col::Id;
-use crate::objects::{CalAttendee, CalComponent, CalDate, CalEventStatus, CalRRule, EventLike};
+use crate::objects::{
+    CalAttendee, CalComponent, CalDate, CalEventStatus, CalRRule, CalTodoStatus, EventLike,
+};
 
 #[derive(Debug)]
 pub struct Occurrence<'c> {
@@ -42,6 +44,13 @@ impl<'c> Occurrence<'c> {
         match self.occ {
             Some(c) => c.as_event().and_then(|ev| ev.status()),
             None => self.base.as_event().and_then(|ev| ev.status()),
+        }
+    }
+
+    pub fn todo_status(&self) -> Option<CalTodoStatus> {
+        match self.occ {
+            Some(c) => c.as_todo().and_then(|td| td.status()),
+            None => self.base.as_todo().and_then(|td| td.status()),
         }
     }
 
