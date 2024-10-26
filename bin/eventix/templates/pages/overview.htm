@@ -143,13 +143,15 @@
                                     {% endif %}
                                     '{{ occ.id }}')"
                  id="{{ occ.id }}"
-                 {% if !occ.is_all_day() %}
                  style="display: flex; gap: .4em"
-                 {% endif %}
                  class="ev_event_occurrence
                         ev_id_{{ occ.js_uid() }}
-                        {% if occ.is_all_day() %}
-                        ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                        {% if let Some(end) = occ.occurrence_end() %}
+                        {% if end.date_naive() < today %}
+                        ev_overdue
+                        {% else if end.date_naive() == today %}
+                        ev_duetoday
+                        {% endif %}
                         {% endif %}
                         {% match occ.status_class() %}
                         {% when Some with (cl) %}
@@ -157,15 +159,15 @@
                         {% when _ %}
                         {% endmatch %}
                         ">
-                {% if occ.is_all_day() %}
-                {{ occ.summary().unwrap() }}
-                {% else %}
                 <span class="ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}"></span>
                 {% if let Some(due) = occ.end_or_due() %}
-                <span><b>{{ due.as_end_with_tz(locale.timezone()).format("%H:%M") }}</b></span>
+                {% match due %}
+                {% when CalDate::DateTime with (due_date) %}
+                <span><b>{{ due_date.with_tz(locale.timezone()).format("%H:%M") }}</b></span>
+                {% when _ %}
+                {% endmatch %}
                 {% endif %}
                 <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
-                {% endif %}
             </div>
             {% endfor %}
             {% endfor %}

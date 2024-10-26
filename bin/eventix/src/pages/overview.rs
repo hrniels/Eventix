@@ -10,7 +10,7 @@ use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use ical::{
     col::{CalStore, Occurrence},
-    objects::{CalComponent, CalTodoStatus, EventLike},
+    objects::{CalComponent, CalDate, CalTodoStatus, EventLike},
     util,
 };
 use once_cell::sync::Lazy;

@@ -451,6 +451,14 @@ span.ev_msg_error span.ev_msg_info {
     cursor: pointer;
 }
 
+.ev_overdue {
+    color: red;
+    font-weight: bold;
+}
+.ev_duetoday {
+    font-weight: bold;
+}
+
 /* ------------ CALENDAR SOURCES ------------ */
 
 div.ev_cal_src_bi {
