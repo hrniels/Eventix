@@ -6,6 +6,9 @@ pub trait EventLike {
     fn last_modified(&self) -> &CalDate;
 
     fn start(&self) -> Option<&CalDate>;
+    fn start_or_created(&self) -> &CalDate {
+        self.start().unwrap_or(self.created())
+    }
     fn end_or_due(&self) -> Option<&CalDate>;
     fn is_all_day(&self) -> bool {
         matches!(self.start(), Some(CalDate::Date(_)))

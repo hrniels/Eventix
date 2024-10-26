@@ -181,34 +181,18 @@ impl CalComponent {
             return rrule.dates_within(dtstart.as_start_with_tz(&start.timezone()), start, end);
         }
 
-        match (self.start(), self.end_or_due()) {
-            (Some(ev_start), Some(ev_end)) => {
-                let tzstart = ev_start.as_start_with_tz(&start.timezone());
-                let tzend = ev_end.as_end_with_tz(&start.timezone());
-                if tzstart > end || tzend < start {
-                    vec![]
-                } else {
-                    vec![tzstart]
-                }
-            }
-            (Some(ev_start), None) => {
-                let tzstart = ev_start.as_start_with_tz(&start.timezone());
-                if tzstart > end {
-                    vec![]
-                } else {
-                    vec![end]
-                }
-            }
-            (None, Some(ev_end)) => {
-                let tzend = ev_end.as_end_with_tz(&start.timezone());
-                if tzend < start {
-                    vec![]
-                } else {
-                    vec![start]
-                }
-            }
-            (None, None) => vec![start],
+        let ev_start = self.start_or_created().as_start_with_tz(&start.timezone());
+        if ev_start > end {
+            return vec![];
         }
+        if let Some(ev_end) = self.end_or_due() {
+            let tzend = ev_end.as_end_with_tz(&start.timezone());
+            if tzend < start {
+                return vec![];
+            }
+        }
+
+        vec![ev_start]
     }
 }
 

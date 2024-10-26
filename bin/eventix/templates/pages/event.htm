@@ -11,7 +11,6 @@
                 </span>
             </th>
         </tr>
-        {% if occ.is_event() || occ.rrule().is_some() %}
         <tr>
             <td width="30%">{{ "Start date"|t(locale) }}:</td>
             <td width="70%">
@@ -24,21 +23,19 @@
         </tr>
         {% if let Some(end) = occ.occurrence_end() %}
         <tr>
-            <td width="30%">{{ "End date"|t(locale) }}:</td>
+            <td width="30%">
+                {% if occ.is_event() %}
+                {{ "End date"|t(locale) }}:
+                {% else %}
+                {{ "Due"|t(locale) }}:
+                {% endif %}
+            </td>
             <td width="70%">
                 {% if occ.is_all_day() %}
                 {{ end|date(locale) }}
                 {% else %}
                 {{ end|datetime(locale) }}
                 {% endif %}
-            </td>
-        </tr>
-        {% endif %}
-        {% else %}
-        <tr>
-            <td width="30%">{{ "Created"|t(locale) }}:</td>
-            <td width="70%">
-                {{ occ.created()|caldate(locale) }}
             </td>
         </tr>
         {% endif %}
@@ -91,6 +88,7 @@
         </tr>
         {% endif %}
         {% if let Some(desc) = occ.description() %}
+        {% if !desc.trim().is_empty() %}
         <tr>
             <td width="30%">{{ "Description"|t(locale) }}:</td>
             <td width="70%">
@@ -99,6 +97,7 @@
                 </div>
             </td>
         </tr>
+        {% endif %}
         {% endif %}
     </table>
 </div>

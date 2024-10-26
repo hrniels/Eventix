@@ -70,13 +70,19 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn duration(&self) -> Option<Duration> {
-        match (self.start(), self.end_or_due()) {
-            (Some(start), Some(end)) => Some(
-                end.as_end_with_tz(&self.start.timezone())
-                    - start.as_start_with_tz(&self.start.timezone()),
-            ),
-            _ => None,
-        }
+        let start = self.start_or_created();
+
+        // ensure that we start day-aligned if either start or end is all-day
+        let start = if self.is_all_day() && !matches!(start, CalDate::Date(_)) {
+            CalDate::Date(start.as_naive_date())
+        } else {
+            start.clone()
+        };
+
+        self.end_or_due().map(|end| {
+            end.as_end_with_tz(&self.start.timezone())
+                - start.as_start_with_tz(&self.start.timezone())
+        })
     }
 
     pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {

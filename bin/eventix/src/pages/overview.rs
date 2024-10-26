@@ -220,6 +220,11 @@ async fn handler(
         cur_date += Duration::days(1);
     }
 
+    let mut next_td_occs = state
+        .store()
+        .filtered_occurrences_within(start, end, |c| c.is_todo())
+        .collect::<Vec<_>>();
+
     let overdue_tds = state
         .store()
         .filtered_occurrences_within(
@@ -232,16 +237,27 @@ async fn handler(
                 _ => false,
             },
         )
-        .collect::<Vec<_>>();
-    println!("{:#?}", overdue_tds);
-
-    let next_td_occs = state
-        .store()
-        .filtered_occurrences_within(start, end, |c| c.is_todo())
-        .collect::<Vec<_>>();
+        .filter(|o| {
+            // so far, we got all todos that overlap with this period of time. but we are only
+            // interested in the ones that are due before the start.
+            o.end_or_due()
+                .map(|e| e.as_end_with_tz(&timezone))
+                .unwrap_or(start)
+                < start
+        });
+    next_td_occs.extend(overdue_tds);
 
     let mut next_tasks = Vec::new();
-    let mut cur_date = start.date_naive();
+    let mut cur_date = next_td_occs
+        .iter()
+        .map(|o| {
+            o.end_or_due()
+                .map(|e| e.as_end_with_tz(&timezone))
+                .unwrap_or(start)
+        })
+        .min()
+        .unwrap_or(start)
+        .date_naive();
     let end_date = end.date_naive();
     while cur_date < end_date {
         let day_occs = get_due_occurrences(&next_td_occs, cur_date);
