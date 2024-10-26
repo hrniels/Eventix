@@ -160,20 +160,19 @@ impl FromStr for WeekdayDesc {
 
 impl Display for WeekdayDesc {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let wday = Weekday::try_from(self.day).unwrap();
         if let Some((num, side)) = self.nth {
             match side {
-                Side::Front => write!(f, "{} {}", util::nth(num as u64), wday),
+                Side::Front => write!(f, "{} {}", util::nth(num as u64), self.day),
                 Side::Back => {
                     if num == 1 {
-                        write!(f, "last {}", wday)
+                        write!(f, "last {}", self.day)
                     } else {
-                        write!(f, "{} to last {}", util::nth(num as u64), wday)
+                        write!(f, "{} to last {}", util::nth(num as u64), self.day)
                     }
                 }
             }
         } else {
-            write!(f, "{:?}", wday)
+            write!(f, "{:?}", self.day)
         }
     }
 }

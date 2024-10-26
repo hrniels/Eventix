@@ -38,7 +38,8 @@ struct EventTemplate<'a> {
 fn attendee_icon(att: &CalAttendee) -> String {
     let role = match att.role() {
         Some(CalRole::Required) => "-fill",
-        Some(CalRole::Optional) | _ => "",
+        Some(CalRole::Optional) => "",
+        _ => "",
     };
 
     let status = match att.part_stat() {
@@ -51,10 +52,10 @@ fn attendee_icon(att: &CalAttendee) -> String {
     format!("bi bi-person{}{}", role, status)
 }
 
-fn attendees_sorted<'a>(occ: &Occurrence<'a>) -> Vec<CalAttendee> {
+fn attendees_sorted(occ: &Occurrence<'_>) -> Vec<CalAttendee> {
     let mut att = occ.attendees().to_vec();
     att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
-        (Some(cn1), Some(cn2)) => cn1.cmp(&cn2),
+        (Some(cn1), Some(cn2)) => cn1.cmp(cn2),
         _ => Ordering::Equal,
     });
     att

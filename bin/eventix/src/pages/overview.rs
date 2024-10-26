@@ -57,7 +57,7 @@ impl<'a> DayOccurrence<'a> {
 impl<'a> Deref for DayOccurrence<'a> {
     type Target = Occurrence<'a>;
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        self.inner
     }
 }
 
@@ -90,7 +90,7 @@ struct OverviewTemplate<'a> {
 }
 
 fn get_overlapping_occurrences<'a>(
-    ev_occs: &'a Vec<Occurrence<'a>>,
+    ev_occs: &'a [Occurrence<'a>],
     date: NaiveDate,
     timezone: &Tz,
 ) -> Vec<DayOccurrence<'a>> {
@@ -104,7 +104,7 @@ fn get_overlapping_occurrences<'a>(
     let mut day_occs = ev_occs
         .iter()
         .filter(|o| o.overlaps(day_start, day_end))
-        .map(|o| DayOccurrence::new(o))
+        .map(DayOccurrence::new)
         .collect::<Vec<_>>();
     day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
         (true, true) | (false, false) => a.occurrence_start().cmp(&b.occurrence_start()),
@@ -115,7 +115,7 @@ fn get_overlapping_occurrences<'a>(
 }
 
 fn get_due_occurrences<'a>(
-    ev_occs: &'a Vec<Occurrence<'a>>,
+    ev_occs: &'a [Occurrence<'a>],
     date: NaiveDate,
 ) -> Vec<DayOccurrence<'a>> {
     let mut day_occs = ev_occs
@@ -124,7 +124,7 @@ fn get_due_occurrences<'a>(
             Some(end) => end.as_naive_date() == date,
             None => false,
         })
-        .map(|o| DayOccurrence::new(o))
+        .map(DayOccurrence::new)
         .collect::<Vec<_>>();
     day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
         (true, true) | (false, false) => a.end_or_due().cmp(&b.end_or_due()),
@@ -140,7 +140,7 @@ async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = Page::new(path().to_string());
     let locale = locale::default();
-    let timezone = locale.timezone().clone();
+    let timezone = *locale.timezone();
 
     let weekdays = vec![
         locale.translate("Monday"),
@@ -263,7 +263,7 @@ async fn handler(
             o.end_or_due().is_none()
                 && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
         })
-        .map(|o| DayOccurrence::new(o))
+        .map(DayOccurrence::new)
         .collect::<Vec<_>>();
     if !unplanned_occs.is_empty() {
         unplanned_occs.sort_by(|a, b| a.created().cmp(b.created()));

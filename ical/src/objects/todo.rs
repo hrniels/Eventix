@@ -65,6 +65,7 @@ impl PropertyConsumer for CalTodo {
                 "BEGIN" => {
                     // TODO support alarms
                     assert_eq!(prop.value(), "VALARM");
+                    #[allow(clippy::while_let_on_iterator)]
                     while let Some(line) = lines.next() {
                         let prop = line.parse::<Property>()?;
                         if prop.name() == "END" && prop.value() == "VALARM" {

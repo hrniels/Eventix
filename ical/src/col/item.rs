@@ -55,14 +55,11 @@ impl CalItem {
         rid: &CalDate,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
-        let Some(first) = self
+        let first = self
             .cal
             .components()
             .iter()
-            .find(|c| c.uid() == uid.as_ref() && c.rid().is_none())
-        else {
-            return None;
-        };
+            .find(|c| c.uid() == uid.as_ref() && c.rid().is_none())?;
 
         let mut res = Occurrence::new(self.source, first, rid.as_start_with_tz(tz));
         let occ = self

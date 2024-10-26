@@ -86,18 +86,13 @@ where
     T: AsRef<str>,
 {
     if objs.len() > 1 {
-        let start = itertools::join(
-            objs.iter()
-                .take(objs.len() - 1)
-                .map(|o| format!("{}", o.as_ref())),
-            ", ",
-        );
+        let start = itertools::join(objs.iter().take(objs.len() - 1).map(|o| o.as_ref()), ", ");
         if objs.len() > 2 {
             format!("{}, and {}", start, objs.last().unwrap().as_ref())
         } else {
             format!("{} and {}", start, objs.last().unwrap().as_ref())
         }
     } else {
-        itertools::join(objs.iter().map(|o| format!("{}", o.as_ref())), ", ")
+        itertools::join(objs.iter().map(|o| o.as_ref()), ", ")
     }
 }

@@ -66,18 +66,19 @@ impl CalDate {
 
 impl PartialOrd for CalDate {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let a = self.as_start_with_tz(&chrono_tz::UTC);
-        let b = other.as_start_with_tz(&chrono_tz::UTC);
-        Some(a.cmp(&b))
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for CalDate {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
+        let a = self.as_start_with_tz(&chrono_tz::UTC);
+        let b = other.as_start_with_tz(&chrono_tz::UTC);
+        a.cmp(&b)
     }
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for CalDate {
     fn to_string(&self) -> String {
         match self {
@@ -129,6 +130,7 @@ impl CalDateTime {
     }
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for CalDateTime {
     fn to_string(&self) -> String {
         match self {
