@@ -384,7 +384,11 @@ span.ev_msg_error span.ev_msg_info {
     flex-direction: column;
     justify-content: flex-start;
 }
-.ev_box > div {
+.ev_box .ev_scrollbox {
+    max-height: 25em;
+    overflow-y: scroll;
+}
+.ev_box > .ev_scrollbox > div {
 	border: 1px solid #fff;
     padding: .4em;
     white-space: nowrap;

@@ -24,13 +24,14 @@
                         ev_month_day_header
                         {% if day.cur_month %}ev_cur_month{% endif %}
                         ">
-                        {% if day.date == today %}<span class="ev_today">{% endif %}
+                        {% let date = day.date.unwrap() %}
+                        {% if date == today %}<span class="ev_today">{% endif %}
                         {% if day.show_month %}
-                        {{ day.date.format("%b %-d") }}
+                        {{ date.format("%b %-d") }}
                         {% else %}
-                        {{ day.date.format("%-d") }}
+                        {{ date.format("%-d") }}
                         {% endif %}
-                        {% if day.date == today %}</span>{% endif %}
+                        {% if date == today %}</span>{% endif %}
                     </div>
                     {% for occ in day.occurrences %}
                     <div onclick="openPopup('{{ occ.uid() }}',
@@ -79,9 +80,10 @@
 <div style="float: right; width: 19%">
     <div class="ev_box">
         <div class="ev_header">{{ "Next events"|t(locale) }}</div>
-        {% for day in next_days %}
-        <div class="ev_next_day_header">{{ day.date.format("%A, %B %d") }}</div>
-        {% for occ in day.occurrences %}
+        <div class="ev_scrollbox">
+            {% for day in next_events %}
+            <div class="ev_next_day_header">{{ day.date.unwrap().format("%A, %B %d") }}</div>
+            {% for occ in day.occurrences %}
             <div onclick="openPopup('{{ occ.uid() }}',
                                     'ev_id_{{ occ.js_uid() }}',
                                     {% if let Some(rid) = occ.rid() %}
@@ -94,7 +96,8 @@
                  {% if !occ.is_all_day() %}
                  style="display: flex; gap: .4em"
                  {% endif %}
-                 class="ev_id_{{ occ.js_uid() }}
+                 class="ev_event_occurrence
+                        ev_id_{{ occ.js_uid() }}
                         {% if occ.is_all_day() %}
                         ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
                         {% endif %}
@@ -109,11 +112,64 @@
                 {% else %}
                 <span class="ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}"></span>
                 <span><b>{{ occ.occurrence_start().format("%H:%M") }}</b></span>
-                <span>{{ occ.summary().unwrap() }}</span>
+                <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                 {% endif %}
             </div>
-        {% endfor %}
-        {% endfor %}
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <br />
+
+    <div class="ev_box">
+        <div class="ev_header">{{ "Tasks"|t(locale) }}</div>
+        <div class="ev_scrollbox">
+            {% for day in next_tasks %}
+            <div class="ev_next_day_header">
+                {% if let Some(date) = day.date %}
+                {{ date.format("%A, %B %d") }}
+                {% else %}
+                {{ "Unplanned"|t(locale) }}
+                {% endif %}
+            </div>
+            {% for occ in day.occurrences %}
+            <div onclick="openPopup('{{ occ.uid() }}',
+                                    'ev_id_{{ occ.js_uid() }}',
+                                    {% if let Some(rid) = occ.rid() %}
+                                    '{{ rid.to_string() }}',
+                                    {% else %}
+                                    '{{ occ.occurrence_start()|as_ref|to_utc }}',
+                                    {% endif %}
+                                    '{{ occ.id }}')"
+                 id="{{ occ.id }}"
+                 {% if !occ.is_all_day() %}
+                 style="display: flex; gap: .4em"
+                 {% endif %}
+                 class="ev_event_occurrence
+                        ev_id_{{ occ.js_uid() }}
+                        {% if occ.is_all_day() %}
+                        ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                        {% endif %}
+                        {% match occ.status_class() %}
+                        {% when Some with (cl) %}
+                        ev_status_{{ cl }}
+                        {% when _ %}
+                        {% endmatch %}
+                        ">
+                {% if occ.is_all_day() %}
+                {{ occ.summary().unwrap() }}
+                {% else %}
+                <span class="ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}"></span>
+                {% if let Some(due) = occ.end_or_due() %}
+                <span><b>{{ due.as_end_with_tz(locale.timezone()).format("%H:%M") }}</b></span>
+                {% endif %}
+                <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </div>
     </div>
 </div>
 <br style="clear: both" />
@@ -215,8 +271,8 @@ function loadOccurrence(uid, rid) {
 
 <style type="text/css">
 div.ev_selected {
-  border: 1px solid #555;
-  font-weight: bold;
+  border: 1px solid #555 !important;
+  font-weight: bold !important;
 }
 
 .ev_popup {

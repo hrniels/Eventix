@@ -6,11 +6,11 @@ use axum::{
     routing::get,
     Router,
 };
-use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use ical::{
     col::{CalStore, Occurrence},
-    objects::EventLike,
+    objects::{CalComponent, CalTodoStatus, EventLike},
     util,
 };
 use once_cell::sync::Lazy;
@@ -62,7 +62,7 @@ impl<'a> Deref for DayOccurrence<'a> {
 }
 
 struct Day<'a> {
-    date: NaiveDate,
+    date: Option<NaiveDate>,
     show_month: bool,
     cur_month: bool,
     occurrences: Vec<DayOccurrence<'a>>,
@@ -85,10 +85,11 @@ struct OverviewTemplate<'a> {
     prev_month: String,
     next_month: String,
     store: &'a CalStore,
-    next_days: Vec<Day<'a>>,
+    next_events: Vec<Day<'a>>,
+    next_tasks: Vec<Day<'a>>,
 }
 
-fn get_day_occurrences<'a>(
+fn get_overlapping_occurrences<'a>(
     ev_occs: &'a Vec<Occurrence<'a>>,
     date: NaiveDate,
     timezone: &Tz,
@@ -107,6 +108,27 @@ fn get_day_occurrences<'a>(
         .collect::<Vec<_>>();
     day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
         (true, true) | (false, false) => a.occurrence_start().cmp(&b.occurrence_start()),
+        (true, false) => Ordering::Less,
+        (false, true) => Ordering::Greater,
+    });
+    day_occs
+}
+
+fn get_due_occurrences<'a>(
+    ev_occs: &'a Vec<Occurrence<'a>>,
+    date: NaiveDate,
+    timezone: &Tz,
+) -> Vec<DayOccurrence<'a>> {
+    let mut day_occs = ev_occs
+        .iter()
+        .filter(|o| match o.end_or_due() {
+            Some(end) => end.as_naive_date() == date,
+            None => false,
+        })
+        .map(|o| DayOccurrence::new(o))
+        .collect::<Vec<_>>();
+    day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
+        (true, true) | (false, false) => a.end_or_due().cmp(&b.end_or_due()),
         (true, false) => Ordering::Less,
         (false, true) => Ordering::Greater,
     });
@@ -156,15 +178,14 @@ async fn handler(
 
     let ev_occs = state
         .store()
-        .occurrences_within(mstart, mend)
-        .filter(|occ| occ.is_event())
+        .filtered_occurrences_within(mstart, mend, |c| c.is_event())
         .collect::<Vec<_>>();
 
     let mut days = Vec::new();
     while date < end {
-        let day_occs = get_day_occurrences(&ev_occs, date, &timezone);
+        let day_occs = get_overlapping_occurrences(&ev_occs, date, &timezone);
         days.push(Day {
-            date,
+            date: Some(date),
             show_month: date.day() == 1
                 || date.day() == util::month_days(date.year(), date.month()),
             cur_month: date >= month_start && date < month_end,
@@ -178,27 +199,81 @@ async fn handler(
     let start = now.with_timezone(locale.timezone());
     let end = start + Duration::days(7);
 
-    let next_occs = state
+    let next_ev_occs = state
         .store()
-        .occurrences_within(start, end)
-        .filter(|o| o.is_event())
+        .filtered_occurrences_within(start, end, |c| c.is_event())
         .collect::<Vec<_>>();
 
-    let mut next_days = Vec::new();
-    let mut date = start.date_naive();
-    let end = end.date_naive();
-    while date < end {
-        let day_occs = get_day_occurrences(&next_occs, date, &timezone);
+    let mut next_events = Vec::new();
+    let mut cur_date = start.date_naive();
+    let end_date = end.date_naive();
+    while cur_date < end_date {
+        let day_occs = get_overlapping_occurrences(&next_ev_occs, cur_date, &timezone);
         if !day_occs.is_empty() {
-            next_days.push(Day {
-                date,
+            next_events.push(Day {
+                date: Some(cur_date),
                 show_month: false,
                 cur_month: false,
                 occurrences: day_occs,
             });
         }
 
-        date += Duration::days(1);
+        cur_date += Duration::days(1);
+    }
+
+    let overdue_tds = state
+        .store()
+        .filtered_occurrences_within(
+            DateTime::<Tz>::MIN_UTC.with_timezone(&timezone),
+            start,
+            |c| match c {
+                CalComponent::Todo(td) if td.due().is_some() => {
+                    td.status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
+                }
+                _ => false,
+            },
+        )
+        .collect::<Vec<_>>();
+    println!("{:#?}", overdue_tds);
+
+    let next_td_occs = state
+        .store()
+        .filtered_occurrences_within(start, end, |c| c.is_todo())
+        .collect::<Vec<_>>();
+
+    let mut next_tasks = Vec::new();
+    let mut cur_date = start.date_naive();
+    let end_date = end.date_naive();
+    while cur_date < end_date {
+        let day_occs = get_due_occurrences(&next_td_occs, cur_date, &timezone);
+        if !day_occs.is_empty() {
+            next_tasks.push(Day {
+                date: Some(cur_date),
+                show_month: false,
+                cur_month: false,
+                occurrences: day_occs,
+            });
+        }
+
+        cur_date += Duration::days(1);
+    }
+
+    let mut unplanned_occs = next_td_occs
+        .iter()
+        .filter(|o| {
+            o.end_or_due().is_none()
+                && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
+        })
+        .map(|o| DayOccurrence::new(o))
+        .collect::<Vec<_>>();
+    if !unplanned_occs.is_empty() {
+        unplanned_occs.sort_by(|a, b| a.created().cmp(b.created()));
+        next_tasks.push(Day {
+            date: None,
+            show_month: false,
+            cur_month: false,
+            occurrences: unplanned_occs,
+        });
     }
 
     let html = OverviewTemplate {
@@ -211,7 +286,8 @@ async fn handler(
         today: Utc::now().with_timezone(&timezone).date_naive(),
         store: state.store(),
         days,
-        next_days,
+        next_events,
+        next_tasks,
     }
     .render()
     .context("overview template")?;

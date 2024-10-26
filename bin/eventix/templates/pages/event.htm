@@ -11,6 +11,7 @@
                 </span>
             </th>
         </tr>
+        {% if occ.is_event() || occ.rrule().is_some() %}
         <tr>
             <td width="30%">{{ "Start date"|t(locale) }}:</td>
             <td width="70%">
@@ -33,6 +34,14 @@
             </td>
         </tr>
         {% endif %}
+        {% else %}
+        <tr>
+            <td width="30%">{{ "Created"|t(locale) }}:</td>
+            <td width="70%">
+                {{ occ.created()|caldate(locale) }}
+            </td>
+        </tr>
+        {% endif %}
         {% if let Some(loc) = occ.location() %}
         <tr>
             <td width="30%">{{ "Location"|t(locale) }}:</td>
@@ -40,6 +49,12 @@
         </tr>
         {% endif %}
         {% if let Some(status) = occ.event_status() %}
+        <tr>
+            <td width="30%">{{ "Status"|t(locale) }}:</td>
+            <td width="70%">{{ status }}</td>
+        </tr>
+        {% endif %}
+        {% if let Some(status) = occ.todo_status() %}
         <tr>
             <td width="30%">{{ "Status"|t(locale) }}:</td>
             <td width="70%">{{ status }}</td>

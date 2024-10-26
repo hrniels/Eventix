@@ -5,6 +5,7 @@ pub mod filters {
     use chrono::DateTime;
     use chrono_tz::Tz;
     use std::{fmt::Display, sync::Arc};
+    use ical::objects::CalDate;
 
     use crate::locale::Locale;
 
@@ -30,6 +31,13 @@ pub mod filters {
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> ::askama::Result<String> {
         Ok(locale.translate(&text.to_string()).to_string())
+    }
+
+    pub fn caldate(
+        date: &CalDate,
+        locale: &Arc<dyn Locale + Send + Sync>,
+    ) -> ::askama::Result<String> {
+        Ok(locale.format_date(&date.as_start_with_tz(locale.timezone())))
     }
 
     pub fn date(
