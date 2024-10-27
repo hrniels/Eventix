@@ -3,7 +3,7 @@ use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
 use crate::objects::{CalDate, CalEventStatus};
-use crate::parser::{LineReader, Property, PropertyConsumer};
+use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
 
 use super::component::EventLikeComponent;
 
@@ -39,6 +39,12 @@ impl Deref for CalEvent {
 impl DerefMut for CalEvent {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+impl PropertyProducer for CalEvent {
+    fn to_props(&self) -> Vec<Property> {
+        vec![]
     }
 }
 

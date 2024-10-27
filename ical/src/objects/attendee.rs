@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 use anyhow::anyhow;
 
@@ -37,6 +37,20 @@ pub enum CalPartStat {
     Delegated,
     Completed,
     InProcess,
+}
+
+impl fmt::Display for CalPartStat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CalPartStat::NeedsAction => write!(f, "NEEDS-ACTION"),
+            CalPartStat::Accepted => write!(f, "ACCEPTED"),
+            CalPartStat::Declined => write!(f, "DECLINED"),
+            CalPartStat::Tentative => write!(f, "TENTATIVE"),
+            CalPartStat::Delegated => write!(f, "DELEGATED"),
+            CalPartStat::Completed => write!(f, "COMPLETED"),
+            CalPartStat::InProcess => write!(f, "IN-PROCESS"),
+        }
+    }
 }
 
 impl FromStr for CalPartStat {
@@ -80,6 +94,18 @@ impl CalAttendee {
 
     pub fn common_name(&self) -> Option<&String> {
         self.common_name.as_ref()
+    }
+
+    pub fn to_prop(&self) -> Property {
+        let mut params = Vec::new();
+        if let Some(partstat) = &self.part_stat {
+            params.push(Parameter::new("PARTSTAT", format!("{}", partstat)));
+        }
+        if let Some(cn) = &self.common_name {
+            params.push(Parameter::new("CN", cn.clone()));
+        }
+        params.extend(self.params.iter().cloned());
+        Property::new("ATTENDEE", params, self.address.clone())
     }
 }
 

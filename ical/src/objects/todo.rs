@@ -3,7 +3,7 @@ use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
 use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent};
-use crate::parser::{LineReader, Property, PropertyConsumer};
+use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
 
 #[derive(Default, Debug)]
 pub struct CalTodo {
@@ -43,6 +43,15 @@ impl Deref for CalTodo {
 impl DerefMut for CalTodo {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+impl PropertyProducer for CalTodo {
+    fn to_props(&self) -> Vec<Property> {
+        let mut props = vec![Property::new("BEGIN", vec![], "VTODO")];
+        props.extend(self.inner.to_props().into_iter());
+        props.push(Property::new("END", vec![], "VTODO"));
+        props
     }
 }
 

@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Utc}
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
-use crate::parser::Property;
+use crate::parser::{Parameter, Property};
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDate {
@@ -62,6 +62,17 @@ impl CalDate {
             Self::DateTime(datetime) => datetime.with_tz(tz),
         }
     }
+
+    pub fn to_prop<N: ToString>(&self, name: N) -> Property {
+        match self {
+            Self::Date(date) => Property::new(
+                name,
+                vec![Parameter::new("VALUE", "DATE")],
+                date.format("%Y%m%d").to_string(),
+            ),
+            Self::DateTime(datetime) => datetime.to_prop(name),
+        }
+    }
 }
 
 impl PartialOrd for CalDate {
@@ -81,10 +92,7 @@ impl Ord for CalDate {
 #[allow(clippy::to_string_trait_impl)]
 impl ToString for CalDate {
     fn to_string(&self) -> String {
-        match self {
-            Self::Date(date) => date.format("%Y%m%d").to_string(),
-            Self::DateTime(datetime) => datetime.to_string(),
-        }
+        format!("{}", self.to_prop("D"))
     }
 }
 
@@ -127,6 +135,17 @@ impl CalDateTime {
                 local.with_timezone(tz)
             }
         }
+    }
+
+    pub fn to_prop<N: ToString>(&self, name: N) -> Property {
+        let (params, date) = match self {
+            Self::Floating(date) => (vec![], date.format("%Y%m%dT%H%M%S")),
+            Self::Utc(dt) => (vec![], dt.format("%Y%m%dT%H%M%SZ")),
+            Self::Timezone(dt, tz) => {
+                (vec![Parameter::new("TZID", tz)], dt.format("%Y%m%dT%H%M%S"))
+            }
+        };
+        Property::new(name, params, date.to_string())
     }
 }
 

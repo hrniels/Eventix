@@ -1,9 +1,10 @@
 use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
+use itertools::Itertools;
 
 use crate::objects::{CalAttendee, CalDate, CalEvent, CalRRule, CalTodo, EventLike};
-use crate::parser::Property;
+use crate::parser::{Property, PropertyProducer};
 
 #[derive(Default, Debug)]
 pub struct EventLikeComponent {
@@ -91,6 +92,48 @@ impl EventLikeComponent {
             }
         }
         Ok(())
+    }
+}
+
+impl PropertyProducer for EventLikeComponent {
+    fn to_props(&self) -> Vec<Property> {
+        let mut props = vec![];
+        props.push(Property::new("UID", vec![], self.uid.clone()));
+        props.push(self.created.to_prop("CREATED"));
+        props.push(self.last_mod.to_prop("LAST-MODIFIED"));
+        if let Some(ref dtstart) = self.start {
+            props.push(dtstart.to_prop("DTSTART"));
+        }
+        if let Some(ref summary) = self.summary {
+            props.push(Property::new("SUMMARY", vec![], summary.clone()));
+        }
+        if let Some(ref desc) = self.desc {
+            props.push(Property::new("DESCRIPTION", vec![], desc.clone()));
+        }
+        if let Some(ref loc) = self.location {
+            props.push(Property::new("LOCATION", vec![], loc.clone()));
+        }
+        if !self.categories.is_empty() {
+            props.push(Property::new_escaped(
+                "CATEGORIES",
+                vec![],
+                self.categories.iter().join(","),
+            ));
+        }
+        if !self.attendees.is_empty() {
+            props.extend(self.attendees.iter().map(|a| a.to_prop()));
+        }
+        if let Some(prio) = self.priority {
+            props.push(Property::new("PRIORITY", vec![], format!("{}", prio)));
+        }
+        if let Some(rrule) = &self.rrule {
+            props.push(Property::new("RRULE", vec![], format!("{}", rrule)));
+        }
+        if let Some(ref rid) = self.rid {
+            props.push(rid.to_prop("RECURRENCE-ID"));
+        }
+        props.extend(self.props.iter().cloned());
+        props
     }
 }
 
@@ -193,6 +236,15 @@ impl CalComponent {
         }
 
         vec![ev_start]
+    }
+}
+
+impl PropertyProducer for CalComponent {
+    fn to_props(&self) -> Vec<Property> {
+        match self {
+            Self::Event(ev) => ev.to_props(),
+            Self::Todo(td) => td.to_props(),
+        }
     }
 }
 

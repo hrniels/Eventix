@@ -4,7 +4,7 @@ use axum::{
     http::{header, StatusCode},
     response::{IntoResponse, Response},
 };
-use std::fmt::Display;
+use std::fmt;
 use std::sync::Arc;
 
 use crate::html::filters;
@@ -25,8 +25,8 @@ pub struct HTMLError {
     inner: anyhow::Error,
 }
 
-impl Display for HTMLError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for HTMLError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }

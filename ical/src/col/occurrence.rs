@@ -5,6 +5,7 @@ use crate::col::Id;
 use crate::objects::{
     CalAttendee, CalComponent, CalDate, CalEventStatus, CalRRule, CalTodoStatus, EventLike,
 };
+use crate::parser::{Property, PropertyProducer};
 
 #[derive(Debug)]
 pub struct Occurrence<'c> {
@@ -118,6 +119,13 @@ macro_rules! occ_or_base_opt {
             _ => $self.base.$method(),
         }
     };
+}
+
+impl PropertyProducer for Occurrence<'_> {
+    fn to_props(&self) -> Vec<Property> {
+        let props = vec![];
+        props
+    }
 }
 
 impl EventLike for Occurrence<'_> {

@@ -1,9 +1,10 @@
 use anyhow::anyhow;
+use std::fmt;
 use std::io::BufRead;
 use std::str::FromStr;
 
 use crate::objects::{CalComponent, CalEvent, CalTodo};
-use crate::parser::{LineReader, Property, PropertyConsumer};
+use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
 
 #[derive(Default, Debug)]
 pub struct Calendar {
@@ -23,6 +24,20 @@ impl Calendar {
 
     pub fn add(&mut self, comp: CalComponent) {
         self.comps.push(comp);
+    }
+}
+
+impl PropertyProducer for Calendar {
+    fn to_props(&self) -> Vec<Property> {
+        let mut props = vec![];
+        props.extend(self.props.iter().cloned());
+        for other in &self.other {
+            props.extend(other.to_props().into_iter());
+        }
+        for comp in &self.comps {
+            props.extend(comp.to_props().into_iter());
+        }
+        props
     }
 }
 
@@ -67,6 +82,15 @@ impl PropertyConsumer for Calendar {
         }
     }
 }
+impl fmt::Display for Calendar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BEGIN:VCALENDAR\r\n")?;
+        for p in self.to_props() {
+            write!(f, "{}\r\n", p)?;
+        }
+        write!(f, "END:VCALENDAR\r\n")
+    }
+}
 
 impl FromStr for Calendar {
     type Err = anyhow::Error;
@@ -92,6 +116,15 @@ impl FromStr for Calendar {
 pub struct Other {
     name: String,
     props: Vec<Property>,
+}
+
+impl PropertyProducer for Other {
+    fn to_props(&self) -> Vec<Property> {
+        let mut props = vec![Property::new("BEGIN", vec![], self.name.clone())];
+        props.extend(self.props.iter().cloned());
+        props.push(Property::new("END", vec![], self.name.clone()));
+        props
+    }
 }
 
 impl PropertyConsumer for Other {
@@ -138,11 +171,19 @@ mod tests {
         let ical = "BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VTODO
+CREATED:20241010T101222Z
+LAST-MODIFIED:20241010T101222Z
 DTSTART;TZID=\"My:TZ\":20241024T090000
 SUMMARY:foo bar
  test with\\n
   multiple\\;\\,
   lines
+DESCRIPTION:test!
+CATEGORIES:A,B,MYCAT\r
+ATTENDEE;PARTSTAT=ACCEPTED;CN=\"My,Name\":my@name.org
+ATTENDEE;CN=test:test@example.com\r
+PRIORITY:7\r
+RID:20221110T111111Z
 UID:1234-5678
 TEST;FOO=bar;A=B:\"value\"
 END:VTODO
@@ -171,5 +212,30 @@ END:VCALENDAR";
             todo.summary(),
             Some(&"foo bartest with\n multiple;, lines".to_string())
         );
+
+        assert_eq!(
+            format!("{}", ical),
+            "BEGIN:VCALENDAR\r
+VERSION:2.0\r
+BEGIN:VTODO\r
+UID:1234-5678\r
+CREATED:20241010T101222Z\r
+LAST-MODIFIED:20241010T101222Z\r
+DTSTART;TZID=\"My:TZ\":20241024T090000\r
+SUMMARY:foo bartest with\\n multiple\\;\\, lines\r
+DESCRIPTION:test!\r
+CATEGORIES:A,B,MYCAT\r
+ATTENDEE;PARTSTAT=ACCEPTED;CN=\"My,Name\":my@name.org\r
+ATTENDEE;CN=test:test@example.com\r
+PRIORITY:7\r
+RID:20221110T111111Z\r
+TEST;FOO=bar;A=B:\"value\"\r
+END:VTODO\r
+END:VCALENDAR\r
+"
+        );
     }
+
+    #[test]
+    fn basic_tostr() {}
 }

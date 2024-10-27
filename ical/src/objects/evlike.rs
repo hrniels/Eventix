@@ -1,6 +1,9 @@
-use crate::objects::{CalAttendee, CalDate, CalRRule};
+use crate::{
+    objects::{CalAttendee, CalDate, CalRRule},
+    parser::PropertyProducer,
+};
 
-pub trait EventLike {
+pub trait EventLike: PropertyProducer {
     fn uid(&self) -> &String;
     fn created(&self) -> &CalDate;
     fn last_modified(&self) -> &CalDate;

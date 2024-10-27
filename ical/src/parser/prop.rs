@@ -1,5 +1,9 @@
 use anyhow::anyhow;
-use std::{io::BufRead, str::FromStr};
+use std::{
+    fmt::{self, Write},
+    io::BufRead,
+    str::FromStr,
+};
 
 use crate::parser::LineReader;
 
@@ -8,6 +12,7 @@ pub struct Property {
     name: String,
     params: Vec<Parameter>,
     value: String,
+    escaped: bool,
 }
 
 impl Property {
@@ -16,6 +21,20 @@ impl Property {
             name: name.to_string(),
             params,
             value: value.to_string(),
+            escaped: false,
+        }
+    }
+
+    pub fn new_escaped<N: ToString, V: ToString>(
+        name: N,
+        params: Vec<Parameter>,
+        value: V,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            params,
+            value: value.to_string(),
+            escaped: true,
         }
     }
 
@@ -44,6 +63,32 @@ impl Property {
 
     pub fn take_value(self) -> String {
         self.value
+    }
+}
+
+impl fmt::Display for Property {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        for p in &self.params {
+            write!(f, ";{}", p)?;
+        }
+
+        f.write_char(':')?;
+        if self.escaped {
+            write!(f, "{}", self.value)
+        } else {
+            for c in self.value.chars() {
+                if c == ':' || c == ';' || c == ',' || c == '\n' {
+                    f.write_char('\\')?;
+                }
+                // TODO that's incomplete
+                match c {
+                    '\n' => f.write_char('n')?,
+                    c => f.write_char(c)?,
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -103,6 +148,7 @@ impl FromStr for Property {
             name,
             params,
             value,
+            escaped: false,
         })
     }
 }
@@ -116,6 +162,10 @@ pub trait PropertyConsumer {
         Self: Sized;
 }
 
+pub trait PropertyProducer {
+    fn to_props(&self) -> Vec<Property>;
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Parameter {
     name: String,
@@ -123,8 +173,11 @@ pub struct Parameter {
 }
 
 impl Parameter {
-    pub fn new(name: String, value: String) -> Self {
-        Self { name, value }
+    pub fn new<N: ToString, V: ToString>(name: N, value: V) -> Self {
+        Self {
+            name: name.to_string(),
+            value: value.to_string(),
+        }
     }
 
     pub fn name(&self) -> &String {
@@ -133,6 +186,18 @@ impl Parameter {
 
     pub fn value(&self) -> &String {
         &self.value
+    }
+}
+
+impl fmt::Display for Parameter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}=", self.name)?;
+        if self.value.contains(|c| c == ':' || c == ';' || c == ',') {
+            write!(f, "\"{}\"", self.value)?;
+        } else {
+            write!(f, "{}", self.value)?;
+        }
+        Ok(())
     }
 }
 
@@ -156,5 +221,70 @@ impl FromStr for Parameter {
             value.to_string()
         };
         Ok(Self { name, value })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn basics() {
+        let prop_str = "BEGIN:VCALENDAR";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(prop.name(), "BEGIN");
+        assert_eq!(prop.params(), []);
+        assert_eq!(prop.value(), "VCALENDAR");
+        assert_eq!(format!("{}", prop), prop_str);
+    }
+
+    #[test]
+    fn param_with_quotes() {
+        let prop_str = "DTSTART;TZID=\"My:TZ\":20241024T090000";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(prop.name(), "DTSTART");
+        assert_eq!(
+            prop.params(),
+            [Parameter::new("TZID".to_string(), "My:TZ".to_string())]
+        );
+        assert_eq!(prop.value(), "20241024T090000");
+        assert_eq!(format!("{}", prop), prop_str);
+    }
+
+    #[test]
+    fn value_with_quotes() {
+        let prop_str = "TEST;FOO=bar;A=B:\"value\"";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(prop.name(), "TEST");
+        assert_eq!(
+            prop.params(),
+            [
+                Parameter::new("FOO".to_string(), "bar".to_string()),
+                Parameter::new("A".to_string(), "B".to_string())
+            ]
+        );
+        assert_eq!(prop.value(), "\"value\"");
+        assert_eq!(format!("{}", prop), prop_str);
+    }
+
+    #[test]
+    fn with_escapes() {
+        let prop_str = "SUMMARY:foo bar
+ test with\\n
+  multiple\\;\\,
+  lines";
+        let mut reader = LineReader::new(prop_str.as_bytes());
+        let prop = reader.next().unwrap().parse::<Property>().unwrap();
+        assert_eq!(prop.name(), "SUMMARY");
+        assert_eq!(prop.params(), []);
+        assert_eq!(
+            prop.value(),
+            r"foo bartest with
+ multiple;, lines"
+        );
+        assert_eq!(
+            format!("{}", prop),
+            "SUMMARY:foo bartest with\\n multiple\\;\\, lines"
+        );
     }
 }

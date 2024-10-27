@@ -1,4 +1,7 @@
-use std::io::BufRead;
+use anyhow::anyhow;
+use std::io::{BufRead, Write};
+
+const MAX_LINE_LEN: usize = 75;
 
 pub struct LineReader<R: BufRead> {
     reader: R,
@@ -51,8 +54,39 @@ impl<R: BufRead> Iterator for LineReader<R> {
     }
 }
 
+pub struct LineWriter<W: Write> {
+    writer: W,
+}
+
+impl<W: Write> LineWriter<W> {
+    pub fn new(writer: W) -> Self {
+        Self { writer }
+    }
+
+    pub fn write_line<S: AsRef<str>>(&mut self, line: S) -> Result<(), anyhow::Error> {
+        let mut first = true;
+        let mut line = line.as_ref();
+        while !line.is_empty() {
+            let mut left = MAX_LINE_LEN;
+            if !first {
+                self.writer.write(&[b' '])?;
+                left -= 1;
+            }
+
+            let slice = &line[..left.min(line.len())];
+            self.writer.write_all(slice.as_bytes())?;
+            self.writer.write(&[b'\n'])?;
+            line = &line[slice.len()..];
+            first = false;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::io::BufWriter;
+
     use super::*;
 
     #[test]
@@ -77,6 +111,56 @@ END:VCALENDAR";
         assert_eq!(reader.next(), Some("END:VEVENT".to_string()));
         assert_eq!(reader.next(), Some("END:VCALENDAR".to_string()));
         assert_eq!(reader.next(), None);
+
+        let res = Vec::new();
+        let mut buf_writer = BufWriter::new(res);
+        let mut writer = LineWriter::new(&mut buf_writer);
+        let reader = LineReader::new(ical.as_bytes());
+        for line in reader {
+            writer.write_line(&line).unwrap();
+        }
+
+        let expected_ical = "BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:foo bartest with multiple lines
+END:VEVENT
+END:VCALENDAR
+";
+        assert_eq!(
+            String::from_utf8(buf_writer.into_inner().unwrap()).unwrap(),
+            expected_ical
+        );
+    }
+
+    #[test]
+    fn long_lines() {
+        let ical = "BEGIN:VCALENDAR
+TEST:0123456789012345678901234567890123456789012345678901234567890123456789
+ 01234567890123456789
+END:VCALENDAR
+";
+
+        let mut reader = LineReader::new(ical.as_bytes());
+        assert_eq!(reader.next(), Some("BEGIN:VCALENDAR".to_string()));
+        assert_eq!(
+            reader.next(),
+            Some("TEST:012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789".to_string())
+        );
+        assert_eq!(reader.next(), Some("END:VCALENDAR".to_string()));
+        assert_eq!(reader.next(), None);
+
+        let res = Vec::new();
+        let mut buf_writer = BufWriter::new(res);
+        let mut writer = LineWriter::new(&mut buf_writer);
+        let reader = LineReader::new(ical.as_bytes());
+        for line in reader {
+            writer.write_line(&line).unwrap();
+        }
+
+        assert_eq!(
+            String::from_utf8(buf_writer.into_inner().unwrap()).unwrap(),
+            ical
+        );
     }
 
     #[test]
@@ -84,6 +168,9 @@ END:VCALENDAR";
         let att_str = "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=TENTATIVE;CN=Henry
   Cabot:mailto:hcabot@example.com";
         let mut reader = LineReader::new(att_str.as_bytes());
-        assert_eq!(reader.next(), Some("ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=TENTATIVE;CN=Henry Cabot:mailto:hcabot@example.com".to_string()));
+        assert_eq!(
+            reader.next(),
+            Some("ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=TENTATIVE;CN=Henry Cabot:mailto:hcabot@example.com".to_string())
+        );
     }
 }
