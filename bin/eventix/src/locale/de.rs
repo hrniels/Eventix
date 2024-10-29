@@ -17,6 +17,13 @@ impl Locale for LocaleDe {
                 ("Yes", "Ja"),
                 ("No", "Nein"),
                 ("Page generation time", "Ladezeit"),
+                // Status names
+                ("NEEDS-ACTION", "Needs action"),
+                ("COMPLETED", "Completed"),
+                ("IN-PROCESS", "In process"),
+                ("CANCELLED", "Canceled"),
+                ("TENTATIVE", "Tentative"),
+                ("CONFIRMED", "Confirmed"),
             ])
         });
         XLATE_TABLE.get(key).unwrap_or(&key)

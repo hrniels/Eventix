@@ -48,19 +48,19 @@
         {% if let Some(status) = occ.event_status() %}
         <tr>
             <td width="30%">{{ "Status"|t(locale) }}:</td>
-            <td width="70%">{{ status }}</td>
+            <td width="70%">{{ status|fmt("{}")|t(locale) }}</td>
         </tr>
         {% endif %}
         {% if let Some(status) = occ.todo_status() %}
         <tr>
             <td width="30%">{{ "Status"|t(locale) }}:</td>
-            <td width="70%">{{ status }}</td>
+            <td width="70%">{{ status|fmt("{}")|t(locale) }}</td>
         </tr>
         {% endif %}
         {% if let Some(rrule) = occ.rrule() %}
         <tr>
             <td width="30%">{{ "Repeats"|t(locale) }}:</td>
-            <td width="70%">{{ rrule|newlines()|safe }}</td>
+            <td width="70%">{{ rrule.human()|newlines()|safe }}</td>
         </tr>
         {% endif %}
         {% if !occ.attendees().is_empty() %}
