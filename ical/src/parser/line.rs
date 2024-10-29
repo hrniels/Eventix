@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use std::io::{BufRead, Write};
 
 const MAX_LINE_LEN: usize = 75;
@@ -73,10 +72,18 @@ impl<W: Write> LineWriter<W> {
                 left -= 1;
             }
 
-            let slice = &line[..left.min(line.len())];
-            self.writer.write_all(slice.as_bytes())?;
-            self.writer.write(&[b'\n'])?;
-            line = &line[slice.len()..];
+            let total = left;
+            for (pos, c) in line.char_indices() {
+                if left < c.len_utf8() {
+                    break;
+                }
+                self.writer
+                    .write(&line[pos..pos + c.len_utf8()].as_bytes())?;
+                left -= c.len_utf8();
+            }
+
+            self.writer.write(&[b'\r', b'\n'])?;
+            line = &line[(total - left)..];
             first = false;
         }
         Ok(())
@@ -120,11 +127,11 @@ END:VCALENDAR";
             writer.write_line(&line).unwrap();
         }
 
-        let expected_ical = "BEGIN:VCALENDAR
-BEGIN:VEVENT
-SUMMARY:foo bartest with multiple lines
-END:VEVENT
-END:VCALENDAR
+        let expected_ical = "BEGIN:VCALENDAR\r
+BEGIN:VEVENT\r
+SUMMARY:foo bartest with multiple lines\r
+END:VEVENT\r
+END:VCALENDAR\r
 ";
         assert_eq!(
             String::from_utf8(buf_writer.into_inner().unwrap()).unwrap(),
@@ -134,10 +141,10 @@ END:VCALENDAR
 
     #[test]
     fn long_lines() {
-        let ical = "BEGIN:VCALENDAR
-TEST:0123456789012345678901234567890123456789012345678901234567890123456789
- 01234567890123456789
-END:VCALENDAR
+        let ical = "BEGIN:VCALENDAR\r
+TEST:0123456789012345678901234567890123456789012345678901234567890123456789\r
+ 01234567890123456789\r
+END:VCALENDAR\r
 ";
 
         let mut reader = LineReader::new(ical.as_bytes());

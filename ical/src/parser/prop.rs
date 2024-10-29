@@ -78,7 +78,7 @@ impl fmt::Display for Property {
             write!(f, "{}", self.value)
         } else {
             for c in self.value.chars() {
-                if c == ':' || c == ';' || c == ',' || c == '\n' {
+                if c == ';' || c == ',' || c == '\n' {
                     f.write_char('\\')?;
                 }
                 // TODO that's incomplete
@@ -145,10 +145,11 @@ impl FromStr for Property {
         let value = value.replace(r"\\", "\\");
 
         Ok(Self {
+            // these are special cases, which do not use escaping
+            escaped: name == "RRULE" || name == "CATEGORIES",
             name,
             params,
             value,
-            escaped: false,
         })
     }
 }
