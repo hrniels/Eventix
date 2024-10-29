@@ -1,5 +1,7 @@
+use std::fs::File;
 use std::path::PathBuf;
 
+use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
 
@@ -142,6 +144,16 @@ impl CalItem {
             .iter()
             .filter(|&c| c.is_event())
             .map(|e| e.as_event().unwrap())
+    }
+
+    pub fn save(&self) -> Result<(), anyhow::Error> {
+        let file = File::options()
+            .write(true)
+            .truncate(true)
+            .open(&self.path)?;
+        self.cal
+            .write(file)
+            .map_err(|e| anyhow!("Writing file '{:?}' failed: {}", self.path, e))
     }
 }
 

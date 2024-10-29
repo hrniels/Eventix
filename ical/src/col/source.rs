@@ -105,4 +105,11 @@ impl CalSource {
             .iter()
             .flat_map(move |i| i.filtered_occurrences_within(start, end, filter.clone()))
     }
+
+    pub fn save(&self) -> Result<(), anyhow::Error> {
+        for i in &self.items {
+            i.save()?;
+        }
+        Ok(())
+    }
 }

@@ -68,4 +68,11 @@ impl CalStore {
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
         self.items().flat_map(|i| i.events())
     }
+
+    pub fn save(&self) -> Result<(), anyhow::Error> {
+        for s in &self.sources {
+            s.save()?;
+        }
+        Ok(())
+    }
 }
