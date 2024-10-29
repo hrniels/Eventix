@@ -6,7 +6,7 @@ use itertools::Itertools;
 use crate::objects::{CalAttendee, CalDate, CalEvent, CalRRule, CalTodo, EventLike};
 use crate::parser::{Property, PropertyProducer};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
     uid: String,
     stamp: CalDate,
@@ -195,7 +195,7 @@ impl EventLike for EventLikeComponent {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum CalComponent {
     Event(CalEvent),
     Todo(CalTodo),

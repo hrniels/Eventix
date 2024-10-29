@@ -8,12 +8,20 @@ use std::path::PathBuf;
 use crate::col::{CalItem, Id, Occurrence};
 use crate::objects::{CalComponent, CalDate, Calendar};
 
+#[derive(Debug)]
 pub struct CalSource {
     id: Id,
     path: PathBuf,
     name: String,
     items: Vec<CalItem>,
 }
+
+impl PartialEq for CalSource {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.items == other.items
+    }
+}
+impl Eq for CalSource {}
 
 impl Default for CalSource {
     fn default() -> Self {

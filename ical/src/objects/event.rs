@@ -7,7 +7,7 @@ use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
 
 use super::component::EventLikeComponent;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Eq, PartialEq)]
 pub struct CalEvent {
     pub(crate) inner: EventLikeComponent,
     status: Option<CalEventStatus>,

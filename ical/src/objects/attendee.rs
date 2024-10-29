@@ -81,7 +81,7 @@ impl FromStr for CalPartStat {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct CalAttendee {
     address: String,
     role: Option<CalRole>,

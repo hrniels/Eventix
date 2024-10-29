@@ -8,12 +8,20 @@ use chrono_tz::Tz;
 use crate::col::{Id, Occurrence};
 use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo, Calendar, EventLike};
 
+#[derive(Debug)]
 pub struct CalItem {
     id: Id,
     source: Id,
     path: PathBuf,
     cal: Calendar,
 }
+
+impl PartialEq for CalItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.cal == other.cal
+    }
+}
+impl Eq for CalItem {}
 
 impl CalItem {
     #[cfg(test)]

@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent, Other};
 use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Eq, PartialEq)]
 pub struct CalTodo {
     pub(crate) inner: EventLikeComponent,
     due: Option<CalDate>,

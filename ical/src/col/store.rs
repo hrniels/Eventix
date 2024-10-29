@@ -4,7 +4,7 @@ use chrono_tz::Tz;
 use crate::col::{CalItem, CalSource, Id, Occurrence};
 use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo};
 
-#[derive(Default)]
+#[derive(Default, Debug, Eq, PartialEq)]
 pub struct CalStore {
     sources: Vec<CalSource>,
 }
