@@ -8,8 +8,8 @@ fn main() -> Result<(), anyhow::Error> {
 
     let mut store = CalStore::default();
     store.add(
-        CalSource::new_from_dir(dir.into(), "".to_string())
-            .context("Unable to parse calendar source")?,
+        CalSource::new_from_dir(dir.clone().into(), "".to_string())
+            .context(format!("Unable to parse calendar source {:?}", dir))?,
     );
 
     println!("TODOs:");

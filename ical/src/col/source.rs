@@ -35,7 +35,9 @@ impl CalSource {
             let filename = e?.path();
 
             let mut input = String::new();
-            File::open(filename.as_path())?.read_to_string(&mut input)?;
+            File::open(filename.as_path())?
+                .read_to_string(&mut input)
+                .map_err(|e| anyhow!("Reading {:?} failed: {}", filename, e))?;
 
             let cal = input.parse::<Calendar>().map_err(|e| {
                 anyhow!("Parsing calendar in {:?} failed: {}", filename.as_path(), e)
