@@ -131,7 +131,7 @@ impl PropertyProducer for EventLikeComponent {
             props.push(Property::new("PRIORITY", vec![], format!("{}", prio)));
         }
         if let Some(rrule) = &self.rrule {
-            props.push(Property::new("RRULE", vec![], format!("{}", rrule)));
+            props.push(Property::new_escaped("RRULE", vec![], format!("{}", rrule)));
         }
         if let Some(ref rid) = self.rid {
             props.push(rid.to_prop("RECURRENCE-ID"));

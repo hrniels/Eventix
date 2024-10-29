@@ -81,6 +81,18 @@ fn parse_weekday(s: &str) -> Result<Weekday, anyhow::Error> {
     }
 }
 
+fn to_weekday_str(wday: Weekday) -> &'static str {
+    match wday {
+        Weekday::Mon => "MO",
+        Weekday::Tue => "TU",
+        Weekday::Wed => "WE",
+        Weekday::Thu => "TH",
+        Weekday::Fri => "FR",
+        Weekday::Sat => "SA",
+        Weekday::Sun => "SU",
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Side {
     Front,
@@ -143,6 +155,10 @@ impl WeekdayDesc {
             }
         }
     }
+
+    pub fn human(&self) -> WeekdayHuman<'_> {
+        WeekdayHuman(self)
+    }
 }
 
 impl FromStr for WeekdayDesc {
@@ -178,17 +194,33 @@ impl fmt::Display for WeekdayDesc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some((num, side)) = self.nth {
             match side {
-                Side::Front => write!(f, "{} {}", util::nth(num as u64), self.day),
+                Side::Front => write!(f, "+")?,
+                Side::Back => write!(f, "-")?,
+            }
+            write!(f, "{}", num)?;
+        }
+
+        write!(f, "{}", to_weekday_str(self.day))
+    }
+}
+
+pub struct WeekdayHuman<'a>(&'a WeekdayDesc);
+
+impl<'a> fmt::Display for WeekdayHuman<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some((num, side)) = self.0.nth {
+            match side {
+                Side::Front => write!(f, "{} {}", util::nth(num as u64), self.0.day),
                 Side::Back => {
                     if num == 1 {
-                        write!(f, "last {}", self.day)
+                        write!(f, "last {}", self.0.day)
                     } else {
-                        write!(f, "{} to last {}", util::nth(num as u64), self.day)
+                        write!(f, "{} to last {}", util::nth(num as u64), self.0.day)
                     }
                 }
             }
         } else {
-            write!(f, "{:?}", self.day)
+            write!(f, "{:?}", self.0.day)
         }
     }
 }
@@ -568,7 +600,10 @@ impl<'a> fmt::Display for RRuleHuman<'a> {
         }
 
         if let Some(by_day) = &self.0.by_day {
-            let days = by_day.iter().map(|d| format!("{}", d)).collect::<Vec<_>>();
+            let days = by_day
+                .iter()
+                .map(|d| format!("{}", d.human()))
+                .collect::<Vec<_>>();
             write!(f, ", on {}", util::human_list(&days))?;
         }
 
@@ -642,10 +677,6 @@ fn write_list<T: fmt::Display>(
 impl fmt::Display for CalRRule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "FREQ={}", self.freq)?;
-        if let Some(ref until) = self.until {
-            let prop = until.to_prop("");
-            write!(f, ";UNTIL={}", prop.value())?;
-        }
         if let Some(count) = self.count {
             write!(f, ";COUNT={}", count)?;
         }
@@ -662,7 +693,11 @@ impl fmt::Display for CalRRule {
         write_list(self.by_month.as_ref(), "BYMONTH", f)?;
         write_list(self.by_set_pos.as_ref(), "BYSETPOS", f)?;
         if let Some(week_start) = self.week_start {
-            write!(f, ";WKST={}", week_start)?;
+            write!(f, ";WKST={}", to_weekday_str(week_start))?;
+        }
+        if let Some(ref until) = self.until {
+            let prop = until.to_prop("");
+            write!(f, ";UNTIL={}", prop.value())?;
         }
         Ok(())
     }

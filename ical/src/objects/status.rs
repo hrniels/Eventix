@@ -25,7 +25,13 @@ impl FromStr for CalTodoStatus {
 
 impl fmt::Display for CalTodoStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        let s = match self {
+            CalTodoStatus::NeedsAction => "NEEDS-ACTION",
+            CalTodoStatus::Completed => "COMPLETED",
+            CalTodoStatus::InProcess => "IN-PROCESS",
+            CalTodoStatus::Cancelled => "CANCELLED",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -51,6 +57,11 @@ impl FromStr for CalEventStatus {
 
 impl fmt::Display for CalEventStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        let s = match self {
+            CalEventStatus::Tentative => "TENTATIVE",
+            CalEventStatus::Confirmed => "CONFIRMED",
+            CalEventStatus::Cancelled => "CANCELLED",
+        };
+        write!(f, "{}", s)
     }
 }

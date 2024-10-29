@@ -13,6 +13,17 @@ pub enum CalRole {
     None,
 }
 
+impl fmt::Display for CalRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CalRole::Chair => write!(f, "CHAIR"),
+            CalRole::Required => write!(f, "REQ-PARTICIPANT"),
+            CalRole::Optional => write!(f, "OPT-PARTICIPANT"),
+            CalRole::None => write!(f, "NON-PARTICIPANT"),
+        }
+    }
+}
+
 impl FromStr for CalRole {
     type Err = anyhow::Error;
 
@@ -98,6 +109,9 @@ impl CalAttendee {
 
     pub fn to_prop(&self) -> Property {
         let mut params = Vec::new();
+        if let Some(role) = &self.role {
+            params.push(Parameter::new("ROLE", format!("{}", role)));
+        }
         if let Some(partstat) = &self.part_stat {
             params.push(Parameter::new("PARTSTAT", format!("{}", partstat)));
         }

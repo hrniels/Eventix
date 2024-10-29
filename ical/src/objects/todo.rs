@@ -50,7 +50,26 @@ impl DerefMut for CalTodo {
 impl PropertyProducer for CalTodo {
     fn to_props(&self) -> Vec<Property> {
         let mut props = vec![Property::new("BEGIN", vec![], "VTODO")];
+        if let Some(ref due) = self.due {
+            props.push(due.to_prop("DUE"));
+        }
+        if let Some(status) = self.status {
+            props.push(Property::new("STATUS", vec![], format!("{}", status)));
+        }
+        if let Some(ref completed) = self.completed {
+            props.push(completed.to_prop("COMPLETED"));
+        }
+        if let Some(percent) = self.percent {
+            props.push(Property::new(
+                "PERCENT-COMPLETE",
+                vec![],
+                format!("{}", percent),
+            ));
+        }
         props.extend(self.inner.to_props().into_iter());
+        for o in &self.other {
+            props.extend(o.to_props().into_iter());
+        }
         props.push(Property::new("END", vec![], "VTODO"));
         props
     }

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, str::FromStr};
+use std::{cmp::Ordering, fmt, str::FromStr};
 
 use anyhow::anyhow;
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
@@ -89,10 +89,9 @@ impl Ord for CalDate {
     }
 }
 
-#[allow(clippy::to_string_trait_impl)]
-impl ToString for CalDate {
-    fn to_string(&self) -> String {
-        format!("{}", self.to_prop("D"))
+impl fmt::Display for CalDate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_prop("D").value())
     }
 }
 
@@ -149,14 +148,18 @@ impl CalDateTime {
     }
 }
 
-#[allow(clippy::to_string_trait_impl)]
-impl ToString for CalDateTime {
-    fn to_string(&self) -> String {
+impl fmt::Display for CalDateTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Floating(date) => date.format("%Y%m%dT%H%M%S").to_string(),
-            Self::Utc(datetime) => datetime.format("%Y%m%dT%H%M%SZ").to_string(),
+            Self::Floating(date) => write!(f, "{}", date.format("%Y%m%dT%H%M%S")),
+            Self::Utc(datetime) => write!(f, "{}", datetime.format("%Y%m%dT%H%M%SZ")),
             Self::Timezone(datetime, tz) => {
-                format!("TZID={}:{}", tz, datetime.format("TZID={}:%Y%m%dT%H%M%S"))
+                write!(
+                    f,
+                    "TZID={}:{}",
+                    tz,
+                    datetime.format("TZID={}:%Y%m%dT%H%M%S")
+                )
             }
         }
     }

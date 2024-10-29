@@ -45,7 +45,19 @@ impl DerefMut for CalEvent {
 
 impl PropertyProducer for CalEvent {
     fn to_props(&self) -> Vec<Property> {
-        vec![]
+        let mut props = vec![Property::new("BEGIN", vec![], "VEVENT")];
+        if let Some(ref dtend) = self.end {
+            props.push(dtend.to_prop("DTEND"));
+        }
+        if let Some(ref status) = self.status {
+            props.push(Property::new("STATUS", vec![], status.to_string()));
+        }
+        props.extend(self.inner.to_props());
+        for o in &self.other {
+            props.extend(o.to_props().into_iter());
+        }
+        props.push(Property::new("END", vec![], "VEVENT"));
+        props
     }
 }
 
