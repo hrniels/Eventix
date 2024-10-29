@@ -1,12 +1,11 @@
 use anyhow::anyhow;
-use std::fmt;
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 use std::str::FromStr;
 
 use crate::objects::{CalComponent, CalEvent, CalTodo};
-use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
+use crate::parser::{LineReader, LineWriter, Property, PropertyConsumer, PropertyProducer};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Eq, PartialEq)]
 pub struct Calendar {
     comps: Vec<CalComponent>,
     props: Vec<Property>,
@@ -24,6 +23,15 @@ impl Calendar {
 
     pub fn add(&mut self, comp: CalComponent) {
         self.comps.push(comp);
+    }
+
+    pub fn write<W: Write>(&self, writer: W) -> Result<(), anyhow::Error> {
+        let mut wr = LineWriter::new(writer);
+        wr.write_line("BEGIN:VCALENDAR")?;
+        for p in self.to_props() {
+            wr.write_line(p.to_string())?;
+        }
+        wr.write_line("END:VCALENDAR")
     }
 }
 
@@ -82,15 +90,6 @@ impl PropertyConsumer for Calendar {
         }
     }
 }
-impl fmt::Display for Calendar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "BEGIN:VCALENDAR\r\n")?;
-        for p in self.to_props() {
-            write!(f, "{}\r\n", p)?;
-        }
-        write!(f, "END:VCALENDAR\r\n")
-    }
-}
 
 impl FromStr for Calendar {
     type Err = anyhow::Error;
@@ -112,7 +111,7 @@ impl FromStr for Calendar {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Other {
     name: String,
     props: Vec<Property>,
@@ -169,6 +168,8 @@ impl PropertyConsumer for Other {
 
 #[cfg(test)]
 mod tests {
+    use std::io::BufWriter;
+
     use chrono::NaiveDate;
 
     use crate::{
@@ -183,6 +184,7 @@ VERSION:2.0
 BEGIN:VTODO
 CREATED:20241010T101222Z
 LAST-MODIFIED:20241010T101222Z
+DTSTAMP:20241024T090000Z
 DTSTART;TZID=\"My:TZ\":20241024T090000
 SUMMARY:foo bar
  test with\\n
@@ -223,14 +225,19 @@ END:VCALENDAR";
             Some(&"foo bartest with\n multiple;, lines".to_string())
         );
 
+        let mut res = Vec::new();
+        let writer = BufWriter::new(&mut res);
+        ical.write(writer).unwrap();
+        let res = String::from_utf8(res).unwrap();
         assert_eq!(
-            format!("{}", ical),
+            res,
             "BEGIN:VCALENDAR\r
 VERSION:2.0\r
 BEGIN:VTODO\r
 UID:1234-5678\r
 CREATED:20241010T101222Z\r
 LAST-MODIFIED:20241010T101222Z\r
+DTSTAMP:20241024T090000Z\r
 DTSTART;TZID=\"My:TZ\":20241024T090000\r
 SUMMARY:foo bartest with\\n multiple\\;\\, lines\r
 DESCRIPTION:test!\r
