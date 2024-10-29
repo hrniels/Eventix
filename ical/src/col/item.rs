@@ -262,12 +262,6 @@ mod tests {
         ));
         source.add(new_item(
             EventBuilder::default()
-                .end(CalDate::Date(NaiveDate::from_ymd_opt(1990, 10, 1).unwrap()))
-                .uid("yes3")
-                .done(),
-        ));
-        source.add(new_item(
-            EventBuilder::default()
                 .start(CalDate::Date(NaiveDate::from_ymd_opt(2000, 2, 1).unwrap()))
                 .uid("no1")
                 .done(),
@@ -285,7 +279,7 @@ mod tests {
         let tz = &chrono_tz::Europe::Berlin;
         let start = CalDate::Date(NaiveDate::from_ymd_opt(1995, 10, 2).unwrap());
         let comps = source.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
-        assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
+        assert!(has_uids(comps, &["yes1", "yes2"]));
         assert_eq!(
             source.occurrence_by_id("yes1", &start, tz).unwrap().uid(),
             "yes1"

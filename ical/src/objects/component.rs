@@ -9,8 +9,9 @@ use crate::parser::{Property, PropertyProducer};
 #[derive(Default, Debug)]
 pub struct EventLikeComponent {
     uid: String,
-    created: CalDate,
-    last_mod: CalDate,
+    stamp: CalDate,
+    created: Option<CalDate>,
+    last_mod: Option<CalDate>,
     start: Option<CalDate>,
     summary: Option<String>,
     desc: Option<String>,
@@ -39,15 +40,13 @@ impl EventLikeComponent {
                 self.uid = prop.take_value();
             }
             "CREATED" => {
-                self.created = prop.try_into()?;
+                self.created = Some(prop.try_into()?);
             }
             "LAST-MODIFIED" => {
-                self.last_mod = prop.try_into()?;
+                self.last_mod = Some(prop.try_into()?);
             }
             "DTSTAMP" => {
-                let stamp_date: CalDate = prop.try_into()?;
-                self.created = stamp_date.clone();
-                self.last_mod = stamp_date.clone();
+                self.stamp = prop.try_into()?;
             }
             "DTSTART" => {
                 self.start = Some(prop.try_into()?);
@@ -99,8 +98,13 @@ impl PropertyProducer for EventLikeComponent {
     fn to_props(&self) -> Vec<Property> {
         let mut props = vec![];
         props.push(Property::new("UID", vec![], self.uid.clone()));
-        props.push(self.created.to_prop("CREATED"));
-        props.push(self.last_mod.to_prop("LAST-MODIFIED"));
+        if let Some(ref created) = self.created {
+            props.push(created.to_prop("CREATED"));
+        }
+        if let Some(ref last_mod) = self.last_mod {
+            props.push(last_mod.to_prop("LAST-MODIFIED"));
+        }
+        props.push(self.stamp.to_prop("DTSTAMP"));
         if let Some(ref dtstart) = self.start {
             props.push(dtstart.to_prop("DTSTART"));
         }
@@ -142,12 +146,16 @@ impl EventLike for EventLikeComponent {
         &self.uid
     }
 
-    fn created(&self) -> &CalDate {
-        &self.created
+    fn stamp(&self) -> &CalDate {
+        &self.stamp
     }
 
-    fn last_modified(&self) -> &CalDate {
-        &self.last_mod
+    fn created(&self) -> Option<&CalDate> {
+        self.created.as_ref()
+    }
+
+    fn last_modified(&self) -> Option<&CalDate> {
+        self.last_mod.as_ref()
     }
 
     fn start(&self) -> Option<&CalDate> {
@@ -224,7 +232,10 @@ impl CalComponent {
             return rrule.dates_within(dtstart.as_start_with_tz(&start.timezone()), start, end);
         }
 
-        let ev_start = self.start_or_created().as_start_with_tz(&start.timezone());
+        let Some(ev_start) = self.start_or_created() else {
+            return vec![];
+        };
+        let ev_start = ev_start.as_start_with_tz(&start.timezone());
         if ev_start > end {
             return vec![];
         }
@@ -262,11 +273,15 @@ impl EventLike for CalComponent {
         with_ev_or_todo!(self, uid)
     }
 
-    fn created(&self) -> &CalDate {
+    fn stamp(&self) -> &CalDate {
+        with_ev_or_todo!(self, stamp)
+    }
+
+    fn created(&self) -> Option<&CalDate> {
         with_ev_or_todo!(self, created)
     }
 
-    fn last_modified(&self) -> &CalDate {
+    fn last_modified(&self) -> Option<&CalDate> {
         with_ev_or_todo!(self, last_modified)
     }
 

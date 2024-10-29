@@ -71,7 +71,7 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn duration(&self) -> Option<Duration> {
-        let start = self.start_or_created();
+        let start = self.start_or_created()?;
 
         // ensure that we start day-aligned if either start or end is all-day
         let start = if self.is_all_day() && !matches!(start, CalDate::Date(_)) {
@@ -133,12 +133,16 @@ impl EventLike for Occurrence<'_> {
         occ_or_base!(self, uid)
     }
 
-    fn created(&self) -> &CalDate {
-        occ_or_base!(self, created)
+    fn stamp(&self) -> &CalDate {
+        occ_or_base!(self, stamp)
     }
 
-    fn last_modified(&self) -> &CalDate {
-        occ_or_base!(self, last_modified)
+    fn created(&self) -> Option<&CalDate> {
+        occ_or_base_opt!(self, created)
+    }
+
+    fn last_modified(&self) -> Option<&CalDate> {
+        occ_or_base_opt!(self, last_modified)
     }
 
     fn start(&self) -> Option<&CalDate> {

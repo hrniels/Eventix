@@ -140,8 +140,7 @@ END:VCALENDAR";
         let stamp = CalDate::DateTime(CalDateTime::Utc(
             Utc.with_ymd_and_hms(2007, 3, 13, 12, 34, 32).unwrap(),
         ));
-        assert_eq!(todo.created(), &stamp);
-        assert_eq!(todo.last_modified(), &stamp);
+        assert_eq!(todo.stamp(), &stamp);
 
         assert_eq!(
             todo.due,

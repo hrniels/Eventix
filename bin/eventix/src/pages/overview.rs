@@ -282,7 +282,12 @@ async fn handler(
         .map(DayOccurrence::new)
         .collect::<Vec<_>>();
     if !unplanned_occs.is_empty() {
-        unplanned_occs.sort_by(|a, b| a.created().cmp(b.created()));
+        unplanned_occs.sort_by(|a, b| match (a.created(), b.created()) {
+            (Some(ac), Some(bc)) => ac.cmp(bc),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        });
         next_tasks.push(Day {
             date: None,
             show_month: false,
