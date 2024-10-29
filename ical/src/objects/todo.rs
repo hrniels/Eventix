@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent};
+use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent, Other};
 use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
 
 #[derive(Default, Debug)]
@@ -12,6 +12,7 @@ pub struct CalTodo {
     status: Option<CalTodoStatus>,
     completed: Option<CalDate>,
     percent: Option<u8>,
+    other: Vec<Other>,
 }
 
 impl CalTodo {
@@ -71,16 +72,10 @@ impl PropertyConsumer for CalTodo {
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
+                // TODO properly support alarms
                 "BEGIN" => {
-                    // TODO support alarms
-                    assert_eq!(prop.value(), "VALARM");
-                    #[allow(clippy::while_let_on_iterator)]
-                    while let Some(line) = lines.next() {
-                        let prop = line.parse::<Property>()?;
-                        if prop.name() == "END" && prop.value() == "VALARM" {
-                            break;
-                        }
-                    }
+                    let other = Other::from_lines(lines, prop)?;
+                    comp.other.push(other);
                 }
                 "END" => {
                     if prop.value() != "VTODO" {

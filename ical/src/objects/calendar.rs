@@ -118,6 +118,19 @@ pub struct Other {
     props: Vec<Property>,
 }
 
+impl Other {
+    pub fn new<N: ToString>(name: N) -> Self {
+        Self {
+            name: name.to_string(),
+            props: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, prop: Property) {
+        self.props.push(prop);
+    }
+}
+
 impl PropertyProducer for Other {
     fn to_props(&self) -> Vec<Property> {
         let mut props = vec![Property::new("BEGIN", vec![], self.name.clone())];
@@ -135,10 +148,7 @@ impl PropertyConsumer for Other {
     where
         Self: Sized,
     {
-        let mut other = Self {
-            name: prop.take_value(),
-            props: Vec::new(),
-        };
+        let mut other = Other::new(prop.take_value());
         loop {
             let Some(line) = lines.next() else {
                 break Err(anyhow!("Unexpected EOF"));
@@ -150,7 +160,7 @@ impl PropertyConsumer for Other {
                     break Ok(other);
                 }
                 _ => {
-                    other.props.push(prop);
+                    other.add(prop);
                 }
             }
         }

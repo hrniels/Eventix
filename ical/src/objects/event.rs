@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalEventStatus};
+use crate::objects::{CalDate, CalEventStatus, Other};
 use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
 
 use super::component::EventLikeComponent;
@@ -12,6 +12,7 @@ pub struct CalEvent {
     pub(crate) inner: EventLikeComponent,
     status: Option<CalEventStatus>,
     end: Option<CalDate>,
+    other: Vec<Other>,
 }
 
 impl CalEvent {
@@ -64,16 +65,10 @@ impl PropertyConsumer for CalEvent {
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
+                // TODO properly support alarms
                 "BEGIN" => {
-                    // TODO support alarms
-                    assert_eq!(prop.value(), "VALARM");
-                    #[allow(clippy::while_let_on_iterator)]
-                    while let Some(line) = lines.next() {
-                        let prop = line.parse::<Property>()?;
-                        if prop.name() == "END" && prop.value() == "VALARM" {
-                            break;
-                        }
-                    }
+                    let other = Other::from_lines(lines, prop)?;
+                    comp.other.push(other);
                 }
                 "END" if prop.value() == "VEVENT" => {
                     break Ok(comp);
