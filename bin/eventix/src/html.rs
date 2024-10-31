@@ -4,7 +4,6 @@ pub mod filters {
     use askama::{Html, MarkupDisplay};
     use chrono::DateTime;
     use chrono_tz::Tz;
-    use ical::objects::CalDate;
     use std::{fmt::Display, sync::Arc};
 
     use crate::locale::Locale;
@@ -26,13 +25,6 @@ pub mod filters {
         Ok(locale.translate(text.as_ref()).to_string())
     }
 
-    pub fn caldate(
-        date: &CalDate,
-        locale: &Arc<dyn Locale + Send + Sync>,
-    ) -> ::askama::Result<String> {
-        Ok(locale.format_date(&date.as_start_with_tz(locale.timezone())))
-    }
-
     pub fn date(
         date: &DateTime<Tz>,
         locale: &Arc<dyn Locale + Send + Sync>,
@@ -45,9 +37,5 @@ pub mod filters {
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> ::askama::Result<String> {
         Ok(locale.format_datetime(date))
-    }
-
-    pub fn to_utc(date: &DateTime<Tz>) -> ::askama::Result<String> {
-        Ok(date.to_utc().format("%Y%m%dT%H%M%SZ").to_string())
     }
 }
