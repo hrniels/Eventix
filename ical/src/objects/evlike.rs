@@ -1,5 +1,5 @@
 use crate::{
-    objects::{CalAttendee, CalDate, CalRRule},
+    objects::{CalAttendee, CalDate, CalOrganizer, CalRRule},
     parser::PropertyProducer,
 };
 
@@ -26,6 +26,7 @@ pub trait EventLike: PropertyProducer {
     fn description(&self) -> Option<&String>;
     fn location(&self) -> Option<&String>;
     fn categories(&self) -> &[String];
+    fn organizer(&self) -> Option<&CalOrganizer>;
     fn attendees(&self) -> &[CalAttendee];
 
     fn rrule(&self) -> Option<&CalRRule>;

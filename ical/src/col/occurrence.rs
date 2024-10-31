@@ -3,7 +3,8 @@ use chrono_tz::Tz;
 
 use crate::col::Id;
 use crate::objects::{
-    CalAttendee, CalComponent, CalDate, CalEventStatus, CalRRule, CalTodoStatus, EventLike,
+    CalAttendee, CalComponent, CalDate, CalEventStatus, CalOrganizer, CalRRule, CalTodoStatus,
+    EventLike,
 };
 use crate::parser::{Property, PropertyProducer};
 
@@ -167,6 +168,10 @@ impl EventLike for Occurrence<'_> {
 
     fn categories(&self) -> &[String] {
         occ_or_base!(self, categories)
+    }
+
+    fn organizer(&self) -> Option<&CalOrganizer> {
+        occ_or_base!(self, organizer)
     }
 
     fn attendees(&self) -> &[CalAttendee] {

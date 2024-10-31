@@ -3,7 +3,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 use itertools::Itertools;
 
-use crate::objects::{CalAttendee, CalDate, CalEvent, CalRRule, CalTodo, EventLike};
+use crate::objects::{CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike};
 use crate::parser::{Property, PropertyProducer};
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -17,6 +17,7 @@ pub struct EventLikeComponent {
     desc: Option<String>,
     location: Option<String>,
     categories: Vec<String>,
+    organizer: Option<CalOrganizer>,
     attendees: Vec<CalAttendee>,
     // 0 = undefined; 1 = highest, 9 = lowest
     priority: Option<u8>,
@@ -66,6 +67,9 @@ impl EventLikeComponent {
                     .split(',')
                     .map(|v| v.trim().to_string())
                     .collect();
+            }
+            "ORGANIZER" => {
+                self.organizer = Some(prop.try_into()?);
             }
             "ATTENDEE" => {
                 let att: CalAttendee = prop.try_into()?;
@@ -124,6 +128,9 @@ impl PropertyProducer for EventLikeComponent {
                 self.categories.iter().join(","),
             ));
         }
+        if let Some(ref org) = self.organizer {
+            props.push(org.to_prop());
+        }
         if !self.attendees.is_empty() {
             props.extend(self.attendees.iter().map(|a| a.to_prop()));
         }
@@ -180,6 +187,10 @@ impl EventLike for EventLikeComponent {
 
     fn categories(&self) -> &[String] {
         self.categories.as_ref()
+    }
+
+    fn organizer(&self) -> Option<&CalOrganizer> {
+        self.organizer.as_ref()
     }
 
     fn attendees(&self) -> &[CalAttendee] {
@@ -310,6 +321,10 @@ impl EventLike for CalComponent {
 
     fn categories(&self) -> &[String] {
         with_ev_or_todo!(self, categories)
+    }
+
+    fn organizer(&self) -> Option<&CalOrganizer> {
+        with_ev_or_todo!(self, organizer)
     }
 
     fn attendees(&self) -> &[CalAttendee] {
