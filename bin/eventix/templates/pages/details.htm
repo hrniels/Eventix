@@ -63,6 +63,24 @@
             <td width="70%">{{ rrule.human()|newlines()|safe }}</td>
         </tr>
         {% endif %}
+        {% if let Some(org) = occ.organizer() %}
+        <tr>
+            <td width="30%">{{ "Organizer"|t(locale) }}:</td>
+            <td width="70%">
+                <a href="{{ org.address() }}">
+                {% if let Some(cn) = org.common_name() %}
+                {{ cn }}
+                {% else %}
+                {{ org.address() }}
+                {% endif %}
+                </a>
+                {% if let Some(sent_by) = org.sent_by() %}
+                , {{ "sent by"|t(locale) }}
+                <a href="{{ sent_by }}">{{ sent_by }}</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endif %}
         {% if !occ.attendees().is_empty() %}
         <tr>
             <td width="30%">{{ "Attendees"|t(locale) }}:</td>
