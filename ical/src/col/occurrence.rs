@@ -8,7 +8,7 @@ use crate::objects::{
 };
 use crate::parser::{Property, PropertyProducer};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
     source: Id,
     start: DateTime<Tz>,

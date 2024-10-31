@@ -4,21 +4,20 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
-use chrono_tz::Tz;
+use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ical::{
     col::CalStore,
-    objects::{CalComponent, CalDate, CalTodoStatus, EventLike},
+    objects::{CalDate, EventLike},
     util,
 };
 use serde::Deserialize;
 use std::{str::FromStr, sync::Arc};
 
 use super::Page;
-use crate::error::HTMLError;
-use crate::html::filters;
 use crate::locale::{self, Locale};
 use crate::objects::DayOccurrence;
+use crate::{error::HTMLError, pages::tasks::Tasks};
+use crate::{html::filters, pages::events::Events};
 
 struct Day<'a> {
     date: Option<NaiveDate>,
@@ -44,8 +43,8 @@ struct OverviewTemplate<'a> {
     prev_month: String,
     next_month: String,
     store: &'a CalStore,
-    next_events: Vec<Day<'a>>,
-    next_tasks: Vec<Day<'a>>,
+    events: Events<'a>,
+    tasks: Tasks<'a>,
 }
 
 pub async fn handler(
@@ -108,94 +107,8 @@ pub async fn handler(
         date += Duration::days(1);
     }
 
-    let now = Local::now();
-    let start = now.with_timezone(locale.timezone());
-    let end = start + Duration::days(7);
-
-    let next_ev_occs = state
-        .store()
-        .filtered_occurrences_within(start, end, |c| c.is_event())
-        .collect::<Vec<_>>();
-
-    let mut next_events = Vec::new();
-    let mut cur_date = start.date_naive();
-    let end_date = end.date_naive();
-    while cur_date < end_date {
-        let day_occs = DayOccurrence::occurrences_on(&next_ev_occs, cur_date, &timezone);
-        if !day_occs.is_empty() {
-            next_events.push(Day {
-                date: Some(cur_date),
-                show_month: false,
-                cur_month: false,
-                occurrences: day_occs,
-            });
-        }
-
-        cur_date += Duration::days(1);
-    }
-
-    let mut next_td_occs = state
-        .store()
-        .filtered_occurrences_within(start, end, |c| c.is_todo())
-        .collect::<Vec<_>>();
-
-    let overdue_tds = state
-        .store()
-        .filtered_occurrences_within(
-            DateTime::<Tz>::MIN_UTC.with_timezone(&timezone),
-            start,
-            |c| match c {
-                CalComponent::Todo(td) if td.due().is_some() => {
-                    td.status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
-                }
-                _ => false,
-            },
-        )
-        .filter(|o| {
-            // so far, we got all todos that overlap with this period of time. but we are only
-            // interested in the ones that are due before the start.
-            o.end_or_due()
-                .map(|e| e.as_end_with_tz(&timezone))
-                .unwrap_or(start)
-                < start
-        });
-    next_td_occs.extend(overdue_tds);
-
-    let mut next_tasks = Vec::new();
-    let mut cur_date = next_td_occs
-        .iter()
-        .map(|o| {
-            o.end_or_due()
-                .map(|e| e.as_end_with_tz(&timezone))
-                .unwrap_or(start)
-        })
-        .min()
-        .unwrap_or(start)
-        .date_naive();
-    let end_date = end.date_naive();
-    while cur_date < end_date {
-        let day_occs = DayOccurrence::due_occurrences(&next_td_occs, cur_date);
-        if !day_occs.is_empty() {
-            next_tasks.push(Day {
-                date: Some(cur_date),
-                show_month: false,
-                cur_month: false,
-                occurrences: day_occs,
-            });
-        }
-
-        cur_date += Duration::days(1);
-    }
-
-    let unplanned_occs = DayOccurrence::unplanned_occurrences(&next_td_occs);
-    if !unplanned_occs.is_empty() {
-        next_tasks.push(Day {
-            date: None,
-            show_month: false,
-            cur_month: false,
-            occurrences: unplanned_occs,
-        });
-    }
+    let events = Events::new(&state, &locale, 7);
+    let tasks = Tasks::new(&state, &locale, 7);
 
     let html = OverviewTemplate {
         page,
@@ -207,8 +120,8 @@ pub async fn handler(
         today: Utc::now().with_timezone(&timezone).date_naive(),
         store: state.store(),
         days,
-        next_events,
-        next_tasks,
+        events,
+        tasks,
     }
     .render()
     .context("overview template")?;

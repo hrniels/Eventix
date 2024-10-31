@@ -1,6 +1,9 @@
 pub mod details;
 pub mod monthly;
 
+mod events;
+mod tasks;
+
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]

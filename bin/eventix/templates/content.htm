@@ -1,0 +1,106 @@
+{% extends "base.htm" %}
+
+{% block content %}
+
+<script type="text/javascript" src="/static/popup.js"></script>
+
+<div style="float: left; width: 80%">
+    {% block inner %}
+    <h1>Dummy content</h1>
+    {% endblock inner %}
+</div>
+
+<div style="float: right; width: 19%">
+    <div class="ev_box">
+        <div class="ev_header">{{ "Next events"|t(locale) }}</div>
+        <div class="ev_scrollbox">
+            {% for day in events.days %}
+            <div class="ev_next_day_header">{{ day.date.unwrap().format("%A, %B %d") }}</div>
+            {% for occ in day.occurrences %}
+            <div onclick="openPopup('{{ occ.uid() }}',
+                                    'ev_id_{{ occ.uid_html() }}',
+                                    '{{ occ.rid_html() }}',
+                                    '{{ occ.id() }}')"
+                 id="{{ occ.id() }}"
+                 {% if !occ.is_all_day() %}
+                 style="display: flex; gap: .4em"
+                 {% endif %}
+                 class="ev_event_occurrence
+                        ev_id_{{ occ.uid_html() }}
+                        {% if occ.is_all_day() %}
+                        ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                        {% endif %}
+                        {% match occ.status_class() %}
+                        {% when Some with (cl) %}
+                        ev_status_{{ cl }}
+                        {% when _ %}
+                        {% endmatch %}
+                        ">
+                {% if occ.is_all_day() %}
+                {{ occ.summary().unwrap() }}
+                {% else %}
+                <span class="ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}"></span>
+                <span><b>{{ occ.occurrence_start().format("%H:%M") }}</b></span>
+                <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <br />
+
+    <div class="ev_box">
+        <div class="ev_header">{{ "Tasks"|t(locale) }}</div>
+        <div class="ev_scrollbox">
+            {% for day in tasks.days %}
+            <div class="ev_next_day_header">
+                {% if let Some(date) = day.date %}
+                {{ date.format("%A, %B %d") }}
+                {% else %}
+                {{ "Unplanned"|t(locale) }}
+                {% endif %}
+            </div>
+            {% for occ in day.occurrences %}
+            <div onclick="openPopup('{{ occ.uid() }}',
+                                    'ev_id_{{ occ.uid_html() }}',
+                                    '{{ occ.rid_html() }}',
+                                    '{{ occ.id() }}')"
+                 id="{{ occ.id() }}"
+                 style="display: flex; gap: .4em"
+                 class="ev_event_occurrence
+                        ev_id_{{ occ.uid_html() }}
+                        {% if let Some(end) = occ.occurrence_end() %}
+                        {% if end.date_naive() < today %}
+                        ev_overdue
+                        {% else if end.date_naive() == today %}
+                        ev_duetoday
+                        {% endif %}
+                        {% endif %}
+                        {% match occ.status_class() %}
+                        {% when Some with (cl) %}
+                        ev_status_{{ cl }}
+                        {% when _ %}
+                        {% endmatch %}
+                        ">
+                <span class="ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}"></span>
+                {% if let Some(due) = occ.end_or_due() %}
+                {% match due %}
+                {% when CalDate::DateTime with (due_date) %}
+                <span><b>{{ due_date.with_tz(locale.timezone()).format("%H:%M") }}</b></span>
+                {% when _ %}
+                {% endmatch %}
+                {% endif %}
+                <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<br style="clear: both" />
+
+<div id="popup" class="ev_popup"></div>
+
+{% endblock %}

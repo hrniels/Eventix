@@ -9,23 +9,26 @@ use once_cell::sync::Lazy;
 
 pub struct DayOccurrence<'a> {
     id: u64,
-    inner: &'a Occurrence<'a>,
+    inner: Occurrence<'a>,
 }
 
 impl<'a> DayOccurrence<'a> {
-    pub fn new(inner: &'a Occurrence<'a>) -> Self {
+    pub fn new(inner: &Occurrence<'a>) -> Self {
         static NEXT_ID: Lazy<Mutex<u64>> = Lazy::new(|| Mutex::new(0));
         let mut next = NEXT_ID.lock().unwrap();
         let id = *next + 1;
         *next += 1;
-        Self { id, inner }
+        Self {
+            id,
+            inner: inner.clone(),
+        }
     }
 
-    pub fn occurrences_on(
-        occs: &'a [Occurrence<'a>],
+    pub fn occurrences_on<'occ: 'a>(
+        occs: &'a [Occurrence<'occ>],
         date: NaiveDate,
         timezone: &Tz,
-    ) -> Vec<DayOccurrence<'a>> {
+    ) -> Vec<DayOccurrence<'occ>> {
         let day_start = timezone
             .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
             .unwrap();
@@ -46,7 +49,10 @@ impl<'a> DayOccurrence<'a> {
         day_occs
     }
 
-    pub fn due_occurrences(occs: &'a [Occurrence<'a>], date: NaiveDate) -> Vec<DayOccurrence<'a>> {
+    pub fn due_occurrences<'occ: 'a>(
+        occs: &'a [Occurrence<'occ>],
+        date: NaiveDate,
+    ) -> Vec<DayOccurrence<'occ>> {
         let mut day_occs = occs
             .iter()
             .filter(|o| match o.end_or_due() {
@@ -63,7 +69,9 @@ impl<'a> DayOccurrence<'a> {
         day_occs
     }
 
-    pub fn unplanned_occurrences(occs: &'a [Occurrence<'a>]) -> Vec<DayOccurrence<'a>> {
+    pub fn unplanned_occurrences<'occ: 'a>(
+        occs: &'a [Occurrence<'occ>],
+    ) -> Vec<DayOccurrence<'occ>> {
         let mut unplanned_occs = occs
             .iter()
             .filter(|o| {
@@ -114,6 +122,6 @@ impl<'a> DayOccurrence<'a> {
 impl<'a> Deref for DayOccurrence<'a> {
     type Target = Occurrence<'a>;
     fn deref(&self) -> &Self::Target {
-        self.inner
+        &self.inner
     }
 }

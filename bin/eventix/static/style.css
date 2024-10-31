@@ -459,6 +459,23 @@ span.ev_msg_error span.ev_msg_info {
     font-weight: bold;
 }
 
+/* ------------ EVENT/TODO POPUP ------------ */
+
+div.ev_selected {
+  border: 1px solid #555 !important;
+  font-weight: bold !important;
+}
+
+.ev_popup {
+  background-color: #ffffff;
+  border: 1px solid #555;
+  box-shadow: 2px 2px 3px #555;
+  cursor: default;
+  display: none;
+  width: 500px;
+  z-index: 50;
+}
+
 /* ------------ CALENDAR SOURCES ------------ */
 
 div.ev_cal_src_bi {
