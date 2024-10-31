@@ -9,12 +9,12 @@ use axum::{
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use ical::{
-    col::{CalStore, Occurrence},
+    col::CalStore,
     objects::{CalComponent, CalDate, CalTodoStatus, EventLike},
     util,
 };
 use serde::Deserialize;
-use std::{cmp::Ordering, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 
 use super::Page;
 use crate::error::HTMLError;
@@ -48,51 +48,6 @@ struct OverviewTemplate<'a> {
     store: &'a CalStore,
     next_events: Vec<Day<'a>>,
     next_tasks: Vec<Day<'a>>,
-}
-
-fn get_overlapping_occurrences<'a>(
-    ev_occs: &'a [Occurrence<'a>],
-    date: NaiveDate,
-    timezone: &Tz,
-) -> Vec<DayOccurrence<'a>> {
-    let day_start = timezone
-        .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
-        .unwrap();
-    let day_end = timezone
-        .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
-        .unwrap();
-
-    let mut day_occs = ev_occs
-        .iter()
-        .filter(|o| o.overlaps(day_start, day_end))
-        .map(DayOccurrence::new)
-        .collect::<Vec<_>>();
-    day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
-        (true, true) | (false, false) => a.occurrence_start().cmp(&b.occurrence_start()),
-        (true, false) => Ordering::Less,
-        (false, true) => Ordering::Greater,
-    });
-    day_occs
-}
-
-fn get_due_occurrences<'a>(
-    ev_occs: &'a [Occurrence<'a>],
-    date: NaiveDate,
-) -> Vec<DayOccurrence<'a>> {
-    let mut day_occs = ev_occs
-        .iter()
-        .filter(|o| match o.end_or_due() {
-            Some(end) => end.as_naive_date() == date,
-            None => false,
-        })
-        .map(DayOccurrence::new)
-        .collect::<Vec<_>>();
-    day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
-        (true, true) | (false, false) => a.end_or_due().cmp(&b.end_or_due()),
-        (true, false) => Ordering::Less,
-        (false, true) => Ordering::Greater,
-    });
-    day_occs
 }
 
 async fn handler(
@@ -143,7 +98,7 @@ async fn handler(
 
     let mut days = Vec::new();
     while date < end {
-        let day_occs = get_overlapping_occurrences(&ev_occs, date, &timezone);
+        let day_occs = DayOccurrence::occurrences_on(&ev_occs, date, &timezone);
         days.push(Day {
             date: Some(date),
             show_month: date.day() == 1
@@ -168,7 +123,7 @@ async fn handler(
     let mut cur_date = start.date_naive();
     let end_date = end.date_naive();
     while cur_date < end_date {
-        let day_occs = get_overlapping_occurrences(&next_ev_occs, cur_date, &timezone);
+        let day_occs = DayOccurrence::occurrences_on(&next_ev_occs, cur_date, &timezone);
         if !day_occs.is_empty() {
             next_events.push(Day {
                 date: Some(cur_date),
@@ -221,7 +176,7 @@ async fn handler(
         .date_naive();
     let end_date = end.date_naive();
     while cur_date < end_date {
-        let day_occs = get_due_occurrences(&next_td_occs, cur_date);
+        let day_occs = DayOccurrence::due_occurrences(&next_td_occs, cur_date);
         if !day_occs.is_empty() {
             next_tasks.push(Day {
                 date: Some(cur_date),
@@ -234,21 +189,8 @@ async fn handler(
         cur_date += Duration::days(1);
     }
 
-    let mut unplanned_occs = next_td_occs
-        .iter()
-        .filter(|o| {
-            o.end_or_due().is_none()
-                && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
-        })
-        .map(DayOccurrence::new)
-        .collect::<Vec<_>>();
+    let unplanned_occs = DayOccurrence::unplanned_occurrences(&next_td_occs);
     if !unplanned_occs.is_empty() {
-        unplanned_occs.sort_by(|a, b| match (a.created(), b.created()) {
-            (Some(ac), Some(bc)) => ac.cmp(bc),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        });
         next_tasks.push(Day {
             date: None,
             show_month: false,
