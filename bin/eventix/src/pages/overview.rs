@@ -13,53 +13,14 @@ use ical::{
     objects::{CalComponent, CalDate, CalTodoStatus, EventLike},
     util,
 };
-use once_cell::sync::Lazy;
 use serde::Deserialize;
-use std::{
-    cmp::Ordering,
-    ops::Deref,
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::{cmp::Ordering, str::FromStr, sync::Arc};
 
 use super::Page;
 use crate::error::HTMLError;
 use crate::html::filters;
 use crate::locale::{self, Locale};
-
-struct DayOccurrence<'a> {
-    id: u64,
-    inner: &'a Occurrence<'a>,
-}
-
-impl<'a> DayOccurrence<'a> {
-    fn new(inner: &'a Occurrence<'a>) -> Self {
-        static NEXT_ID: Lazy<Mutex<u64>> = Lazy::new(|| Mutex::new(0));
-        let mut next = NEXT_ID.lock().unwrap();
-        let id = *next + 1;
-        *next += 1;
-        Self { id, inner }
-    }
-
-    fn js_uid(&self) -> String {
-        self.inner
-            .uid()
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric())
-            .collect()
-    }
-
-    fn status_class(&self) -> Option<String> {
-        self.inner.event_status().map(|st| format!("{:?}", st))
-    }
-}
-
-impl<'a> Deref for DayOccurrence<'a> {
-    type Target = Occurrence<'a>;
-    fn deref(&self) -> &Self::Target {
-        self.inner
-    }
-}
+use crate::objects::DayOccurrence;
 
 struct Day<'a> {
     date: Option<NaiveDate>,

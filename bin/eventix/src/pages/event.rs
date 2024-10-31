@@ -16,6 +16,8 @@ use crate::error::HTMLError;
 use crate::html::filters;
 use crate::locale::{self, Locale};
 
+use crate::objects::DayOccurrence;
+
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
@@ -32,7 +34,7 @@ struct Response {
 struct EventTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     source: &'a CalSource,
-    occ: Occurrence<'a>,
+    occ: DayOccurrence<'a>,
 }
 
 fn attendee_icon(att: &CalAttendee) -> String {
@@ -93,6 +95,7 @@ pub async fn handler(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
             &req.uid, req.rid
         ))?;
+    let occ = DayOccurrence::new(&occ);
     let source = state.store().source(occ.source()).unwrap();
 
     let html = EventTemplate {

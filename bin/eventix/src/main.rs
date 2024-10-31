@@ -1,6 +1,7 @@
 mod error;
 mod html;
 mod locale;
+mod objects;
 mod pages;
 mod state;
 
