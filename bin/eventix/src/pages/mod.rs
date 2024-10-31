@@ -1,5 +1,5 @@
-pub mod event;
-pub mod overview;
+pub mod details;
+pub mod monthly;
 
 use std::time::{Duration, Instant};
 

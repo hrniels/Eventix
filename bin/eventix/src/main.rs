@@ -9,7 +9,7 @@ use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
-use pages::event;
+use pages::{details, monthly};
 use std::{env, path::PathBuf, sync::Arc};
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -17,8 +17,6 @@ use tower_http::{
     LatencyUnit,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-use crate::pages::overview;
 
 async fn error_handler() -> impl IntoResponse {
     HTMLError::from(anyhow::Error::msg("no such route"))
@@ -77,8 +75,8 @@ async fn main() {
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
         .nest_service("/static", ServeDir::new("static"))
-        .nest(overview::path(), overview::router(state.clone()))
-        .nest(event::path(), event::router(state.clone()))
+        .nest(monthly::path(), monthly::router(state.clone()))
+        .nest(details::path(), details::router(state.clone()))
         .fallback(error_handler)
         .layer(
             TraceLayer::new_for_http()

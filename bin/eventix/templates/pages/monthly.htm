@@ -250,7 +250,7 @@ function inBoundingBox(e, id) {
 function loadOccurrence(uid, rid) {
     $.ajax({
         type: 'GET',
-        url: '{{ page.path() }}event?uid=' + uid + (rid != null ? '&rid=' + rid : ''),
+        url: '/details?uid=' + uid + (rid != null ? '&rid=' + rid : ''),
         dataType: 'json',
         success: function(data) {
             $('#popup').html(data.html);

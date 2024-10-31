@@ -2,8 +2,6 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
-use axum::routing::get;
-use axum::Router;
 use ical::col::{CalSource, Occurrence};
 use ical::objects::{CalPartStat, CalRole, EventLike};
 use serde::{Deserialize, Serialize};
@@ -30,7 +28,7 @@ struct Response {
 }
 
 #[derive(Template)]
-#[template(path = "pages/event.htm")]
+#[template(path = "pages/details.htm")]
 struct EventTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     source: &'a CalSource,
@@ -107,12 +105,4 @@ pub async fn handler(
     .context("event template")?;
 
     Ok(Json(Response { html }))
-}
-
-pub fn path() -> &'static str {
-    "/event"
-}
-
-pub fn router(state: crate::state::State) -> Router {
-    Router::new().route("/", get(handler)).with_state(state)
 }

@@ -3,8 +3,6 @@ use askama::Template;
 use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
-    routing::get,
-    Router,
 };
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -30,12 +28,12 @@ struct Day<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-struct Request {
+pub struct Request {
     month: Option<String>,
 }
 
 #[derive(Template)]
-#[template(path = "pages/overview.htm")]
+#[template(path = "pages/monthly.htm")]
 struct OverviewTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
@@ -50,11 +48,11 @@ struct OverviewTemplate<'a> {
     next_tasks: Vec<Day<'a>>,
 }
 
-async fn handler(
+pub async fn handler(
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let page = Page::new(path().to_string());
+    let page = super::new_page();
     let locale = locale::default();
     let timezone = *locale.timezone();
 
@@ -216,12 +214,4 @@ async fn handler(
     .context("overview template")?;
 
     Ok(Html(html))
-}
-
-pub fn path() -> &'static str {
-    "/"
-}
-
-pub fn router(state: crate::state::State) -> Router {
-    Router::new().route("/", get(handler)).with_state(state)
 }
