@@ -95,13 +95,13 @@ impl CalSource {
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
-        rid: &CalDate,
+        rid: Option<&CalDate>,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let uid_str = uid.as_ref();
         self.items
             .iter()
-            .find_map(|c| c.occurrence_by_id(uid_str, rid, tz))
+            .find_map(|i| i.occurrence_by_id(uid_str, rid, tz))
     }
 
     pub fn occurrences_within(

@@ -67,23 +67,23 @@ impl CalItem {
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
-        rid: &CalDate,
+        rid: Option<&CalDate>,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
-        let first = self
-            .cal
-            .components()
-            .iter()
-            .find(|c| c.uid() == uid.as_ref() && c.rid().is_none())?;
+        let first = self.base_with(|c| c.uid() == uid.as_ref())?;
 
-        let mut res = Occurrence::new(self.source, first, rid.as_start_with_tz(tz));
-        let occ = self
-            .cal
-            .components()
-            .iter()
-            .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid));
-        if let Some(occ) = occ {
-            res.set_occurrence(occ);
+        let date = first.start().unwrap_or(first.stamp()).as_start_with_tz(tz);
+        let mut res = Occurrence::new(self.source, first, date);
+
+        if let Some(rid) = rid {
+            let occ = self
+                .cal
+                .components()
+                .iter()
+                .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid));
+            if let Some(occ) = occ {
+                res.set_occurrence(occ);
+            }
         }
         Some(res)
     }
@@ -108,12 +108,7 @@ impl CalItem {
         // we currently assume here that there is just a single uid per calendar. that is, if there
         // are multiple events, they all have the same uid and one is the base event with rid =
         // None and the others overwrite specific occurrences of that base event.
-        let Some(first) = self
-            .cal
-            .components()
-            .iter()
-            .find(|c| c.rid().is_none() && filter(c))
-        else {
+        let Some(first) = self.base_with(filter) else {
             return vec![];
         };
 
@@ -322,17 +317,16 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
-        let start = CalDate::Date(NaiveDate::from_ymd_opt(1995, 10, 2).unwrap());
         let comps = source.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
         assert!(has_uids(comps, &["yes1", "yes2"]));
         assert_eq!(
-            source.occurrence_by_id("yes1", &start, tz).unwrap().uid(),
+            source.occurrence_by_id("yes1", None, tz).unwrap().uid(),
             "yes1"
         );
         assert_eq!(
-            source.occurrence_by_id("no2", &start, tz).unwrap().uid(),
+            source.occurrence_by_id("no2", None, tz).unwrap().uid(),
             "no2"
         );
-        assert!(source.occurrence_by_id("not-found", &start, tz).is_none());
+        assert!(source.occurrence_by_id("not-found", None, tz).is_none());
     }
 }

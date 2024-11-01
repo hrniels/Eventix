@@ -41,7 +41,7 @@ impl CalStore {
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
-        rid: &CalDate,
+        rid: Option<&CalDate>,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let uid_str = uid.as_ref();
