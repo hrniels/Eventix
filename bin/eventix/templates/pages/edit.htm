@@ -1,0 +1,32 @@
+{% extends "content.htm" %}
+
+{% block inner %}
+
+<div>
+    <form method="post" action="/edit/update">
+    <input type="hidden" name="uid" value="{{ uid }}" />
+    {% if let Some(rid) = rid %}
+    <input type="hidden" name="rid" value="{{ rid }}" />
+    {% endif %}
+    <table width="100%" class="ev_table">
+        <tr>
+            <th colspan="2" align="center">
+                {{ "Edit"|t(locale) }}
+            </th>
+        </tr>
+        <tr>
+            <td width="30%">{{ "Summary"|t(locale) }}:</td>
+            <td width="70%">
+                <input type="text" size="50" name="summary" value="{{ summary }}" />
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" align="center">
+                <input type="submit" value="{{ "Save"|t(locale) }}" />
+            </td>
+        </tr>
+    </table>
+    </form>
+</div>
+
+{% endblock inner %}

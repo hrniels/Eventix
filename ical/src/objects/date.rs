@@ -20,6 +20,14 @@ impl Default for CalDate {
 }
 
 impl CalDate {
+    pub fn today() -> Self {
+        CalDate::Date(Utc::now().date_naive())
+    }
+
+    pub fn now() -> Self {
+        CalDate::DateTime(CalDateTime::Utc(Utc::now()))
+    }
+
     pub fn fmt_start_with_tz(&self, tz: &Tz) -> String {
         self.fmt_date(self.as_start_with_tz(tz))
     }

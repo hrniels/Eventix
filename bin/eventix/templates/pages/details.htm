@@ -117,5 +117,21 @@
         </tr>
         {% endif %}
         {% endif %}
+        <tr>
+            <td colspan="2" align="right">
+                {% if occ.is_recurrent() %}
+                <a class="ev_button_big" href="/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}">
+                    {{ "Edit occurrence"|t(locale) }}
+                </a>
+                {% endif %}
+                <a class="ev_button_big" href="/edit?uid={{ occ.uid() }}">
+                    {% if occ.is_recurrent() %}
+                    {{ "Edit series"|t(locale) }}
+                    {% else %}
+                    {{ "Edit"|t(locale) }}
+                    {% endif %}
+                </a>
+            </td>
+        </tr>
     </table>
 </div>

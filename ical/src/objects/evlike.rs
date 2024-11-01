@@ -32,6 +32,11 @@ pub trait EventLike: PropertyProducer {
     fn rrule(&self) -> Option<&CalRRule>;
     fn rid(&self) -> Option<&CalDate>;
 
+    fn is_recurrent(&self) -> bool {
+        self.rrule().is_some() || self.rid().is_some()
+    }
+}
+
 pub trait UpdatableEventLike: EventLike {
     fn set_summary(&mut self, summary: String);
     fn set_last_modified(&mut self, date: CalDate);

@@ -9,7 +9,7 @@ use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
-use pages::{details, monthly};
+use pages::{details, edit, monthly};
 use std::{
     env,
     path::PathBuf,
@@ -81,6 +81,7 @@ async fn main() {
         .nest_service("/static", ServeDir::new("static"))
         .nest(monthly::path(), monthly::router(state.clone()))
         .nest(details::path(), details::router(state.clone()))
+        .nest(edit::path(), edit::router(state.clone()))
         .fallback(error_handler)
         .layer(
             TraceLayer::new_for_http()
