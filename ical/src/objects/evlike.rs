@@ -31,4 +31,9 @@ pub trait EventLike: PropertyProducer {
 
     fn rrule(&self) -> Option<&CalRRule>;
     fn rid(&self) -> Option<&CalDate>;
+
+pub trait UpdatableEventLike: EventLike {
+    fn set_summary(&mut self, summary: String);
+    fn set_last_modified(&mut self, date: CalDate);
+    fn set_stamp(&mut self, date: CalDate);
 }

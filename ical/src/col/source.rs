@@ -82,6 +82,16 @@ impl CalSource {
         &self.items
     }
 
+    pub fn item_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalItem> {
+        let uid_ref = uid.as_ref();
+        self.items.iter().find(|i| i.contains_uid(uid_ref))
+    }
+
+    pub fn item_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalItem> {
+        let uid_ref = uid.as_ref();
+        self.items.iter_mut().find(|i| i.contains_uid(uid_ref))
+    }
+
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,

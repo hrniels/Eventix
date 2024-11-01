@@ -59,6 +59,11 @@ impl CalItem {
         &self.cal
     }
 
+    pub fn contains_uid<S: AsRef<str>>(&self, uid: S) -> bool {
+        let uid_ref = uid.as_ref();
+        self.cal.components().iter().any(|c| c.uid() == uid_ref)
+    }
+
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
@@ -136,6 +141,26 @@ impl CalItem {
             }
         }
         occs
+    }
+
+    pub fn base_with<F>(&self, filter: F) -> Option<&CalComponent>
+    where
+        F: Fn(&CalComponent) -> bool,
+    {
+        self.cal
+            .components()
+            .iter()
+            .find(|c| c.rid().is_none() && filter(c))
+    }
+
+    pub fn base_with_mut<F>(&mut self, filter: F) -> Option<&mut CalComponent>
+    where
+        F: Fn(&CalComponent) -> bool,
+    {
+        self.cal
+            .components_mut()
+            .iter_mut()
+            .find(|c| c.rid().is_none() && filter(c))
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {

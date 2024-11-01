@@ -3,7 +3,9 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 use itertools::Itertools;
 
-use crate::objects::{CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike};
+use crate::objects::{
+    CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike, UpdatableEventLike,
+};
 use crate::parser::{Property, PropertyProducer};
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -206,6 +208,20 @@ impl EventLike for EventLikeComponent {
     }
 }
 
+impl UpdatableEventLike for EventLikeComponent {
+    fn set_summary(&mut self, summary: String) {
+        self.summary = Some(summary);
+    }
+
+    fn set_last_modified(&mut self, date: CalDate) {
+        self.last_mod = Some(date);
+    }
+
+    fn set_stamp(&mut self, date: CalDate) {
+        self.stamp = date;
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum CalComponent {
     Event(CalEvent),
@@ -270,7 +286,7 @@ impl PropertyProducer for CalComponent {
     }
 }
 
-macro_rules! with_ev_or_todo {
+macro_rules! get_with_ev_or_todo {
     ($self:tt, $method:tt) => {
         match $self {
             Self::Event(ev) => ev.inner.$method(),
@@ -279,25 +295,34 @@ macro_rules! with_ev_or_todo {
     };
 }
 
+macro_rules! set_with_ev_or_todo {
+    ($self:tt, $method:tt, $val:expr) => {
+        match $self {
+            Self::Event(ev) => ev.inner.$method($val),
+            Self::Todo(td) => td.inner.$method($val),
+        }
+    };
+}
+
 impl EventLike for CalComponent {
     fn uid(&self) -> &String {
-        with_ev_or_todo!(self, uid)
+        get_with_ev_or_todo!(self, uid)
     }
 
     fn stamp(&self) -> &CalDate {
-        with_ev_or_todo!(self, stamp)
+        get_with_ev_or_todo!(self, stamp)
     }
 
     fn created(&self) -> Option<&CalDate> {
-        with_ev_or_todo!(self, created)
+        get_with_ev_or_todo!(self, created)
     }
 
     fn last_modified(&self) -> Option<&CalDate> {
-        with_ev_or_todo!(self, last_modified)
+        get_with_ev_or_todo!(self, last_modified)
     }
 
     fn start(&self) -> Option<&CalDate> {
-        with_ev_or_todo!(self, start)
+        get_with_ev_or_todo!(self, start)
     }
 
     fn end_or_due(&self) -> Option<&CalDate> {
@@ -308,34 +333,48 @@ impl EventLike for CalComponent {
     }
 
     fn summary(&self) -> Option<&String> {
-        with_ev_or_todo!(self, summary)
+        get_with_ev_or_todo!(self, summary)
     }
 
     fn description(&self) -> Option<&String> {
-        with_ev_or_todo!(self, description)
+        get_with_ev_or_todo!(self, description)
     }
 
     fn location(&self) -> Option<&String> {
-        with_ev_or_todo!(self, location)
+        get_with_ev_or_todo!(self, location)
     }
 
     fn categories(&self) -> &[String] {
-        with_ev_or_todo!(self, categories)
+        get_with_ev_or_todo!(self, categories)
     }
 
     fn organizer(&self) -> Option<&CalOrganizer> {
-        with_ev_or_todo!(self, organizer)
+        get_with_ev_or_todo!(self, organizer)
     }
 
     fn attendees(&self) -> &[CalAttendee] {
-        with_ev_or_todo!(self, attendees)
+        get_with_ev_or_todo!(self, attendees)
     }
 
     fn rrule(&self) -> Option<&CalRRule> {
-        with_ev_or_todo!(self, rrule)
+        get_with_ev_or_todo!(self, rrule)
     }
 
     fn rid(&self) -> Option<&CalDate> {
-        with_ev_or_todo!(self, rid)
+        get_with_ev_or_todo!(self, rid)
+    }
+}
+
+impl UpdatableEventLike for CalComponent {
+    fn set_summary(&mut self, summary: String) {
+        set_with_ev_or_todo!(self, set_summary, summary);
+    }
+
+    fn set_last_modified(&mut self, date: CalDate) {
+        set_with_ev_or_todo!(self, set_last_modified, date);
+    }
+
+    fn set_stamp(&mut self, date: CalDate) {
+        set_with_ev_or_todo!(self, set_stamp, date);
     }
 }

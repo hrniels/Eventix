@@ -26,6 +26,18 @@ impl CalStore {
         self.sources.iter().flat_map(|c| c.items().iter())
     }
 
+    pub fn item_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalItem> {
+        let uid_str = uid.as_ref();
+        self.sources.iter().find_map(|c| c.item_by_id(uid_str))
+    }
+
+    pub fn item_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalItem> {
+        let uid_str = uid.as_ref();
+        self.sources
+            .iter_mut()
+            .find_map(|c| c.item_by_id_mut(uid_str))
+    }
+
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,

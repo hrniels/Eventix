@@ -21,6 +21,10 @@ impl Calendar {
         &self.comps
     }
 
+    pub fn components_mut(&mut self) -> &mut [CalComponent] {
+        &mut self.comps
+    }
+
     pub fn add(&mut self, comp: CalComponent) {
         self.comps.push(comp);
     }
