@@ -88,8 +88,9 @@ pub async fn handler(
         .from_local_datetime(&end.pred_opt().unwrap().and_hms_opt(23, 59, 59).unwrap())
         .unwrap();
 
-    let ev_occs = state
-        .store()
+    let store = state.store().lock().unwrap();
+
+    let ev_occs = store
         .filtered_occurrences_within(mstart, mend, |c| c.is_event())
         .collect::<Vec<_>>();
 
@@ -107,8 +108,8 @@ pub async fn handler(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&state, &locale, 7);
-    let tasks = Tasks::new(&state, &locale, 7);
+    let events = Events::new(&store, &locale, 7);
+    let tasks = Tasks::new(&store, &locale, 7);
 
     let html = OverviewTemplate {
         page,
@@ -118,7 +119,7 @@ pub async fn handler(
         prev_month: format!("{}-{}", pyear, pmonth),
         next_month: format!("{}-{}", nyear, nmonth),
         today: Utc::now().with_timezone(&timezone).date_naive(),
-        store: state.store(),
+        store: &store,
         days,
         events,
         tasks,

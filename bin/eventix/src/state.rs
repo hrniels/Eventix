@@ -1,18 +1,18 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ical::col::CalStore;
 
 #[derive(Clone)]
 pub struct State {
-    store: Arc<CalStore>,
+    store: Arc<Mutex<CalStore>>,
 }
 
 impl State {
-    pub fn new(store: Arc<CalStore>) -> Self {
+    pub fn new(store: Arc<Mutex<CalStore>>) -> Self {
         Self { store }
     }
 
-    pub fn store(&self) -> &Arc<CalStore> {
+    pub fn store(&self) -> &Arc<Mutex<CalStore>> {
         &self.store
     }
 }

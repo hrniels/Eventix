@@ -10,7 +10,11 @@ use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
 use pages::{details, monthly};
-use std::{env, path::PathBuf, sync::Arc};
+use std::{
+    env,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::{DefaultOnResponse, TraceLayer},
@@ -71,7 +75,7 @@ async fn main() {
         .expect("Loading calendar failed"),
     );
 
-    let state = state::State::new(Arc::new(store));
+    let state = state::State::new(Arc::new(Mutex::new(store)));
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
         .nest_service("/static", ServeDir::new("static"))

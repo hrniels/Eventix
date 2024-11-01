@@ -86,15 +86,16 @@ pub async fn handler(
         .parse::<CalDate>()
         .context(format!("Invalid rid date: {}", req.rid))?;
 
-    let occ = state
-        .store()
-        .occurrence_by_id(&req.uid, &rid, locale.timezone())
+    let store = state.store().lock().unwrap();
+
+    let occ = store
+        .occurrence_by_id(&req.uid, Some(&rid), locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
             &req.uid, req.rid
         ))?;
     let occ = DayOccurrence::new(&occ);
-    let source = state.store().source(occ.source()).unwrap();
+    let source = store.source(occ.source()).unwrap();
 
     let html = EventTemplate {
         locale,

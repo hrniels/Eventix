@@ -1,12 +1,12 @@
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard};
 
 use chrono::{DateTime, Duration, Local, NaiveDate};
 use chrono_tz::Tz;
+use ical::col::CalStore;
 use ical::objects::{CalComponent, CalTodoStatus, EventLike};
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
-use crate::state::State;
 
 pub struct Day<'a> {
     pub date: Option<NaiveDate>,
@@ -18,20 +18,22 @@ pub struct Tasks<'a> {
 }
 
 impl<'a> Tasks<'a> {
-    pub fn new(state: &'a State, locale: &Arc<dyn Locale + Send + Sync>, days: u32) -> Tasks<'a> {
+    pub fn new(
+        store: &'a MutexGuard<'_, CalStore>,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        days: u32,
+    ) -> Tasks<'a> {
         let timezone = locale.timezone();
 
         let now = Local::now();
         let start = now.with_timezone(locale.timezone());
         let end = start + Duration::days(days as i64);
 
-        let mut next_td_occs = state
-            .store()
+        let mut next_td_occs = store
             .filtered_occurrences_within(start, end, |c| c.is_todo())
             .collect::<Vec<_>>();
 
-        let overdue_tds = state
-            .store()
+        let overdue_tds = store
             .filtered_occurrences_within(
                 DateTime::<Tz>::MIN_UTC.with_timezone(&timezone),
                 start,

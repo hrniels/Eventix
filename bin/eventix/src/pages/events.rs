@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard};
 
 use chrono::{Duration, Local, NaiveDate};
+use ical::col::CalStore;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
-use crate::state::State;
 
 pub struct Day<'a> {
     pub date: Option<NaiveDate>,
@@ -16,15 +16,18 @@ pub struct Events<'a> {
 }
 
 impl<'a> Events<'a> {
-    pub fn new(state: &'a State, locale: &Arc<dyn Locale + Send + Sync>, days: u32) -> Events<'a> {
+    pub fn new(
+        store: &'a MutexGuard<'_, CalStore>,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        days: u32,
+    ) -> Events<'a> {
         let timezone = locale.timezone();
 
         let now = Local::now();
         let start = now.with_timezone(locale.timezone());
         let end = start + Duration::days(days as i64);
 
-        let next_ev_occs = state
-            .store()
+        let next_ev_occs = store
             .filtered_occurrences_within(start, end, |c| c.is_event())
             .collect::<Vec<_>>();
 
