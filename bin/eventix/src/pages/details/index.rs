@@ -29,7 +29,7 @@ struct Response {
 
 #[derive(Template)]
 #[template(path = "pages/details.htm")]
-struct EventTemplate<'a> {
+struct DetailsTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     source: &'a CalSource,
     occ: DayOccurrence<'a>,
@@ -97,7 +97,7 @@ pub async fn handler(
     let occ = DayOccurrence::new(&occ);
     let source = store.source(occ.source()).unwrap();
 
-    let html = EventTemplate {
+    let html = DetailsTemplate {
         locale,
         source,
         occ,

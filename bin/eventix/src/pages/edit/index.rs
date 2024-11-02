@@ -14,7 +14,7 @@ use crate::{html::filters, pages::events::Events};
 
 #[derive(Template)]
 #[template(path = "pages/edit.htm")]
-struct OverviewTemplate<'a> {
+struct EditTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     uid: String,
@@ -68,7 +68,7 @@ pub async fn content(
     let events = Events::new(&store, &locale, 7);
     let tasks = Tasks::new(&store, &locale, 7);
 
-    let html = OverviewTemplate {
+    let html = EditTemplate {
         page,
         locale,
         uid: req.uid.clone(),

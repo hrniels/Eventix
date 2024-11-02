@@ -33,7 +33,7 @@ pub struct Request {
 
 #[derive(Template)]
 #[template(path = "pages/monthly.htm")]
-struct OverviewTemplate<'a> {
+struct MonthlyTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     weekdays: Vec<&'a str>,
@@ -111,7 +111,7 @@ pub async fn handler(
     let events = Events::new(&store, &locale, 7);
     let tasks = Tasks::new(&store, &locale, 7);
 
-    let html = OverviewTemplate {
+    let html = MonthlyTemplate {
         page,
         locale,
         weekdays,
