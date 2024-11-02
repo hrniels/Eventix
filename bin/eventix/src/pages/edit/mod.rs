@@ -5,11 +5,23 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use serde::{Deserialize, Serialize};
 
-use super::Page;
+use super::{Breadcrumb, Page};
 
-pub fn new_page() -> Page {
-    Page::new(path().to_string())
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Request {
+    uid: String,
+    rid: Option<String>,
+}
+
+pub fn new_page(req: &Request) -> Page {
+    let mut page = Page::new(path().to_string());
+    page.add_breadcrumb(Breadcrumb::new(
+        format!("{}?{}", path(), serde_qs::to_string(req).unwrap()),
+        "Edit",
+    ));
+    page
 }
 
 pub fn path() -> &'static str {

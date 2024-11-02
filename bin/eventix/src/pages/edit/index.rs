@@ -5,25 +5,12 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use ical::objects::{CalDate, EventLike};
-use serde::Deserialize;
 use std::sync::Arc;
 
-use super::Page;
+use super::{Page, Request};
 use crate::locale::{self, Locale};
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
-
-#[derive(Debug, Deserialize)]
-pub struct Request {
-    uid: String,
-    rid: Option<String>,
-}
-
-impl Request {
-    pub fn new(uid: String, rid: Option<String>) -> Self {
-        Self { uid, rid }
-    }
-}
 
 #[derive(Template)]
 #[template(path = "pages/edit.htm")]
@@ -42,7 +29,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
-        super::new_page(),
+        super::new_page(&req),
         locale::default(),
         State(state),
         Query(req),

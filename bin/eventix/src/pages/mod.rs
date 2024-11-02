@@ -15,7 +15,7 @@ pub struct Breadcrumb {
 
 impl Breadcrumb {
     #[allow(dead_code)]
-    pub fn new<S: ToString>(url: S, name: S) -> Self {
+    pub fn new<U: ToString, N: ToString>(url: U, name: N) -> Self {
         Self {
             url: url.to_string(),
             name: name.to_string(),

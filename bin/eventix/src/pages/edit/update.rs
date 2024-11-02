@@ -11,12 +11,11 @@ use crate::error::HTMLError;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
 
-use super::index::Request;
+use super::Request;
 
 #[derive(Debug, Deserialize)]
 pub struct Update {
-    uid: String,
-    rid: Option<String>,
+    base: Request,
     summary: String,
 }
 
@@ -47,23 +46,18 @@ pub async fn handler(
     Form(form): Form<Update>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page();
+    let mut page = super::new_page(&form.base);
 
     {
         let mut store = state.store().lock().unwrap();
 
-        let item = store
-            .item_by_id_mut(&form.uid)
-            .context(format!("Unable to find component with uid '{}'", form.uid))?;
+        let item = store.item_by_id_mut(&form.base.uid).context(format!(
+            "Unable to find component with uid '{}'",
+            form.base.uid
+        ))?;
 
         action_update(&mut page, &locale, item, &form)?;
     }
 
-    super::index::content(
-        page,
-        locale,
-        State(state),
-        Query(Request::new(form.uid, form.rid)),
-    )
-    .await
+    super::index::content(page, locale, State(state), Query(form.base)).await
 }
