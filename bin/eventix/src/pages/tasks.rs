@@ -1,8 +1,8 @@
 use std::sync::{Arc, MutexGuard};
 
-use chrono::{DateTime, Duration, Local, NaiveDate};
+use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
-use ical::col::CalStore;
+use ical::col::{CalStore, Id};
 use ical::objects::{CalComponent, CalTodoStatus, EventLike};
 
 use crate::locale::Locale;
@@ -15,6 +15,8 @@ pub struct Day<'a> {
 
 pub struct Tasks<'a> {
     pub days: Vec<Day<'a>>,
+    pub today: NaiveDate,
+    store: &'a MutexGuard<'a, CalStore>,
 }
 
 impl<'a> Tasks<'a> {
@@ -88,6 +90,14 @@ impl<'a> Tasks<'a> {
             });
         }
 
-        Self { days }
+        Self {
+            days,
+            store,
+            today: Utc::now().with_timezone(timezone).date_naive(),
+        }
+    }
+
+    pub fn calendar_name(&self, source: Id) -> &str {
+        self.store.source(source).unwrap().name()
     }
 }

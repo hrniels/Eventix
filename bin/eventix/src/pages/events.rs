@@ -1,7 +1,7 @@
 use std::sync::{Arc, MutexGuard};
 
 use chrono::{Duration, Local, NaiveDate};
-use ical::col::CalStore;
+use ical::col::{CalStore, Id};
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
@@ -13,6 +13,7 @@ pub struct Day<'a> {
 
 pub struct Events<'a> {
     pub days: Vec<Day<'a>>,
+    store: &'a MutexGuard<'a, CalStore>,
 }
 
 impl<'a> Events<'a> {
@@ -46,6 +47,10 @@ impl<'a> Events<'a> {
             cur_date += Duration::days(1);
         }
 
-        Self { days }
+        Self { days, store }
+    }
+
+    pub fn calendar_name(&self, source: Id) -> &str {
+        self.store.source(source).unwrap().name()
     }
 }

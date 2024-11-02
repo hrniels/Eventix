@@ -4,11 +4,9 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use chrono::{NaiveDate, Utc};
-use ical::col::CalStore;
 use ical::objects::{CalDate, EventLike};
 use serde::Deserialize;
-use std::sync::{Arc, MutexGuard};
+use std::sync::Arc;
 
 use super::Page;
 use crate::locale::{self, Locale};
@@ -35,8 +33,6 @@ struct OverviewTemplate<'a> {
     uid: String,
     rid: Option<String>,
     summary: &'a String,
-    store: &'a MutexGuard<'a, CalStore>,
-    today: NaiveDate,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -60,8 +56,6 @@ pub async fn content(
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let timezone = *locale.timezone();
-
     let store = state.store().lock().unwrap();
 
     let item = store
@@ -93,8 +87,6 @@ pub async fn content(
         uid: req.uid.clone(),
         rid: req.rid.clone(),
         summary: occ.summary().unwrap_or(&String::from("")),
-        store: &store,
-        today: Utc::now().with_timezone(&timezone).date_naive(),
         events,
         tasks,
     }
