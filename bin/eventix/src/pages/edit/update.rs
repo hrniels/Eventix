@@ -2,7 +2,7 @@ use anyhow::Context;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::col::CalItem;
-use ical::objects::{CalDate, UpdatableEventLike};
+use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -36,11 +36,16 @@ fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
     item: &mut CalItem,
-    form: &Update,
+    form: &mut Update,
 ) -> anyhow::Result<()> {
-    let base = item
-        .base_with_mut(|_| true)
-        .context("Unable to find base component")?;
+    let rid = if let Some(ref rid) = form.base.rid {
+        Some(
+            rid.parse::<CalDate>()
+                .context(format!("Invalid rid date: {}", rid))?,
+        )
+    } else {
+        None
+    };
 
     if form.summary.is_empty() {
         page.add_error(locale.translate("Summary cannot be empty."));
@@ -56,25 +61,46 @@ fn action_update(
         return Ok(());
     };
 
-    base.set_summary(Some(form.summary.clone()));
-    base.set_location(nonempty_or_none(form.location.clone()));
-    base.set_description(nonempty_or_none(form.description.clone()));
-    base.set_start(Some(start));
-    if let Some(ev) = base.as_event_mut() {
-        ev.set_end(Some(end));
-    } else {
-        base.as_todo_mut().unwrap().set_due(Some(end));
+    if form.base.rid.is_some() {
+        let base = item
+            .component_with(|c| c.uid() == &form.base.uid && c.rid().is_none())
+            .context("Unable to find base component")?;
+
+        // inherit from base if we can
+        if Some(&form.summary) == base.summary() {
+            form.summary.clear();
+        }
+        if Some(&form.location) == base.location() {
+            form.location.clear();
+        }
+        if Some(&form.description) == base.description() {
+            form.description.clear();
+        }
     }
 
-    base.set_last_modified(CalDate::now());
-    base.set_stamp(CalDate::now());
+    let comp = item
+        .component_with_mut(|c| c.uid() == &form.base.uid && c.rid() == rid.as_ref())
+        .context("Unable to find component")?;
+
+    comp.set_summary(nonempty_or_none(form.summary.clone()));
+    comp.set_location(nonempty_or_none(form.location.clone()));
+    comp.set_description(nonempty_or_none(form.description.clone()));
+    comp.set_start(Some(start));
+    if let Some(ev) = comp.as_event_mut() {
+        ev.set_end(Some(end));
+    } else {
+        comp.as_todo_mut().unwrap().set_due(Some(end));
+    }
+
+    comp.set_last_modified(CalDate::now());
+    comp.set_stamp(CalDate::now());
 
     item.save()
 }
 
 pub async fn handler(
     State(state): State<crate::state::State>,
-    MultiForm(form): MultiForm<Update>,
+    MultiForm(mut form): MultiForm<Update>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
     let mut page = super::new_page(&form.base);
@@ -87,7 +113,7 @@ pub async fn handler(
             form.base.uid
         ))?;
 
-        action_update(&mut page, &locale, item, &form)?;
+        action_update(&mut page, &locale, item, &mut form)?;
     }
 
     super::index::content(page, locale, State(state), Query(form.base)).await

@@ -70,7 +70,7 @@ impl CalItem {
         rid: Option<&CalDate>,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
-        let first = self.base_with(|c| c.uid() == uid.as_ref())?;
+        let first = self.component_with(|c| c.rid().is_none() && c.uid() == uid.as_ref())?;
 
         let date = first.start().unwrap_or(first.stamp()).as_start_with_tz(tz);
         let mut res = Occurrence::new(self.source, first, date);
@@ -108,7 +108,7 @@ impl CalItem {
         // we currently assume here that there is just a single uid per calendar. that is, if there
         // are multiple events, they all have the same uid and one is the base event with rid =
         // None and the others overwrite specific occurrences of that base event.
-        let Some(first) = self.base_with(filter) else {
+        let Some(first) = self.component_with(|c| c.rid().is_none() && filter(c)) else {
             return vec![];
         };
 
@@ -138,24 +138,18 @@ impl CalItem {
         occs
     }
 
-    pub fn base_with<F>(&self, filter: F) -> Option<&CalComponent>
+    pub fn component_with<F>(&self, filter: F) -> Option<&CalComponent>
     where
         F: Fn(&CalComponent) -> bool,
     {
-        self.cal
-            .components()
-            .iter()
-            .find(|c| c.rid().is_none() && filter(c))
+        self.cal.components().iter().find(|c| filter(c))
     }
 
-    pub fn base_with_mut<F>(&mut self, filter: F) -> Option<&mut CalComponent>
+    pub fn component_with_mut<F>(&mut self, filter: F) -> Option<&mut CalComponent>
     where
         F: Fn(&CalComponent) -> bool,
     {
-        self.cal
-            .components_mut()
-            .iter_mut()
-            .find(|c| c.rid().is_none() && filter(c))
+        self.cal.components_mut().iter_mut().find(|c| filter(c))
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
