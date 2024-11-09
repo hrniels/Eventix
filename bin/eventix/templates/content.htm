@@ -22,9 +22,6 @@
                                     '{{ occ.rid_html() }}',
                                     '{{ occ.id() }}')"
                  id="{{ occ.id() }}"
-                 {% if !occ.is_all_day() %}
-                 style="display: flex; gap: .4em"
-                 {% endif %}
                  class="ev_event_occurrence
                         ev_id_{{ occ.uid_html() }}
                         {% if occ.is_all_day() %}
@@ -36,12 +33,20 @@
                         {% when _ %}
                         {% endmatch %}
                         ">
+                {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                <i style="float: right" class="bi bi-arrow-clockwise"></i>
+                {% endif %}
+                {% if occ.is_overwritten() %}
+                <i style="float: right" class="bi bi-pencil"></i>
+                {% endif %}
                 {% if occ.is_all_day() %}
                 {{ occ.summary().unwrap() }}
                 {% else %}
-                <span class="ev_cal_src_{{ events.calendar_name(occ.source()) }}"></span>
-                <span><b>{{ occ.occurrence_start().format("%H:%M") }}</b></span>
-                <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                <div style="display: flex; gap: .4em">
+                    <span class="ev_cal_src_{{ events.calendar_name(occ.source()) }}"></span>
+                    <span><b>{{ occ.occurrence_start().format("%H:%M") }}</b></span>
+                    <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                </div>
                 {% endif %}
             </div>
             {% endfor %}
