@@ -20,6 +20,10 @@ impl CalTodo {
         self.due.as_ref()
     }
 
+    pub fn set_due(&mut self, due: Option<CalDate>) {
+        self.due = due;
+    }
+
     pub fn status(&self) -> Option<CalTodoStatus> {
         self.status
     }

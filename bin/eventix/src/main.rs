@@ -1,4 +1,6 @@
+mod comps;
 mod error;
+mod extract;
 mod html;
 mod locale;
 mod objects;

@@ -24,8 +24,8 @@ impl CalEvent {
         self.end.as_ref()
     }
 
-    pub fn set_end(&mut self, end: CalDate) {
-        self.end = Some(end);
+    pub fn set_end(&mut self, end: Option<CalDate>) {
+        self.end = end;
     }
 }
 

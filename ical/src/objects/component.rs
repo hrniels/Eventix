@@ -33,8 +33,8 @@ impl EventLikeComponent {
         self.uid = uid.to_string();
     }
 
-    pub fn set_start(&mut self, start: CalDate) {
-        self.start = Some(start);
+    pub fn set_start(&mut self, start: Option<CalDate>) {
+        self.start = start;
     }
 
     pub(crate) fn parse_prop(&mut self, prop: Property) -> Result<(), anyhow::Error> {
@@ -209,8 +209,20 @@ impl EventLike for EventLikeComponent {
 }
 
 impl UpdatableEventLike for EventLikeComponent {
-    fn set_summary(&mut self, summary: String) {
-        self.summary = Some(summary);
+    fn set_start(&mut self, start: Option<CalDate>) {
+        self.start = start;
+    }
+
+    fn set_summary(&mut self, summary: Option<String>) {
+        self.summary = summary;
+    }
+
+    fn set_location(&mut self, location: Option<String>) {
+        self.location = location;
+    }
+
+    fn set_description(&mut self, desc: Option<String>) {
+        self.desc = desc;
     }
 
     fn set_last_modified(&mut self, date: CalDate) {
@@ -244,7 +256,21 @@ impl CalComponent {
         }
     }
 
+    pub fn as_event_mut(&mut self) -> Option<&mut CalEvent> {
+        match self {
+            Self::Event(ev) => Some(ev),
+            _ => None,
+        }
+    }
+
     pub fn as_todo(&self) -> Option<&CalTodo> {
+        match self {
+            Self::Todo(todo) => Some(todo),
+            _ => None,
+        }
+    }
+
+    pub fn as_todo_mut(&mut self) -> Option<&mut CalTodo> {
         match self {
             Self::Todo(todo) => Some(todo),
             _ => None,
@@ -366,8 +392,20 @@ impl EventLike for CalComponent {
 }
 
 impl UpdatableEventLike for CalComponent {
-    fn set_summary(&mut self, summary: String) {
+    fn set_start(&mut self, start: Option<CalDate>) {
+        set_with_ev_or_todo!(self, set_start, start);
+    }
+
+    fn set_summary(&mut self, summary: Option<String>) {
         set_with_ev_or_todo!(self, set_summary, summary);
+    }
+
+    fn set_location(&mut self, location: Option<String>) {
+        set_with_ev_or_todo!(self, set_location, location);
+    }
+
+    fn set_description(&mut self, desc: Option<String>) {
+        set_with_ev_or_todo!(self, set_description, desc);
     }
 
     fn set_last_modified(&mut self, date: CalDate) {

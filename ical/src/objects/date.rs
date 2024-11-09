@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt, str::FromStr};
 
 use anyhow::anyhow;
-use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
@@ -121,6 +121,14 @@ impl CalDateTime {
             Self::Utc(dt) => dt.date_naive(),
             Self::Timezone(dt, _tzid) => dt.date(),
             Self::Floating(dt) => dt.date(),
+        }
+    }
+
+    pub fn as_naive_time(&self) -> NaiveTime {
+        match self {
+            Self::Utc(dt) => dt.naive_local().time(),
+            Self::Timezone(dt, _tzid) => dt.time(),
+            Self::Floating(dt) => dt.time(),
         }
     }
 

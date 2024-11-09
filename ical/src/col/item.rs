@@ -206,12 +206,12 @@ mod tests {
         }
 
         fn start(mut self, start: CalDate) -> Self {
-            self.ev.set_start(start);
+            self.ev.set_start(Some(start));
             self
         }
 
         fn end(mut self, end: CalDate) -> Self {
-            self.ev.set_end(end);
+            self.ev.set_end(Some(end));
             self
         }
 

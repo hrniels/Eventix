@@ -92,6 +92,14 @@ fieldset.ev_form dd {
 	vertical-align: middle;
 }
 
+fieldset.ev_form div.ev_submit {
+	font-size: 1.1em;
+	font-weight: bold;
+	padding: 0.8em;
+	background-color: #dbdbdb;
+	text-align: center;
+}
+
 /* ------------ PAGINATION ------------ */
 
 .ev_pageno {
@@ -217,6 +225,14 @@ td.ev_coldesc {
 
 .ev_highlight {
 	border: 2px solid #7a8ba9;
+}
+
+table.ev_date {
+	border-collapse: collapse;
+	border-spacing: 2px;
+}
+table.ev_date td {
+	padding: 0.3em;
 }
 
 /* ------------ TABLE BORDER ------------ */

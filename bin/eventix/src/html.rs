@@ -2,7 +2,7 @@ use std::time::Duration;
 
 pub mod filters {
     use askama::{Html, MarkupDisplay};
-    use chrono::DateTime;
+    use chrono::{DateTime, NaiveDate, NaiveTime};
     use chrono_tz::Tz;
     use std::{fmt::Display, sync::Arc};
 
@@ -23,6 +23,20 @@ pub mod filters {
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> ::askama::Result<String> {
         Ok(locale.translate(text.as_ref()).to_string())
+    }
+
+    pub fn naive_date(date: &Option<NaiveDate>) -> ::askama::Result<String> {
+        Ok(match date {
+            Some(d) => format!("{}", d.format("%Y-%m-%d")),
+            None => String::new(),
+        })
+    }
+
+    pub fn naive_time(date: &Option<NaiveTime>) -> ::askama::Result<String> {
+        Ok(match date {
+            Some(d) => format!("{}", d.format("%H:%M")),
+            None => String::new(),
+        })
     }
 
     pub fn date(

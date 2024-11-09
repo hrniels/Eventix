@@ -8,7 +8,10 @@ use ical::objects::{CalDate, EventLike};
 use std::sync::Arc;
 
 use super::{Page, Request};
-use crate::locale::{self, Locale};
+use crate::{
+    comps::daterange::DateRangeTemplate,
+    locale::{self, Locale},
+};
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
 
@@ -20,6 +23,9 @@ struct EditTemplate<'a> {
     uid: String,
     rid: Option<String>,
     summary: &'a String,
+    location: &'a String,
+    description: &'a String,
+    start_end: DateRangeTemplate<'a>,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -70,11 +76,19 @@ pub async fn content(
 
     let html = EditTemplate {
         page,
-        locale,
         uid: req.uid.clone(),
         rid: req.rid.clone(),
         summary: occ.summary().unwrap_or(&String::from("")),
+        location: occ.location().unwrap_or(&String::from("")),
+        description: occ.description().unwrap_or(&String::from("")),
+        start_end: DateRangeTemplate::new(
+            locale.clone(),
+            "start_end",
+            occ.start().cloned(),
+            occ.end_or_due().cloned(),
+        ),
         events,
+        locale,
         tasks,
     }
     .render()
