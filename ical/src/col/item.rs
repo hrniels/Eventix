@@ -72,7 +72,11 @@ impl CalItem {
     ) -> Option<Occurrence<'_>> {
         let first = self.component_with(|c| c.rid().is_none() && c.uid() == uid.as_ref())?;
 
-        let date = first.start().unwrap_or(first.stamp()).as_start_with_tz(tz);
+        let date = if let Some(rid) = rid {
+            rid.as_start_with_tz(tz)
+        } else {
+            first.start().unwrap_or(first.stamp()).as_start_with_tz(tz)
+        };
         let mut res = Occurrence::new(self.source, first, date);
 
         if let Some(rid) = rid {
@@ -166,6 +170,10 @@ impl CalItem {
             .iter()
             .filter(|&c| c.is_event())
             .map(|e| e.as_event().unwrap())
+    }
+
+    pub fn add_component(&mut self, comp: CalComponent) {
+        self.cal.add(comp);
     }
 
     pub fn save(&self) -> Result<(), anyhow::Error> {

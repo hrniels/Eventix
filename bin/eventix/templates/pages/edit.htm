@@ -9,7 +9,11 @@
     <input type="hidden" name="rid" value="{{ rid }}" />
     {% endif %}
     <div class="ev_border">
-        <h1 class="ev_topic">{{ "Edit"|t(locale) }}</h1>
+        {% if let Some(rid) = rid %}
+        <h1 class="ev_topic">{{ "Edit occurrence"|t(locale) }}</h1>
+        {% else %}
+        <h1 class="ev_topic">{{ "Edit series"|t(locale) }}</h1>
+        {% endif %}
         <fieldset class="ev_form">
            <dl>
                 <dt>{{ "Summary"|t(locale) }}:</dt>
@@ -18,6 +22,20 @@
            <dl>
                 <dt>{{ "Date"|t(locale) }}:</dt>
                 <dd>{{ start_end|safe }}</dd>
+           </dl>
+           <dl>
+                <dt>{{ "Repeat"|t(locale) }}:</dt>
+                <dd>
+                    {% if rid.is_none() %}
+                    {{ rrule|safe }}
+                    {% else %}
+                    {% if let Some(rrule) = occ.rrule() %}
+                    {{ rrule.human()|newlines()|safe }}
+                    {% else %}
+                    -
+                    {% endif %}
+                    {% endif %}
+                </dd>
            </dl>
            <dl>
                 <dt>{{ "Location"|t(locale) }}:</dt>

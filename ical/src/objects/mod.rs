@@ -16,6 +16,6 @@ pub use date::{CalDate, CalDateTime};
 pub use event::CalEvent;
 pub use evlike::{EventLike, UpdatableEventLike};
 pub use organizer::CalOrganizer;
-pub use recur::CalRRule;
+pub use recur::{CalRRule, CalRRuleFreq, CalWDayDesc};
 pub use status::{CalEventStatus, CalTodoStatus};
 pub use todo::CalTodo;

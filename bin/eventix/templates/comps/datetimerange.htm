@@ -10,12 +10,12 @@ function calSettings() {
 
 $(function() {
     var settings = calSettings();
-    var from = $("#{{ name }}from_date")
+    var from = $("#{{ id }}from_date")
         .datepicker(settings)
         .on("change", function() {
             to.datepicker("option", "minDate", getDate(this));
         });
-    var to = $("#{{ name }}to_date")
+    var to = $("#{{ id }}to_date")
         .datepicker(settings)
         .on("change", function() {
             from.datepicker("option", "maxDate", getDate(this));
@@ -35,9 +35,9 @@ $(function() {
 </script>
 
 <div style="padding-bottom: .3em">
-    <input type="checkbox" id="{{ name }}all_day" name="{{ name }}all_day"
+    <input type="checkbox" id="{{ id }}all_day" name="{{ name }}all_day"
            {% if all_day %}checked="checked"{% endif %} />
-    <label for="{{ name }}all_day">{{ "All day"|t(locale) }}</label>
+    <label for="{{ id }}all_day">{{ "All day"|t(locale) }}</label>
 </div>
 
 <table class="ev_date">
@@ -46,9 +46,9 @@ $(function() {
             {{ "Start"|t(locale) }}:
         </td>
         <td>
-            <input id="{{ name }}from_date" type="text" name="{{ name }}[from_date]" size="8"
+            <input id="{{ id }}from_date" type="text" name="{{ name }}[from][date]" size="8"
                    maxlength="10" value="{{ from_date|naive_date }}" />
-            <input id="{{ name }}from_time" type="text" name="{{ name }}[from_time]" size="8"
+            <input id="{{ id }}from_time" type="text" name="{{ name }}[from][time]" size="8"
                    maxlength="5" value="{{ from_time|naive_time }}" />
         </td>
     </tr>
@@ -57,9 +57,9 @@ $(function() {
             {{ "End"|t(locale) }}:
         </td>
         <td>
-            <input id="{{ name }}to_date" type="text" name="{{ name }}[to_date]" size="8"
+            <input id="{{ id }}to_date" type="text" name="{{ name }}[to][date]" size="8"
                    maxlength="10" value="{{ to_date|naive_date }}" />
-            <input id="{{ name }}to_time" type="text" name="{{ name }}[to_time]" size="8"
+            <input id="{{ id }}to_time" type="text" name="{{ name }}[to][time]" size="8"
                    maxlength="5" value="{{ to_time|naive_time }}" />
         </td>
     </tr>
@@ -71,19 +71,19 @@ $(function() {
     setAllDay(true);
     {% endif %}
 
-    $("#{{ name }}all_day").click(function() {
+    $("#{{ id }}all_day").click(function() {
         setAllDay(this.checked)
     });
 });
 
 function setAllDay(allday) {
     if(allday) {
-        $("#{{ name }}from_time").prop("disabled", true);
-        $("#{{ name }}to_time").prop("disabled", true);
+        $("#{{ id }}from_time").prop("disabled", true);
+        $("#{{ id }}to_time").prop("disabled", true);
     }
     else {
-        $("#{{ name }}from_time").prop("disabled", false);
-        $("#{{ name }}to_time").prop("disabled", false);
+        $("#{{ id }}from_time").prop("disabled", false);
+        $("#{{ id }}to_time").prop("disabled", false);
     }
 }
 </script>

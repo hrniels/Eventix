@@ -2,11 +2,12 @@ use anyhow::Context;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::col::CalItem;
-use ical::objects::{CalDate, EventLike, UpdatableEventLike};
+use ical::objects::{CalComponent, CalDate, CalDateTime, CalEvent, EventLike, UpdatableEventLike};
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::comps::daterange::DateRange;
+use crate::comps::datetimerange::DateTimeRange;
+use crate::comps::recur::RecurRequest;
 use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
@@ -21,7 +22,8 @@ pub struct Update {
     summary: String,
     location: String,
     description: String,
-    start_end: DateRange,
+    rrule: RecurRequest,
+    start_end: DateTimeRange,
 }
 
 fn nonempty_or_none(val: String) -> Option<String> {
@@ -38,6 +40,8 @@ fn action_update(
     item: &mut CalItem,
     form: &mut Update,
 ) -> anyhow::Result<()> {
+    println!("{:#?}", form);
+
     let rid = if let Some(ref rid) = form.base.rid {
         Some(
             rid.parse::<CalDate>()
@@ -61,7 +65,7 @@ fn action_update(
         return Ok(());
     };
 
-    if form.base.rid.is_some() {
+    let rrule = if form.base.rid.is_some() {
         let base = item
             .component_with(|c| c.uid() == &form.base.uid && c.rid().is_none())
             .context("Unable to find base component")?;
@@ -76,12 +80,45 @@ fn action_update(
         if Some(&form.description) == base.description() {
             form.description.clear();
         }
+        None
+    } else {
+        match form.rrule.to_rrule() {
+            Ok(rrule) => rrule,
+            Err(e) => {
+                page.add_error(e);
+                return Ok(());
+            }
+        }
+    };
+
+    if let Some(comp) =
+        item.component_with_mut(|c| c.uid() == &form.base.uid && c.rid() == rid.as_ref())
+    {
+        update_component(comp, form, start, end);
+        if rid.is_none() {
+            println!("rrule = {:?}\n -> {:?}", form.rrule, rrule);
+            comp.set_rrule(rrule);
+        }
+    } else {
+        let mut comp = CalComponent::Event(CalEvent::default());
+        update_component(&mut comp, form, start, end);
+        comp.set_uid(form.base.uid.clone());
+        let start = CalDate::DateTime(CalDateTime::Timezone(
+            rid.as_ref()
+                .unwrap()
+                .as_start_with_tz(locale.timezone())
+                .naive_local(),
+            locale.timezone().name().to_string(),
+        ));
+        comp.set_start(Some(start));
+        comp.set_rid(rid);
+        item.add_component(comp);
     }
 
-    let comp = item
-        .component_with_mut(|c| c.uid() == &form.base.uid && c.rid() == rid.as_ref())
-        .context("Unable to find component")?;
+    item.save()
+}
 
+fn update_component(comp: &mut CalComponent, form: &Update, start: CalDate, end: CalDate) {
     comp.set_summary(nonempty_or_none(form.summary.clone()));
     comp.set_location(nonempty_or_none(form.location.clone()));
     comp.set_description(nonempty_or_none(form.description.clone()));
@@ -94,8 +131,6 @@ fn action_update(
 
     comp.set_last_modified(CalDate::now());
     comp.set_stamp(CalDate::now());
-
-    item.save()
 }
 
 pub async fn handler(

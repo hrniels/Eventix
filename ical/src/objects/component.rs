@@ -214,6 +214,10 @@ impl EventLike for EventLikeComponent {
 }
 
 impl UpdatableEventLike for EventLikeComponent {
+    fn set_uid(&mut self, uid: String) {
+        self.uid = uid;
+    }
+
     fn set_start(&mut self, start: Option<CalDate>) {
         self.start = start;
     }
@@ -236,6 +240,14 @@ impl UpdatableEventLike for EventLikeComponent {
 
     fn set_stamp(&mut self, date: CalDate) {
         self.stamp = date;
+    }
+
+    fn set_rrule(&mut self, rrule: Option<CalRRule>) {
+        self.rrule = rrule;
+    }
+
+    fn set_rid(&mut self, rid: Option<CalDate>) {
+        self.rid = rid;
     }
 }
 
@@ -397,6 +409,10 @@ impl EventLike for CalComponent {
 }
 
 impl UpdatableEventLike for CalComponent {
+    fn set_uid(&mut self, uid: String) {
+        set_with_ev_or_todo!(self, set_uid, uid);
+    }
+
     fn set_start(&mut self, start: Option<CalDate>) {
         set_with_ev_or_todo!(self, set_start, start);
     }
@@ -419,5 +435,13 @@ impl UpdatableEventLike for CalComponent {
 
     fn set_stamp(&mut self, date: CalDate) {
         set_with_ev_or_todo!(self, set_stamp, date);
+    }
+
+    fn set_rrule(&mut self, rrule: Option<CalRRule>) {
+        set_with_ev_or_todo!(self, set_rrule, rrule);
+    }
+
+    fn set_rid(&mut self, rid: Option<CalDate>) {
+        set_with_ev_or_todo!(self, set_rid, rid);
     }
 }

@@ -83,6 +83,15 @@ impl CalDate {
     }
 }
 
+impl From<DateTime<Tz>> for CalDate {
+    fn from(date: DateTime<Tz>) -> Self {
+        Self::DateTime(CalDateTime::Timezone(
+            date.naive_local(),
+            date.timezone().name().to_string(),
+        ))
+    }
+}
+
 impl PartialOrd for CalDate {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))

@@ -42,5 +42,19 @@ fn main() -> Result<(), anyhow::Error> {
         );
     }
 
+    store.save()?;
+
+    let mut store2 = CalStore::default();
+    store2.add(
+        CalSource::new_from_dir(dir.into(), "".to_string())
+            .context("Unable to parse calendar source")?,
+    );
+
+    if store != store2 {
+        println!("{:#?}", store);
+        println!("-----");
+        println!("{:#?}", store2);
+    }
+
     Ok(())
 }

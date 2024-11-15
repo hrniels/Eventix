@@ -4,12 +4,15 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use ical::objects::{CalDate, EventLike};
+use ical::{
+    col::Occurrence,
+    objects::{CalDate, EventLike},
+};
 use std::sync::Arc;
 
 use super::{Page, Request};
 use crate::{
-    comps::daterange::DateRangeTemplate,
+    comps::{datetimerange::DateTimeRangeTemplate, recur::RecurTemplate},
     locale::{self, Locale},
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
@@ -25,7 +28,9 @@ struct EditTemplate<'a> {
     summary: &'a String,
     location: &'a String,
     description: &'a String,
-    start_end: DateRangeTemplate<'a>,
+    start_end: DateTimeRangeTemplate<'a>,
+    rrule: RecurTemplate<'a>,
+    occ: &'a Occurrence<'a>,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -81,12 +86,14 @@ pub async fn content(
         summary: occ.summary().unwrap_or(&String::from("")),
         location: occ.location().unwrap_or(&String::from("")),
         description: occ.description().unwrap_or(&String::from("")),
-        start_end: DateRangeTemplate::new(
+        start_end: DateTimeRangeTemplate::new(
             locale.clone(),
             "start_end",
-            occ.start().cloned(),
-            occ.end_or_due().cloned(),
+            Some(occ.occurrence_start().into()),
+            occ.occurrence_end().map(|e| e.into()),
         ),
+        rrule: RecurTemplate::new(locale.clone(), "rrule", occ.rrule()),
+        occ: &occ,
         events,
         locale,
         tasks,

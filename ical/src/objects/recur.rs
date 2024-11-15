@@ -11,7 +11,7 @@ use crate::parser::Property;
 use crate::util;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Frequency {
+pub enum CalRRuleFreq {
     Secondly,
     Minutely,
     Hourly,
@@ -22,7 +22,7 @@ pub enum Frequency {
     Yearly,
 }
 
-impl Frequency {
+impl CalRRuleFreq {
     pub fn advance(&self, now: NaiveDateTime, interval: u32) -> NaiveDateTime {
         match self {
             Self::Secondly => now + Duration::seconds(interval.into()),
@@ -36,22 +36,22 @@ impl Frequency {
     }
 }
 
-impl fmt::Display for Frequency {
+impl fmt::Display for CalRRuleFreq {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
-            Frequency::Secondly => "SECONDLY",
-            Frequency::Minutely => "MINUTELY",
-            Frequency::Hourly => "HOURLY",
-            Frequency::Daily => "DAILY",
-            Frequency::Weekly => "WEEKLY",
-            Frequency::Monthly => "MONTHLY",
-            Frequency::Yearly => "YEARLY",
+            Self::Secondly => "SECONDLY",
+            Self::Minutely => "MINUTELY",
+            Self::Hourly => "HOURLY",
+            Self::Daily => "DAILY",
+            Self::Weekly => "WEEKLY",
+            Self::Monthly => "MONTHLY",
+            Self::Yearly => "YEARLY",
         };
         write!(f, "{}", name)
     }
 }
 
-impl FromStr for Frequency {
+impl FromStr for CalRRuleFreq {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -65,31 +65,6 @@ impl FromStr for Frequency {
             "YEARLY" => Ok(Self::Yearly),
             _ => Err(anyhow!("unexpected frequency {}", s)),
         }
-    }
-}
-
-fn parse_weekday(s: &str) -> Result<Weekday, anyhow::Error> {
-    match s {
-        "SU" => Ok(Weekday::Sun),
-        "MO" => Ok(Weekday::Mon),
-        "TU" => Ok(Weekday::Tue),
-        "WE" => Ok(Weekday::Wed),
-        "TH" => Ok(Weekday::Thu),
-        "FR" => Ok(Weekday::Fri),
-        "SA" => Ok(Weekday::Sat),
-        _ => Err(anyhow!("unexpected weekday {}", s)),
-    }
-}
-
-fn to_weekday_str(wday: Weekday) -> &'static str {
-    match wday {
-        Weekday::Mon => "MO",
-        Weekday::Tue => "TU",
-        Weekday::Wed => "WE",
-        Weekday::Thu => "TH",
-        Weekday::Fri => "FR",
-        Weekday::Sat => "SA",
-        Weekday::Sun => "SU",
     }
 }
 
@@ -112,15 +87,47 @@ impl FromStr for Side {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct WeekdayDesc {
+pub struct CalWDayDesc {
     day: Weekday,
     nth: Option<(u8, Side)>,
 }
 
-impl WeekdayDesc {
-    #[cfg(test)]
+impl CalWDayDesc {
+    pub fn parse_weekday(s: &str) -> Result<Weekday, anyhow::Error> {
+        match s {
+            "SU" => Ok(Weekday::Sun),
+            "MO" => Ok(Weekday::Mon),
+            "TU" => Ok(Weekday::Tue),
+            "WE" => Ok(Weekday::Wed),
+            "TH" => Ok(Weekday::Thu),
+            "FR" => Ok(Weekday::Fri),
+            "SA" => Ok(Weekday::Sat),
+            _ => Err(anyhow!("unexpected weekday {}", s)),
+        }
+    }
+
+    pub fn to_weekday_str(wday: Weekday) -> &'static str {
+        match wday {
+            Weekday::Mon => "MO",
+            Weekday::Tue => "TU",
+            Weekday::Wed => "WE",
+            Weekday::Thu => "TH",
+            Weekday::Fri => "FR",
+            Weekday::Sat => "SA",
+            Weekday::Sun => "SU",
+        }
+    }
+
     pub fn new(day: Weekday, nth: Option<(u8, Side)>) -> Self {
         Self { day, nth }
+    }
+
+    pub fn day(&self) -> Weekday {
+        self.day
+    }
+
+    pub fn nth(&self) -> Option<(u8, Side)> {
+        self.nth
     }
 
     pub fn matches(&self, date: DateTime<Tz>, rrule: &CalRRule) -> bool {
@@ -128,8 +135,8 @@ impl WeekdayDesc {
             None => self.day == date.weekday(),
             Some((n, side)) => {
                 // offset within the month
-                if rrule.freq == Frequency::Monthly
-                    || (rrule.freq == Frequency::Yearly && rrule.by_month.is_some())
+                if rrule.freq == CalRRuleFreq::Monthly
+                    || (rrule.freq == CalRRuleFreq::Yearly && rrule.by_month.is_some())
                 {
                     match side {
                         Side::Front => util::nth_weekday_of_month_front(date, self.day, n),
@@ -139,14 +146,14 @@ impl WeekdayDesc {
                     .unwrap_or(false)
                 }
                 // offset within the year
-                else if rrule.freq == Frequency::Yearly {
+                else if rrule.freq == CalRRuleFreq::Yearly {
                     match side {
                         Side::Front => util::nth_weekday_of_year_front(date, self.day, n),
                         Side::Back => util::nth_weekday_of_year_back(date, self.day, n),
                     }
                     .map(|d| d == date.date_naive())
                     .unwrap_or(false)
-                } else if rrule.freq == Frequency::Weekly {
+                } else if rrule.freq == CalRRuleFreq::Weekly {
                     self.day == date.weekday()
                 } else {
                     // anything else is invalid
@@ -161,7 +168,7 @@ impl WeekdayDesc {
     }
 }
 
-impl FromStr for WeekdayDesc {
+impl FromStr for CalWDayDesc {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -185,12 +192,12 @@ impl FromStr for WeekdayDesc {
             )
         };
 
-        let day = parse_weekday(s)?;
+        let day = Self::parse_weekday(s)?;
         Ok(Self { day, nth })
     }
 }
 
-impl fmt::Display for WeekdayDesc {
+impl fmt::Display for CalWDayDesc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some((num, side)) = self.nth {
             match side {
@@ -200,11 +207,11 @@ impl fmt::Display for WeekdayDesc {
             write!(f, "{}", num)?;
         }
 
-        write!(f, "{}", to_weekday_str(self.day))
+        write!(f, "{}", Self::to_weekday_str(self.day))
     }
 }
 
-pub struct WeekdayHuman<'a>(&'a WeekdayDesc);
+pub struct WeekdayHuman<'a>(&'a CalWDayDesc);
 
 impl<'a> fmt::Display for WeekdayHuman<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -269,14 +276,14 @@ impl fmt::Display for DayDesc {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct CalRRule {
-    freq: Frequency,
+    freq: CalRRuleFreq,
     until: Option<CalDate>,
     count: Option<u8>,
     interval: Option<u8>,
     by_second: Option<Vec<u8>>,
     by_minute: Option<Vec<u8>>,
     by_hour: Option<Vec<u8>>,
-    by_day: Option<Vec<WeekdayDesc>>,
+    by_day: Option<Vec<CalWDayDesc>>,
     by_mon_day: Option<Vec<DayDesc>>,
     by_year_day: Option<Vec<DayDesc>>,
     by_week_no: Option<Vec<DayDesc>>,
@@ -285,7 +292,7 @@ pub struct CalRRule {
     week_start: Option<Weekday>,
 }
 
-fn next_date(date: DateTime<Tz>, freq: Frequency, interval: u32) -> DateTime<Tz> {
+fn next_date(date: DateTime<Tz>, freq: CalRRuleFreq, interval: u32) -> DateTime<Tz> {
     // we basically want to ignore DST here, in the sense that all recurrences of an event
     // that started at 9:00 AM should always be at 9:00 AM as well, regardless of whether
     // DST is on or off. For that reason, we build a NaiveDateTime from the date in the
@@ -301,6 +308,41 @@ fn next_date(date: DateTime<Tz>, freq: Frequency, interval: u32) -> DateTime<Tz>
 }
 
 impl CalRRule {
+    pub fn frequency(&self) -> CalRRuleFreq {
+        self.freq
+    }
+    pub fn set_frequency(&mut self, freq: CalRRuleFreq) {
+        self.freq = freq;
+    }
+
+    pub fn until(&self) -> Option<&CalDate> {
+        self.until.as_ref()
+    }
+    pub fn set_until(&mut self, until: CalDate) {
+        self.until = Some(until);
+    }
+
+    pub fn count(&self) -> Option<u8> {
+        self.count
+    }
+    pub fn set_count(&mut self, count: u8) {
+        self.count = Some(count);
+    }
+
+    pub fn interval(&self) -> Option<u8> {
+        self.interval
+    }
+    pub fn set_interval(&mut self, interval: u8) {
+        self.interval = Some(interval);
+    }
+
+    pub fn by_day(&self) -> Option<&Vec<CalWDayDesc>> {
+        self.by_day.as_ref()
+    }
+    pub fn set_by_day(&mut self, by_day: Vec<CalWDayDesc>) {
+        self.by_day = Some(by_day);
+    }
+
     pub fn dates_within(
         &self,
         dtstart: DateTime<Tz>,
@@ -334,13 +376,13 @@ impl CalRRule {
 
     fn limited(&self, date: DateTime<Tz>) -> bool {
         if let Some(by_month) = &self.by_month {
-            if self.freq <= Frequency::Monthly && !by_month.contains(&(date.month() as u8)) {
+            if self.freq <= CalRRuleFreq::Monthly && !by_month.contains(&(date.month() as u8)) {
                 return true;
             }
         }
 
         if let Some(by_yday) = &self.by_year_day {
-            if self.freq <= Frequency::Hourly
+            if self.freq <= CalRRuleFreq::Hourly
                 && !by_yday.iter().any(|yd| match yd.side {
                     Side::Front => yd.num as u32 == util::year_day(date),
                     Side::Back => {
@@ -353,7 +395,7 @@ impl CalRRule {
             }
         }
         if let Some(by_mday) = &self.by_mon_day {
-            if self.freq <= Frequency::Daily
+            if self.freq <= CalRRuleFreq::Daily
                 && !by_mday.iter().any(|wd| match wd.side {
                     Side::Front => wd.num as u32 == date.day(),
                     Side::Back => {
@@ -368,26 +410,29 @@ impl CalRRule {
 
         if let Some(by_day) = &self.by_day {
             // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
-            if self.freq <= Frequency::Daily && !by_day.iter().any(|wd| wd.day == date.weekday()) {
+            if self.freq <= CalRRuleFreq::Daily && !by_day.iter().any(|wd| wd.day == date.weekday())
+            {
                 return true;
             }
         }
 
         // TODO ignore if event has DTSTART=DATE
         if let Some(by_hour) = &self.by_hour {
-            if self.freq <= Frequency::Hourly && !by_hour.iter().any(|&h| h as u32 == date.hour()) {
+            if self.freq <= CalRRuleFreq::Hourly
+                && !by_hour.iter().any(|&h| h as u32 == date.hour())
+            {
                 return true;
             }
         }
         if let Some(by_min) = &self.by_minute {
-            if self.freq <= Frequency::Minutely
+            if self.freq <= CalRRuleFreq::Minutely
                 && !by_min.iter().any(|&m| m as u32 == date.minute())
             {
                 return true;
             }
         }
         if let Some(by_sec) = &self.by_second {
-            if self.freq <= Frequency::Secondly
+            if self.freq <= CalRRuleFreq::Secondly
                 && !by_sec.iter().any(|&s| s as u32 == date.second())
             {
                 return true;
@@ -415,20 +460,20 @@ impl CalRRule {
         let secs = [date.second() as u8];
         let mut secs = secs.as_slice();
 
-        if self.by_year_day.is_some() && self.freq > Frequency::Monthly {
+        if self.by_year_day.is_some() && self.freq > CalRRuleFreq::Monthly {
             unimplemented!("BYYEARDAY expansion is not supported");
         }
-        if self.by_week_no.is_some() && self.freq > Frequency::Monthly {
+        if self.by_week_no.is_some() && self.freq > CalRRuleFreq::Monthly {
             unimplemented!("BYWEEKNO expansion is not supported");
         }
 
         if let Some(by_month) = &self.by_month {
-            if self.freq > Frequency::Monthly {
+            if self.freq > CalRRuleFreq::Monthly {
                 months = by_month.as_slice();
             }
         }
         if let Some(by_mon_day) = &self.by_mon_day {
-            if self.freq >= Frequency::Monthly {
+            if self.freq >= CalRRuleFreq::Monthly {
                 mon_days = by_mon_day
                     .iter()
                     .map(|md| match md.side {
@@ -441,24 +486,24 @@ impl CalRRule {
             }
         }
         if let Some(by_hour) = &self.by_hour {
-            if self.freq > Frequency::Hourly {
+            if self.freq > CalRRuleFreq::Hourly {
                 hours = by_hour.as_slice();
             }
         }
         if let Some(by_min) = &self.by_minute {
-            if self.freq > Frequency::Minutely {
+            if self.freq > CalRRuleFreq::Minutely {
                 mins = by_min.as_slice();
             }
         }
         if let Some(by_sec) = &self.by_second {
-            if self.freq > Frequency::Secondly {
+            if self.freq > CalRRuleFreq::Secondly {
                 secs = by_sec.as_slice();
             }
         }
 
-        if self.freq >= Frequency::Weekly && self.by_day.is_some() {
+        if self.freq >= CalRRuleFreq::Weekly && self.by_day.is_some() {
             let (cur, end) = match self.freq {
-                Frequency::Weekly => {
+                CalRRuleFreq::Weekly => {
                     // start at beginning of week. note that this is required in case the interval
                     // is not 1, in which case we might otherwise accidentally consider dates in
                     // the next week. starting too early is not an issue, because we drop the dates
@@ -468,7 +513,7 @@ impl CalRRule {
                     let cur = date - Duration::days(day_of_week as i64);
                     (Some(cur), Some(cur + Duration::days(7)))
                 }
-                Frequency::Monthly => {
+                CalRRuleFreq::Monthly => {
                     // start at beginning of month (same as above)
                     let cur = date.with_day(1).unwrap();
                     let end = if cur.month() == 12 {
@@ -522,7 +567,7 @@ impl CalRRule {
                         }
                     }
                 }
-                cur = next_date(cur, Frequency::Daily, 1);
+                cur = next_date(cur, CalRRuleFreq::Daily, 1);
             }
             return false;
         }
@@ -576,13 +621,13 @@ impl<'a> fmt::Display for RRuleHuman<'a> {
             Some(interval) if interval > 1 => {
                 write!(f, "every ")?;
                 match self.0.freq {
-                    Frequency::Yearly => write!(f, "{} years", interval)?,
-                    Frequency::Monthly => write!(f, "{} months", interval)?,
-                    Frequency::Weekly => write!(f, "{} weeks", interval)?,
-                    Frequency::Daily => write!(f, "{} days", interval)?,
-                    Frequency::Hourly => write!(f, "{} hours", interval)?,
-                    Frequency::Minutely => write!(f, "{} minutes", interval)?,
-                    Frequency::Secondly => write!(f, "{} seconds", interval)?,
+                    CalRRuleFreq::Yearly => write!(f, "{} years", interval)?,
+                    CalRRuleFreq::Monthly => write!(f, "{} months", interval)?,
+                    CalRRuleFreq::Weekly => write!(f, "{} weeks", interval)?,
+                    CalRRuleFreq::Daily => write!(f, "{} days", interval)?,
+                    CalRRuleFreq::Hourly => write!(f, "{} hours", interval)?,
+                    CalRRuleFreq::Minutely => write!(f, "{} minutes", interval)?,
+                    CalRRuleFreq::Secondly => write!(f, "{} seconds", interval)?,
                 }
             }
             _ => {
@@ -693,7 +738,7 @@ impl fmt::Display for CalRRule {
         write_list(self.by_month.as_ref(), "BYMONTH", f)?;
         write_list(self.by_set_pos.as_ref(), "BYSETPOS", f)?;
         if let Some(week_start) = self.week_start {
-            write!(f, ";WKST={}", to_weekday_str(week_start))?;
+            write!(f, ";WKST={}", CalWDayDesc::to_weekday_str(week_start))?;
         }
         if let Some(ref until) = self.until {
             let prop = until.to_prop("");
@@ -769,7 +814,7 @@ impl FromStr for CalRRule {
                     rrule.by_set_pos = Some(parse_list(value)?);
                 }
                 "WKST" => {
-                    rrule.week_start = Some(parse_weekday(value)?);
+                    rrule.week_start = Some(CalWDayDesc::parse_weekday(value)?);
                 }
                 _ => return Err(anyhow!("unexpected rule {}", name)),
             }
@@ -789,20 +834,20 @@ mod tests {
     #[test]
     fn parse_weekday_desc() {
         assert_eq!(
-            "MO".parse::<WeekdayDesc>().unwrap(),
-            WeekdayDesc::new(Weekday::Mon, None)
+            "MO".parse::<CalWDayDesc>().unwrap(),
+            CalWDayDesc::new(Weekday::Mon, None)
         );
         assert_eq!(
-            "-3SA".parse::<WeekdayDesc>().unwrap(),
-            WeekdayDesc::new(Weekday::Sat, Some((3, Side::Back)))
+            "-3SA".parse::<CalWDayDesc>().unwrap(),
+            CalWDayDesc::new(Weekday::Sat, Some((3, Side::Back)))
         );
         assert_eq!(
-            "+1TU".parse::<WeekdayDesc>().unwrap(),
-            WeekdayDesc::new(Weekday::Tue, Some((1, Side::Front)))
+            "+1TU".parse::<CalWDayDesc>().unwrap(),
+            CalWDayDesc::new(Weekday::Tue, Some((1, Side::Front)))
         );
         assert_eq!(
-            "1FR".parse::<WeekdayDesc>().unwrap(),
-            WeekdayDesc::new(Weekday::Fri, Some((1, Side::Front)))
+            "1FR".parse::<CalWDayDesc>().unwrap(),
+            CalWDayDesc::new(Weekday::Fri, Some((1, Side::Front)))
         );
     }
 
@@ -829,7 +874,7 @@ mod tests {
     #[test]
     fn parse_recur_count() {
         let mut rule = CalRRule::default();
-        rule.freq = Frequency::Daily;
+        rule.freq = CalRRuleFreq::Daily;
         rule.count = Some(10);
         assert_eq!("FREQ=DAILY;COUNT=10".parse::<CalRRule>().unwrap(), rule);
         assert_eq!(
@@ -841,7 +886,7 @@ mod tests {
     #[test]
     fn parse_recur_interval() {
         let mut rule = CalRRule::default();
-        rule.freq = Frequency::Monthly;
+        rule.freq = CalRRuleFreq::Monthly;
         rule.interval = Some(2);
         assert_eq!("FREQ=MONTHLY;INTERVAL=2".parse::<CalRRule>().unwrap(), rule);
         assert_eq!(
@@ -853,7 +898,7 @@ mod tests {
     #[test]
     fn parse_recur_until() {
         let mut rule = CalRRule::default();
-        rule.freq = Frequency::Daily;
+        rule.freq = CalRRuleFreq::Daily;
         rule.until = Some(CalDate::DateTime(CalDateTime::Utc(
             Utc.with_ymd_and_hms(1997, 12, 24, 0, 0, 0).unwrap(),
         )));
@@ -868,20 +913,20 @@ mod tests {
     #[test]
     fn parse_recur_by() {
         let mut rule = CalRRule::default();
-        rule.freq = Frequency::Yearly;
+        rule.freq = CalRRuleFreq::Yearly;
         rule.by_month = Some(vec![1]);
         rule.by_set_pos = Some(vec![
             DayDesc::new(2, Side::Front),
             DayDesc::new(5, Side::Front),
         ]);
         rule.by_day = Some(vec![
-            WeekdayDesc::new(Weekday::Sun, None),
-            WeekdayDesc::new(Weekday::Mon, None),
-            WeekdayDesc::new(Weekday::Tue, None),
-            WeekdayDesc::new(Weekday::Wed, None),
-            WeekdayDesc::new(Weekday::Thu, None),
-            WeekdayDesc::new(Weekday::Fri, None),
-            WeekdayDesc::new(Weekday::Sat, None),
+            CalWDayDesc::new(Weekday::Sun, None),
+            CalWDayDesc::new(Weekday::Mon, None),
+            CalWDayDesc::new(Weekday::Tue, None),
+            CalWDayDesc::new(Weekday::Wed, None),
+            CalWDayDesc::new(Weekday::Thu, None),
+            CalWDayDesc::new(Weekday::Fri, None),
+            CalWDayDesc::new(Weekday::Sat, None),
         ]);
 
         assert_eq!(
