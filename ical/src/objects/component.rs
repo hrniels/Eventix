@@ -18,9 +18,9 @@ pub struct EventLikeComponent {
     summary: Option<String>,
     desc: Option<String>,
     location: Option<String>,
-    categories: Vec<String>,
+    categories: Option<Vec<String>>,
     organizer: Option<CalOrganizer>,
-    attendees: Vec<CalAttendee>,
+    attendees: Option<Vec<CalAttendee>>,
     // 0 = undefined; 1 = highest, 9 = lowest
     priority: Option<u8>,
     rrule: Option<CalRRule>,
@@ -64,19 +64,24 @@ impl EventLikeComponent {
                 self.location = Some(prop.take_value());
             }
             "CATEGORIES" => {
-                self.categories = prop
-                    .value()
-                    .split(',')
-                    .map(|v| v.trim().to_string())
-                    .collect();
+                self.categories = Some(
+                    prop.value()
+                        .split(',')
+                        .map(|v| v.trim().to_string())
+                        .collect(),
+                );
             }
             "ORGANIZER" => {
                 self.organizer = Some(prop.try_into()?);
             }
             "ATTENDEE" => {
                 let att: CalAttendee = prop.try_into()?;
-                if !self.attendees.iter().any(|a| a.address() == att.address()) {
-                    self.attendees.push(att);
+                if self.attendees.is_none() {
+                    self.attendees = Some(vec![]);
+                }
+                let attendees = self.attendees.as_mut().unwrap();
+                if !attendees.iter().any(|a| a.address() == att.address()) {
+                    attendees.push(att);
                 }
             }
             "PRIORITY" => {
@@ -123,18 +128,18 @@ impl PropertyProducer for EventLikeComponent {
         if let Some(ref loc) = self.location {
             props.push(Property::new("LOCATION", vec![], loc.clone()));
         }
-        if !self.categories.is_empty() {
+        if let Some(ref cats) = self.categories {
             props.push(Property::new_escaped(
                 "CATEGORIES",
                 vec![],
-                self.categories.iter().join(","),
+                cats.iter().join(","),
             ));
         }
         if let Some(ref org) = self.organizer {
             props.push(org.to_prop());
         }
-        if !self.attendees.is_empty() {
-            props.extend(self.attendees.iter().map(|a| a.to_prop()));
+        if let Some(ref atts) = self.attendees {
+            props.extend(atts.iter().map(|a| a.to_prop()));
         }
         if let Some(prio) = self.priority {
             props.push(Property::new("PRIORITY", vec![], format!("{}", prio)));
@@ -187,16 +192,16 @@ impl EventLike for EventLikeComponent {
         self.location.as_ref()
     }
 
-    fn categories(&self) -> &[String] {
-        self.categories.as_ref()
+    fn categories(&self) -> Option<&[String]> {
+        self.categories.as_ref().map(|c| c.as_ref())
     }
 
     fn organizer(&self) -> Option<&CalOrganizer> {
         self.organizer.as_ref()
     }
 
-    fn attendees(&self) -> &[CalAttendee] {
-        self.attendees.as_ref()
+    fn attendees(&self) -> Option<&[CalAttendee]> {
+        self.attendees.as_ref().map(|a| a.as_ref())
     }
 
     fn rrule(&self) -> Option<&CalRRule> {
@@ -370,7 +375,7 @@ impl EventLike for CalComponent {
         get_with_ev_or_todo!(self, location)
     }
 
-    fn categories(&self) -> &[String] {
+    fn categories(&self) -> Option<&[String]> {
         get_with_ev_or_todo!(self, categories)
     }
 
@@ -378,7 +383,7 @@ impl EventLike for CalComponent {
         get_with_ev_or_todo!(self, organizer)
     }
 
-    fn attendees(&self) -> &[CalAttendee] {
+    fn attendees(&self) -> Option<&[CalAttendee]> {
         get_with_ev_or_todo!(self, attendees)
     }
 

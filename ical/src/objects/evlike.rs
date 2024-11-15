@@ -25,9 +25,9 @@ pub trait EventLike: PropertyProducer {
     fn summary(&self) -> Option<&String>;
     fn description(&self) -> Option<&String>;
     fn location(&self) -> Option<&String>;
-    fn categories(&self) -> &[String];
+    fn categories(&self) -> Option<&[String]>;
     fn organizer(&self) -> Option<&CalOrganizer>;
-    fn attendees(&self) -> &[CalAttendee];
+    fn attendees(&self) -> Option<&[CalAttendee]>;
 
     fn rrule(&self) -> Option<&CalRRule>;
     fn rid(&self) -> Option<&CalDate>;

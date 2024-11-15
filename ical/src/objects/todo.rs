@@ -173,7 +173,7 @@ END:VCALENDAR";
         assert_eq!(todo.status, Some(CalTodoStatus::NeedsAction));
         assert_eq!(
             todo.categories(),
-            vec!["FAMILY".to_string(), "FINANCE".to_string()]
+            Some(vec!["FAMILY".to_string(), "FINANCE".to_string()].as_ref())
         );
 
         assert_eq!(todo.percent, Some(10));

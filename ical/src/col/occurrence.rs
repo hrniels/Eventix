@@ -44,15 +44,19 @@ impl<'c> Occurrence<'c> {
 
     pub fn event_status(&self) -> Option<CalEventStatus> {
         match self.occ {
-            Some(c) => c.as_event().and_then(|ev| ev.status()),
-            None => self.base.as_event().and_then(|ev| ev.status()),
+            Some(c) if c.as_todo().and_then(|td| td.status()).is_some() => {
+                c.as_event().and_then(|ev| ev.status())
+            }
+            _ => self.base.as_event().and_then(|ev| ev.status()),
         }
     }
 
     pub fn todo_status(&self) -> Option<CalTodoStatus> {
         match self.occ {
-            Some(c) => c.as_todo().and_then(|td| td.status()),
-            None => self.base.as_todo().and_then(|td| td.status()),
+            Some(c) if c.as_todo().and_then(|td| td.status()).is_some() => {
+                c.as_todo().and_then(|td| td.status())
+            }
+            _ => self.base.as_todo().and_then(|td| td.status()),
         }
     }
 
@@ -166,16 +170,16 @@ impl EventLike for Occurrence<'_> {
         occ_or_base_opt!(self, location)
     }
 
-    fn categories(&self) -> &[String] {
-        occ_or_base!(self, categories)
+    fn categories(&self) -> Option<&[String]> {
+        occ_or_base_opt!(self, categories)
     }
 
     fn organizer(&self) -> Option<&CalOrganizer> {
-        occ_or_base!(self, organizer)
+        occ_or_base_opt!(self, organizer)
     }
 
-    fn attendees(&self) -> &[CalAttendee] {
-        occ_or_base!(self, attendees)
+    fn attendees(&self) -> Option<&[CalAttendee]> {
+        occ_or_base_opt!(self, attendees)
     }
 
     fn rrule(&self) -> Option<&CalRRule> {

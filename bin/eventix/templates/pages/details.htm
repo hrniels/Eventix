@@ -81,7 +81,7 @@
             </td>
         </tr>
         {% endif %}
-        {% if !occ.attendees().is_empty() %}
+        {% if let Some(atts) = occ.attendees() %}
         <tr>
             <td width="30%">{{ "Attendees"|t(locale) }}:</td>
             <td width="70%">
