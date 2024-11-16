@@ -29,7 +29,7 @@ where
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Date {
     #[serde(
@@ -40,6 +40,10 @@ pub struct Date {
 }
 
 impl Date {
+    pub fn new(date: Option<NaiveDate>) -> Self {
+        Self { date }
+    }
+
     pub fn date(&self) -> Option<NaiveDate> {
         self.date
     }

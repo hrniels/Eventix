@@ -1,6 +1,7 @@
 pub mod details;
 pub mod edit;
 pub mod monthly;
+pub mod new;
 
 mod events;
 mod tasks;

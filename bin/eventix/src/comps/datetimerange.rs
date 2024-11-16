@@ -9,13 +9,17 @@ use crate::locale::Locale;
 
 use super::datetime::DateTime;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct DateTimeRange {
     from: DateTime,
     to: DateTime,
 }
 
 impl DateTimeRange {
+    pub fn new(from: DateTime, to: DateTime) -> Self {
+        Self { from, to }
+    }
+
     pub fn from(&self, locale: &Arc<dyn Locale + Send + Sync>) -> Option<CalDate> {
         self.from.to_caldate(locale, false)
     }

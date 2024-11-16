@@ -234,6 +234,10 @@ impl UpdatableEventLike for EventLikeComponent {
         self.desc = desc;
     }
 
+    fn set_created(&mut self, date: CalDate) {
+        self.created = Some(date);
+    }
+
     fn set_last_modified(&mut self, date: CalDate) {
         self.last_mod = Some(date);
     }
@@ -427,6 +431,10 @@ impl UpdatableEventLike for CalComponent {
 
     fn set_description(&mut self, desc: Option<String>) {
         set_with_ev_or_todo!(self, set_description, desc);
+    }
+
+    fn set_created(&mut self, date: CalDate) {
+        set_with_ev_or_todo!(self, set_created, date);
     }
 
     fn set_last_modified(&mut self, date: CalDate) {

@@ -43,6 +43,7 @@ pub trait UpdatableEventLike: EventLike {
     fn set_summary(&mut self, summary: Option<String>);
     fn set_location(&mut self, location: Option<String>);
     fn set_description(&mut self, desc: Option<String>);
+    fn set_created(&mut self, date: CalDate);
     fn set_last_modified(&mut self, date: CalDate);
     fn set_stamp(&mut self, date: CalDate);
     fn set_rrule(&mut self, rrule: Option<CalRRule>);

@@ -18,6 +18,10 @@ impl CalStore {
         self.sources.iter().find(|s| s.id() == id)
     }
 
+    pub fn source_mut(&mut self, id: Id) -> Option<&mut CalSource> {
+        self.sources.iter_mut().find(|s| s.id() == id)
+    }
+
     pub fn sources(&self) -> &[CalSource] {
         &self.sources
     }

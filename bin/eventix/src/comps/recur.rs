@@ -133,14 +133,15 @@ fn parse_by_day(wdays: &str) -> Vec<CalWDayDesc> {
     days
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 pub enum RecurEnd {
+    #[default]
     NoEnd,
     Count,
     Until,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 pub struct RecurRequest {
     #[serde(deserialize_with = "Frequency::deserialize")]
     freq: Option<Frequency>,

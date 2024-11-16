@@ -9,13 +9,17 @@ use crate::locale::Locale;
 
 use super::date::{Date, DateTemplate};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct DateTime {
     date: Date,
     time: Option<NaiveTime>,
 }
 
 impl DateTime {
+    pub fn new(date: Date, time: Option<NaiveTime>) -> Self {
+        Self { date, time }
+    }
+
     pub fn date(&self) -> Option<NaiveDate> {
         self.date.date()
     }

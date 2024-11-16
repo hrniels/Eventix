@@ -180,6 +180,7 @@ impl CalItem {
         let file = File::options()
             .write(true)
             .truncate(true)
+            .create(true)
             .open(&self.path)?;
         self.cal
             .write(file)

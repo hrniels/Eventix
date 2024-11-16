@@ -12,7 +12,12 @@
 
 <div style="float: right; width: 19%">
     <div class="ev_box">
-        <div class="ev_header">{{ "Next events"|t(locale) }}</div>
+        <div class="ev_header">
+            {{ "Next events"|t(locale) }}
+            <a style="float: right" href="/new">
+                <i class="bi bi-plus-square" style="color: white"></i>
+            </a>
+        </div>
         <div class="ev_scrollbox">
             {% for day in events.days %}
             <div class="ev_next_day_header">{{ day.date.unwrap().format("%A, %B %d") }}</div>

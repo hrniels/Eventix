@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
+use std::fmt::Display;
 use std::fs::{read_dir, File};
 use std::io::Read;
 use std::path::PathBuf;
@@ -14,6 +15,12 @@ pub struct CalSource {
     path: PathBuf,
     name: String,
     items: Vec<CalItem>,
+}
+
+impl Display for CalSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 impl PartialEq for CalSource {
