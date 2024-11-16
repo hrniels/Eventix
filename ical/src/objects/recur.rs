@@ -360,7 +360,7 @@ impl CalRRule {
 
         assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
         if self.week_start.is_some() {
-            // eprintln!("WARNING: WKST is not supported");
+            // TODO eprintln!("WARNING: WKST is not supported");
         }
 
         let mut count = 0;

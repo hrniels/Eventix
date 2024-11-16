@@ -98,7 +98,6 @@ pub async fn handler(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
             &req.uid, req.rid
         ))?;
-    println!("Found occurrence: {:#?}", occ);
     let occ = DayOccurrence::new(&occ);
     let source = store.source(occ.source()).unwrap();
 

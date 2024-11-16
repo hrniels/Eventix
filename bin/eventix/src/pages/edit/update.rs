@@ -40,8 +40,6 @@ fn action_update(
     item: &mut CalItem,
     form: &mut Update,
 ) -> anyhow::Result<()> {
-    println!("{:#?}", form);
-
     let rid = if let Some(ref rid) = form.base.rid {
         Some(
             rid.parse::<CalDate>()
@@ -96,7 +94,6 @@ fn action_update(
     {
         update_component(comp, form, start, end);
         if rid.is_none() {
-            println!("rrule = {:?}\n -> {:?}", form.rrule, rrule);
             comp.set_rrule(rrule);
         }
     } else {
