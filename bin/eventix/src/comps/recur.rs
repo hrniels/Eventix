@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use askama::Template;
 use chrono::Weekday;
-use ical::objects::{CalRRule, CalRRuleFreq, CalWDayDesc};
+use ical::objects::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
 use serde::{Deserialize, Deserializer};
 use std::fmt;
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use strum::EnumIter;
 
 use crate::{comps::date::DateTemplate, html::filters, locale::Locale};
 
-use super::date::Date;
+use super::{combobox::ComboboxTemplate, date::Date};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Frequency {
@@ -44,7 +44,7 @@ impl Frequency {
     }
 }
 
-#[derive(Debug, EnumIter, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq, Deserialize)]
 enum IterWeekday {
     Monday,
     Tuesday,
@@ -53,6 +53,20 @@ enum IterWeekday {
     Friday,
     Saturday,
     Sunday,
+}
+
+impl From<IterWeekday> for Weekday {
+    fn from(wday: IterWeekday) -> Self {
+        match wday {
+            IterWeekday::Monday => Self::Mon,
+            IterWeekday::Tuesday => Self::Tue,
+            IterWeekday::Wednesday => Self::Wed,
+            IterWeekday::Thursday => Self::Thu,
+            IterWeekday::Friday => Self::Fri,
+            IterWeekday::Saturday => Self::Sat,
+            IterWeekday::Sunday => Self::Sun,
+        }
+    }
 }
 
 impl From<Weekday> for IterWeekday {
@@ -75,11 +89,43 @@ impl fmt::Display for IterWeekday {
     }
 }
 
+#[derive(Debug, EnumIter, Eq, PartialEq, Deserialize)]
+enum Nth {
+    First,
+    Second,
+    Third,
+    Last,
+}
+
+impl fmt::Display for Nth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+fn monthly_nth_from_rrule(rrule: Option<&CalRRule>) -> Option<Nth> {
+    match rrule {
+        Some(r) if r.by_day().is_some() => {
+            r.by_day().unwrap()[0]
+                .nth()
+                .and_then(|(num, side)| match side {
+                    CalRRuleSide::Front => match num {
+                        1 => Some(Nth::First),
+                        2 => Some(Nth::Second),
+                        3 => Some(Nth::Third),
+                        _ => None,
+                    },
+                    CalRRuleSide::Back if num == 1 => Some(Nth::Last),
+                    _ => None,
+                })
+        }
+        _ => None,
+    }
+}
+
 fn parse_by_day(wdays: &str) -> Vec<CalWDayDesc> {
     let mut days = vec![];
-    println!("wdays = {}", wdays);
     for day in wdays.split(',') {
-        println!("!! {} !!", day);
         if let Ok(wday) = CalWDayDesc::parse_weekday(&day) {
             days.push(CalWDayDesc::new(wday, None));
         }
@@ -102,7 +148,10 @@ pub struct RecurRequest {
     end: RecurEnd,
     count: u8,
     until: Option<Date>,
-    weekdays: String,
+    weekly_days: String,
+    monthly_type: String,
+    monthly_nth: Option<Nth>,
+    monthly_wday: Option<IterWeekday>,
 }
 
 impl RecurRequest {
@@ -114,8 +163,22 @@ impl RecurRequest {
 
             match freq {
                 Frequency::Weekly => {
-                    let byday = parse_by_day(&self.weekdays);
+                    let byday = parse_by_day(&self.weekly_days);
                     rrule.set_by_day(byday);
+                }
+                Frequency::Monthly => {
+                    if self.monthly_type == "byday" {
+                        let nth = match self.monthly_nth.as_ref().unwrap() {
+                            Nth::First => Some((1, CalRRuleSide::Front)),
+                            Nth::Second => Some((2, CalRRuleSide::Front)),
+                            Nth::Third => Some((3, CalRRuleSide::Front)),
+                            Nth::Last => Some((1, CalRRuleSide::Back)),
+                        };
+                        rrule.set_by_day(vec![CalWDayDesc::new(
+                            self.monthly_wday.unwrap().into(),
+                            nth,
+                        )]);
+                    }
                 }
                 _ => {}
             }
@@ -152,9 +215,12 @@ pub struct RecurTemplate<'a> {
     freq: String,
     count: String,
     interval: String,
-    weekdays: String,
     end: &'a str,
     until: DateTemplate,
+    weekly_days: String,
+    monthly_type: &'a str,
+    monthly_wday: ComboboxTemplate<IterWeekday>,
+    monthly_nth: ComboboxTemplate<Nth>,
 }
 
 impl<'a> RecurTemplate<'a> {
@@ -177,7 +243,7 @@ impl<'a> RecurTemplate<'a> {
             _ => "none",
         };
 
-        let weekdays = match rrule {
+        let weekly_days = match rrule {
             Some(r) if r.by_day().is_some() => {
                 let mut wdays = String::new();
                 for wd in r.by_day().as_ref().unwrap().iter() {
@@ -195,12 +261,26 @@ impl<'a> RecurTemplate<'a> {
             count,
             interval: rrule
                 .and_then(|r| r.interval().map(|i| format!("{}", i)))
-                .unwrap_or(String::from("")),
-            weekdays,
+                .unwrap_or(String::from("1")),
             end,
             until: DateTemplate::new(
                 format!("{}[until]", name),
                 rrule.and_then(|r| r.until()).cloned(),
+            ),
+            weekly_days,
+            monthly_nth: ComboboxTemplate::new(
+                locale.clone(),
+                format!("{}[monthly_nth]", name),
+                monthly_nth_from_rrule(rrule),
+            ),
+            monthly_type: match rrule {
+                Some(r) if r.by_day().is_some() => "byday",
+                _ => "none",
+            },
+            monthly_wday: ComboboxTemplate::new(
+                locale.clone(),
+                format!("{}[monthly_wday]", name),
+                rrule.and_then(|r| r.by_day().map(|d| d[0].day().into())),
             ),
             locale,
         }

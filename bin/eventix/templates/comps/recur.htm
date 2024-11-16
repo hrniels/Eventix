@@ -13,8 +13,8 @@
     </div>
     <div id="{{ id }}-tabs-WEEKLY">
         <div id="{{ id }}_weekdays_list" style="padding: .4em">
-            <input type="hidden" id="{{ id }}_weekdays" name="{{ name }}[weekdays]"
-                                 value="{{ weekdays }}" />
+            <input type="hidden" id="{{ id }}_weekdays" name="{{ name }}[weekly_days]"
+                                 value="{{ weekly_days }}" />
             {{ "On"|t(locale) }}:
             <a id="{{ id }}_weekday_MO" href="javascript:toggle_wday('MO')">Mon</a>
             <a id="{{ id }}_weekday_TU" href="javascript:toggle_wday('TU')">Tue</a>
@@ -25,7 +25,29 @@
             <a id="{{ id }}_weekday_SU" href="javascript:toggle_wday('SU')">Sun</a>
         </div>
     </div>
-    <div id="{{ id }}-tabs-MONTHLY">
+    <div id="{{ id }}-tabs-MONTHLY" style="display: flex; gap: .4em">
+        <div style="padding: .4em">
+        {{ "On"|t(locale) }}:
+        </div>
+        <div>
+            <div style="padding-top: .4em">
+                <input class="radio" type="radio"
+                                     name="{{ name }}[monthly_type]" id="{{ id }}-monthly-none"
+                                     value="none"
+                                     {% if monthly_type == "none" %}checked="checked"{% endif %}/>
+                <label for="{{ id }}-monthly-none">Same day</label>
+            </div>
+            <div style="padding-top: .4em">
+                <input class="radio" type="radio"
+                                     name="{{ name }}[monthly_type]" id="{{ id }}-monthly-type"
+                                     value="byday"
+                                     {% if monthly_type == "byday" %}checked="checked"{% endif %}/>
+                <label for="{{ id }}-monthly-byday">
+                {{ monthly_nth|safe }}
+                {{ monthly_wday|safe }}
+                </label>
+            </div>
+        </div>
     </div>
     <div id="{{ id }}-tabs-YEARLY">
     </div>

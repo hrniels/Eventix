@@ -1,0 +1,9 @@
+<select name="{{ name }}">
+    {% for opt in options %}
+    <option value="{{ opt.value }}"
+        {% if let Some(val) = value %}
+        {% if opt.value|as_ref == val %} selected="selected"{% endif %}
+        {% endif %}
+        >{{ opt.name|t(locale) }}</option>
+    {% endfor %}
+</select>
