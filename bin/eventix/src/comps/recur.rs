@@ -98,7 +98,7 @@ pub enum RecurEnd {
 pub struct RecurRequest {
     #[serde(deserialize_with = "Frequency::deserialize")]
     freq: Option<Frequency>,
-    interval: u8,
+    interval: Option<u8>,
     end: RecurEnd,
     count: u8,
     until: Option<Date>,
@@ -110,7 +110,7 @@ impl RecurRequest {
         if let Some(freq) = self.freq {
             let mut rrule = CalRRule::default();
             rrule.set_frequency(freq.to_cal_freq());
-            rrule.set_interval(self.interval);
+            rrule.set_interval(self.interval.unwrap());
 
             match freq {
                 Frequency::Weekly => {
