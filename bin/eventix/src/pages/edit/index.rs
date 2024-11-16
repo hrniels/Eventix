@@ -89,8 +89,8 @@ pub async fn content(
         start_end: DateTimeRangeTemplate::new(
             locale.clone(),
             "start_end",
-            Some(occ.occurrence_start().into()),
-            occ.occurrence_end().map(|e| e.into()),
+            Some(occ.occurrence_startdate()),
+            occ.occurrence_enddate(),
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", occ.rrule()),
         occ: &occ,

@@ -71,8 +71,26 @@ impl<'c> Occurrence<'c> {
         self.start
     }
 
+    pub fn occurrence_startdate(&self) -> CalDate {
+        if self.is_all_day() {
+            CalDate::Date(self.start.date_naive())
+        } else {
+            self.start.into()
+        }
+    }
+
     pub fn occurrence_end(&self) -> Option<DateTime<Tz>> {
         self.duration().map(|d| self.start + d)
+    }
+
+    pub fn occurrence_enddate(&self) -> Option<CalDate> {
+        self.occurrence_end().and_then(|e| {
+            if self.is_all_day() {
+                Some(CalDate::Date(e.date_naive().succ_opt()?))
+            } else {
+                Some(e.into())
+            }
+        })
     }
 
     pub fn duration(&self) -> Option<Duration> {
