@@ -17,9 +17,14 @@ pub struct Request {
 
 pub fn new_page(req: &Request) -> Page {
     let mut page = Page::new(path().to_string());
+    let name = if req.rid.is_some() {
+        "Edit occurrence"
+    } else {
+        "Edit series"
+    };
     page.add_breadcrumb(Breadcrumb::new(
         format!("{}?{}", path(), serde_qs::to_string(req).unwrap()),
-        "Edit",
+        name,
     ));
     page
 }
