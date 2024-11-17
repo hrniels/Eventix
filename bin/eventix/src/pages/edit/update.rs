@@ -22,7 +22,7 @@ pub struct Update {
     summary: String,
     location: String,
     description: String,
-    rrule: RecurRequest,
+    rrule: Option<RecurRequest>,
     start_end: DateTimeRange,
 }
 
@@ -80,7 +80,7 @@ fn action_update(
         }
         None
     } else {
-        match form.rrule.to_rrule() {
+        match form.rrule.as_ref().unwrap().to_rrule() {
             Ok(rrule) => rrule,
             Err(e) => {
                 page.add_error(e);
