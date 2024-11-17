@@ -26,7 +26,7 @@ struct Day<'a> {
     occurrences: Vec<DayOccurrence<'a>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 pub struct Request {
     month: Option<String>,
 }
@@ -51,8 +51,21 @@ pub async fn handler(
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page();
-    let locale = locale::default();
+    content(
+        super::new_page(),
+        locale::default(),
+        State(state),
+        Query(req),
+    )
+    .await
+}
+
+pub async fn content(
+    page: Page,
+    locale: Arc<dyn Locale + Send + Sync>,
+    State(state): State<crate::state::State>,
+    Query(req): Query<Request>,
+) -> Result<impl IntoResponse, HTMLError> {
     let timezone = *locale.timezone();
 
     let weekdays = vec![

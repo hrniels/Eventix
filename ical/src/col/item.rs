@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::PathBuf;
 
 use anyhow::anyhow;
@@ -156,17 +156,19 @@ impl CalItem {
         self.cal.components_mut().iter_mut().find(|c| filter(c))
     }
 
+    pub fn components(&self) -> &[CalComponent] {
+        self.cal.components()
+    }
+
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
-        self.cal
-            .components()
+        self.components()
             .iter()
             .filter(|&c| c.is_todo())
             .map(|t| t.as_todo().unwrap())
     }
 
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
-        self.cal
-            .components()
+        self.components()
             .iter()
             .filter(|&c| c.is_event())
             .map(|e| e.as_event().unwrap())
@@ -176,7 +178,11 @@ impl CalItem {
         self.cal.add(comp);
     }
 
-    pub fn save(&self) -> Result<(), anyhow::Error> {
+    pub fn delete_components<N: AsRef<str>>(&mut self, uid: N) {
+        self.cal.delete_components(uid);
+    }
+
+    pub fn save(&self) -> anyhow::Result<()> {
         let file = File::options()
             .write(true)
             .truncate(true)
@@ -185,6 +191,11 @@ impl CalItem {
         self.cal
             .write(file)
             .map_err(|e| anyhow!("Writing file '{:?}' failed: {}", self.path, e))
+    }
+
+    pub fn remove(&mut self) -> anyhow::Result<()> {
+        fs::remove_file(&self.path)
+            .map_err(|e| anyhow!("Removing file '{:?}' failed: {}", self.path, e))
     }
 }
 

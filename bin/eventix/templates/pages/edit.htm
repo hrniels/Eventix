@@ -3,7 +3,7 @@
 {% block inner %}
 
 <div>
-    <form method="post" action="/edit/update">
+    <form id="form" method="post" action="/edit/update">
     <input type="hidden" name="uid" value="{{ uid }}" />
     {% if let Some(rid) = rid %}
     <input type="hidden" name="rid" value="{{ rid }}" />
@@ -48,12 +48,57 @@
                 </dd>
            </dl>
            <div class="ev_submit">
-                <input type="submit" value="{{ "Save"|t(locale) }}" />
-                <input type="button" onclick="document.location.href = '/'" value="{{ "Cancel"|t(locale) }}" />
+               <table width="100%" class="ev_noborder">
+                   <tr>
+                       <td width="25%" align="left">
+                           <a id="delete-button" class="ev_button_big ev_button_critical" href="#">
+                               <span>
+                                   {% if let Some(rid) = rid %}
+                                   {{ "Delete occurrence"|t(locale) }}
+                                   {% else %}
+                                   {{ "Delete series"|t(locale) }}
+                                   {% endif %}
+                               </span>
+                           </a>
+                       </td>
+                       <td width="50%" align="center">
+                           <a class="ev_button_big ev_button_normal" style="width: 80px"
+                              href="javascript:$('form').submit()">
+                               <span>{{ "Save"|t(locale) }}</span>
+                           </a>
+                           <a class="ev_button_big ev_button_normal" style="width: 80px"
+                              href="javascript:document.location.href = '/'">
+                               <span>{{ "Cancel"|t(locale) }}</span>
+                           </a>
+                       </td>
+                       <td width="25%"></td>
+                   </tr>
+               </table>
            </div>
         </fieldset>
     </div>
     </form>
+</div>
+
+<script>
+    $(function() {
+        confirmDialog(
+            'delete-confirm',
+            'delete-button',
+            {% if let Some(rid) = rid %}
+            '/edit/delete?uid={{ uid }}&rid={{ rid }}',
+            {% else %}
+            '/edit/delete?uid={{ uid }}',
+            {% endif %}
+        )
+    });
+</script>
+<div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
+    {% if let Some(rid) = rid %}
+    {{ "This will permanently delete this occurrence."|t(locale) }}
+    {% else %}
+    {{ "This will permanently delete this series."|t(locale) }}
+    {% endif %}
 </div>
 
 {% endblock inner %}

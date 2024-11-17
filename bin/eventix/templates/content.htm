@@ -3,6 +3,29 @@
 {% block content %}
 
 <script type="text/javascript" src="/static/popup.js"></script>
+<script type="text/javascript">
+    function confirmDialog(id, btn, url) {
+        $("#" + id).dialog({
+            resizable: false,
+            height: "auto",
+            width: 400,
+            modal: true,
+            autoOpen: false,
+            buttons: {
+                "Delete": function() {
+                    window.location.href = url;
+                },
+                "Cancel": function() {
+                    $(this).dialog("close");
+                }
+            }
+        });
+
+        $("#" + btn).on("click", function() {
+            $("#" + id).dialog("open");
+        });
+    }
+</script>
 
 <div style="float: left; width: 80%">
     {% block inner %}

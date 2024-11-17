@@ -307,44 +307,53 @@ td.ev_status_need_info {
 
 /* ------------ BUTTONS ------------ */
 
-a.ev_button {
-	background-image: url(images/button.gif);
-	background-repeat: no-repeat;
-	width: 80px;
-	height: 20px;
-	line-height: 20px;
-	white-space: nowrap;
-	margin: 0px 2px 0px 2px;
-	display: block;
-	float: right;
-	text-align: center;
-	font-size: .8em;
-	text-decoration: none;
+.ev_button, .ev_button_big {
+    background-image: linear-gradient(#f9f9f9, #f1f1f1);
+    border-radius: 5px;
+    display: inline-block;
+    width: auto;
+	padding-top: 2px;
+    padding-left: .6em;
+    padding-right: .6em;
+    margin: 2px;
+	text-align: left;
 	font-weight: bold;
-	color: #000000;
+    cursor: pointer;
 }
-a.ev_button:hover {
-	color: #3F5E88;
+.ev_button {
+    height: 16px;
+	font-size: .8em;
+    padding-bottom: 4px;
+}
+.ev_button_big {
+    text-align: center;
+    height: 30px;
+	font-size: 1.1em;
+    padding-bottom: 2px;
+}
+.ev_button *, .ev_button_big * {
+    vertical-align: sub;
 }
 
-a.ev_button_big {
-	background-image: url(images/button_big.gif);
-	background-repeat: no-repeat;
-	width: 120px;
-	height: 20px;
-	line-height: 20px;
-	white-space: nowrap;
-	margin: 0px 2px 0px 2px;
-	display: block;
-	float: right;
-	text-align: center;
-	font-size: .8em;
-	text-decoration: none;
-	font-weight: bold;
-	color: #000000;
+.ev_button_normal {
+    border: 1px solid #3F5E88;
+    border-left: 5px solid #3F5E88;
+    color: #000000;
 }
-a.ev_button_big:hover {
-	color: #3F5E88;
+a.ev_button_normal:hover {
+    color: #3F5E88;
+    text-decoration: none;
+}
+
+.ev_button_critical {
+    border: 1px solid red;
+    border-left: 5px solid red;
+    color: red;
+}
+a.ev_button_critical:hover {
+    background-image: linear-gradient(#ff0000, #e00000) !important;
+    color: white;
+    text-decoration: none;
 }
 
 input.ev_btn_okay {

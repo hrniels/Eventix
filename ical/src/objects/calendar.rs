@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use std::io::{BufRead, Write};
 use std::str::FromStr;
 
-use crate::objects::{CalComponent, CalEvent, CalTodo};
+use crate::objects::{CalComponent, CalEvent, CalTodo, EventLike};
 use crate::parser::{LineReader, LineWriter, Property, PropertyConsumer, PropertyProducer};
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -27,6 +27,10 @@ impl Calendar {
 
     pub fn add(&mut self, comp: CalComponent) {
         self.comps.push(comp);
+    }
+
+    pub fn delete_components<N: AsRef<str>>(&mut self, uid: N) {
+        self.comps.retain(|c| c.uid() != uid.as_ref());
     }
 
     pub fn write<W: Write>(&self, writer: W) -> Result<(), anyhow::Error> {

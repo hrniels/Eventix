@@ -120,18 +120,64 @@
         <tr>
             <td colspan="2" align="right">
                 {% if occ.is_recurrent() %}
-                <a class="ev_button_big" href="/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}">
-                    {{ "Edit occurrence"|t(locale) }}
+                <a style="float: right" class="ev_button ev_button_normal" href="/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}">
+                    <i class="bi bi-pencil"></i>
+                    <span>{{ "Edit occ.:"|t(locale) }}</span>
                 </a>
                 {% endif %}
-                <a class="ev_button_big" href="/edit?uid={{ occ.uid() }}">
-                    {% if occ.is_recurrent() %}
-                    {{ "Edit series"|t(locale) }}
-                    {% else %}
-                    {{ "Edit"|t(locale) }}
-                    {% endif %}
+                <a id="delete-series-button" style="float: left" class="ev_button ev_button_critical" href="#">
+                    <i class="bi bi-trash"></i>
+                    <span>
+                        {% if occ.is_recurrent() %}
+                        {{ "Delete series"|t(locale) }}
+                        {% else %}
+                        {{ "Delete"|t(locale) }}
+                        {% endif %}
+                    </span>
                 </a>
+                <a style="float: right" class="ev_button ev_button_normal" href="/edit?uid={{ occ.uid() }}">
+                    <i class="bi bi-pencil"></i>
+                    <span>
+                        {% if occ.is_recurrent() %}
+                        {{ "Edit series"|t(locale) }}
+                        {% else %}
+                        {{ "Edit"|t(locale) }}
+                        {% endif %}
+                    </span>
+                </a>
+                {% if occ.is_recurrent() %}
+                <a id="delete-occ-button" style="float: left" class="ev_button ev_button_critical" href="#">
+                    <i class="bi bi-trash"></i>
+                    <span>{{ "Delete occ.:"|t(locale) }}</span>
+                </a>
+                {% endif %}
             </td>
         </tr>
     </table>
 </div>
+
+<script>
+    $(function() {
+        confirmDialog(
+            'delete-series-confirm',
+            'delete-series-button',
+            '/edit/delete?uid={{ occ.uid() }}',
+        );
+
+        {% if occ.is_recurrent() %}
+        confirmDialog(
+            'delete-occ-confirm',
+            'delete-occ-button',
+            '/edit/delete?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}',
+        );
+        {% endif %}
+    });
+</script>
+<div id="delete-series-confirm" title="{{ "Are you sure?"|t(locale) }}">
+    {{ "This will permanently delete this series."|t(locale) }}
+</div>
+{% if occ.is_recurrent() %}
+<div id="delete-occ-confirm" title="{{ "Are you sure?"|t(locale) }}">
+    {{ "This will permanently delete this occurrence."|t(locale) }}
+</div>
+{% endif %}

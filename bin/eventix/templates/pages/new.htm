@@ -3,7 +3,7 @@
 {% block inner %}
 
 <div>
-    <form method="post" action="/new/save">
+    <form id="form" method="post" action="/new/save">
     <div class="ev_border">
         <h1 class="ev_topic">{{ "New event"|t(locale) }}</h1>
         <fieldset class="ev_form">
@@ -34,8 +34,14 @@
                 </dd>
            </dl>
            <div class="ev_submit">
-                <input type="submit" value="{{ "Save"|t(locale) }}" />
-                <input type="button" onclick="document.location.href = '/'" value="{{ "Cancel"|t(locale) }}" />
+               <a class="ev_button_big ev_button_normal" style="width: 80px"
+                  href="javascript:$('form').submit()">
+                   <span>{{ "Save"|t(locale) }}</span>
+               </a>
+               <a class="ev_button_big ev_button_normal" style="width: 80px"
+                  href="javascript:document.location.href = '/'">
+                   <span>{{ "Cancel"|t(locale) }}</span>
+               </a>
            </div>
         </fieldset>
     </div>

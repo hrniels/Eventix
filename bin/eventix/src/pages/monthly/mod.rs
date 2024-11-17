@@ -1,4 +1,4 @@
-mod index;
+pub mod index;
 
 use axum::{routing::get, Router};
 

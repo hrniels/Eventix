@@ -1,3 +1,4 @@
+mod delete;
 mod index;
 mod update;
 
@@ -37,5 +38,6 @@ pub fn router(state: crate::state::State) -> Router {
     Router::new()
         .route("/", get(self::index::handler))
         .route("/update", post(self::update::handler))
+        .route("/delete", get(self::delete::handler))
         .with_state(state)
 }
