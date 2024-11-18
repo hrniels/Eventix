@@ -44,7 +44,7 @@ impl<'c> Occurrence<'c> {
 
     pub fn event_status(&self) -> Option<CalEventStatus> {
         match self.occ {
-            Some(c) if c.as_todo().and_then(|td| td.status()).is_some() => {
+            Some(c) if c.as_event().and_then(|ev| ev.status()).is_some() => {
                 c.as_event().and_then(|ev| ev.status())
             }
             _ => self.base.as_event().and_then(|ev| ev.status()),
