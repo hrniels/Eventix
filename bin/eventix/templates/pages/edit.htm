@@ -10,9 +10,9 @@
     {% endif %}
     <div class="ev_border">
         {% if let Some(rid) = rid %}
-        <h1 class="ev_topic">{{ "Edit occurrence"|t(locale) }}</h1>
+        <h1 class="ev_header">{{ "Edit occurrence"|t(locale) }}</h1>
         {% else %}
-        <h1 class="ev_topic">{{ "Edit series"|t(locale) }}</h1>
+        <h1 class="ev_header">{{ "Edit series"|t(locale) }}</h1>
         {% endif %}
         <fieldset class="ev_form">
            <dl>

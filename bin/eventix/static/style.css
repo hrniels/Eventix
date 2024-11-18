@@ -156,27 +156,6 @@ tr.ev_hlrow_sel td.ev_hlcol {
 	font-weight: bold;
 }
 
-.ev_topic {
-	font-size: 1.1em;
-	font-weight: bold;
-	color: #fff;
-	padding: 0.8em;
-	background-color: #637591;
-	text-align: center;
-}
-h1.ev_topic {
-	margin: 0;
-	padding: 0.8em;
-}
-
-.ev_topic a {
-	color: #fff;
-	text-decoration: underline;
-}
-.ev_topic a:hover {
-	text-decoration: none;
-}
-
 .ev_desc {
 	padding-top: 0.3em;
 	font-size: 0.9em;
@@ -207,8 +186,8 @@ table.ev_table th {
 	background-color: #637591;
 	border: 1px solid #bbb;
 	color: #fff;
-	padding: 0.8em;
-	font-size: 1.1em;
+	padding: 0.5em;
+	font-size: 1.3em;
 }
 table.ev_table th a {
 	color: #fff;
@@ -372,13 +351,13 @@ input.ev_btn_cancel {
 
 /* ------------ MESSAGES ------------ */
 
-h1.ev_error {
-    background: #d70e0e;
+.ev_error {
+    background: #d70e0e !important;
     color: #ffffff;
 }
 
-h1.ev_info {
-    background: #0041b9;
+.ev_info {
+    background: #0041b9 !important;
     color: #ffffff;
 }
 
@@ -426,8 +405,9 @@ span.ev_msg_error span.ev_msg_info {
 	background-color: #637591;
 	border: 1px solid #bbb;
 	color: #fff;
-    padding: .8em !important;
-	font-size: 1.1em;
+    padding: .5em !important;
+    margin: 0;
+	font-size: 1.3em;
     font-weight: bold;
     text-align: center;
 }
