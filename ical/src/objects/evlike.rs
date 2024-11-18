@@ -28,6 +28,7 @@ pub trait EventLike: PropertyProducer {
     fn categories(&self) -> Option<&[String]>;
     fn organizer(&self) -> Option<&CalOrganizer>;
     fn attendees(&self) -> Option<&[CalAttendee]>;
+    fn exdates(&self) -> &[CalDate];
 
     fn rrule(&self) -> Option<&CalRRule>;
     fn rid(&self) -> Option<&CalDate>;
@@ -48,4 +49,5 @@ pub trait UpdatableEventLike: EventLike {
     fn set_stamp(&mut self, date: CalDate);
     fn set_rrule(&mut self, rrule: Option<CalRRule>);
     fn set_rid(&mut self, rid: Option<CalDate>);
+    fn add_exdate(&mut self, date: CalDate);
 }

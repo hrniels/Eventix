@@ -10,6 +10,7 @@ axum = { version = "0.7.7", features = ["macros", "multipart"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 chrono-tz = "0.10.0"
 clap = { version = "4.5.20", features = ["derive"] }
+formatx = "0.2.2"
 ical = { path = "../../ical" }
 itertools = "0.13.0"
 numfmt = "1.1.1"

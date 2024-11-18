@@ -21,6 +21,7 @@ pub struct EventLikeComponent {
     categories: Option<Vec<String>>,
     organizer: Option<CalOrganizer>,
     attendees: Option<Vec<CalAttendee>>,
+    exdates: Vec<CalDate>,
     // 0 = undefined; 1 = highest, 9 = lowest
     priority: Option<u8>,
     rrule: Option<CalRRule>,
@@ -84,6 +85,12 @@ impl EventLikeComponent {
                     attendees.push(att);
                 }
             }
+            "EXDATE" => {
+                for date in prop.value().split(',') {
+                    let dateprop = Property::new(prop.name(), prop.params().to_vec(), date);
+                    self.exdates.push(dateprop.try_into()?);
+                }
+            }
             "PRIORITY" => {
                 let prio = prop.value().parse()?;
                 if prio >= 10 {
@@ -140,6 +147,9 @@ impl PropertyProducer for EventLikeComponent {
         }
         if let Some(ref atts) = self.attendees {
             props.extend(atts.iter().map(|a| a.to_prop()));
+        }
+        for exdate in &self.exdates {
+            props.push(exdate.to_prop("EXDATE"));
         }
         if let Some(prio) = self.priority {
             props.push(Property::new("PRIORITY", vec![], format!("{}", prio)));
@@ -204,6 +214,10 @@ impl EventLike for EventLikeComponent {
         self.attendees.as_ref().map(|a| a.as_ref())
     }
 
+    fn exdates(&self) -> &[CalDate] {
+        &self.exdates
+    }
+
     fn rrule(&self) -> Option<&CalRRule> {
         self.rrule.as_ref()
     }
@@ -252,6 +266,10 @@ impl UpdatableEventLike for EventLikeComponent {
 
     fn set_rid(&mut self, rid: Option<CalDate>) {
         self.rid = rid;
+    }
+
+    fn add_exdate(&mut self, date: CalDate) {
+        self.exdates.push(date);
     }
 }
 
@@ -303,7 +321,16 @@ impl CalComponent {
             let Some(dtstart) = self.start() else {
                 return vec![];
             };
-            return rrule.dates_within(dtstart.as_start_with_tz(&start.timezone()), start, end);
+
+            let mut dates =
+                rrule.dates_within(dtstart.as_start_with_tz(&start.timezone()), start, end);
+            let exdates_dt = self
+                .exdates()
+                .iter()
+                .map(|d| d.as_start_with_tz(&start.timezone()))
+                .collect::<Vec<_>>();
+            dates.retain(|d| !exdates_dt.contains(d));
+            return dates;
         }
 
         let Some(ev_start) = self.start_or_created() else {
@@ -403,6 +430,10 @@ impl EventLike for CalComponent {
         get_with_ev_or_todo!(self, attendees)
     }
 
+    fn exdates(&self) -> &[CalDate] {
+        get_with_ev_or_todo!(self, exdates)
+    }
+
     fn rrule(&self) -> Option<&CalRRule> {
         get_with_ev_or_todo!(self, rrule)
     }
@@ -451,5 +482,9 @@ impl UpdatableEventLike for CalComponent {
 
     fn set_rid(&mut self, rid: Option<CalDate>) {
         set_with_ev_or_todo!(self, set_rid, rid);
+    }
+
+    fn add_exdate(&mut self, date: CalDate) {
+        set_with_ev_or_todo!(self, add_exdate, date);
     }
 }

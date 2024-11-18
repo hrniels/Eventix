@@ -200,6 +200,10 @@ impl EventLike for Occurrence<'_> {
         occ_or_base_opt!(self, attendees)
     }
 
+    fn exdates(&self) -> &[CalDate] {
+        self.base.exdates()
+    }
+
     fn rrule(&self) -> Option<&CalRRule> {
         occ_or_base_opt!(self, rrule)
     }

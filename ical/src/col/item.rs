@@ -204,7 +204,7 @@ mod tests {
     use chrono::{NaiveDate, TimeZone};
 
     use crate::col::CalSource;
-    use crate::objects::{CalComponent, CalDate};
+    use crate::objects::{CalComponent, CalDate, CalRRule, UpdatableEventLike};
 
     use super::*;
 
@@ -226,6 +226,16 @@ mod tests {
 
         fn end(mut self, end: CalDate) -> Self {
             self.ev.set_end(Some(end));
+            self
+        }
+
+        fn rrule(mut self, rrule: CalRRule) -> Self {
+            self.ev.set_rrule(Some(rrule));
+            self
+        }
+
+        fn exdate(mut self, date: CalDate) -> Self {
+            self.ev.add_exdate(date);
             self
         }
 
@@ -342,5 +352,34 @@ mod tests {
             "no2"
         );
         assert!(source.occurrence_by_id("not-found", None, tz).is_none());
+    }
+
+    #[test]
+    fn recur_with_exdates() {
+        let mut source = CalSource::default();
+
+        let mut rrule = CalRRule::default();
+        rrule.set_frequency(crate::objects::CalRRuleFreq::Daily);
+        rrule.set_count(7);
+
+        source.add(new_item(
+            EventBuilder::default()
+                .start(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 5).unwrap()))
+                .rrule(rrule)
+                .exdate(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 7).unwrap()))
+                .exdate(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 9).unwrap()))
+                .uid("yes")
+                .done(),
+        ));
+
+        let occs = source
+            .occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31))
+            .collect::<Vec<_>>();
+        assert_eq!(occs[0].uid(), "yes");
+        assert_eq!(occs[0].occurrence_start(), new_date(1990, 1, 5));
+        assert_eq!(occs[1].occurrence_start(), new_date(1990, 1, 6));
+        assert_eq!(occs[2].occurrence_start(), new_date(1990, 1, 8));
+        assert_eq!(occs[3].occurrence_start(), new_date(1990, 1, 10));
+        assert_eq!(occs[4].occurrence_start(), new_date(1990, 1, 11));
     }
 }

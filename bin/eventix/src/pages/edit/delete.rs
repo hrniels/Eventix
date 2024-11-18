@@ -1,11 +1,12 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
+use formatx::formatx;
 use ical::col::CalStore;
+use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use std::sync::{Arc, Mutex};
 
 use crate::error::HTMLError;
-use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
 
@@ -17,17 +18,37 @@ fn action_delete(
     store: Arc<Mutex<CalStore>>,
     form: &Request,
 ) -> anyhow::Result<()> {
-    match form.rid {
-        Some(ref rid) => unimplemented!(),
-        None => {
-            let mut store = store.lock().unwrap();
-            let item = store
-                .item_by_id_mut(&form.uid)
-                .ok_or_else(|| anyhow!("Unable to find item with uid {}", form.uid))?;
+    let mut store = store.lock().unwrap();
+    let item = store
+        .item_by_id_mut(&form.uid)
+        .ok_or_else(|| anyhow!("Unable to find item with uid {}", form.uid))?;
 
+    match form.rid {
+        Some(ref rid) => {
+            let date = rid
+                .parse::<CalDate>()
+                .context(format!("Invalid rid date: {}", rid))?;
+
+            let base = item
+                .component_with_mut(|c| c.rid().is_none() && c.uid() == &form.uid)
+                .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
+            base.add_exdate(date.clone());
+            item.save()?;
+
+            page.add_info(
+                formatx!(
+                    locale.translate("Deleted occurrence on {} successfully."),
+                    date.fmt_start_with_tz(locale.timezone())
+                )
+                .unwrap(),
+            );
+        }
+        None => {
             item.delete_components(&form.uid);
             if item.components().len() == 0 {
                 item.remove()?;
+            } else {
+                item.save()?;
             }
 
             page.add_info(locale.translate("Deleted series successfully."));
