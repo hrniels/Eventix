@@ -230,10 +230,10 @@ impl TryFrom<Property> for CalDate {
             .and_then(|d| d.and_hms_opt(hour, min, sec))
             .ok_or_else(|| anyhow!("Invalid datetime: {datetime}"))?;
 
-        let res = if let Some(tz) = prop.param("TZID") {
-            CalDateTime::Timezone(date, tz.value().clone())
-        } else if datetime.ends_with('Z') {
+        let res = if datetime.ends_with('Z') {
             CalDateTime::Utc(date.and_utc())
+        } else if let Some(tz) = prop.param("TZID") {
+            CalDateTime::Timezone(date, tz.value().clone())
         } else {
             CalDateTime::Floating(date)
         };
