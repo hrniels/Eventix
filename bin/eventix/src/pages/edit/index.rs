@@ -10,7 +10,7 @@ use ical::{
 };
 use std::sync::Arc;
 
-use super::{Page, Request};
+use super::{Page, Request, Update};
 use crate::{
     comps::{datetimerange::DateTimeRangeTemplate, recur::RecurTemplate},
     locale::{self, Locale},
@@ -44,6 +44,7 @@ pub async fn handler(
         locale::default(),
         State(state),
         Query(req),
+        None,
     )
     .await
 }
@@ -53,6 +54,7 @@ pub async fn content(
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
+    form: Option<Update>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let store = state.store().lock().unwrap();
 
@@ -76,23 +78,23 @@ pub async fn content(
             &req.uid, rid
         ))?;
 
+    let form = match form {
+        Some(f) => f,
+        None => Update::new_from_occurrence(req, &occ, locale.timezone()),
+    };
+
     let events = Events::new(&store, &locale, 7);
     let tasks = Tasks::new(&store, &locale, 7);
 
     let html = EditTemplate {
         page,
-        uid: req.uid.clone(),
-        rid: req.rid.clone(),
-        summary: occ.summary().unwrap_or(&String::from("")),
-        location: occ.location().unwrap_or(&String::from("")),
-        description: occ.description().unwrap_or(&String::from("")),
-        start_end: DateTimeRangeTemplate::new(
-            locale.clone(),
-            "start_end",
-            Some(occ.occurrence_startdate()),
-            occ.occurrence_enddate(),
-        ),
-        rrule: RecurTemplate::new(locale.clone(), "rrule", occ.rrule()),
+        uid: form.req.uid.clone(),
+        rid: form.req.rid.clone(),
+        summary: &form.summary,
+        location: &form.location,
+        description: &form.description,
+        start_end: DateTimeRangeTemplate::new(locale.clone(), "start_end", Some(form.start_end)),
+        rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         occ: &occ,
         events,
         locale,

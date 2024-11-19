@@ -49,14 +49,11 @@ pub struct DateTimeTemplate {
 }
 
 impl DateTimeTemplate {
-    pub fn new<N: ToString>(name: N, date: Option<CalDate>) -> Self {
+    pub fn new<N: ToString>(name: N, date: Option<DateTime>) -> Self {
         let name = name.to_string();
         Self {
-            date: DateTemplate::new(format!("{}_date", name), date.clone()),
-            time: match date {
-                Some(CalDate::DateTime(ref dt)) => Some(dt.as_naive_time()),
-                _ => None,
-            },
+            time: date.as_ref().and_then(|d| d.time()),
+            date: DateTemplate::new(format!("{}_date", name), date.map(|d| d.date)),
             id: name.replace("[", "_").replace("]", "_"),
             name,
         }

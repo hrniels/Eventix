@@ -57,20 +57,13 @@ pub async fn content(
     let events = Events::new(&store, &locale, 7);
     let tasks = Tasks::new(&store, &locale, 7);
 
-    let rrule = form.rrule.to_rrule().unwrap();
-
     let html = NewTemplate {
         page,
         summary: &form.summary,
         location: &form.location,
         description: &form.description,
-        start_end: DateTimeRangeTemplate::new(
-            locale.clone(),
-            "start_end",
-            form.start_end.from(&locale),
-            form.start_end.to(&locale),
-        ),
-        rrule: RecurTemplate::new(locale.clone(), "rrule", rrule.as_ref()),
+        start_end: DateTimeRangeTemplate::new(locale.clone(), "start_end", Some(form.start_end)),
+        rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         calendars: CalComboTemplate::new(
             locale.clone(),
             "calendar",

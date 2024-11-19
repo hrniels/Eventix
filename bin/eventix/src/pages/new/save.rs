@@ -32,11 +32,11 @@ fn action_update(
         return Ok(false);
     }
 
-    let Some(start) = form.start_end.from(locale) else {
+    let Some(start) = form.start_end.from_as_caldate(locale) else {
         page.add_error(locale.translate("Please specify the start date/time."));
         return Ok(false);
     };
-    let Some(end) = form.start_end.to(locale) else {
+    let Some(end) = form.start_end.to_as_caldate(locale) else {
         page.add_error(locale.translate("Please specify the end date/time."));
         return Ok(false);
     };

@@ -33,15 +33,15 @@
             <div style="padding-top: .4em">
                 <input class="radio" type="radio"
                                      name="{{ name }}[monthly_type]" id="{{ id }}-monthly-none"
-                                     value="none"
-                                     {% if monthly_type == "none" %}checked="checked"{% endif %}/>
+                                     value="None"
+                                     {% if monthly_type == MonthlyType::None %}checked="checked"{% endif %}/>
                 <label for="{{ id }}-monthly-none">Same day</label>
             </div>
             <div style="padding-top: .4em">
                 <input class="radio" type="radio"
                                      name="{{ name }}[monthly_type]" id="{{ id }}-monthly-type"
-                                     value="byday"
-                                     {% if monthly_type == "byday" %}checked="checked"{% endif %}/>
+                                     value="ByDay"
+                                     {% if monthly_type == MonthlyType::ByDay %}checked="checked"{% endif %}/>
                 <label for="{{ id }}-monthly-byday">
                 {{ monthly_nth|safe }}
                 {{ monthly_wday|safe }}
@@ -65,14 +65,14 @@
             <input class="radio" type="radio"
                                  name="{{ name }}[end]" id="{{ id }}-end0"
                                  value="NoEnd"
-                                 {% if end == "none" %}checked="checked"{% endif %}/>
+                                 {% if end == RecurEnd::NoEnd %}checked="checked"{% endif %}/>
             <label for="{{ id }}-end0">No end date</label>
         </div>
         <div style="padding-top: .4em">
             <input class="radio" type="radio"
                                  name="{{ name }}[end]" id="{{ id }}-end-1"
                                  value="Count"
-                                 {% if end == "count" %}checked="checked"{% endif %}/>
+                                 {% if end == RecurEnd::Count %}checked="checked"{% endif %}/>
             <label for="{{ id }}-end-1">Create</label>
             <input id="{{ id }}_count" name="{{ name }}[count]" size="5"
                                        value="{{ count }}" />
@@ -82,7 +82,7 @@
             <input class="radio" type="radio"
                                  name="{{ name }}[end]" id="{{ id }}-end-2"
                                  value="Until"
-                                 {% if end == "until" %}checked="checked"{% endif %}/>
+                                 {% if end == RecurEnd::Until %}checked="checked"{% endif %}/>
             <label for="{{ id }}-end-2">Repeat until</label>
             {{ until|safe }}
         </div>
@@ -113,10 +113,10 @@
     $(function() {
         $("#{{ id }}_weekdays_list a").button();
         $("#{{ id }}_interval").spinner({
-            min: 2,
+            min: 1,
         });
         $("#{{ id }}_count").spinner({
-            min: 2,
+            min: 1,
         });
 
         var weekdays = $("#{{ id }}_weekdays").attr('value');

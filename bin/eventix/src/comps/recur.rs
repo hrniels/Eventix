@@ -3,7 +3,7 @@ use askama::Template;
 use chrono::Weekday;
 use ical::objects::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
 use serde::{Deserialize, Deserializer};
-use std::fmt;
+use std::fmt::{self, Display};
 use std::sync::Arc;
 use strum::EnumIter;
 
@@ -19,16 +19,45 @@ enum Frequency {
     Yearly,
 }
 
-impl Frequency {
-    pub fn to_cal_freq(&self) -> CalRRuleFreq {
+impl Display for Frequency {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Frequency::Daily => CalRRuleFreq::Daily,
-            Frequency::Weekly => CalRRuleFreq::Weekly,
-            Frequency::Monthly => CalRRuleFreq::Monthly,
-            Frequency::Yearly => CalRRuleFreq::Yearly,
+            Frequency::Daily => write!(f, "DAILY"),
+            Frequency::Weekly => write!(f, "WEEKLY"),
+            Frequency::Monthly => write!(f, "MONTHLY"),
+            Frequency::Yearly => write!(f, "YEARLY"),
         }
     }
+}
 
+impl TryFrom<CalRRuleFreq> for Frequency {
+    type Error = ();
+
+    fn try_from(value: CalRRuleFreq) -> Result<Self, Self::Error> {
+        match value {
+            CalRRuleFreq::Secondly => Err(()),
+            CalRRuleFreq::Minutely => Err(()),
+            CalRRuleFreq::Hourly => Err(()),
+            CalRRuleFreq::Daily => Ok(Self::Daily),
+            CalRRuleFreq::Weekly => Ok(Self::Weekly),
+            CalRRuleFreq::Monthly => Ok(Self::Monthly),
+            CalRRuleFreq::Yearly => Ok(Self::Yearly),
+        }
+    }
+}
+
+impl From<Frequency> for CalRRuleFreq {
+    fn from(value: Frequency) -> Self {
+        match value {
+            Frequency::Daily => Self::Daily,
+            Frequency::Weekly => Self::Weekly,
+            Frequency::Monthly => Self::Monthly,
+            Frequency::Yearly => Self::Yearly,
+        }
+    }
+}
+
+impl Frequency {
     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Frequency>, D::Error>
     where
         D: Deserializer<'de>,
@@ -133,7 +162,7 @@ fn parse_by_day(wdays: &str) -> Vec<CalWDayDesc> {
     days
 }
 
-#[derive(Default, Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize, PartialEq, Eq)]
 pub enum RecurEnd {
     #[default]
     NoEnd,
@@ -141,26 +170,93 @@ pub enum RecurEnd {
     Until,
 }
 
-#[derive(Default, Debug, Deserialize)]
+impl Display for RecurEnd {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Default, Debug, Deserialize, PartialEq, Eq)]
+pub enum MonthlyType {
+    #[default]
+    None,
+    ByDay,
+}
+
+impl Display for MonthlyType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct RecurRequest {
     #[serde(deserialize_with = "Frequency::deserialize")]
     freq: Option<Frequency>,
-    interval: Option<u8>,
+    interval: u8,
     end: RecurEnd,
     count: u8,
     until: Option<Date>,
     weekly_days: String,
-    monthly_type: String,
+    monthly_type: MonthlyType,
     monthly_nth: Option<Nth>,
     monthly_wday: Option<IterWeekday>,
 }
 
+impl Default for RecurRequest {
+    fn default() -> Self {
+        Self {
+            freq: None,
+            interval: 1,
+            count: 1,
+            end: RecurEnd::NoEnd,
+            until: None,
+            weekly_days: String::default(),
+            monthly_type: MonthlyType::None,
+            monthly_nth: None,
+            monthly_wday: None,
+        }
+    }
+}
+
 impl RecurRequest {
+    pub fn from_rrule(rrule: Option<&CalRRule>) -> Self {
+        Self {
+            freq: rrule.and_then(|r| Frequency::try_from(r.frequency()).ok()),
+            interval: rrule.and_then(|r| r.interval()).unwrap_or(1),
+            count: rrule.and_then(|r| r.count()).unwrap_or(1),
+            end: match rrule {
+                Some(r) if r.count().is_some() => RecurEnd::Count,
+                Some(r) if r.until().is_some() => RecurEnd::Until,
+                _ => RecurEnd::NoEnd,
+            },
+            until: rrule
+                .and_then(|r| r.until())
+                .map(|d| Date::new(Some(d.as_naive_date()))),
+            weekly_days: match rrule {
+                Some(r) if r.by_day().is_some() => {
+                    let mut wdays = String::new();
+                    for wd in r.by_day().as_ref().unwrap().iter() {
+                        wdays.push_str(&format!("{},", CalWDayDesc::to_weekday_str(wd.day())));
+                    }
+                    wdays
+                }
+                _ => "".to_string(),
+            },
+            monthly_type: match rrule {
+                Some(r) if r.by_day().is_some() => MonthlyType::ByDay,
+                _ => MonthlyType::None,
+            },
+            monthly_nth: monthly_nth_from_rrule(rrule),
+            monthly_wday: rrule.and_then(|r| r.by_day().map(|d| d[0].day().into())),
+        }
+    }
+
     pub fn to_rrule(&self) -> anyhow::Result<Option<CalRRule>> {
         if let Some(freq) = self.freq {
             let mut rrule = CalRRule::default();
-            rrule.set_frequency(freq.to_cal_freq());
-            rrule.set_interval(self.interval.unwrap());
+            rrule.set_frequency(freq.into());
+            rrule.set_interval(self.interval);
 
             match freq {
                 Frequency::Weekly => {
@@ -168,7 +264,7 @@ impl RecurRequest {
                     rrule.set_by_day(byday);
                 }
                 Frequency::Monthly => {
-                    if self.monthly_type == "byday" {
+                    if self.monthly_type == MonthlyType::ByDay {
                         let nth = match self.monthly_nth.as_ref().unwrap() {
                             Nth::First => Some((1, CalRRuleSide::Front)),
                             Nth::Second => Some((2, CalRRuleSide::Front)),
@@ -214,74 +310,40 @@ pub struct RecurTemplate<'a> {
     name: &'a str,
     id: String,
     freq: String,
-    count: String,
-    interval: String,
-    end: &'a str,
+    count: u8,
+    interval: u8,
+    end: RecurEnd,
     until: DateTemplate,
     weekly_days: String,
-    monthly_type: &'a str,
+    monthly_type: MonthlyType,
     monthly_wday: ComboboxTemplate<IterWeekday>,
     monthly_nth: ComboboxTemplate<Nth>,
 }
 
 impl<'a> RecurTemplate<'a> {
-    pub fn new(
-        locale: Arc<dyn Locale + Send + Sync>,
-        name: &'a str,
-        rrule: Option<&CalRRule>,
-    ) -> Self {
-        let freq = match rrule {
-            Some(r) => format!("{}", r.frequency()),
-            None => "NONE".to_string(),
-        };
-        let count = match rrule {
-            Some(r) if r.count().is_some() => format!("{}", r.count().unwrap()),
-            _ => "1".to_string(),
-        };
-        let end = match rrule {
-            Some(r) if r.count().is_some() => "count",
-            Some(r) if r.until().is_some() => "until",
-            _ => "none",
-        };
-
-        let weekly_days = match rrule {
-            Some(r) if r.by_day().is_some() => {
-                let mut wdays = String::new();
-                for wd in r.by_day().as_ref().unwrap().iter() {
-                    wdays.push_str(&format!("{},", CalWDayDesc::to_weekday_str(wd.day())));
-                }
-                wdays
-            }
-            _ => "".to_string(),
-        };
-
+    pub fn new(locale: Arc<dyn Locale + Send + Sync>, name: &'a str, value: RecurRequest) -> Self {
         Self {
             name,
             id: name.replace("[", "_").replace("]", "_"),
-            freq,
-            count,
-            interval: rrule
-                .and_then(|r| r.interval().map(|i| format!("{}", i)))
-                .unwrap_or(String::from("1")),
-            end,
-            until: DateTemplate::new(
-                format!("{}[until]", name),
-                rrule.and_then(|r| r.until()).cloned(),
-            ),
-            weekly_days,
+            freq: match value.freq {
+                Some(f) => format!("{}", f),
+                None => String::from("NONE"),
+            },
+            count: value.count,
+            interval: value.interval,
+            end: value.end,
+            until: DateTemplate::new(format!("{}[until]", name), value.until),
+            weekly_days: value.weekly_days,
             monthly_nth: ComboboxTemplate::new(
                 locale.clone(),
                 format!("{}[monthly_nth]", name),
-                monthly_nth_from_rrule(rrule),
+                value.monthly_nth,
             ),
-            monthly_type: match rrule {
-                Some(r) if r.by_day().is_some() => "byday",
-                _ => "none",
-            },
+            monthly_type: value.monthly_type,
             monthly_wday: ComboboxTemplate::new(
                 locale.clone(),
                 format!("{}[monthly_wday]", name),
-                rrule.and_then(|r| r.by_day().map(|d| d[0].day().into())),
+                value.monthly_wday,
             ),
             locale,
         }

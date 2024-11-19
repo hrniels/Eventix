@@ -67,12 +67,12 @@ pub struct DateTemplate {
 }
 
 impl<'a> DateTemplate {
-    pub fn new<N: ToString>(name: N, date: Option<CalDate>) -> Self {
+    pub fn new<N: ToString>(name: N, date: Option<Date>) -> Self {
         let name = name.to_string();
         Self {
             id: name.replace("[", "_").replace("]", "_"),
             name,
-            date: date.as_ref().map(|d| d.as_naive_date()),
+            date: date.and_then(|d| d.date),
         }
     }
 }

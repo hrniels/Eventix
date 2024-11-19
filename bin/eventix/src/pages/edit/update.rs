@@ -3,28 +3,14 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::col::CalItem;
 use ical::objects::{CalComponent, CalDate, CalDateTime, CalEvent, EventLike, UpdatableEventLike};
-use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::comps::datetimerange::DateTimeRange;
-use crate::comps::recur::RecurRequest;
 use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
 
-use super::Request;
-
-#[derive(Debug, Deserialize)]
-pub struct Update {
-    #[serde(flatten)]
-    base: Request,
-    summary: String,
-    location: String,
-    description: String,
-    rrule: Option<RecurRequest>,
-    start_end: DateTimeRange,
-}
+use super::Update;
 
 fn nonempty_or_none(val: String) -> Option<String> {
     if val.is_empty() {
@@ -39,8 +25,8 @@ fn action_update(
     locale: &Arc<dyn Locale + Send + Sync>,
     item: &mut CalItem,
     form: &mut Update,
-) -> anyhow::Result<()> {
-    let rid = if let Some(ref rid) = form.base.rid {
+) -> anyhow::Result<bool> {
+    let rid = if let Some(ref rid) = form.req.rid {
         Some(
             rid.parse::<CalDate>()
                 .context(format!("Invalid rid date: {}", rid))?,
@@ -51,21 +37,21 @@ fn action_update(
 
     if form.summary.is_empty() {
         page.add_error(locale.translate("Summary cannot be empty."));
-        return Ok(());
+        return Ok(false);
     }
 
-    let Some(start) = form.start_end.from(locale) else {
+    let Some(start) = form.start_end.from_as_caldate(locale) else {
         page.add_error(locale.translate("Please specify the start date/time."));
-        return Ok(());
+        return Ok(false);
     };
-    let Some(end) = form.start_end.to(locale) else {
+    let Some(end) = form.start_end.to_as_caldate(locale) else {
         page.add_error(locale.translate("Please specify the end date/time."));
-        return Ok(());
+        return Ok(false);
     };
 
-    let rrule = if form.base.rid.is_some() {
+    let rrule = if form.req.rid.is_some() {
         let base = item
-            .component_with(|c| c.uid() == &form.base.uid && c.rid().is_none())
+            .component_with(|c| c.uid() == &form.req.uid && c.rid().is_none())
             .context("Unable to find base component")?;
 
         // inherit from base if we can
@@ -80,17 +66,17 @@ fn action_update(
         }
         None
     } else {
-        match form.rrule.as_ref().unwrap().to_rrule() {
+        match form.rrule.to_rrule() {
             Ok(rrule) => rrule,
             Err(e) => {
                 page.add_error(e);
-                return Ok(());
+                return Ok(false);
             }
         }
     };
 
     if let Some(comp) =
-        item.component_with_mut(|c| c.uid() == &form.base.uid && c.rid() == rid.as_ref())
+        item.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
     {
         update_component(comp, form, start, end);
         if rid.is_none() {
@@ -99,7 +85,7 @@ fn action_update(
     } else {
         let mut comp = CalComponent::Event(CalEvent::default());
         update_component(&mut comp, form, start, end);
-        comp.set_uid(form.base.uid.clone());
+        comp.set_uid(form.req.uid.clone());
         let start = CalDate::DateTime(CalDateTime::Timezone(
             rid.as_ref()
                 .unwrap()
@@ -112,7 +98,8 @@ fn action_update(
         item.add_component(comp);
     }
 
-    item.save()
+    item.save()?;
+    Ok(true)
 }
 
 fn update_component(comp: &mut CalComponent, form: &Update, start: CalDate, end: CalDate) {
@@ -135,18 +122,23 @@ pub async fn handler(
     MultiForm(mut form): MultiForm<Update>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page(&form.base);
+    let mut page = super::new_page(&form.req);
 
-    {
+    let req = form.req.clone();
+    let form = {
         let mut store = state.store().lock().unwrap();
 
-        let item = store.item_by_id_mut(&form.base.uid).context(format!(
+        let item = store.item_by_id_mut(&form.req.uid).context(format!(
             "Unable to find component with uid '{}'",
-            form.base.uid
+            form.req.uid
         ))?;
 
-        action_update(&mut page, &locale, item, &mut form)?;
-    }
+        if action_update(&mut page, &locale, item, &mut form)? {
+            None
+        } else {
+            Some(form)
+        }
+    };
 
-    super::index::content(page, locale, State(state), Query(form.base)).await
+    super::index::content(page, locale, State(state), Query(req), form).await
 }
