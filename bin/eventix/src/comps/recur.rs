@@ -134,7 +134,7 @@ impl fmt::Display for Nth {
 
 fn monthly_nth_from_rrule(rrule: Option<&CalRRule>) -> Option<Nth> {
     match rrule {
-        Some(r) if r.by_day().is_some() => {
+        Some(r) if r.by_day().is_some() && !r.by_day().as_ref().unwrap().is_empty() => {
             r.by_day().unwrap()[0]
                 .nth()
                 .and_then(|(num, side)| match side {
@@ -152,14 +152,18 @@ fn monthly_nth_from_rrule(rrule: Option<&CalRRule>) -> Option<Nth> {
     }
 }
 
-fn parse_by_day(wdays: &str) -> Vec<CalWDayDesc> {
+fn parse_by_day(wdays: &str) -> Option<Vec<CalWDayDesc>> {
     let mut days = vec![];
     for day in wdays.split(',') {
         if let Ok(wday) = CalWDayDesc::parse_weekday(&day) {
             days.push(CalWDayDesc::new(wday, None));
         }
     }
-    days
+    if days.is_empty() {
+        None
+    } else {
+        Some(days)
+    }
 }
 
 #[derive(Default, Debug, Deserialize, PartialEq, Eq)]
@@ -248,7 +252,15 @@ impl RecurRequest {
                 _ => MonthlyType::None,
             },
             monthly_nth: monthly_nth_from_rrule(rrule),
-            monthly_wday: rrule.and_then(|r| r.by_day().map(|d| d[0].day().into())),
+            monthly_wday: rrule.and_then(|r| {
+                r.by_day().and_then(|d| {
+                    if d.is_empty() {
+                        None
+                    } else {
+                        Some(d[0].day().into())
+                    }
+                })
+            }),
         }
     }
 
@@ -271,10 +283,10 @@ impl RecurRequest {
                             Nth::Third => Some((3, CalRRuleSide::Front)),
                             Nth::Last => Some((1, CalRRuleSide::Back)),
                         };
-                        rrule.set_by_day(vec![CalWDayDesc::new(
+                        rrule.set_by_day(Some(vec![CalWDayDesc::new(
                             self.monthly_wday.unwrap().into(),
                             nth,
-                        )]);
+                        )]));
                     }
                 }
                 _ => {}

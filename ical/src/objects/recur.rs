@@ -339,8 +339,8 @@ impl CalRRule {
     pub fn by_day(&self) -> Option<&Vec<CalWDayDesc>> {
         self.by_day.as_ref()
     }
-    pub fn set_by_day(&mut self, by_day: Vec<CalWDayDesc>) {
-        self.by_day = Some(by_day);
+    pub fn set_by_day(&mut self, by_day: Option<Vec<CalWDayDesc>>) {
+        self.by_day = by_day;
     }
 
     pub fn dates_within(
