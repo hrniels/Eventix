@@ -45,7 +45,7 @@ fn action_delete(
         }
         None => {
             item.delete_components(&form.uid);
-            if item.components().len() == 0 {
+            if item.components().is_empty() {
                 item.remove()?;
             } else {
                 item.save()?;

@@ -54,18 +54,22 @@ impl DateTimeRange {
         self.from.time().is_none() && self.to.time().is_none()
     }
 
-    pub fn from_as_caldate(&self, locale: &Arc<dyn Locale + Send + Sync>) -> Option<CalDate> {
-        if self.from_enabled.is_none() {
-            return None;
-        }
-        self.from.to_caldate(locale, false)
-    }
-
-    pub fn to_as_caldate(&self, locale: &Arc<dyn Locale + Send + Sync>) -> Option<CalDate> {
-        if self.to_enabled.is_none() {
-            return None;
-        }
-        self.to.to_caldate(locale, true)
+    pub fn as_caldates(
+        &self,
+        locale: &Arc<dyn Locale + Send + Sync>,
+    ) -> (Option<CalDate>, Option<CalDate>) {
+        (
+            if self.from_enabled.is_none() {
+                None
+            } else {
+                self.from.to_caldate(locale, false)
+            },
+            if self.to_enabled.is_none() {
+                None
+            } else {
+                self.to.to_caldate(locale, true)
+            },
+        )
     }
 }
 

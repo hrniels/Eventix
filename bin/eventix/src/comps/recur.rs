@@ -155,7 +155,7 @@ fn monthly_nth_from_rrule(rrule: Option<&CalRRule>) -> Option<Nth> {
 fn parse_by_day(wdays: &str) -> Option<Vec<CalWDayDesc>> {
     let mut days = vec![];
     for day in wdays.split(',') {
-        if let Ok(wday) = CalWDayDesc::parse_weekday(&day) {
+        if let Ok(wday) = CalWDayDesc::parse_weekday(day) {
             days.push(CalWDayDesc::new(wday, None));
         }
     }

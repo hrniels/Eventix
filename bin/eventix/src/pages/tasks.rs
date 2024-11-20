@@ -37,7 +37,7 @@ impl<'a> Tasks<'a> {
 
         let overdue_tds = store
             .filtered_occurrences_within(
-                DateTime::<Tz>::MIN_UTC.with_timezone(&timezone),
+                DateTime::<Tz>::MIN_UTC.with_timezone(timezone),
                 start,
                 |c| match c {
                     CalComponent::Todo(td) if td.due().is_some() => {
@@ -51,7 +51,7 @@ impl<'a> Tasks<'a> {
                 // so far, we got all todos that overlap with this period of time. but we are only
                 // interested in the ones that are due before the start.
                 o.end_or_due()
-                    .map(|e| e.as_end_with_tz(&timezone))
+                    .map(|e| e.as_end_with_tz(timezone))
                     .unwrap_or(start)
                     < start
             });
@@ -63,7 +63,7 @@ impl<'a> Tasks<'a> {
             .iter()
             .map(|o| {
                 o.end_or_due()
-                    .map(|e| e.as_end_with_tz(&timezone))
+                    .map(|e| e.as_end_with_tz(timezone))
                     .unwrap_or(start)
             })
             .min()

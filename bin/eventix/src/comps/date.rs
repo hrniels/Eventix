@@ -54,7 +54,7 @@ impl Date {
         } else {
             self.date
         };
-        date.map(|d| CalDate::Date(d))
+        date.map(CalDate::Date)
     }
 }
 
@@ -66,7 +66,7 @@ pub struct DateTemplate {
     date: Option<NaiveDate>,
 }
 
-impl<'a> DateTemplate {
+impl DateTemplate {
     pub fn new<N: ToString>(name: N, date: Option<Date>) -> Self {
         let name = name.to_string();
         Self {

@@ -25,7 +25,7 @@ where
                 .map_err(|e| {
                     format!(
                         "Unable to deserialize: {}\n{}",
-                        e.to_string(),
+                        e,
                         String::from_utf8(body.to_vec()).unwrap()
                     )
                 })?,

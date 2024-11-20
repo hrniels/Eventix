@@ -37,7 +37,7 @@ impl<'a> Events<'a> {
         let mut cur_date = start.date_naive();
         let end_date = end.date_naive();
         while cur_date < end_date {
-            let day_occs = DayOccurrence::occurrences_on(&next_ev_occs, cur_date, &timezone);
+            let day_occs = DayOccurrence::occurrences_on(&next_ev_occs, cur_date, timezone);
             if !day_occs.is_empty() {
                 days.push(Day {
                     date: Some(cur_date),

@@ -53,7 +53,7 @@ fn attendee_icon(att: &CalAttendee) -> String {
 }
 
 fn attendees_sorted(occ: &Occurrence<'_>) -> Vec<CalAttendee> {
-    if let Some(ref atts) = occ.attendees() {
+    if let Some(atts) = occ.attendees() {
         let mut att = atts.to_vec();
         att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
             (Some(cn1), Some(cn2)) => cn1.cmp(cn2),

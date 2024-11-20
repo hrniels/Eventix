@@ -27,8 +27,7 @@ pub trait CompAction {
             return false;
         }
 
-        let start = self.start_end().from_as_caldate(locale);
-        let end = self.start_end().to_as_caldate(locale);
+        let (start, end) = self.start_end().as_caldates(locale);
 
         if ctype == CalCompType::Event {
             if start.is_none() {
@@ -71,8 +70,7 @@ pub trait CompAction {
     }
 
     fn update(&self, comp: &mut CalComponent, locale: &Arc<dyn Locale + Send + Sync>) {
-        let start = self.start_end().from_as_caldate(locale);
-        let end = self.start_end().to_as_caldate(locale);
+        let (start, end) = self.start_end().as_caldates(locale);
 
         comp.set_summary(Self::nonempty_or_none(self.summary().clone()));
         comp.set_location(Self::nonempty_or_none(self.location().clone()));
