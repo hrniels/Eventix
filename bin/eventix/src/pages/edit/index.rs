@@ -89,8 +89,8 @@ pub async fn content(
         None => CompEdit::new_from_occurrence(req, &occ, locale.timezone()),
     };
 
-    let events = Events::new(&store, &locale, 7);
-    let tasks = Tasks::new(&store, &locale, 7);
+    let events = Events::new(&store, &locale);
+    let tasks = Tasks::new(&store, &locale);
 
     let html = EditTemplate {
         page,

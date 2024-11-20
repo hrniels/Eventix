@@ -21,6 +21,13 @@ impl<'a> Events<'a> {
     pub fn new(
         store: &'a MutexGuard<'_, CalStore>,
         locale: &Arc<dyn Locale + Send + Sync>,
+    ) -> Events<'a> {
+        Self::new_with_days(store, locale, 7)
+    }
+
+    pub fn new_with_days(
+        store: &'a MutexGuard<'_, CalStore>,
+        locale: &Arc<dyn Locale + Send + Sync>,
         days: u32,
     ) -> Events<'a> {
         let timezone = locale.timezone();

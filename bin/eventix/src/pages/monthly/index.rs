@@ -121,8 +121,8 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&store, &locale, 7);
-    let tasks = Tasks::new(&store, &locale, 7);
+    let events = Events::new(&store, &locale);
+    let tasks = Tasks::new(&store, &locale);
 
     let html = MonthlyTemplate {
         page,

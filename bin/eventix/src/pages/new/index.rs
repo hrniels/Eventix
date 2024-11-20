@@ -56,8 +56,8 @@ pub async fn content(
 ) -> Result<impl IntoResponse, HTMLError> {
     let store = state.store().lock().unwrap();
 
-    let events = Events::new(&store, &locale, 7);
-    let tasks = Tasks::new(&store, &locale, 7);
+    let events = Events::new(&store, &locale);
+    let tasks = Tasks::new(&store, &locale);
 
     let html = NewTemplate {
         page,
