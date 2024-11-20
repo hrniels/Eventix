@@ -68,7 +68,7 @@ impl<W: Write> LineWriter<W> {
         while !line.is_empty() {
             let mut left = MAX_LINE_LEN;
             if !first {
-                self.writer.write(&[b' '])?;
+                self.writer.write_all(b" ")?;
                 left -= 1;
             }
 
@@ -78,11 +78,11 @@ impl<W: Write> LineWriter<W> {
                     break;
                 }
                 self.writer
-                    .write(&line[pos..pos + c.len_utf8()].as_bytes())?;
+                    .write_all(line[pos..pos + c.len_utf8()].as_bytes())?;
                 left -= c.len_utf8();
             }
 
-            self.writer.write(&[b'\r', b'\n'])?;
+            self.writer.write_all(b"\r\n")?;
             line = &line[(total - left)..];
             first = false;
         }

@@ -193,7 +193,7 @@ impl Parameter {
 impl fmt::Display for Parameter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}=", self.name)?;
-        if self.value.contains(|c| c == ':' || c == ';' || c == ',') {
+        if self.value.contains([':', ';', ',']) {
             write!(f, "\"{}\"", self.value)?;
         } else {
             write!(f, "{}", self.value)?;

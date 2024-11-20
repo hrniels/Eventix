@@ -70,7 +70,7 @@ impl PropertyProducer for CalTodo {
                 format!("{}", percent),
             ));
         }
-        props.extend(self.inner.to_props().into_iter());
+        props.extend(self.inner.to_props());
         for o in &self.other {
             props.extend(o.to_props().into_iter());
         }
