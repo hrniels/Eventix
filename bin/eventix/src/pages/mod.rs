@@ -26,25 +26,19 @@ impl Breadcrumb {
 
 pub struct Page {
     start: Instant,
-    path: String,
     breadcrumbs: Vec<Breadcrumb>,
     errors: Vec<String>,
     infos: Vec<String>,
 }
 
 impl Page {
-    pub fn new<S: ToString>(path: S) -> Self {
+    pub fn new() -> Self {
         Self {
             start: Instant::now(),
-            path: path.to_string(),
             breadcrumbs: Vec::new(),
             errors: Vec::new(),
             infos: Vec::new(),
         }
-    }
-
-    pub fn path(&self) -> &str {
-        &self.path
     }
 
     pub fn breadcrumbs(&self) -> &[Breadcrumb] {

@@ -49,6 +49,7 @@ pub struct DateTimeTemplate {
 }
 
 impl DateTimeTemplate {
+    #[allow(dead_code)]
     pub fn new<N: ToString>(name: N, date: Option<DateTime>) -> Self {
         let name = name.to_string();
         Self {

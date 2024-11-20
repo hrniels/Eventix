@@ -34,7 +34,7 @@ impl fmt::Display for HTMLError {
 impl IntoResponse for HTMLError {
     fn into_response(self) -> Response {
         let html = ErrorTemplate {
-            page: Page::new("/"),
+            page: Page::new(),
             locale: locale::default(),
             msg: &self.inner.to_string(),
             trace: self.inner.chain().skip(1).map(|e| e.to_string()).collect(),

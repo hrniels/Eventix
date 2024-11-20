@@ -83,7 +83,7 @@ impl CompAction for CompNew {
 }
 
 pub fn new_page(req: &Request) -> Page {
-    let mut page = Page::new(path().to_string());
+    let mut page = Page::new();
     match req.ctype {
         CalCompType::Todo => page.add_breadcrumb(Breadcrumb::new(
             format!("{}?ctype={:?}", path(), req.ctype),

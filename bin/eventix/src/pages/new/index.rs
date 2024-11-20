@@ -71,12 +71,7 @@ pub async fn content(
             Some(form.start_end),
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
-        calendars: CalComboTemplate::new(
-            locale.clone(),
-            "calendar",
-            store.sources(),
-            form.calendar,
-        ),
+        calendars: CalComboTemplate::new("calendar", store.sources(), form.calendar),
         events,
         locale,
         tasks,

@@ -93,7 +93,7 @@ pub fn build_title(occ: &Occurrence, rid: &Option<String>) -> String {
 }
 
 pub fn new_page() -> Page {
-    Page::new(path().to_string())
+    Page::new()
 }
 
 pub fn path() -> &'static str {

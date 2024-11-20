@@ -5,7 +5,7 @@ use axum::{routing::get, Router};
 use super::Page;
 
 pub fn new_page() -> Page {
-    Page::new(path().to_string())
+    Page::new()
 }
 
 pub fn path() -> &'static str {
