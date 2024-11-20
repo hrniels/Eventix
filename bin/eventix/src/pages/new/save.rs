@@ -2,44 +2,29 @@ use anyhow::anyhow;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use ical::col::{CalItem, CalStore};
-use ical::objects::{CalComponent, CalDate, CalEvent, Calendar, UpdatableEventLike};
+use ical::objects::{
+    CalCompType, CalComponent, CalDate, CalEvent, CalTodo, Calendar, UpdatableEventLike,
+};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
+use crate::comp::CompAction;
 use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
 
-use super::Save;
-
-fn nonempty_or_none(val: String) -> Option<String> {
-    if val.is_empty() {
-        None
-    } else {
-        Some(val)
-    }
-}
+use super::CompNew;
 
 fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
     store: &Arc<Mutex<CalStore>>,
-    form: &mut Save,
+    form: &mut CompNew,
 ) -> anyhow::Result<bool> {
-    if form.summary.is_empty() {
-        page.add_error(locale.translate("Summary cannot be empty."));
+    if !form.check(page, locale, form.req.ctype) {
         return Ok(false);
     }
-
-    let Some(start) = form.start_end.from_as_caldate(locale) else {
-        page.add_error(locale.translate("Please specify the start date/time."));
-        return Ok(false);
-    };
-    let Some(end) = form.start_end.to_as_caldate(locale) else {
-        page.add_error(locale.translate("Please specify the end date/time."));
-        return Ok(false);
-    };
 
     let rrule = match form.rrule.to_rrule() {
         Ok(rrule) => rrule,
@@ -59,22 +44,16 @@ fn action_update(
     path.push(format!("{}.ics", uid));
     let mut item = CalItem::new(form.calendar, path, Calendar::default());
 
-    let mut comp = CalComponent::Event(CalEvent::default());
-    comp.set_uid(uid.to_string());
-    comp.set_summary(nonempty_or_none(form.summary.clone()));
-    comp.set_location(nonempty_or_none(form.location.clone()));
-    comp.set_description(nonempty_or_none(form.description.clone()));
-    comp.set_start(Some(start));
-    if let Some(ev) = comp.as_event_mut() {
-        ev.set_end(Some(end));
+    let mut comp = if form.req.ctype == CalCompType::Event {
+        CalComponent::Event(CalEvent::default())
     } else {
-        comp.as_todo_mut().unwrap().set_due(Some(end));
-    }
-    comp.set_rrule(rrule);
+        CalComponent::Todo(CalTodo::default())
+    };
 
+    comp.set_uid(uid.to_string());
+    comp.set_rrule(rrule);
     comp.set_created(CalDate::now());
-    comp.set_last_modified(CalDate::now());
-    comp.set_stamp(CalDate::now());
+    form.update(&mut comp, locale);
 
     item.add_component(comp);
     item.save()?;
@@ -85,14 +64,14 @@ fn action_update(
 
 pub async fn handler(
     State(state): State<crate::state::State>,
-    MultiForm(mut form): MultiForm<Save>,
+    MultiForm(mut form): MultiForm<CompNew>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page();
+    let mut page = super::new_page(&form.req);
 
     if action_update(&mut page, &locale, state.store(), &mut form)? {
         page.add_info(locale.translate("New event was added successfully"));
-        form = Save::new(locale.timezone());
+        form = CompNew::new(form.req.ctype, locale.timezone());
     }
 
     super::index::content(page, locale, State(state), form).await

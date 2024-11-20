@@ -1,3 +1,4 @@
+mod comp;
 mod comps;
 mod error;
 mod extract;

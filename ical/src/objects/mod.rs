@@ -11,7 +11,7 @@ mod todo;
 
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
 pub use calendar::{Calendar, Other};
-pub use component::{CalComponent, EventLikeComponent};
+pub use component::{CalCompType, CalComponent, EventLikeComponent};
 pub use date::{CalDate, CalDateTime};
 pub use event::CalEvent;
 pub use evlike::{EventLike, UpdatableEventLike};

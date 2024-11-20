@@ -1,7 +1,7 @@
 use anyhow::Context;
 use chrono::{Duration, Local};
 use ical::col::{CalSource, CalStore};
-use ical::objects::EventLike;
+use ical::objects::{CalCompType, EventLike};
 
 fn main() -> Result<(), anyhow::Error> {
     let dir = std::env::args().nth(1).unwrap();
@@ -24,7 +24,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     let mut occurrences = store
         .occurrences_within(start, end)
-        .filter(|o| o.is_event())
+        .filter(|o| o.ctype() == CalCompType::Event)
         .collect::<Vec<_>>();
     occurrences.sort_by_key(|a| a.occurrence_start());
 

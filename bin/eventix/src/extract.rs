@@ -22,7 +22,13 @@ where
             // disable strict-mode to support array fields
             serde_qs::Config::new(5, false)
                 .deserialize_bytes(&body)
-                .map_err(|e| e.to_string())?,
+                .map_err(|e| {
+                    format!(
+                        "Unable to deserialize: {}\n{}",
+                        e.to_string(),
+                        String::from_utf8(body.to_vec()).unwrap()
+                    )
+                })?,
         ))
     }
 }

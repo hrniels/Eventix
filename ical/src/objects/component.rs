@@ -2,6 +2,8 @@ use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 use crate::objects::{
     CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike, UpdatableEventLike,
@@ -273,6 +275,19 @@ impl UpdatableEventLike for EventLikeComponent {
     }
 }
 
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CalCompType {
+    #[default]
+    Event,
+    Todo,
+}
+
+impl Display for CalCompType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum CalComponent {
     Event(CalEvent),
@@ -280,12 +295,11 @@ pub enum CalComponent {
 }
 
 impl CalComponent {
-    pub fn is_event(&self) -> bool {
-        matches!(self, Self::Event(_))
-    }
-
-    pub fn is_todo(&self) -> bool {
-        matches!(self, Self::Todo(_))
+    pub fn ctype(&self) -> CalCompType {
+        match self {
+            Self::Event(_) => CalCompType::Event,
+            Self::Todo(_) => CalCompType::Todo,
+        }
     }
 
     pub fn as_event(&self) -> Option<&CalEvent> {

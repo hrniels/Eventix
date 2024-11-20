@@ -2,7 +2,10 @@ use anyhow::Context;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::col::CalItem;
-use ical::objects::{CalComponent, CalDate, CalDateTime, CalEvent, EventLike, UpdatableEventLike};
+use ical::objects::{
+    CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, EventLike,
+    UpdatableEventLike,
+};
 use std::sync::Arc;
 
 use crate::error::HTMLError;
@@ -10,21 +13,13 @@ use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
 
-use super::Update;
-
-fn nonempty_or_none(val: String) -> Option<String> {
-    if val.is_empty() {
-        None
-    } else {
-        Some(val)
-    }
-}
+use super::{CompAction, CompEdit};
 
 fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
     item: &mut CalItem,
-    form: &mut Update,
+    form: &mut CompEdit,
 ) -> anyhow::Result<bool> {
     let rid = if let Some(ref rid) = form.req.rid {
         Some(
@@ -35,25 +30,16 @@ fn action_update(
         None
     };
 
-    if form.summary.is_empty() {
-        page.add_error(locale.translate("Summary cannot be empty."));
+    let base = item
+        .component_with(|c| c.uid() == &form.req.uid && c.rid().is_none())
+        .context("Unable to find base component")?;
+    let ctype = base.ctype();
+
+    if !form.check(page, locale, ctype) {
         return Ok(false);
     }
 
-    let Some(start) = form.start_end.from_as_caldate(locale) else {
-        page.add_error(locale.translate("Please specify the start date/time."));
-        return Ok(false);
-    };
-    let Some(end) = form.start_end.to_as_caldate(locale) else {
-        page.add_error(locale.translate("Please specify the end date/time."));
-        return Ok(false);
-    };
-
     let rrule = if form.req.rid.is_some() {
-        let base = item
-            .component_with(|c| c.uid() == &form.req.uid && c.rid().is_none())
-            .context("Unable to find base component")?;
-
         // inherit from base if we can
         if Some(&form.summary) == base.summary() {
             form.summary.clear();
@@ -78,13 +64,18 @@ fn action_update(
     if let Some(comp) =
         item.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
     {
-        update_component(comp, form, start, end);
+        form.update(comp, locale);
         if rid.is_none() {
             comp.set_rrule(rrule);
         }
     } else {
-        let mut comp = CalComponent::Event(CalEvent::default());
-        update_component(&mut comp, form, start, end);
+        let mut comp = if ctype == CalCompType::Event {
+            CalComponent::Event(CalEvent::default())
+        } else {
+            CalComponent::Todo(CalTodo::default())
+        };
+
+        form.update(&mut comp, locale);
         comp.set_uid(form.req.uid.clone());
         let start = CalDate::DateTime(CalDateTime::Timezone(
             rid.as_ref()
@@ -102,27 +93,12 @@ fn action_update(
     Ok(true)
 }
 
-fn update_component(comp: &mut CalComponent, form: &Update, start: CalDate, end: CalDate) {
-    comp.set_summary(nonempty_or_none(form.summary.clone()));
-    comp.set_location(nonempty_or_none(form.location.clone()));
-    comp.set_description(nonempty_or_none(form.description.clone()));
-    comp.set_start(Some(start));
-    if let Some(ev) = comp.as_event_mut() {
-        ev.set_end(Some(end));
-    } else {
-        comp.as_todo_mut().unwrap().set_due(Some(end));
-    }
-
-    comp.set_last_modified(CalDate::now());
-    comp.set_stamp(CalDate::now());
-}
-
 pub async fn handler(
     State(state): State<crate::state::State>,
-    MultiForm(mut form): MultiForm<Update>,
+    MultiForm(mut form): MultiForm<CompEdit>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page(&form.req);
+    let mut page = super::new_page();
 
     let req = form.req.clone();
     let form = {

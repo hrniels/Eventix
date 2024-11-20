@@ -6,7 +6,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{Id, Occurrence};
-use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo, Calendar, EventLike};
+use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo, Calendar, EventLike};
 
 #[derive(Debug)]
 pub struct CalItem {
@@ -163,14 +163,14 @@ impl CalItem {
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
         self.components()
             .iter()
-            .filter(|&c| c.is_todo())
+            .filter(|&c| c.ctype() == CalCompType::Todo)
             .map(|t| t.as_todo().unwrap())
     }
 
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
         self.components()
             .iter()
-            .filter(|&c| c.is_event())
+            .filter(|&c| c.ctype() == CalCompType::Event)
             .map(|e| e.as_event().unwrap())
     }
 

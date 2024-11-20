@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use ical::objects::{CalAttendee, CalDate};
+use ical::objects::{CalAttendee, CalCompType, CalDate};
 
 use crate::error::HTMLError;
 use crate::html::filters;

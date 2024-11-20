@@ -2,6 +2,7 @@ use std::sync::{Arc, MutexGuard};
 
 use chrono::{Duration, Local, NaiveDate};
 use ical::col::{CalStore, Id};
+use ical::objects::CalCompType;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
@@ -29,7 +30,7 @@ impl<'a> Events<'a> {
         let end = start + Duration::days(days as i64);
 
         let next_ev_occs = store
-            .filtered_occurrences_within(start, end, |c| c.is_event())
+            .filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Event)
             .collect::<Vec<_>>();
 
         let mut days = Vec::new();

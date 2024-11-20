@@ -7,7 +7,7 @@ use axum::{
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ical::{
     col::CalStore,
-    objects::{CalDate, EventLike},
+    objects::{CalCompType, CalDate, EventLike},
     util,
 };
 use serde::Deserialize;
@@ -104,7 +104,7 @@ pub async fn content(
     let store = state.store().lock().unwrap();
 
     let ev_occs = store
-        .filtered_occurrences_within(mstart, mend, |c| c.is_event())
+        .filtered_occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event)
         .collect::<Vec<_>>();
 
     let mut days = Vec::new();

@@ -55,8 +55,8 @@ impl<'a> DayOccurrence<'a> {
     ) -> Vec<DayOccurrence<'occ>> {
         let mut day_occs = occs
             .iter()
-            .filter(|o| match o.end_or_due() {
-                Some(end) => end.as_naive_date() == date,
+            .filter(|o| match o.occurrence_end() {
+                Some(end) => end.date_naive() == date,
                 None => false,
             })
             .map(DayOccurrence::new)

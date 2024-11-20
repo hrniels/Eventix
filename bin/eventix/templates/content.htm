@@ -37,7 +37,7 @@
     <div class="ev_box">
         <div class="ev_header">
             {{ "Next events"|t(locale) }}
-            <a style="float: right" href="/new">
+            <a style="float: right" href="/new?ctype=Event">
                 <i class="bi bi-plus-square" style="color: white"></i>
             </a>
         </div>
@@ -85,7 +85,12 @@
     <br />
 
     <div class="ev_box">
-        <div class="ev_header">{{ "Tasks"|t(locale) }}</div>
+        <div class="ev_header">
+            {{ "Tasks"|t(locale) }}
+            <a style="float: right" href="/new?ctype=Todo">
+                <i class="bi bi-plus-square" style="color: white"></i>
+            </a>
+        </div>
         <div class="ev_scrollbox">
             {% for day in tasks.days %}
             <div class="ev_next_day_header">

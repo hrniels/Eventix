@@ -3,7 +3,7 @@ use std::sync::{Arc, MutexGuard};
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
 use ical::col::{CalStore, Id};
-use ical::objects::{CalComponent, CalTodoStatus, EventLike};
+use ical::objects::{CalCompType, CalComponent, CalTodoStatus, EventLike};
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
@@ -32,7 +32,7 @@ impl<'a> Tasks<'a> {
         let end = start + Duration::days(days as i64);
 
         let mut next_td_occs = store
-            .filtered_occurrences_within(start, end, |c| c.is_todo())
+            .filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo)
             .collect::<Vec<_>>();
 
         let overdue_tds = store

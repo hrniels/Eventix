@@ -7,13 +7,16 @@ use axum::{
     Router,
 };
 use chrono_tz::Tz;
-use ical::col::Occurrence;
 use ical::objects::EventLike;
+use ical::{col::Occurrence, objects::CalCompType};
 use serde::{Deserialize, Serialize};
 
-use crate::comps::{datetimerange::DateTimeRange, recur::RecurRequest};
+use crate::{
+    comp::CompAction,
+    comps::{datetimerange::DateTimeRange, recur::RecurRequest},
+};
 
-use super::{Breadcrumb, Page};
+use super::Page;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -22,7 +25,7 @@ pub struct Request {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Update {
+pub struct CompEdit {
     #[serde(flatten)]
     req: Request,
     summary: String,
@@ -32,7 +35,7 @@ pub struct Update {
     start_end: DateTimeRange,
 }
 
-impl Update {
+impl CompEdit {
     pub fn new_from_occurrence(req: Request, occ: &Occurrence, tz: &Tz) -> Self {
         Self {
             req,
@@ -41,26 +44,56 @@ impl Update {
             description: occ.description().cloned().unwrap_or(String::from("")),
             rrule: RecurRequest::from_rrule(occ.rrule()),
             start_end: DateTimeRange::new_from_caldate(
-                Some(occ.occurrence_startdate()),
-                occ.occurrence_enddate(),
+                if occ.is_recurrent() {
+                    Some(occ.occurrence_startdate())
+                } else {
+                    occ.start().cloned()
+                },
+                if occ.is_recurrent() {
+                    occ.occurrence_enddate()
+                } else {
+                    occ.end_or_due().cloned()
+                },
                 tz,
             ),
         }
     }
 }
 
-pub fn new_page(req: &Request) -> Page {
-    let mut page = Page::new(path().to_string());
-    let name = if req.rid.is_some() {
-        "Edit occurrence"
-    } else {
-        "Edit series"
-    };
-    page.add_breadcrumb(Breadcrumb::new(
-        format!("{}?{}", path(), serde_qs::to_string(req).unwrap()),
-        name,
-    ));
-    page
+impl CompAction for CompEdit {
+    fn summary(&self) -> &String {
+        &self.summary
+    }
+    fn location(&self) -> &String {
+        &self.location
+    }
+    fn description(&self) -> &String {
+        &self.description
+    }
+    fn rrule(&self) -> &RecurRequest {
+        &self.rrule
+    }
+    fn start_end(&self) -> &DateTimeRange {
+        &self.start_end
+    }
+}
+
+pub fn build_title(occ: &Occurrence, rid: &Option<String>) -> String {
+    let mut title = String::from("Edit ");
+    match occ.ctype() {
+        CalCompType::Event => title.push_str("event"),
+        CalCompType::Todo => title.push_str("task"),
+    }
+    if rid.is_some() {
+        title.push_str(" occurrence");
+    } else if occ.rrule().is_some() {
+        title.push_str(" series");
+    }
+    title
+}
+
+pub fn new_page() -> Page {
+    Page::new(path().to_string())
 }
 
 pub fn path() -> &'static str {

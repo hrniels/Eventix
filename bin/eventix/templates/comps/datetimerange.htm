@@ -8,16 +8,26 @@ function calSettings() {
     };
 }
 
+function setChecked(id, value) {
+    $("#" + id).prop('checked', value != "");
+}
+
 $(function() {
     var settings = calSettings();
     var from = $("#{{ id }}from_date")
         .datepicker(settings)
         .on("change", function() {
+            {% if ctype == CalCompType::Todo %}
+            setChecked('{{ id }}from_enabled', this.value);
+            {% endif %}
             to.datepicker("option", "minDate", getDate(this));
         });
     var to = $("#{{ id }}to_date")
         .datepicker(settings)
         .on("change", function() {
+            {% if ctype == CalCompType::Todo %}
+            setChecked('{{ id }}to_enabled', this.value);
+            {% endif %}
             from.datepicker("option", "maxDate", getDate(this));
         });
 
@@ -46,6 +56,12 @@ $(function() {
             {{ "Start"|t(locale) }}:
         </td>
         <td>
+            {% if ctype == CalCompType::Todo %}
+            <input type="checkbox" id="{{ id }}from_enabled" name="{{ name }}[from_enabled]"
+                                   value="true"{% if from_enabled %}checked="checked"{% endif %}/>
+            {% else %}
+            <input type="hidden" name="{{ name}}[from_enabled]" value="true"/>
+            {% endif %}
             <input id="{{ id }}from_date" type="text" name="{{ name }}[from][date]" size="8"
                    maxlength="10" value="{{ from_date|naive_date }}" />
             <input id="{{ id }}from_time" type="text" name="{{ name }}[from][time]" size="8"
@@ -54,9 +70,19 @@ $(function() {
     </tr>
     <tr>
         <td>
+            {% if ctype == CalCompType::Todo %}
+            {{ "Due"|t(locale) }}:
+            {% else %}
             {{ "End"|t(locale) }}:
+            {% endif %}
         </td>
         <td>
+            {% if ctype == CalCompType::Todo %}
+            <input type="checkbox" id="{{ id }}to_enabled" name="{{ name }}[to_enabled]"
+                                   value="true"{% if to_enabled %}checked="checked"{% endif %}/>
+            {% else %}
+            <input type="hidden" name="{{ name}}[to_enabled]" value="true"/>
+            {% endif %}
             <input id="{{ id }}to_date" type="text" name="{{ name }}[to][date]" size="8"
                    maxlength="10" value="{{ to_date|naive_date }}" />
             <input id="{{ id }}to_time" type="text" name="{{ name }}[to][time]" size="8"

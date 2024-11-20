@@ -10,10 +10,11 @@ use ical::{
 };
 use std::sync::Arc;
 
-use super::{Page, Request, Update};
+use super::{CompEdit, Page, Request};
 use crate::{
     comps::{datetimerange::DateTimeRangeTemplate, recur::RecurTemplate},
     locale::{self, Locale},
+    pages::Breadcrumb,
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
@@ -40,7 +41,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
-        super::new_page(&req),
+        super::new_page(),
         locale::default(),
         State(state),
         Query(req),
@@ -50,11 +51,11 @@ pub async fn handler(
 }
 
 pub async fn content(
-    page: Page,
+    mut page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
-    form: Option<Update>,
+    form: Option<CompEdit>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let store = state.store().lock().unwrap();
 
@@ -78,9 +79,14 @@ pub async fn content(
             &req.uid, rid
         ))?;
 
+    page.add_breadcrumb(Breadcrumb::new(
+        format!("{}?{}", super::path(), serde_qs::to_string(&req).unwrap()),
+        super::build_title(&occ, &req.rid),
+    ));
+
     let form = match form {
         Some(f) => f,
-        None => Update::new_from_occurrence(req, &occ, locale.timezone()),
+        None => CompEdit::new_from_occurrence(req, &occ, locale.timezone()),
     };
 
     let events = Events::new(&store, &locale, 7);
@@ -93,7 +99,12 @@ pub async fn content(
         summary: &form.summary,
         location: &form.location,
         description: &form.description,
-        start_end: DateTimeRangeTemplate::new(locale.clone(), "start_end", Some(form.start_end)),
+        start_end: DateTimeRangeTemplate::new(
+            locale.clone(),
+            occ.ctype(),
+            "start_end",
+            Some(form.start_end),
+        ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         occ: &occ,
         events,

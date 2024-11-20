@@ -9,11 +9,7 @@
     <input type="hidden" name="rid" value="{{ rid }}" />
     {% endif %}
     <div class="ev_border">
-        {% if let Some(rid) = rid %}
-        <h1 class="ev_header">{{ "Edit occurrence"|t(locale) }}</h1>
-        {% else %}
-        <h1 class="ev_header">{{ "Edit series"|t(locale) }}</h1>
-        {% endif %}
+        <h1 class="ev_header">{{ super::build_title(occ, rid)|t(locale) }}</h1>
         <fieldset class="ev_form">
            <dl>
                 <dt>{{ "Summary"|t(locale) }}:</dt>

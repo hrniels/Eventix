@@ -24,7 +24,7 @@
         {% if let Some(end) = occ.occurrence_end() %}
         <tr>
             <td width="30%">
-                {% if occ.is_event() %}
+                {% if occ.ctype() == CalCompType::Event %}
                 {{ "End date"|t(locale) }}:
                 {% else %}
                 {{ "Due"|t(locale) }}:

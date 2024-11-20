@@ -1,14 +1,14 @@
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::{
-    extract::State,
+    extract::{Query, State},
     response::{Html, IntoResponse},
 };
 use std::sync::Arc;
 
-use ical::objects::{CalDate, EventLike};
+use ical::objects::{CalCompType, CalDate, EventLike};
 
-use super::{Page, Save};
+use super::{CompNew, Page, Request};
 use crate::{
     comps::{
         calcombo::CalComboTemplate, datetimerange::DateTimeRangeTemplate, recur::RecurTemplate,
@@ -23,6 +23,7 @@ use crate::{html::filters, pages::events::Events};
 struct NewTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
+    ctype: CalCompType,
     summary: &'a String,
     location: &'a String,
     description: &'a String,
@@ -35,13 +36,14 @@ struct NewTemplate<'a> {
 
 pub async fn handler(
     State(state): State<crate::state::State>,
+    Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
     content(
-        super::new_page(),
+        super::new_page(&req),
         locale.clone(),
         State(state),
-        Save::new(locale.timezone()),
+        CompNew::new(req.ctype, locale.timezone()),
     )
     .await
 }
@@ -50,7 +52,7 @@ pub async fn content(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<crate::state::State>,
-    form: Save,
+    form: CompNew,
 ) -> Result<impl IntoResponse, HTMLError> {
     let store = state.store().lock().unwrap();
 
@@ -62,7 +64,12 @@ pub async fn content(
         summary: &form.summary,
         location: &form.location,
         description: &form.description,
-        start_end: DateTimeRangeTemplate::new(locale.clone(), "start_end", Some(form.start_end)),
+        start_end: DateTimeRangeTemplate::new(
+            locale.clone(),
+            form.req.ctype,
+            "start_end",
+            Some(form.start_end),
+        ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         calendars: CalComboTemplate::new(
             locale.clone(),
@@ -73,6 +80,7 @@ pub async fn content(
         events,
         locale,
         tasks,
+        ctype: form.req.ctype,
     }
     .render()
     .context("new template")?;

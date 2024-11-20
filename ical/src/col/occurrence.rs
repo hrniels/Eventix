@@ -3,8 +3,8 @@ use chrono_tz::Tz;
 
 use crate::col::Id;
 use crate::objects::{
-    CalAttendee, CalComponent, CalDate, CalEventStatus, CalOrganizer, CalRRule, CalTodoStatus,
-    EventLike,
+    CalAttendee, CalCompType, CalComponent, CalDate, CalEventStatus, CalOrganizer, CalRRule,
+    CalTodoStatus, EventLike,
 };
 use crate::parser::{Property, PropertyProducer};
 
@@ -30,12 +30,8 @@ impl<'c> Occurrence<'c> {
         self.source
     }
 
-    pub fn is_event(&self) -> bool {
-        self.base.is_event()
-    }
-
-    pub fn is_todo(&self) -> bool {
-        self.base.is_todo()
+    pub fn ctype(&self) -> CalCompType {
+        self.base.ctype()
     }
 
     pub fn is_overwritten(&self) -> bool {

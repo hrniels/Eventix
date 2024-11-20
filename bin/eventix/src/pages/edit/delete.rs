@@ -63,7 +63,7 @@ pub async fn handler(
     Query(form): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page(&form);
+    let mut page = super::new_page();
 
     action_delete(&mut page, &locale, state.store().clone(), &form)?;
 
