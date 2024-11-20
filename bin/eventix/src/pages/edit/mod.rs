@@ -81,13 +81,13 @@ impl CompAction for CompEdit {
 pub fn build_title(occ: &Occurrence, rid: &Option<String>) -> String {
     let mut title = String::from("Edit ");
     match occ.ctype() {
-        CalCompType::Event => title.push_str("event"),
-        CalCompType::Todo => title.push_str("task"),
+        CalCompType::Event => title.push_str("Event"),
+        CalCompType::Todo => title.push_str("Task"),
     }
     if rid.is_some() {
-        title.push_str(" occurrence");
+        title.push_str(" Occurrence");
     } else if occ.rrule().is_some() {
-        title.push_str(" series");
+        title.push_str(" Series");
     }
     title
 }
