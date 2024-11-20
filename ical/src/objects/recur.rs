@@ -178,6 +178,10 @@ impl FromStr for CalWDayDesc {
             (s, CalRRuleSide::Front)
         };
 
+        if s.is_empty() {
+            return Err(anyhow!("Unexpected string end"));
+        }
+
         let mut rest = s;
         while rest.as_bytes()[0].is_ascii_digit() {
             rest = &rest[1..];
