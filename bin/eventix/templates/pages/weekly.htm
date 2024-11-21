@@ -1,0 +1,160 @@
+{% extends "content.htm" %}
+
+{% block inner %}
+
+<table width="100%" class="ev_table">
+    <tr>
+        <th align="left"><a href="/weekly?date={{ prev_week }}">&lt;&lt;</a></th>
+        <th colspan="6" align="center">{{ week_start }} - {{ week_end }}</th>
+        <th align="right"><a href="/weekly?date={{ next_week }}">&gt;&gt;</a></th>
+    </tr>
+    <tr>
+        <td width="12%"></td>
+        {% for day in days %}
+        <td width="12%" align="center">
+            {% let date = day.date.unwrap() %}
+            {% if date == today %}
+            <b>
+                {{ date.format("%A") }},
+                <span class="ev_today">{{ date.format("%b %d") }}</span>
+            </b>
+            {% else %}
+            <b>{{ date.format("%A, %b %d") }}</b>
+            {% endif %}
+        </td>
+        {% endfor %}
+    </tr>
+    <tr>
+        <td width="12%"></td>
+        {% for day in days %}
+        <td width="12%" align="center" class="ev_month_td" style="height: auto">
+            <div class="ev_month_cell">
+                {% for occ in day.allday %}
+                <div onclick="openPopup('{{ occ.uid() }}',
+                                        'ev_id_{{ occ.uid_html() }}',
+                                        '{{ occ.rid_html() }}',
+                                        '{{ occ.id() }}')"
+                         id="{{ occ.id() }}" class="
+                    ev_event_occurrence
+                    ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                    ev_id_{{ occ.uid_html() }}
+                    {% match occ.status_class() %}
+                    {% when Some with (cl) %}
+                    ev_status_{{ cl }}
+                    {% when _ %}
+                    {% endmatch %}
+                    "
+                     >
+                    <div style="padding: 2px">
+                        {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                        <i style="float: right" class="bi bi-arrow-clockwise"></i>
+                        {% endif %}
+                        {% if occ.is_overwritten() %}
+                        <i style="float: right" class="bi bi-pencil"></i>
+                        {% endif %}
+                        {% if !occ.is_all_day() %}
+                        {{ occ.occurrence_start().format("%H:%M") }}:
+                        {% else %}
+                        <center>
+                        {% endif %}
+                        {{ occ.summary().unwrap() }}
+                        {% if occ.is_all_day() %}
+                        </center>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </td>
+        {% endfor %}
+    </tr>
+</table>
+<div id="week_scroll_area" style="height: 720px; overflow-y: scroll;">
+<table width="100%" class="ev_table">
+    <tr>
+        <td width="12%" class="ev_month_td">
+        <div style="position: relative; height: 1440px; padding: 0px">
+        {% for hour in 0..24 %}
+        <div style="position: absolute;
+                    top: {{ hour * 60 }}px;
+                    padding: 2px;
+                    {% if hour > 0 %}
+                    width: 100%;
+                    border-top: .05em dashed #000000;
+                    {% endif %}">
+            {{ format!("{:02}", hour) }}:00
+        </div>
+        {% endfor %}
+        </div>
+        </td>
+        {% for day in days %}
+        <td width="12%" class="ev_month_td">
+            <div class="ev_month_cell">
+                <div style="position: relative; height: 1440px; padding: 0px">
+                {% for hour in 0..24 %}
+                <div style="position: absolute;
+                            top: {{ hour * 60 }}px;
+                            {% if hour > 0 %}
+                            width: 100%;
+                            border-top: .05em dashed #000000;
+                            {% endif %}">
+                </div>
+                {% endfor %}
+                {% for occ in day.occurrences %}
+                <div style="position: absolute;
+                            top: {{ occ.minute_off() }}px;
+                            height: {{ occ.minute_duration() - 2 }}px;
+                            width: {{ 100 / occ.overlap_count() }}%;
+                            left: {{ occ.overlap_off() * (100 / occ.overlap_count()) }}%;
+                            padding: 0px"
+                     onclick="openPopup('{{ occ.uid() }}',
+                                        'ev_id_{{ occ.uid_html() }}',
+                                        '{{ occ.rid_html() }}',
+                                        '{{ occ.id() }}')"
+                     id="{{ occ.id() }}" class="
+                    ev_event_occurrence
+                    ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                    ev_id_{{ occ.uid_html() }}
+                    {% match occ.status_class() %}
+                    {% when Some with (cl) %}
+                    ev_status_{{ cl }}
+                    {% when _ %}
+                    {% endmatch %}
+                    "
+                     >
+                    <div style="padding: 2px">
+                        {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                        <i style="float: right" class="bi bi-arrow-clockwise"></i>
+                        {% endif %}
+                        {% if occ.is_overwritten() %}
+                        <i style="float: right" class="bi bi-pencil"></i>
+                        {% endif %}
+                        {% if !occ.is_all_day() %}
+                        {{ occ.occurrence_start().format("%H:%M") }}:
+                        {% else %}
+                        <center>
+                        {% endif %}
+                        {{ occ.summary().unwrap() }}
+                        {% if occ.is_all_day() %}
+                        </center>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                </div>
+            </div>
+        </td>
+        {% endfor %}
+    </tr>
+</table>
+</div>
+
+<script type="text/javascript">
+    $(function() {
+        var area = document.getElementById("week_scroll_area");
+        area.scrollTop = 60 * 8;
+    });
+</script>
+
+{% endblock inner %}
+

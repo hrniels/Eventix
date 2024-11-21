@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::{ops::Deref, sync::Mutex};
 
-use chrono::{NaiveDate, TimeZone};
+use chrono::{NaiveDate, TimeZone, Timelike};
 use chrono_tz::Tz;
 use ical::col::Occurrence;
 use ical::objects::{CalTodoStatus, EventLike};
@@ -10,6 +10,7 @@ use once_cell::sync::Lazy;
 pub struct DayOccurrence<'a> {
     id: u64,
     inner: Occurrence<'a>,
+    overlap: Option<(usize, usize)>,
 }
 
 impl<'a> DayOccurrence<'a> {
@@ -21,6 +22,7 @@ impl<'a> DayOccurrence<'a> {
         Self {
             id,
             inner: inner.clone(),
+            overlap: None,
         }
     }
 
@@ -94,6 +96,18 @@ impl<'a> DayOccurrence<'a> {
         self.id
     }
 
+    pub fn overlap_count(&self) -> usize {
+        self.overlap.unwrap().0
+    }
+
+    pub fn overlap_off(&self) -> usize {
+        self.overlap.unwrap().1
+    }
+
+    pub fn set_overlap(&mut self, overlap: (usize, usize)) {
+        self.overlap = Some(overlap);
+    }
+
     pub fn uid_html(&self) -> String {
         self.inner
             .uid()
@@ -116,6 +130,18 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn status_class(&self) -> Option<String> {
         self.inner.event_status().map(|st| format!("{:?}", st))
+    }
+
+    pub fn minute_off(&self) -> u64 {
+        self.inner.occurrence_start().hour() as u64 * 60
+            + self.inner.occurrence_start().minute() as u64
+    }
+
+    pub fn minute_duration(&self) -> u64 {
+        match self.inner.duration() {
+            Some(d) => d.num_minutes() as u64,
+            None => 0,
+        }
     }
 }
 

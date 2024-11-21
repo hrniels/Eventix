@@ -2,6 +2,7 @@ pub mod details;
 pub mod edit;
 pub mod monthly;
 pub mod new;
+pub mod weekly;
 
 mod events;
 mod tasks;

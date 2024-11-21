@@ -12,7 +12,7 @@ use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
-use pages::{details, edit, monthly, new};
+use pages::{details, edit, monthly, new, weekly};
 use std::{
     env,
     path::PathBuf,
@@ -85,6 +85,7 @@ async fn main() {
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
         .nest_service("/static", ServeDir::new("static"))
         .nest(monthly::path(), monthly::router(state.clone()))
+        .nest(weekly::path(), weekly::router(state.clone()))
         .nest(details::path(), details::router(state.clone()))
         .nest(edit::path(), edit::router(state.clone()))
         .nest(new::path(), new::router(state.clone()))
