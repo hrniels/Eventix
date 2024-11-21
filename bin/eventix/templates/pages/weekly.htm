@@ -4,9 +4,9 @@
 
 <table width="100%" class="ev_table">
     <tr>
-        <th align="left"><a href="/weekly?date={{ prev_week }}">&lt;&lt;</a></th>
+        <th align="left"><a id="link-prev" href="/weekly?date={{ prev_week }}">&lt;&lt;</a></th>
         <th colspan="6" align="center">{{ week_start }} - {{ week_end }}</th>
-        <th align="right"><a href="/weekly?date={{ next_week }}">&gt;&gt;</a></th>
+        <th align="right"><a id="link-next" href="/weekly?date={{ next_week }}">&gt;&gt;</a></th>
     </tr>
     <tr>
         <td width="12%"></td>
@@ -153,6 +153,20 @@
     $(function() {
         var area = document.getElementById("week_scroll_area");
         area.scrollTop = 60 * 8;
+    });
+
+    $(document).keydown(function(e) {
+        switch(e.code) {
+            case "Period":
+                document.location.href = '/weekly';
+                break;
+            case "ArrowLeft":
+                document.getElementById('link-prev').click();
+                break;
+            case "ArrowRight":
+                document.getElementById('link-next').click();
+                break;
+        }
     });
 </script>
 
