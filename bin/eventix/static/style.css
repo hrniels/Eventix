@@ -429,7 +429,7 @@ span.ev_msg_error span.ev_msg_info {
     color: #000 !important;
 }
 .ev_today {
-    border-radius: 50%;
+    border-radius: 10px;
     background-color: #3584e4;
     padding: 2px;
     color: #fff;
