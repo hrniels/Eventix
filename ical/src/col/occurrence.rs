@@ -106,12 +106,12 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
-        if self.start >= start && self.start <= end {
+        if self.start >= start && self.start < end {
             return true;
         }
 
         if let Some(occ_end) = self.occurrence_end() {
-            if occ_end >= start && occ_end <= end {
+            if occ_end > start && occ_end <= end {
                 return true;
             }
             if self.start < start && occ_end > end {
