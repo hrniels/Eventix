@@ -19,7 +19,7 @@ use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
 
 struct Day<'a> {
-    date: Option<NaiveDate>,
+    date: NaiveDate,
     allday: Vec<DayOccurrence<'a>>,
     occurrences: Vec<DayOccurrence<'a>>,
 }
@@ -209,7 +209,7 @@ pub async fn content(
         }
 
         days.push(Day {
-            date: Some(date),
+            date,
             allday,
             occurrences: day_occs,
         });

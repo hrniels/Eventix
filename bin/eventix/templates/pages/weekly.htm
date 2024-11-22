@@ -12,14 +12,13 @@
         <td width="12%"></td>
         {% for day in days %}
         <td width="12%" align="center">
-            {% let date = day.date.unwrap() %}
-            {% if date == today %}
+            {% if day.date == today %}
             <b>
-                {{ date.format("%A") }},
-                <span class="ev_today">{{ date.format("%b %d") }}</span>
+                {{ day.date.format("%A") }},
+                <span class="ev_today">{{ day.date.format("%b %d") }}</span>
             </b>
             {% else %}
-            <b>{{ date.format("%A, %b %d") }}</b>
+            <b>{{ day.date.format("%A, %b %d") }}</b>
             {% endif %}
         </td>
         {% endfor %}
@@ -28,7 +27,7 @@
         <td width="12%"></td>
         {% for day in days %}
         <td width="12%" align="center" class="ev_month_td
-                                              {% if day.date.unwrap() == today %}ev_today_bg{% endif %}"
+                                              {% if day.date == today %}ev_today_bg{% endif %}"
                                        style="height: auto">
             <div class="ev_month_cell">
                 {% for occ in day.allday %}
@@ -101,7 +100,7 @@
                             {% if hour > 0 %}
                             border-top: .05em dashed #000000;
                             {% endif %}"
-                     {% if day.date.unwrap() == today %}class="ev_today_bg"{% endif %}>
+                     {% if day.date == today %}class="ev_today_bg"{% endif %}>
                 </div>
                 {% endfor %}
                 {% for occ in day.occurrences %}
