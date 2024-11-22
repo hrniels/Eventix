@@ -22,7 +22,7 @@
             <a href="/weekly?date={{ date.format("%Y-%m-%d") }}">{{ date.format("%W") }}</a>
         </td>
     {% endif %}
-        <td width="14%" class="ev_month_td">
+        <td width="14%" class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}">
             <div class="ev_month_cell">
                 <div class="
                     ev_month_day_header

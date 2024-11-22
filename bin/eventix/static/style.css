@@ -433,9 +433,10 @@ span.ev_msg_error span.ev_msg_info {
 }
 .ev_today {
     border-radius: 10px;
-    background-color: #3584e4;
+    border: .05em solid #000;
+    background-color: #d4e3ff;
     padding: 2px;
-    color: #fff;
+    color: #000;
     font-weight: bold;
 }
 
@@ -465,6 +466,10 @@ span.ev_msg_error span.ev_msg_info {
 }
 .ev_duetoday {
     font-weight: bold;
+}
+
+.ev_today_bg {
+    background-color: #d4e3ff;
 }
 
 /* ------------ EVENT/TODO POPUP ------------ */
