@@ -37,7 +37,7 @@
     <div class="ev_box">
         <div class="ev_header">
             {{ "Next Events"|t(locale) }}
-            <a style="float: right" href="/new?ctype=Event">
+            <a id="link-event" style="float: right" href="/new?ctype=Event">
                 <i class="bi bi-plus-square" style="color: white"></i>
             </a>
         </div>
@@ -87,7 +87,7 @@
     <div class="ev_box">
         <div class="ev_header">
             {{ "Tasks"|t(locale) }}
-            <a style="float: right" href="/new?ctype=Todo">
+            <a id="link-todo" style="float: right" href="/new?ctype=Todo">
                 <i class="bi bi-plus-square" style="color: white"></i>
             </a>
         </div>
@@ -140,5 +140,22 @@
 <br style="clear: both" />
 
 <div id="popup" class="ev_popup"></div>
+
+<script type="text/javascript">
+    $(document).keydown(function(e) {
+        // we have to ignore these keys if the focus is on an input element or similar. to be sure,
+        // we only accept them when the body is focused.
+        if(document.activeElement.nodeName == 'BODY') {
+            switch(e.code) {
+                case "KeyE":
+                    document.getElementById('link-event').click();
+                    break;
+                case "KeyT":
+                    document.getElementById('link-todo').click();
+                    break;
+            }
+        }
+    });
+</script>
 
 {% endblock %}
