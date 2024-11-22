@@ -1,5 +1,6 @@
-use anyhow::anyhow;
 use std::{fmt, str::FromStr};
+
+use crate::parser::ParseError;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalTodoStatus {
@@ -10,7 +11,7 @@ pub enum CalTodoStatus {
 }
 
 impl FromStr for CalTodoStatus {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
@@ -18,7 +19,7 @@ impl FromStr for CalTodoStatus {
             "COMPLETED" => Ok(Self::Completed),
             "IN-PROCESS" => Ok(Self::InProcess),
             "CANCELLED" => Ok(Self::Cancelled),
-            _ => Err(anyhow!("Invalid status {}", s)),
+            _ => Err(ParseError::InvalidStatus(s.to_string())),
         }
     }
 }
@@ -43,14 +44,14 @@ pub enum CalEventStatus {
 }
 
 impl FromStr for CalEventStatus {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
             "TENTATIVE" => Ok(Self::Tentative),
             "CANCELLED" => Ok(Self::Cancelled),
             "CONFIRMED" => Ok(Self::Confirmed),
-            _ => Err(anyhow!("Invalid status {}", s)),
+            _ => Err(ParseError::InvalidStatus(s.to_string())),
         }
     }
 }

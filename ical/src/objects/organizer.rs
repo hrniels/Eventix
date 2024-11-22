@@ -1,4 +1,4 @@
-use crate::parser::{Parameter, Property};
+use crate::parser::{Parameter, ParseError, Property};
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct CalOrganizer {
@@ -35,7 +35,7 @@ impl CalOrganizer {
 }
 
 impl TryFrom<Property> for CalOrganizer {
-    type Error = anyhow::Error;
+    type Error = ParseError;
 
     fn try_from(prop: Property) -> Result<Self, Self::Error> {
         let mut org = CalOrganizer::default();

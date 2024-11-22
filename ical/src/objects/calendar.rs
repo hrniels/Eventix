@@ -1,9 +1,10 @@
-use anyhow::anyhow;
 use std::io::{BufRead, Write};
 use std::str::FromStr;
 
 use crate::objects::{CalComponent, CalEvent, CalTodo, EventLike};
-use crate::parser::{LineReader, LineWriter, Property, PropertyConsumer, PropertyProducer};
+use crate::parser::{
+    LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
+};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct Calendar {
@@ -39,7 +40,8 @@ impl Calendar {
         for p in self.to_props() {
             wr.write_line(p.to_string())?;
         }
-        wr.write_line("END:VCALENDAR")
+        wr.write_line("END:VCALENDAR")?;
+        Ok(())
     }
 }
 
@@ -61,7 +63,7 @@ impl PropertyConsumer for Calendar {
     fn from_lines<R: BufRead>(
         lines: &mut LineReader<R>,
         _prop: Property,
-    ) -> Result<Self, anyhow::Error>
+    ) -> Result<Self, ParseError>
     where
         Self: Sized,
     {
@@ -87,7 +89,7 @@ impl PropertyConsumer for Calendar {
                 }
                 "END" => {
                     if prop.value() != "VCALENDAR" {
-                        return Err(anyhow!("Unexpected END:{}", prop.value()));
+                        return Err(ParseError::UnexpectedEnd(prop.take_value()));
                     }
                     break Ok(cal);
                 }
@@ -100,12 +102,12 @@ impl PropertyConsumer for Calendar {
 }
 
 impl FromStr for Calendar {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut lines = LineReader::new(s.as_bytes());
         let Some(line) = lines.next() else {
-            return Err(anyhow!("Unexpected EOF"));
+            return Err(ParseError::UnexpectedEOF);
         };
 
         let prop = line.parse::<Property>()?;
@@ -114,7 +116,7 @@ impl FromStr for Calendar {
                 let cal = Calendar::from_lines(&mut lines, prop)?;
                 Ok(cal)
             }
-            _ => Err(anyhow!("Unexpected property: {:?}", prop)),
+            _ => Err(ParseError::UnexpectedProp(prop.name().to_string())),
         }
     }
 }
@@ -148,17 +150,14 @@ impl PropertyProducer for Other {
 }
 
 impl PropertyConsumer for Other {
-    fn from_lines<R: BufRead>(
-        lines: &mut LineReader<R>,
-        prop: Property,
-    ) -> Result<Self, anyhow::Error>
+    fn from_lines<R: BufRead>(lines: &mut LineReader<R>, prop: Property) -> Result<Self, ParseError>
     where
         Self: Sized,
     {
         let mut other = Other::new(prop.take_value());
         loop {
             let Some(line) = lines.next() else {
-                break Err(anyhow!("Unexpected EOF"));
+                break Err(ParseError::UnexpectedEOF);
             };
 
             let prop = line.parse::<Property>()?;

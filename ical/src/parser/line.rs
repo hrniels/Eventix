@@ -1,4 +1,4 @@
-use std::io::{BufRead, Write};
+use std::io::{self, BufRead, Write};
 
 const MAX_LINE_LEN: usize = 75;
 
@@ -62,7 +62,7 @@ impl<W: Write> LineWriter<W> {
         Self { writer }
     }
 
-    pub fn write_line<S: AsRef<str>>(&mut self, line: S) -> Result<(), anyhow::Error> {
+    pub fn write_line<S: AsRef<str>>(&mut self, line: S) -> io::Result<()> {
         let mut first = true;
         let mut line = line.as_ref();
         while !line.is_empty() {

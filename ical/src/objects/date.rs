@@ -1,11 +1,10 @@
 use std::{cmp::Ordering, fmt, str::FromStr};
 
-use anyhow::anyhow;
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
-use crate::parser::{Parameter, Property};
+use crate::parser::{Parameter, ParseError, Property};
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDate {
@@ -191,7 +190,7 @@ impl fmt::Display for CalDateTime {
 }
 
 impl FromStr for CalDate {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let prop = format!("X:{}", s).parse::<Property>()?;
@@ -200,12 +199,12 @@ impl FromStr for CalDate {
 }
 
 impl TryFrom<Property> for CalDate {
-    type Error = anyhow::Error;
+    type Error = ParseError;
 
     fn try_from(prop: Property) -> Result<Self, Self::Error> {
         let datetime = prop.value();
         if datetime.len() < 8 {
-            return Err(anyhow!("Malformed date: {}", datetime));
+            return Err(ParseError::MalformedDate(datetime.to_string()));
         }
 
         let year = datetime[0..4].parse::<i32>()?;
@@ -214,12 +213,12 @@ impl TryFrom<Property> for CalDate {
 
         if datetime.len() == 8 || prop.has_param_value("VALUE", "DATE") {
             let date = NaiveDate::from_ymd_opt(year, month, day)
-                .ok_or_else(|| anyhow!("Invalid date: {datetime}"))?;
+                .ok_or_else(|| ParseError::InvalidDate(datetime.to_string()))?;
             return Ok(CalDate::Date(date));
         }
 
         if datetime.len() < 15 || &datetime[8..9] != "T" {
-            return Err(anyhow!("Malformed datetime: {}", datetime));
+            return Err(ParseError::MalformedDate(datetime.to_string()));
         }
 
         let hour = datetime[9..11].parse::<u32>()?;
@@ -228,7 +227,7 @@ impl TryFrom<Property> for CalDate {
 
         let date = NaiveDate::from_ymd_opt(year, month, day)
             .and_then(|d| d.and_hms_opt(hour, min, sec))
-            .ok_or_else(|| anyhow!("Invalid datetime: {datetime}"))?;
+            .ok_or_else(|| ParseError::InvalidDate(datetime.to_string()))?;
 
         let res = if datetime.ends_with('Z') {
             CalDateTime::Utc(date.and_utc())

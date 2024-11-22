@@ -1,8 +1,6 @@
 use std::{fmt, str::FromStr};
 
-use anyhow::anyhow;
-
-use crate::parser::{Parameter, Property};
+use crate::parser::{Parameter, ParseError, Property};
 
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalRole {
@@ -25,7 +23,7 @@ impl fmt::Display for CalRole {
 }
 
 impl FromStr for CalRole {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
@@ -33,7 +31,7 @@ impl FromStr for CalRole {
             "REQ-PARTICIPANT" => Ok(Self::Required),
             "OPT-PARTICIPANT" => Ok(Self::Optional),
             "NON-PARTICIPANT" => Ok(Self::None),
-            _ => Err(anyhow!("Invalid role {}", s)),
+            _ => Err(ParseError::InvalidRole(s.to_string())),
         }
     }
 }
@@ -65,7 +63,7 @@ impl fmt::Display for CalPartStat {
 }
 
 impl FromStr for CalPartStat {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
@@ -76,7 +74,7 @@ impl FromStr for CalPartStat {
             "DELEGATED" => Ok(Self::Delegated),
             "COMPLETED" => Ok(Self::Completed),
             "IN-PROCESS" => Ok(Self::InProcess),
-            _ => Err(anyhow!("Invalid participation status {}", s)),
+            _ => Err(ParseError::InvalidStatus(s.to_string())),
         }
     }
 }
@@ -124,7 +122,7 @@ impl CalAttendee {
 }
 
 impl TryFrom<Property> for CalAttendee {
-    type Error = anyhow::Error;
+    type Error = ParseError;
 
     fn try_from(prop: Property) -> Result<Self, Self::Error> {
         let mut att = CalAttendee::default();

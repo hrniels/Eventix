@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
 use itertools::Itertools;
@@ -8,7 +7,7 @@ use std::fmt::Display;
 use crate::objects::{
     CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike, UpdatableEventLike,
 };
-use crate::parser::{Property, PropertyProducer};
+use crate::parser::{ParseError, Property, PropertyProducer};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
@@ -40,7 +39,7 @@ impl EventLikeComponent {
         self.start = start;
     }
 
-    pub(crate) fn parse_prop(&mut self, prop: Property) -> Result<(), anyhow::Error> {
+    pub(crate) fn parse_prop(&mut self, prop: Property) -> Result<(), ParseError> {
         match prop.name().as_str() {
             "UID" => {
                 self.uid = prop.take_value();
@@ -96,7 +95,7 @@ impl EventLikeComponent {
             "PRIORITY" => {
                 let prio = prop.value().parse()?;
                 if prio >= 10 {
-                    return Err(anyhow!("Invalid priority: {}", prio));
+                    return Err(ParseError::InvalidPriority(prio));
                 }
                 self.priority = Some(prio);
             }

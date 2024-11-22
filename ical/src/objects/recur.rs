@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use chrono::offset::LocalResult;
 use chrono::{DateTime, Datelike, Duration, Month, Months, NaiveDateTime, Timelike, Weekday};
 use chrono_tz::Tz;
@@ -7,7 +6,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::objects::CalDate;
-use crate::parser::Property;
+use crate::parser::{ParseError, Property};
 use crate::util;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -52,7 +51,7 @@ impl fmt::Display for CalRRuleFreq {
 }
 
 impl FromStr for CalRRuleFreq {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -63,7 +62,7 @@ impl FromStr for CalRRuleFreq {
             "WEEKLY" => Ok(Self::Weekly),
             "MONTHLY" => Ok(Self::Monthly),
             "YEARLY" => Ok(Self::Yearly),
-            _ => Err(anyhow!("unexpected frequency {}", s)),
+            _ => Err(ParseError::InvalidFrequency(s.to_string())),
         }
     }
 }
@@ -75,13 +74,13 @@ pub enum CalRRuleSide {
 }
 
 impl FromStr for CalRRuleSide {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.as_bytes()[0] {
             b'+' => Ok(Self::Front),
             b'-' => Ok(Self::Back),
-            _ => Err(anyhow!("unexpected side {}", s)),
+            _ => Err(ParseError::InvalidSide(s.to_string())),
         }
     }
 }
@@ -93,7 +92,7 @@ pub struct CalWDayDesc {
 }
 
 impl CalWDayDesc {
-    pub fn parse_weekday(s: &str) -> Result<Weekday, anyhow::Error> {
+    pub fn parse_weekday(s: &str) -> Result<Weekday, ParseError> {
         match s {
             "SU" => Ok(Weekday::Sun),
             "MO" => Ok(Weekday::Mon),
@@ -102,7 +101,7 @@ impl CalWDayDesc {
             "TH" => Ok(Weekday::Thu),
             "FR" => Ok(Weekday::Fri),
             "SA" => Ok(Weekday::Sat),
-            _ => Err(anyhow!("unexpected weekday {}", s)),
+            _ => Err(ParseError::InvalidWeekday(s.to_string())),
         }
     }
 
@@ -169,7 +168,7 @@ impl CalWDayDesc {
 }
 
 impl FromStr for CalWDayDesc {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (s, side) = if s.starts_with('-') || s.starts_with('+') {
@@ -179,7 +178,7 @@ impl FromStr for CalWDayDesc {
         };
 
         if s.is_empty() {
-            return Err(anyhow!("Unexpected string end"));
+            return Err(ParseError::UnexpectedWDayEnd);
         }
 
         let mut rest = s;
@@ -250,7 +249,7 @@ impl DayDesc {
 }
 
 impl FromStr for DayDesc {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (s, side) = if s.starts_with('-') || s.starts_with('+') {
@@ -752,30 +751,29 @@ impl fmt::Display for CalRRule {
     }
 }
 
-fn parse_list<T: FromStr>(s: &str) -> Result<Vec<T>, anyhow::Error> {
+fn parse_list<E, T>(s: &str) -> Result<Vec<T>, ParseError>
+where
+    T: FromStr<Err = E>,
+    ParseError: From<E>,
+{
     let mut list = Vec::new();
     for item in s.split(',') {
-        list.push(
-            item.parse()
-                .map_err(|_| anyhow!("parsing list item failed"))?,
-        );
+        list.push(item.parse()?);
     }
     Ok(list)
 }
 
 impl FromStr for CalRRule {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut rrule = CalRRule::default();
         for part in s.split(';') {
             let mut name_value = part.splitn(2, '=');
-            let name = name_value
-                .next()
-                .ok_or_else(|| anyhow!("malformed rrule"))?;
+            let name = name_value.next().unwrap();
             let value = name_value
                 .next()
-                .ok_or_else(|| anyhow!("malformed rrule"))?;
+                .ok_or_else(|| ParseError::MissingParamValue)?;
             match name {
                 "FREQ" => {
                     rrule.freq = value.parse()?;
@@ -820,7 +818,7 @@ impl FromStr for CalRRule {
                 "WKST" => {
                     rrule.week_start = Some(CalWDayDesc::parse_weekday(value)?);
                 }
-                _ => return Err(anyhow!("unexpected rule {}", name)),
+                _ => return Err(ParseError::UnexpectedRRule(name.to_string())),
             }
         }
         Ok(rrule)

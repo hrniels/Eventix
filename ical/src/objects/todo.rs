@@ -1,9 +1,8 @@
-use anyhow::anyhow;
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
 use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent, Other};
-use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
+use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct CalTodo {
@@ -83,14 +82,14 @@ impl PropertyConsumer for CalTodo {
     fn from_lines<R: BufRead>(
         lines: &mut LineReader<R>,
         _prop: Property,
-    ) -> Result<Self, anyhow::Error>
+    ) -> Result<Self, ParseError>
     where
         Self: Sized,
     {
         let mut comp = Self::default();
         loop {
             let Some(line) = lines.next() else {
-                break Err(anyhow!("Unexpected EOF"));
+                break Err(ParseError::UnexpectedEOF);
             };
 
             let prop = line.parse::<Property>()?;
@@ -102,7 +101,7 @@ impl PropertyConsumer for CalTodo {
                 }
                 "END" => {
                     if prop.value() != "VTODO" {
-                        return Err(anyhow!("Unexpected END:{}", prop.value()));
+                        return Err(ParseError::UnexpectedEnd(prop.take_value()));
                     }
                     break Ok(comp);
                 }
@@ -118,7 +117,7 @@ impl PropertyConsumer for CalTodo {
                 "PERCENT-COMPLETE" => {
                     let percent = prop.value().parse()?;
                     if percent > 100 {
-                        return Err(anyhow!("Invalid percent: {}", percent));
+                        return Err(ParseError::InvalidPercent(percent));
                     }
                     comp.percent = Some(percent);
                 }

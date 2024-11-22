@@ -1,9 +1,8 @@
-use anyhow::anyhow;
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
 use crate::objects::{CalDate, CalEventStatus, Other};
-use crate::parser::{LineReader, Property, PropertyConsumer, PropertyProducer};
+use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
 use super::component::EventLikeComponent;
 
@@ -65,14 +64,14 @@ impl PropertyConsumer for CalEvent {
     fn from_lines<R: BufRead>(
         lines: &mut LineReader<R>,
         _prop: Property,
-    ) -> Result<Self, anyhow::Error>
+    ) -> Result<Self, ParseError>
     where
         Self: Sized,
     {
         let mut comp = Self::default();
         loop {
             let Some(line) = lines.next() else {
-                break Err(anyhow!("Unexpected EOF"));
+                break Err(ParseError::UnexpectedEOF);
             };
 
             let prop = line.parse::<Property>()?;

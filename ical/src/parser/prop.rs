@@ -1,11 +1,10 @@
-use anyhow::anyhow;
 use std::{
     fmt::{self, Write},
     io::BufRead,
     str::FromStr,
 };
 
-use crate::parser::LineReader;
+use crate::parser::{LineReader, ParseError};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Property {
@@ -93,14 +92,14 @@ impl fmt::Display for Property {
 }
 
 impl FromStr for Property {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut name = String::new();
         let mut chars = s.char_indices();
         let (end, has_params) = loop {
             let Some((idx, c)) = chars.next() else {
-                return Err(anyhow!("Missing name end"));
+                return Err(ParseError::MissingNameEnd);
             };
             if c == ';' || c == ':' {
                 break (idx + 1, c == ';');
@@ -114,7 +113,7 @@ impl FromStr for Property {
             let mut params = Vec::new();
             let end = loop {
                 let Some((idx, c)) = chars.next() else {
-                    return Err(anyhow!("Missing parameter end"));
+                    return Err(ParseError::MissingParamEnd);
                 };
                 if !in_quote {
                     if c == ';' || c == ':' {
@@ -158,7 +157,7 @@ pub trait PropertyConsumer {
     fn from_lines<R: BufRead>(
         lines: &mut LineReader<R>,
         prop: Property,
-    ) -> Result<Self, anyhow::Error>
+    ) -> Result<Self, ParseError>
     where
         Self: Sized;
 }
@@ -203,17 +202,12 @@ impl fmt::Display for Parameter {
 }
 
 impl FromStr for Parameter {
-    type Err = anyhow::Error;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.splitn(2, '=');
-        let name = parts
-            .next()
-            .ok_or_else(|| anyhow!("Missing parameter name"))?
-            .to_string();
-        let value = parts
-            .next()
-            .ok_or_else(|| anyhow!("Missing parameter value"))?;
+        let name = parts.next().unwrap().to_string();
+        let value = parts.next().ok_or_else(|| ParseError::MissingParamValue)?;
 
         // strip quotes
         let value = if value.starts_with('"') {
@@ -237,6 +231,19 @@ mod tests {
         assert_eq!(prop.params(), []);
         assert_eq!(prop.value(), "VCALENDAR");
         assert_eq!(format!("{}", prop), prop_str);
+    }
+
+    #[test]
+    fn errors() {
+        assert_eq!("BEGIN".parse::<Property>(), Err(ParseError::MissingNameEnd));
+        assert_eq!(
+            "BEGIN;TEST".parse::<Property>(),
+            Err(ParseError::MissingParamEnd)
+        );
+        assert_eq!(
+            "BEGIN;:BLA".parse::<Property>(),
+            Err(ParseError::MissingParamValue)
+        );
     }
 
     #[test]
