@@ -2,12 +2,12 @@
 
 {% block inner %}
 
+<h1 class="ev_header">
+    <a style="float: left" id="link-prev" href="/?month={{ prev_month }}">&lt;&lt;</a>
+    {{ month }}
+    <a style="float: right" id="link-next" href="/?month={{ next_month }}">&gt;&gt;</a>
+</h1>
 <table width="100%" class="ev_table">
-    <tr>
-        <th align="left"><a id="link-prev" href="/?month={{ prev_month }}">&lt;&lt;</a></th>
-        <th colspan="5" align="center">{{ month }}</th>
-        <th align="right"><a id="link-next" href="/?month={{ next_month }}">&gt;&gt;</a></th>
-    </tr>
     <tr>
         {% for wday in weekdays %}
         <td align="center"><b>{{ wday }}</b></td>

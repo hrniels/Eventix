@@ -411,6 +411,9 @@ span.ev_msg_error span.ev_msg_info {
     font-weight: bold;
     text-align: center;
 }
+.ev_header * {
+    color: #fff;
+}
 .ev_next_day_header {
     background-color: #f0f0f0;
 	border-top: 1px solid #bbb !important;
