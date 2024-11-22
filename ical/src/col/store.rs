@@ -1,7 +1,7 @@
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::col::{CalItem, CalSource, Id, Occurrence};
+use crate::col::{CalItem, CalSource, ColError, Id, Occurrence};
 use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo};
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -85,7 +85,7 @@ impl CalStore {
         self.items().flat_map(|i| i.events())
     }
 
-    pub fn save(&self) -> Result<(), anyhow::Error> {
+    pub fn save(&self) -> Result<(), ColError> {
         for s in &self.sources {
             s.save()?;
         }

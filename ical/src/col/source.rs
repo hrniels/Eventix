@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
 use std::fmt::Display;
@@ -6,7 +5,7 @@ use std::fs::{read_dir, File};
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::col::{CalItem, Id, Occurrence};
+use crate::col::{CalItem, ColError, Id, Occurrence};
 use crate::objects::{CalComponent, CalDate, Calendar};
 
 #[derive(Debug)]
@@ -42,21 +41,25 @@ impl Default for CalSource {
 }
 
 impl CalSource {
-    pub fn new_from_dir(path: PathBuf, name: String) -> Result<Self, anyhow::Error> {
+    pub fn new_from_dir(path: PathBuf, name: String) -> Result<Self, ColError> {
         let id = super::generate_id();
 
         let mut items = Vec::new();
-        for e in read_dir(path.as_path())? {
-            let filename = e?.path();
+        let dir_items = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
+        for entry in dir_items {
+            let filename = entry
+                .map_err(|e| ColError::ReadDir(path.clone(), e))?
+                .path();
 
             let mut input = String::new();
-            File::open(filename.as_path())?
+            File::open(filename.as_path())
+                .map_err(|e| ColError::FileOpen(filename.clone(), e))?
                 .read_to_string(&mut input)
-                .map_err(|e| anyhow!("Reading {:?} failed: {}", filename, e))?;
+                .map_err(|e| ColError::FileRead(filename.clone(), e))?;
 
-            let cal = input.parse::<Calendar>().map_err(|e| {
-                anyhow!("Parsing calendar in {:?} failed: {}", filename.as_path(), e)
-            })?;
+            let cal = input
+                .parse::<Calendar>()
+                .map_err(|e| ColError::FileParse(filename.clone(), e))?;
             let cal = CalItem::new(id, filename, cal);
             items.push(cal);
         }
@@ -133,7 +136,7 @@ impl CalSource {
             .flat_map(move |i| i.filtered_occurrences_within(start, end, filter.clone()))
     }
 
-    pub fn save(&self) -> Result<(), anyhow::Error> {
+    pub fn save(&self) -> Result<(), ColError> {
         for i in &self.items {
             i.save()?;
         }

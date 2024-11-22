@@ -1,4 +1,4 @@
-use std::io::{BufRead, Write};
+use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
 use crate::objects::{CalComponent, CalEvent, CalTodo, EventLike};
@@ -34,7 +34,7 @@ impl Calendar {
         self.comps.retain(|c| c.uid() != uid.as_ref());
     }
 
-    pub fn write<W: Write>(&self, writer: W) -> Result<(), anyhow::Error> {
+    pub fn write<W: Write>(&self, writer: W) -> io::Result<()> {
         let mut wr = LineWriter::new(writer);
         wr.write_line("BEGIN:VCALENDAR")?;
         for p in self.to_props() {

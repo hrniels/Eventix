@@ -1,11 +1,10 @@
 use std::fs::{self, File};
 use std::path::PathBuf;
 
-use anyhow::anyhow;
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::col::{Id, Occurrence};
+use crate::col::{ColError, Id, Occurrence};
 use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo, Calendar, EventLike};
 
 #[derive(Debug)]
@@ -182,20 +181,20 @@ impl CalItem {
         self.cal.delete_components(uid);
     }
 
-    pub fn save(&self) -> anyhow::Result<()> {
+    pub fn save(&self) -> Result<(), ColError> {
         let file = File::options()
             .write(true)
             .truncate(true)
             .create(true)
-            .open(&self.path)?;
+            .open(&self.path)
+            .map_err(|e| ColError::FileOpen(self.path.clone(), e))?;
         self.cal
             .write(file)
-            .map_err(|e| anyhow!("Writing file '{:?}' failed: {}", self.path, e))
+            .map_err(|e| ColError::FileWrite(self.path.clone(), e))
     }
 
-    pub fn remove(&mut self) -> anyhow::Result<()> {
-        fs::remove_file(&self.path)
-            .map_err(|e| anyhow!("Removing file '{:?}' failed: {}", self.path, e))
+    pub fn remove(&mut self) -> Result<(), ColError> {
+        fs::remove_file(&self.path).map_err(|e| ColError::FileRemove(self.path.clone(), e))
     }
 }
 
