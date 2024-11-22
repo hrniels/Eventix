@@ -4,7 +4,7 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{Datelike, Duration, NaiveDate, TimeZone, Timelike, Utc};
 use ical::{
     col::CalStore,
     objects::{CalCompType, CalDate, EventLike},
@@ -36,6 +36,7 @@ struct WeeklyTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     days: Vec<Day<'a>>,
     today: NaiveDate,
+    minutes: u32,
     week_start: String,
     week_end: String,
     prev_week: String,
@@ -220,6 +221,8 @@ pub async fn content(
     let events = Events::new(&store, &locale);
     let tasks = Tasks::new(&store, &locale);
 
+    let now = Utc::now().with_timezone(&timezone);
+
     let html = WeeklyTemplate {
         page,
         locale,
@@ -227,7 +230,8 @@ pub async fn content(
         week_end: week_end.pred_opt().unwrap().format("%B %d, %Y").to_string(),
         prev_week: prev_week.format("%Y-%m-%d").to_string(),
         next_week: next_week.format("%Y-%m-%d").to_string(),
-        today: Utc::now().with_timezone(&timezone).date_naive(),
+        today: now.date_naive(),
+        minutes: now.time().hour() * 60 + now.time().minute(),
         store: &store,
         days,
         events,
