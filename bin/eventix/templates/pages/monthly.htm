@@ -9,13 +9,18 @@
 </h1>
 <table width="100%" class="ev_table">
     <tr>
+        <td align="center"></td>
         {% for wday in weekdays %}
         <td align="center"><b>{{ wday }}</b></td>
         {% endfor %}
     </tr>
     {% for (idx, day) in days.iter().enumerate() %}
+    {% let date = day.date.unwrap() %}
     {% if idx % 7 == 0 %}
     <tr>
+        <td width="2%" class="ev_month_td" align="center" style="vertical-align: middle">
+            <a href="/weekly?date={{ date.format("%Y-%m-%d") }}">{{ date.format("%W") }}</a>
+        </td>
     {% endif %}
         <td width="14%" class="ev_month_td">
             <div class="ev_month_cell">
@@ -23,7 +28,6 @@
                     ev_month_day_header
                     {% if day.cur_month %}ev_cur_month{% endif %}
                     ">
-                    {% let date = day.date.unwrap() %}
                     {% if date == today %}<span class="ev_today">{% endif %}
                     {% if day.show_month %}
                     {{ date.format("%b %-d") }}
