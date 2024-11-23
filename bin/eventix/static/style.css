@@ -426,6 +426,7 @@ span.ev_msg_error span.ev_msg_info {
     text-align: right;
     background-color: #f0f0f0;
     color: #555;
+    padding: .2em;
 }
 .ev_cur_month {
     background-color: #ddd;
@@ -446,9 +447,8 @@ span.ev_msg_error span.ev_msg_info {
 }
 
 .ev_month_cell {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
+    height: 110px;
+    overflow-y: scroll;
 }
 .ev_month_cell div {
     white-space: nowrap;
@@ -470,6 +470,18 @@ span.ev_msg_error span.ev_msg_info {
 
 .ev_today_bg {
     background-color: #d4e3ff;
+}
+
+.ev_week_cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.ev_week_cell div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: .2em;
 }
 
 /* ------------ EVENT/TODO POPUP ------------ */

@@ -23,19 +23,19 @@
         </td>
     {% endif %}
         <td width="14%" class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}">
+            <div class="
+                ev_month_day_header
+                {% if day.cur_month %}ev_cur_month{% endif %}
+                ">
+                {% if date == today %}<span class="ev_today">{% endif %}
+                {% if day.show_month %}
+                {{ date.format("%b %-d") }}
+                {% else %}
+                {{ date.format("%-d") }}
+                {% endif %}
+                {% if date == today %}</span>{% endif %}
+            </div>
             <div class="ev_month_cell">
-                <div class="
-                    ev_month_day_header
-                    {% if day.cur_month %}ev_cur_month{% endif %}
-                    ">
-                    {% if date == today %}<span class="ev_today">{% endif %}
-                    {% if day.show_month %}
-                    {{ date.format("%b %-d") }}
-                    {% else %}
-                    {{ date.format("%-d") }}
-                    {% endif %}
-                    {% if date == today %}</span>{% endif %}
-                </div>
                 {% for occ in day.occurrences %}
                 <div onclick="openPopup('{{ occ.uid() }}',
                                         'ev_id_{{ occ.uid_html() }}',

@@ -29,7 +29,7 @@
         <td width="12%" align="center" class="ev_month_td
                                               {% if day.date == today %}ev_today_bg{% endif %}"
                                        style="height: auto">
-            <div class="ev_month_cell">
+            <div class="ev_week_cell">
                 {% for occ in day.allday %}
                 <div onclick="openPopup('{{ occ.uid() }}',
                                         'ev_id_{{ occ.uid_html() }}',
@@ -90,7 +90,7 @@
         </td>
         {% for day in days %}
         <td width="12%" class="ev_month_td">
-            <div class="ev_month_cell">
+            <div class="ev_week_cell">
                 <div style="position: relative; height: 1440px; padding: 0px">
                 {% for hour in 0..24 %}
                 <div style="position: absolute;
