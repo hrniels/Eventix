@@ -105,17 +105,15 @@
             </td>
         </tr>
         {% endif %}
-        {% if let Some(desc) = occ.description() %}
-        {% if !desc.trim().is_empty() %}
+        {% if let Some(desc) = Self::description(occ) %}
         <tr>
             <td width="30%">{{ "Description"|t(locale) }}:</td>
             <td width="70%">
                 <div class="ev_vscrollbox" style="max-width: 350px; max-height: 300px;">
-                    {{ desc|trim|newlines()|safe }}
+                    {{ desc|safe }}
                 </div>
             </td>
         </tr>
-        {% endif %}
         {% endif %}
         <tr>
             <td colspan="2" align="right">
