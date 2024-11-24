@@ -7,6 +7,10 @@ use strum::IntoEnumIterator;
 use crate::html::filters;
 use crate::locale::Locale;
 
+pub trait Named {
+    fn name(&self) -> String;
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ComboValue<T: Display> {
     value: T,
@@ -35,7 +39,7 @@ pub struct ComboboxTemplate<T: Display + Eq + PartialEq> {
     locale: Arc<dyn Locale + Send + Sync>,
 }
 
-impl<T: Display + Eq + PartialEq + Debug + IntoEnumIterator> ComboboxTemplate<T> {
+impl<T: Display + Eq + PartialEq + Named + IntoEnumIterator> ComboboxTemplate<T> {
     pub fn new<N: ToString>(
         locale: Arc<dyn Locale + Send + Sync>,
         name: N,
@@ -46,7 +50,7 @@ impl<T: Display + Eq + PartialEq + Debug + IntoEnumIterator> ComboboxTemplate<T>
             name,
             value,
             T::iter()
-                .map(|e| ComboOption::new(format!("{:?}", e), e))
+                .map(|e| ComboOption::new(format!("{}", e.name()), e))
                 .collect(),
         )
     }

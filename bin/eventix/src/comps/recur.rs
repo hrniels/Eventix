@@ -9,7 +9,7 @@ use strum::EnumIter;
 
 use crate::{comps::date::DateTemplate, html::filters, locale::Locale};
 
-use super::{combobox::ComboboxTemplate, date::Date};
+use super::{combobox::ComboboxTemplate, combobox::Named, date::Date};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Frequency {
@@ -112,6 +112,12 @@ impl From<Weekday> for IterWeekday {
     }
 }
 
+impl Named for IterWeekday {
+    fn name(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
 impl fmt::Display for IterWeekday {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -124,6 +130,12 @@ enum Nth {
     Second,
     Third,
     Last,
+}
+
+impl Named for Nth {
+    fn name(&self) -> String {
+        format!("{:?}", self)
+    }
 }
 
 impl fmt::Display for Nth {
