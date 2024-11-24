@@ -3,8 +3,8 @@ use chrono_tz::Tz;
 
 use crate::col::Id;
 use crate::objects::{
-    CalAttendee, CalCompType, CalComponent, CalDate, CalEventStatus, CalOrganizer, CalRRule,
-    CalTodoStatus, EventLike,
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalEventStatus, CalOrganizer,
+    CalRRule, CalTodoStatus, EventLike,
 };
 use crate::parser::{Property, PropertyProducer};
 
@@ -198,6 +198,10 @@ impl EventLike for Occurrence<'_> {
 
     fn exdates(&self) -> &[CalDate] {
         self.base.exdates()
+    }
+
+    fn alarms(&self) -> &[CalAlarm] {
+        occ_or_base!(self, alarms)
     }
 
     fn rrule(&self) -> Option<&CalRRule> {

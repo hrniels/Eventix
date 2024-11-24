@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalEventStatus, Other};
+use crate::objects::{CalDate, CalEventStatus};
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
 use super::component::EventLikeComponent;
@@ -11,7 +11,6 @@ pub struct CalEvent {
     pub(crate) inner: EventLikeComponent,
     status: Option<CalEventStatus>,
     end: Option<CalDate>,
-    other: Vec<Other>,
 }
 
 impl CalEvent {
@@ -52,9 +51,6 @@ impl PropertyProducer for CalEvent {
             props.push(Property::new("STATUS", vec![], status.to_string()));
         }
         props.extend(self.inner.to_props());
-        for o in &self.other {
-            props.extend(o.to_props().into_iter());
-        }
         props.push(Property::new("END", vec![], "VEVENT"));
         props
     }
@@ -76,11 +72,6 @@ impl PropertyConsumer for CalEvent {
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
-                // TODO properly support alarms
-                "BEGIN" => {
-                    let other = Other::from_lines(lines, prop)?;
-                    comp.other.push(other);
-                }
                 "END" if prop.value() == "VEVENT" => {
                     break Ok(comp);
                 }
@@ -91,7 +82,7 @@ impl PropertyConsumer for CalEvent {
                     comp.end = Some(prop.try_into()?);
                 }
                 _ => {
-                    comp.inner.parse_prop(prop)?;
+                    comp.inner.parse_prop(lines, prop)?;
                 }
             }
         }

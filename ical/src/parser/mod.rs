@@ -20,6 +20,8 @@ pub enum ParseError {
     UnexpectedProp(String),
     #[error("Unexpected END:{0}")]
     UnexpectedEnd(String),
+    #[error("Unexpected BEGIN:{0}")]
+    UnexpectedBegin(String),
     #[error("Invalid weekday description end")]
     UnexpectedWDayEnd,
     #[error("Unexpected rrule {0}")]
@@ -46,6 +48,10 @@ pub enum ParseError {
     InvalidSide(String),
     #[error("Invalid weekday: {0}")]
     InvalidWeekday(String),
+    #[error("Invalid action: {0}")]
+    InvalidAction(String),
+    #[error("Invalid duration: {0}")]
+    InvalidDuration(String),
 }
 
 impl From<ParseIntError> for ParseError {

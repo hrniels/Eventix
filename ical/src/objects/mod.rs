@@ -1,3 +1,4 @@
+mod alarm;
 mod attendee;
 mod calendar;
 mod component;
@@ -9,6 +10,7 @@ mod recur;
 mod status;
 mod todo;
 
+pub use alarm::{CalAction, CalAlarm, CalRelated, CalTrigger};
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
 pub use calendar::{Calendar, Other};
 pub use component::{CalCompType, CalComponent, EventLikeComponent};

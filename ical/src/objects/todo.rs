@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use std::ops::{Deref, DerefMut};
 
-use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent, Other};
+use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent};
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -11,7 +11,6 @@ pub struct CalTodo {
     status: Option<CalTodoStatus>,
     completed: Option<CalDate>,
     percent: Option<u8>,
-    other: Vec<Other>,
 }
 
 impl CalTodo {
@@ -70,9 +69,6 @@ impl PropertyProducer for CalTodo {
             ));
         }
         props.extend(self.inner.to_props());
-        for o in &self.other {
-            props.extend(o.to_props().into_iter());
-        }
         props.push(Property::new("END", vec![], "VTODO"));
         props
     }
@@ -94,11 +90,6 @@ impl PropertyConsumer for CalTodo {
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
-                // TODO properly support alarms
-                "BEGIN" => {
-                    let other = Other::from_lines(lines, prop)?;
-                    comp.other.push(other);
-                }
                 "END" => {
                     if prop.value() != "VTODO" {
                         return Err(ParseError::UnexpectedEnd(prop.take_value()));
@@ -122,7 +113,7 @@ impl PropertyConsumer for CalTodo {
                     comp.percent = Some(percent);
                 }
                 _ => {
-                    comp.inner.parse_prop(prop)?;
+                    comp.inner.parse_prop(lines, prop)?;
                 }
             }
         }

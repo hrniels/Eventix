@@ -3,11 +3,13 @@ use chrono_tz::Tz;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::io::BufRead;
 
 use crate::objects::{
-    CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike, UpdatableEventLike,
+    CalAlarm, CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike,
+    UpdatableEventLike,
 };
-use crate::parser::{ParseError, Property, PropertyProducer};
+use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
@@ -23,6 +25,7 @@ pub struct EventLikeComponent {
     organizer: Option<CalOrganizer>,
     attendees: Option<Vec<CalAttendee>>,
     exdates: Vec<CalDate>,
+    alarms: Vec<CalAlarm>,
     // 0 = undefined; 1 = highest, 9 = lowest
     priority: Option<u8>,
     rrule: Option<CalRRule>,
@@ -39,7 +42,11 @@ impl EventLikeComponent {
         self.start = start;
     }
 
-    pub(crate) fn parse_prop(&mut self, prop: Property) -> Result<(), ParseError> {
+    pub(crate) fn parse_prop<R: BufRead>(
+        &mut self,
+        lines: &mut LineReader<R>,
+        prop: Property,
+    ) -> Result<(), ParseError> {
         match prop.name().as_str() {
             "UID" => {
                 self.uid = prop.take_value();
@@ -105,6 +112,13 @@ impl EventLikeComponent {
             "RECURRENCE-ID" => {
                 self.rid = Some(prop.try_into()?);
             }
+            "BEGIN" => {
+                if prop.value() != "VALARM" {
+                    return Err(ParseError::UnexpectedBegin(prop.take_value()));
+                }
+                let alarm = CalAlarm::from_lines(lines, prop)?;
+                self.alarms.push(alarm);
+            }
             _ => {
                 self.props.push(prop);
             }
@@ -160,6 +174,9 @@ impl PropertyProducer for EventLikeComponent {
         }
         if let Some(ref rid) = self.rid {
             props.push(rid.to_prop("RECURRENCE-ID"));
+        }
+        for a in &self.alarms {
+            props.extend(a.to_props().into_iter());
         }
         props.extend(self.props.iter().cloned());
         props
@@ -219,6 +236,10 @@ impl EventLike for EventLikeComponent {
         &self.exdates
     }
 
+    fn alarms(&self) -> &[CalAlarm] {
+        &self.alarms
+    }
+
     fn rrule(&self) -> Option<&CalRRule> {
         self.rrule.as_ref()
     }
@@ -271,6 +292,10 @@ impl UpdatableEventLike for EventLikeComponent {
 
     fn add_exdate(&mut self, date: CalDate) {
         self.exdates.push(date);
+    }
+
+    fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {
+        self.alarms = alarms;
     }
 }
 
@@ -447,6 +472,10 @@ impl EventLike for CalComponent {
         get_with_ev_or_todo!(self, exdates)
     }
 
+    fn alarms(&self) -> &[CalAlarm] {
+        get_with_ev_or_todo!(self, alarms)
+    }
+
     fn rrule(&self) -> Option<&CalRRule> {
         get_with_ev_or_todo!(self, rrule)
     }
@@ -499,5 +528,9 @@ impl UpdatableEventLike for CalComponent {
 
     fn add_exdate(&mut self, date: CalDate) {
         set_with_ev_or_todo!(self, add_exdate, date);
+    }
+
+    fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {
+        set_with_ev_or_todo!(self, set_alarms, alarms);
     }
 }
