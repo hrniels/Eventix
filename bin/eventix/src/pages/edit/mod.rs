@@ -31,7 +31,7 @@ pub struct CompEdit {
     summary: String,
     location: String,
     description: String,
-    rrule: RecurRequest,
+    rrule: Option<RecurRequest>,
     start_end: DateTimeRange,
 }
 
@@ -42,7 +42,11 @@ impl CompEdit {
             summary: occ.summary().cloned().unwrap_or(String::from("")),
             location: occ.location().cloned().unwrap_or(String::from("")),
             description: occ.description().cloned().unwrap_or(String::from("")),
-            rrule: RecurRequest::from_rrule(occ.rrule()),
+            rrule: if occ.rid().is_none() {
+                Some(RecurRequest::from_rrule(occ.rrule()))
+            } else {
+                None
+            },
             start_end: DateTimeRange::new_from_caldate(
                 if occ.is_recurrent() {
                     Some(occ.occurrence_startdate())
@@ -70,8 +74,8 @@ impl CompAction for CompEdit {
     fn description(&self) -> &String {
         &self.description
     }
-    fn rrule(&self) -> &RecurRequest {
-        &self.rrule
+    fn rrule(&self) -> Option<&RecurRequest> {
+        self.rrule.as_ref()
     }
     fn start_end(&self) -> &DateTimeRange {
         &self.start_end

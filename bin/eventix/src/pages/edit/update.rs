@@ -52,9 +52,10 @@ fn action_update(
         }
         None
     } else {
-        match form.rrule.to_rrule() {
-            Ok(rrule) => rrule,
-            Err(e) => {
+        match form.rrule.as_ref().map(|rr| rr.to_rrule()) {
+            None => None,
+            Some(Ok(rrule)) => rrule,
+            Some(Err(e)) => {
                 page.add_error(e);
                 return Ok(false);
             }

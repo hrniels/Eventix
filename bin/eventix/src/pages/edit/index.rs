@@ -30,7 +30,7 @@ struct EditTemplate<'a> {
     location: &'a String,
     description: &'a String,
     start_end: DateTimeRangeTemplate<'a>,
-    rrule: RecurTemplate<'a>,
+    rrule: Option<RecurTemplate<'a>>,
     occ: &'a Occurrence<'a>,
     events: Events<'a>,
     tasks: Tasks<'a>,
@@ -105,7 +105,9 @@ pub async fn content(
             "start_end",
             Some(form.start_end),
         ),
-        rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
+        rrule: form
+            .rrule
+            .map(|rr| RecurTemplate::new(locale.clone(), "rrule", rr)),
         occ: &occ,
         events,
         locale,

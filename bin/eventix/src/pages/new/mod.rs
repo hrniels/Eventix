@@ -74,8 +74,8 @@ impl CompAction for CompNew {
     fn description(&self) -> &String {
         &self.description
     }
-    fn rrule(&self) -> &RecurRequest {
-        &self.rrule
+    fn rrule(&self) -> Option<&RecurRequest> {
+        Some(&self.rrule)
     }
     fn start_end(&self) -> &DateTimeRange {
         &self.start_end

@@ -13,7 +13,7 @@ pub trait CompAction {
     fn summary(&self) -> &String;
     fn location(&self) -> &String;
     fn description(&self) -> &String;
-    fn rrule(&self) -> &RecurRequest;
+    fn rrule(&self) -> Option<&RecurRequest>;
     fn start_end(&self) -> &DateTimeRange;
 
     fn check(

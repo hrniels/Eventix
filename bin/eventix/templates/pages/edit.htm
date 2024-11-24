@@ -22,15 +22,16 @@
            <dl>
                 <dt>{{ "Repeat"|t(locale) }}:</dt>
                 <dd>
-                    {% if rid.is_none() %}
+                    {% match rrule %}
+                    {% when Some(rrule) %}
                     {{ rrule|safe }}
-                    {% else %}
+                    {% when _ %}
                     {% if let Some(rrule) = occ.rrule() %}
                     {{ rrule.human()|newlines()|safe }}
                     {% else %}
                     -
                     {% endif %}
-                    {% endif %}
+                    {% endmatch %}
                 </dd>
            </dl>
            <dl>
