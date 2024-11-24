@@ -135,21 +135,21 @@ fn translate(alarm: &CalAlarm, timezone: &Tz) -> (u64, DurUnit, DurType, Option<
         CalTrigger::Relative { related, duration } => {
             if duration.num_days() != 0 {
                 (
-                    duration.num_days().abs() as u64,
+                    duration.num_days().unsigned_abs(),
                     DurUnit::Days,
                     determine_type(related, duration),
                     None,
                 )
             } else if duration.num_hours() != 0 {
                 (
-                    duration.num_hours().abs() as u64,
+                    duration.num_hours().unsigned_abs(),
                     DurUnit::Hours,
                     determine_type(related, duration),
                     None,
                 )
             } else if duration.num_minutes() != 0 {
                 (
-                    duration.num_minutes().abs() as u64,
+                    duration.num_minutes().unsigned_abs(),
                     DurUnit::Minutes,
                     determine_type(related, duration),
                     None,
@@ -214,9 +214,9 @@ impl AlarmRequest {
                         _ => CalRelated::End,
                     },
                     duration: match self.durunit {
-                        DurUnit::Days => Duration::days(duration as i64),
-                        DurUnit::Hours => Duration::hours(duration as i64),
-                        DurUnit::Minutes => Duration::minutes(duration as i64),
+                        DurUnit::Days => Duration::days(duration),
+                        DurUnit::Hours => Duration::hours(duration),
+                        DurUnit::Minutes => Duration::minutes(duration),
                     },
                 },
                 Trigger::Absolute => CalTrigger::Absolute(

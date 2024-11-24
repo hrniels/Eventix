@@ -49,9 +49,7 @@ impl<T: Display + Eq + PartialEq + Named + IntoEnumIterator> ComboboxTemplate<T>
             locale,
             name,
             value,
-            T::iter()
-                .map(|e| ComboOption::new(format!("{}", e.name()), e))
-                .collect(),
+            T::iter().map(|e| ComboOption::new(e.name(), e)).collect(),
         )
     }
 }

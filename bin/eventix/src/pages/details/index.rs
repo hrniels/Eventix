@@ -47,7 +47,7 @@ impl DetailsTemplate<'_> {
                 // code later.
                 let regex = r"(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{2,6}\b([-a-zA-Z0-9()@:;%_\+.~#?&/=]*)";
                 let re = Regex::new(regex).unwrap();
-                let desc = re.replace_all(&desc, "\0$0\0");
+                let desc = re.replace_all(desc, "\0$0\0");
 
                 // now replace HTML entities etc.
                 let desc = MarkupDisplay::new_unsafe(desc, Html);

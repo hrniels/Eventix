@@ -771,9 +771,7 @@ impl FromStr for CalRRule {
         for part in s.split(';') {
             let mut name_value = part.splitn(2, '=');
             let name = name_value.next().unwrap();
-            let value = name_value
-                .next()
-                .ok_or_else(|| ParseError::MissingParamValue)?;
+            let value = name_value.next().ok_or(ParseError::MissingParamValue)?;
             match name {
                 "FREQ" => {
                     rrule.freq = value.parse()?;

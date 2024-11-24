@@ -72,7 +72,7 @@ fn overlaps_of(day_occs: &[&DayOccurrence], occ: &DayOccurrence) -> usize {
         }
     }
 
-    if overlaps.len() == 0 {
+    if overlaps.is_empty() {
         // it's just us
         1
     } else {

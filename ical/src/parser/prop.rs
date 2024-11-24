@@ -207,7 +207,7 @@ impl FromStr for Parameter {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.splitn(2, '=');
         let name = parts.next().unwrap().to_string();
-        let value = parts.next().ok_or_else(|| ParseError::MissingParamValue)?;
+        let value = parts.next().ok_or(ParseError::MissingParamValue)?;
 
         // strip quotes
         let value = if value.starts_with('"') {

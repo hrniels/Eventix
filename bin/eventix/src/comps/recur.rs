@@ -276,10 +276,6 @@ impl RecurRequest {
         }
     }
 
-    pub fn is_some(&self) -> bool {
-        self.freq.is_some()
-    }
-
     pub fn to_rrule(&self) -> anyhow::Result<Option<CalRRule>> {
         if let Some(freq) = self.freq {
             let mut rrule = CalRRule::default();

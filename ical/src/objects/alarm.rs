@@ -152,13 +152,13 @@ fn display_duration(mut duration: Duration) -> String {
 }
 
 fn parse_num<'a>(org: &'_ str, d: &'a str) -> Result<(&'a str, i64, char), ParseError> {
-    let Some(digits) = d.chars().position(|c| !c.is_digit(10)) else {
+    let Some(digits) = d.chars().position(|c| !c.is_ascii_digit()) else {
         return Err(ParseError::InvalidDuration(org.to_string()));
     };
 
     let num = d[0..digits]
         .parse::<u64>()
-        .map_err(|e| ParseError::InvalidNumber(e))?;
+        .map_err(ParseError::InvalidNumber)?;
     Ok((&d[digits + 1..], num as i64, d.chars().nth(digits).unwrap()))
 }
 
