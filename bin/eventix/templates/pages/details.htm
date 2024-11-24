@@ -63,6 +63,12 @@
             <td width="70%">{{ rrule.human()|newlines()|safe }}</td>
         </tr>
         {% endif %}
+        {% if occ.has_alarms() %}
+        <tr>
+            <td width="30%">{{ "Reminder"|t(locale) }}:</td>
+            <td width="70%">{{ occ.alarms().first().unwrap()|safe }}</td>
+        </tr>
+        {% endif %}
         {% if let Some(org) = occ.organizer() %}
         <tr>
             <td width="30%">{{ "Organizer"|t(locale) }}:</td>

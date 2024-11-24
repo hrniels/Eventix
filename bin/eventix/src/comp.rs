@@ -3,6 +3,7 @@ use std::sync::Arc;
 use ical::objects::CalCompType;
 use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 
+use crate::comps::alarm::AlarmRequest;
 use crate::{
     comps::{datetimerange::DateTimeRange, recur::RecurRequest},
     locale::Locale,
@@ -14,6 +15,7 @@ pub trait CompAction {
     fn location(&self) -> &String;
     fn description(&self) -> &String;
     fn rrule(&self) -> Option<&RecurRequest>;
+    fn reminder(&self) -> &AlarmRequest;
     fn start_end(&self) -> &DateTimeRange;
 
     fn check(
@@ -58,6 +60,10 @@ pub trait CompAction {
             return false;
         }
 
+        if !self.reminder().check(page, locale) {
+            return false;
+        }
+
         true
     }
 
@@ -80,6 +86,11 @@ pub trait CompAction {
             ev.set_end(end);
         } else {
             comp.as_todo_mut().unwrap().set_due(end);
+        }
+        if let Some(alarm) = self.reminder().to_alarm(locale).unwrap() {
+            comp.set_alarms(vec![alarm]);
+        } else {
+            comp.set_alarms(vec![]);
         }
 
         comp.set_last_modified(CalDate::now());

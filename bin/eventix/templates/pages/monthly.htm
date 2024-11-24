@@ -57,6 +57,9 @@
                     {% if occ.is_overwritten() %}
                     <i style="float: right" class="bi bi-pencil"></i>
                     {% endif %}
+                    {% if occ.has_alarms() %}
+                    <i style="float: right" class="bi bi-alarm"></i>
+                    {% endif %}
                     {% if !occ.is_all_day() %}
                     {{ occ.occurrence_start().format("%H:%M") }}:
                     {% else %}

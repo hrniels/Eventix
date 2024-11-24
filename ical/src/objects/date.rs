@@ -49,6 +49,13 @@ impl CalDate {
         }
     }
 
+    pub fn to_utc(self) -> CalDate {
+        match self {
+            Self::Date(date) => Self::Date(date),
+            Self::DateTime(datetime) => Self::DateTime(datetime.to_utc()),
+        }
+    }
+
     pub fn as_start_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Date(date) => tz
@@ -158,6 +165,11 @@ impl CalDateTime {
                 local.with_timezone(tz)
             }
         }
+    }
+
+    pub fn to_utc(self) -> CalDateTime {
+        let dt = self.with_tz(&Tz::UTC);
+        Self::Utc(dt.to_utc())
     }
 
     pub fn to_prop<N: ToString>(&self, name: N) -> Property {

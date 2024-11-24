@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     comp::CompAction,
-    comps::{datetimerange::DateTimeRange, recur::RecurRequest},
+    comps::{alarm::AlarmRequest, datetimerange::DateTimeRange, recur::RecurRequest},
 };
 
 use super::Page;
@@ -32,6 +32,7 @@ pub struct CompEdit {
     location: String,
     description: String,
     rrule: Option<RecurRequest>,
+    reminder: AlarmRequest,
     start_end: DateTimeRange,
 }
 
@@ -46,6 +47,11 @@ impl CompEdit {
                 Some(RecurRequest::from_rrule(occ.rrule()))
             } else {
                 None
+            },
+            reminder: if !occ.alarms().is_empty() {
+                AlarmRequest::from_alarm(occ.alarms(), tz)
+            } else {
+                AlarmRequest::default()
             },
             start_end: DateTimeRange::new_from_caldate(
                 if occ.is_recurrent() {
@@ -79,6 +85,9 @@ impl CompAction for CompEdit {
     }
     fn start_end(&self) -> &DateTimeRange {
         &self.start_end
+    }
+    fn reminder(&self) -> &AlarmRequest {
+        &self.reminder
     }
 }
 

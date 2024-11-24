@@ -1,3 +1,4 @@
+pub mod alarm;
 pub mod calcombo;
 pub mod combobox;
 pub mod date;

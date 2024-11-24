@@ -1,5 +1,6 @@
 use askama::Template;
 use chrono::{NaiveDate, NaiveTime};
+use chrono_tz::Tz;
 use ical::objects::{CalDate, CalDateTime};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -16,6 +17,11 @@ pub struct DateTime {
 }
 
 impl DateTime {
+    pub fn from_caldate(date: &CalDate, timezone: &Tz) -> Self {
+        let dt = date.as_start_with_tz(timezone);
+        Self::new(Date::new(Some(dt.date_naive())), Some(dt.time()))
+    }
+
     pub fn new(date: Date, time: Option<NaiveTime>) -> Self {
         Self { date, time }
     }
@@ -54,7 +60,7 @@ impl DateTimeTemplate {
         let name = name.to_string();
         Self {
             time: date.as_ref().and_then(|d| d.time()),
-            date: DateTemplate::new(format!("{}_date", name), date.map(|d| d.date)),
+            date: DateTemplate::new(format!("{}[date]", name), date.map(|d| d.date)),
             id: name.replace("[", "_").replace("]", "_"),
             name,
         }

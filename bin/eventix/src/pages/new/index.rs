@@ -11,7 +11,8 @@ use ical::objects::{CalCompType, CalDate, EventLike};
 use super::{CompNew, Page, Request};
 use crate::{
     comps::{
-        calcombo::CalComboTemplate, datetimerange::DateTimeRangeTemplate, recur::RecurTemplate,
+        alarm::AlarmTemplate, calcombo::CalComboTemplate, datetimerange::DateTimeRangeTemplate,
+        recur::RecurTemplate,
     },
     locale::{self, Locale},
 };
@@ -29,6 +30,7 @@ struct NewTemplate<'a> {
     description: &'a String,
     start_end: DateTimeRangeTemplate<'a>,
     rrule: RecurTemplate<'a>,
+    reminder: AlarmTemplate<'a>,
     calendars: CalComboTemplate<'a>,
     events: Events<'a>,
     tasks: Tasks<'a>,
@@ -71,6 +73,7 @@ pub async fn content(
             Some(form.start_end),
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
+        reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
         calendars: CalComboTemplate::new("calendar", store.sources(), form.calendar),
         events,
         locale,

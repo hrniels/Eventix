@@ -12,7 +12,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     comp::CompAction,
-    comps::{date::Date, datetime::DateTime, datetimerange::DateTimeRange, recur::RecurRequest},
+    comps::{
+        alarm::AlarmRequest, date::Date, datetime::DateTime, datetimerange::DateTimeRange,
+        recur::RecurRequest,
+    },
 };
 
 use super::{Breadcrumb, Page};
@@ -31,6 +34,7 @@ pub struct CompNew {
     location: String,
     description: String,
     rrule: RecurRequest,
+    reminder: AlarmRequest,
     start_end: DateTimeRange,
 }
 
@@ -79,6 +83,9 @@ impl CompAction for CompNew {
     }
     fn start_end(&self) -> &DateTimeRange {
         &self.start_end
+    }
+    fn reminder(&self) -> &AlarmRequest {
+        &self.reminder
     }
 }
 
