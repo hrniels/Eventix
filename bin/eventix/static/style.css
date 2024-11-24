@@ -349,6 +349,12 @@ input.ev_btn_cancel {
 	height: 23px;
 }
 
+.ev_button_selected, .ev_button_selected:hover, .ev_button_selected:active,
+.ev_button_selected:link, .ev_button_selected:visited {
+    background-color: #627492 !important;
+    color: #ffffff !important;
+}
+
 /* ------------ MESSAGES ------------ */
 
 .ev_error {
