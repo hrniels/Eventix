@@ -102,6 +102,13 @@ impl CalSource {
         self.items.iter_mut().find(|i| i.contains_uid(uid_ref))
     }
 
+    pub fn next_alarm_occurrence(&self, start: DateTime<Tz>) -> Option<Occurrence<'_>> {
+        self.items
+            .iter()
+            .filter_map(|i| i.next_alarm_occurrence(start))
+            .min_by(|a, b| a.alarm_date().unwrap().cmp(&b.alarm_date().unwrap()))
+    }
+
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,

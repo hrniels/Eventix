@@ -42,6 +42,13 @@ impl CalStore {
             .find_map(|c| c.item_by_id_mut(uid_str))
     }
 
+    pub fn next_alarm_occurrence(&self, start: DateTime<Tz>) -> Option<Occurrence<'_>> {
+        self.sources
+            .iter()
+            .filter_map(|c| c.next_alarm_occurrence(start))
+            .min_by(|a, b| a.alarm_date().unwrap().cmp(&b.alarm_date().unwrap()))
+    }
+
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,

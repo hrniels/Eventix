@@ -377,6 +377,30 @@ impl CalRRule {
         dates
     }
 
+    pub fn next_date(&self, dtstart: DateTime<Tz>, start: DateTime<Tz>) -> Option<DateTime<Tz>> {
+        let mut dates = Vec::new();
+        let mut date = dtstart;
+        let end = if let Some(ref until) = self.until {
+            until.as_end_with_tz(&start.timezone())
+        } else {
+            DateTime::<Tz>::MAX_UTC.with_timezone(&start.timezone())
+        };
+        let interval = self.interval.unwrap_or(1) as u32;
+
+        let mut count = 0;
+        while date <= end {
+            if !self.limited(date) && self.expand(dtstart, start, date, &mut count, &mut dates) {
+                break;
+            }
+            if dates.len() > 0 {
+                break;
+            }
+
+            date = next_date(date, self.freq, interval);
+        }
+        dates.first().cloned()
+    }
+
     fn limited(&self, date: DateTime<Tz>) -> bool {
         if let Some(by_month) = &self.by_month {
             if self.freq <= CalRRuleFreq::Monthly && !by_month.contains(&(date.month() as u8)) {

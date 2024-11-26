@@ -105,6 +105,12 @@ impl<'c> Occurrence<'c> {
         })
     }
 
+    pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
+        self.alarms()
+            .first()
+            .and_then(|a| a.trigger_date(Some(self.occurrence_start()), self.occurrence_end()))
+    }
+
     pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
         if self.start >= start && self.start < end {
             return true;
