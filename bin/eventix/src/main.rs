@@ -4,6 +4,7 @@ mod error;
 mod extract;
 mod html;
 mod locale;
+mod notify;
 mod objects;
 mod pages;
 mod state;
@@ -105,6 +106,11 @@ async fn main() {
                 })
                 .on_response(DefaultOnResponse::new().latency_unit(LatencyUnit::Micros)),
         );
+
+    tokio::spawn(notify::watch_alarms(
+        state.clone(),
+        locale::default().timezone().clone(),
+    ));
 
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.address, args.port))
         .await
