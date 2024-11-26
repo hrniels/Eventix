@@ -103,7 +103,7 @@ pub async fn handler(
 
     let req = form.req.clone();
     let form = {
-        let mut store = state.store().lock().unwrap();
+        let mut store = state.store().lock().await;
 
         let item = store.item_by_id_mut(&form.req.uid).context(format!(
             "Unable to find component with uid '{}'",

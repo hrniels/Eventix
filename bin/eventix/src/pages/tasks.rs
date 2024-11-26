@@ -1,9 +1,10 @@
-use std::sync::{Arc, MutexGuard};
+use std::sync::Arc;
 
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
 use ical::col::{CalStore, Id};
 use ical::objects::{CalCompType, CalComponent, CalTodoStatus, EventLike};
+use tokio::sync::MutexGuard;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;

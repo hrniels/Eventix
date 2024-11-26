@@ -4,7 +4,8 @@ use axum::response::IntoResponse;
 use formatx::formatx;
 use ical::col::CalStore;
 use ical::objects::{CalDate, EventLike, UpdatableEventLike};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::error::HTMLError;
 use crate::locale::{self, Locale};
@@ -12,13 +13,13 @@ use crate::pages::Page;
 
 use super::Request;
 
-fn action_delete(
+async fn action_delete(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
     store: Arc<Mutex<CalStore>>,
     form: &Request,
 ) -> anyhow::Result<()> {
-    let mut store = store.lock().unwrap();
+    let mut store = store.lock().await;
     let item = store
         .item_by_id_mut(&form.uid)
         .ok_or_else(|| anyhow!("Unable to find item with uid {}", form.uid))?;
@@ -65,7 +66,7 @@ pub async fn handler(
     let locale = locale::default();
     let mut page = super::new_page();
 
-    action_delete(&mut page, &locale, state.store().clone(), &form)?;
+    action_delete(&mut page, &locale, state.store().clone(), &form).await?;
 
     crate::monthly::index::content(
         page,

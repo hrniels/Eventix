@@ -58,7 +58,7 @@ pub async fn content(
     Query(req): Query<Request>,
     form: Option<CompEdit>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let store = state.store().lock().unwrap();
+    let store = state.store().lock().await;
 
     let item = store
         .item_by_id(&req.uid)

@@ -56,7 +56,7 @@ pub async fn content(
     State(state): State<crate::state::State>,
     form: CompNew,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let store = state.store().lock().unwrap();
+    let store = state.store().lock().await;
 
     let events = Events::new(&store, &locale);
     let tasks = Tasks::new(&store, &locale);

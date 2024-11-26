@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use ical::col::CalStore;
+use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct State {

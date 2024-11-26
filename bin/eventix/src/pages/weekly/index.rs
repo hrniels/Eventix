@@ -184,7 +184,7 @@ pub async fn content(
         .from_local_datetime(&end.pred_opt().unwrap().and_hms_opt(23, 59, 59).unwrap())
         .unwrap();
 
-    let store = state.store().lock().unwrap();
+    let store = state.store().lock().await;
 
     let ev_occs = store
         .filtered_occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event)

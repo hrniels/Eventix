@@ -5,7 +5,8 @@ use ical::col::{CalItem, CalStore};
 use ical::objects::{
     CalCompType, CalComponent, CalDate, CalEvent, CalTodo, Calendar, UpdatableEventLike,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::comp::CompAction;
@@ -16,7 +17,7 @@ use crate::pages::Page;
 
 use super::CompNew;
 
-fn action_update(
+async fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
     store: &Arc<Mutex<CalStore>>,
@@ -34,7 +35,7 @@ fn action_update(
         }
     };
 
-    let mut store = store.lock().unwrap();
+    let mut store = store.lock().await;
     let source = store
         .source_mut(form.calendar)
         .ok_or_else(|| anyhow!("Unable to find source with id {}", form.calendar))?;
@@ -69,7 +70,7 @@ pub async fn handler(
     let locale = locale::default();
     let mut page = super::new_page(&form.req);
 
-    if action_update(&mut page, &locale, state.store(), &mut form)? {
+    if action_update(&mut page, &locale, state.store(), &mut form).await? {
         page.add_info(locale.translate("New event was added successfully"));
         form = CompNew::new(form.req.ctype, locale.timezone());
     }

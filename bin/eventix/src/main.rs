@@ -13,11 +13,8 @@ use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
 use pages::{details, edit, monthly, new, weekly};
-use std::{
-    env,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{env, path::PathBuf, sync::Arc};
+use tokio::sync::Mutex;
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::{DefaultOnResponse, TraceLayer},

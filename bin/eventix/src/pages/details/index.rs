@@ -133,7 +133,7 @@ pub async fn handler(
         .parse::<CalDate>()
         .context(format!("Invalid rid date: {}", req.rid))?;
 
-    let store = state.store().lock().unwrap();
+    let store = state.store().lock().await;
 
     let occ = store
         .occurrence_by_id(&req.uid, Some(&rid), locale.timezone())
