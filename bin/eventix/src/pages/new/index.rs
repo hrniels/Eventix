@@ -31,7 +31,7 @@ struct NewTemplate<'a> {
     start_end: DateTimeRangeTemplate<'a>,
     rrule: RecurTemplate<'a>,
     reminder: AlarmTemplate<'a>,
-    calendars: CalComboTemplate<'a>,
+    calendars: CalComboTemplate,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
