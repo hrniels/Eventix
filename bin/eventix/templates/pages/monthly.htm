@@ -44,7 +44,7 @@
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
                     ev_id_{{ occ.uid_html() }}
-                    ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                    ev_cal_src ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}
                     ev_status_{{ cl }}

@@ -509,47 +509,37 @@ div.ev_selected {
 
 /* ------------ CALENDAR SOURCES ------------ */
 
-div.ev_cal_src_bi {
+div.ev_cal_src {
     border: 1px solid #fff;
+}
+span.ev_cal_src {
+  height: 15px;
+  width: 15px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: 0 0 15px; /* minimum width */
+}
+
+div.ev_cal_src_bi {
     background-color: #1d77c0;
     color: #fff;
 }
-
 span.ev_cal_src_bi {
-  height: 15px;
-  width: 15px;
   background-color: #1d77c0;
-  border-radius: 50%;
-  display: inline-block;
-  flex: 0 0 15px; /* minimum width */
 }
 
 div.ev_cal_src_scriptsolution {
-    border: 1px solid #fff;
     background-color: #2ec17d;
     color: #fff;
 }
-
 span.ev_cal_src_scriptsolution {
-  height: 15px;
-  width: 15px;
   background-color: #2ec17d;
-  border-radius: 50%;
-  display: inline-block;
-  flex: 0 0 15px; /* minimum width */
 }
 
 div.ev_cal_src_scriptsolution_tasks {
-    border: 1px solid #fff;
     background-color: #128421;
     color: #fff;
 }
-
 span.ev_cal_src_scriptsolution_tasks {
-  height: 15px;
-  width: 15px;
   background-color: #128421;
-  border-radius: 50%;
-  display: inline-block;
-  flex: 0 0 15px; /* minimum width */
 }

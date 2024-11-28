@@ -53,7 +53,7 @@
                  class="ev_event_occurrence
                         ev_id_{{ occ.uid_html() }}
                         {% if occ.is_all_day() %}
-                        ev_cal_src_{{ events.calendar_name(occ.source()) }}
+                        ev_cal_src ev_cal_src_{{ events.calendar_name(occ.source()) }}
                         {% endif %}
                         {% match occ.status_class() %}
                         {% when Some with (cl) %}
@@ -74,7 +74,7 @@
                 {{ occ.summary().unwrap() }}
                 {% else %}
                 <div style="display: flex; gap: .4em">
-                    <span class="ev_cal_src_{{ events.calendar_name(occ.source()) }}"></span>
+                    <span class="ev_cal_src ev_cal_src_{{ events.calendar_name(occ.source()) }}"></span>
                     <span><b>{{ occ.occurrence_start().format("%H:%M") }}</b></span>
                     <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                 </div>
@@ -125,7 +125,7 @@
                         {% when _ %}
                         {% endmatch %}
                         ">
-                <span class="ev_cal_src_{{ tasks.calendar_name(occ.source()) }}"></span>
+                <span class="ev_cal_src ev_cal_src_{{ tasks.calendar_name(occ.source()) }}"></span>
                 {% if let Some(due) = occ.end_or_due() %}
                 {% match due %}
                 {% when CalDate::DateTime with (due_date) %}

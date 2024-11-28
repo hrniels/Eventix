@@ -37,7 +37,7 @@
                                         '{{ occ.id() }}')"
                          id="{{ occ.id() }}" class="
                     ev_event_occurrence
-                    ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                    ev_cal_src ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
                     ev_id_{{ occ.uid_html() }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}
@@ -119,7 +119,7 @@
                                         '{{ occ.id() }}')"
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
-                    ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
+                    ev_cal_src ev_cal_src_{{ store.source(occ.source()).unwrap().name() }}
                     ev_id_{{ occ.uid_html() }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}
@@ -186,4 +186,3 @@
 </script>
 
 {% endblock inner %}
-
