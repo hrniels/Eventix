@@ -1,0 +1,24 @@
+[calendar.scriptsolution]
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
+name = "Script-Solution"
+
+[calendar.scriptsolution_tasks]
+path = "/home/hrniels/.config/vdirsyncer-test/tasks-scso/tasks~h26VsoBEVm_nzi6FeDvGvES"
+name = "ScSo Tasks"
+
+[calendar.bi]
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"
+name = "BI"
+
+[calendar.holidays]
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3"
+name = "Holidays"
+
+[calendar.oschair]
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/osstaff_shared_by_adam"
+name = "OS Chair"
+
+[calendar.oslwl]
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"
+name = "OS LWL"
+

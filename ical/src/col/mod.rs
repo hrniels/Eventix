@@ -1,5 +1,3 @@
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
 use std::{io, path::PathBuf};
 
 use crate::parser::ParseError;
@@ -29,14 +27,4 @@ pub enum ColError {
     FileRemove(PathBuf, io::Error),
     #[error("Parsing {0} failed: {1}")]
     FileParse(PathBuf, ParseError),
-}
-
-pub type Id = u64;
-
-pub fn generate_id() -> Id {
-    static NEXT_ID: Lazy<Mutex<Id>> = Lazy::new(|| Mutex::new(0));
-    let mut next = NEXT_ID.lock().unwrap();
-    let res = *next + 1;
-    *next += 1;
-    res
 }

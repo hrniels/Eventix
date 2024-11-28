@@ -14,7 +14,8 @@ use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
 use pages::{details, edit, monthly, new, weekly};
-use std::{env, path::PathBuf, sync::Arc};
+use serde::Deserialize;
+use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -40,6 +41,18 @@ struct Args {
     port: u16,
 }
 
+#[derive(Debug, Deserialize)]
+struct Sources {
+    #[serde(rename = "calendar")]
+    calendars: HashMap<String, Calendar>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Calendar {
+    path: String,
+    name: String,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -51,57 +64,29 @@ async fn main() {
 
     let args = Args::parse();
 
+    let mut file = File::options()
+        .read(true)
+        .open("calendars.toml")
+        .expect("open calendars.toml");
+    let mut sources = String::new();
+    file.read_to_string(&mut sources)
+        .expect("read calendars.toml");
+    let sources: Sources = toml::from_str(&sources).expect("parse calendars.toml");
+
     let mut store = CalStore::default();
-    store.add(
-        CalSource::new_from_dir(
-            PathBuf::from(
-                "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq",
-            ),
-            "scriptsolution".to_string(),
-        )
-        .expect("Loading calendar failed"),
-    );
-    store.add(
-        CalSource::new_from_dir(
-            PathBuf::from(
-                "/home/hrniels/.config/vdirsyncer-test/tasks-scso/tasks~h26VsoBEVm_nzi6FeDvGvES",
-            ),
-            "scriptsolution_tasks".to_string(),
-        )
-        .expect("Loading calendar failed"),
-    );
-    store.add(
-        CalSource::new_from_dir(
-            PathBuf::from("/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"),
-            "bi".to_string(),
-        )
-        .expect("Loading calendar failed"),
-    );
-    store.add(
-        CalSource::new_from_dir(
-            PathBuf::from(
-                "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3",
-            ),
-            "holidays".to_string(),
-        )
-        .expect("Loading calendar failed"),
-    );
-    store.add(
-        CalSource::new_from_dir(
-            PathBuf::from(
-                "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/osstaff_shared_by_adam",
-            ),
-            "oschair".to_string(),
-        )
-        .expect("Loading calendar failed"),
-    );
-    store.add(
-        CalSource::new_from_dir(
-            PathBuf::from("/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"),
-            "oslwl".to_string(),
-        )
-        .expect("Loading calendar failed"),
-    );
+    for (id, cal) in &sources.calendars {
+        store.add(
+            CalSource::new_from_dir(
+                Arc::from(id.clone()),
+                PathBuf::from(cal.path.clone()),
+                cal.name.clone(),
+            )
+            .expect(&format!(
+                "Loading calendar {} from '{}' failed",
+                id, cal.path
+            )),
+        );
+    }
 
     let state = state::State::new(Arc::new(Mutex::new(store)));
     let app = Router::new()

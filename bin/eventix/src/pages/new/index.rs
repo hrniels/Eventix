@@ -60,6 +60,7 @@ pub async fn content(
 
     let events = Events::new(&store, &locale);
     let tasks = Tasks::new(&store, &locale);
+    let calendar = Arc::from(form.calendar.clone());
 
     let html = NewTemplate {
         page,
@@ -74,7 +75,7 @@ pub async fn content(
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
-        calendars: CalComboTemplate::new("calendar", store.sources(), form.calendar),
+        calendars: CalComboTemplate::new("calendar", store.sources(), calendar),
         events,
         locale,
         tasks,

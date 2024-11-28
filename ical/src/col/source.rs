@@ -4,13 +4,14 @@ use std::fmt::Display;
 use std::fs::{read_dir, File};
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use crate::col::{CalItem, ColError, Id, Occurrence};
+use crate::col::{CalItem, ColError, Occurrence};
 use crate::objects::{CalComponent, CalDate, Calendar};
 
 #[derive(Debug)]
 pub struct CalSource {
-    id: Id,
+    id: Arc<String>,
     path: PathBuf,
     name: String,
     items: Vec<CalItem>,
@@ -32,7 +33,7 @@ impl Eq for CalSource {}
 impl Default for CalSource {
     fn default() -> Self {
         Self {
-            id: super::generate_id(),
+            id: Arc::default(),
             path: PathBuf::default(),
             name: String::default(),
             items: Vec::new(),
@@ -41,9 +42,7 @@ impl Default for CalSource {
 }
 
 impl CalSource {
-    pub fn new_from_dir(path: PathBuf, name: String) -> Result<Self, ColError> {
-        let id = super::generate_id();
-
+    pub fn new_from_dir(id: Arc<String>, path: PathBuf, name: String) -> Result<Self, ColError> {
         let mut items = Vec::new();
         let dir_items = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
         for entry in dir_items {
@@ -60,7 +59,7 @@ impl CalSource {
             let cal = input
                 .parse::<Calendar>()
                 .map_err(|e| ColError::FileParse(filename.clone(), e))?;
-            let cal = CalItem::new(id, filename, cal);
+            let cal = CalItem::new(id.clone(), filename, cal);
             items.push(cal);
         }
 
@@ -72,8 +71,8 @@ impl CalSource {
         })
     }
 
-    pub fn id(&self) -> Id {
-        self.id
+    pub fn id(&self) -> &Arc<String> {
+        &self.id
     }
 
     pub fn path(&self) -> &PathBuf {

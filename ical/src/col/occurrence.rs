@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 
-use crate::col::Id;
 use crate::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalEventStatus, CalOrganizer,
     CalRRule, CalTodoStatus, EventLike,
@@ -10,14 +11,14 @@ use crate::parser::{Property, PropertyProducer};
 
 #[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
-    source: Id,
+    source: Arc<String>,
     start: DateTime<Tz>,
     base: &'c CalComponent,
     occ: Option<&'c CalComponent>,
 }
 
 impl<'c> Occurrence<'c> {
-    pub fn new(source: Id, base: &'c CalComponent, start: DateTime<Tz>) -> Self {
+    pub fn new(source: Arc<String>, base: &'c CalComponent, start: DateTime<Tz>) -> Self {
         Self {
             source,
             start,
@@ -26,8 +27,8 @@ impl<'c> Occurrence<'c> {
         }
     }
 
-    pub fn source(&self) -> Id {
-        self.source
+    pub fn source(&self) -> &Arc<String> {
+        &self.source
     }
 
     pub fn ctype(&self) -> CalCompType {

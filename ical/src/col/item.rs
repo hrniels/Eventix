@@ -1,16 +1,16 @@
 use std::fs::{self, File};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::col::{ColError, Id, Occurrence};
+use crate::col::{ColError, Occurrence};
 use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo, Calendar, EventLike};
 
 #[derive(Debug)]
 pub struct CalItem {
-    id: Id,
-    source: Id,
+    source: Arc<String>,
     path: PathBuf,
     cal: Calendar,
 }
@@ -26,28 +26,18 @@ impl CalItem {
     #[cfg(test)]
     fn new_simple(cal: Calendar) -> Self {
         Self {
-            id: super::generate_id(),
-            source: 0,
+            source: Arc::default(),
             path: PathBuf::default(),
             cal,
         }
     }
 
-    pub fn new(source: Id, path: PathBuf, cal: Calendar) -> Self {
-        Self {
-            id: super::generate_id(),
-            source,
-            path,
-            cal,
-        }
+    pub fn new(source: Arc<String>, path: PathBuf, cal: Calendar) -> Self {
+        Self { source, path, cal }
     }
 
-    pub fn id(&self) -> Id {
-        self.id
-    }
-
-    pub fn source(&self) -> Id {
-        self.source
+    pub fn source(&self) -> &Arc<String> {
+        &self.source
     }
 
     pub fn path(&self) -> &PathBuf {
@@ -73,7 +63,7 @@ impl CalItem {
         // alarm for the next occurrence
         let next_base = if first.has_alarms() {
             first.next_date(start).and_then(|d| {
-                let occ = Occurrence::new(self.source, first, d);
+                let occ = Occurrence::new(self.source.clone(), first, d);
                 occ.alarm_date().map(|d| (occ, d))
             })
         } else {
@@ -90,7 +80,7 @@ impl CalItem {
             // get the alarm date to be able to determine their minimum
             .flat_map(|c| {
                 let mut occ = Occurrence::new(
-                    self.source,
+                    self.source.clone(),
                     first,
                     c.rid().unwrap().as_start_with_tz(&start.timezone()),
                 );
@@ -131,7 +121,7 @@ impl CalItem {
         } else {
             first.start().unwrap_or(first.stamp()).as_start_with_tz(tz)
         };
-        let mut res = Occurrence::new(self.source, first, date);
+        let mut res = Occurrence::new(self.source.clone(), first, date);
 
         if let Some(rid) = rid {
             let occ = self
@@ -173,7 +163,7 @@ impl CalItem {
         let mut occs = first
             .dates_within(start, end)
             .iter()
-            .map(|d| Occurrence::new(self.source, first, *d))
+            .map(|d| Occurrence::new(self.source.clone(), first, *d))
             .collect::<Vec<_>>();
 
         // update occurrences from components that references specific occurrences

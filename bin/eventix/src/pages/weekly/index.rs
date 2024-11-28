@@ -5,10 +5,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Timelike, Utc};
-use ical::{
-    col::CalStore,
-    objects::{CalCompType, CalDate, EventLike},
-};
+use ical::objects::{CalCompType, CalDate, EventLike};
 use serde::Deserialize;
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
@@ -41,7 +38,6 @@ struct WeeklyTemplate<'a> {
     week_end: String,
     prev_week: String,
     next_week: String,
-    store: &'a CalStore,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -232,7 +228,6 @@ pub async fn content(
         next_week: next_week.format("%Y-%m-%d").to_string(),
         today: now.date_naive(),
         minutes: now.time().hour() * 60 + now.time().minute(),
-        store: &store,
         days,
         events,
         tasks,

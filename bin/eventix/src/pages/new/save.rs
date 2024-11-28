@@ -35,15 +35,16 @@ async fn action_update(
         }
     };
 
+    let calendar = Arc::from(form.calendar.clone());
     let mut store = store.lock().await;
     let source = store
-        .source_mut(form.calendar)
+        .source_mut(&calendar)
         .ok_or_else(|| anyhow!("Unable to find source with id {}", form.calendar))?;
 
     let uid = Uuid::new_v4();
     let mut path = source.path().clone();
     path.push(format!("{}.ics", uid));
-    let mut item = CalItem::new(form.calendar, path, Calendar::default());
+    let mut item = CalItem::new(calendar, path, Calendar::default());
 
     let mut comp = if form.req.ctype == CalCompType::Event {
         CalComponent::Event(CalEvent::default())

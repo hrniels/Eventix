@@ -1,7 +1,7 @@
 <select name="{{ name }}" id="{{ id }}">
     {% for cal in calendars %}
-    <option value="{{ cal.id() }}"{% if calendar == cal.id() %} selected="selected"{% endif %}
-            data-style="float: left; margin-right: .5em" data-class="{{ cal.name() }}">{{ cal.name() }}</option>
+    <option value="{{ cal.id() }}"{% if calendar|as_ref == cal.id() %} selected="selected"{% endif %}
+            data-style="float: left; margin-right: .5em" data-class="{{ cal.id() }}">{{ cal.name() }}</option>
     {% endfor %}
 </select>
 

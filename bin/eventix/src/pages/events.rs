@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::{Duration, Local, NaiveDate};
-use ical::col::{CalStore, Id};
+use ical::col::CalStore;
 use ical::objects::CalCompType;
 use tokio::sync::MutexGuard;
 
@@ -15,7 +15,6 @@ pub struct Day<'a> {
 
 pub struct Events<'a> {
     pub days: Vec<Day<'a>>,
-    store: &'a MutexGuard<'a, CalStore>,
 }
 
 impl<'a> Events<'a> {
@@ -56,10 +55,6 @@ impl<'a> Events<'a> {
             cur_date += Duration::days(1);
         }
 
-        Self { days, store }
-    }
-
-    pub fn calendar_name(&self, source: Id) -> &str {
-        self.store.source(source).unwrap().name()
+        Self { days }
     }
 }

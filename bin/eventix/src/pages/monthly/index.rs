@@ -6,7 +6,6 @@ use axum::{
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ical::{
-    col::CalStore,
     objects::{CalCompType, CalDate, EventLike},
     util,
 };
@@ -42,7 +41,6 @@ struct MonthlyTemplate<'a> {
     month: String,
     prev_month: String,
     next_month: String,
-    store: &'a CalStore,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -132,7 +130,6 @@ pub async fn content(
         prev_month: format!("{}-{}", pyear, pmonth),
         next_month: format!("{}-{}", nyear, nmonth),
         today: Utc::now().with_timezone(&timezone).date_naive(),
-        store: &store,
         days,
         events,
         tasks,

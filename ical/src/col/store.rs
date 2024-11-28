@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::col::{CalItem, CalSource, ColError, Id, Occurrence};
+use crate::col::{CalItem, CalSource, ColError, Occurrence};
 use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo};
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -14,11 +16,11 @@ impl CalStore {
         self.sources.push(source);
     }
 
-    pub fn source(&self, id: Id) -> Option<&CalSource> {
+    pub fn source(&self, id: &Arc<String>) -> Option<&CalSource> {
         self.sources.iter().find(|s| s.id() == id)
     }
 
-    pub fn source_mut(&mut self, id: Id) -> Option<&mut CalSource> {
+    pub fn source_mut(&mut self, id: &Arc<String>) -> Option<&mut CalSource> {
         self.sources.iter_mut().find(|s| s.id() == id)
     }
 

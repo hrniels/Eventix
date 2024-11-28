@@ -7,7 +7,7 @@ use axum::{
 };
 use chrono::{Duration, NaiveTime, Timelike, Utc};
 use chrono_tz::Tz;
-use ical::{col::Id, objects::CalCompType};
+use ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -29,7 +29,7 @@ pub struct Request {
 pub struct CompNew {
     #[serde(flatten)]
     req: Request,
-    calendar: Id,
+    calendar: String,
     summary: String,
     location: String,
     description: String,
