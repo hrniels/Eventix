@@ -4,6 +4,7 @@ use chrono_tz::Tz;
 use itertools::Itertools;
 use std::fmt;
 use std::str::FromStr;
+use tracing::warn;
 
 use crate::objects::CalDate;
 use crate::parser::{ParseError, Property};
@@ -363,7 +364,7 @@ impl CalRRule {
 
         assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
         if self.week_start.is_some() {
-            // TODO eprintln!("WARNING: WKST is not supported");
+            warn!("WKST is not supported");
         }
 
         let mut count = 0;
