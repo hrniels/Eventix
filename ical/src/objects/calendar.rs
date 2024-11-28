@@ -1,6 +1,8 @@
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
+use tracing::warn;
+
 use crate::objects::{CalComponent, CalEvent, CalTodo, EventLike};
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
@@ -75,18 +77,18 @@ impl PropertyConsumer for Calendar {
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
-                "BEGIN" if prop.value() == "VTODO" => {
-                    let todo = CalComponent::Todo(CalTodo::from_lines(lines, prop)?);
-                    cal.comps.push(todo);
-                }
-                "BEGIN" if prop.value() == "VEVENT" => {
-                    let event = CalComponent::Event(CalEvent::from_lines(lines, prop)?);
-                    cal.comps.push(event);
-                }
-                "BEGIN" => {
-                    let other = Other::from_lines(lines, prop)?;
-                    cal.other.push(other);
-                }
+                "BEGIN" if prop.value() == "VTODO" => match CalTodo::from_lines(lines, prop) {
+                    Ok(todo) => cal.comps.push(CalComponent::Todo(todo)),
+                    Err(e) => warn!("ignoring malformed todo: {}", e),
+                },
+                "BEGIN" if prop.value() == "VEVENT" => match CalEvent::from_lines(lines, prop) {
+                    Ok(ev) => cal.comps.push(CalComponent::Event(ev)),
+                    Err(e) => warn!("ignoring malformed event: {}", e),
+                },
+                "BEGIN" => match Other::from_lines(lines, prop) {
+                    Ok(other) => cal.other.push(other),
+                    Err(e) => warn!("ignoring unknown component: {}", e),
+                },
                 "END" => {
                     if prop.value() != "VCALENDAR" {
                         return Err(ParseError::UnexpectedEnd(prop.take_value()));
