@@ -55,7 +55,7 @@ async fn main() {
     store.add(
         CalSource::new_from_dir(
             PathBuf::from(
-                "/home/hrniels/.config/vdirsyncer-test/calendars/calendar~jt7D6iFxhujcnk_A7SJmbFq",
+                "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq",
             ),
             "scriptsolution".to_string(),
         )
@@ -64,7 +64,7 @@ async fn main() {
     store.add(
         CalSource::new_from_dir(
             PathBuf::from(
-                "/home/hrniels/.config/vdirsyncer-test/tasks/tasks~h26VsoBEVm_nzi6FeDvGvES",
+                "/home/hrniels/.config/vdirsyncer-test/tasks-scso/tasks~h26VsoBEVm_nzi6FeDvGvES",
             ),
             "scriptsolution_tasks".to_string(),
         )
@@ -72,8 +72,33 @@ async fn main() {
     );
     store.add(
         CalSource::new_from_dir(
-            PathBuf::from("/home/hrniels/.config/vdirsyncer-test/outlook-calendars/calendar"),
+            PathBuf::from("/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"),
             "bi".to_string(),
+        )
+        .expect("Loading calendar failed"),
+    );
+    store.add(
+        CalSource::new_from_dir(
+            PathBuf::from(
+                "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3",
+            ),
+            "holidays".to_string(),
+        )
+        .expect("Loading calendar failed"),
+    );
+    store.add(
+        CalSource::new_from_dir(
+            PathBuf::from(
+                "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/osstaff_shared_by_adam",
+            ),
+            "oschair".to_string(),
+        )
+        .expect("Loading calendar failed"),
+    );
+    store.add(
+        CalSource::new_from_dir(
+            PathBuf::from("/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"),
+            "oslwl".to_string(),
         )
         .expect("Loading calendar failed"),
     );

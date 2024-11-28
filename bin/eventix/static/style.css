@@ -543,3 +543,27 @@ div.ev_cal_src_scriptsolution_tasks {
 span.ev_cal_src_scriptsolution_tasks {
   background-color: #128421;
 }
+
+div.ev_cal_src_holidays {
+    background-color: #f6d22d;
+    color: #000;
+}
+span.ev_cal_src_holidays {
+  background-color: #f6d22d;
+}
+
+div.ev_cal_src_oschair {
+    background-color: #a8c1e1;
+    color: #000;
+}
+span.ev_cal_src_oschair {
+  background-color: #a8c1e1;
+}
+
+div.ev_cal_src_oslwl {
+    background-color: #e1c4a8;
+    color: #000;
+}
+span.ev_cal_src_oslwl {
+  background-color: #e1c4a8;
+}
