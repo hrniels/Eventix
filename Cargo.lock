@@ -645,6 +645,7 @@ dependencies = [
  "once_cell",
  "serde",
  "thiserror 2.0.3",
+ "tracing",
 ]
 
 [[package]]

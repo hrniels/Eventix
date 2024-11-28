@@ -4,6 +4,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::io::BufRead;
+use tracing::warn;
 
 use crate::objects::{
     CalAlarm, CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike,
@@ -116,8 +117,10 @@ impl EventLikeComponent {
                 if prop.value() != "VALARM" {
                     return Err(ParseError::UnexpectedBegin(prop.take_value()));
                 }
-                let alarm = CalAlarm::from_lines(lines, prop)?;
-                self.alarms.push(alarm);
+                match CalAlarm::from_lines(lines, prop) {
+                    Ok(alarm) => self.alarms.push(alarm),
+                    Err(e) => warn!("ignoring malformed alarm: {}", e),
+                }
             }
             _ => {
                 self.props.push(prop);
