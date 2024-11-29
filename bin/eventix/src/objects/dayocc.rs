@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::{ops::Deref, sync::Mutex};
 
 use chrono::{NaiveDate, TimeZone, Timelike};
@@ -43,10 +42,13 @@ impl<'a> DayOccurrence<'a> {
             .filter(|o| o.overlaps(day_start, day_end))
             .map(DayOccurrence::new)
             .collect::<Vec<_>>();
-        day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
-            (true, true) | (false, false) => a.occurrence_start().cmp(&b.occurrence_start()),
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
+        day_occs.sort_by_key(|i| {
+            (
+                !i.is_all_day(),
+                i.source().clone(),
+                i.summary().cloned(),
+                i.occurrence_start(),
+            )
         });
         day_occs
     }
@@ -63,10 +65,13 @@ impl<'a> DayOccurrence<'a> {
             })
             .map(DayOccurrence::new)
             .collect::<Vec<_>>();
-        day_occs.sort_by(|a, b| match (a.is_all_day(), b.is_all_day()) {
-            (true, true) | (false, false) => a.end_or_due().cmp(&b.end_or_due()),
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
+        day_occs.sort_by_key(|i| {
+            (
+                !i.is_all_day(),
+                i.source().clone(),
+                i.summary().cloned(),
+                i.end_or_due().cloned(),
+            )
         });
         day_occs
     }
@@ -83,12 +88,7 @@ impl<'a> DayOccurrence<'a> {
             })
             .map(DayOccurrence::new)
             .collect::<Vec<_>>();
-        unplanned_occs.sort_by(|a, b| match (a.created(), b.created()) {
-            (Some(ac), Some(bc)) => ac.cmp(bc),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        });
+        unplanned_occs.sort_by_key(|i| i.created().cloned());
         unplanned_occs
     }
 
