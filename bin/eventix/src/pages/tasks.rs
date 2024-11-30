@@ -22,13 +22,15 @@ pub struct Tasks<'a> {
 impl<'a> Tasks<'a> {
     pub fn new(
         store: &'a MutexGuard<'_, CalStore>,
+        disabled: &'a MutexGuard<'_, Vec<String>>,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> Tasks<'a> {
-        Self::new_with_days(store, locale, 7)
+        Self::new_with_days(store, disabled, locale, 7)
     }
 
     pub fn new_with_days(
         store: &'a MutexGuard<'_, CalStore>,
+        disabled: &'a MutexGuard<'_, Vec<String>>,
         locale: &Arc<dyn Locale + Send + Sync>,
         days: u32,
     ) -> Tasks<'a> {
@@ -39,7 +41,12 @@ impl<'a> Tasks<'a> {
         let end = start + Duration::days(days as i64);
 
         let mut next_td_occs = store
-            .filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo)
+            .sources()
+            .iter()
+            .filter(|s| !disabled.contains(s.id()))
+            .flat_map(move |s| {
+                s.filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo)
+            })
             .collect::<Vec<_>>();
 
         let overdue_tds = store

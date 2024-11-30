@@ -513,11 +513,20 @@ div.ev_cal_src {
     border: 1px solid #fff;
 }
 span.ev_cal_src {
-  height: 15px;
-  width: 15px;
-  border-radius: 50%;
-  display: inline-block;
-  flex: 0 0 15px; /* minimum width */
+    height: 15px;
+    width: 15px;
+    border: 1px solid #fff;
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 15px; /* minimum width */
+}
+
+span.ev_cal_src_highlight {
+    border: 1px solid #000 !important;
+}
+
+span.ev_cal_src_disabled {
+    background-color: #a0a0a0;
 }
 
 div.ev_cal_src_bi {
@@ -525,7 +534,7 @@ div.ev_cal_src_bi {
     color: #fff;
 }
 span.ev_cal_src_bi {
-  background-color: #1d77c0;
+    background-color: #1d77c0;
 }
 
 div.ev_cal_src_scriptsolution {
@@ -533,7 +542,7 @@ div.ev_cal_src_scriptsolution {
     color: #fff;
 }
 span.ev_cal_src_scriptsolution {
-  background-color: #2ec17d;
+    background-color: #2ec17d;
 }
 
 div.ev_cal_src_scriptsolution_tasks {
@@ -541,7 +550,7 @@ div.ev_cal_src_scriptsolution_tasks {
     color: #fff;
 }
 span.ev_cal_src_scriptsolution_tasks {
-  background-color: #128421;
+    background-color: #128421;
 }
 
 div.ev_cal_src_holidays {
@@ -549,7 +558,7 @@ div.ev_cal_src_holidays {
     color: #000;
 }
 span.ev_cal_src_holidays {
-  background-color: #f6d22d;
+    background-color: #f6d22d;
 }
 
 div.ev_cal_src_oschair {
@@ -557,7 +566,7 @@ div.ev_cal_src_oschair {
     color: #000;
 }
 span.ev_cal_src_oschair {
-  background-color: #a8c1e1;
+    background-color: #a8c1e1;
 }
 
 div.ev_cal_src_oslwl {
@@ -565,5 +574,5 @@ div.ev_cal_src_oslwl {
     color: #000;
 }
 span.ev_cal_src_oslwl {
-  background-color: #e1c4a8;
+    background-color: #e1c4a8;
 }

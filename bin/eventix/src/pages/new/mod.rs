@@ -16,6 +16,7 @@ use crate::{
         alarm::AlarmRequest, date::Date, datetime::DateTime, datetimerange::DateTimeRange,
         recur::RecurRequest,
     },
+    state::State,
 };
 
 use super::{Breadcrumb, Page};
@@ -89,8 +90,8 @@ impl CompAction for CompNew {
     }
 }
 
-pub fn new_page(req: &Request) -> Page {
-    let mut page = Page::new();
+pub async fn new_page(state: &State, req: &Request) -> Page {
+    let mut page = Page::new(state).await;
     match req.ctype {
         CalCompType::Todo => page.add_breadcrumb(Breadcrumb::new(
             format!("{}?ctype={:?}", path(), req.ctype),

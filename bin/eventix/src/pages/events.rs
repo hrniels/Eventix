@@ -20,13 +20,15 @@ pub struct Events<'a> {
 impl<'a> Events<'a> {
     pub fn new(
         store: &'a MutexGuard<'_, CalStore>,
+        disabled: &'a MutexGuard<'_, Vec<String>>,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> Events<'a> {
-        Self::new_with_days(store, locale, 7)
+        Self::new_with_days(store, disabled, locale, 7)
     }
 
     pub fn new_with_days(
         store: &'a MutexGuard<'_, CalStore>,
+        disabled: &'a MutexGuard<'_, Vec<String>>,
         locale: &Arc<dyn Locale + Send + Sync>,
         days: u32,
     ) -> Events<'a> {
@@ -37,7 +39,12 @@ impl<'a> Events<'a> {
         let end = start + Duration::days(days as i64);
 
         let next_ev_occs = store
-            .filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Event)
+            .sources()
+            .iter()
+            .filter(|s| !disabled.contains(s.id()))
+            .flat_map(move |s| {
+                s.filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Event)
+            })
             .collect::<Vec<_>>();
 
         let mut days = Vec::new();

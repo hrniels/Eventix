@@ -2,12 +2,18 @@ pub mod details;
 pub mod edit;
 pub mod monthly;
 pub mod new;
+pub mod togglecal;
 pub mod weekly;
 
 mod events;
 mod tasks;
 
 use std::time::{Duration, Instant};
+
+use crate::{
+    objects::{Calendar, Calendars},
+    state::State,
+};
 
 #[derive(Debug, Clone)]
 pub struct Breadcrumb {
@@ -30,16 +36,32 @@ pub struct Page {
     breadcrumbs: Vec<Breadcrumb>,
     errors: Vec<String>,
     infos: Vec<String>,
+    calendars: Calendars,
 }
 
-impl Page {
-    pub fn new() -> Self {
+impl Default for Page {
+    fn default() -> Self {
         Self {
             start: Instant::now(),
             breadcrumbs: Vec::new(),
             errors: Vec::new(),
             infos: Vec::new(),
+            calendars: Calendars::default(),
         }
+    }
+}
+
+impl Page {
+    pub async fn new(state: &State) -> Self {
+        Self {
+            start: Instant::now(),
+            calendars: Calendars::new_with_disabled(state).await,
+            ..Default::default()
+        }
+    }
+
+    pub fn calendars(&self) -> &[Calendar] {
+        &self.calendars.0
     }
 
     pub fn breadcrumbs(&self) -> &[Breadcrumb] {

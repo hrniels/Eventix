@@ -42,7 +42,7 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
     content(
-        super::new_page(&req),
+        super::new_page(&state, &req).await,
         locale.clone(),
         State(state),
         CompNew::new(req.ctype, locale.timezone()),
@@ -56,10 +56,10 @@ pub async fn content(
     State(state): State<crate::state::State>,
     form: CompNew,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let store = state.store().lock().await;
+    let (store, disabled) = state.acquire_store_and_disabled().await;
 
-    let events = Events::new(&store, &locale);
-    let tasks = Tasks::new(&store, &locale);
+    let events = Events::new(&store, &disabled, &locale);
+    let tasks = Tasks::new(&store, &disabled, &locale);
     let calendar = Arc::from(form.calendar.clone());
 
     let html = NewTemplate {
@@ -75,7 +75,7 @@ pub async fn content(
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
-        calendars: CalComboTemplate::new("calendar", store.sources(), calendar),
+        calendars: CalComboTemplate::new("calendar", store.sources().iter(), calendar),
         events,
         locale,
         tasks,

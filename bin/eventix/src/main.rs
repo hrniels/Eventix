@@ -13,7 +13,7 @@ use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
-use pages::{details, edit, monthly, new, weekly};
+use pages::{details, edit, monthly, new, togglecal, weekly};
 use serde::Deserialize;
 use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
@@ -97,6 +97,7 @@ async fn main() {
         .nest(details::path(), details::router(state.clone()))
         .nest(edit::path(), edit::router(state.clone()))
         .nest(new::path(), new::router(state.clone()))
+        .nest(togglecal::path(), togglecal::router(state.clone()))
         .fallback(error_handler)
         .layer(
             TraceLayer::new_for_http()

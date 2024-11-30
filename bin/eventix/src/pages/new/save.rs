@@ -69,7 +69,7 @@ pub async fn handler(
     MultiForm(mut form): MultiForm<CompNew>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page(&form.req);
+    let mut page = super::new_page(&state, &form.req).await;
 
     if action_update(&mut page, &locale, state.store(), &mut form).await? {
         page.add_info(locale.translate("New event was added successfully"));

@@ -47,7 +47,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
-        super::new_page(),
+        super::new_page(&state).await,
         locale::default(),
         State(state),
         Query(req),
@@ -180,10 +180,15 @@ pub async fn content(
         .from_local_datetime(&end.pred_opt().unwrap().and_hms_opt(23, 59, 59).unwrap())
         .unwrap();
 
-    let store = state.store().lock().await;
+    let (store, disabled) = state.acquire_store_and_disabled().await;
 
     let ev_occs = store
-        .filtered_occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event)
+        .sources()
+        .iter()
+        .filter(|s| !disabled.contains(s.id()))
+        .flat_map(move |s| {
+            s.filtered_occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event)
+        })
         .collect::<Vec<_>>();
 
     let mut days = Vec::new();
@@ -214,8 +219,8 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&store, &locale);
-    let tasks = Tasks::new(&store, &locale);
+    let events = Events::new(&store, &disabled, &locale);
+    let tasks = Tasks::new(&store, &disabled, &locale);
 
     let now = Utc::now().with_timezone(&timezone);
 

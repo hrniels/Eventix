@@ -42,7 +42,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
-        super::new_page(),
+        super::new_page(&state).await,
         locale::default(),
         State(state),
         Query(req),
@@ -58,7 +58,7 @@ pub async fn content(
     Query(req): Query<Request>,
     form: Option<CompEdit>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let store = state.store().lock().await;
+    let (store, disabled) = state.acquire_store_and_disabled().await;
 
     let item = store
         .item_by_id(&req.uid)
@@ -90,8 +90,8 @@ pub async fn content(
         None => CompEdit::new_from_occurrence(req, &occ, locale.timezone()),
     };
 
-    let events = Events::new(&store, &locale);
-    let tasks = Tasks::new(&store, &locale);
+    let events = Events::new(&store, &disabled, &locale);
+    let tasks = Tasks::new(&store, &disabled, &locale);
 
     let html = EditTemplate {
         page,

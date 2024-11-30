@@ -2,10 +2,12 @@ pub mod index;
 
 use axum::{routing::get, Router};
 
+use crate::state::State;
+
 use super::Page;
 
-pub fn new_page() -> Page {
-    Page::new()
+pub async fn new_page(state: &State) -> Page {
+    Page::new(state).await
 }
 
 pub fn path() -> &'static str {

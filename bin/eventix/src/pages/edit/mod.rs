@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     comp::CompAction,
     comps::{alarm::AlarmRequest, datetimerange::DateTimeRange, recur::RecurRequest},
+    state::State,
 };
 
 use super::Page;
@@ -105,8 +106,8 @@ pub fn build_title(occ: &Occurrence, rid: &Option<String>) -> String {
     title
 }
 
-pub fn new_page() -> Page {
-    Page::new()
+pub async fn new_page(state: &State) -> Page {
+    Page::new(state).await
 }
 
 pub fn path() -> &'static str {

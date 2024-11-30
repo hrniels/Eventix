@@ -99,7 +99,7 @@ pub async fn handler(
     MultiForm(mut form): MultiForm<CompEdit>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page();
+    let mut page = super::new_page(&state).await;
 
     let req = form.req.clone();
     let form = {

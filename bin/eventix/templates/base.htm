@@ -11,6 +11,18 @@
         <script type="text/javascript" src="/static/basic.js"></script>
         <script type="text/javascript" src="/static/jquery-3.7.1.min.js"></script>
         <script type="text/javascript" src="/static/jquery-ui.js"></script>
+        <script type="text/javascript">
+            function toggleCalendar(id) {
+                $.ajax({
+                    type: 'GET',
+                    url: '/toggle-calendar?id=' + id,
+                    dataType: 'json',
+                    success: function(data) {
+                        document.location.reload();
+                    }
+                });
+            }
+        </script>
     </head>
     <body>
         <div style="float: left;">
@@ -23,6 +35,35 @@
         </div>
 
         <div style="float: right;" class="ev_padbottom">
+            <div style="cursor: default; float: left" class="ev_button ev_button_normal">
+                <span style="vertical-align: middle">Calendars:</span>
+                {% for cal in page.calendars() %}
+                <a style="vertical-align: middle" title="{{ cal.name }}"
+                   href="javascript:toggleCalendar('{{ cal.id }}')">
+                    <span id="calendar_enabled_{{ cal.id }}" class="ev_cal_src
+                                 {% if cal.enabled %}
+                                 ev_cal_src_{{ cal.id }}
+                                 {% else %}
+                                 ev_cal_src_disabled
+                                 {% endif %}
+                                 "></span>
+                </a>
+                <script type="text/javascript">
+                $(document).ready(function() {
+                    {% if !cal.enabled %}
+                    $("#calendar_enabled_{{ cal.id }}").hover(function() {
+                        $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");
+                    });
+                    {% else %}
+                    $("#calendar_enabled_{{ cal.id }}").hover(function() {
+                        $(this).toggleClass("ev_cal_src_highlight");
+                    });
+                    {% endif %}
+                });
+                </script>
+                {% endfor %}
+            </div>
+            &nbsp;
             <a id="link-monthly" class="ev_button ev_button_normal"
                style="width: 80px; text-align: center" href="/">
                 <span>{{ "Monthly"|t(locale) }}</span>
