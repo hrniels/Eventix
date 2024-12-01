@@ -109,7 +109,7 @@
                 {% for occ in day.occurrences %}
                 <div style="position: absolute;
                             top: {{ occ.minute_off() }}px;
-                            height: {{ occ.minute_duration() - 2 }}px;
+                            height: {{ occ.minute_duration() }}px;
                             width: {{ 100 / occ.overlap_count() }}%;
                             left: {{ occ.overlap_off() * (100 / occ.overlap_count()) }}%;
                             padding: 0px"
