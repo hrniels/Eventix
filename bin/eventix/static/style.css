@@ -576,3 +576,27 @@ div.ev_cal_src_oslwl {
 span.ev_cal_src_oslwl {
     background-color: #e1c4a8;
 }
+
+div.ev_cal_src_oslws {
+    background-color: #f9f06a;
+    color: #000;
+}
+span.ev_cal_src_oslws {
+    background-color: #f9f06a;
+}
+
+div.ev_cal_src_oslss {
+    background-color: #e5bc41;
+    color: #000;
+}
+span.ev_cal_src_oslss {
+    background-color: #e5bc41;
+}
+
+div.ev_cal_src_ospr {
+    background-color: #e42629;
+    color: #000;
+}
+span.ev_cal_src_ospr {
+    background-color: #e42629;
+}
