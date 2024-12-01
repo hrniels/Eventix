@@ -1,24 +1,24 @@
 [calendar.scriptsolution]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
 name = "Script-Solution"
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
 
 [calendar.scriptsolution_tasks]
-path = "/home/hrniels/.config/vdirsyncer-test/tasks-scso/tasks~h26VsoBEVm_nzi6FeDvGvES"
 name = "ScSo Tasks"
+path = "/home/hrniels/.config/vdirsyncer-test/tasks-scso/tasks~h26VsoBEVm_nzi6FeDvGvES"
 
 [calendar.bi]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"
 name = "BI"
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"
 
 [calendar.holidays]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3"
 name = "Holidays"
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3"
 
 [calendar.oschair]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/osstaff_shared_by_adam"
 name = "OS Chair"
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/osstaff_shared_by_adam"
 
 [calendar.oslwl]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"
 name = "OS LWL"
-
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"
+disabled = true

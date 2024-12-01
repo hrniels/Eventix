@@ -10,10 +10,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(store: Arc<Mutex<CalStore>>) -> Self {
+    pub fn new(store: Arc<Mutex<CalStore>>, disabled_cals: Arc<Mutex<Vec<String>>>) -> Self {
         Self {
             store,
-            disabled_cals: Arc::new(Mutex::new(Vec::new())),
+            disabled_cals,
         }
     }
 

@@ -51,6 +51,7 @@ struct Sources {
 struct Calendar {
     path: String,
     name: String,
+    disabled: Option<bool>,
 }
 
 #[tokio::main]
@@ -73,8 +74,13 @@ async fn main() {
         .expect("read calendars.toml");
     let sources: Sources = toml::from_str(&sources).expect("parse calendars.toml");
 
+    let mut disabled_cals = Vec::new();
     let mut store = CalStore::default();
     for (id, cal) in &sources.calendars {
+        if cal.disabled.unwrap_or(false) {
+            disabled_cals.push(id.clone());
+        }
+
         store.add(
             CalSource::new_from_dir(
                 Arc::from(id.clone()),
@@ -88,7 +94,11 @@ async fn main() {
         );
     }
 
-    let state = state::State::new(Arc::new(Mutex::new(store)));
+    let state = state::State::new(
+        Arc::new(Mutex::new(store)),
+        Arc::new(Mutex::new(disabled_cals)),
+    );
+
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
         .nest_service("/static", ServeDir::new("static"))
