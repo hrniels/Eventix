@@ -4,7 +4,6 @@ use chrono_tz::Tz;
 use itertools::Itertools;
 use std::fmt;
 use std::str::FromStr;
-use tracing::warn;
 
 use crate::objects::CalDate;
 use crate::parser::{ParseError, Property};
@@ -363,9 +362,6 @@ impl CalRRule {
         let interval = self.interval.unwrap_or(1) as u32;
 
         assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
-        if self.week_start.is_some() {
-            warn!("WKST is not supported");
-        }
 
         let mut count = 0;
         while date <= end {
@@ -536,8 +532,10 @@ impl CalRRule {
                     // is not 1, in which case we might otherwise accidentally consider dates in
                     // the next week. starting too early is not an issue, because we drop the dates
                     // before start anyway.
-                    // TODO here we need to consider week_start, I believe
-                    let day_of_week = date.weekday().num_days_from_monday();
+                    let day_of_week = match self.week_start {
+                        Some(wkst) => date.weekday().days_since(wkst),
+                        _ => date.weekday().num_days_from_monday(),
+                    };
                     let cur = date - Duration::days(day_of_week as i64);
                     (Some(cur), Some(cur + Duration::days(7)))
                 }
@@ -1427,6 +1425,25 @@ mod tests {
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 15, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1999, 3, 10, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1999, 3, 11, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_with_wkst() {
+        let start = ny_datetime(1997, 8, 5, 9, 0, 0);
+        let rrule = "FREQ=WEEKLY;INTERVAL=2;COUNT=4;BYDAY=TU,SU;WKST=SU"
+            .parse::<CalRRule>()
+            .unwrap();
+        assert_eq!(
+            format!("{}", rrule.human()),
+            "Occurs every 2 weeks, on Tue and Sun\nRepeats 4 times".to_string()
+        );
+        let dates = rrule.dates_within(start, start, start + Duration::weeks(1000));
+        let mut iter = dates.iter();
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 8, 5, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 8, 17, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 8, 19, 9, 0, 0));
+        assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 8, 31, 9, 0, 0));
         assert_eq!(iter.next(), None);
     }
 }
