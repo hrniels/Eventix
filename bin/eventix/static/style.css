@@ -407,6 +407,13 @@ span.ev_msg_error span.ev_msg_info {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.ev_tabheader {
+    display: inline;
+    font-size: 1.3em;
+    margin: 0;
+    color: #fff;
+    z-index: 100;
+}
 .ev_header {
 	background-color: #637591;
 	border: 1px solid #bbb;
@@ -599,4 +606,13 @@ div.ev_cal_src_ospr {
 }
 span.ev_cal_src_ospr {
     background-color: #e42629;
+}
+
+/* ------------ JQUERY ------------ */
+
+.ui-autocomplete {
+    max-height: 200px;
+    overflow-y: auto;
+    /* prevent horizontal scrollbar */
+    overflow-x: hidden;
 }

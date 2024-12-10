@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     comp::CompAction,
-    comps::{alarm::AlarmRequest, datetimerange::DateTimeRange, recur::RecurRequest},
+    comps::{
+        alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange,
+        recur::RecurRequest,
+    },
     state::State,
 };
 
@@ -35,6 +38,7 @@ pub struct CompEdit {
     rrule: Option<RecurRequest>,
     reminder: AlarmRequest,
     start_end: DateTimeRange,
+    attendees: Option<Attendees>,
 }
 
 impl CompEdit {
@@ -67,6 +71,7 @@ impl CompEdit {
                 },
                 tz,
             ),
+            attendees: Some(Attendees::new_from_cal_attendees(occ.attendees())),
         }
     }
 }
@@ -89,6 +94,9 @@ impl CompAction for CompEdit {
     }
     fn reminder(&self) -> &AlarmRequest {
         &self.reminder
+    }
+    fn attendees(&self) -> Option<&Attendees> {
+        self.attendees.as_ref()
     }
 }
 

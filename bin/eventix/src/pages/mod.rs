@@ -1,3 +1,4 @@
+pub mod attendees;
 pub mod details;
 pub mod edit;
 pub mod monthly;

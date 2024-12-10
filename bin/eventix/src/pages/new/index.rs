@@ -11,8 +11,8 @@ use ical::objects::{CalCompType, CalDate, EventLike};
 use super::{CompNew, Page, Request};
 use crate::{
     comps::{
-        alarm::AlarmTemplate, calcombo::CalComboTemplate, datetimerange::DateTimeRangeTemplate,
-        recur::RecurTemplate,
+        alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
+        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate,
     },
     locale::{self, Locale},
 };
@@ -32,6 +32,7 @@ struct NewTemplate<'a> {
     rrule: RecurTemplate<'a>,
     reminder: AlarmTemplate<'a>,
     calendars: CalComboTemplate,
+    attendees: AttendeesTemplate,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -76,6 +77,7 @@ pub async fn content(
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
         calendars: CalComboTemplate::new("calendar", store.sources().iter(), calendar),
+        attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
         events,
         locale,
         tasks,

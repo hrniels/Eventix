@@ -12,7 +12,10 @@ use std::sync::Arc;
 
 use super::{CompEdit, Page, Request};
 use crate::{
-    comps::{alarm::AlarmTemplate, datetimerange::DateTimeRangeTemplate, recur::RecurTemplate},
+    comps::{
+        alarm::AlarmTemplate, attendees::AttendeesTemplate, datetimerange::DateTimeRangeTemplate,
+        recur::RecurTemplate,
+    },
     locale::{self, Locale},
     pages::Breadcrumb,
 };
@@ -32,6 +35,7 @@ struct EditTemplate<'a> {
     start_end: DateTimeRangeTemplate<'a>,
     rrule: Option<RecurTemplate<'a>>,
     reminder: AlarmTemplate<'a>,
+    attendees: AttendeesTemplate,
     occ: &'a Occurrence<'a>,
     events: Events<'a>,
     tasks: Tasks<'a>,
@@ -110,6 +114,7 @@ pub async fn content(
             .rrule
             .map(|rr| RecurTemplate::new(locale.clone(), "rrule", rr)),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
+        attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
         occ: &occ,
         events,
         locale,

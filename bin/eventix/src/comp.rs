@@ -4,6 +4,7 @@ use ical::objects::CalCompType;
 use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 
 use crate::comps::alarm::AlarmRequest;
+use crate::comps::attendees::Attendees;
 use crate::{
     comps::{datetimerange::DateTimeRange, recur::RecurRequest},
     locale::Locale,
@@ -17,6 +18,7 @@ pub trait CompAction {
     fn rrule(&self) -> Option<&RecurRequest>;
     fn reminder(&self) -> &AlarmRequest;
     fn start_end(&self) -> &DateTimeRange;
+    fn attendees(&self) -> Option<&Attendees>;
 
     fn check(
         &self,
@@ -91,6 +93,11 @@ pub trait CompAction {
             comp.set_alarms(vec![alarm]);
         } else {
             comp.set_alarms(vec![]);
+        }
+        if let Some(att) = self.attendees() {
+            comp.set_attendees(att.to_cal_attendees());
+        } else {
+            comp.set_attendees(None);
         }
 
         comp.set_last_modified(CalDate::now());
