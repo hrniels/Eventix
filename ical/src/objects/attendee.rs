@@ -89,6 +89,13 @@ pub struct CalAttendee {
 }
 
 impl CalAttendee {
+    pub fn new(address: String) -> Self {
+        Self {
+            address,
+            ..Default::default()
+        }
+    }
+
     pub fn address(&self) -> &String {
         &self.address
     }
@@ -97,12 +104,32 @@ impl CalAttendee {
         self.role
     }
 
+    pub fn set_role(&mut self, role: CalRole) {
+        self.role = Some(role);
+    }
+
     pub fn part_stat(&self) -> Option<CalPartStat> {
         self.part_stat
     }
 
     pub fn common_name(&self) -> Option<&String> {
         self.common_name.as_ref()
+    }
+
+    pub fn set_common_name(&mut self, cn: String) {
+        self.common_name = Some(cn);
+    }
+
+    pub fn pretty_name(&self) -> String {
+        let address = match self.address.strip_prefix("mailto:") {
+            Some(addr) => addr,
+            None => &self.address,
+        };
+        if let Some(name) = &self.common_name {
+            format!("{} <{}>", name, address)
+        } else {
+            address.to_string()
+        }
     }
 
     pub fn to_prop(&self) -> Property {

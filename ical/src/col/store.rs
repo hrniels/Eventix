@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -84,6 +85,25 @@ impl CalStore {
             .iter()
             .flat_map(|c| c.items().iter())
             .flat_map(move |i| i.filtered_occurrences_within(start, end, filter.clone()))
+    }
+
+    pub fn contacts(&self) -> HashMap<String, String> {
+        let mut contacts = HashMap::new();
+        for i in self.items() {
+            let item_contacts = i.contacts();
+            for (k, v) in item_contacts {
+                match contacts.get_mut(&k) {
+                    Some(cur_name) if *cur_name == k => {
+                        *cur_name = v;
+                    }
+                    None => {
+                        contacts.insert(k, v);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        contacts
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -216,6 +217,28 @@ impl CalItem {
             .iter()
             .filter(|&c| c.ctype() == CalCompType::Event)
             .map(|e| e.as_event().unwrap())
+    }
+
+    pub fn contacts(&self) -> HashMap<String, String> {
+        let mut contacts = HashMap::new();
+        for c in self.components() {
+            if let Some(attendees) = c.attendees() {
+                for a in attendees {
+                    let cur_name = contacts.get_mut(a.address());
+                    match cur_name {
+                        Some(cur_name) if a.address() == cur_name && a.common_name().is_some() => {
+                            *cur_name = a.common_name().unwrap().clone();
+                        }
+                        None => {
+                            let name = a.common_name().unwrap_or(a.address()).clone();
+                            contacts.insert(a.address().clone(), name);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        contacts
     }
 
     pub fn add_component(&mut self, comp: CalComponent) {

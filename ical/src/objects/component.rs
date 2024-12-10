@@ -300,6 +300,10 @@ impl UpdatableEventLike for EventLikeComponent {
     fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {
         self.alarms = alarms;
     }
+
+    fn set_attendees(&mut self, attendees: Option<Vec<CalAttendee>>) {
+        self.attendees = attendees;
+    }
 }
 
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -572,5 +576,9 @@ impl UpdatableEventLike for CalComponent {
 
     fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {
         set_with_ev_or_todo!(self, set_alarms, alarms);
+    }
+
+    fn set_attendees(&mut self, attendees: Option<Vec<CalAttendee>>) {
+        set_with_ev_or_todo!(self, set_attendees, attendees);
     }
 }
