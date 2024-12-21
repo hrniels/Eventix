@@ -7,7 +7,9 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 
 use crate::col::{ColError, Occurrence};
-use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo, Calendar, EventLike};
+use crate::objects::{
+    CalCompType, CalComponent, CalDate, CalEvent, CalTodo, CalTrigger, Calendar, EventLike,
+};
 
 #[derive(Debug)]
 pub struct CalItem {
@@ -54,59 +56,69 @@ impl CalItem {
         self.cal.components().iter().any(|c| c.uid() == uid_ref)
     }
 
-    pub fn next_alarm_occurrence(&self, start: DateTime<Tz>) -> Option<Occurrence<'_>> {
+    pub fn due_alarms_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> Vec<Occurrence<'_>> {
         // this should never happen, but if there is no base component, we're done here
         let Some(first) = self.component_with(|c| c.rid().is_none()) else {
-            return None;
+            return vec![];
         };
 
-        // first find the next alarm for the base component; that's easy because it's always the
-        // alarm for the next occurrence
-        let next_base = if first.has_alarms() {
-            first.next_date(start).and_then(|d| {
-                let occ = Occurrence::new(self.source.clone(), first, d);
-                occ.alarm_date().map(|d| (occ, d))
-            })
-        } else {
-            None
-        };
-
-        // now let's find the next alarm for all overwritten components
-        let next_overwritten = self
-            .cal
-            .components()
-            .iter()
-            // ignore base and components without alarm
-            .filter(|c| c.rid().is_some() && c.has_alarms())
-            // get the alarm date to be able to determine their minimum
-            .flat_map(|c| {
-                let mut occ = Occurrence::new(
-                    self.source.clone(),
-                    first,
-                    c.rid().unwrap().as_start_with_tz(&start.timezone()),
-                );
-                occ.set_occurrence(c);
-                occ.alarm_date().map(|d| (occ, d))
-            })
-            // ignore alarms in the past
-            .filter(|(_c, d)| *d >= start)
-            // now select the component with the minimum alarm date
-            .min_by(|a, b| a.1.cmp(&b.1));
-
-        // finally determine the minimum of the next base alarm and the overwritten alarm. that's
-        // requires a bit of Option handling, because for both we might have found nothing.
-        match (next_base, next_overwritten) {
-            (Some(base), Some(over)) => {
-                if base.1 < over.1 {
-                    Some(base.0)
-                } else {
-                    Some(over.0)
+        // get the alarms for occurrences of the base component
+        let mut alarms = vec![];
+        if let Some(alarm) = first.alarms().first() {
+            match alarm.trigger() {
+                CalTrigger::Relative {
+                    related: _,
+                    duration,
+                } => {
+                    alarms.extend(
+                        first
+                            .dates_within(start - *duration, end - *duration)
+                            .iter()
+                            .map(|d| Occurrence::new(self.source.clone(), first, *d))
+                            .filter(|o| {
+                                let alarm = o.alarm_date().unwrap();
+                                alarm >= start && alarm < end
+                            }),
+                    );
+                }
+                CalTrigger::Absolute(date) => {
+                    let alarm_date = date.as_start_with_tz(&start.timezone());
+                    if alarm_date >= start && alarm_date < end {
+                        alarms.push(Occurrence::new(
+                            self.source.clone(),
+                            first,
+                            first.start().unwrap().as_start_with_tz(&start.timezone()),
+                        ))
+                    }
                 }
             }
-            (None, Some(over)) => Some(over.0),
-            (Some(base), None) => Some(base.0),
-            (None, None) => None,
         }
+
+        // now let's find the alarms for all overwritten components
+        if !alarms.is_empty() {
+            let overwritten = self.cal.components().iter().filter(|c| c.rid().is_some());
+            for c in overwritten {
+                if let Some(rid) = c.rid() {
+                    let rid_tz = rid.as_start_with_tz(&start.timezone());
+                    let mut tmp_occ = Occurrence::new(self.source.clone(), first, rid_tz);
+                    tmp_occ.set_occurrence(c);
+                    match tmp_occ.alarm_date() {
+                        // if the alarm is also within the time frame, just set the overwritten event
+                        Some(alarm) if alarm >= start && alarm < end => {
+                            if let Some(occ) =
+                                alarms.iter_mut().find(|o| o.occurrence_start() == rid_tz)
+                            {
+                                occ.set_occurrence(c);
+                            }
+                        }
+                        // otherwise remove the occurrence from the results
+                        _ => alarms.retain(|a| a.occurrence_start() != rid_tz),
+                    }
+                }
+            }
+        }
+
+        alarms
     }
 
     pub fn occurrence_by_id<S: AsRef<str>>(
@@ -304,6 +316,11 @@ mod tests {
             self
         }
 
+        fn rid(mut self, date: CalDate) -> Self {
+            self.ev.set_rid(Some(date));
+            self
+        }
+
         fn exdate(mut self, date: CalDate) -> Self {
             self.ev.add_exdate(date);
             self
@@ -472,12 +489,12 @@ mod tests {
     fn alarms() {
         let mut source = CalSource::default();
         source.add(new_item(
-            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
+            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 3).unwrap(), "id1")
                 .alarm(CalAlarm::new(
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::Start,
-                        duration: -Duration::days(1),
+                        duration: -Duration::days(2),
                     },
                 ))
                 .done(),
@@ -504,13 +521,24 @@ mod tests {
                 .done(),
         ));
 
-        let occ = source.next_alarm_occurrence(new_date(1990, 1, 1)).unwrap();
-        assert_eq!(occ.uid(), "id1");
-        assert_eq!(occ.alarm_date(), Some(new_date(1990, 1, 1)));
+        let occs = source
+            .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 2))
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 1);
+        assert_eq!(occs[0].uid(), "id1");
+        assert_eq!(occs[0].alarm_date(), Some(new_date(1990, 1, 1)));
 
-        let occ = source.next_alarm_occurrence(new_date(1990, 1, 5)).unwrap();
-        assert_eq!(occ.uid(), "id3");
-        assert_eq!(occ.alarm_date(), Some(new_datetime(1990, 1, 6, 23, 59, 59)));
+        let occs = source
+            .due_alarms_within(new_date(1990, 1, 5), new_date(1990, 1, 8))
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 2);
+        assert_eq!(occs[0].uid(), "id2");
+        assert_eq!(occs[0].alarm_date(), Some(new_date(1990, 1, 7)));
+        assert_eq!(occs[1].uid(), "id3");
+        assert_eq!(
+            occs[1].alarm_date(),
+            Some(new_datetime(1990, 1, 6, 23, 59, 59))
+        );
     }
 
     #[test]
@@ -518,12 +546,12 @@ mod tests {
         let mut source = CalSource::default();
         source.add(new_item(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
-                .rrule("FREQ=DAILY;INTERVAL=4".parse().unwrap())
+                .rrule("FREQ=DAILY;INTERVAL=4;COUNT=2".parse().unwrap())
                 .alarm(CalAlarm::new(
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::Start,
-                        duration: Duration::days(1),
+                        duration: Duration::minutes(-10),
                     },
                 ))
                 .done(),
@@ -541,19 +569,112 @@ mod tests {
                 .done(),
         ));
 
-        let occ = source.next_alarm_occurrence(new_date(1990, 1, 5)).unwrap();
-        assert_eq!(occ.uid(), "id1");
-        assert_eq!(occ.occurrence_start(), new_date(1990, 1, 6));
-        assert_eq!(occ.alarm_date(), Some(new_date(1990, 1, 7)));
+        let occs = source
+            .due_alarms_within(
+                new_datetime(1990, 1, 5, 23, 45, 0),
+                new_datetime(1990, 1, 5, 23, 55, 0),
+            )
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 1);
+        assert_eq!(occs[0].uid(), "id1");
+        assert_eq!(occs[0].occurrence_start(), new_date(1990, 1, 6));
+        assert_eq!(
+            occs[0].alarm_date(),
+            Some(new_datetime(1990, 1, 5, 23, 50, 0))
+        );
 
-        let occ = source.next_alarm_occurrence(new_date(1990, 1, 6)).unwrap();
-        assert_eq!(occ.uid(), "id1");
-        assert_eq!(occ.occurrence_start(), new_date(1990, 1, 6));
-        assert_eq!(occ.alarm_date(), Some(new_date(1990, 1, 7)));
+        let occs = source
+            .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 7))
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 2);
+        assert_eq!(occs[0].uid(), "id1");
+        assert_eq!(occs[0].occurrence_start(), new_date(1990, 1, 2));
+        assert_eq!(
+            occs[0].alarm_date(),
+            Some(new_datetime(1990, 1, 1, 23, 50, 0))
+        );
+        assert_eq!(occs[1].uid(), "id1");
+        assert_eq!(occs[1].occurrence_start(), new_date(1990, 1, 6));
+        assert_eq!(
+            occs[1].alarm_date(),
+            Some(new_datetime(1990, 1, 5, 23, 50, 0))
+        );
 
-        let occ = source.next_alarm_occurrence(new_date(1990, 1, 7)).unwrap();
-        assert_eq!(occ.uid(), "id2");
-        assert_eq!(occ.occurrence_start(), new_date(1990, 1, 8));
-        assert_eq!(occ.alarm_date(), Some(new_datetime(1990, 1, 7, 23, 59, 59)));
+        let occs = source
+            .due_alarms_within(new_date(1990, 1, 7), new_date(1990, 1, 15))
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 2);
+        assert_eq!(occs[0].uid(), "id2");
+        assert_eq!(occs[0].occurrence_start(), new_date(1990, 1, 8));
+        assert_eq!(
+            occs[0].alarm_date(),
+            Some(new_datetime(1990, 1, 7, 23, 59, 59))
+        );
+        assert_eq!(occs[1].uid(), "id2");
+        assert_eq!(occs[1].occurrence_start(), new_date(1990, 1, 15));
+        assert_eq!(
+            occs[1].alarm_date(),
+            Some(new_datetime(1990, 1, 14, 23, 59, 59))
+        );
+    }
+
+    #[test]
+    fn alarms_with_recurrence_overwrite() {
+        let mut source = CalSource::default();
+        let mut cal = Calendar::default();
+        cal.add(CalComponent::Event(
+            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
+                .rrule("FREQ=DAILY;INTERVAL=4;COUNT=3".parse().unwrap())
+                .alarm(CalAlarm::new(
+                    CalAction::Display,
+                    CalTrigger::Relative {
+                        related: CalRelated::Start,
+                        duration: Duration::minutes(-10),
+                    },
+                ))
+                .done(),
+        ));
+        cal.add(CalComponent::Event(
+            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(), "id1")
+                .rid(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 6).unwrap()))
+                .alarm(CalAlarm::new(
+                    CalAction::Display,
+                    CalTrigger::Relative {
+                        related: CalRelated::Start,
+                        duration: Duration::hours(1),
+                    },
+                ))
+                .done(),
+        ));
+        cal.add(CalComponent::Event(
+            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 10).unwrap(), "id1")
+                .rid(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 10).unwrap()))
+                .alarm(CalAlarm::new(
+                    CalAction::Display,
+                    CalTrigger::Relative {
+                        related: CalRelated::End,
+                        duration: Duration::days(1),
+                    },
+                ))
+                .done(),
+        ));
+        source.add(CalItem::new_simple(cal));
+
+        let occs = source
+            .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 11))
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 2);
+        assert_eq!(occs[0].uid(), "id1");
+        assert_eq!(occs[0].occurrence_start(), new_date(1990, 1, 2));
+        assert_eq!(
+            occs[0].alarm_date(),
+            Some(new_datetime(1990, 1, 1, 23, 50, 0))
+        );
+        assert_eq!(occs[1].uid(), "id1");
+        assert_eq!(occs[1].occurrence_start(), new_date(1990, 1, 6));
+        assert_eq!(
+            occs[1].alarm_date(),
+            Some(new_datetime(1990, 1, 6, 1, 0, 0))
+        );
     }
 }

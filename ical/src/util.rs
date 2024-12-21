@@ -3,6 +3,24 @@ use std::fmt::Write;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Weekday};
 use chrono_tz::Tz;
 
+pub fn date_ranges_overlap(
+    start1: DateTime<Tz>,
+    end1: DateTime<Tz>,
+    start2: DateTime<Tz>,
+    end2: DateTime<Tz>,
+) -> bool {
+    if start1 >= start2 && start1 < end2 {
+        return true;
+    }
+    if end1 > start2 && end1 <= end2 {
+        return true;
+    }
+    if start1 < start2 && end1 > end2 {
+        return true;
+    }
+    false
+}
+
 pub fn nth_weekday_of_month_front(date: DateTime<Tz>, day: Weekday, n: u8) -> Option<NaiveDate> {
     NaiveDate::from_weekday_of_month_opt(date.year(), date.month(), day, n)
 }

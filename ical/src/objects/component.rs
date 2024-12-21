@@ -1,4 +1,4 @@
-use chrono::DateTime;
+use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -361,45 +361,25 @@ impl CalComponent {
         }
     }
 
+    pub fn duration(&self, tz: &Tz) -> Option<Duration> {
+        let start = self.start_or_created()?;
+
+        // ensure that we start day-aligned if either start or end is all-day
+        let start = if self.is_all_day() && !matches!(start, CalDate::Date(_)) {
+            CalDate::Date(start.as_naive_date())
+        } else {
+            start.clone()
+        };
+
+        self.end_or_due()
+            .map(|end| end.as_end_with_tz(tz) - start.as_start_with_tz(tz))
+    }
+
     fn exdates_as_datetime(&self, tz: &Tz) -> Vec<DateTime<Tz>> {
         self.exdates()
             .iter()
             .map(|d| d.as_start_with_tz(tz))
             .collect::<Vec<_>>()
-    }
-
-    pub fn next_date(&self, start: DateTime<Tz>) -> Option<DateTime<Tz>> {
-        if let Some(rrule) = self.rrule() {
-            let Some(dtstart) = self.start() else {
-                return None;
-            };
-
-            let exdates_dt = self.exdates_as_datetime(&start.timezone());
-            let next = loop {
-                let Some(next) =
-                    rrule.next_date(dtstart.as_start_with_tz(&start.timezone()), start)
-                else {
-                    break None;
-                };
-                if !exdates_dt.contains(&next) {
-                    break Some(next);
-                }
-            };
-            return next;
-        }
-
-        let Some(ev_start) = self.start_or_created() else {
-            return None;
-        };
-        let ev_start = ev_start.as_start_with_tz(&start.timezone());
-        if let Some(ev_end) = self.end_or_due() {
-            let tzend = ev_end.as_end_with_tz(&start.timezone());
-            if tzend < start {
-                return None;
-            }
-        }
-
-        Some(ev_start)
     }
 
     pub fn dates_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> Vec<DateTime<Tz>> {
@@ -408,8 +388,12 @@ impl CalComponent {
                 return vec![];
             };
 
-            let mut dates =
-                rrule.dates_within(dtstart.as_start_with_tz(&start.timezone()), start, end);
+            let mut dates = rrule.dates_within(
+                dtstart.as_start_with_tz(&start.timezone()),
+                self.duration(&start.timezone()),
+                start,
+                end,
+            );
             let exdates_dt = self.exdates_as_datetime(&start.timezone());
             dates.retain(|d| !exdates_dt.contains(d));
             return dates;

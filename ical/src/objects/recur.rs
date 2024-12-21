@@ -349,53 +349,38 @@ impl CalRRule {
     pub fn dates_within(
         &self,
         dtstart: DateTime<Tz>,
+        dtdur: Option<Duration>,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> Vec<DateTime<Tz>> {
         let mut dates = Vec::new();
         let mut date = dtstart;
-        let end = if let Some(ref until) = self.until {
-            until.as_end_with_tz(&start.timezone()).min(end)
-        } else {
-            end
-        };
         let interval = self.interval.unwrap_or(1) as u32;
+        // go one interval further to ensure that we do not miss an occurrence. for example, if we
+        // want to see all occurrences until December 20th of a monthly event starting at 25th of
+        // January, we will not consider the December as the 25th is already out of range. going
+        // one interval further means that we will consider the December and might set the day to
+        // something else, which might indeed be within the range.
+        let beyond_end = next_date(end, self.freq, interval);
+        let until = if let Some(ref until) = self.until {
+            until.as_end_with_tz(&start.timezone()).min(beyond_end)
+        } else {
+            beyond_end
+        };
 
         assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
 
         let mut count = 0;
-        while date <= end {
-            if !self.limited(date) && self.expand(dtstart, start, date, &mut count, &mut dates) {
+        while date <= until {
+            if !self.limited(date)
+                && self.expand(dtstart, dtdur, start, end, date, &mut count, &mut dates)
+            {
                 break;
             }
 
             date = next_date(date, self.freq, interval);
         }
         dates
-    }
-
-    pub fn next_date(&self, dtstart: DateTime<Tz>, start: DateTime<Tz>) -> Option<DateTime<Tz>> {
-        let mut dates = Vec::new();
-        let mut date = dtstart;
-        let end = if let Some(ref until) = self.until {
-            until.as_end_with_tz(&start.timezone())
-        } else {
-            DateTime::<Tz>::MAX_UTC.with_timezone(&start.timezone())
-        };
-        let interval = self.interval.unwrap_or(1) as u32;
-
-        let mut count = 0;
-        while date <= end {
-            if !self.limited(date) && self.expand(dtstart, start, date, &mut count, &mut dates) {
-                break;
-            }
-            if dates.len() > 0 {
-                break;
-            }
-
-            date = next_date(date, self.freq, interval);
-        }
-        dates.first().cloned()
     }
 
     fn limited(&self, date: DateTime<Tz>) -> bool {
@@ -469,7 +454,9 @@ impl CalRRule {
     fn expand(
         &self,
         dtstart: DateTime<Tz>,
+        dtdur: Option<Duration>,
         start: DateTime<Tz>,
+        end: DateTime<Tz>,
         date: DateTime<Tz>,
         count: &mut usize,
         res: &mut Vec<DateTime<Tz>>,
@@ -526,7 +513,7 @@ impl CalRRule {
         }
 
         if self.freq >= CalRRuleFreq::Weekly && self.by_day.is_some() {
-            let (cur, end) = match self.freq {
+            let (vcur, vend) = match self.freq {
                 CalRRuleFreq::Weekly => {
                     // start at beginning of week. note that this is required in case the interval
                     // is not 1, in which case we might otherwise accidentally consider dates in
@@ -536,18 +523,19 @@ impl CalRRule {
                         Some(wkst) => date.weekday().days_since(wkst),
                         _ => date.weekday().num_days_from_monday(),
                     };
-                    let cur = date - Duration::days(day_of_week as i64);
-                    (Some(cur), Some(cur + Duration::days(7)))
+                    let vcur = date - Duration::days(day_of_week as i64);
+                    (Some(vcur), Some(vcur + Duration::days(7)))
                 }
                 CalRRuleFreq::Monthly => {
                     // start at beginning of month (same as above)
-                    let cur = date.with_day(1).unwrap();
-                    let end = if cur.month() == 12 {
-                        cur.with_year(cur.year() + 1).and_then(|d| d.with_month(1))
+                    let vcur = date.with_day(1).unwrap();
+                    let vend = if vcur.month() == 12 {
+                        vcur.with_year(vcur.year() + 1)
+                            .and_then(|d| d.with_month(1))
                     } else {
-                        cur.with_month(cur.month() + 1)
+                        vcur.with_month(vcur.month() + 1)
                     };
-                    (Some(cur), end)
+                    (Some(vcur), vend)
                 }
                 _ => {
                     // start at beginning of year (same as above)
@@ -555,26 +543,31 @@ impl CalRRule {
                     (Some(cur), cur.with_year(cur.year() + 1))
                 }
             };
-            let Some(mut cur) = cur else {
+            let Some(mut vcur) = vcur else {
                 return false;
             };
-            let Some(end) = end else {
+            let Some(vend) = vend else {
                 return false;
             };
 
             let by_day = self.by_day.as_ref().unwrap();
-            while cur < end {
+            while vcur < vend {
                 // limit by month if BYMONTH is present
-                if self.by_month.is_none() || months.contains(&(cur.month() as u8)) {
+                if self.by_month.is_none() || months.contains(&(vcur.month() as u8)) {
                     for h in hours {
                         for m in mins {
                             for s in secs {
-                                if by_day.iter().any(|d| d.matches(cur, self)) {
-                                    if let Some(ndate) = cur.with_hour(*h as u32) {
+                                if by_day.iter().any(|d| d.matches(vcur, self)) {
+                                    if let Some(ndate) = vcur.with_hour(*h as u32) {
                                         if let Some(ndate) = ndate.with_minute(*m as u32) {
                                             if let Some(ndate) = ndate.with_second(*s as u32) {
                                                 if ndate >= dtstart {
-                                                    if ndate >= start {
+                                                    if util::date_ranges_overlap(
+                                                        ndate,
+                                                        ndate + dtdur.unwrap_or(Duration::zero()),
+                                                        start,
+                                                        end,
+                                                    ) {
                                                         res.push(ndate);
                                                     }
                                                     *count += 1;
@@ -593,7 +586,7 @@ impl CalRRule {
                         }
                     }
                 }
-                cur = next_date(cur, CalRRuleFreq::Daily, 1);
+                vcur = next_date(vcur, CalRRuleFreq::Daily, 1);
             }
             return false;
         }
@@ -609,7 +602,12 @@ impl CalRRule {
                                         if let Some(ndate) = ndate.with_minute(*m as u32) {
                                             if let Some(ndate) = ndate.with_second(*s as u32) {
                                                 if ndate >= dtstart {
-                                                    if ndate >= start {
+                                                    if util::date_ranges_overlap(
+                                                        ndate,
+                                                        ndate + dtdur.unwrap_or(Duration::zero()),
+                                                        start,
+                                                        end,
+                                                    ) {
                                                         res.push(ndate);
                                                     }
                                                     *count += 1;
@@ -978,7 +976,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily\nRepeats 3 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(20));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(20),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 3, 9, 0, 0));
@@ -995,7 +998,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(dtstart, start, start + Duration::days(20));
+        let dates = rrule.dates_within(
+            dtstart,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(20),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 4, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 5, 9, 0, 0));
@@ -1013,7 +1021,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily\nRepeats until October 27, 1997".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(20));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(20),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 25, 9, 0, 0)); // EDT
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 10, 26, 9, 0, 0)); // EST
@@ -1024,7 +1037,12 @@ mod tests {
     fn range_every_other_day() {
         let start = ny_datetime(1997, 10, 25, 9, 0, 0);
         let rrule = "FREQ=DAILY;INTERVAL=2".parse::<CalRRule>().unwrap();
-        let dates = rrule.dates_within(start, start, start + Duration::days(10));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(10),
+        );
         assert_eq!(
             format!("{}", rrule.human()),
             "Occurs every 2 days".to_string()
@@ -1048,7 +1066,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 10 days\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(100));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(100),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 12, 9, 0, 0));
@@ -1066,7 +1089,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs weekly\nRepeats 10 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(5),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 9, 9, 0, 0));
@@ -1084,7 +1112,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily, on Mon\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(8),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0));
@@ -1105,7 +1138,12 @@ mod tests {
             "Occurs secondly, at hour(s) 10 and 12, at minute(s) 20, 30, and 40, at second(s) 10\nRepeats 5 times"
                 .to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(4),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 20, 10));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 10, 30, 10));
@@ -1126,7 +1164,12 @@ mod tests {
             "Occurs daily, on the 3rd, 10th, and last day of the month\nRepeats 7 times"
                 .to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(12));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(12),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 3, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 10, 9, 0, 0));
@@ -1149,7 +1192,12 @@ mod tests {
             "Occurs hourly, on the 2nd, 35th, and 10th to last day of the year, at hour(s) 12\nRepeats 4 times"
                 .to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(500));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(500),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 12, 22, 12, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 1, 2, 12, 0, 0));
@@ -1169,7 +1217,12 @@ mod tests {
             "Occurs hourly, at minute(s) 4 and 5, at second(s) 10, 20, and 30\nRepeats 8 times"
                 .to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(1));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(1),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 10));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 2, 9, 4, 20));
@@ -1190,7 +1243,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily, at hour(s) 4 and 8\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(5));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(5),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 3, 4, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 3, 8, 0, 0));
@@ -1210,7 +1268,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs monthly, on the 1st and last day of the month\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(100));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(100),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 9, 30, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 1, 9, 0, 0));
@@ -1230,7 +1293,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs yearly, in October and November\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(1000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 10, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2023, 11, 2, 9, 0, 0));
@@ -1250,7 +1318,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs weekly, on Mon and 2nd Tue\nRepeats 6 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(1000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 3, 9, 0, 0));
@@ -1271,7 +1344,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 weeks, on Tue and Thu\nRepeats 6 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(1000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 4, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 16, 9, 0, 0));
@@ -1292,7 +1370,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs monthly, on Mon, 2nd Tue, and last Wed\nRepeats 6 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(1000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0)); // MO
@@ -1314,7 +1397,12 @@ mod tests {
             "Occurs yearly, in September, on Mon, 2nd Tue, and last Wed\nRepeats 6 times"
                 .to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(1000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(1000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 2, 9, 0, 0)); // MO
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 9, 9, 9, 0, 0)); // MO
@@ -1335,7 +1423,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs yearly, on 5th Mon and last Fri\nRepeats 6 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::days(2000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::days(2000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(2024, 12, 27, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(2025, 2, 3, 9, 0, 0));
@@ -1357,7 +1450,12 @@ mod tests {
             "Occurs yearly, in January, on Sun, Mon, Tue, Wed, Thu, Fri, and Sat\nRepeats 5 times"
                 .to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(4));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(4),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 1, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1998, 1, 2, 9, 0, 0));
@@ -1377,7 +1475,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 weeks\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(12));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(12),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 2, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 16, 9, 0, 0));
@@ -1397,7 +1500,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 months, on 1st Sun and last Sun\nRepeats 5 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(100));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(100),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 7, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 28, 9, 0, 0));
@@ -1418,7 +1526,12 @@ mod tests {
             "Occurs every 18 months, on the 10th, 11th, and 15th day of the month\nRepeats 5 times"
                 .to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(1000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(1000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 10, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 9, 11, 9, 0, 0));
@@ -1438,7 +1551,12 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 weeks, on Tue and Sun\nRepeats 4 times".to_string()
         );
-        let dates = rrule.dates_within(start, start, start + Duration::weeks(1000));
+        let dates = rrule.dates_within(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(1000),
+        );
         let mut iter = dates.iter();
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 8, 5, 9, 0, 0));
         assert_eq!(*iter.next().unwrap(), ny_datetime(1997, 8, 17, 9, 0, 0));

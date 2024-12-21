@@ -45,11 +45,14 @@ impl CalStore {
             .find_map(|c| c.item_by_id_mut(uid_str))
     }
 
-    pub fn next_alarm_occurrence(&self, start: DateTime<Tz>) -> Option<Occurrence<'_>> {
+    pub fn due_alarms_within(
+        &self,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+    ) -> impl Iterator<Item = Occurrence<'_>> {
         self.sources
             .iter()
-            .filter_map(|c| c.next_alarm_occurrence(start))
-            .min_by(|a, b| a.alarm_date().unwrap().cmp(&b.alarm_date().unwrap()))
+            .flat_map(move |c| c.due_alarms_within(start, end))
     }
 
     pub fn occurrence_by_id<S: AsRef<str>>(

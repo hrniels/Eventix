@@ -8,6 +8,7 @@ use crate::objects::{
     CalRRule, CalTodoStatus, EventLike,
 };
 use crate::parser::{Property, PropertyProducer};
+use crate::util;
 
 #[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
@@ -91,19 +92,7 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn duration(&self) -> Option<Duration> {
-        let start = self.start_or_created()?;
-
-        // ensure that we start day-aligned if either start or end is all-day
-        let start = if self.is_all_day() && !matches!(start, CalDate::Date(_)) {
-            CalDate::Date(start.as_naive_date())
-        } else {
-            start.clone()
-        };
-
-        self.end_or_due().map(|end| {
-            end.as_end_with_tz(&self.start.timezone())
-                - start.as_start_with_tz(&self.start.timezone())
-        })
+        self.base.duration(&self.start.timezone())
     }
 
     pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
@@ -113,19 +102,12 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
-        if self.start >= start && self.start < end {
-            return true;
-        }
-
-        if let Some(occ_end) = self.occurrence_end() {
-            if occ_end > start && occ_end <= end {
-                return true;
-            }
-            if self.start < start && occ_end > end {
-                return true;
-            }
-        }
-        false
+        util::date_ranges_overlap(
+            self.start,
+            self.occurrence_end().unwrap_or(self.start),
+            start,
+            end,
+        )
     }
 }
 
