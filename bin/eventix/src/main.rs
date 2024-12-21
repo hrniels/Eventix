@@ -7,15 +7,16 @@ mod locale;
 mod notify;
 mod objects;
 mod pages;
+mod settings;
 mod state;
 
 use axum::{http::Request, response::IntoResponse, Router};
+use chrono::Duration;
 use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
 use pages::{attendees, details, edit, monthly, new, togglecal, weekly};
-use serde::Deserialize;
-use std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -41,19 +42,6 @@ struct Args {
     port: u16,
 }
 
-#[derive(Debug, Deserialize)]
-struct Sources {
-    #[serde(rename = "calendar")]
-    calendars: HashMap<String, Calendar>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Calendar {
-    path: String,
-    name: String,
-    disabled: Option<bool>,
-}
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -65,18 +53,11 @@ async fn main() {
 
     let args = Args::parse();
 
-    let mut file = File::options()
-        .read(true)
-        .open("calendars.toml")
-        .expect("open calendars.toml");
-    let mut sources = String::new();
-    file.read_to_string(&mut sources)
-        .expect("read calendars.toml");
-    let sources: Sources = toml::from_str(&sources).expect("parse calendars.toml");
+    let settings = settings::Settings::load_from_file().expect("load settings");
 
     let mut disabled_cals = Vec::new();
     let mut store = CalStore::default();
-    for (id, cal) in &sources.calendars {
+    for (id, cal) in &settings.calendars {
         if cal.disabled.unwrap_or(false) {
             disabled_cals.push(id.clone());
         }
@@ -97,6 +78,11 @@ async fn main() {
     let state = state::State::new(
         Arc::new(Mutex::new(store)),
         Arc::new(Mutex::new(disabled_cals)),
+        Arc::new(Mutex::new(
+            settings
+                .last_alarm_check
+                .unwrap_or(chrono::Utc::now().naive_utc() - Duration::days(7)),
+        )),
     );
 
     let app = Router::new()

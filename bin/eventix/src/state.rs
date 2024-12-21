@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::NaiveDateTime;
 use ical::col::CalStore;
 use tokio::sync::{Mutex, MutexGuard};
 
@@ -7,13 +8,19 @@ use tokio::sync::{Mutex, MutexGuard};
 pub struct State {
     store: Arc<Mutex<CalStore>>,
     disabled_cals: Arc<Mutex<Vec<String>>>,
+    last_alarm_check: Arc<Mutex<NaiveDateTime>>,
 }
 
 impl State {
-    pub fn new(store: Arc<Mutex<CalStore>>, disabled_cals: Arc<Mutex<Vec<String>>>) -> Self {
+    pub fn new(
+        store: Arc<Mutex<CalStore>>,
+        disabled_cals: Arc<Mutex<Vec<String>>>,
+        last_alarm_check: Arc<Mutex<NaiveDateTime>>,
+    ) -> Self {
         Self {
             store,
             disabled_cals,
+            last_alarm_check,
         }
     }
 
@@ -23,6 +30,10 @@ impl State {
 
     pub fn disabled_cals(&self) -> &Arc<Mutex<Vec<String>>> {
         &self.disabled_cals
+    }
+
+    pub fn last_alarm_check(&self) -> &Arc<Mutex<NaiveDateTime>> {
+        &self.last_alarm_check
     }
 
     pub async fn acquire_store_and_disabled(

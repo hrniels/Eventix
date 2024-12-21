@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use chrono::Duration;
+use chrono::TimeZone;
 use chrono_tz::Tz;
 use ical::{col::Occurrence, objects::EventLike};
 use std::{
@@ -7,8 +7,9 @@ use std::{
     process::Command,
 };
 use tokio::time;
+use tracing::warn;
 
-use crate::state::State;
+use crate::{settings::Settings, state::State};
 
 struct Notification {
     pub appname: String,
@@ -59,25 +60,38 @@ impl Notification {
 }
 
 pub async fn watch_alarms(state: State, tz: Tz) {
-    // remember the last time we checked for alarms
-    let mut last_check = chrono::Utc::now().with_timezone(&tz) - Duration::days(7);
-
     loop {
+        let last_check = {
+            let last_check = state.last_alarm_check().lock().await;
+            chrono::Utc
+                .from_utc_datetime(&*last_check)
+                .with_timezone(&tz)
+        };
         let now = chrono::Utc::now().with_timezone(&tz);
 
-        let store = state.store().lock().await;
+        {
+            let store = state.store().lock().await;
 
-        // find all due alarms since the last check and sort them by alarm time
-        let mut alarms = store.due_alarms_within(last_check, now).collect::<Vec<_>>();
-        alarms.sort_by_key(|o| o.alarm_date().unwrap());
+            // find all due alarms since the last check and sort them by alarm time
+            let mut alarms = store.due_alarms_within(last_check, now).collect::<Vec<_>>();
+            alarms.sort_by_key(|o| o.alarm_date().unwrap());
 
-        for alarm in alarms {
-            let notification = Notification::from_occurrence(&alarm);
-            notification.send().unwrap();
+            for alarm in alarms {
+                let notification = Notification::from_occurrence(&alarm);
+                notification.send().unwrap();
+            }
         }
 
-        last_check = now;
-        drop(store);
+        {
+            let mut last_check = state.last_alarm_check().lock().await;
+            *last_check = now.naive_utc();
+        }
+
+        // permanently remember last time of check
+        let settings = Settings::new_from_state(state.clone()).await;
+        if let Err(e) = settings.write_to_file() {
+            warn!("Unable to save settings: {}", e);
+        }
 
         time::sleep(time::Duration::from_secs(30)).await;
     }
