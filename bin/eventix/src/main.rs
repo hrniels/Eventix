@@ -29,7 +29,7 @@ async fn error_handler() -> impl IntoResponse {
     HTMLError::from(anyhow::Error::msg("no such route"))
 }
 
-/// A website to aggregate and analyse finance transactions
+/// A website to manage iCalendar events and tasks
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
