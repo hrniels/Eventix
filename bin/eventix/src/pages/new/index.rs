@@ -42,11 +42,12 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
+    let calendar = state.last_calendar().lock().await.clone();
     content(
         super::new_page(&state, &req).await,
         locale.clone(),
         State(state),
-        CompNew::new(req.ctype, locale.timezone()),
+        CompNew::new(req.ctype, locale.timezone(), calendar),
     )
     .await
 }

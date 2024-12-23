@@ -83,6 +83,7 @@ async fn main() {
                 .last_alarm_check
                 .unwrap_or(chrono::Utc::now().naive_utc() - Duration::days(7)),
         )),
+        Arc::new(Mutex::new(settings.last_calendar)),
     );
 
     let app = Router::new()

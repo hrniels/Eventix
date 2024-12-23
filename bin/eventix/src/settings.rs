@@ -16,6 +16,7 @@ pub struct Settings {
     #[serde(rename = "calendar")]
     pub calendars: BTreeMap<String, Calendar>,
     pub last_alarm_check: Option<NaiveDateTime>,
+    pub last_calendar: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,10 +57,12 @@ impl Settings {
             calendars
         };
         let last_alarm_check = *state.last_alarm_check().lock().await;
+        let last_calendar = state.last_calendar().lock().await.clone();
 
         Self {
             calendars,
             last_alarm_check: Some(last_alarm_check),
+            last_calendar,
         }
     }
 

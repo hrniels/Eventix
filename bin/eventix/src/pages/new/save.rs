@@ -73,7 +73,13 @@ pub async fn handler(
 
     if action_update(&mut page, &locale, state.store(), &mut form).await? {
         page.add_info(locale.translate("New event was added successfully"));
-        form = CompNew::new(form.req.ctype, locale.timezone());
+
+        // remember the last used calendar
+        {
+            let mut last_cal = state.last_calendar().lock().await;
+            *last_cal = Some(form.calendar.clone());
+        }
+        form = CompNew::new(form.req.ctype, locale.timezone(), Some(form.calendar));
     }
 
     super::index::content(page, locale, State(state), form).await

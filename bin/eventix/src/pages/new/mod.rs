@@ -41,7 +41,7 @@ pub struct CompNew {
 }
 
 impl CompNew {
-    fn new(ctype: CalCompType, timezone: &Tz) -> Self {
+    fn new(ctype: CalCompType, timezone: &Tz, calendar: Option<String>) -> Self {
         let now = Utc::now().with_timezone(timezone);
         let last_hour = NaiveTime::from_hms_opt(now.naive_local().time().hour(), 0, 0).unwrap();
         let next_hour = now.with_time(last_hour).unwrap() + Duration::hours(1);
@@ -65,6 +65,7 @@ impl CompNew {
         Self {
             req: Request { ctype },
             start_end,
+            calendar: calendar.unwrap_or(String::new()),
             ..Default::default()
         }
     }

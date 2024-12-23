@@ -9,6 +9,7 @@ pub struct State {
     store: Arc<Mutex<CalStore>>,
     disabled_cals: Arc<Mutex<Vec<String>>>,
     last_alarm_check: Arc<Mutex<NaiveDateTime>>,
+    last_calendar: Arc<Mutex<Option<String>>>,
 }
 
 impl State {
@@ -16,11 +17,13 @@ impl State {
         store: Arc<Mutex<CalStore>>,
         disabled_cals: Arc<Mutex<Vec<String>>>,
         last_alarm_check: Arc<Mutex<NaiveDateTime>>,
+        last_calendar: Arc<Mutex<Option<String>>>,
     ) -> Self {
         Self {
             store,
             disabled_cals,
             last_alarm_check,
+            last_calendar,
         }
     }
 
@@ -34,6 +37,10 @@ impl State {
 
     pub fn last_alarm_check(&self) -> &Arc<Mutex<NaiveDateTime>> {
         &self.last_alarm_check
+    }
+
+    pub fn last_calendar(&self) -> &Arc<Mutex<Option<String>>> {
+        &self.last_calendar
     }
 
     pub async fn acquire_store_and_disabled(
