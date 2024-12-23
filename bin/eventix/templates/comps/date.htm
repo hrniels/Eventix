@@ -10,8 +10,10 @@ function calSettings() {
 
 $(function() {
     var settings = calSettings();
-    $("#{{ id }}")
-        .datepicker(settings);
+    var d = $("#{{ id }}");
+    d.datepicker(settings);
+    d.datepicker("option", "beforeShow", addArrowToDatePicker);
+    d.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
 });
 </script>
 

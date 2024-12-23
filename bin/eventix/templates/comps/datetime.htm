@@ -1,3 +1,13 @@
 {{ date|safe }}
 <input id="{{ id }}_time" type="text" name="{{ name }}[time]" size="8"
        maxlength="5" value="{{ time|naive_time }}" />
+
+<link rel="stylesheet" type="text/css" href="/static/jquery-clockpicker.min.css">
+<script type="text/javascript" src="/static/jquery-clockpicker.min.js"></script>
+<script type="text/javascript">
+$(function() {
+    $('#{{ id }}_time').clockpicker({
+        autoclose: true,
+    });
+});
+</script>

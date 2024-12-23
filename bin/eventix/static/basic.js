@@ -28,3 +28,18 @@ function moveToTabCenter(elId, tabsId, tabBarId)
         left: ((tab.outerWidth() / 2) - (el.outerWidth() / 2)) + "px"
     }).show();
 }
+
+function addArrowToDatePicker(input, inst)
+{
+    // move the datepicker a bit down so that we can draw the arrow on top
+    inst.dpDiv.css({
+        marginTop: '10px',
+    });
+    inst.dpDiv.addClass('popup');
+}
+
+function hideArrowBottom(inst)
+{
+    // ensure that the datepicker header is above the arrow
+    $('.ui-datepicker-header').css('zIndex', 2);
+}

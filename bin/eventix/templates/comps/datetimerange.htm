@@ -30,6 +30,10 @@ $(function() {
             {% endif %}
             from.datepicker("option", "maxDate", getDate(this));
         });
+    from.datepicker("option", "beforeShow", addArrowToDatePicker);
+    to.datepicker("option", "beforeShow", addArrowToDatePicker);
+    from.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
+    to.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
 
     function getDate(element) {
         var date;
@@ -91,6 +95,8 @@ $(function() {
     </tr>
 </table>
 
+<link rel="stylesheet" type="text/css" href="/static/jquery-clockpicker.min.css">
+<script type="text/javascript" src="/static/jquery-clockpicker.min.js"></script>
 <script type="text/javascript">
 $(function() {
     {% if all_day %}
@@ -100,6 +106,12 @@ $(function() {
     $("#{{ id }}all_day").click(function() {
         setAllDay(this.checked)
     });
+
+    var options = {
+        autoclose: true,
+    };
+    $('#{{ id }}to_time').clockpicker(options);
+    $('#{{ id }}from_time').clockpicker(options);
 });
 
 function setAllDay(allday) {
