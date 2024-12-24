@@ -41,6 +41,7 @@
                                         'ev_id_{{ occ.uid_html() }}',
                                         '{{ occ.rid_html() }}',
                                         '{{ occ.id() }}')"
+                     {% if occ.is_all_day() %}style="text-align: center"{% endif %}
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
                     ev_id_{{ occ.uid_html() }}
@@ -62,13 +63,8 @@
                     {% endif %}
                     {% if !occ.is_all_day() %}
                     {{ occ.occurrence_start().format("%H:%M") }}:
-                    {% else %}
-                    <center>
                     {% endif %}
                     {{ occ.summary().unwrap() }}
-                    {% if occ.is_all_day() %}
-                    </center>
-                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
