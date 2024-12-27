@@ -60,7 +60,12 @@ pub trait CompAction {
             return false;
         }
 
-        if self.rrule().is_some() && start.is_none() {
+        if self
+            .rrule()
+            .and_then(|rr| rr.to_rrule().unwrap_or(None))
+            .is_some()
+            && start.is_none()
+        {
             page.add_error(
                 locale.translate("Please specify the start for repeating events/tasks."),
             );
