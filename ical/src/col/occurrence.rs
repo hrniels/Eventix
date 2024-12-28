@@ -10,6 +10,17 @@ use crate::objects::{
 use crate::parser::{Property, PropertyProducer};
 use crate::util;
 
+macro_rules! ctype_method {
+    ($self:expr, $ctype:tt, $method:tt) => {
+        match $self.occ {
+            Some(c) if c.$ctype().and_then(|td| td.$method()).is_some() => {
+                c.$ctype().and_then(|td| td.$method())
+            }
+            _ => $self.base.$ctype().and_then(|td| td.$method()),
+        }
+    };
+}
+
 #[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
     source: Arc<String>,
@@ -41,21 +52,11 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn event_status(&self) -> Option<CalEventStatus> {
-        match self.occ {
-            Some(c) if c.as_event().and_then(|ev| ev.status()).is_some() => {
-                c.as_event().and_then(|ev| ev.status())
-            }
-            _ => self.base.as_event().and_then(|ev| ev.status()),
-        }
+        ctype_method!(self, as_event, status)
     }
 
     pub fn todo_status(&self) -> Option<CalTodoStatus> {
-        match self.occ {
-            Some(c) if c.as_todo().and_then(|td| td.status()).is_some() => {
-                c.as_todo().and_then(|td| td.status())
-            }
-            _ => self.base.as_todo().and_then(|td| td.status()),
-        }
+        ctype_method!(self, as_todo, status)
     }
 
     pub fn set_occurrence(&mut self, occ: &'c CalComponent) {
