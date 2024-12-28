@@ -3,7 +3,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
 use ical::col::CalStore;
-use ical::objects::{CalCompType, CalComponent, CalTodoStatus, EventLike};
+use ical::objects::{CalCompType, CalTodoStatus, EventLike};
 use tokio::sync::MutexGuard;
 
 use crate::locale::Locale;
@@ -25,7 +25,7 @@ impl<'a> Tasks<'a> {
         disabled: &'a MutexGuard<'_, Vec<String>>,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> Tasks<'a> {
-        Self::new_with_days(store, disabled, locale, 7)
+        Self::new_with_days(store, disabled, locale, 21)
     }
 
     pub fn new_with_days(
@@ -47,27 +47,25 @@ impl<'a> Tasks<'a> {
             .flat_map(move |s| {
                 s.filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo)
             })
+            .filter(|o| {
+                o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
+            })
             .collect::<Vec<_>>();
 
         let overdue_tds = store
             .filtered_occurrences_within(
                 DateTime::<Tz>::MIN_UTC.with_timezone(timezone),
                 start,
-                |c| match c {
-                    CalComponent::Todo(td) if td.due().is_some() => {
-                        td.status().unwrap_or(CalTodoStatus::NeedsAction)
-                            != CalTodoStatus::Completed
-                    }
-                    _ => false,
-                },
+                |c| c.ctype() == CalCompType::Todo,
             )
             .filter(|o| {
                 // so far, we got all todos that overlap with this period of time. but we are only
-                // interested in the ones that are due before the start.
-                o.end_or_due()
-                    .map(|e| e.as_end_with_tz(timezone))
-                    .unwrap_or(start)
-                    < start
+                // interested in the ones that are due before the start and are not complete yet.
+                o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
+                    && o.end_or_due()
+                        .map(|e| e.as_end_with_tz(timezone))
+                        .unwrap_or(start)
+                        < start
             });
 
         let mut days = Vec::new();
