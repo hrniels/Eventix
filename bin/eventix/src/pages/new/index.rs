@@ -12,7 +12,7 @@ use super::{CompNew, Page, Request};
 use crate::{
     comps::{
         alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
-        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate,
+        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
     locale::{self, Locale},
 };
@@ -33,6 +33,7 @@ struct NewTemplate<'a> {
     reminder: AlarmTemplate<'a>,
     calendars: CalComboTemplate,
     attendees: AttendeesTemplate,
+    status: Option<TodoStatusTemplate>,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -79,6 +80,9 @@ pub async fn content(
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
         calendars: CalComboTemplate::new("calendar", store.sources().iter(), calendar),
         attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
+        status: form
+            .status
+            .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),
         events,
         locale,
         tasks,

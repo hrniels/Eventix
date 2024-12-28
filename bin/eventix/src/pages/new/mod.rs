@@ -14,7 +14,7 @@ use crate::{
     comp::CompAction,
     comps::{
         alarm::AlarmRequest, attendees::Attendees, date::Date, datetime::DateTime,
-        datetimerange::DateTimeRange, recur::RecurRequest,
+        datetimerange::DateTimeRange, recur::RecurRequest, todostatus::TodoStatus,
     },
     state::State,
 };
@@ -38,6 +38,7 @@ pub struct CompNew {
     reminder: AlarmRequest,
     attendees: Option<Attendees>,
     start_end: DateTimeRange,
+    status: Option<TodoStatus>,
 }
 
 impl CompNew {
@@ -66,6 +67,10 @@ impl CompNew {
             req: Request { ctype },
             start_end,
             calendar: calendar.unwrap_or(String::new()),
+            status: match ctype {
+                CalCompType::Todo => Some(TodoStatus::default()),
+                CalCompType::Event => None,
+            },
             ..Default::default()
         }
     }
@@ -92,6 +97,9 @@ impl CompAction for CompNew {
     }
     fn attendees(&self) -> Option<&Attendees> {
         self.attendees.as_ref()
+    }
+    fn status(&self) -> Option<&TodoStatus> {
+        self.status.as_ref()
     }
 }
 

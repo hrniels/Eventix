@@ -15,7 +15,7 @@ use crate::{
     comp::CompAction,
     comps::{
         alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange,
-        recur::RecurRequest,
+        recur::RecurRequest, todostatus::TodoStatus,
     },
     state::State,
 };
@@ -39,6 +39,7 @@ pub struct CompEdit {
     reminder: AlarmRequest,
     start_end: DateTimeRange,
     attendees: Option<Attendees>,
+    status: Option<TodoStatus>,
 }
 
 impl CompEdit {
@@ -71,6 +72,7 @@ impl CompEdit {
                 },
                 tz,
             ),
+            status: TodoStatus::new_from_occurrence(occ),
             attendees: Some(Attendees::new_from_cal_attendees(occ.attendees())),
         }
     }
@@ -97,6 +99,9 @@ impl CompAction for CompEdit {
     }
     fn attendees(&self) -> Option<&Attendees> {
         self.attendees.as_ref()
+    }
+    fn status(&self) -> Option<&TodoStatus> {
+        self.status.as_ref()
     }
 }
 

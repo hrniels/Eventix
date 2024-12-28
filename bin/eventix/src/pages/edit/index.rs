@@ -14,7 +14,7 @@ use super::{CompEdit, Page, Request};
 use crate::{
     comps::{
         alarm::AlarmTemplate, attendees::AttendeesTemplate, datetimerange::DateTimeRangeTemplate,
-        recur::RecurTemplate,
+        recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
     locale::{self, Locale},
     pages::Breadcrumb,
@@ -36,6 +36,7 @@ struct EditTemplate<'a> {
     rrule: Option<RecurTemplate<'a>>,
     reminder: AlarmTemplate<'a>,
     attendees: AttendeesTemplate,
+    status: Option<TodoStatusTemplate>,
     occ: &'a Occurrence<'a>,
     events: Events<'a>,
     tasks: Tasks<'a>,
@@ -115,6 +116,9 @@ pub async fn content(
             .map(|rr| RecurTemplate::new(locale.clone(), "rrule", rr)),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
         attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
+        status: form
+            .status
+            .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),
         occ: &occ,
         events,
         locale,

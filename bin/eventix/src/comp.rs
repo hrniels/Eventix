@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use ical::objects::CalCompType;
+use ical::objects::{CalCompType, CalTodoStatus};
 use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 
 use crate::comps::alarm::AlarmRequest;
 use crate::comps::attendees::Attendees;
+use crate::comps::todostatus::TodoStatus;
 use crate::{
     comps::{datetimerange::DateTimeRange, recur::RecurRequest},
     locale::Locale,
@@ -19,6 +20,7 @@ pub trait CompAction {
     fn reminder(&self) -> &AlarmRequest;
     fn start_end(&self) -> &DateTimeRange;
     fn attendees(&self) -> Option<&Attendees>;
+    fn status(&self) -> Option<&TodoStatus>;
 
     fn check(
         &self,
@@ -108,6 +110,18 @@ pub trait CompAction {
             comp.set_attendees(att.to_cal_attendees());
         } else {
             comp.set_attendees(None);
+        }
+
+        if let Some(td) = comp.as_todo_mut() {
+            if let Some(st) = self.status() {
+                td.set_status(Some(st.status()));
+                if st.status() == CalTodoStatus::Completed {
+                    td.set_percent(Some(100));
+                    td.set_completed(st.completed().and_then(|d| d.to_caldate(false)));
+                } else if st.status() == CalTodoStatus::InProcess {
+                    td.set_percent(st.percent());
+                }
+            }
         }
 
         comp.set_last_modified(CalDate::now());

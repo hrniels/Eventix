@@ -29,7 +29,7 @@ where
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Date {
     #[serde(

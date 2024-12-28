@@ -28,6 +28,12 @@
                         <dt>{{ "Date"|t(locale) }}:</dt>
                         <dd>{{ start_end|safe }}</dd>
                     </dl>
+                    {% if let Some(status) = status %}
+                    <dl>
+                        <dt>{{ "Status"|t(locale) }}:</dt>
+                        <dd>{{ status|safe }}</dd>
+                    </dl>
+                    {% endif %}
                     <dl>
                         <dt>{{ "Reminder"|t(locale) }}:</dt>
                         <dd>{{ reminder|safe }}</dd>

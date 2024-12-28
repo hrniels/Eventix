@@ -59,6 +59,14 @@ impl<'c> Occurrence<'c> {
         ctype_method!(self, as_todo, status)
     }
 
+    pub fn todo_percent(&self) -> Option<u8> {
+        ctype_method!(self, as_todo, percent)
+    }
+
+    pub fn todo_completed(&self) -> Option<&CalDate> {
+        ctype_method!(self, as_todo, completed)
+    }
+
     pub fn set_occurrence(&mut self, occ: &'c CalComponent) {
         self.occ = Some(occ);
         if let Some(ostart) = occ.start() {

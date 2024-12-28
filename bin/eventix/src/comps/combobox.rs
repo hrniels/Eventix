@@ -33,6 +33,7 @@ impl<T: Display> ComboOption<T> {
 #[derive(Template)]
 #[template(path = "comps/combobox.htm")]
 pub struct ComboboxTemplate<T: Display + Eq + PartialEq> {
+    id: String,
     name: String,
     value: Option<T>,
     options: Vec<ComboOption<T>>,
@@ -61,9 +62,11 @@ impl<T: Display + Eq + PartialEq> ComboboxTemplate<T> {
         value: Option<T>,
         options: Vec<ComboOption<T>>,
     ) -> Self {
+        let name = name.to_string();
         Self {
             locale,
-            name: name.to_string(),
+            id: name.replace("[", "_").replace("]", "_"),
+            name,
             value,
             options,
         }

@@ -1,5 +1,7 @@
 use std::{fmt, str::FromStr};
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 use crate::parser::ParseError;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -8,6 +10,25 @@ pub enum CalTodoStatus {
     Completed,
     InProcess,
     Cancelled,
+}
+
+impl Serialize for CalTodoStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_some(&format!("{}", self))
+    }
+}
+
+impl<'de> Deserialize<'de> for CalTodoStatus {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let buf = String::deserialize(deserializer)?;
+        Ok(CalTodoStatus::from_str(&buf).map_err(serde::de::Error::custom)?)
+    }
 }
 
 impl FromStr for CalTodoStatus {

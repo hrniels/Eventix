@@ -26,12 +26,24 @@ impl CalTodo {
         self.status
     }
 
+    pub fn set_status(&mut self, status: Option<CalTodoStatus>) {
+        self.status = status;
+    }
+
     pub fn completed(&self) -> Option<&CalDate> {
         self.completed.as_ref()
     }
 
+    pub fn set_completed(&mut self, completed: Option<CalDate>) {
+        self.completed = completed;
+    }
+
     pub fn percent(&self) -> Option<u8> {
         self.percent
+    }
+
+    pub fn set_percent(&mut self, percent: Option<u8>) {
+        self.percent = percent;
     }
 }
 
