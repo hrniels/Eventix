@@ -85,7 +85,7 @@ impl TodoStatusTemplate {
                 vec![
                     ComboOption::new(locale.translate("Needs action"), CalTodoStatus::NeedsAction),
                     ComboOption::new(locale.translate("Completed"), CalTodoStatus::Completed),
-                    ComboOption::new(locale.translate("In progress"), CalTodoStatus::InProcess),
+                    ComboOption::new(locale.translate("In process"), CalTodoStatus::InProcess),
                     ComboOption::new(locale.translate("Cancelled"), CalTodoStatus::Cancelled),
                 ],
             ),
