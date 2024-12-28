@@ -45,11 +45,10 @@ pub struct CompEdit {
 impl CompEdit {
     pub fn new_from_occurrence(req: Request, occ: &Occurrence, tz: &Tz) -> Self {
         Self {
-            req,
             summary: occ.summary().cloned().unwrap_or(String::from("")),
             location: occ.location().cloned().unwrap_or(String::from("")),
             description: occ.description().cloned().unwrap_or(String::from("")),
-            rrule: if occ.rid().is_none() {
+            rrule: if req.rid.is_none() {
                 Some(RecurRequest::from_rrule(occ.rrule()))
             } else {
                 None
@@ -72,8 +71,12 @@ impl CompEdit {
                 },
                 tz,
             ),
-            status: TodoStatus::new_from_occurrence(occ),
+            status: req
+                .rid
+                .as_ref()
+                .and_then(|_| TodoStatus::new_from_occurrence(occ)),
             attendees: Some(Attendees::new_from_cal_attendees(occ.attendees())),
+            req,
         }
     }
 }
