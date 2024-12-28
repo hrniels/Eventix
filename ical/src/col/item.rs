@@ -8,7 +8,8 @@ use chrono_tz::Tz;
 
 use crate::col::{ColError, Occurrence};
 use crate::objects::{
-    CalCompType, CalComponent, CalDate, CalEvent, CalTodo, CalTrigger, Calendar, EventLike,
+    CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger, Calendar,
+    EventLike, UpdatableEventLike,
 };
 
 #[derive(Debug)]
@@ -215,6 +216,36 @@ impl CalItem {
 
     pub fn components(&self) -> &[CalComponent] {
         self.cal.components()
+    }
+
+    pub fn overwrite_component<F>(&mut self, rid: CalDate, tz: &Tz, func: F)
+    where
+        F: FnOnce(&mut CalComponent),
+    {
+        let base = self
+            .components()
+            .iter()
+            .filter(|c| c.rid().is_none())
+            .next()
+            .unwrap();
+
+        let mut comp = if base.ctype() == CalCompType::Event {
+            CalComponent::Event(CalEvent::default())
+        } else {
+            CalComponent::Todo(CalTodo::default())
+        };
+
+        comp.set_uid(base.uid().clone());
+        let start = CalDate::DateTime(CalDateTime::Timezone(
+            rid.as_start_with_tz(tz).naive_local(),
+            tz.name().to_string(),
+        ));
+        comp.set_start(Some(start));
+        comp.set_rid(Some(rid));
+        comp.set_last_modified(CalDate::now());
+        comp.set_stamp(CalDate::now());
+        func(&mut comp);
+        self.add_component(comp);
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {

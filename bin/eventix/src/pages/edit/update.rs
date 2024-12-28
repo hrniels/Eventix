@@ -2,10 +2,7 @@ use anyhow::Context;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::col::CalItem;
-use ical::objects::{
-    CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, EventLike,
-    UpdatableEventLike,
-};
+use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use std::sync::Arc;
 
 use crate::error::HTMLError;
@@ -70,24 +67,9 @@ fn action_update(
             comp.set_rrule(rrule);
         }
     } else {
-        let mut comp = if ctype == CalCompType::Event {
-            CalComponent::Event(CalEvent::default())
-        } else {
-            CalComponent::Todo(CalTodo::default())
-        };
-
-        form.update(&mut comp, locale);
-        comp.set_uid(form.req.uid.clone());
-        let start = CalDate::DateTime(CalDateTime::Timezone(
-            rid.as_ref()
-                .unwrap()
-                .as_start_with_tz(locale.timezone())
-                .naive_local(),
-            locale.timezone().name().to_string(),
-        ));
-        comp.set_start(Some(start));
-        comp.set_rid(rid);
-        item.add_component(comp);
+        item.overwrite_component(rid.unwrap(), locale.timezone(), |c| {
+            form.update(c, locale);
+        });
     }
 
     item.save()?;
