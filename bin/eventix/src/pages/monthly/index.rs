@@ -140,7 +140,7 @@ pub async fn content(
         tasks,
     }
     .render()
-    .context("overview template")?;
+    .context("monthly template")?;
 
     Ok(Html(html))
 }

@@ -150,7 +150,7 @@ pub async fn handler(
         occ,
     }
     .render()
-    .context("event template")?;
+    .context("details template")?;
 
     Ok(Json(Response { html }))
 }

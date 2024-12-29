@@ -238,7 +238,7 @@ pub async fn content(
         tasks,
     }
     .render()
-    .context("overview template")?;
+    .context("weekly template")?;
 
     Ok(Html(html))
 }
