@@ -45,7 +45,16 @@ function select(newid) {
         selected = newid;
     });
 
-    loadOccurrence(newid.uid, newid.rid);
+    loadOccurrence(newid.id, newid.uid, newid.rid);
+}
+
+function correctPosition(id) {
+    var el = document.getElementById(id);
+    var elRect = pageBoundingBox(el);
+    var popup = $('#popup');
+    var popupRect = pageBoundingBox(document.getElementById('popup'));
+    if(elRect.top + popupRect.height > window.innerHeight && elRect.bottom >= popupRect.height)
+        popup.css('top', elRect.bottom - popupRect.height);
 }
 
 function deselect(oldid, newid) {
@@ -78,13 +87,16 @@ function inBoundingBox(e, id) {
         e.pageY >= box.top && e.pageY <= box.top + box.height;
 }
 
-function loadOccurrence(uid, rid) {
+function loadOccurrence(id, uid, rid) {
     $.ajax({
         type: 'GET',
         url: '/details?uid=' + uid + (rid != null ? '&rid=' + rid : ''),
         dataType: 'json',
         success: function(data) {
             $('#popup').html(data.html);
+            setTimeout(function() {
+                correctPosition(id)
+            }, 10);
         }
     });
 }
