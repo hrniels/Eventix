@@ -2,6 +2,7 @@ pub mod attendees;
 pub mod complete;
 pub mod details;
 pub mod edit;
+pub mod list;
 pub mod monthly;
 pub mod new;
 pub mod togglecal;

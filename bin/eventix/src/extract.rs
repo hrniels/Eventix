@@ -32,3 +32,25 @@ where
         ))
     }
 }
+
+#[derive(Debug)]
+pub struct MultiQuery<T>(pub T);
+
+#[axum::async_trait]
+impl<T, S> FromRequest<S> for MultiQuery<T>
+where
+    S: Send + Sync,
+    T: DeserializeOwned,
+{
+    type Rejection = String;
+
+    async fn from_request(mut req: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
+        let query = req.uri_mut().query().unwrap_or("");
+        Ok(Self(
+            // disable strict-mode to support array fields
+            serde_qs::Config::new(5, false)
+                .deserialize_str(query)
+                .map_err(|e| e.to_string())?,
+        ))
+    }
+}

@@ -1,0 +1,144 @@
+{% extends "content.htm" %}
+
+{% block inner %}
+
+<form id="form" method="get" action="/list">
+    <div class="ev_border">
+        <fieldset class="ev_form">
+            <h1 class="ev_header">{{ "Filter"|t(locale) }}</h1>
+            <dl>
+                <dt>{{ "Keywords"|t(locale) }}:</dt>
+                <dd><input type="text" size="50" name="keywords" value="{{ filter.keywords }}" /></dd>
+            </dl>
+            <dl>
+                <dt>{{ "Calendars"|t(locale) }}:</dt>
+                <dd>
+                    <table class="ev_noborder">
+                    {% for (idx, src) in sources.iter().enumerate() %}
+                        {% if idx % 6 == 0 %}
+                        <tr>
+                        {% endif %}
+                            <td>
+                                <input type="checkbox" id="source_{{ idx + 1 }}"
+                                       name="sources[]" value="{{ src.id() }}"
+                                       {% if filter.sources.contains(src.id()) %}
+                                       checked="checked"
+                                       {% endif %}/>
+                                <label for="source_{{ idx + 1 }}">
+                                    <div style="display: inline"
+                                         class="ev_cal_src ev_cal_src_{{ src.id() }}">
+                                        {{ src.name() }}
+                                    </div>
+                                </label>
+                            </td>
+                        {% if idx % 6 == 5 %}
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                    </table>
+                    <div style="padding-top: 0.5em">
+                        <input type="button" value="{{ "Invert selection"|t(locale) }}"
+                               onclick="invertSelection('source_')" />
+                    </div>
+                </dd>
+            </dl>
+            <div class="ev_submit">
+                <a class="ev_button_big ev_button_normal" style="width: 80px"
+                   href="javascript:$('form').submit()">
+                    <span>{{ "Apply"|t(locale) }}</span>
+                </a>
+                <a class="ev_button_big ev_button_normal" style="width: 80px"
+                   href="javascript:document.location.href = '/list'">
+                    <span>{{ "Reset"|t(locale) }}</span>
+                </a>
+            </div>
+        </fieldset>
+    </div>
+</form>
+
+<div style="display: none" id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
+    {{ "This will permanently delete this item."|t(locale) }}
+</div>
+
+<h1 style="margin-top: 1em" class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
+<table width="100%" class="ev_table">
+    {% if comps.is_empty() %}
+    <tr>
+        <td colspan="3" align="center">{{ "No items found"|t(locale) }}</td>
+    </tr>
+    {% endif %}
+    {% for (id, c) in comps.iter().enumerate() %}
+    <tr>
+        <td width="3%" align="center">
+            {% if c.comp.ctype() == CalCompType::Event %}
+            <i class="bi bi-calendar-date"></i>
+            {% else %}
+            <i class="bi bi-check2-square"></i>
+            {% endif %}
+        </td>
+        <td width="40%">
+            <div style="display: flex; gap: .4em">
+                <span class="ev_cal_src ev_cal_src_{{ c.source }}"></span>
+                <span class="ev_summary
+                             {% if let Some(td) = c.comp.as_todo() %}
+                             {% if td.status().unwrap_or(CalTodoStatus::NeedsAction) == CalTodoStatus::Completed %}
+                             ev_status_Completed
+                             {% endif %}
+                             {% endif %}">
+                    {% if let Some(summary) = c.comp.summary() %}
+                    {{ summary }}
+                    {% endif %}
+                </span>
+                {% if c.comp.rid().is_some() || c.comp.rrule().is_some() %}
+                <i style="float: right" class="bi bi-arrow-clockwise"></i>
+                {% endif %}
+                {% if c.comp.has_alarms() %}
+                <i style="float: right" class="bi bi-alarm"></i>
+                {% endif %}
+            </div>
+        </td>
+        <td width="27%" align="center">
+            {% if let Some(start) = c.comp.start() %}
+            {{ start.fmt_start_with_tz(locale.timezone(), true) }}
+            {% if let Some(end) = c.comp.end_or_due() %}
+            -
+            {% endif %}
+            {% endif %}
+            {% if let Some(end) = c.comp.end_or_due() %}
+            {{ end.fmt_end_with_tz(locale.timezone(), true) }}
+            {% endif %}
+        </td>
+        <td width="30%" align="right">
+            {% if let Some(td) = c.comp.as_todo() %}
+            {% if !td.is_recurrent() && td.status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed %}
+            <a class="ev_button ev_button_good" href="javascript:completeTodo('{{ c.comp.uid() }}')">
+                <i class="bi bi-check-lg"></i>
+                <span>{{ "Complete"|t(locale) }}</span>
+            </a>
+            {% endif %}
+            {% endif %}
+            <a id="delete-button-{{ id }}" class="ev_button ev_button_critical" href="#">
+                <i class="bi bi-trash"></i>
+                <span>{{ "Delete"|t(locale) }}</span>
+            </a>
+            <a class="ev_button ev_button_normal" href="/edit?uid={{ c.comp.uid() }}">
+                <i class="bi bi-pencil"></i>
+                <span>{{ "Edit"|t(locale) }}</span>
+            </a>
+            <script>
+                confirmDialog(
+                    'delete-confirm',
+                    'delete-button-{{ id }}',
+                    '/edit/delete?uid={{ c.comp.uid() }}',
+                );
+            </script>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<div style="margin-top: 1em" align="center">
+{{ pagination|safe }}
+</div>
+
+{% endblock inner %}

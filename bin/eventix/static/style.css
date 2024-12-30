@@ -466,7 +466,7 @@ span.ev_msg_error span.ev_msg_info {
     font-weight: bold;
 }
 
-.ev_status_Cancelled {
+.ev_status_Cancelled, .ev_status_Completed {
     text-decoration: line-through;
     text-decoration-thickness: 2px;
 }
