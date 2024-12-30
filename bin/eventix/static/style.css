@@ -105,6 +105,7 @@ fieldset.ev_form div.ev_submit {
 .ev_pageno {
 	background-color: #f0f0f0;
 	border: 1px solid #ccc;
+    margin: .1em;
 }
 
 .ev_pagecurrent {

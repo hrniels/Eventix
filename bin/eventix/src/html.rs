@@ -8,6 +8,10 @@ pub mod filters {
 
     use crate::locale::Locale;
 
+    pub fn deref<T: Clone>(value: &T) -> ::askama::Result<T> {
+        Ok(value.clone())
+    }
+
     pub fn as_time(time: super::Duration) -> ::askama::Result<String> {
         Ok(format!("{} µs", time.as_micros()))
     }
