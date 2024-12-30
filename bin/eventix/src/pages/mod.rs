@@ -70,7 +70,6 @@ impl Page {
         &self.breadcrumbs
     }
 
-    #[allow(dead_code)]
     pub fn add_breadcrumb(&mut self, breadcrumb: Breadcrumb) {
         self.breadcrumbs.push(breadcrumb);
     }
