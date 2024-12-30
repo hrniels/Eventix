@@ -39,7 +39,7 @@ async fn action_delete(
             page.add_info(
                 formatx!(
                     locale.translate("Deleted occurrence on {} successfully."),
-                    date.fmt_start_with_tz(locale.timezone())
+                    date.fmt_start_with_tz(locale.timezone(), false)
                 )
                 .unwrap(),
             );
