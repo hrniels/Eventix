@@ -404,6 +404,7 @@ dependencies = [
  "anyhow",
  "askama",
  "axum",
+ "bitflags",
  "chrono",
  "chrono-tz",
  "clap",

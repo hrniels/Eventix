@@ -43,7 +43,9 @@
         </div>
         <div class="ev_scrollbox">
             {% for day in events.days %}
-            <div class="ev_next_day_header">{{ day.date.unwrap().format("%A, %B %d") }}</div>
+            <div class="ev_next_day_header">
+                {{ day.date.unwrap()|as_ref|weekdate(locale, DateFlags::None) }}
+            </div>
             {% for occ in day.occurrences %}
             <div onclick="openPopup('{{ occ.uid() }}',
                                     'ev_id_{{ occ.uid_html() }}',
@@ -75,7 +77,7 @@
                 {% else %}
                 <div style="display: flex; gap: .4em">
                     <span class="ev_cal_src ev_cal_src_{{ occ.source() }}"></span>
-                    <span><b>{{ occ.occurrence_start().format("%H:%M") }}</b></span>
+                    <span><b>{{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
                     <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                 </div>
                 {% endif %}
@@ -98,7 +100,7 @@
             {% for day in tasks.days %}
             <div class="ev_next_day_header">
                 {% if let Some(date) = day.date %}
-                {{ date.format("%A, %B %d") }}
+                {{ date|weekdate(locale, DateFlags::None) }}
                 {% else %}
                 {{ "Unplanned"|t(locale) }}
                 {% endif %}
@@ -129,7 +131,7 @@
                 {% if let Some(due) = occ.end_or_due() %}
                 {% match due %}
                 {% when CalDate::DateTime with (due_date) %}
-                <span><b>{{ due_date.with_tz(locale.timezone()).format("%H:%M") }}</b></span>
+                <span><b>{{ due_date.with_tz(locale.timezone())|as_ref|time(locale, TimeFlags::Short) }}</b></span>
                 {% when _ %}
                 {% endmatch %}
                 {% endif %}

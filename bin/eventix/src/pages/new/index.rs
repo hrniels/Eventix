@@ -14,7 +14,7 @@ use crate::{
         alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
         datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
-    locale::{self, Locale},
+    locale::{self, DateFlags, Locale, TimeFlags},
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};

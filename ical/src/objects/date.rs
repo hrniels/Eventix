@@ -27,26 +27,18 @@ impl CalDate {
         CalDate::DateTime(CalDateTime::Utc(Utc::now()))
     }
 
-    pub fn fmt_start_with_tz(&self, tz: &Tz, short: bool) -> String {
-        self.fmt_date(self.as_start_with_tz(tz), short)
+    pub fn fmt_start_with_tz(&self, tz: &Tz) -> String {
+        self.fmt_date(self.as_start_with_tz(tz))
     }
 
-    pub fn fmt_end_with_tz(&self, tz: &Tz, short: bool) -> String {
-        self.fmt_date(self.as_end_with_tz(tz), short)
+    pub fn fmt_end_with_tz(&self, tz: &Tz) -> String {
+        self.fmt_date(self.as_end_with_tz(tz))
     }
 
-    fn fmt_date(&self, dt: DateTime<Tz>, short: bool) -> String {
+    fn fmt_date(&self, dt: DateTime<Tz>) -> String {
         match self {
-            Self::Date(_) => dt
-                .format(if short { "%b %d %Y" } else { "%B %d, %Y" })
-                .to_string(),
-            Self::DateTime(_) => dt
-                .format(if short {
-                    "%b %d %Y, %H:%M"
-                } else {
-                    "%A, %B %d, %Y %H:%M"
-                })
-                .to_string(),
+            Self::Date(_) => dt.format("%B %d, %Y").to_string(),
+            Self::DateTime(_) => dt.format("%A, %B %d, %Y %H:%M").to_string(),
         }
     }
 
@@ -134,11 +126,6 @@ pub enum CalDateTime {
 }
 
 impl CalDateTime {
-    pub fn fmt_with_tz(&self, tz: &Tz) -> String {
-        let datetime = self.with_tz(tz);
-        datetime.format("%A, %B %d, %Y %H:%M").to_string()
-    }
-
     pub fn as_naive_date(&self) -> NaiveDate {
         match self {
             Self::Utc(dt) => dt.date_naive(),

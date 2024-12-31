@@ -15,9 +15,9 @@
             <td width="30%">{{ "Start date"|t(locale) }}:</td>
             <td width="70%">
                 {% if occ.is_all_day() %}
-                {{ occ.occurrence_start()|as_ref|date(locale) }}
+                {{ occ.occurrence_start()|as_ref|date(locale, DateFlags::None) }}
                 {% else %}
-                {{ occ.occurrence_start()|as_ref|datetime(locale) }}
+                {{ occ.occurrence_start()|as_ref|datetime(locale, DateFlags::None) }}
                 {% endif %}
             </td>
         </tr>
@@ -32,9 +32,9 @@
             </td>
             <td width="70%">
                 {% if occ.is_all_day() %}
-                {{ end|date(locale) }}
+                {{ end|date(locale, DateFlags::None) }}
                 {% else %}
-                {{ end|datetime(locale) }}
+                {{ end|datetime(locale, DateFlags::None) }}
                 {% endif %}
             </td>
         </tr>

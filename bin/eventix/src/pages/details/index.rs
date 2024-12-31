@@ -13,7 +13,7 @@ use ical::objects::{CalAttendee, CalCompType, CalDate};
 
 use crate::error::HTMLError;
 use crate::html::filters;
-use crate::locale::{self, Locale};
+use crate::locale::{self, DateFlags, Locale};
 
 use crate::objects::DayOccurrence;
 

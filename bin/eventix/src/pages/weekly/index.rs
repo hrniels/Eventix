@@ -10,7 +10,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use super::Page;
-use crate::locale::{self, Locale};
+use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::DayOccurrence;
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
@@ -226,9 +226,9 @@ pub async fn content(
 
     let html = WeeklyTemplate {
         page,
-        locale,
-        week_start: week_start.format("%B %d, %Y").to_string(),
-        week_end: week_end.pred_opt().unwrap().format("%B %d, %Y").to_string(),
+        locale: locale.clone(),
+        week_start: locale.fmt_weekdate(&week_start, DateFlags::None),
+        week_end: locale.fmt_weekdate(&week_end.pred_opt().unwrap(), DateFlags::None),
         prev_week: prev_week.format("%Y-%m-%d").to_string(),
         next_week: next_week.format("%Y-%m-%d").to_string(),
         today: now.date_naive(),

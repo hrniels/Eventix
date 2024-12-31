@@ -62,7 +62,7 @@
                     <i style="float: right" class="bi bi-alarm"></i>
                     {% endif %}
                     {% if !occ.is_all_day() %}
-                    {{ occ.occurrence_start().format("%H:%M") }}:
+                    {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}:
                     {% endif %}
                     {{ occ.summary().unwrap() }}
                 </div>

@@ -1,15 +1,19 @@
 use anyhow::anyhow;
 use chrono::TimeZone;
-use chrono_tz::Tz;
 use ical::{col::Occurrence, objects::EventLike};
 use std::{
     path::{self, PathBuf},
     process::Command,
+    sync::Arc,
 };
 use tokio::time;
 use tracing::warn;
 
-use crate::{settings::Settings, state::State};
+use crate::{
+    locale::{DateFlags, Locale},
+    settings::Settings,
+    state::State,
+};
 
 struct Notification {
     pub appname: String,
@@ -20,17 +24,17 @@ struct Notification {
 }
 
 impl Notification {
-    fn from_occurrence(occ: &Occurrence<'_>) -> Self {
+    fn from_occurrence(occ: &Occurrence<'_>, locale: &Arc<dyn Locale + Send + Sync>) -> Self {
         let mut body = format!(
             "Start: {}",
-            occ.occurrence_start().format("%A, %b %d %Y, %H:%M:%S")
+            locale.fmt_datetime(&occ.occurrence_start(), DateFlags::None)
         );
         if let Some(loc) = occ.location() {
             body.push_str(&format!("\nWhere: {}", loc));
         }
         body.push_str(&format!(
             "\nReminder for: {}",
-            occ.alarm_date().unwrap().format("%b %d %Y, %H:%M:%S")
+            locale.fmt_datetime(&occ.alarm_date().unwrap(), DateFlags::Short)
         ));
 
         let icon: PathBuf = ["static", "images", "icon.png"].iter().collect();
@@ -59,15 +63,15 @@ impl Notification {
     }
 }
 
-pub async fn watch_alarms(state: State, tz: Tz) {
+pub async fn watch_alarms(state: State, locale: Arc<dyn Locale + Send + Sync>) {
     loop {
         let last_check = {
             let last_check = state.last_alarm_check().lock().await;
             chrono::Utc
                 .from_utc_datetime(&*last_check)
-                .with_timezone(&tz)
+                .with_timezone(locale.timezone())
         };
-        let now = chrono::Utc::now().with_timezone(&tz);
+        let now = chrono::Utc::now().with_timezone(locale.timezone());
 
         {
             let store = state.store().lock().await;
@@ -77,7 +81,7 @@ pub async fn watch_alarms(state: State, tz: Tz) {
             alarms.sort_by_key(|o| o.alarm_date().unwrap());
 
             for alarm in alarms {
-                let notification = Notification::from_occurrence(&alarm);
+                let notification = Notification::from_occurrence(&alarm, &locale);
                 notification.send().unwrap();
             }
         }

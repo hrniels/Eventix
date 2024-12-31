@@ -18,7 +18,7 @@
                 <span class="ev_today">{{ day.date.format("%b %d") }}</span>
             </b>
             {% else %}
-            <b>{{ day.date.format("%A, %b %d") }}</b>
+            <b>{{ day.date|weekdate(locale, DateFlags::NoToday) }}</b>
             {% endif %}
         </td>
         {% endfor %}
@@ -58,7 +58,7 @@
                         <i style="float: right" class="bi bi-alarm"></i>
                         {% endif %}
                         {% if !occ.is_all_day() %}
-                        {{ occ.occurrence_start().format("%H:%M") }}:
+                        {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}:
                         {% endif %}
                         {{ occ.summary().unwrap() }}
                     </div>
@@ -135,7 +135,7 @@
                         <i style="float: right" class="bi bi-alarm"></i>
                         {% endif %}
                         {% if !occ.is_all_day() %}
-                        {{ occ.occurrence_start().format("%H:%M") }}:
+                        {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}:
                         {% else %}
                         <center>
                         {% endif %}

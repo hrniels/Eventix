@@ -338,7 +338,7 @@ impl Display for CalAlarm {
                     }
                 )
             }
-            CalTrigger::Absolute(dt) => write!(f, "On {}", dt.fmt_start_with_tz(&Tz::UTC, false)),
+            CalTrigger::Absolute(dt) => write!(f, "On {}", dt.fmt_start_with_tz(&Tz::UTC)),
         }
     }
 }

@@ -118,10 +118,7 @@ async fn main() {
                 .on_response(DefaultOnResponse::new().latency_unit(LatencyUnit::Micros)),
         );
 
-    tokio::spawn(notify::watch_alarms(
-        state.clone(),
-        locale::default().timezone().clone(),
-    ));
+    tokio::spawn(notify::watch_alarms(state.clone(), locale::default()));
 
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.address, args.port))
         .await

@@ -14,7 +14,7 @@ use crate::comps::pagination::PaginationTemplate;
 use crate::error::HTMLError;
 use crate::extract::MultiQuery;
 use crate::html::filters;
-use crate::locale::{self, Locale};
+use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
 use crate::pages::Page;

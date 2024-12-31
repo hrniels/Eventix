@@ -99,13 +99,13 @@
         </td>
         <td width="27%" align="center">
             {% if let Some(start) = c.comp.start() %}
-            {{ start.fmt_start_with_tz(locale.timezone(), true) }}
+            {{ start|caldate(locale, DateFlags::Short, false) }}
             {% if let Some(end) = c.comp.end_or_due() %}
             -
             {% endif %}
             {% endif %}
             {% if let Some(end) = c.comp.end_or_due() %}
-            {{ end.fmt_end_with_tz(locale.timezone(), true) }}
+            {{ end|caldate(locale, DateFlags::Short, true) }}
             {% endif %}
         </td>
         <td width="30%" align="right">

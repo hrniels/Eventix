@@ -4,9 +4,10 @@ pub mod filters {
     use askama::{Html, MarkupDisplay};
     use chrono::{DateTime, NaiveDate, NaiveTime};
     use chrono_tz::Tz;
+    use ical::objects::CalDate;
     use std::{fmt::Display, sync::Arc};
 
-    use crate::locale::Locale;
+    use crate::locale::{DateFlags, DateLike, Locale, TimeFlags};
 
     pub fn deref<T: Clone>(value: &T) -> ::askama::Result<T> {
         Ok(value.clone())
@@ -43,17 +44,54 @@ pub mod filters {
         })
     }
 
-    pub fn date(
+    pub fn time(
         date: &DateTime<Tz>,
         locale: &Arc<dyn Locale + Send + Sync>,
+        flags: TimeFlags,
     ) -> ::askama::Result<String> {
-        Ok(locale.format_date(date))
+        Ok(locale.fmt_time(date, flags))
+    }
+
+    pub fn weekdate(
+        date: &dyn DateLike,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        flags: DateFlags,
+    ) -> ::askama::Result<String> {
+        Ok(locale.fmt_weekdate(date, flags))
+    }
+
+    pub fn caldate(
+        date: &CalDate,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        flags: DateFlags,
+        end: bool,
+    ) -> ::askama::Result<String> {
+        match date {
+            CalDate::Date(d) => Ok(locale.fmt_date(&d, flags)),
+            CalDate::DateTime(_) => {
+                let datetime = if end {
+                    date.as_end_with_tz(locale.timezone())
+                } else {
+                    date.as_start_with_tz(locale.timezone())
+                };
+                Ok(locale.fmt_datetime(&datetime, flags))
+            }
+        }
+    }
+
+    pub fn date(
+        date: &dyn DateLike,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        flags: DateFlags,
+    ) -> ::askama::Result<String> {
+        Ok(locale.fmt_date(date, flags))
     }
 
     pub fn datetime(
-        date: &DateTime<Tz>,
+        date: &dyn DateLike,
         locale: &Arc<dyn Locale + Send + Sync>,
+        flags: DateFlags,
     ) -> ::askama::Result<String> {
-        Ok(locale.format_datetime(date))
+        Ok(locale.fmt_datetime(date, flags))
     }
 }
