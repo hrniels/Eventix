@@ -8,6 +8,8 @@ pub struct Calendar {
     pub id: Arc<String>,
     pub name: String,
     pub enabled: bool,
+    pub fgcolor: String,
+    pub bgcolor: String,
 }
 
 #[derive(Default)]
@@ -23,6 +25,8 @@ impl Calendars {
                 id: s.id().clone(),
                 name: s.name().clone(),
                 enabled: !disabled.contains(s.id()),
+                fgcolor: s.props().get(&String::from("fgcolor")).unwrap().clone(),
+                bgcolor: s.props().get(&String::from("bgcolor")).unwrap().clone(),
             })
             .collect::<Vec<_>>();
         calendars.sort_by(|a, b| a.name.cmp(&b.name));
@@ -38,6 +42,8 @@ impl Calendars {
                 id: s.id().clone(),
                 name: s.name().clone(),
                 enabled: true,
+                fgcolor: s.props().get(&String::from("fgcolor")).unwrap().clone(),
+                bgcolor: s.props().get(&String::from("bgcolor")).unwrap().clone(),
             })
             .collect::<Vec<_>>();
         calendars.sort_by(|a, b| a.name.cmp(&b.name));

@@ -16,7 +16,7 @@ use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
 use pages::{attendees, complete, details, edit, list, monthly, new, togglecal, weekly};
-use std::{env, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -62,11 +62,16 @@ async fn main() {
             disabled_cals.push(id.clone());
         }
 
+        let mut props = HashMap::new();
+        props.insert("fgcolor".to_string(), cal.fgcolor.clone());
+        props.insert("bgcolor".to_string(), cal.bgcolor.clone());
+
         store.add(
             CalSource::new_from_dir(
                 Arc::from(id.clone()),
                 PathBuf::from(cal.path.clone()),
                 cal.name.clone(),
+                props,
             )
             .expect(&format!(
                 "Loading calendar {} from '{}' failed",

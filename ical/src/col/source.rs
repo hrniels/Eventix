@@ -1,5 +1,6 @@
 use chrono::DateTime;
 use chrono_tz::Tz;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_dir, File};
 use std::io::Read;
@@ -14,6 +15,7 @@ pub struct CalSource {
     id: Arc<String>,
     path: PathBuf,
     name: String,
+    props: HashMap<String, String>,
     items: Vec<CalItem>,
 }
 
@@ -36,13 +38,19 @@ impl Default for CalSource {
             id: Arc::default(),
             path: PathBuf::default(),
             name: String::default(),
+            props: HashMap::new(),
             items: Vec::new(),
         }
     }
 }
 
 impl CalSource {
-    pub fn new_from_dir(id: Arc<String>, path: PathBuf, name: String) -> Result<Self, ColError> {
+    pub fn new_from_dir(
+        id: Arc<String>,
+        path: PathBuf,
+        name: String,
+        props: HashMap<String, String>,
+    ) -> Result<Self, ColError> {
         let mut items = Vec::new();
         let dir_items = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
         for entry in dir_items {
@@ -67,6 +75,7 @@ impl CalSource {
             id,
             path,
             name,
+            props,
             items,
         })
     }
@@ -81,6 +90,10 @@ impl CalSource {
 
     pub fn name(&self) -> &String {
         &self.name
+    }
+
+    pub fn props(&self) -> &HashMap<String, String> {
+        &self.props
     }
 
     pub fn add(&mut self, item: CalItem) {

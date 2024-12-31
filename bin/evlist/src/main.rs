@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -14,6 +15,7 @@ fn main() -> Result<(), anyhow::Error> {
             Arc::new(String::from("test")),
             dir.clone().into(),
             "".to_string(),
+            HashMap::new(),
         )
         .context(format!("Unable to parse calendar source {:?}", dir))?,
     );
@@ -52,8 +54,13 @@ fn main() -> Result<(), anyhow::Error> {
 
     let mut store2 = CalStore::default();
     store2.add(
-        CalSource::new_from_dir(Arc::new(String::from("test")), dir.into(), "".to_string())
-            .context("Unable to parse calendar source")?,
+        CalSource::new_from_dir(
+            Arc::new(String::from("test")),
+            dir.into(),
+            "".to_string(),
+            HashMap::new(),
+        )
+        .context("Unable to parse calendar source")?,
     );
 
     if store != store2 {

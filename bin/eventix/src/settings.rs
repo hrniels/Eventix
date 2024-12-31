@@ -24,6 +24,8 @@ pub struct Calendar {
     pub path: String,
     pub name: String,
     pub disabled: Option<bool>,
+    pub fgcolor: String,
+    pub bgcolor: String,
 }
 
 const FILENAME: &str = "settings.toml";
@@ -51,6 +53,16 @@ impl Settings {
                         path: source.path().to_str().unwrap().to_string(),
                         name: source.name().to_string(),
                         disabled: Some(disabled.contains(source.id())),
+                        fgcolor: source
+                            .props()
+                            .get(&String::from("fgcolor"))
+                            .unwrap()
+                            .clone(),
+                        bgcolor: source
+                            .props()
+                            .get(&String::from("bgcolor"))
+                            .unwrap()
+                            .clone(),
                     },
                 );
             }

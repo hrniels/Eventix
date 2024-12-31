@@ -8,6 +8,14 @@
         <link rel="stylesheet" type="text/css" href="/static/jquery-ui.min.css">
         <link rel="stylesheet" type="text/css" href="/static/colorpicker/jquery.minicolors.css">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+        <style type="text/css">
+            {% for cal in page.calendars() %}
+            div.ev_cal_src_{{ cal.id }}, span.ev_cal_src_{{ cal.id }} {
+                background-color: {{ cal.bgcolor }};
+                color: {{ cal.fgcolor }};
+            }
+            {% endfor %}
+        </style>
         <script type="text/javascript" src="/static/basic.js"></script>
         <script type="text/javascript" src="/static/jquery-3.7.1.min.js"></script>
         <script type="text/javascript" src="/static/jquery-ui.js"></script>
