@@ -45,9 +45,9 @@ impl<'a> DayOccurrence<'a> {
         day_occs.sort_by_key(|i| {
             (
                 !i.is_all_day(),
+                i.occurrence_start(),
                 i.source().clone(),
                 i.summary().cloned(),
-                i.occurrence_start(),
             )
         });
         day_occs
@@ -68,9 +68,9 @@ impl<'a> DayOccurrence<'a> {
         day_occs.sort_by_key(|i| {
             (
                 !i.is_all_day(),
+                i.end_or_due().cloned(),
                 i.source().clone(),
                 i.summary().cloned(),
-                i.end_or_due().cloned(),
             )
         });
         day_occs
