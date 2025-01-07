@@ -14,6 +14,7 @@ name = "Holidays"
 disabled = false
 fgcolor = "#000000"
 bgcolor = "#f6d22d"
+types = []
 
 [calendar.oschair]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/osstaff_shared_by_adam"
@@ -21,6 +22,7 @@ name = "OS Chair"
 disabled = false
 fgcolor = "#000000"
 bgcolor = "#a8c1e1"
+types = ["Event"]
 
 [calendar.oslss]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslss/lehre-ss_shared_by_d688b6f0-b6c0-1031-9c9d-3f576beecc46"
@@ -28,6 +30,7 @@ name = "OS Lehre SS"
 disabled = true
 fgcolor = "#000000"
 bgcolor = "#e5bc41"
+types = ["Event"]
 
 [calendar.oslwl]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"
@@ -35,6 +38,7 @@ name = "OS LWL"
 disabled = true
 fgcolor = "#000000"
 bgcolor = "#e1c4a8"
+types = ["Event"]
 
 [calendar.oslws]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslws/lehre-ws_shared_by_d688b6f0-b6c0-1031-9c9d-3f576beecc46"
@@ -42,6 +46,7 @@ name = "OS Lehre WS"
 disabled = true
 fgcolor = "#000000"
 bgcolor = "#f9f06a"
+types = ["Event"]
 
 [calendar.ospr]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-ospr/prüfungstermine_shared_by_mhaehnel"
@@ -49,6 +54,7 @@ name = "OS Prüfung"
 disabled = true
 fgcolor = "#ffffff"
 bgcolor = "#e42629"
+types = ["Event"]
 
 [calendar.scriptsolution]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
@@ -56,6 +62,7 @@ name = "Script-Solution"
 disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#2ec17d"
+types = ["Event"]
 
 [calendar.scriptsolution_tasks]
 path = "/home/hrniels/.config/vdirsyncer-test/tasks-scso/tasks~h26VsoBEVm_nzi6FeDvGvES"
@@ -63,5 +70,4 @@ name = "ScSo Tasks"
 disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#128421"
-
-
+types = ["Todo"]

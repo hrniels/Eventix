@@ -78,7 +78,20 @@ pub async fn content(
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
-        calendars: CalComboTemplate::new("calendar", store.sources().iter(), calendar),
+        calendars: CalComboTemplate::new(
+            "calendar",
+            store
+                .sources()
+                .iter()
+                .filter(|src| match src.props().get("types") {
+                    Some(ty) => {
+                        let types: Vec<CalCompType> = serde_json::from_str(ty).unwrap();
+                        types.contains(&form.req.ctype)
+                    }
+                    None => true,
+                }),
+            calendar,
+        ),
         attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
         status: form
             .status

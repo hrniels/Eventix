@@ -1,5 +1,6 @@
 use anyhow::Context;
 use chrono::NaiveDateTime;
+use ical::objects::CalCompType;
 
 use std::{
     collections::BTreeMap,
@@ -26,6 +27,7 @@ pub struct Calendar {
     pub disabled: Option<bool>,
     pub fgcolor: String,
     pub bgcolor: String,
+    pub types: Option<Vec<CalCompType>>,
 }
 
 const FILENAME: &str = "settings.toml";
@@ -63,6 +65,10 @@ impl Settings {
                             .get(&String::from("bgcolor"))
                             .unwrap()
                             .clone(),
+                        types: source
+                            .props()
+                            .get(&String::from("types"))
+                            .map(|ty| serde_json::from_str(ty).unwrap()),
                     },
                 );
             }

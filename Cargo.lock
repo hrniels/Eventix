@@ -415,6 +415,7 @@ dependencies = [
  "once_cell",
  "regex",
  "serde",
+ "serde_json",
  "serde_qs",
  "strum",
  "tokio",
@@ -1097,9 +1098,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.131"
+version = "1.0.135"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67d42a0bd4ac281beff598909bb56a86acaf979b84483e1c79c10dcaf98f8cf3"
+checksum = "2b0d7ba2887406110130a978386c4e1befb98c674b4fba677954e4db976630d9"
 dependencies = [
  "itoa",
  "memchr",

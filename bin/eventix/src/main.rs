@@ -65,6 +65,9 @@ async fn main() {
         let mut props = HashMap::new();
         props.insert("fgcolor".to_string(), cal.fgcolor.clone());
         props.insert("bgcolor".to_string(), cal.bgcolor.clone());
+        if let Some(types) = &cal.types {
+            props.insert("types".to_string(), serde_json::to_string(types).unwrap());
+        }
 
         store.add(
             CalSource::new_from_dir(
