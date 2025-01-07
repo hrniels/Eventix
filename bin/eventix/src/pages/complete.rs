@@ -56,6 +56,8 @@ async fn handler(
     } else {
         item.overwrite_component(rid, locale.timezone(), complete);
     }
+    item.save()
+        .context(format!("Save item {}:{:?}", req.uid, req.rid))?;
 
     Ok(Json(Response {}))
 }
