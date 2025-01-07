@@ -88,10 +88,13 @@ pub async fn handler(
     }
 
     let keywords = filter.keywords.to_lowercase();
-    let matches_keywords = |field: &String, kws: &String| {
-        for kw in kws.split_whitespace() {
-            if field.contains(kw) {
-                return true;
+    let matches_keywords = |field: Option<&String>, kws: &String| {
+        if let Some(field) = field {
+            let field = field.to_lowercase();
+            for kw in kws.split_whitespace() {
+                if field.contains(kw) {
+                    return true;
+                }
             }
         }
         false
@@ -113,20 +116,17 @@ pub async fn handler(
                 if keywords.is_empty() {
                     return true;
                 }
-                if let Some(summary) = l.comp.summary() {
-                    if matches_keywords(&summary.to_lowercase(), &filter.keywords) {
-                        return true;
-                    }
+                if matches_keywords(l.comp.summary(), &filter.keywords) {
+                    return true;
                 }
-                if let Some(desc) = l.comp.description() {
-                    if matches_keywords(&desc.to_lowercase(), &filter.keywords) {
-                        return true;
-                    }
+                if matches_keywords(l.comp.description(), &filter.keywords) {
+                    return true;
                 }
-                if let Some(loc) = l.comp.location() {
-                    if matches_keywords(&loc.to_lowercase(), &filter.keywords) {
-                        return true;
-                    }
+                if matches_keywords(l.comp.location(), &filter.keywords) {
+                    return true;
+                }
+                if matches_keywords(Some(l.comp.uid()), &filter.keywords) {
+                    return true;
                 }
                 false
             })
