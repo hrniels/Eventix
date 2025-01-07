@@ -56,10 +56,6 @@
     </div>
 </form>
 
-<div style="display: none" id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "This will permanently delete this item."|t(locale) }}
-</div>
-
 <h1 style="margin-top: 1em" class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
 <table width="100%" class="ev_table">
     {% if comps.is_empty() %}
@@ -125,17 +121,31 @@
                 <i class="bi bi-pencil"></i>
                 <span>{{ "Edit"|t(locale) }}</span>
             </a>
-            <script>
-                confirmDialog(
-                    'delete-confirm',
-                    'delete-button-{{ id }}',
-                    '/edit/delete?uid={{ c.comp.uid() }}',
-                );
-            </script>
         </td>
     </tr>
     {% endfor %}
 </table>
+
+{% for (id, _) in comps.iter().enumerate() %}
+<div style="display: none" id="delete-confirm-{{ id }}" title="{{ "Are you sure?"|t(locale) }}">
+    {{ "This will permanently delete this item."|t(locale) }}
+</div>
+{% endfor %}
+
+<script>
+    var ids = [
+        {% for (id, c) in comps.iter().enumerate() %}
+        '{{ c.comp.uid() }}',
+        {% endfor %}
+    ];
+    for(var i = 0; i < ids.length; i++) {
+        confirmDialog(
+            'delete-confirm-' + i,
+            'delete-button-' + i,
+            '/edit/delete?uid=' + ids[i],
+        );
+    }
+</script>
 
 <div style="margin-top: 1em" align="center">
 {{ pagination|safe }}
