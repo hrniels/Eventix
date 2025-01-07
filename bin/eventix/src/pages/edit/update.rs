@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::col::CalItem;
@@ -67,6 +67,11 @@ fn action_update(
             comp.set_rrule(rrule);
         }
     } else {
+        let comp = item.component_with(|c| c.uid() == &form.req.uid).unwrap();
+        if !comp.is_recurrent() {
+            return Err(anyhow!("Component {} is not recurrent", form.req.uid).into());
+        }
+
         item.overwrite_component(rid.unwrap(), locale.timezone(), |c| {
             form.update(c, locale);
         });

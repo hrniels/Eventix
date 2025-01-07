@@ -71,10 +71,11 @@ impl CompEdit {
                 },
                 tz,
             ),
-            status: req
-                .rid
-                .as_ref()
-                .and_then(|_| TodoStatus::new_from_occurrence(occ)),
+            status: if !occ.is_recurrent() || req.rid.is_some() {
+                TodoStatus::new_from_occurrence(occ)
+            } else {
+                None
+            },
             attendees: Some(Attendees::new_from_cal_attendees(occ.attendees())),
             req,
         }

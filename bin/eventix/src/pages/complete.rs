@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
@@ -13,7 +13,7 @@ use crate::{error::HTMLError, locale};
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: String,
+    rid: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,10 +33,14 @@ async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
-    let rid = req
-        .rid
-        .parse::<CalDate>()
-        .context(format!("Invalid rid date: {}", req.rid))?;
+    let rid = if let Some(rid) = req.rid.as_ref() {
+        Some(
+            rid.parse::<CalDate>()
+                .context(format!("Invalid rid date: {}", rid))?,
+        )
+    } else {
+        None
+    };
 
     let mut store = state.store().lock().await;
 
@@ -51,10 +55,16 @@ async fn handler(
         td.set_completed(Some(CalDate::now()));
     };
 
-    if let Some(comp) = item.component_with_mut(|c| c.uid() == &req.uid && c.rid() == Some(&rid)) {
+    if let Some(comp) = item.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
+    {
         complete(comp);
     } else {
-        item.overwrite_component(rid, locale.timezone(), complete);
+        let comp = item.component_with(|c| c.uid() == &req.uid).unwrap();
+        if !comp.is_recurrent() {
+            return Err(anyhow!("Component {} is not recurrent", req.uid).into());
+        }
+
+        item.overwrite_component(rid.unwrap(), locale.timezone(), complete);
     }
     item.save()
         .context(format!("Save item {}:{:?}", req.uid, req.rid))?;

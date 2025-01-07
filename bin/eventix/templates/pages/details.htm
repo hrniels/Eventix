@@ -151,7 +151,12 @@
                 </a>
                 {% if occ.ctype() == CalCompType::Todo %}
                 <a style="float: right" class="ev_button ev_button_good"
-                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+                   {% if occ.is_recurrent() %}
+                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}')"
+                   {% else %}
+                   href="javascript:completeTodo('{{ occ.uid() }}')"
+                   {% endif %}
+                   >
                     <i class="bi bi-check-lg"></i>
                     <span>{{ "Complete"|t(locale) }}</span>
                 </a>
@@ -168,17 +173,6 @@
 </div>
 
 <script>
-    function completeTodo(uid, rid) {
-        $.ajax({
-            type: 'GET',
-            url: '/complete?uid=' + uid + '&rid=' + rid,
-            dataType: 'json',
-            success: function(data) {
-                document.location.reload();
-            }
-        });
-    }
-
     $(function() {
         confirmDialog(
             'delete-series-confirm',

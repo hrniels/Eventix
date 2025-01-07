@@ -10,14 +10,12 @@ function invertSelection(prefix)
     }
 }
 
-function toggleCheckbox(id)
-{
+function toggleCheckbox(id) {
     var el = document.getElementById(id);
     el.checked = !el.checked;
 }
 
-function moveToTabCenter(elId, tabsId, tabBarId)
-{
+function moveToTabCenter(elId, tabsId, tabBarId) {
     var pos = $('#' + tabsId).position().top;
     var tab = $('#' + tabBarId);
     var el = $('#' + elId);
@@ -29,8 +27,7 @@ function moveToTabCenter(elId, tabsId, tabBarId)
     }).show();
 }
 
-function addArrowToDatePicker(input, inst)
-{
+function addArrowToDatePicker(input, inst) {
     // move the datepicker a bit down so that we can draw the arrow on top
     inst.dpDiv.css({
         marginTop: '10px',
@@ -38,8 +35,21 @@ function addArrowToDatePicker(input, inst)
     inst.dpDiv.addClass('popup');
 }
 
-function hideArrowBottom(inst)
-{
+function hideArrowBottom(inst) {
     // ensure that the datepicker header is above the arrow
     $('.ui-datepicker-header').css('zIndex', 2);
+}
+
+function completeTodo(uid, rid) {
+    var url = '/complete?uid=' + uid;
+    if(rid != null)
+        url += '&rid=' + rid;
+    $.ajax({
+        type: 'GET',
+        url: url,
+        dataType: 'json',
+        success: function(data) {
+            document.location.reload();
+        }
+    });
 }
