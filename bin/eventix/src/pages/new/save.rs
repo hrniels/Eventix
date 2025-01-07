@@ -77,7 +77,11 @@ pub async fn handler(
         // remember the last used calendar
         {
             let mut last_cal = state.last_calendar().lock().await;
-            *last_cal = Some(form.calendar.clone());
+            if let Some(e) = last_cal.get_mut(&form.req.ctype) {
+                *e = form.calendar.clone();
+            } else {
+                last_cal.insert(form.req.ctype, form.calendar.clone());
+            }
         }
         form = CompNew::new(form.req.ctype, locale.timezone(), Some(form.calendar));
     }

@@ -43,7 +43,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let calendar = state.last_calendar().lock().await.clone();
+    let calendar = state.last_calendar().lock().await.get(&req.ctype).cloned();
     content(
         super::new_page(&state, &req).await,
         locale.clone(),

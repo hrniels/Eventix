@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use ical::objects::CalCompType;
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs::File,
     io::{Read, Write},
 };
@@ -17,7 +17,7 @@ pub struct Settings {
     #[serde(rename = "calendar")]
     pub calendars: BTreeMap<String, Calendar>,
     pub last_alarm_check: Option<NaiveDateTime>,
-    pub last_calendar: Option<String>,
+    pub last_calendar: HashMap<CalCompType, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

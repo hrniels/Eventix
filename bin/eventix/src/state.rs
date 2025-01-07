@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use chrono::NaiveDateTime;
-use ical::col::CalStore;
+use ical::{col::CalStore, objects::CalCompType};
 use tokio::sync::{Mutex, MutexGuard};
 
 #[derive(Clone)]
@@ -9,7 +9,7 @@ pub struct State {
     store: Arc<Mutex<CalStore>>,
     disabled_cals: Arc<Mutex<Vec<String>>>,
     last_alarm_check: Arc<Mutex<NaiveDateTime>>,
-    last_calendar: Arc<Mutex<Option<String>>>,
+    last_calendar: Arc<Mutex<HashMap<CalCompType, String>>>,
 }
 
 impl State {
@@ -17,7 +17,7 @@ impl State {
         store: Arc<Mutex<CalStore>>,
         disabled_cals: Arc<Mutex<Vec<String>>>,
         last_alarm_check: Arc<Mutex<NaiveDateTime>>,
-        last_calendar: Arc<Mutex<Option<String>>>,
+        last_calendar: Arc<Mutex<HashMap<CalCompType, String>>>,
     ) -> Self {
         Self {
             store,
@@ -39,7 +39,7 @@ impl State {
         &self.last_alarm_check
     }
 
-    pub fn last_calendar(&self) -> &Arc<Mutex<Option<String>>> {
+    pub fn last_calendar(&self) -> &Arc<Mutex<HashMap<CalCompType, String>>> {
         &self.last_calendar
     }
 

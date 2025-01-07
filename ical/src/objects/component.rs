@@ -306,7 +306,7 @@ impl UpdatableEventLike for EventLikeComponent {
     }
 }
 
-#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default, Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CalCompType {
     #[default]
     Event,

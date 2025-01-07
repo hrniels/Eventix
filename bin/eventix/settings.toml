@@ -1,5 +1,4 @@
 last_alarm_check = "2024-12-31T10:40:18.080478122"
-last_calendar = "scriptsolution_tasks"
 
 [calendar.bi]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"
@@ -71,3 +70,7 @@ disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#128421"
 types = ["Todo"]
+
+[last_calendar]
+Event = "scriptsolution"
+Todo = "scriptsolution_tasks"
