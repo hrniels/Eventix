@@ -120,6 +120,9 @@ pub trait CompAction {
                     td.set_completed(st.completed().and_then(|d| d.to_caldate(false)));
                 } else if st.status() == CalTodoStatus::InProcess {
                     td.set_percent(st.percent());
+                } else {
+                    td.set_percent(None);
+                    td.set_completed(None);
                 }
             }
         }
