@@ -139,11 +139,18 @@
         {% endfor %}
     ];
     for(var i = 0; i < ids.length; i++) {
-        confirmDialog(
-            'delete-confirm-' + i,
-            'delete-button-' + i,
-            '/edit/delete?uid=' + ids[i],
-        );
+        // ensure that we pass the current value of i to the closure
+        (function(i) {
+            confirmDialog(
+                'delete-confirm-' + i,
+                'delete-button-' + i,
+                function() {
+                    deleteItem(ids[i], null, function() {
+                        window.location.reload();
+                    });
+                }
+            );
+        })(i);
     }
 </script>
 

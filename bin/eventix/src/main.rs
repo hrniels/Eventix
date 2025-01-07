@@ -15,7 +15,7 @@ use chrono::Duration;
 use clap::Parser;
 use error::HTMLError;
 use ical::col::{CalSource, CalStore};
-use pages::{attendees, complete, details, edit, list, monthly, new, togglecal, weekly};
+use pages::{attendees, complete, delete, details, edit, list, monthly, new, togglecal, weekly};
 use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::{
@@ -101,6 +101,7 @@ async fn main() {
         .nest(new::path(), new::router(state.clone()))
         .nest(list::path(), list::router(state.clone()))
         .nest(complete::path(), complete::router(state.clone()))
+        .nest(delete::path(), delete::router(state.clone()))
         .nest(togglecal::path(), togglecal::router(state.clone()))
         .nest(attendees::path(), attendees::router(state.clone()))
         .fallback(error_handler)

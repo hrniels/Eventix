@@ -173,18 +173,26 @@
 </div>
 
 <script>
+    function onDeleted() {
+        window.location.reload();
+    }
+
     $(function() {
         confirmDialog(
             'delete-series-confirm',
             'delete-series-button',
-            '/edit/delete?uid={{ occ.uid() }}',
+            function() {
+                deleteItem('{{ occ.uid() }}', null, onDeleted);
+            }
         );
 
         {% if occ.is_recurrent() %}
         confirmDialog(
             'delete-occ-confirm',
             'delete-occ-button',
-            '/edit/delete?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}',
+            function() {
+                deleteItem('{{ occ.uid() }}', '{{ occ.rid_html() }}', onDeleted);
+            }
         );
         {% endif %}
     });

@@ -4,7 +4,7 @@
 
 <script type="text/javascript" src="/static/popup.js"></script>
 <script type="text/javascript">
-    function confirmDialog(id, btn, url) {
+    function confirmDialog(id, btn, onClick) {
         $("#" + id).dialog({
             resizable: false,
             height: "auto",
@@ -13,7 +13,7 @@
             autoOpen: false,
             buttons: {
                 "Delete": function() {
-                    window.location.href = url;
+                    onClick();
                 },
                 "Cancel": function() {
                     $(this).dialog("close");

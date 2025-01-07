@@ -104,15 +104,21 @@
         moveToTabCenter('title', 'tabs', 'tab-bar');
     });
 
+    function onDeleted() {
+        window.location.href = '/';
+    }
+
     $(function() {
         confirmDialog(
             'delete-confirm',
             'delete-button',
-            {% if let Some(rid) = rid %}
-            '/edit/delete?uid={{ uid }}&rid={{ rid }}',
-            {% else %}
-            '/edit/delete?uid={{ uid }}',
-            {% endif %}
+            function() {
+                {% if let Some(rid) = rid %}
+                deleteItem('{{ uid }}', '{{ rid }}', onDeleted);
+                {% else %}
+                deleteItem('{{ uid }}', null, onDeleted);
+                {% endif %}
+            }
         );
 
         $("#tabs").tabs({

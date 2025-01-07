@@ -53,3 +53,15 @@ function completeTodo(uid, rid) {
         }
     });
 }
+
+function deleteItem(uid, rid, onDeleted) {
+    var url = '/delete?uid=' + uid;
+    if(rid != null)
+        url += '&rid=' + rid;
+    $.ajax({
+        type: 'GET',
+        url: url,
+        dataType: 'json',
+        success: onDeleted,
+    });
+}

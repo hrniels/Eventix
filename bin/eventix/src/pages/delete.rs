@@ -1,24 +1,34 @@
 use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use formatx::formatx;
+use axum::routing::get;
+use axum::{Json, Router};
 use ical::col::CalStore;
 use ical::objects::{CalDate, EventLike, UpdatableEventLike};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::error::HTMLError;
-use crate::locale::{self, DateFlags, Locale};
-use crate::pages::Page;
 
-use super::Request;
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Request {
+    uid: String,
+    rid: Option<String>,
+}
 
-async fn action_delete(
-    page: &mut Page,
-    locale: &Arc<dyn Locale + Send + Sync>,
-    store: Arc<Mutex<CalStore>>,
-    form: &Request,
-) -> anyhow::Result<()> {
+#[derive(Debug, Serialize)]
+struct Response {}
+
+pub fn path() -> &'static str {
+    "/delete"
+}
+
+pub fn router(state: crate::state::State) -> Router {
+    Router::new().route("/", get(handler)).with_state(state)
+}
+
+async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::Result<()> {
     let mut store = store.lock().await;
     let item = store
         .item_by_id_mut(&form.uid)
@@ -35,14 +45,6 @@ async fn action_delete(
                 .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
             base.add_exdate(date.clone());
             item.save()?;
-
-            page.add_info(
-                formatx!(
-                    locale.translate("Deleted occurrence on {} successfully."),
-                    locale.fmt_datetime(&date.as_start_with_tz(locale.timezone()), DateFlags::None)
-                )
-                .unwrap(),
-            );
         }
         None => {
             item.delete_components(&form.uid);
@@ -51,8 +53,6 @@ async fn action_delete(
             } else {
                 item.save()?;
             }
-
-            page.add_info(locale.translate("Deleted series successfully."));
         }
     }
 
@@ -63,16 +63,7 @@ pub async fn handler(
     State(state): State<crate::state::State>,
     Query(form): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
-    let mut page = super::new_page(&state).await;
+    action_delete(state.store().clone(), &form).await?;
 
-    action_delete(&mut page, &locale, state.store().clone(), &form).await?;
-
-    crate::monthly::index::content(
-        page,
-        locale,
-        State(state),
-        Query(crate::monthly::index::Request::default()),
-    )
-    .await
+    Ok(Json(Response {}))
 }
