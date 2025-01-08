@@ -20,12 +20,10 @@ pub struct Request {
 #[derive(Debug, Serialize)]
 struct Response {}
 
-pub fn path() -> &'static str {
-    "/delete"
-}
-
 pub fn router(state: crate::state::State) -> Router {
-    Router::new().route("/", get(handler)).with_state(state)
+    Router::new()
+        .route("/delete", get(handler))
+        .with_state(state)
 }
 
 async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::Result<()> {

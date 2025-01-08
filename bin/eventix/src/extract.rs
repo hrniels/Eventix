@@ -6,7 +6,6 @@ use serde::de::DeserializeOwned;
 #[derive(Debug)]
 pub struct MultiForm<T>(pub T);
 
-#[axum::async_trait]
 impl<T, S> FromRequest<S> for MultiForm<T>
 where
     S: Send + Sync,
@@ -36,7 +35,6 @@ where
 #[derive(Debug)]
 pub struct MultiQuery<T>(pub T);
 
-#[axum::async_trait]
 impl<T, S> FromRequest<S> for MultiQuery<T>
 where
     S: Send + Sync,

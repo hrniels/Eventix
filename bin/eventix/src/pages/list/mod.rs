@@ -7,10 +7,6 @@ use crate::state::State;
 
 use super::{Breadcrumb, Page};
 
-pub fn path() -> &'static str {
-    "/list"
-}
-
 pub async fn new_page(state: &State, req: &Filter) -> Page {
     let mut page = Page::new(state).await;
     page.add_breadcrumb(Breadcrumb::new(req.url(), "List"));
@@ -19,6 +15,6 @@ pub async fn new_page(state: &State, req: &Filter) -> Page {
 
 pub fn router(state: crate::state::State) -> Router {
     Router::new()
-        .route("/", get(self::index::handler))
+        .route("/list", get(self::index::handler))
         .with_state(state)
 }

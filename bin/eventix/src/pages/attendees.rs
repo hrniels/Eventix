@@ -16,12 +16,10 @@ pub struct Request {
 #[derive(Debug, Serialize)]
 struct Response(Vec<String>);
 
-pub fn path() -> &'static str {
-    "/attendees"
-}
-
 pub fn router(state: crate::state::State) -> Router {
-    Router::new().route("/", get(handler)).with_state(state)
+    Router::new()
+        .route("/attendees", get(handler))
+        .with_state(state)
 }
 
 async fn handler(

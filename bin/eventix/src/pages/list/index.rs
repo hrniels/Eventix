@@ -19,8 +19,6 @@ use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
 use crate::pages::Page;
 
-use super::path;
-
 const PER_PAGE: usize = 15;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,7 +41,7 @@ impl Default for Filter {
 
 impl Filter {
     pub fn url(&self) -> String {
-        format!("{}?{}", path(), serde_qs::to_string(self).unwrap())
+        format!("/list?{}", serde_qs::to_string(self).unwrap())
     }
 
     pub fn with_page(&self, page: usize) -> Self {

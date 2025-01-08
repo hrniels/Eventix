@@ -107,24 +107,20 @@ pub async fn new_page(state: &State, req: &Request) -> Page {
     let mut page = Page::new(state).await;
     match req.ctype {
         CalCompType::Todo => page.add_breadcrumb(Breadcrumb::new(
-            format!("{}?ctype={:?}", path(), req.ctype),
+            format!("/new?ctype={:?}", req.ctype),
             "New task",
         )),
         CalCompType::Event => page.add_breadcrumb(Breadcrumb::new(
-            format!("{}?ctype={:?}", path(), req.ctype),
+            format!("/new?ctype={:?}", req.ctype),
             "New event",
         )),
     }
     page
 }
 
-pub fn path() -> &'static str {
-    "/new"
-}
-
 pub fn router(state: crate::state::State) -> Router {
     Router::new()
-        .route("/", get(self::index::handler))
-        .route("/save", post(self::save::handler))
+        .route("/new", get(self::index::handler))
+        .route("/new/save", post(self::save::handler))
         .with_state(state)
 }

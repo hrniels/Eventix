@@ -86,7 +86,7 @@ pub async fn content(
         ))?;
 
     page.add_breadcrumb(Breadcrumb::new(
-        format!("{}?{}", super::path(), serde_qs::to_string(&req).unwrap()),
+        format!("/edit?{}", serde_qs::to_string(&req).unwrap()),
         super::build_title(&occ, &req.rid),
     ));
 

@@ -19,12 +19,10 @@ pub struct Request {
 #[derive(Debug, Serialize)]
 struct Response {}
 
-pub fn path() -> &'static str {
-    "/complete"
-}
-
 pub fn router(state: crate::state::State) -> Router {
-    Router::new().route("/", get(handler)).with_state(state)
+    Router::new()
+        .route("/complete", get(handler))
+        .with_state(state)
 }
 
 async fn handler(

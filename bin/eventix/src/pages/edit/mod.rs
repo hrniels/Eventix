@@ -126,13 +126,9 @@ pub async fn new_page(state: &State) -> Page {
     Page::new(state).await
 }
 
-pub fn path() -> &'static str {
-    "/edit"
-}
-
 pub fn router(state: crate::state::State) -> Router {
     Router::new()
-        .route("/", get(self::index::handler))
-        .route("/update", post(self::update::handler))
+        .route("/edit", get(self::index::handler))
+        .route("/edit/update", post(self::update::handler))
         .with_state(state)
 }
