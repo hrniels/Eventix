@@ -41,7 +41,9 @@
                                         'ev_id_{{ occ.uid_html() }}',
                                         '{{ occ.rid_html() }}',
                                         '{{ occ.id() }}')"
-                     {% if occ.is_all_day() %}style="text-align: center"{% endif %}
+                     {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
+                     style="text-align: center"
+                     {% endif %}
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
                     ev_id_{{ occ.uid_html() }}
@@ -61,8 +63,18 @@
                     {% if occ.has_alarms() %}
                     <i style="float: right" class="bi bi-alarm"></i>
                     {% endif %}
-                    {% if !occ.is_all_day() %}
-                    {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}:
+                    {% if !occ.is_all_day() && !occ.is_all_day_on(day.date.unwrap()) %}
+                    {% if occ.occurrence_starts_on(day.date.unwrap()) &&
+                          !occ.occurrence_ends_on(day.date.unwrap()) %}
+                    <i class="bi bi-arrow-bar-right"></i>
+                    {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}
+                    {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
+                               occ.occurrence_ends_on(day.date.unwrap()) %}
+                    <i class="bi bi-arrow-bar-left"></i>
+                    {{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                    {% else %}
+                    {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}
+                    {% endif %}
                     {% endif %}
                     {{ occ.summary().unwrap() }}
                 </div>

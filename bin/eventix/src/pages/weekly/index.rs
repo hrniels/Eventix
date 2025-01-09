@@ -198,7 +198,7 @@ pub async fn content(
         let mut allday = vec![];
         let mut i = 0;
         while i < day_occs.len() {
-            if day_occs[i].is_all_day() {
+            if day_occs[i].is_all_day() || day_occs[i].is_all_day_on(date) {
                 allday.push(day_occs.remove(i));
             } else {
                 i += 1;

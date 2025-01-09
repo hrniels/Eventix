@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chrono::{DateTime, Duration};
+use chrono::{DateTime, Duration, NaiveDate};
 use chrono_tz::Tz;
 
 use crate::objects::{
@@ -98,6 +98,24 @@ impl<'c> Occurrence<'c> {
                 Some(e.into())
             }
         })
+    }
+
+    pub fn occurrence_starts_on(&self, date: NaiveDate) -> bool {
+        self.occurrence_start().date_naive() == date
+    }
+
+    pub fn occurrence_ends_on(&self, date: NaiveDate) -> bool {
+        self.occurrence_end()
+            .map(|end| end.date_naive() == date)
+            .unwrap_or(false)
+    }
+
+    pub fn is_all_day_on(&self, date: NaiveDate) -> bool {
+        let end = self
+            .occurrence_end()
+            .map(|e| e.date_naive())
+            .unwrap_or(date);
+        date > self.occurrence_start().date_naive() && date < end
     }
 
     pub fn duration(&self) -> Option<Duration> {

@@ -44,7 +44,7 @@ impl<'a> DayOccurrence<'a> {
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (
-                !i.is_all_day(),
+                !(i.is_all_day() || i.is_all_day_on(date)),
                 i.occurrence_start(),
                 i.source().clone(),
                 i.summary().cloned(),
@@ -67,7 +67,7 @@ impl<'a> DayOccurrence<'a> {
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (
-                !i.is_all_day(),
+                !(i.is_all_day() || i.is_all_day_on(date)),
                 i.end_or_due().cloned(),
                 i.source().clone(),
                 i.summary().cloned(),
@@ -132,15 +132,24 @@ impl<'a> DayOccurrence<'a> {
         self.inner.event_status().map(|st| format!("{:?}", st))
     }
 
-    pub fn minute_off(&self) -> u64 {
-        self.inner.occurrence_start().hour() as u64 * 60
-            + self.inner.occurrence_start().minute() as u64
+    pub fn minute_off(&self, date: NaiveDate) -> u64 {
+        if self.inner.occurrence_starts_on(date) {
+            self.inner.occurrence_start().hour() as u64 * 60
+                + self.inner.occurrence_start().minute() as u64
+        } else {
+            0
+        }
     }
 
-    pub fn minute_duration(&self) -> u64 {
-        match self.inner.duration() {
-            Some(d) => d.num_minutes() as u64,
-            None => 0,
+    pub fn minute_duration(&self, date: NaiveDate) -> u64 {
+        if self.inner.occurrence_starts_on(date) {
+            match self.inner.duration() {
+                Some(d) => d.num_minutes() as u64,
+                None => 0,
+            }
+        } else {
+            let end = self.inner.occurrence_end().unwrap();
+            end.hour() as u64 * 60 + end.minute() as u64
         }
     }
 }
