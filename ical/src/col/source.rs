@@ -54,9 +54,16 @@ impl CalSource {
         let mut items = Vec::new();
         let dir_items = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
         for entry in dir_items {
-            let filename = entry
-                .map_err(|e| ColError::ReadDir(path.clone(), e))?
-                .path();
+            let entry = entry.map_err(|e| ColError::ReadDir(path.clone(), e))?;
+            if !entry
+                .file_type()
+                .map_err(|e| ColError::FileType(path.clone(), e))?
+                .is_file()
+            {
+                continue;
+            }
+
+            let filename = entry.path();
 
             let mut input = String::new();
             File::open(filename.as_path())

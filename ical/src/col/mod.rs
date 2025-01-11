@@ -27,4 +27,6 @@ pub enum ColError {
     FileRemove(PathBuf, io::Error),
     #[error("Parsing {0} failed: {1}")]
     FileParse(PathBuf, ParseError),
+    #[error("Getting file type for {0} failed: {1}")]
+    FileType(PathBuf, io::Error),
 }
