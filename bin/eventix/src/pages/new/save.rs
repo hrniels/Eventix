@@ -83,7 +83,7 @@ pub async fn handler(
                 last_cal.insert(form.req.ctype, form.calendar.clone());
             }
         }
-        form = CompNew::new(form.req.ctype, locale.timezone(), Some(form.calendar));
+        form = CompNew::new(&form.req, locale.timezone(), Some(form.calendar));
     }
 
     super::index::content(page, locale, State(state), form).await

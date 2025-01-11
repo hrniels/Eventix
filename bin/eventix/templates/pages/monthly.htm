@@ -27,6 +27,10 @@
                 ev_month_day_header
                 {% if day.cur_month %}ev_cur_month{% endif %}
                 ">
+                <a href="/new?ctype=Event&date={{ date.format("%Y-%m-%d") }}"
+                   style="float: left" class="ev_add_icon">
+                    <i class="bi bi-plus-square"></i>
+                </a>
                 {% if date == today %}<span class="ev_today">{% endif %}
                 {% if day.show_month %}
                 {{ date.format("%b %-d") }}

@@ -509,6 +509,19 @@ span.ev_msg_error span.ev_msg_info {
     padding: .2em;
 }
 
+/* ------------ ADD ICON -------------- */
+
+.ev_add_icon {
+    color: #000;
+    display: none;
+}
+.ev_month_day_header:hover > .ev_add_icon {
+    display: inline;
+}
+.ev_hour_cell:hover > .ev_add_icon {
+    display: inline;
+}
+
 /* ------------ EVENT/TODO POPUP ------------ */
 
 div.ev_selected {

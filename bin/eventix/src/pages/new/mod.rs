@@ -5,7 +5,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use chrono::{Duration, NaiveTime, Timelike, Utc};
+use chrono::{Duration, NaiveDateTime, NaiveTime, Timelike, Utc};
 use chrono_tz::Tz;
 use ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
@@ -24,6 +24,8 @@ use super::{Breadcrumb, Page};
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
     ctype: CalCompType,
+    date: Option<Date>,
+    hour: Option<u32>,
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -42,13 +44,36 @@ pub struct CompNew {
 }
 
 impl CompNew {
-    fn new(ctype: CalCompType, timezone: &Tz, calendar: Option<String>) -> Self {
+    fn new(req: &Request, timezone: &Tz, calendar: Option<String>) -> Self {
         let now = Utc::now().with_timezone(timezone);
-        let last_hour = NaiveTime::from_hms_opt(now.naive_local().time().hour(), 0, 0).unwrap();
-        let next_hour = now.with_time(last_hour).unwrap() + Duration::hours(1);
+        let date = if let Some(date) = &req.date {
+            let time = if let Some(hour) = req.hour {
+                if hour < 24 {
+                    NaiveTime::from_hms_opt(hour, 0, 0).unwrap()
+                } else {
+                    now.time()
+                }
+            } else {
+                now.time()
+            };
+            NaiveDateTime::new(date.date().unwrap(), time)
+                .and_local_timezone(*timezone)
+                .earliest()
+                .unwrap()
+        } else {
+            now
+        };
+
+        let next_hour = if req.hour.is_some() {
+            date
+        } else {
+            let last_hour =
+                NaiveTime::from_hms_opt(date.naive_local().time().hour(), 0, 0).unwrap();
+            date.with_time(last_hour).unwrap() + Duration::hours(1)
+        };
         let next_next_hour = next_hour + Duration::hours(1);
 
-        let start_end = match ctype {
+        let start_end = match req.ctype {
             CalCompType::Event => {
                 let start = DateTime::new(
                     Date::new(Some(next_hour.date_naive())),
@@ -64,10 +89,14 @@ impl CompNew {
         };
 
         Self {
-            req: Request { ctype },
+            req: Request {
+                ctype: req.ctype,
+                date: None,
+                hour: None,
+            },
             start_end,
             calendar: calendar.unwrap_or(String::new()),
-            status: match ctype {
+            status: match req.ctype {
                 CalCompType::Todo => Some(TodoStatus::default()),
                 CalCompType::Event => None,
             },

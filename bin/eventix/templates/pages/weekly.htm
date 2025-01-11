@@ -95,7 +95,12 @@
                             {% if hour > 0 %}
                             border-top: .05em dashed #000000;
                             {% endif %}"
+                     class="ev_hour_cell"
                      {% if day.date == today %}class="ev_today_bg"{% endif %}>
+                    <a href="/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}"
+                       style="float: left" class="ev_add_icon">
+                        <i class="bi bi-plus-square"></i>
+                    </a>
                 </div>
                 {% endfor %}
                 {% for occ in day.occurrences %}

@@ -48,7 +48,7 @@ pub async fn handler(
         super::new_page(&state, &req).await,
         locale.clone(),
         State(state),
-        CompNew::new(req.ctype, locale.timezone(), calendar),
+        CompNew::new(&req, locale.timezone(), calendar),
     )
     .await
 }
