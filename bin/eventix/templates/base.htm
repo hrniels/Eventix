@@ -19,18 +19,6 @@
         <script type="text/javascript" src="/static/basic.js"></script>
         <script type="text/javascript" src="/static/jquery-3.7.1.min.js"></script>
         <script type="text/javascript" src="/static/jquery-ui.js"></script>
-        <script type="text/javascript">
-            function toggleCalendar(id) {
-                $.ajax({
-                    type: 'GET',
-                    url: '/toggle-calendar?id=' + id,
-                    dataType: 'json',
-                    success: function(data) {
-                        document.location.reload();
-                    }
-                });
-            }
-        </script>
     </head>
     <body>
         <div style="float: left;">
@@ -83,6 +71,10 @@
             <a id="link-list" class="ev_button ev_button_normal"
                style="width: 70px; text-align: center" href="/list">
                 <span>{{ "List"|t(locale) }}</span>
+            </a>
+            <a id="link-refresh" class="ev_button ev_button_normal"
+                style="width: 20px; text-align: center" href="javascript:reloadDB()">
+                <i class="bi bi-arrow-clockwise"></i>
             </a>
         </div>
         <br style="clear: both;" />

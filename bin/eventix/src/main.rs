@@ -11,13 +11,12 @@ mod settings;
 mod state;
 
 use axum::{http::Request, response::IntoResponse, Router};
-use chrono::Duration;
 use clap::Parser;
 use error::HTMLError;
-use ical::col::{CalSource, CalStore};
-use pages::{attendees, complete, delete, details, edit, list, monthly, new, togglecal, weekly};
-use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
-use tokio::sync::Mutex;
+use pages::{
+    attendees, complete, delete, details, edit, list, monthly, new, reload, togglecal, weekly,
+};
+use std::env;
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::{DefaultOnResponse, TraceLayer},
@@ -53,46 +52,8 @@ async fn main() {
 
     let args = Args::parse();
 
-    let settings = settings::Settings::load_from_file().expect("load settings");
-
-    let mut disabled_cals = Vec::new();
-    let mut store = CalStore::default();
-    for (id, cal) in &settings.calendars {
-        if cal.disabled.unwrap_or(false) {
-            disabled_cals.push(id.clone());
-        }
-
-        let mut props = HashMap::new();
-        props.insert("fgcolor".to_string(), cal.fgcolor.clone());
-        props.insert("bgcolor".to_string(), cal.bgcolor.clone());
-        if let Some(types) = &cal.types {
-            props.insert("types".to_string(), serde_json::to_string(types).unwrap());
-        }
-
-        store.add(
-            CalSource::new_from_dir(
-                Arc::from(id.clone()),
-                PathBuf::from(cal.path.clone()),
-                cal.name.clone(),
-                props,
-            )
-            .expect(&format!(
-                "Loading calendar {} from '{}' failed",
-                id, cal.path
-            )),
-        );
-    }
-
-    let state = state::State::new(
-        Arc::new(Mutex::new(store)),
-        Arc::new(Mutex::new(disabled_cals)),
-        Arc::new(Mutex::new(
-            settings
-                .last_alarm_check
-                .unwrap_or(chrono::Utc::now().naive_utc() - Duration::days(7)),
-        )),
-        Arc::new(Mutex::new(settings.last_calendar)),
-    );
+    let state = state::State::default();
+    state.reload().await.expect("loading state");
 
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
@@ -107,6 +68,7 @@ async fn main() {
         .merge(delete::router(state.clone()))
         .merge(togglecal::router(state.clone()))
         .merge(attendees::router(state.clone()))
+        .merge(reload::router(state.clone()))
         .fallback(error_handler)
         .layer(
             TraceLayer::new_for_http()

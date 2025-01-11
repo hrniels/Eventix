@@ -1,5 +1,8 @@
-function invertSelection(prefix)
-{
+function reloadPage() {
+    window.location.reload();
+}
+
+function invertSelection(prefix) {
     for(var i = 1;;i++)
     {
         var checkbox = document.getElementById(prefix + i);
@@ -48,9 +51,7 @@ function completeTodo(uid, rid) {
         type: 'GET',
         url: url,
         dataType: 'json',
-        success: function(data) {
-            document.location.reload();
-        }
+        success: reloadPage,
     });
 }
 
@@ -63,5 +64,23 @@ function deleteItem(uid, rid, onDeleted) {
         url: url,
         dataType: 'json',
         success: onDeleted,
+    });
+}
+
+function toggleCalendar(id) {
+    $.ajax({
+        type: 'GET',
+        url: '/toggle-calendar?id=' + id,
+        dataType: 'json',
+        success: reloadPage,
+    });
+}
+
+function reloadDB() {
+    $.ajax({
+        type: 'GET',
+        url: '/reload',
+        dataType: 'json',
+        success: reloadPage,
     });
 }

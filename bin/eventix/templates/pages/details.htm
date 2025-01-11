@@ -173,16 +173,12 @@
 </div>
 
 <script>
-    function onDeleted() {
-        window.location.reload();
-    }
-
     $(function() {
         confirmDialog(
             'delete-series-confirm',
             'delete-series-button',
             function() {
-                deleteItem('{{ occ.uid() }}', null, onDeleted);
+                deleteItem('{{ occ.uid() }}', null, reloadPage);
             }
         );
 
@@ -191,7 +187,7 @@
             'delete-occ-confirm',
             'delete-occ-button',
             function() {
-                deleteItem('{{ occ.uid() }}', '{{ occ.rid_html() }}', onDeleted);
+                deleteItem('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage);
             }
         );
         {% endif %}

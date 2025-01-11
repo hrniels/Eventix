@@ -145,9 +145,7 @@
                 'delete-confirm-' + i,
                 'delete-button-' + i,
                 function() {
-                    deleteItem(ids[i], null, function() {
-                        window.location.reload();
-                    });
+                    deleteItem(ids[i], null, reloadPage);
                 }
             );
         })(i);
