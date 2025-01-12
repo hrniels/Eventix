@@ -102,10 +102,13 @@ pub async fn handler(
         store
             .items()
             .flat_map(|i| {
-                i.components().into_iter().map(|c| ListComponent {
-                    source: i.source(),
-                    comp: c,
-                })
+                i.components()
+                    .into_iter()
+                    .filter(|c| c.rid().is_none())
+                    .map(|c| ListComponent {
+                        source: i.source(),
+                        comp: c,
+                    })
             })
             .filter(|l| {
                 if !filter.sources.contains(l.source) {
