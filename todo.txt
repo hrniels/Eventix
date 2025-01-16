@@ -21,3 +21,6 @@
 - submit forms with enter/ctrl+enter
 - store disabled as property in calendar
 - cancel for edit item should go back or so
+- autoreload after some time? (background task that reloads the state regularly?)
+- add a quicker way to jump to specific weeks/months/years
+- why does it show the next day as "due day" if it's an all-day due date?
