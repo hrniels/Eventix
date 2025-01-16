@@ -20,7 +20,9 @@ pub struct State {
 
 impl State {
     pub async fn reload(&self) -> anyhow::Result<()> {
-        let settings = settings::Settings::load_from_file().context("load settings")?;
+        let settings = settings::Settings::load_from_file()
+            .await
+            .context("load settings")?;
 
         let mut disabled_cals = Vec::new();
         let mut store = CalStore::default();

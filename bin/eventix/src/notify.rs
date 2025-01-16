@@ -93,7 +93,7 @@ pub async fn watch_alarms(state: State, locale: Arc<dyn Locale + Send + Sync>) {
 
         // permanently remember last time of check
         let settings = Settings::new_from_state(state.clone()).await;
-        if let Err(e) = settings.write_to_file() {
+        if let Err(e) = settings.write_to_file().await {
             warn!("Unable to save settings: {}", e);
         }
 

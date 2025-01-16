@@ -38,7 +38,7 @@ async fn handler(
 
     // permanently remember the new calendar state
     let settings = Settings::new_from_state(state.clone()).await;
-    if let Err(e) = settings.write_to_file() {
+    if let Err(e) = settings.write_to_file().await {
         warn!("Unable to save settings: {}", e);
     }
 

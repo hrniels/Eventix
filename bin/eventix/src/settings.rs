@@ -1,6 +1,8 @@
 use anyhow::Context;
 use chrono::NaiveDateTime;
 use ical::objects::CalCompType;
+use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -31,19 +33,9 @@ pub struct Calendar {
 }
 
 const FILENAME: &str = "settings.toml";
+static MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 impl Settings {
-    pub fn load_from_file() -> anyhow::Result<Self> {
-        let mut file = File::options()
-            .read(true)
-            .open(FILENAME)
-            .context(format!("open {}", FILENAME))?;
-        let mut sources = String::new();
-        file.read_to_string(&mut sources)
-            .context(format!("read {}", FILENAME))?;
-        Ok(toml::from_str(&sources).context(format!("parse {}", FILENAME))?)
-    }
-
     pub async fn new_from_state(state: State) -> Self {
         let calendars = {
             let mut calendars = BTreeMap::new();
@@ -84,10 +76,25 @@ impl Settings {
         }
     }
 
-    pub fn write_to_file(&self) -> anyhow::Result<()> {
+    pub async fn load_from_file() -> anyhow::Result<Self> {
+        // ensure that reads/writes to this file do not happen in parallel
+        let _guard = MUTEX.lock().await;
+        let mut file = File::options()
+            .read(true)
+            .open(FILENAME)
+            .context(format!("open {}", FILENAME))?;
+        let mut sources = String::new();
+        file.read_to_string(&mut sources)
+            .context(format!("read {}", FILENAME))?;
+        Ok(toml::from_str(&sources).context(format!("parse {}", FILENAME))?)
+    }
+
+    pub async fn write_to_file(&self) -> anyhow::Result<()> {
+        let _guard = MUTEX.lock().await;
         let mut file = File::options()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(FILENAME)
             .context(format!("open {}", FILENAME))?;
         file.write_all(
