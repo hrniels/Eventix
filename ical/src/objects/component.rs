@@ -12,6 +12,8 @@ use crate::objects::{
 };
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
+use super::recur::RecurIterator;
+
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
     uid: String,
@@ -319,6 +321,50 @@ impl Display for CalCompType {
     }
 }
 
+#[derive(Default)]
+pub struct CompDateIterator<'a> {
+    recur: Option<RecurIterator<'a>>,
+    exdates: Vec<DateTime<Tz>>,
+    single: Option<DateTime<Tz>>,
+}
+
+impl<'a> CompDateIterator<'a> {
+    fn new_recur(iter: RecurIterator<'a>, exdates: Vec<DateTime<Tz>>) -> Self {
+        Self {
+            recur: Some(iter),
+            exdates,
+            single: None,
+        }
+    }
+
+    fn new_single(single: DateTime<Tz>) -> Self {
+        Self {
+            recur: None,
+            exdates: vec![],
+            single: Some(single),
+        }
+    }
+}
+
+impl<'a> Iterator for CompDateIterator<'a> {
+    type Item = DateTime<Tz>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(recur) = &mut self.recur {
+            while let Some(next) = recur.next() {
+                if !self.exdates.contains(&next) {
+                    return Some(next);
+                }
+            }
+            None
+        } else if let Some(single) = self.single.take() {
+            Some(single)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum CalComponent {
     Event(CalEvent),
@@ -382,38 +428,37 @@ impl CalComponent {
             .collect::<Vec<_>>()
     }
 
-    pub fn dates_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> Vec<DateTime<Tz>> {
+    pub fn dates_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> CompDateIterator {
         if let Some(rrule) = self.rrule() {
             let Some(dtstart) = self.start() else {
-                return vec![];
+                return CompDateIterator::default();
             };
 
-            let mut dates = rrule.dates_within(
+            let dates = rrule.dates_within(
                 dtstart.as_start_with_tz(&start.timezone()),
                 self.duration(&start.timezone()),
                 start,
                 end,
             );
-            let exdates_dt = self.exdates_as_datetime(&start.timezone());
-            dates.retain(|d| !exdates_dt.contains(d));
-            return dates;
+            let exdates = self.exdates_as_datetime(&start.timezone());
+            return CompDateIterator::new_recur(dates, exdates);
         }
 
         let Some(ev_start) = self.start_or_created() else {
-            return vec![];
+            return CompDateIterator::default();
         };
         let ev_start = ev_start.as_start_with_tz(&start.timezone());
         if ev_start > end {
-            return vec![];
+            return CompDateIterator::default();
         }
         if let Some(ev_end) = self.end_or_due() {
             let tzend = ev_end.as_end_with_tz(&start.timezone());
             if tzend < start {
-                return vec![];
+                return CompDateIterator::default();
             }
         }
 
-        vec![ev_start]
+        CompDateIterator::new_single(ev_start)
     }
 }
 

@@ -9,8 +9,63 @@ use chrono_tz::Tz;
 use crate::col::{ColError, Occurrence};
 use crate::objects::{
     CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger, Calendar,
-    EventLike, UpdatableEventLike,
+    CompDateIterator, EventLike, UpdatableEventLike,
 };
+
+pub struct OccurrenceIterator<'a> {
+    item: &'a CalItem,
+    dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
+    tz: Tz,
+}
+
+impl<'a> OccurrenceIterator<'a> {
+    fn new(
+        item: &'a CalItem,
+        first: &'a CalComponent,
+        dates: CompDateIterator<'a>,
+        tz: Tz,
+    ) -> Self {
+        Self {
+            item,
+            dates: Some((first, dates)),
+            tz,
+        }
+    }
+
+    fn new_empty(item: &'a CalItem, tz: Tz) -> Self {
+        Self {
+            item,
+            dates: None,
+            tz,
+        }
+    }
+}
+
+impl<'a> Iterator for OccurrenceIterator<'a> {
+    type Item = Occurrence<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((first, dates)) = &mut self.dates {
+            dates.next().map(|d| {
+                let mut occ = Occurrence::new(self.item.source.clone(), first, d);
+                // was this specific occurrence overwritten?
+                if let Some(overwritten) =
+                    self.item.cal.components().iter().find(|c| match c.rid() {
+                        Some(rid) if occ.occurrence_start() == rid.as_start_with_tz(&self.tz) => {
+                            true
+                        }
+                        _ => false,
+                    })
+                {
+                    occ.set_occurrence(overwritten);
+                }
+                occ
+            })
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct CalItem {
@@ -74,8 +129,7 @@ impl CalItem {
                     alarms.extend(
                         first
                             .dates_within(start - *duration, end - *duration)
-                            .iter()
-                            .map(|d| Occurrence::new(self.source.clone(), first, *d))
+                            .map(|d| Occurrence::new(self.source.clone(), first, d))
                             .filter(|o| {
                                 let alarm = o.alarm_date().unwrap();
                                 alarm >= start && alarm < end
@@ -154,7 +208,7 @@ impl CalItem {
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> Vec<Occurrence<'_>> {
+    ) -> OccurrenceIterator<'_> {
         self.filtered_occurrences_within(start, end, |_| true)
     }
 
@@ -163,7 +217,7 @@ impl CalItem {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
         filter: F,
-    ) -> Vec<Occurrence<'_>>
+    ) -> OccurrenceIterator<'_>
     where
         F: Fn(&CalComponent) -> bool,
     {
@@ -171,33 +225,15 @@ impl CalItem {
         // are multiple events, they all have the same uid and one is the base event with rid =
         // None and the others overwrite specific occurrences of that base event.
         let Some(first) = self.component_with(|c| c.rid().is_none() && filter(c)) else {
-            return vec![];
+            return OccurrenceIterator::new_empty(self, start.timezone());
         };
 
-        let mut occs = first
-            .dates_within(start, end)
-            .iter()
-            .map(|d| Occurrence::new(self.source.clone(), first, *d))
-            .collect::<Vec<_>>();
-
-        // update occurrences from components that references specific occurrences
-        if !occs.is_empty() {
-            for c in self.cal.components() {
-                if let Some(rid) = c.rid() {
-                    let rid_tz = rid.as_start_with_tz(&start.timezone());
-                    if let Some(occ) = occs.iter_mut().find(|o| o.occurrence_start() == rid_tz) {
-                        occ.set_occurrence(c);
-                    } else {
-                        // otherwise this recurrence should be outside of the range
-                        assert!(
-                            !(rid.as_start_with_tz(&start.timezone()) >= start
-                                && rid.as_end_with_tz(&start.timezone()) <= end)
-                        );
-                    }
-                }
-            }
-        }
-        occs
+        OccurrenceIterator::new(
+            self,
+            first,
+            first.dates_within(start, end),
+            start.timezone(),
+        )
     }
 
     pub fn component_with<F>(&self, filter: F) -> Option<&CalComponent>
