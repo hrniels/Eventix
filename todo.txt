@@ -24,3 +24,4 @@
 - autoreload after some time? (background task that reloads the state regularly?)
 - add a quicker way to jump to specific weeks/months/years
 - why does it show the next day as "due day" if it's an all-day due date?
+- highlight if events are right now
