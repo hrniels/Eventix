@@ -57,6 +57,7 @@ impl DateLike for &NaiveDate {
 }
 
 bitflags! {
+    #[derive(Copy, Clone)]
     pub struct TimeFlags : u32{
         const None = 0;
         const Short = 1;
@@ -64,10 +65,21 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Copy, Clone)]
     pub struct DateFlags: u32 {
         const None = 0;
         const Short = 1;
         const NoToday = 2;
+    }
+}
+
+impl From<DateFlags> for TimeFlags {
+    fn from(flags: DateFlags) -> Self {
+        if flags.contains(DateFlags::Short) {
+            TimeFlags::Short
+        } else {
+            TimeFlags::empty()
+        }
     }
 }
 
@@ -76,13 +88,13 @@ pub trait Locale {
         &chrono_tz::Europe::Berlin
     }
 
-    fn fmt_time(&self, date: &DateTime<Tz>, flags: TimeFlags) -> String {
+    fn fmt_time(&self, date: &dyn DateLike, flags: TimeFlags) -> String {
         let fmt = if flags.contains(TimeFlags::Short) {
             "%H:%M"
         } else {
             "%H:%M:%S"
         };
-        date.format(fmt).to_string()
+        date.fmt(fmt)
     }
 
     fn fmt_weekdate(&self, date: &dyn DateLike, flags: DateFlags) -> String {
@@ -105,7 +117,7 @@ pub trait Locale {
             "%A, %B %d, %Y"
         };
         let prefix = self.fmt_date_with(date, fmt, flags);
-        format!("{}, {}", prefix, date.fmt("%H:%M:%S"))
+        format!("{}, {}", prefix, self.fmt_time(date, flags.into()))
     }
 
     fn fmt_date_with(&self, date: &dyn DateLike, f: &str, flags: DateFlags) -> String {

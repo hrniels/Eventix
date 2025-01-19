@@ -94,15 +94,7 @@
             </div>
         </td>
         <td width="27%" align="center">
-            {% if let Some(start) = c.comp.start() %}
-            {{ start|caldate(locale, DateFlags::Short, false) }}
-            {% if let Some(end) = c.comp.end_or_due() %}
-            -
-            {% endif %}
-            {% endif %}
-            {% if let Some(end) = c.comp.end_or_due() %}
-            {{ end|caldate(locale, DateFlags::Short, true) }}
-            {% endif %}
+            {{ Self::date_range(locale, c.comp.start(), c.comp.end_or_due())|safe }}
         </td>
         <td width="30%" align="right">
             {% if let Some(td) = c.comp.as_todo() %}

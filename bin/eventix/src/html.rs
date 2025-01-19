@@ -60,22 +60,21 @@ pub mod filters {
         Ok(locale.fmt_weekdate(date, flags))
     }
 
+    #[allow(dead_code)]
     pub fn caldate(
         date: &CalDate,
         locale: &Arc<dyn Locale + Send + Sync>,
         flags: DateFlags,
         end: bool,
     ) -> ::askama::Result<String> {
+        let datetime = if end {
+            date.as_end_with_tz(locale.timezone())
+        } else {
+            date.as_start_with_tz(locale.timezone())
+        };
         match date {
-            CalDate::Date(d) => Ok(locale.fmt_date(&d, flags)),
-            CalDate::DateTime(_) => {
-                let datetime = if end {
-                    date.as_end_with_tz(locale.timezone())
-                } else {
-                    date.as_start_with_tz(locale.timezone())
-                };
-                Ok(locale.fmt_datetime(&datetime, flags))
-            }
+            CalDate::Date(_) => Ok(locale.fmt_date(&datetime, flags)),
+            CalDate::DateTime(_) => Ok(locale.fmt_datetime(&datetime, flags)),
         }
     }
 
