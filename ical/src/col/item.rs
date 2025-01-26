@@ -189,11 +189,13 @@ impl CalItem {
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let first = self.component_with(|c| c.rid().is_none() && c.uid() == uid.as_ref())?;
-        let fstart = match rid {
-            Some(rid) => Some(rid.as_start_with_tz(tz)),
-            None => first.start().map(|d| d.as_start_with_tz(tz)),
+        let (fstart, fend) = match rid {
+            Some(rid) => (Some(rid.as_start_with_tz(tz)), None),
+            None => (
+                first.start().map(|d| d.as_start_with_tz(tz)),
+                first.end_or_due().map(|d| d.as_end_with_tz(tz)),
+            ),
         };
-        let fend = first.end_or_due().map(|d| d.as_end_with_tz(tz));
         let mut res = Occurrence::new(self.source.clone(), first, fstart, fend);
 
         if let Some(rid) = rid {
