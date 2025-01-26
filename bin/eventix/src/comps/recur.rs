@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use askama::Template;
 use chrono::Weekday;
-use ical::objects::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
+use ical::objects::{CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
 use std::sync::Arc;
@@ -310,7 +310,7 @@ impl RecurRequest {
                     if let Some(ref until) = self.until {
                         rrule.set_until(
                             until
-                                .to_caldate(false)
+                                .to_caldate(CalDateType::Inclusive, false)
                                 .ok_or_else(|| anyhow!("Please specify a valid end date"))?,
                         );
                     } else {

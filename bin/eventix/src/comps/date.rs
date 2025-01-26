@@ -1,6 +1,6 @@
 use askama::Template;
 use chrono::NaiveDate;
-use ical::objects::CalDate;
+use ical::objects::{CalDate, CalDateType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::html::filters;
@@ -48,13 +48,13 @@ impl Date {
         self.date
     }
 
-    pub fn to_caldate(&self, end: bool) -> Option<CalDate> {
-        let date = if end {
+    pub fn to_caldate(&self, ty: CalDateType, end: bool) -> Option<CalDate> {
+        let date = if ty == CalDateType::Exclusive && end {
             self.date.and_then(|d| d.succ_opt())
         } else {
             self.date
         };
-        date.map(CalDate::Date)
+        date.map(|d| CalDate::Date(d, ty))
     }
 }
 

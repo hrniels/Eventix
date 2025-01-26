@@ -33,7 +33,7 @@ pub trait CompAction {
             return false;
         }
 
-        let (start, end) = self.start_end().as_caldates(locale);
+        let (start, end) = self.start_end().as_caldates(locale, ctype.into());
 
         if ctype == CalCompType::Event {
             if start.is_none() {
@@ -48,8 +48,8 @@ pub trait CompAction {
 
         if start.is_some()
             && end.is_some()
-            && matches!(start.as_ref().unwrap(), CalDate::Date(_))
-                != matches!(end.as_ref().unwrap(), CalDate::Date(_))
+            && matches!(start.as_ref().unwrap(), CalDate::Date(..))
+                != matches!(end.as_ref().unwrap(), CalDate::Date(..))
         {
             page.add_error(
                 locale.translate("Please specify the time for both start and end or for none."),
@@ -90,7 +90,8 @@ pub trait CompAction {
     }
 
     fn update(&self, comp: &mut CalComponent, locale: &Arc<dyn Locale + Send + Sync>) {
-        let (start, end) = self.start_end().as_caldates(locale);
+        let dtype = comp.ctype().into();
+        let (start, end) = self.start_end().as_caldates(locale, dtype);
 
         comp.set_summary(Self::nonempty_or_none(self.summary().clone()));
         comp.set_location(Self::nonempty_or_none(self.location().clone()));
@@ -117,7 +118,7 @@ pub trait CompAction {
                 td.set_status(Some(st.status()));
                 if st.status() == CalTodoStatus::Completed {
                     td.set_percent(Some(100));
-                    td.set_completed(st.completed().and_then(|d| d.to_caldate(false)));
+                    td.set_completed(st.completed().and_then(|d| d.to_caldate(dtype, false)));
                 } else if st.status() == CalTodoStatus::InProcess {
                     td.set_percent(st.percent());
                 } else {

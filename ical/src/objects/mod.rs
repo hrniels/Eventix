@@ -16,7 +16,7 @@ pub use calendar::{Calendar, Other};
 pub use component::{
     CalCompType, CalComponent, CompDateIterator, CompDateType, EventLikeComponent,
 };
-pub use date::{CalDate, CalDateTime};
+pub use date::{CalDate, CalDateTime, CalDateType};
 pub use event::CalEvent;
 pub use evlike::{EventLike, UpdatableEventLike};
 pub use organizer::CalOrganizer;

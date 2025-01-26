@@ -18,8 +18,8 @@ pub trait EventLike: PropertyProducer {
     }
     fn end_or_due(&self) -> Option<&CalDate>;
     fn is_all_day(&self) -> bool {
-        matches!(self.start(), Some(CalDate::Date(_)))
-            || matches!(self.end_or_due(), Some(CalDate::Date(_)))
+        matches!(self.start(), Some(CalDate::Date(..)))
+            || matches!(self.end_or_due(), Some(CalDate::Date(..)))
     }
 
     fn summary(&self) -> Option<&String>;

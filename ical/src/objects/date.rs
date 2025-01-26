@@ -6,21 +6,38 @@ use serde::{Deserialize, Serialize};
 
 use crate::parser::{Parameter, ParseError, Property};
 
+use super::CalCompType;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum CalDateType {
+    Inclusive,
+    Exclusive,
+}
+
+impl From<CalCompType> for CalDateType {
+    fn from(value: CalCompType) -> Self {
+        match value {
+            CalCompType::Event => Self::Exclusive,
+            CalCompType::Todo => Self::Inclusive,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDate {
-    Date(NaiveDate),
+    Date(NaiveDate, CalDateType),
     DateTime(CalDateTime),
 }
 
 impl Default for CalDate {
     fn default() -> Self {
-        Self::Date(NaiveDate::default())
+        Self::Date(NaiveDate::default(), CalDateType::Inclusive)
     }
 }
 
 impl CalDate {
     pub fn today() -> Self {
-        CalDate::Date(Utc::now().date_naive())
+        CalDate::Date(Utc::now().date_naive(), CalDateType::Inclusive)
     }
 
     pub fn now() -> Self {
@@ -37,28 +54,28 @@ impl CalDate {
 
     fn fmt_date(&self, dt: DateTime<Tz>) -> String {
         match self {
-            Self::Date(_) => dt.format("%B %d, %Y").to_string(),
+            Self::Date(..) => dt.format("%B %d, %Y").to_string(),
             Self::DateTime(_) => dt.format("%A, %B %d, %Y %H:%M").to_string(),
         }
     }
 
     pub fn as_naive_date(&self) -> NaiveDate {
         match self {
-            Self::Date(date) => *date,
+            Self::Date(date, _) => *date,
             Self::DateTime(datetime) => datetime.as_naive_date(),
         }
     }
 
     pub fn to_utc(self) -> CalDate {
         match self {
-            Self::Date(date) => Self::Date(date),
+            Self::Date(date, ty) => Self::Date(date, ty),
             Self::DateTime(datetime) => Self::DateTime(datetime.to_utc()),
         }
     }
 
     pub fn as_start_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
-            Self::Date(date) => tz
+            Self::Date(date, _) => tz
                 .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
                 .unwrap(),
             Self::DateTime(datetime) => datetime.with_tz(tz),
@@ -67,19 +84,22 @@ impl CalDate {
 
     pub fn as_end_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
-            Self::Date(date) => {
+            Self::Date(date, CalDateType::Exclusive) => {
                 let next_day = tz
                     .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
                     .unwrap();
                 next_day - Duration::seconds(1)
             }
+            Self::Date(date, CalDateType::Inclusive) => tz
+                .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+                .unwrap(),
             Self::DateTime(datetime) => datetime.with_tz(tz),
         }
     }
 
     pub fn to_prop<N: ToString>(&self, name: N) -> Property {
         match self {
-            Self::Date(date) => Property::new(
+            Self::Date(date, _) => Property::new(
                 name,
                 vec![Parameter::new("VALUE", "DATE")],
                 date.format("%Y%m%d").to_string(),
@@ -221,7 +241,12 @@ impl TryFrom<Property> for CalDate {
         if datetime.len() == 8 || prop.has_param_value("VALUE", "DATE") {
             let date = NaiveDate::from_ymd_opt(year, month, day)
                 .ok_or_else(|| ParseError::InvalidDate(datetime.to_string()))?;
-            return Ok(CalDate::Date(date));
+            let ty = if prop.name() == "DUE" {
+                CalDateType::Inclusive
+            } else {
+                CalDateType::Exclusive
+            };
+            return Ok(CalDate::Date(date, ty));
         }
 
         if datetime.len() < 15 || &datetime[8..9] != "T" {
@@ -257,7 +282,10 @@ mod tests {
         let date: CalDate = prop.try_into().unwrap();
         assert_eq!(
             date,
-            CalDate::Date(NaiveDate::from_ymd_opt(1999, 5, 6).unwrap())
+            CalDate::Date(
+                NaiveDate::from_ymd_opt(1999, 5, 6).unwrap(),
+                CalDateType::Inclusive
+            )
         );
     }
 
@@ -267,7 +295,10 @@ mod tests {
         let date: CalDate = prop.try_into().unwrap();
         assert_eq!(
             date,
-            CalDate::Date(NaiveDate::from_ymd_opt(2004, 10, 30).unwrap())
+            CalDate::Date(
+                NaiveDate::from_ymd_opt(2004, 10, 30).unwrap(),
+                CalDateType::Inclusive
+            )
         );
     }
 

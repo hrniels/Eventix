@@ -136,7 +136,7 @@ impl PropertyConsumer for CalTodo {
 mod tests {
     use chrono::{NaiveDate, TimeZone, Utc};
 
-    use crate::objects::{CalDate, CalDateTime, CalTodoStatus, Calendar, EventLike};
+    use crate::objects::{CalDate, CalDateTime, CalDateType, CalTodoStatus, Calendar, EventLike};
 
     #[test]
     fn basics() {
@@ -169,7 +169,10 @@ END:VCALENDAR";
 
         assert_eq!(
             todo.due,
-            Some(CalDate::Date(NaiveDate::from_ymd_opt(2007, 5, 1).unwrap()))
+            Some(CalDate::Date(
+                NaiveDate::from_ymd_opt(2007, 5, 1).unwrap(),
+                CalDateType::Inclusive
+            ))
         );
 
         assert_eq!(todo.status, Some(CalTodoStatus::NeedsAction));

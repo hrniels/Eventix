@@ -117,7 +117,7 @@ impl<'c> Occurrence<'c> {
     pub fn occurrence_startdate(&self) -> Option<CalDate> {
         self.start.map(|start| {
             if self.is_all_day() {
-                CalDate::Date(start.date_naive())
+                CalDate::Date(start.date_naive(), self.ctype().into())
             } else {
                 start.into()
             }
@@ -134,7 +134,10 @@ impl<'c> Occurrence<'c> {
     pub fn occurrence_enddate(&self) -> Option<CalDate> {
         self.occurrence_end().and_then(|e| {
             if self.is_all_day() {
-                Some(CalDate::Date(e.date_naive().succ_opt()?))
+                Some(CalDate::Date(
+                    e.date_naive().succ_opt()?,
+                    self.ctype().into(),
+                ))
             } else {
                 Some(e.into())
             }

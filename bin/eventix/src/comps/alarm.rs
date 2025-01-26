@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use askama::Template;
 use chrono::Duration;
 use chrono_tz::Tz;
-use ical::objects::{CalAction, CalAlarm, CalRelated, CalTrigger};
+use ical::objects::{CalAction, CalAlarm, CalDateType, CalRelated, CalTrigger};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
 use std::sync::Arc;
@@ -188,7 +188,7 @@ impl AlarmRequest {
             if self
                 .datetime
                 .as_ref()
-                .and_then(|dt| dt.to_caldate(locale, false))
+                .and_then(|dt| dt.to_caldate(locale, CalDateType::Inclusive, false))
                 .is_none()
             {
                 page.add_error(locale.translate("Please specify a valid date and time"));
@@ -221,7 +221,7 @@ impl AlarmRequest {
                 },
                 Trigger::Absolute => CalTrigger::Absolute(
                     match self.datetime {
-                        Some(ref dt) => dt.to_caldate(locale, false),
+                        Some(ref dt) => dt.to_caldate(locale, CalDateType::Inclusive, false),
                         None => None,
                     }
                     .ok_or_else(|| anyhow!("Invalid datetime"))?

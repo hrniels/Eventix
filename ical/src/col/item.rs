@@ -428,8 +428,11 @@ mod tests {
     fn new_allday_event(date: NaiveDate, uid: &str) -> EventBuilder {
         EventBuilder::default()
             .uid(uid)
-            .start(CalDate::Date(date))
-            .end(CalDate::Date(date.succ_opt().unwrap()))
+            .start(CalDate::Date(date, CalCompType::Event.into()))
+            .end(CalDate::Date(
+                date.succ_opt().unwrap(),
+                CalCompType::Event.into(),
+            ))
     }
 
     fn new_item(event: CalEvent) -> CalItem {
@@ -491,13 +494,19 @@ mod tests {
         source.add(new_item(
             EventBuilder::default()
                 .uid("yes1")
-                .end(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 6).unwrap()))
+                .end(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .done(),
         ));
         source.add(new_item(
             EventBuilder::default()
                 .uid("yes2")
-                .end(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 7).unwrap()))
+                .end(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .done(),
         ));
 
@@ -510,12 +519,24 @@ mod tests {
         assert_eq!(all[0].occurrence_start(), None);
         assert_eq!(
             all[0].occurrence_end(),
-            Some(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 6).unwrap()).as_end_with_tz(tz))
+            Some(
+                CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
+                    CalCompType::Event.into()
+                )
+                .as_end_with_tz(tz)
+            )
         );
         assert_eq!(all[1].occurrence_start(), None);
         assert_eq!(
             all[1].occurrence_end(),
-            Some(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 7).unwrap()).as_end_with_tz(tz))
+            Some(
+                CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
+                    CalCompType::Event.into()
+                )
+                .as_end_with_tz(tz)
+            )
         );
         assert_eq!(
             source.occurrence_by_id("yes1", None, tz).unwrap().uid(),
@@ -533,21 +554,31 @@ mod tests {
         ));
         source.add(new_item(
             EventBuilder::default()
-                .start(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 5).unwrap()))
+                .start(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .uid("yes2")
                 .done(),
         ));
         source.add(new_item(
             EventBuilder::default()
-                .start(CalDate::Date(NaiveDate::from_ymd_opt(2000, 2, 1).unwrap()))
+                .start(CalDate::Date(
+                    NaiveDate::from_ymd_opt(2000, 2, 1).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .uid("no1")
                 .done(),
         ));
         source.add(new_item(
             EventBuilder::default()
-                .start(CalDate::Date(NaiveDate::from_ymd_opt(1988, 2, 1).unwrap()))
+                .start(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1988, 2, 1).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1989, 12, 31).unwrap(),
+                    CalCompType::Event.into(),
                 ))
                 .uid("no2")
                 .done(),
@@ -577,10 +608,19 @@ mod tests {
 
         source.add(new_item(
             EventBuilder::default()
-                .start(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 5).unwrap()))
+                .start(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .rrule(rrule)
-                .exdate(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 7).unwrap()))
-                .exdate(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 9).unwrap()))
+                .exdate(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
+                    CalCompType::Event.into(),
+                ))
+                .exdate(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 9).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .uid("yes")
                 .done(),
         ));
@@ -616,6 +656,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Absolute(CalDate::Date(
                         NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
+                        CalCompType::Event.into(),
                     )),
                 ))
                 .done(),
@@ -747,7 +788,10 @@ mod tests {
         ));
         cal.add(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(), "id1")
-                .rid(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 6).unwrap()))
+                .rid(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .alarm(CalAlarm::new(
                     CalAction::Display,
                     CalTrigger::Relative {
@@ -759,7 +803,10 @@ mod tests {
         ));
         cal.add(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 10).unwrap(), "id1")
-                .rid(CalDate::Date(NaiveDate::from_ymd_opt(1990, 1, 10).unwrap()))
+                .rid(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 10).unwrap(),
+                    CalCompType::Event.into(),
+                ))
                 .alarm(CalAlarm::new(
                     CalAction::Display,
                     CalTrigger::Relative {

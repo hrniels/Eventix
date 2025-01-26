@@ -1,7 +1,7 @@
 use askama::Template;
 use chrono::{NaiveDate, NaiveTime};
 use chrono_tz::Tz;
-use ical::objects::{CalCompType, CalDate};
+use ical::objects::{CalCompType, CalDate, CalDateType};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -35,14 +35,14 @@ impl DateTimeRange {
                 Date::new(from.as_ref().map(|f| f.as_start_with_tz(tz).date_naive())),
                 from.as_ref().and_then(|f| match f {
                     CalDate::DateTime(dt) => Some(dt.with_tz(tz).time()),
-                    CalDate::Date(_) => None,
+                    CalDate::Date(..) => None,
                 }),
             ),
             to: DateTime::new(
                 Date::new(to.as_ref().map(|t| t.as_end_with_tz(tz).date_naive())),
                 to.as_ref().and_then(|t| match t {
                     CalDate::DateTime(dt) => Some(dt.with_tz(tz).time()),
-                    CalDate::Date(_) => None,
+                    CalDate::Date(..) => None,
                 }),
             ),
             from_enabled: from.map(|_| true),
@@ -57,17 +57,18 @@ impl DateTimeRange {
     pub fn as_caldates(
         &self,
         locale: &Arc<dyn Locale + Send + Sync>,
+        ty: CalDateType,
     ) -> (Option<CalDate>, Option<CalDate>) {
         (
             if self.from_enabled.is_none() {
                 None
             } else {
-                self.from.to_caldate(locale, false)
+                self.from.to_caldate(locale, ty, false)
             },
             if self.to_enabled.is_none() {
                 None
             } else {
-                self.to.to_caldate(locale, true)
+                self.to.to_caldate(locale, ty, true)
             },
         )
     }

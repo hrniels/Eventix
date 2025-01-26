@@ -1,7 +1,7 @@
 use askama::Template;
 use chrono::{NaiveDate, NaiveTime};
 use chrono_tz::Tz;
-use ical::objects::{CalDate, CalDateTime};
+use ical::objects::{CalDate, CalDateTime, CalDateType};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -34,13 +34,18 @@ impl DateTime {
         self.time
     }
 
-    pub fn to_caldate(&self, locale: &Arc<dyn Locale + Send + Sync>, end: bool) -> Option<CalDate> {
+    pub fn to_caldate(
+        &self,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        ty: CalDateType,
+        end: bool,
+    ) -> Option<CalDate> {
         match self.time {
             Some(time) => Some(CalDate::DateTime(CalDateTime::Timezone(
                 self.date.date()?.and_time(time),
                 locale.timezone().name().to_string(),
             ))),
-            None => Some(self.date.to_caldate(end)?),
+            None => Some(self.date.to_caldate(ty, end)?),
         }
     }
 }

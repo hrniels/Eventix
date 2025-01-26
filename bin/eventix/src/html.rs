@@ -73,7 +73,7 @@ pub mod filters {
             date.as_start_with_tz(locale.timezone())
         };
         match date {
-            CalDate::Date(_) => Ok(locale.fmt_date(&datetime, flags)),
+            CalDate::Date(..) => Ok(locale.fmt_date(&datetime, flags)),
             CalDate::DateTime(_) => Ok(locale.fmt_datetime(&datetime, flags)),
         }
     }

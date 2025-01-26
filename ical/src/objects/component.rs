@@ -417,8 +417,8 @@ impl CalComponent {
         let start = self.start()?;
 
         // ensure that we start day-aligned if either start or end is all-day
-        let start = if self.is_all_day() && !matches!(start, CalDate::Date(_)) {
-            CalDate::Date(start.as_naive_date())
+        let start = if self.is_all_day() && !matches!(start, CalDate::Date(..)) {
+            CalDate::Date(start.as_naive_date(), self.ctype().into())
         } else {
             start.clone()
         };
