@@ -59,7 +59,7 @@ impl CompEdit {
             },
             start_end: DateTimeRange::new_from_caldate(
                 if occ.is_recurrent() {
-                    Some(occ.occurrence_startdate())
+                    occ.occurrence_startdate()
                 } else {
                     occ.start().cloned()
                 },

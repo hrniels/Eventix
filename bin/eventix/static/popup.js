@@ -90,7 +90,7 @@ function inBoundingBox(e, id) {
 function loadOccurrence(id, uid, rid) {
     $.ajax({
         type: 'GET',
-        url: '/details?uid=' + uid + (rid != null ? '&rid=' + rid : ''),
+        url: '/details?uid=' + uid + (rid ? '&rid=' + rid : ''),
         dataType: 'json',
         success: function(data) {
             $('#popup').html(data.html);

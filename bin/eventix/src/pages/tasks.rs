@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
-use ical::col::CalStore;
-use ical::objects::{CalCompType, CalTodoStatus};
+use ical::col::{CalStore, Occurrence};
+use ical::objects::{CalCompType, CalTodoStatus, EventLike};
 use tokio::sync::MutexGuard;
 
 use crate::locale::Locale;
@@ -87,7 +87,35 @@ impl<'a> Tasks<'a> {
             cur_date += Duration::days(1);
         }
 
-        let unplanned_occs = DayOccurrence::unplanned_occurrences(&next_td_occs);
+        let unplanned_occs = store
+            .items()
+            .filter(|s| !disabled.contains(s.source()))
+            .flat_map(|i| i.components().iter().map(|c| (i.source(), c)))
+            .filter(|(_source, c)| {
+                c.ctype() == CalCompType::Todo
+                    && !c.is_recurrent()
+                    && c.end_or_due().is_none()
+                    && c.as_todo()
+                        .unwrap()
+                        .status()
+                        .unwrap_or(CalTodoStatus::NeedsAction)
+                        != CalTodoStatus::Completed
+            })
+            .map(|(source, c)| {
+                Occurrence::new(
+                    source.clone(),
+                    c,
+                    c.start().map(|d| d.as_start_with_tz(timezone)),
+                    None,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let mut unplanned_occs = unplanned_occs
+            .iter()
+            .map(DayOccurrence::new)
+            .collect::<Vec<_>>();
+        unplanned_occs.sort_by_key(|i| i.created().cloned());
         if !unplanned_occs.is_empty() {
             days.push(Day {
                 date: None,

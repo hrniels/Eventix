@@ -11,16 +11,18 @@
                 </span>
             </th>
         </tr>
+        {% if let Some(start) = occ.occurrence_start() %}
         <tr>
             <td width="30%">{{ "Start date"|t(locale) }}:</td>
             <td width="70%">
                 {% if occ.is_all_day() %}
-                {{ occ.occurrence_start()|as_ref|date(locale, DateFlags::None) }}
+                {{ start|date(locale, DateFlags::None) }}
                 {% else %}
-                {{ occ.occurrence_start()|as_ref|datetime(locale, DateFlags::None) }}
+                {{ start|datetime(locale, DateFlags::None) }}
                 {% endif %}
             </td>
         </tr>
+        {% endif %}
         {% if let Some(end) = occ.occurrence_end() %}
         <tr>
             <td width="30%">

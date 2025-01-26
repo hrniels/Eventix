@@ -20,7 +20,7 @@ use crate::objects::DayOccurrence;
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: String,
+    rid: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,18 +128,22 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
-    let rid = req
-        .rid
-        .parse::<CalDate>()
-        .context(format!("Invalid rid date: {}", req.rid))?;
+    let rid = if let Some(rid) = req.rid {
+        Some(
+            rid.parse::<CalDate>()
+                .context(format!("Invalid rid date: {}", rid))?,
+        )
+    } else {
+        None
+    };
 
     let store = state.store().lock().await;
 
     let occ = store
-        .occurrence_by_id(&req.uid, Some(&rid), locale.timezone())
+        .occurrence_by_id(&req.uid, rid.as_ref(), locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
-            &req.uid, req.rid
+            &req.uid, rid
         ))?;
     let occ = DayOccurrence::new(&occ);
     let source = store.source(occ.source()).unwrap();

@@ -138,13 +138,13 @@
                         {% if occ.occurrence_starts_on(day.date.clone()) &&
                               !occ.occurrence_ends_on(day.date.clone()) %}
                         <i class="bi bi-arrow-bar-right"></i>
-                        {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
                         {% else if !occ.occurrence_starts_on(day.date.clone()) &&
                                    occ.occurrence_ends_on(day.date.clone()) %}
                         <i class="bi bi-arrow-bar-left"></i>
                         {{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
                         {% else %}
-                        {{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
                         {% endif %}
                         {{ occ.summary().unwrap() }}
                     </div>

@@ -3,7 +3,7 @@ use std::{ops::Deref, sync::Mutex};
 use chrono::{NaiveDate, TimeZone, Timelike};
 use chrono_tz::Tz;
 use ical::col::Occurrence;
-use ical::objects::{CalTodoStatus, EventLike};
+use ical::objects::EventLike;
 use once_cell::sync::Lazy;
 
 pub struct DayOccurrence<'a> {
@@ -76,22 +76,6 @@ impl<'a> DayOccurrence<'a> {
         day_occs
     }
 
-    pub fn unplanned_occurrences<'occ: 'a>(
-        occs: &'a [Occurrence<'occ>],
-    ) -> Vec<DayOccurrence<'occ>> {
-        let mut unplanned_occs = occs
-            .iter()
-            .filter(|o| {
-                o.end_or_due().is_none()
-                    && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction)
-                        != CalTodoStatus::Completed
-            })
-            .map(DayOccurrence::new)
-            .collect::<Vec<_>>();
-        unplanned_occs.sort_by_key(|i| i.created().cloned());
-        unplanned_occs
-    }
-
     pub fn id(&self) -> u64 {
         self.id
     }
@@ -119,12 +103,13 @@ impl<'a> DayOccurrence<'a> {
     pub fn rid_html(&self) -> String {
         match self.inner.rid() {
             Some(rid) => rid.to_string(),
-            None => self
-                .inner
-                .occurrence_start()
-                .to_utc()
-                .format("%Y%m%dT%H%M%SZ")
-                .to_string(),
+            None => {
+                if let Some(start) = self.inner.occurrence_start() {
+                    start.to_utc().format("%Y%m%dT%H%M%SZ").to_string()
+                } else {
+                    String::new()
+                }
+            }
         }
     }
 
@@ -133,12 +118,12 @@ impl<'a> DayOccurrence<'a> {
     }
 
     pub fn minute_off(&self, date: NaiveDate) -> u64 {
-        if self.inner.occurrence_starts_on(date) {
-            self.inner.occurrence_start().hour() as u64 * 60
-                + self.inner.occurrence_start().minute() as u64
-        } else {
-            0
+        if let Some(start) = self.inner.occurrence_start() {
+            if self.inner.occurrence_starts_on(date) {
+                return start.hour() as u64 * 60 + start.minute() as u64;
+            }
         }
+        0
     }
 
     pub fn minute_duration(&self, date: NaiveDate) -> u64 {

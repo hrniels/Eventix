@@ -321,11 +321,17 @@ impl Display for CalCompType {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum CompDateType {
+    Start,
+    EndOrDue,
+}
+
 #[derive(Default)]
 pub struct CompDateIterator<'a> {
     recur: Option<RecurIterator<'a>>,
     exdates: Vec<DateTime<Tz>>,
-    single: Option<DateTime<Tz>>,
+    single: Option<(CompDateType, DateTime<Tz>)>,
 }
 
 impl<'a> CompDateIterator<'a> {
@@ -337,23 +343,23 @@ impl<'a> CompDateIterator<'a> {
         }
     }
 
-    fn new_single(single: DateTime<Tz>) -> Self {
+    fn new_single(ty: CompDateType, single: DateTime<Tz>) -> Self {
         Self {
             recur: None,
             exdates: vec![],
-            single: Some(single),
+            single: Some((ty, single)),
         }
     }
 }
 
 impl<'a> Iterator for CompDateIterator<'a> {
-    type Item = DateTime<Tz>;
+    type Item = (CompDateType, DateTime<Tz>);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(recur) = &mut self.recur {
             while let Some(next) = recur.next() {
                 if !self.exdates.contains(&next) {
-                    return Some(next);
+                    return Some((CompDateType::Start, next));
                 }
             }
             None
@@ -408,7 +414,7 @@ impl CalComponent {
     }
 
     pub fn duration(&self, tz: &Tz) -> Option<Duration> {
-        let start = self.start_or_created()?;
+        let start = self.start()?;
 
         // ensure that we start day-aligned if either start or end is all-day
         let start = if self.is_all_day() && !matches!(start, CalDate::Date(_)) {
@@ -444,13 +450,13 @@ impl CalComponent {
             return CompDateIterator::new_recur(dates, exdates);
         }
 
-        let Some(ev_start) = self.start_or_created() else {
-            return CompDateIterator::default();
-        };
-        let ev_start = ev_start.as_start_with_tz(&start.timezone());
-        if ev_start > end {
-            return CompDateIterator::default();
+        if let Some(ev_start) = self.start() {
+            let ev_start = ev_start.as_start_with_tz(&start.timezone());
+            if ev_start > end {
+                return CompDateIterator::default();
+            }
         }
+
         if let Some(ev_end) = self.end_or_due() {
             let tzend = ev_end.as_end_with_tz(&start.timezone());
             if tzend < start {
@@ -458,7 +464,17 @@ impl CalComponent {
             }
         }
 
-        CompDateIterator::new_single(ev_start)
+        match (self.start(), self.end_or_due()) {
+            (Some(ev_start), _) => CompDateIterator::new_single(
+                CompDateType::Start,
+                ev_start.as_start_with_tz(&start.timezone()),
+            ),
+            (None, Some(ev_end)) => CompDateIterator::new_single(
+                CompDateType::EndOrDue,
+                ev_end.as_end_with_tz(&start.timezone()),
+            ),
+            (None, None) => CompDateIterator::default(),
+        }
     }
 }
 

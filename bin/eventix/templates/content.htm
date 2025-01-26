@@ -80,13 +80,13 @@
                     {% if occ.occurrence_starts_on(day.date.unwrap()) &&
                           !occ.occurrence_ends_on(day.date.unwrap()) %}
                     <i class="bi bi-arrow-bar-right"></i>
-                    <span><b>{{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
+                    <span><b>{{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
                     {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
                                occ.occurrence_ends_on(day.date.unwrap()) %}
                     <i class="bi bi-arrow-bar-left"></i>
                     <span><b>{{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
                     {% else if occ.occurrence_starts_on(day.date.unwrap()) %}
-                    <span><b>{{ occ.occurrence_start()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
+                    <span><b>{{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
                     {% endif %}
                     <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                 </div>

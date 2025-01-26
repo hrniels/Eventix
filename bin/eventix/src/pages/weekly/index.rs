@@ -62,8 +62,10 @@ fn overlaps_of(day_occs: &[&DayOccurrence], occ: &DayOccurrence) -> usize {
             continue;
         }
         if let Some(dend) = day.occurrence_end() {
-            if occ.overlaps(day.occurrence_start(), dend) {
-                overlaps.push(*day);
+            if let Some(dstart) = day.occurrence_start() {
+                if occ.overlaps(dstart, dend) {
+                    overlaps.push(*day);
+                }
             }
         }
     }
@@ -102,9 +104,11 @@ fn determine_slot(slots: &[Vec<&DayOccurrence>], day: &DayOccurrence) -> usize {
         }
         for occ in &slots[slot] {
             if let Some(dend) = day.occurrence_end() {
-                if occ.overlaps(day.occurrence_start(), dend) {
-                    // if one occurrence in that slot overlaps with us, try the next one
-                    continue 'outer;
+                if let Some(dstart) = day.occurrence_start() {
+                    if occ.overlaps(dstart, dend) {
+                        // if one occurrence in that slot overlaps with us, try the next one
+                        continue 'outer;
+                    }
                 }
             }
         }

@@ -25,10 +25,10 @@ struct Notification {
 
 impl Notification {
     fn from_occurrence(occ: &Occurrence<'_>, locale: &Arc<dyn Locale + Send + Sync>) -> Self {
-        let mut body = format!(
-            "Start: {}",
-            locale.fmt_datetime(&occ.occurrence_start(), DateFlags::None)
-        );
+        let mut body = String::new();
+        if let Some(start) = occ.occurrence_start() {
+            body = format!("Start: {}", locale.fmt_datetime(&start, DateFlags::None));
+        }
         if let Some(loc) = occ.location() {
             body.push_str(&format!("\nWhere: {}", loc));
         }

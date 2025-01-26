@@ -5,7 +5,7 @@ use chrono_tz::Tz;
 
 use crate::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalEventStatus, CalOrganizer,
-    CalRRule, CalTodoStatus, EventLike,
+    CalRRule, CalTodoStatus, CompDateType, EventLike,
 };
 use crate::parser::{Property, PropertyProducer};
 use crate::util;
@@ -24,18 +24,54 @@ macro_rules! ctype_method {
 #[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
     source: Arc<String>,
-    start: DateTime<Tz>,
+    start: Option<DateTime<Tz>>,
+    end: Option<DateTime<Tz>>,
     base: &'c CalComponent,
     occ: Option<&'c CalComponent>,
 }
 
 impl<'c> Occurrence<'c> {
-    pub fn new(source: Arc<String>, base: &'c CalComponent, start: DateTime<Tz>) -> Self {
+    pub fn new(
+        source: Arc<String>,
+        base: &'c CalComponent,
+        start: Option<DateTime<Tz>>,
+        end: Option<DateTime<Tz>>,
+    ) -> Self {
         Self {
             source,
             start,
+            end,
             base,
             occ: None,
+        }
+    }
+
+    pub fn new_single(
+        source: Arc<String>,
+        base: &'c CalComponent,
+        ty: CompDateType,
+        date: DateTime<Tz>,
+    ) -> Self {
+        Self::new(
+            source,
+            base,
+            if ty == CompDateType::Start {
+                Some(date)
+            } else {
+                None
+            },
+            if ty == CompDateType::EndOrDue {
+                Some(date)
+            } else {
+                None
+            },
+        )
+    }
+
+    pub fn tz(&self) -> Option<Tz> {
+        match self.start {
+            Some(start) => Some(start.timezone()),
+            None => self.end.map(|end| end.timezone()),
         }
     }
 
@@ -70,24 +106,29 @@ impl<'c> Occurrence<'c> {
     pub fn set_occurrence(&mut self, occ: &'c CalComponent) {
         self.occ = Some(occ);
         if let Some(ostart) = occ.start() {
-            self.start = ostart.as_start_with_tz(&self.start.timezone());
+            self.start = Some(ostart.as_start_with_tz(&self.tz().unwrap()));
         }
     }
 
-    pub fn occurrence_start(&self) -> DateTime<Tz> {
+    pub fn occurrence_start(&self) -> Option<DateTime<Tz>> {
         self.start
     }
 
-    pub fn occurrence_startdate(&self) -> CalDate {
-        if self.is_all_day() {
-            CalDate::Date(self.start.date_naive())
-        } else {
-            self.start.into()
-        }
+    pub fn occurrence_startdate(&self) -> Option<CalDate> {
+        self.start.map(|start| {
+            if self.is_all_day() {
+                CalDate::Date(start.date_naive())
+            } else {
+                start.into()
+            }
+        })
     }
 
     pub fn occurrence_end(&self) -> Option<DateTime<Tz>> {
-        self.duration().map(|d| self.start + d)
+        match self.end {
+            Some(end) => Some(end),
+            None => self.duration().map(|d| self.start.unwrap() + d),
+        }
     }
 
     pub fn occurrence_enddate(&self) -> Option<CalDate> {
@@ -101,7 +142,10 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn occurrence_starts_on(&self, date: NaiveDate) -> bool {
-        self.occurrence_start().date_naive() == date
+        match self.occurrence_start() {
+            Some(start) => start.date_naive() == date,
+            None => false,
+        }
     }
 
     pub fn occurrence_ends_on(&self, date: NaiveDate) -> bool {
@@ -115,26 +159,30 @@ impl<'c> Occurrence<'c> {
             .occurrence_end()
             .map(|e| e.date_naive())
             .unwrap_or(date);
-        date > self.occurrence_start().date_naive() && date < end
+        match self.occurrence_start() {
+            Some(start) => date > start.date_naive() && date < end,
+            None => false,
+        }
     }
 
     pub fn duration(&self) -> Option<Duration> {
-        self.base.duration(&self.start.timezone())
+        self.tz().and_then(|tz| self.base.duration(&tz))
     }
 
     pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
         self.alarms()
             .first()
-            .and_then(|a| a.trigger_date(Some(self.occurrence_start()), self.occurrence_end()))
+            .and_then(|a| a.trigger_date(self.occurrence_start(), self.occurrence_end()))
     }
 
     pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
-        util::date_ranges_overlap(
-            self.start,
-            self.occurrence_end().unwrap_or(self.start),
-            start,
-            end,
-        )
+        if let Some(ostart) = self.start {
+            util::date_ranges_overlap(ostart, self.occurrence_end().unwrap_or(ostart), start, end)
+        } else if let Some(oend) = self.occurrence_end() {
+            oend >= start && oend < end
+        } else {
+            false
+        }
     }
 }
 
