@@ -174,10 +174,18 @@
     </table>
 </div>
 
+<div id="delete-series-confirm-{{ occ.uid_html() }}" title="{{ "Are you sure?"|t(locale) }}">
+    {{ "This will permanently delete this series."|t(locale) }}
+</div>
+{% if occ.is_recurrent() %}
+<div id="delete-occ-confirm-{{ occ.uid_html() }}" title="{{ "Are you sure?"|t(locale) }}">
+    {{ "This will permanently delete this occurrence."|t(locale) }}
+</div>
+{% endif %}
 <script>
     $(function() {
         confirmDialog(
-            'delete-series-confirm',
+            'delete-series-confirm-{{ occ.uid_html() }}',
             'delete-series-button',
             function() {
                 deleteItem('{{ occ.uid() }}', null, reloadPage);
@@ -186,7 +194,7 @@
 
         {% if occ.is_recurrent() %}
         confirmDialog(
-            'delete-occ-confirm',
+            'delete-occ-confirm-{{ occ.uid_html() }}',
             'delete-occ-button',
             function() {
                 deleteItem('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage);
@@ -195,11 +203,3 @@
         {% endif %}
     });
 </script>
-<div id="delete-series-confirm" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "This will permanently delete this series."|t(locale) }}
-</div>
-{% if occ.is_recurrent() %}
-<div id="delete-occ-confirm" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "This will permanently delete this occurrence."|t(locale) }}
-</div>
-{% endif %}
