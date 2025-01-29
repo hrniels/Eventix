@@ -135,8 +135,11 @@ impl CalItem {
                                 Occurrence::new_single(self.source.clone(), first, ty, d)
                             })
                             .filter(|o| {
-                                let alarm = o.alarm_date().unwrap();
-                                alarm >= start && alarm < end
+                                if let Some(alarm) = o.alarm_date() {
+                                    alarm >= start && alarm < end
+                                } else {
+                                    false
+                                }
                             }),
                     );
                 }
