@@ -1,9 +1,10 @@
+use std::cmp::Ordering;
 use std::{ops::Deref, sync::Mutex};
 
 use chrono::{NaiveDate, TimeZone, Timelike};
 use chrono_tz::Tz;
 use ical::col::Occurrence;
-use ical::objects::EventLike;
+use ical::objects::{CalAttendee, EventLike};
 use once_cell::sync::Lazy;
 
 pub struct DayOccurrence<'a> {
@@ -78,6 +79,19 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn id(&self) -> u64 {
         self.id
+    }
+
+    pub fn attendees_sorted(&self) -> Vec<&CalAttendee> {
+        if let Some(atts) = self.attendees() {
+            let mut att = atts.iter().collect::<Vec<_>>();
+            att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
+                (Some(cn1), Some(cn2)) => cn1.cmp(cn2),
+                _ => Ordering::Equal,
+            });
+            att
+        } else {
+            vec![]
+        }
     }
 
     pub fn overlap_count(&self) -> usize {

@@ -5,15 +5,17 @@ use axum::response::{Html, IntoResponse};
 use ical::col::CalSource;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use ical::objects::{CalCompType, CalComponent, CalDate, CalTodoStatus, EventLike};
+use ical::objects::{CalAttendee, CalCompType, CalComponent, CalDate, CalTodoStatus, EventLike};
 
+use crate::comps::organizer::OrganizerTemplate;
 use crate::comps::pagination::PaginationTemplate;
 use crate::error::HTMLError;
 use crate::extract::MultiQuery;
-use crate::html::filters;
+use crate::html::{self, filters};
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
@@ -56,6 +58,7 @@ impl Filter {
 struct ListComponent<'a> {
     source: &'a Arc<String>,
     comp: &'a CalComponent,
+    org: Option<OrganizerTemplate<'a>>,
 }
 
 #[derive(Template)]
@@ -119,6 +122,15 @@ impl<'a, F: Fn(&usize) -> String> ListTemplate<'a, F> {
             (None, None) => String::from("-"),
         }
     }
+
+    fn attendees_sorted(atts: &[CalAttendee]) -> Vec<&CalAttendee> {
+        let mut att = atts.iter().collect::<Vec<_>>();
+        att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
+            (Some(cn1), Some(cn2)) => cn1.cmp(cn2),
+            _ => Ordering::Equal,
+        });
+        att
+    }
 }
 
 pub async fn handler(
@@ -157,6 +169,9 @@ pub async fn handler(
                     .filter(|c| c.rid().is_none())
                     .map(|c| ListComponent {
                         source: i.source(),
+                        org: c
+                            .organizer()
+                            .map(|org| OrganizerTemplate::new(locale.clone(), org)),
                         comp: c,
                     })
             })

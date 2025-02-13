@@ -56,6 +56,12 @@
     </div>
 </form>
 
+<script>
+    function toggleRow(id) {
+        $('#row_' + id).toggle(100);
+    }
+</script>
+
 <h1 style="margin-top: 1em" class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
 <table width="100%" class="ev_table">
     {% if comps.is_empty() %}
@@ -72,7 +78,7 @@
             <i class="bi bi-check2-square"></i>
             {% endif %}
         </td>
-        <td width="40%">
+        <td width="33%">
             <div style="display: flex; gap: .4em">
                 <span class="ev_cal_src ev_cal_src_{{ c.source }}"></span>
                 <span class="ev_summary
@@ -82,7 +88,9 @@
                              {% endif %}
                              {% endif %}">
                     {% if let Some(summary) = c.comp.summary() %}
-                    {{ summary }}
+                    <a href="javascript:toggleRow('{{ id }}')">
+                        {{ summary }}
+                    </a>
                     {% endif %}
                 </span>
                 {% if c.comp.rid().is_some() || c.comp.rrule().is_some() %}
@@ -93,10 +101,10 @@
                 {% endif %}
             </div>
         </td>
-        <td width="27%" align="center">
+        <td width="34%" align="center">
             {{ Self::date_range(locale, c.comp.start(), c.comp.end_or_due())|safe }}
         </td>
-        <td width="30%" align="right">
+        <td width="33%" align="right">
             {% if let Some(td) = c.comp.as_todo() %}
             {% if !td.is_recurrent() && td.status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed %}
             <a class="ev_button ev_button_good" href="javascript:completeTodo('{{ c.comp.uid() }}')">
@@ -113,6 +121,98 @@
                 <i class="bi bi-pencil"></i>
                 <span>{{ "Edit"|t(locale) }}</span>
             </a>
+        </td>
+    </tr>
+    <tr id="row_{{ id }}" style="display: none">
+        <td></td>
+        <td style="vertical-align: top">
+            <table width="100%" class="ev_noborder">
+                {% if let Some(rrule) = c.comp.rrule() %}
+                <tr>
+                    <td width="20%" style="vertical-align: top"><b>{{ "Repeats"|t(locale) }}:</b></td>
+                    <td width="80%">{{ rrule.human()|newlines()|safe }}</td>
+                </tr>
+                {% else %}
+                {% if let Some(start) = c.comp.start() %}
+                <tr>
+                    <td width="20%"><b>{{ "Start date"|t(locale) }}:</b></td>
+                    <td width="80%">
+                        {% if c.comp.is_all_day() %}
+                        {{ start.as_start_with_tz(locale.timezone())|as_ref|date(locale, DateFlags::None) }}
+                        {% else %}
+                        {{ start.as_start_with_tz(locale.timezone())|as_ref|datetime(locale, DateFlags::None) }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% if let Some(end) = c.comp.end_or_due() %}
+                <tr>
+                    <td width="20%">
+                        {% if c.comp.ctype() == CalCompType::Event %}
+                        <b>{{ "End date"|t(locale) }}:</b>
+                        {% else %}
+                        <b>{{ "Due"|t(locale) }}:</b>
+                        {% endif %}
+                    </td>
+                    <td width="80%">
+                        {% if c.comp.is_all_day() %}
+                        {{ end.as_end_with_tz(locale.timezone())|as_ref|date(locale, DateFlags::None) }}
+                        {% else %}
+                        {{ end.as_end_with_tz(locale.timezone())|as_ref|datetime(locale, DateFlags::None) }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% endif %}
+                {% if c.comp.has_alarms() %}
+                <tr>
+                    <td width="20%"><b>{{ "Reminder"|t(locale) }}:</b></td>
+                    <td width="80%">{{ c.comp.alarms().first().unwrap()|safe }}</td>
+                </tr>
+                {% endif %}
+                {% if let Some(loc) = c.comp.location() %}
+                <tr>
+                    <td width="20%"><b>{{ "Location"|t(locale) }}:</b></td>
+                    <td width="80%">{{ loc }}</td>
+                </tr>
+                {% endif %}
+                {% if let Some(org) = c.org %}
+                <tr>
+                    <td width="20%"><b>{{ "Organizer"|t(locale) }}:</b></td>
+                    <td width="80%">{{ org|safe }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </td>
+        <td style="vertical-align: top">
+        {% if let Some(desc) = html::text_to_html(c.comp.description()) %}
+        <b>{{ "Description"|t(locale) }}:</b><br />
+        <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
+            {{ desc|safe }}
+        </div>
+        {% endif %}
+        </td>
+        <td style="vertical-align: top">
+            {% if let Some(atts) = c.comp.attendees() %}
+            <b>{{ "Attendees"|t(locale) }}:</b><br />
+            <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
+                <ul class="ev_iconlist">
+                    {% for att in Self::attendees_sorted(atts) %}
+                    <li>
+                        <i title="{{ html::attendee_title(att) }}"
+                           class="{{ html::attendee_icon(att) }}"></i>
+                        <a href="{{ att.address() }}">
+                            {% if let Some(cn) = att.common_name() %}
+                            {{ cn }}
+                            {% else %}
+                            {{ att.address() }}
+                            {% endif %}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
         </td>
     </tr>
     {% endfor %}

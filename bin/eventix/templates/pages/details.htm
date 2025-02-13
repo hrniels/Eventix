@@ -71,22 +71,10 @@
             <td width="70%">{{ occ.alarms().first().unwrap()|safe }}</td>
         </tr>
         {% endif %}
-        {% if let Some(org) = occ.organizer() %}
+        {% if let Some(org) = org %}
         <tr>
             <td width="30%">{{ "Organizer"|t(locale) }}:</td>
-            <td width="70%">
-                <a href="{{ org.address() }}">
-                {% if let Some(cn) = org.common_name() %}
-                {{ cn }}
-                {% else %}
-                {{ org.address() }}
-                {% endif %}
-                </a>
-                {% if let Some(sent_by) = org.sent_by() %}
-                , {{ "sent by"|t(locale) }}
-                <a href="{{ sent_by }}">{{ sent_by }}</a>
-                {% endif %}
-            </td>
+            <td width="70%">{{ org|safe }}</td>
         </tr>
         {% endif %}
         {% if let Some(atts) = occ.attendees() %}
@@ -95,10 +83,10 @@
             <td width="70%">
                 <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
                     <ul class="ev_iconlist">
-                    {% for att in self::attendees_sorted(occ) %}
+                    {% for att in occ.attendees_sorted() %}
                         <li>
-                            <i title="{{ self::attendee_title(att) }}"
-                               class="{{ self::attendee_icon(att) }}"></i>
+                            <i title="{{ html::attendee_title(att) }}"
+                               class="{{ html::attendee_icon(att) }}"></i>
                             <a href="{{ att.address() }}">
                             {% if let Some(cn) = att.common_name() %}
                             {{ cn }}
@@ -113,7 +101,7 @@
             </td>
         </tr>
         {% endif %}
-        {% if let Some(desc) = Self::description(occ) %}
+        {% if let Some(desc) = html::text_to_html(occ.description()) %}
         <tr>
             <td width="30%">{{ "Description"|t(locale) }}:</td>
             <td width="70%">
