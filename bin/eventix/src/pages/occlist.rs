@@ -4,8 +4,10 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::routing::get;
 use axum::Router;
-use chrono::{Duration, Local};
-use ical::objects::{CalCompType, CalTodoStatus, EventLike};
+use chrono::offset::LocalResult;
+use chrono::{DateTime, Duration, NaiveDateTime, TimeZone};
+use chrono_tz::Tz;
+use ical::objects::{CalCompType, CalDate, CalTodoStatus, EventLike};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -15,14 +17,23 @@ use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+enum Direction {
+    Backwards,
+    Forward,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
+    date: String,
+    dir: Direction,
 }
 
 #[derive(Debug, Serialize)]
 struct Response {
     html: String,
+    date: Option<String>,
 }
 
 pub fn router(state: crate::state::State) -> Router {
@@ -38,27 +49,70 @@ struct OccListTemplate<'a> {
     occs: Vec<DayOccurrence<'a>>,
 }
 
+fn min_datetime(timezone: Tz) -> DateTime<Tz> {
+    let mut naive = NaiveDateTime::MIN;
+    loop {
+        match timezone.from_local_datetime(&naive) {
+            LocalResult::Single(date) => break date,
+            _ => naive = naive + Duration::days(1),
+        }
+    }
+}
+
+fn max_datetime(timezone: Tz) -> DateTime<Tz> {
+    let mut naive = NaiveDateTime::MAX;
+    loop {
+        match timezone.from_local_datetime(&naive) {
+            LocalResult::Single(date) => break date,
+            _ => naive = naive - Duration::days(1),
+        }
+    }
+}
+
 pub async fn handler(
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
+    const COUNT: usize = 5;
+
     let locale = locale::default();
-    let now = Local::now().with_timezone(locale.timezone());
-    let start = now - Duration::days(180);
-    let end = now + Duration::days(180);
+
+    let date = req
+        .date
+        .parse::<CalDate>()
+        .context(format!("Invalid date: {}", req.date))?
+        .as_start_with_tz(locale.timezone());
 
     let store = state.store().lock().await;
-
     let item = store
         .item_by_id(&req.uid)
         .context(format!("Unable to find item with uid {}", req.uid))?;
 
-    let occs = item.occurrences_within(start, end);
-    let occs = occs.map(|ref o| DayOccurrence::new(o)).collect();
+    let occs: Vec<_> = match req.dir {
+        Direction::Forward => {
+            let start = date + Duration::seconds(1);
+            let end = max_datetime(*locale.timezone());
+            item.occurrences_within(start, end).take(COUNT).collect()
+        }
+        Direction::Backwards => {
+            let start = min_datetime(*locale.timezone());
+            let end = date;
+            let occs = item.occurrences_within(start, end).collect::<Vec<_>>();
+            occs[occs.len().saturating_sub(COUNT)..].to_vec()
+        }
+    };
+
+    let occs: Vec<_> = occs.iter().map(|o| DayOccurrence::new(o)).collect();
+
+    let date = match req.dir {
+        Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_end()),
+        Direction::Backwards => occs.iter().next().and_then(|l| l.occurrence_start()),
+    }
+    .map(|d| d.to_utc().format("%Y%m%dT%H%M%SZ").to_string());
 
     let html = OccListTemplate { occs, locale }
         .render()
         .context("details template")?;
 
-    Ok(Json(Response { html }))
+    Ok(Json(Response { html, date }))
 }

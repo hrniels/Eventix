@@ -11,7 +11,7 @@
         {{ occ.summary().unwrap() }}
         </span>
     </td>
-    <td>
+    <td align="center">
         {{ html::date_range(locale, occ.occurrence_startdate().as_ref(), occ.occurrence_enddate().as_ref())|safe }}
     </td>
     <td>

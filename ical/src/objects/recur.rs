@@ -1,5 +1,7 @@
 use chrono::offset::LocalResult;
-use chrono::{DateTime, Datelike, Duration, Month, Months, NaiveDateTime, Timelike, Weekday};
+use chrono::{
+    DateTime, Datelike, Duration, Month, Months, NaiveDateTime, TimeDelta, Timelike, Weekday,
+};
 use chrono_tz::Tz;
 use itertools::Itertools;
 use std::fmt;
@@ -22,15 +24,15 @@ pub enum CalRRuleFreq {
 }
 
 impl CalRRuleFreq {
-    pub fn advance(&self, now: NaiveDateTime, interval: u32) -> NaiveDateTime {
+    pub fn advance(&self, now: NaiveDateTime, interval: u32) -> Option<NaiveDateTime> {
         match self {
-            Self::Secondly => now + Duration::seconds(interval.into()),
-            Self::Minutely => now + Duration::minutes(interval.into()),
-            Self::Hourly => now + Duration::hours(interval.into()),
-            Self::Daily => now + Duration::days(interval.into()),
-            Self::Weekly => now + Duration::weeks(interval.into()),
-            Self::Monthly => now.checked_add_months(Months::new(interval)).unwrap(),
-            Self::Yearly => now.checked_add_months(Months::new(interval * 12)).unwrap(),
+            Self::Secondly => now.checked_add_signed(TimeDelta::seconds(interval.into())),
+            Self::Minutely => now.checked_add_signed(TimeDelta::minutes(interval.into())),
+            Self::Hourly => now.checked_add_signed(TimeDelta::hours(interval.into())),
+            Self::Daily => now.checked_add_signed(TimeDelta::days(interval.into())),
+            Self::Weekly => now.checked_add_signed(TimeDelta::weeks(interval.into())),
+            Self::Monthly => now.checked_add_months(Months::new(interval)),
+            Self::Yearly => now.checked_add_months(Months::new(interval * 12)),
         }
     }
 }
@@ -295,16 +297,16 @@ pub struct CalRRule {
     week_start: Option<Weekday>,
 }
 
-fn next_date(date: DateTime<Tz>, freq: CalRRuleFreq, interval: u32) -> DateTime<Tz> {
+fn next_date(date: DateTime<Tz>, freq: CalRRuleFreq, interval: u32) -> Option<DateTime<Tz>> {
     // we basically want to ignore DST here, in the sense that all recurrences of an event
     // that started at 9:00 AM should always be at 9:00 AM as well, regardless of whether
     // DST is on or off. For that reason, we build a NaiveDateTime from the date in the
     // selected timezone, advance it accordingly, and turn it back into a DateTime.
     for i in 1.. {
-        let next = freq.advance(date.naive_local(), interval * i);
+        let next = freq.advance(date.naive_local(), interval * i)?;
         // if the date is not representable in our timezone, just skip it
         if let LocalResult::Single(localdate) = next.and_local_timezone(date.timezone()) {
-            return localdate;
+            return Some(localdate);
         }
     }
     unreachable!();
@@ -353,11 +355,11 @@ impl<'a> Iterator for RecurIterator<'a> {
                     // if we've found something, walk through that
                     if self.last.len() > 0 {
                         self.last_pos = 0;
-                        self.date = next_date(self.date, self.rrule.freq, self.interval);
+                        self.date = next_date(self.date, self.rrule.freq, self.interval).unwrap();
                         break;
                     }
                 }
-                self.date = next_date(self.date, self.rrule.freq, self.interval);
+                self.date = next_date(self.date, self.rrule.freq, self.interval).unwrap();
             }
         }
 
@@ -418,7 +420,7 @@ impl CalRRule {
         // January, we will not consider the December as the 25th is already out of range. going
         // one interval further means that we will consider the December and might set the day to
         // something else, which might indeed be within the range.
-        let beyond_end = next_date(end, self.freq, interval);
+        let beyond_end = next_date(end, self.freq, interval).unwrap_or(end);
         let until = if let Some(ref until) = self.until {
             until.as_end_with_tz(&start.timezone()).min(beyond_end)
         } else {
@@ -648,7 +650,7 @@ impl CalRRule {
                         }
                     }
                 }
-                vcur = next_date(vcur, CalRRuleFreq::Daily, 1);
+                vcur = next_date(vcur, CalRRuleFreq::Daily, 1).unwrap();
             }
             return Some(res);
         }

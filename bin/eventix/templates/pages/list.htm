@@ -57,21 +57,53 @@
 </form>
 
 <script>
-    var loaded_occs = {};
+    var occs_state = {};
+
+    function loadOccs(uid, ndate, dir, onsuccess) {
+        $.ajax({
+            type: 'GET',
+            url: '/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir,
+            dataType: 'json',
+            success: function(data) {
+                onsuccess(data);
+            },
+        });
+    }
+
+    function loadPrev(id, uid) {
+        if(occs_state[uid].prev) {
+            loadOccs(uid, occs_state[uid].prev, 'Backwards', function(data) {
+                occs_state[uid].prev = data.date;
+                var row = $('#row_' + id + '_prev');
+                row.after(data.html);
+                if(data.date == null)
+                    row.hide();
+            });
+        }
+    }
+
+    function loadNext(id, uid) {
+        if(occs_state[uid].next) {
+            loadOccs(uid, occs_state[uid].next, 'Forward', function(data) {
+                occs_state[uid].next = data.date;
+                var row = $('#row_' + id + '_next');
+                row.before(data.html);
+                if(data.date == null)
+                    row.hide();
+            });
+        }
+    }
+
     function toggleRow(id, uid) {
         $('#row_' + id).toggle(100);
 
-        if(!loaded_occs[id]) {
-            loaded_occs[id] = true;
-            $.ajax({
-                type: 'GET',
-                url: '/occlist?uid=' + uid,
-                dataType: 'json',
-                success: function(data) {
-                    var row = $('#row_' + id + '_occs');
-                    row.after(data.html);
-                },
-            });
+        if(!occs_state[uid]) {
+            occs_state[uid] = {
+                'prev': curISODate(),
+                'next': curISODate(),
+            };
+            loadPrev(id, uid);
+            loadNext(id, uid);
         }
     }
 </script>
@@ -243,8 +275,22 @@
                 </td>
             </tr>
             {% if c.comp.is_recurrent() %}
-            <tr id="row_{{ id }}_occs">
+            <tr>
                 <td colspan="3"><b>{{ "Occurrences"|t(locale) }}</b>:</td>
+            </tr>
+            <tr id="row_{{ id }}_prev">
+                <td colspan="3" align="center">
+                    <a style="font-size: 1.5em" href="javascript:loadPrev('{{ id }}', '{{ c.comp.uid() }}')">
+                        ...
+                    </a>
+                </td>
+            </tr>
+            <tr id="row_{{ id }}_next">
+                <td colspan="3" align="center">
+                    <a style="font-size: 1.5em" href="javascript:loadNext('{{ id }}', '{{ c.comp.uid() }}')">
+                       ...
+                    </a>
+                </td>
             </tr>
             {% endif %}
         </table>

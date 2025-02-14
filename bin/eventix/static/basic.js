@@ -2,6 +2,17 @@ function reloadPage() {
     window.location.reload();
 }
 
+function curISODate() {
+    var date = new Date();
+    var y = date.getUTCFullYear();
+    var m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    var d = date.getUTCDate().toString().padStart(2, '0');
+    var H = date.getUTCHours().toString().padStart(2, '0');
+    var M = date.getUTCMinutes().toString().padStart(2, '0');
+    var S = date.getUTCSeconds().toString().padStart(2, '0');
+    return `${y}${m}${d}T${H}${M}${S}Z`;
+}
+
 function invertSelection(prefix) {
     for(var i = 1;;i++)
     {
