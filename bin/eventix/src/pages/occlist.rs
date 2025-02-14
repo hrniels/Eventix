@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::error::HTMLError;
-use crate::html::filters;
-use crate::locale::{self, DateFlags, Locale};
+use crate::html::{self, filters};
+use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
 

@@ -12,13 +12,7 @@
         </span>
     </td>
     <td>
-        {% if let Some(start) = occ.occurrence_start() %}
-        {% if occ.is_all_day() %}
-        {{ start|date(locale, DateFlags::None) }}
-        {% else %}
-        {{ start|datetime(locale, DateFlags::None) }}
-        {% endif %}
-        {% endif %}
+        {{ html::date_range(locale, occ.occurrence_startdate().as_ref(), occ.occurrence_enddate().as_ref())|safe }}
     </td>
     <td>
         <a style="float: right" class="ev_button ev_button_normal" href="/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}">

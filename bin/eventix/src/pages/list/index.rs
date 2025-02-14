@@ -75,54 +75,6 @@ struct ListTemplate<'a, F: Fn(&usize) -> String> {
 }
 
 impl<'a, F: Fn(&usize) -> String> ListTemplate<'a, F> {
-    fn date_range(
-        locale: &Arc<dyn Locale + Send + Sync>,
-        start: Option<&CalDate>,
-        end: Option<&CalDate>,
-    ) -> String {
-        let tz = locale.timezone();
-        let date_flags = DateFlags::Short;
-        let time_flags = TimeFlags::Short;
-        match (start, end) {
-            (Some(CalDate::Date(start, ..)), Some(CalDate::Date(end, ..)))
-                if start.succ_opt() == Some(*end) =>
-            {
-                format!("{}", locale.fmt_date(&start, date_flags))
-            }
-            (Some(CalDate::Date(start, ..)), Some(end @ CalDate::Date(..))) => {
-                format!(
-                    "{} &#x2012; {}",
-                    locale.fmt_date(&start, date_flags),
-                    locale.fmt_date(&end.as_end_with_tz(tz), date_flags)
-                )
-            }
-            (Some(start), Some(end)) if start.as_naive_date() == end.as_naive_date() => {
-                format!(
-                    "{}, {} &#x2012; {}",
-                    locale.fmt_date(&start.as_naive_date(), date_flags),
-                    locale.fmt_time(&start.as_start_with_tz(tz), time_flags),
-                    locale.fmt_time(&end.as_end_with_tz(tz), time_flags)
-                )
-            }
-            (Some(start), Some(end)) => {
-                format!(
-                    "{} &#x2012; {}",
-                    locale.fmt_datetime(&start.as_start_with_tz(tz), date_flags),
-                    locale.fmt_datetime(&end.as_end_with_tz(tz), date_flags)
-                )
-            }
-            (Some(CalDate::Date(start, ..)), None) => locale.fmt_date(&start, date_flags),
-            (Some(start @ CalDate::DateTime(_)), None) => {
-                locale.fmt_datetime(&start.as_start_with_tz(tz), date_flags)
-            }
-            (None, Some(CalDate::Date(end, ..))) => locale.fmt_date(&end, date_flags),
-            (None, Some(end @ CalDate::DateTime(_))) => {
-                locale.fmt_datetime(&end.as_end_with_tz(tz), date_flags)
-            }
-            (None, None) => String::from("-"),
-        }
-    }
-
     fn attendees_sorted(atts: &[CalAttendee]) -> Vec<&CalAttendee> {
         let mut att = atts.iter().collect::<Vec<_>>();
         att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
