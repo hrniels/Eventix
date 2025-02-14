@@ -1,0 +1,56 @@
+{% for occ in occs %}
+<tr>
+    <td>
+        &bull;&nbsp;
+        <span class="ev_summary
+                     {% match occ.status_class() %}
+                     {% when Some with (cl) %}
+                     ev_status_{{ cl }}
+                     {% when _ %}
+                     {% endmatch %}">
+        {{ occ.summary().unwrap() }}
+        </span>
+    </td>
+    <td>
+        {% if let Some(start) = occ.occurrence_start() %}
+        {% if occ.is_all_day() %}
+        {{ start|date(locale, DateFlags::None) }}
+        {% else %}
+        {{ start|datetime(locale, DateFlags::None) }}
+        {% endif %}
+        {% endif %}
+    </td>
+    <td>
+        <a style="float: right" class="ev_button ev_button_normal" href="/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}">
+            <i class="bi bi-pencil"></i>
+            <span>{{ "Edit"|t(locale) }}</span>
+        </a>
+        <a id="delete-occ-button-{{ occ.rid_html() }}" style="float: right" class="ev_button ev_button_critical">
+            <i class="bi bi-trash"></i>
+            <span>{{ "Delete"|t(locale) }}</span>
+        </a>
+        {% if occ.ctype() == CalCompType::Todo %}
+        {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
+        <a style="float: right" class="ev_button ev_button_good"
+                                href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}')"
+                                >
+                                <i class="bi bi-check-lg"></i>
+                                <span>{{ "Complete"|t(locale) }}</span>
+        </a>
+        {% endif %}
+        {% endif %}
+        <div id="delete-occ-confirm-{{ occ.rid_html() }}" title="{{ "Are you sure?"|t(locale) }}">
+            {{ "This will permanently delete this occurrence."|t(locale) }}
+        </div>
+        <script type="text/javascript">
+            confirmDialog(
+                'delete-occ-confirm-{{ occ.rid_html() }}',
+                'delete-occ-button-{{ occ.rid_html() }}',
+                function() {
+                    deleteItem('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage);
+                }
+            );
+        </script>
+    </td>
+</tr>
+{% endfor %}

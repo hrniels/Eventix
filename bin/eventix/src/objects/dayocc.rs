@@ -128,7 +128,13 @@ impl<'a> DayOccurrence<'a> {
     }
 
     pub fn status_class(&self) -> Option<String> {
-        self.inner.event_status().map(|st| format!("{:?}", st))
+        if let Some(st) = self.inner.event_status() {
+            Some(format!("{:?}", st))
+        } else if let Some(st) = self.inner.todo_status() {
+            Some(format!("{:?}", st))
+        } else {
+            None
+        }
     }
 
     pub fn minute_off(&self, date: NaiveDate) -> u64 {

@@ -14,7 +14,8 @@ use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
 use pages::{
-    attendees, complete, delete, details, edit, list, monthly, new, reload, togglecal, weekly,
+    attendees, complete, delete, details, edit, list, monthly, new, occlist, reload, togglecal,
+    weekly,
 };
 use std::env;
 use tower_http::{
@@ -67,6 +68,7 @@ async fn main() {
         .merge(complete::router(state.clone()))
         .merge(delete::router(state.clone()))
         .merge(togglecal::router(state.clone()))
+        .merge(occlist::router(state.clone()))
         .merge(attendees::router(state.clone()))
         .merge(reload::router(state.clone()))
         .fallback(error_handler)

@@ -6,6 +6,7 @@ pub mod edit;
 pub mod list;
 pub mod monthly;
 pub mod new;
+pub mod occlist;
 pub mod reload;
 pub mod togglecal;
 pub mod weekly;
