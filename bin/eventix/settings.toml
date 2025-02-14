@@ -64,7 +64,7 @@ bgcolor = "#2ec17d"
 types = ["Event"]
 
 [calendar.scriptsolution_tasks]
-path = "/home/hrniels/.config/vdirsyncer-test/tasks-scso/tasks~h26VsoBEVm_nzi6FeDvGvES"
+path = "/home/hrniels/.config/vdirsyncer-test/tasks"
 name = "ScSo Tasks"
 disabled = false
 fgcolor = "#ffffff"
