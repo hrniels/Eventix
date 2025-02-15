@@ -92,23 +92,41 @@ pub async fn handler(
         Direction::Forward => {
             let start = date + Duration::seconds(1);
             let end = max_datetime(*locale.timezone());
-            item.occurrences_within(start, end).take(COUNT).collect()
+            item.occurrences_within(start, end)
+                .take(COUNT + 1)
+                .collect()
         }
         Direction::Backwards => {
             let start = min_datetime(*locale.timezone());
             let end = date;
             let occs = item.occurrences_within(start, end).collect::<Vec<_>>();
-            occs[occs.len().saturating_sub(COUNT)..].to_vec()
+            occs[occs.len().saturating_sub(COUNT + 1)..].to_vec()
         }
     };
 
-    let occs: Vec<_> = occs.iter().map(|o| DayOccurrence::new(o)).collect();
+    let more = occs.len() > COUNT;
+    let occs: Vec<_> = match req.dir {
+        Direction::Forward => occs
+            .iter()
+            .take(COUNT)
+            .map(|o| DayOccurrence::new(o))
+            .collect(),
+        Direction::Backwards => occs
+            .iter()
+            .skip(if more { 1 } else { 0 })
+            .map(|o| DayOccurrence::new(o))
+            .collect(),
+    };
 
-    let date = match req.dir {
-        Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_end()),
-        Direction::Backwards => occs.iter().next().and_then(|l| l.occurrence_start()),
-    }
-    .map(|d| d.to_utc().format("%Y%m%dT%H%M%SZ").to_string());
+    let date = if more {
+        match req.dir {
+            Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_end()),
+            Direction::Backwards => occs.iter().next().and_then(|l| l.occurrence_start()),
+        }
+        .map(|d| d.to_utc().format("%Y%m%dT%H%M%SZ").to_string())
+    } else {
+        None
+    };
 
     let html = OccListTemplate { occs, locale }
         .render()
