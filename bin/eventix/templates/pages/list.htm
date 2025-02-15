@@ -5,58 +5,73 @@
 <form id="form" method="get" action="/list">
     <div class="ev_border">
         <fieldset class="ev_form">
-            <h1 class="ev_header">{{ "Filter"|t(locale) }}</h1>
-            <dl>
-                <dt>{{ "Keywords"|t(locale) }}:</dt>
-                <dd><input type="text" size="50" name="keywords" value="{{ filter.keywords }}" /></dd>
-            </dl>
-            <dl>
-                <dt>{{ "Calendars"|t(locale) }}:</dt>
-                <dd>
-                    <table class="ev_noborder">
-                    {% for (idx, src) in sources.iter().enumerate() %}
-                        {% if idx % 6 == 0 %}
-                        <tr>
-                        {% endif %}
-                            <td>
-                                <input type="checkbox" id="source_{{ idx + 1 }}"
-                                       name="sources[]" value="{{ src.id() }}"
-                                       {% if filter.sources.contains(src.id()) %}
-                                       checked="checked"
-                                       {% endif %}/>
-                                <label for="source_{{ idx + 1 }}">
-                                    <div style="display: inline"
-                                         class="ev_cal_src ev_cal_src_{{ src.id() }}">
-                                        {{ src.name() }}
-                                    </div>
-                                </label>
-                            </td>
-                        {% if idx % 6 == 5 %}
-                        </tr>
-                        {% endif %}
-                    {% endfor %}
-                    </table>
-                    <div style="padding-top: 0.5em">
-                        <input type="button" value="{{ "Invert selection"|t(locale) }}"
-                               onclick="invertSelection('source_')" />
-                    </div>
-                </dd>
-            </dl>
-            <div class="ev_submit">
-                <a class="ev_button_big ev_button_normal" style="width: 80px"
-                   href="javascript:$('form').submit()">
-                    <span>{{ "Apply"|t(locale) }}</span>
-                </a>
-                <a class="ev_button_big ev_button_normal" style="width: 80px"
-                   href="javascript:document.location.href = '/list'">
-                    <span>{{ "Reset"|t(locale) }}</span>
-                </a>
+            <h1 class="ev_header" onmouseover="this.style.cursor='pointer';"
+                                  onmouseout="this.style.cursor='default';"
+                                  onclick="toggleFilter()">
+                {{ "Filter"|t(locale) }}
+            </h1>
+            <div id="filter_box">
+                <dl>
+                    <dt>{{ "Keywords"|t(locale) }}:</dt>
+                    <dd><input type="text" size="50" name="keywords" value="{{ filter.keywords }}" /></dd>
+                </dl>
+                <dl>
+                    <dt>{{ "Calendars"|t(locale) }}:</dt>
+                    <dd>
+                        <table class="ev_noborder">
+                        {% for (idx, src) in sources.iter().enumerate() %}
+                            {% if idx % 6 == 0 %}
+                            <tr>
+                            {% endif %}
+                                <td>
+                                    <input type="checkbox" id="source_{{ idx + 1 }}"
+                                           name="sources[]" value="{{ src.id() }}"
+                                           {% if filter.sources.contains(src.id()) %}
+                                           checked="checked"
+                                           {% endif %}/>
+                                    <label for="source_{{ idx + 1 }}">
+                                        <div style="display: inline"
+                                             class="ev_cal_src ev_cal_src_{{ src.id() }}">
+                                            {{ src.name() }}
+                                        </div>
+                                    </label>
+                                </td>
+                            {% if idx % 6 == 5 %}
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+                        </table>
+                        <div style="padding-top: 0.5em">
+                            <input type="button" value="{{ "Invert selection"|t(locale) }}"
+                                   onclick="invertSelection('source_')" />
+                        </div>
+                    </dd>
+                </dl>
+                <div class="ev_submit">
+                    <a class="ev_button_big ev_button_normal" style="width: 80px"
+                       href="javascript:$('form').submit()">
+                        <span>{{ "Apply"|t(locale) }}</span>
+                    </a>
+                    <a class="ev_button_big ev_button_normal" style="width: 80px"
+                       href="javascript:document.location.href = '/list'">
+                        <span>{{ "Reset"|t(locale) }}</span>
+                    </a>
+                </div>
             </div>
         </fieldset>
     </div>
 </form>
 
 <script>
+    function toggleFilter() {
+        var hidden = document.getElementById('filter_box').style.display == 'none';
+        $('#filter_box').toggle('blind', {}, 300);
+        Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
+    }
+
+    if(Cookies.get('ev_list_filter') != 1)
+        $('#filter_box').hide();
+
     var occs_state = {};
 
     function loadOccs(uid, ndate, dir, onsuccess) {
