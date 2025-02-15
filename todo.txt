@@ -8,11 +8,9 @@
   * give them numbers and show at each fields the numbers of the occurrences that overwrite it
   * show a checkbox next to every field to choose between "update all" and "update base"
 - show icon if there is a description
-- allow to remove EXDATE
 - add tooltips
 - add ability to change calendar for existing events/tasks
-- better formatting of date ranges
-- show list of occurrences in event/task list
+- show deleted occurrences in occurrence list (marked accordingly) and allow "undelete"
 - add calendar management (add/edit/delete)
 - more filtering: date range, ordering, status, ...?
 - add folding of filter box
