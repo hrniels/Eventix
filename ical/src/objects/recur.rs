@@ -218,7 +218,7 @@ impl fmt::Display for CalWDayDesc {
 
 pub struct WeekdayHuman<'a>(&'a CalWDayDesc);
 
-impl<'a> fmt::Display for WeekdayHuman<'a> {
+impl fmt::Display for WeekdayHuman<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some((num, side)) = self.0.nth {
             match side {
@@ -326,7 +326,7 @@ pub struct RecurIterator<'a> {
     last_pos: usize,
 }
 
-impl<'a> Iterator for RecurIterator<'a> {
+impl Iterator for RecurIterator<'_> {
     type Item = DateTime<Tz>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -353,7 +353,7 @@ impl<'a> Iterator for RecurIterator<'a> {
                     }
 
                     // if we've found something, walk through that
-                    if self.last.len() > 0 {
+                    if !self.last.is_empty() {
                         self.last_pos = 0;
                         self.date = next_date(self.date, self.rrule.freq, self.interval).unwrap();
                         break;
@@ -603,12 +603,8 @@ impl CalRRule {
                     (Some(cur), cur.with_year(cur.year() + 1))
                 }
             };
-            let Some(mut vcur) = vcur else {
-                return None;
-            };
-            let Some(vend) = vend else {
-                return None;
-            };
+            let mut vcur = vcur?;
+            let vend = vend?;
 
             let mut res = vec![];
             let by_day = self.by_day.as_ref().unwrap();
@@ -706,7 +702,7 @@ impl CalRRule {
 
 pub struct RRuleHuman<'a>(&'a CalRRule);
 
-impl<'a> fmt::Display for RRuleHuman<'a> {
+impl fmt::Display for RRuleHuman<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Occurs ")?;
         match self.0.interval {

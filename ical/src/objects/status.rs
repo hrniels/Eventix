@@ -27,7 +27,7 @@ impl<'de> Deserialize<'de> for CalTodoStatus {
         D: Deserializer<'de>,
     {
         let buf = String::deserialize(deserializer)?;
-        Ok(CalTodoStatus::from_str(&buf).map_err(serde::de::Error::custom)?)
+        CalTodoStatus::from_str(&buf).map_err(serde::de::Error::custom)
     }
 }
 

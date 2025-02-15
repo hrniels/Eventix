@@ -52,17 +52,14 @@ impl<'a> OccurrenceIterator<'a> {
     fn fetch_next_recurrence(&mut self) -> Option<Occurrence<'a>> {
         // unwrap the base component and the recurring date iterator.
         let (base, ref mut date_iter) = self.dates.as_mut()?;
-        while let Some((ty, d)) = date_iter.next() {
+        for (ty, d) in date_iter {
             let mut occ = Occurrence::new_single(self.item.source.clone(), base, ty, d);
             // check if an overwritten event exists for this occurrence.
-            if let Some(overwritten) = self.item.cal.components().iter().find(|c| match c.rid() {
+            if let Some(overwritten) = self.item.cal.components().iter().find(|c| {
+                matches!(c.rid(),
                 Some(rid)
                     if occ.occurrence_start()
-                        == Some(rid.as_start_with_tz(&self.start.timezone())) =>
-                {
-                    true
-                }
-                _ => false,
+                        == Some(rid.as_start_with_tz(&self.start.timezone())))
             }) {
                 let rid = overwritten.rid().unwrap().clone();
                 // skip this in case we had it already within the overwritten iterator
@@ -353,8 +350,7 @@ impl CalItem {
         let base = self
             .components()
             .iter()
-            .filter(|c| c.rid().is_none())
-            .next()
+            .find(|c| c.rid().is_none())
             .unwrap();
 
         let mut comp = if base.ctype() == CalCompType::Event {

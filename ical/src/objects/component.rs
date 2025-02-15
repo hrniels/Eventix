@@ -352,21 +352,19 @@ impl<'a> CompDateIterator<'a> {
     }
 }
 
-impl<'a> Iterator for CompDateIterator<'a> {
+impl Iterator for CompDateIterator<'_> {
     type Item = (CompDateType, DateTime<Tz>);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(recur) = &mut self.recur {
-            while let Some(next) = recur.next() {
-                if !self.exdates.contains(&next) {
-                    return Some((CompDateType::Start, next));
+            for date in recur {
+                if !self.exdates.contains(&date) {
+                    return Some((CompDateType::Start, date));
                 }
             }
             None
-        } else if let Some(single) = self.single.take() {
-            Some(single)
         } else {
-            None
+            self.single.take()
         }
     }
 }

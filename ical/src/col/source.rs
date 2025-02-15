@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::col::{CalItem, ColError, Occurrence};
 use crate::objects::{CalComponent, CalDate, Calendar};
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct CalSource {
     id: Arc<String>,
     path: PathBuf,
@@ -31,18 +31,6 @@ impl PartialEq for CalSource {
     }
 }
 impl Eq for CalSource {}
-
-impl Default for CalSource {
-    fn default() -> Self {
-        Self {
-            id: Arc::default(),
-            path: PathBuf::default(),
-            name: String::default(),
-            props: HashMap::new(),
-            items: Vec::new(),
-        }
-    }
-}
 
 impl CalSource {
     pub fn new_from_dir(
