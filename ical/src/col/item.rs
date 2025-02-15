@@ -9,35 +9,115 @@ use chrono_tz::Tz;
 use crate::col::{ColError, Occurrence};
 use crate::objects::{
     CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger, Calendar,
-    CompDateIterator, EventLike, UpdatableEventLike,
+    CompDateIterator, CompDateType, EventLike, UpdatableEventLike,
 };
+use crate::util;
 
 pub struct OccurrenceIterator<'a> {
     item: &'a CalItem,
+    start: DateTime<Tz>,
+    end: DateTime<Tz>,
     dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
-    tz: Tz,
+    seen_rids: Vec<CalDate>,
+    // overwritten components and the current index
+    sorted_overwritten: Vec<&'a CalComponent>,
+    overwritten_index: usize,
+    // lookahead candidates for merging
+    next_recurrence: Option<Occurrence<'a>>,
+    next_overwritten: Option<Occurrence<'a>>,
 }
 
 impl<'a> OccurrenceIterator<'a> {
     fn new(
         item: &'a CalItem,
-        first: &'a CalComponent,
-        dates: CompDateIterator<'a>,
-        tz: Tz,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+        dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
     ) -> Self {
+        let mut sorted_overwritten: Vec<&CalComponent> = item.components().iter().collect();
+        sorted_overwritten.sort_by_key(|comp| comp.start());
         Self {
+            start,
+            end,
             item,
-            dates: Some((first, dates)),
-            tz,
+            dates,
+            sorted_overwritten,
+            overwritten_index: 0,
+            seen_rids: Vec::new(),
+            next_recurrence: None,
+            next_overwritten: None,
         }
     }
 
-    fn new_empty(item: &'a CalItem, tz: Tz) -> Self {
-        Self {
-            item,
-            dates: None,
-            tz,
+    fn fetch_next_recurrence(&mut self) -> Option<Occurrence<'a>> {
+        // unwrap the base component and the recurring date iterator.
+        let (base, ref mut date_iter) = self.dates.as_mut()?;
+        while let Some((ty, d)) = date_iter.next() {
+            let mut occ = Occurrence::new_single(self.item.source.clone(), base, ty, d);
+            // check if an overwritten event exists for this occurrence.
+            if let Some(overwritten) = self.item.cal.components().iter().find(|c| match c.rid() {
+                Some(rid)
+                    if occ.occurrence_start()
+                        == Some(rid.as_start_with_tz(&self.start.timezone())) =>
+                {
+                    true
+                }
+                _ => false,
+            }) {
+                let rid = overwritten.rid().unwrap().clone();
+                // skip this in case we had it already within the overwritten iterator
+                if self.seen_rids.contains(&rid) {
+                    continue;
+                }
+                self.seen_rids.push(rid);
+
+                occ.set_occurrence(overwritten);
+                // if it isn't in the range anymore, do not consider it
+                if !Self::is_in_range(&occ, self.start, self.end) {
+                    continue;
+                }
+            }
+            return Some(occ);
         }
+        None
+    }
+
+    fn fetch_next_overwritten(&mut self) -> Option<Occurrence<'a>> {
+        let base = self.dates.as_ref()?.0;
+        let timezone = self.start.timezone();
+        while self.overwritten_index < self.sorted_overwritten.len() {
+            let overwritten = self.sorted_overwritten[self.overwritten_index];
+            self.overwritten_index += 1;
+            if let Some(rid) = overwritten.rid() {
+                if self.seen_rids.contains(rid) {
+                    continue;
+                }
+                self.seen_rids.push(rid.clone());
+
+                let start_date = overwritten.start().unwrap().as_start_with_tz(&timezone);
+                let mut occ = Occurrence::new_single(
+                    self.item.source.clone(),
+                    base,
+                    CompDateType::Start,
+                    start_date,
+                );
+                occ.set_occurrence(overwritten);
+                if Self::is_in_range(&occ, self.start, self.end) {
+                    return Some(occ);
+                }
+            }
+        }
+        None
+    }
+
+    fn is_in_range(occ: &Occurrence, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
+        let occ_start = occ.occurrence_start().unwrap();
+        util::date_ranges_overlap(
+            occ_start,
+            occ.occurrence_end().unwrap_or(occ_start),
+            start,
+            end,
+        )
     }
 }
 
@@ -45,26 +125,28 @@ impl<'a> Iterator for OccurrenceIterator<'a> {
     type Item = Occurrence<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((first, dates)) = &mut self.dates {
-            dates.next().map(|(ty, d)| {
-                let mut occ = Occurrence::new_single(self.item.source.clone(), first, ty, d);
-                // was this specific occurrence overwritten?
-                if let Some(overwritten) =
-                    self.item.cal.components().iter().find(|c| match c.rid() {
-                        Some(rid)
-                            if occ.occurrence_start() == Some(rid.as_start_with_tz(&self.tz)) =>
-                        {
-                            true
-                        }
-                        _ => false,
-                    })
-                {
-                    occ.set_occurrence(overwritten);
+        // fill the lookahead candidates if not already present.
+        if self.next_recurrence.is_none() {
+            self.next_recurrence = self.fetch_next_recurrence();
+        }
+        if self.next_overwritten.is_none() {
+            self.next_overwritten = self.fetch_next_overwritten();
+        }
+
+        // take the earlier one
+        match (&self.next_recurrence, &self.next_overwritten) {
+            (None, None) => None,
+            (Some(_), None) => self.next_recurrence.take(),
+            (None, Some(_)) => self.next_overwritten.take(),
+            (Some(recurrence), Some(overwritten)) => {
+                let rec_start = recurrence.occurrence_start().unwrap();
+                let over_start = overwritten.occurrence_start().unwrap();
+                if rec_start <= over_start {
+                    self.next_recurrence.take()
+                } else {
+                    self.next_overwritten.take()
                 }
-                occ
-            })
-        } else {
-            None
+            }
         }
     }
 }
@@ -235,14 +317,14 @@ impl CalItem {
         // are multiple events, they all have the same uid and one is the base event with rid =
         // None and the others overwrite specific occurrences of that base event.
         let Some(first) = self.component_with(|c| c.rid().is_none() && filter(c)) else {
-            return OccurrenceIterator::new_empty(self, start.timezone());
+            return OccurrenceIterator::new(self, start, end, None);
         };
 
         OccurrenceIterator::new(
             self,
-            first,
-            first.dates_within(start, end),
-            start.timezone(),
+            start,
+            end,
+            Some((first, first.dates_within(start, end))),
         )
     }
 
@@ -839,5 +921,51 @@ mod tests {
             occs[1].alarm_date(),
             Some(new_datetime(1990, 1, 6, 1, 0, 0))
         );
+    }
+
+    #[test]
+    fn recurrence_overwrite_with_date_change() {
+        let mut source = CalSource::default();
+        let mut cal = Calendar::default();
+        cal.add(CalComponent::Event(
+            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
+                .rrule("FREQ=DAILY;INTERVAL=4;COUNT=3".parse().unwrap())
+                .done(),
+        ));
+        cal.add(CalComponent::Event(
+            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 8).unwrap(), "id1")
+                .rid(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 10).unwrap(),
+                    CalCompType::Event.into(),
+                ))
+                .done(),
+        ));
+        cal.add(CalComponent::Event(
+            new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(), "id1")
+                .rid(CalDate::Date(
+                    NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
+                    CalCompType::Event.into(),
+                ))
+                .done(),
+        ));
+        source.add(CalItem::new_simple(cal));
+
+        // this includes the 6th, but this is overwritten to happen on the 4th, which is outside
+        // the range
+        let occs = source
+            .occurrences_within(new_date(1990, 1, 5), new_date(1990, 1, 7))
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 0);
+
+        // this leads to an empty list from the recurrence itself, but should consider the
+        // overwritten one, which is indeed in the requested range.
+        let occs = source
+            .occurrences_within(new_date(1990, 1, 3), new_date(1990, 1, 9))
+            .collect::<Vec<_>>();
+        assert_eq!(occs.len(), 2);
+        assert_eq!(occs[0].uid(), "id1");
+        assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 4)));
+        assert_eq!(occs[1].uid(), "id1");
+        assert_eq!(occs[1].occurrence_start(), Some(new_date(1990, 1, 8)));
     }
 }
