@@ -153,7 +153,7 @@ pub fn date_range(
         (Some(CalDate::Date(start, ..)), Some(CalDate::Date(end, ..)))
             if start.succ_opt() == Some(*end) =>
         {
-            format!("{}", locale.fmt_date(&start, date_flags))
+            locale.fmt_date(&start, date_flags).to_string()
         }
         (Some(CalDate::Date(start, ..)), Some(end @ CalDate::Date(..))) => {
             format!(

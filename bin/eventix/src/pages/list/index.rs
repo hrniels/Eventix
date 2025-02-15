@@ -74,7 +74,7 @@ struct ListTemplate<'a, F: Fn(&usize) -> String> {
     tasks: Tasks<'a>,
 }
 
-impl<'a, F: Fn(&usize) -> String> ListTemplate<'a, F> {
+impl<F: Fn(&usize) -> String> ListTemplate<'_, F> {
     fn attendees_sorted(atts: &[CalAttendee]) -> Vec<&CalAttendee> {
         let mut att = atts.iter().collect::<Vec<_>>();
         att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
@@ -117,7 +117,7 @@ pub async fn handler(
             .items()
             .flat_map(|i| {
                 i.components()
-                    .into_iter()
+                    .iter()
                     .filter(|c| c.rid().is_none())
                     .map(|c| ListComponent {
                         source: i.source(),

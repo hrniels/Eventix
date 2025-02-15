@@ -130,10 +130,8 @@ impl<'a> DayOccurrence<'a> {
     pub fn status_class(&self) -> Option<String> {
         if let Some(st) = self.inner.event_status() {
             Some(format!("{:?}", st))
-        } else if let Some(st) = self.inner.todo_status() {
-            Some(format!("{:?}", st))
         } else {
-            None
+            self.inner.todo_status().map(|st| format!("{:?}", st))
         }
     }
 

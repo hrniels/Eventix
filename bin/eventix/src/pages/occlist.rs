@@ -54,7 +54,7 @@ fn min_datetime(timezone: Tz) -> DateTime<Tz> {
     loop {
         match timezone.from_local_datetime(&naive) {
             LocalResult::Single(date) => break date,
-            _ => naive = naive + Duration::days(1),
+            _ => naive += Duration::days(1),
         }
     }
 }
@@ -64,7 +64,7 @@ fn max_datetime(timezone: Tz) -> DateTime<Tz> {
     loop {
         match timezone.from_local_datetime(&naive) {
             LocalResult::Single(date) => break date,
-            _ => naive = naive - Duration::days(1),
+            _ => naive -= Duration::days(1),
         }
     }
 }
@@ -106,22 +106,18 @@ pub async fn handler(
 
     let more = occs.len() > COUNT;
     let occs: Vec<_> = match req.dir {
-        Direction::Forward => occs
-            .iter()
-            .take(COUNT)
-            .map(|o| DayOccurrence::new(o))
-            .collect(),
+        Direction::Forward => occs.iter().take(COUNT).map(DayOccurrence::new).collect(),
         Direction::Backwards => occs
             .iter()
             .skip(if more { 1 } else { 0 })
-            .map(|o| DayOccurrence::new(o))
+            .map(DayOccurrence::new)
             .collect(),
     };
 
     let date = if more {
         match req.dir {
             Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_end()),
-            Direction::Backwards => occs.iter().next().and_then(|l| l.occurrence_start()),
+            Direction::Backwards => occs.first().and_then(|l| l.occurrence_start()),
         }
         .map(|d| d.to_utc().format("%Y%m%dT%H%M%SZ").to_string())
     } else {

@@ -95,7 +95,7 @@ impl CompNew {
                 hour: None,
             },
             start_end,
-            calendar: calendar.unwrap_or(String::new()),
+            calendar: calendar.unwrap_or_default(),
             status: match req.ctype {
                 CalCompType::Todo => Some(TodoStatus::default()),
                 CalCompType::Event => None,

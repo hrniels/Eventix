@@ -69,7 +69,7 @@ fn action_update(
     } else {
         let comp = item.component_with(|c| c.uid() == &form.req.uid).unwrap();
         if !comp.is_recurrent() {
-            return Err(anyhow!("Component {} is not recurrent", form.req.uid).into());
+            return Err(anyhow!("Component {} is not recurrent", form.req.uid));
         }
 
         item.overwrite_component(rid.unwrap(), locale.timezone(), |c| {

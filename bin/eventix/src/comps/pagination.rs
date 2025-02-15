@@ -16,7 +16,7 @@ pub struct PaginationTemplate<F: Fn(&usize) -> String> {
 
 impl<F: Fn(&usize) -> String> PaginationTemplate<F> {
     pub fn new(build_url: F, total: usize, per_page: usize, page: usize) -> Self {
-        let num = (total + per_page - 1) / per_page;
+        let num = total.div_ceil(per_page);
         let page = if page > num || page < 1 { 1 } else { page };
         Self {
             build_url,

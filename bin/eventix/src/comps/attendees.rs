@@ -111,7 +111,7 @@ impl AttendeesTemplate {
             locale,
             id: name.replace("[", "_").replace("]", "_"),
             name,
-            attendees: attendees.unwrap_or(Attendees::default()),
+            attendees: attendees.unwrap_or_default(),
         }
     }
 }

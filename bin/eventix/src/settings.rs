@@ -86,7 +86,7 @@ impl Settings {
         let mut sources = String::new();
         file.read_to_string(&mut sources)
             .context(format!("read {}", FILENAME))?;
-        Ok(toml::from_str(&sources).context(format!("parse {}", FILENAME))?)
+        toml::from_str(&sources).context(format!("parse {}", FILENAME))
     }
 
     pub async fn write_to_file(&self) -> anyhow::Result<()> {

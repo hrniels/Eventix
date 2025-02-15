@@ -68,7 +68,7 @@ pub async fn watch_alarms(state: State, locale: Arc<dyn Locale + Send + Sync>) {
         let last_check = {
             let last_check = state.last_alarm_check().lock().await;
             chrono::Utc
-                .from_utc_datetime(&*last_check)
+                .from_utc_datetime(&last_check)
                 .with_timezone(locale.timezone())
         };
         let now = chrono::Utc::now().with_timezone(locale.timezone());

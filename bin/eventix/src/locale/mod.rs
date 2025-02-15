@@ -38,7 +38,7 @@ impl DateLike for &DateTime<Tz> {
 
 impl DateLike for NaiveDate {
     fn naive(&self) -> NaiveDate {
-        self.clone()
+        *self
     }
 
     fn fmt(&self, f: &str) -> String {
@@ -48,7 +48,7 @@ impl DateLike for NaiveDate {
 
 impl DateLike for &NaiveDate {
     fn naive(&self) -> NaiveDate {
-        (*self).clone()
+        **self
     }
 
     fn fmt(&self, f: &str) -> String {
