@@ -83,6 +83,8 @@ impl fmt::Display for Property {
                 // TODO that's incomplete
                 match c {
                     '\n' => f.write_char('n')?,
+                    // disallow other control characters
+                    c if c.is_control() => {}
                     c => f.write_char(c)?,
                 }
             }
