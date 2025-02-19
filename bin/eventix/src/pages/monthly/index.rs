@@ -10,11 +10,12 @@ use ical::{
     util,
 };
 use serde::Deserialize;
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use super::Page;
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::DayOccurrence;
+use crate::util::parse_human_date;
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
 
@@ -27,7 +28,7 @@ struct Day<'a> {
 
 #[derive(Default, Debug, Deserialize)]
 pub struct Request {
-    month: Option<String>,
+    date: Option<String>,
 }
 
 #[derive(Template)]
@@ -76,11 +77,7 @@ pub async fn content(
         locale.translate("Sunday"),
     ];
 
-    let date = match req.month {
-        Some(month) => NaiveDate::from_str(&format!("{}-01", month))
-            .context(format!("Invalid month: {}", month))?,
-        None => Utc::now().with_timezone(&timezone).naive_local().date(),
-    };
+    let date = parse_human_date(req.date, &timezone)?;
     let (pyear, pmonth) = util::prev_month(date.year(), date.month());
     let (nyear, nmonth) = util::next_month(date.year(), date.month());
 

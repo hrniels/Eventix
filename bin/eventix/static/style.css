@@ -539,6 +539,13 @@ div.ev_selected {
   z-index: 50;
 }
 
+/* ------------ JUMP TO DATE ------------ */
+
+.ev_jump input {
+    font-size: .75em;
+    color: #000;
+}
+
 /* ------------ CALENDAR SOURCES ------------ */
 
 div.ev_cal_src {

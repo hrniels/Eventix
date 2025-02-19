@@ -7,13 +7,13 @@ use axum::{
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Timelike, Utc};
 use ical::objects::{CalCompType, CalDate, EventLike};
 use serde::Deserialize;
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use super::Page;
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
-use crate::objects::DayOccurrence;
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
+use crate::{objects::DayOccurrence, util::parse_human_date};
 
 struct Day<'a> {
     date: NaiveDate,
@@ -164,10 +164,7 @@ pub async fn content(
 ) -> Result<impl IntoResponse, HTMLError> {
     let timezone = *locale.timezone();
 
-    let date = match req.date {
-        Some(date) => NaiveDate::from_str(&date).context(format!("Invalid date: {}", date))?,
-        None => Utc::now().with_timezone(&timezone).naive_local().date(),
-    };
+    let date = parse_human_date(req.date, &timezone)?;
     let prev_week = date - Duration::days(7);
     let next_week = date + Duration::days(7);
 

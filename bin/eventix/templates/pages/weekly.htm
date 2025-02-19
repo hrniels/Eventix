@@ -3,10 +3,30 @@
 {% block inner %}
 
 <h1 class="ev_header">
-    <a style="float: left" id="link-prev" href="/weekly?date={{ prev_week }}">&laquo;</a>
+    <div style="float: left" class="ev_jump">
+        <input type="text" id="jump_location" size="10" />
+        <input type="button" value="{{ "Jump!"|t(locale) }}" onclick="executeJump()" />
+    </div>
+
+    <a style="margin-right: .5em" id="link-prev" href="/weekly?date={{ prev_week }}">&laquo;</a>
     {{ week_start }} - {{ week_end }}
-    <a style="float: right" id="link-next" href="/weekly?date={{ next_week }}">&raquo;</a>
+    <a style="margin-left: .5em" id="link-next" href="/weekly?date={{ next_week }}">&raquo;</a>
 </h1>
+
+<script type="text/javascript">
+    function executeJump() {
+        document.location.href = '?date=' + $('#jump_location').val();
+    }
+
+    $('#jump_location').keypress(function(e) {
+        if(e.which == 13) {
+            executeJump();
+            // stop propagation
+            return false;
+        }
+    });
+</script>
+
 <table width="100%" class="ev_table">
     <tr>
         <td width="12%"></td>
@@ -18,7 +38,7 @@
                 <span class="ev_today">{{ day.date.format("%b %d") }}</span>
             </b>
             {% else %}
-            <b>{{ day.date|weekdate(locale, DateFlags::NoToday) }}</b>
+            <b>{{ day.date|weekdate(locale, DateFlags::NoToday | DateFlags::Short) }}</b>
             {% endif %}
         </td>
         {% endfor %}
@@ -175,6 +195,9 @@
             return;
 
         switch(e.code) {
+            case "KeyJ":
+                $('#jump_location').focus();
+                return false;
             case "Period":
                 document.location.href = '/weekly';
                 break;

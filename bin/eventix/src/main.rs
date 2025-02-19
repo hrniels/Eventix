@@ -9,6 +9,7 @@ mod objects;
 mod pages;
 mod settings;
 mod state;
+mod util;
 
 use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
