@@ -93,6 +93,9 @@
 
 <script type="text/javascript">
     $(document).keydown(function(e) {
+        if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
+            return;
+
         switch(e.code) {
             case "Period":
                 document.location.href = '/';

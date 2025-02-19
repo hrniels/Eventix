@@ -170,6 +170,9 @@
         // we have to ignore these keys if the focus is on an input element or similar. to be sure,
         // we only accept them when the body is focused.
         if(document.activeElement.nodeName == 'BODY') {
+            if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
+                return;
+
             switch(e.code) {
                 case "KeyE":
                     document.getElementById('link-event').click();
