@@ -10,18 +10,18 @@
 - show icon if there is a description
 - add tooltips
 - add ability to change calendar for existing events/tasks
+- prevent that recurrent events break if we change the date of all occurrences and have overwrites
 - show deleted occurrences in occurrence list (marked accordingly) and allow "undelete"
 - add calendar management (add/edit/delete)
 - more filtering: date range, ordering, status, ...?
-- add folding of filter box
 - generate link to OSM for locations
 - increment SEQUENCE: https://www.rfc-editor.org/rfc/rfc5546.html#section-2.1.4
 - submit forms with enter/ctrl+enter
 - store disabled as property in calendar
 - cancel for edit item should go back or so
 - autoreload after some time? (background task that reloads the state regularly?)
-- add a quicker way to jump to specific weeks/months/years
 - highlight if events are right now
 - fix bug in conflicts script that adds \r at the end
 - add conflicts management
 - show tasks in monthly/weekly view?
+- trayicon?
