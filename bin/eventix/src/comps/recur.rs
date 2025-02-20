@@ -13,6 +13,7 @@ use super::{combobox::ComboboxTemplate, combobox::Named, date::Date};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Frequency {
+    Hourly,
     Daily,
     Weekly,
     Monthly,
@@ -22,6 +23,7 @@ enum Frequency {
 impl Display for Frequency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Frequency::Hourly => write!(f, "HOURLY"),
             Frequency::Daily => write!(f, "DAILY"),
             Frequency::Weekly => write!(f, "WEEKLY"),
             Frequency::Monthly => write!(f, "MONTHLY"),
@@ -37,7 +39,7 @@ impl TryFrom<CalRRuleFreq> for Frequency {
         match value {
             CalRRuleFreq::Secondly => Err(()),
             CalRRuleFreq::Minutely => Err(()),
-            CalRRuleFreq::Hourly => Err(()),
+            CalRRuleFreq::Hourly => Ok(Self::Hourly),
             CalRRuleFreq::Daily => Ok(Self::Daily),
             CalRRuleFreq::Weekly => Ok(Self::Weekly),
             CalRRuleFreq::Monthly => Ok(Self::Monthly),
@@ -49,6 +51,7 @@ impl TryFrom<CalRRuleFreq> for Frequency {
 impl From<Frequency> for CalRRuleFreq {
     fn from(value: Frequency) -> Self {
         match value {
+            Frequency::Hourly => Self::Hourly,
             Frequency::Daily => Self::Daily,
             Frequency::Weekly => Self::Weekly,
             Frequency::Monthly => Self::Monthly,
@@ -64,6 +67,7 @@ impl Frequency {
     {
         let buf = String::deserialize(deserializer)?;
         match buf.as_str() {
+            "HOURLY" => Ok(Some(Frequency::Hourly)),
             "DAILY" => Ok(Some(Frequency::Daily)),
             "WEEKLY" => Ok(Some(Frequency::Weekly)),
             "MONTHLY" => Ok(Some(Frequency::Monthly)),

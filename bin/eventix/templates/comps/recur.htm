@@ -2,12 +2,15 @@
 <div id="{{ id }}-tabs">
     <ul>
         <li><a href="#{{ id }}-tabs-NONE">{{ "None"|t(locale) }}</a></li>
+        <li><a href="#{{ id }}-tabs-HOURLY">{{ "Hourly"|t(locale) }}</a></li>
         <li><a href="#{{ id }}-tabs-DAILY">{{ "Daily"|t(locale) }}</a></li>
         <li><a href="#{{ id }}-tabs-WEEKLY">{{ "Weekly"|t(locale) }}</a></li>
         <li><a href="#{{ id }}-tabs-MONTHLY">{{ "Monthly"|t(locale) }}</a></li>
         <li><a href="#{{ id }}-tabs-YEARLY">{{ "Annually"|t(locale) }}</a></li>
     </ul>
     <div id="{{ id }}-tabs-NONE">
+    </div>
+    <div id="{{ id }}-tabs-HOURLY">
     </div>
     <div id="{{ id }}-tabs-DAILY">
     </div>
@@ -127,6 +130,9 @@
                     $("#{{ id }}-tabs-end").show();
                     var label = $("#{{ id }}_interval_label");
                     switch(name) {
+                        case "HOURLY":
+                            label.html("{{ "hour(s)"|t(locale) }}");
+                            break;
                         case "DAILY":
                             label.html("{{ "day(s)"|t(locale) }}");
                             break;
@@ -149,7 +155,7 @@
 
         var tab = $("#{{ id }}_freq").attr('value');
         if(tab != 'NONE') {
-            var tabs = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+            var tabs = ['NONE', 'HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
             $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
             $("#{{ id }}-tabs-end").show();
         }
