@@ -39,7 +39,7 @@
         // we only accept them when the body is focused.
         if(document.activeElement.nodeName == 'BODY') {
             if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
-                return;
+                return true;
 
             switch(e.code) {
                 {% if page != 1 %}
@@ -54,6 +54,7 @@
                 {% endif %}
             }
         }
+        return true;
     });
 </script>
 {% endif %}

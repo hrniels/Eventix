@@ -171,7 +171,7 @@
         // we only accept them when the body is focused.
         if(document.activeElement.nodeName == 'BODY') {
             if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
-                return;
+                return true;
 
             switch(e.code) {
                 case "KeyE":

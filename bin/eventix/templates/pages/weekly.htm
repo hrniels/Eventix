@@ -191,23 +191,26 @@
     });
 
     $(document).keydown(function(e) {
-        if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
-            return;
+        if(document.activeElement.nodeName == 'BODY') {
+            if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
+                return true;
 
-        switch(e.code) {
-            case "KeyJ":
-                $('#jump_location').focus();
-                return false;
-            case "Period":
-                document.location.href = '/weekly';
-                break;
-            case "ArrowLeft":
-                document.getElementById('link-prev').click();
-                break;
-            case "ArrowRight":
-                document.getElementById('link-next').click();
-                break;
+            switch(e.code) {
+                case "KeyJ":
+                    $('#jump_location').focus();
+                    return false;
+                case "Period":
+                    document.location.href = '/weekly';
+                    break;
+                case "ArrowLeft":
+                    document.getElementById('link-prev').click();
+                    break;
+                case "ArrowRight":
+                    document.getElementById('link-next').click();
+                    break;
+            }
         }
+        return true;
     });
 </script>
 
