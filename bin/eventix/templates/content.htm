@@ -138,7 +138,7 @@
                         {% endmatch %}
                         ">
                 <span class="ev_cal_src ev_cal_src_{{ occ.source() }}"></span>
-                {% if let Some(due) = occ.end_or_due() %}
+                {% if let Some(due) = occ.occurrence_enddate() %}
                 {% match due %}
                 {% when CalDate::DateTime with (due_date) %}
                 <span><b>{{ due_date.with_tz(locale.timezone())|as_ref|time(locale, TimeFlags::Short) }}</b></span>
