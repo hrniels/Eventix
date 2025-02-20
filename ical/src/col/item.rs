@@ -412,8 +412,13 @@ impl CalItem {
         self.cal.add(comp);
     }
 
-    pub fn delete_components<N: AsRef<str>>(&mut self, uid: N) {
+    pub fn delete_by_uid<N: AsRef<str>>(&mut self, uid: N) -> Result<(), ColError> {
         self.cal.delete_components(uid);
+        if self.components().is_empty() {
+            self.remove()
+        } else {
+            self.save()
+        }
     }
 
     pub fn save(&self) -> Result<(), ColError> {

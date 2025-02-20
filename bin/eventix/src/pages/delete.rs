@@ -45,12 +45,7 @@ async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::R
             item.save()?;
         }
         None => {
-            item.delete_components(&form.uid);
-            if item.components().is_empty() {
-                item.remove()?;
-            } else {
-                item.save()?;
-            }
+            item.delete_by_uid(&form.uid)?;
         }
     }
 
