@@ -9,7 +9,6 @@
   * show a checkbox next to every field to choose between "update all" and "update base"
 - show icon if there is a description
 - add tooltips
-- add ability to change calendar for existing events/tasks
 - prevent that recurrent events break if we change the date of all occurrences and have overwrites
 - show deleted occurrences in occurrence list (marked accordingly) and allow "undelete"
 - add calendar management (add/edit/delete)
@@ -24,4 +23,8 @@
 - fix bug in conflicts script that adds \r at the end
 - add conflicts management
 - show tasks in monthly/weekly view?
-- trayicon?
+- trayicon: (we can probably just use gtk and libappindicator directly)
+  https://github.com/olback/tray-item-rs/blob/master/src/api/linux_libappindicator/mod.rs
+- websocket between server and website for remote control (open specific page from trayicon etc.):
+  https://dev.to/campbellgoe/websocket-starter-in-rust-with-client-and-server-example-4ahj
+- bug if recurrent task has no due date? then we only get 5 occurrences in the list!?
