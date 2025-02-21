@@ -105,7 +105,8 @@
         </td>
         {% for day in days %}
         <td width="12%" class="ev_month_td">
-            <div class="ev_week_cell">
+            <div class="ev_week_cell
+                        {% if day.date == today %}ev_today_bg{% endif %}">
                 <div style="position: relative; height: 1440px; padding: 0px">
                 {% for hour in 0..24 %}
                 <div style="position: absolute;
@@ -115,8 +116,7 @@
                             {% if hour > 0 %}
                             border-top: .05em dashed #000000;
                             {% endif %}"
-                     class="ev_hour_cell"
-                     {% if day.date == today %}class="ev_today_bg"{% endif %}>
+                     class="ev_hour_cell">
                     <a href="/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}"
                        style="float: left" class="ev_add_icon">
                         <i class="bi bi-plus-square"></i>
