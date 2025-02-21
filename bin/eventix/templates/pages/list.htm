@@ -123,7 +123,7 @@
     }
 </script>
 
-<h1 style="margin-top: 1em" class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
+<h1 class="ev_padtop ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
 <table width="100%" class="ev_table">
     {% if comps.is_empty() %}
     <tr>
@@ -340,7 +340,7 @@
     }
 </script>
 
-<div style="margin-top: 1em" align="center">
+<div class="ev_padtop" align="center">
 {{ pagination|safe }}
 </div>
 

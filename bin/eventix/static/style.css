@@ -5,25 +5,9 @@ body {
 	font-size: .9em;
 }
 
-div#ajax_wait_bar {
-	left: 0px;
-	text-align: center;
-	background-color: #008000;
-	color: white;
-	font-size: .9em;
-	font-weight: bold;
-	padding: 4px;
-	border: 1px dotted #fff;
-}
-
 input,select,textarea {
 	font-size: 1em;
 	padding: 2px;
-}
-
-.keyword {
-	background-color: #FFFF00;
-	color: #000;
 }
 
 img {
@@ -42,19 +26,15 @@ a:hover {
 /* ------------ PADDING ------------ */
 
 .ev_padtop {
-	margin-top: 0.9em;
-}
-
-.ev_paddouble {
-	margin-top: 2em;
+	margin-top: 0.9em !important;
 }
 
 .ev_padbottom {
-	margin-bottom: 0.9em;
+	margin-bottom: 0.9em !important;
 }
 
 .ev_padbottom_big {
-	margin-bottom: 1.5em;
+	margin-bottom: 1.5em !important;
 }
 
 /* ------------ FORMULARS ------------ */
@@ -123,50 +103,49 @@ fieldset.ev_form div.ev_submit {
 	text-decoration: none;
 }
 
-/* ------------ ROW-HOVER ------------ */
+/* ------------ CONTENT ------------ */
 
-td.ev_hlcol {
-	padding: 0.4em;
-	background-color: #ebebeb;
-}
-td.ev_hlcol_sel {
-	background-color: #FFBE5C !important;
-}
-
-tr.ev_hlrow:hover td.ev_hlcol {
-	background-color: #f5f5f5;
-}
-
-tr.ev_hlrow_sel td.ev_hlcol {
-	background-color: #FFBE5C !important;
-}
-
-/* ------------ THE DIFFERENT CONTENT-STYLES ------------ */
-
-/* for the main content */
 .ev_main {
 	padding: 0.3em;
 	background-color: #f6f6f6;
 }
 
-/* the columns on the left (if 2 column-layout) */
-.ev_left {
-	padding: 0.3em;
-	font-size: 0.9em;
-	background-color: #DBDBDB;
-	font-weight: bold;
+.ev_tabheader {
+    display: inline;
+    font-size: 1.3em;
+    margin: 0;
+    color: #fff;
+    z-index: 100;
 }
 
-.ev_desc {
-	padding-top: 0.3em;
-	font-size: 0.9em;
+.ev_header {
+	background-color: #637591;
+	border: 1px solid #bbb;
+	color: #fff;
+    padding: .5em !important;
+    margin: 0;
+	font-size: 1.3em;
+    font-weight: bold;
+    text-align: center;
+}
+.ev_header * {
+    color: #fff;
 }
 
-.ev_red {
-	background-color: #fbcbc0 !important;
+.ev_next_day_header {
+    background-color: #f0f0f0;
+	border-top: 1px solid #bbb !important;
+	border-bottom: 1px solid #bbb !important;
+    padding: .3em;
+    font-weight: bold;
 }
-.ev_green {
-	background-color: #bbfbbd !important;
+
+.ev_overdue {
+    color: red;
+    font-weight: bold;
+}
+.ev_duetoday {
+    font-weight: bold;
 }
 
 /* ------------ TABLES ------------ */
@@ -198,14 +177,6 @@ table.ev_table th a:hover {
 	color: #fff;
 	text-decoration: none;
 }
-td.ev_coldesc {
-	font-weight: bold;
-	background-color: #f0f0f0;
-}
-
-.ev_highlight {
-	border: 2px solid #7a8ba9;
-}
 
 table.ev_date {
 	border-collapse: collapse;
@@ -214,8 +185,6 @@ table.ev_date {
 table.ev_date td {
 	padding: 0.3em;
 }
-
-/* ------------ TABLE BORDER ------------ */
 
 .ev_border {
 	border-radius: 2px;
@@ -226,23 +195,7 @@ table.ev_date td {
 	border: 1px solid #7F90AE;
 }
 
-.ev_code {
-	margin: 0.3em;
-	padding: 0.3em;
-	border: 1px dotted #999;
-	background-color: #fff;
-	font-family: monospace;
-}
-
 /* ------------ LISTS ------------ */
-
-ul.ev_source {
-	padding: 35px;
-}
-ul.ev_source li {
-	margin: 0;
-	padding: 0;
-}
 
 ul.ev_iconlist {
     margin-right: .1em;
@@ -347,20 +300,6 @@ a.ev_button_critical:hover {
     text-decoration: none;
 }
 
-input.ev_btn_okay {
-	vertical-align: middle;
-	color: #008000;
-	width: 23px;
-	height: 23px;
-}
-
-input.ev_btn_cancel {
-	vertical-align: middle;
-	color: #800000;
-	width: 23px;
-	height: 23px;
-}
-
 .ev_button_selected, .ev_button_selected:hover, .ev_button_selected:active,
 .ev_button_selected:link, .ev_button_selected:visited {
     background-color: #627492 !important;
@@ -383,14 +322,7 @@ span.ev_msg_error span.ev_msg_info {
 	font-weight: bold;
 }
 
-/* ------------ MONTH VIEW ------------ */
-
-.ev_month_td {
-    max-width: 3cm;
-    height: 3cm;
-    vertical-align: top;
-    padding: 0px !important;
-}
+/* ------------ BOXES ------------ */
 
 .ev_vscrollbox {
     max-width: 350px;
@@ -399,7 +331,6 @@ span.ev_msg_error span.ev_msg_info {
     overflow-y: scroll;
     text-overflow: ellipsis;
 }
-
 .ev_box {
 	border: 1px solid #bbb;
     display: flex;
@@ -419,44 +350,13 @@ span.ev_msg_error span.ev_msg_info {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.ev_tabheader {
-    display: inline;
-    font-size: 1.3em;
-    margin: 0;
-    color: #fff;
-    z-index: 100;
-}
-.ev_header {
-	background-color: #637591;
-	border: 1px solid #bbb;
-	color: #fff;
-    padding: .5em !important;
-    margin: 0;
-	font-size: 1.3em;
-    font-weight: bold;
-    text-align: center;
-}
-.ev_header * {
-    color: #fff;
-}
-.ev_next_day_header {
-    background-color: #f0f0f0;
-	border-top: 1px solid #bbb !important;
-	border-bottom: 1px solid #bbb !important;
-    padding: .3em;
-    font-weight: bold;
+
+/* ------------ MONTH/WEEK VIEW ------------ */
+
+.ev_event_occurrence {
+    cursor: pointer;
 }
 
-.ev_month_day_header {
-    text-align: right;
-    background-color: #f0f0f0;
-    color: #555;
-    padding: .2em;
-}
-.ev_cur_month {
-    background-color: #ddd;
-    color: #000 !important;
-}
 .ev_today {
     border-radius: 10px;
     border: .05em solid #000;
@@ -465,10 +365,34 @@ span.ev_msg_error span.ev_msg_info {
     color: #000;
     font-weight: bold;
 }
+.ev_today_bg {
+    background-color: #d4e3ff;
+}
 
 .ev_status_Cancelled, .ev_status_Completed {
     text-decoration: line-through;
     text-decoration-thickness: 2px;
+}
+
+/* ------------ MONTH VIEW ------------ */
+
+.ev_month_td {
+    max-width: 3cm;
+    height: 3cm;
+    vertical-align: top;
+    padding: 0px !important;
+}
+
+.ev_month_day_header {
+    text-align: right;
+    background-color: #f0f0f0;
+    color: #555;
+    padding: .2em;
+}
+
+.ev_cur_month {
+    background-color: #ddd;
+    color: #000 !important;
 }
 
 .ev_month_cell {
@@ -481,21 +405,8 @@ span.ev_msg_error span.ev_msg_info {
     text-overflow: ellipsis;
     padding: .2em;
 }
-.ev_event_occurrence {
-    cursor: pointer;
-}
 
-.ev_overdue {
-    color: red;
-    font-weight: bold;
-}
-.ev_duetoday {
-    font-weight: bold;
-}
-
-.ev_today_bg {
-    background-color: #d4e3ff;
-}
+/* ------------ WEEK VIEW ------------ */
 
 .ev_week_cell {
     display: flex;
