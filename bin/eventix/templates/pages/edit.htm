@@ -17,6 +17,19 @@
                 </ul>
                 <div id="tabs-basics" style="padding: 0">
                     <dl>
+                        <dt>{{ "Calendar"|t(locale) }}:</dt>
+                        <dd>
+                        {% if let Some(calendars) = calendars %}
+                        {{ calendars|safe }}
+                        {% else %}
+                        <div style="display: flex; gap: .4em">
+                            <span class="ev_cal_src ev_cal_src_{{ source.id() }}"></span>
+                            {{ source.name() }}
+                        </div>
+                        {% endif %}
+                        </dd>
+                    </dl>
+                    <dl>
                         <dt>{{ "Summary"|t(locale) }}:</dt>
                         <dd><input type="text" size="50" name="summary" value="{{ summary }}" /></dd>
                     </dl>

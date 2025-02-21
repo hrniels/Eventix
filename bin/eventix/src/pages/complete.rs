@@ -62,7 +62,7 @@ async fn handler(
             return Err(anyhow!("Component {} is not recurrent", req.uid).into());
         }
 
-        item.overwrite_component(rid.unwrap(), locale.timezone(), complete);
+        item.create_overwrite(rid.unwrap(), locale.timezone(), complete);
     }
     item.save()
         .context(format!("Save item {}:{:?}", req.uid, req.rid))?;

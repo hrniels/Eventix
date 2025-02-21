@@ -180,8 +180,16 @@ impl CalItem {
         &self.source
     }
 
+    pub(crate) fn set_source(&mut self, src: Arc<String>) {
+        self.source = src;
+    }
+
     pub fn path(&self) -> &PathBuf {
         &self.path
+    }
+
+    pub(crate) fn set_path(&mut self, path: PathBuf) {
+        self.path = path;
     }
 
     pub fn calendar(&self) -> &Calendar {
@@ -343,7 +351,7 @@ impl CalItem {
         self.cal.components()
     }
 
-    pub fn overwrite_component<F>(&mut self, rid: CalDate, tz: &Tz, func: F)
+    pub fn create_overwrite<F>(&mut self, rid: CalDate, tz: &Tz, func: F)
     where
         F: FnOnce(&mut CalComponent),
     {
@@ -412,13 +420,8 @@ impl CalItem {
         self.cal.add(comp);
     }
 
-    pub fn delete_by_uid<N: AsRef<str>>(&mut self, uid: N) -> Result<(), ColError> {
+    pub(crate) fn delete_by_uid<N: AsRef<str>>(&mut self, uid: N) {
         self.cal.delete_components(uid);
-        if self.components().is_empty() {
-            self.remove()
-        } else {
-            self.save()
-        }
     }
 
     pub fn save(&self) -> Result<(), ColError> {

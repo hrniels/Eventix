@@ -45,7 +45,8 @@ async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::R
             item.save()?;
         }
         None => {
-            item.delete_by_uid(&form.uid)?;
+            let src = item.source().clone();
+            store.source_mut(&src).unwrap().delete_by_uid(&form.uid)?;
         }
     }
 

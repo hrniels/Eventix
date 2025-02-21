@@ -29,4 +29,8 @@ pub enum ColError {
     FileParse(PathBuf, ParseError),
     #[error("Getting file type for {0} failed: {1}")]
     FileType(PathBuf, io::Error),
+    #[error("Unable to find source with id {0}")]
+    SourceNotFound(String),
+    #[error("Unable to find item with path {0}")]
+    ItemNotFound(PathBuf),
 }

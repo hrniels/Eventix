@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use chrono::DateTime;
 use chrono_tz::Tz;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::col::{CalItem, CalSource, ColError, Occurrence};
-use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo};
+use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct CalStore {
@@ -27,6 +27,18 @@ impl CalStore {
 
     pub fn sources(&self) -> &[CalSource] {
         &self.sources
+    }
+
+    pub fn sources_for_type(&self, ty: CalCompType) -> impl Iterator<Item = &CalSource> {
+        self.sources
+            .iter()
+            .filter(move |src| match src.props().get("types") {
+                Some(src_ty) => {
+                    let types: Vec<CalCompType> = serde_json::from_str(src_ty).unwrap();
+                    types.contains(&ty)
+                }
+                None => true,
+            })
     }
 
     pub fn items(&self) -> impl Iterator<Item = &CalItem> {
@@ -115,6 +127,42 @@ impl CalStore {
 
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
         self.items().flat_map(|i| i.events())
+    }
+
+    pub fn switch_source(
+        &mut self,
+        path: PathBuf,
+        old: &Arc<String>,
+        new: &Arc<String>,
+    ) -> Result<(), ColError> {
+        let old_src = self
+            .source_mut(old)
+            .ok_or_else(|| ColError::SourceNotFound((*old).to_string()))?;
+        let mut item = old_src.delete_item(&path)?;
+
+        let new_src = match self.source_mut(new) {
+            Some(src) => src,
+            None => {
+                // if that failed, store the item in the old source again
+                item.save().unwrap();
+                self.source_mut(old).unwrap().add(item);
+                return Err(ColError::SourceNotFound((*new).to_string()));
+            }
+        };
+
+        item.set_source(new.clone());
+        item.set_path(new_src.path().join(item.path().file_name().unwrap()));
+        if let Err(e) = item.save() {
+            // if that failed, change everything back
+            let old_src = self.source(old).unwrap();
+            item.set_source(old.clone());
+            item.set_path(old_src.path().join(item.path().file_name().unwrap()));
+            item.save().unwrap();
+            self.source_mut(old).unwrap().add(item);
+            return Err(e);
+        }
+        new_src.add(item);
+        Ok(())
     }
 
     pub fn save(&self) -> Result<(), ColError> {

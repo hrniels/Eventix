@@ -80,16 +80,7 @@ pub async fn content(
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
         calendars: CalComboTemplate::new(
             "calendar",
-            store
-                .sources()
-                .iter()
-                .filter(|src| match src.props().get("types") {
-                    Some(ty) => {
-                        let types: Vec<CalCompType> = serde_json::from_str(ty).unwrap();
-                        types.contains(&form.req.ctype)
-                    }
-                    None => true,
-                }),
+            store.sources_for_type(form.req.ctype),
             calendar,
         ),
         attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),

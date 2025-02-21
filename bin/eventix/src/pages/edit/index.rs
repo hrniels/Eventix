@@ -5,7 +5,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use ical::{
-    col::Occurrence,
+    col::{CalSource, Occurrence},
     objects::{CalDate, EventLike},
 };
 use std::sync::Arc;
@@ -13,8 +13,8 @@ use std::sync::Arc;
 use super::{CompEdit, Page, Request};
 use crate::{
     comps::{
-        alarm::AlarmTemplate, attendees::AttendeesTemplate, datetimerange::DateTimeRangeTemplate,
-        recur::RecurTemplate, todostatus::TodoStatusTemplate,
+        alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
+        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
     locale::{self, DateFlags, Locale, TimeFlags},
     pages::Breadcrumb,
@@ -29,6 +29,8 @@ struct EditTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     uid: String,
     rid: Option<String>,
+    source: &'a CalSource,
+    calendars: Option<CalComboTemplate>,
     summary: &'a String,
     location: &'a String,
     description: &'a String,
@@ -92,8 +94,17 @@ pub async fn content(
 
     let form = match form {
         Some(f) => f,
-        None => CompEdit::new_from_occurrence(req, &occ, locale.timezone()),
+        None => {
+            let cal = if req.rid.is_none() {
+                Some((*item.source()).to_string())
+            } else {
+                None
+            };
+            CompEdit::new_from_occurrence(req, &occ, cal, locale.timezone())
+        }
     };
+
+    let source = store.source(item.source()).unwrap();
 
     let events = Events::new(&store, &disabled, &locale);
     let tasks = Tasks::new(&store, &disabled, &locale);
@@ -102,6 +113,14 @@ pub async fn content(
         page,
         uid: form.req.uid.clone(),
         rid: form.req.rid.clone(),
+        source,
+        calendars: form.calendar.map(|cal| {
+            CalComboTemplate::new(
+                "calendar",
+                store.sources_for_type(occ.ctype()),
+                Arc::new(cal),
+            )
+        }),
         summary: &form.summary,
         location: &form.location,
         description: &form.description,

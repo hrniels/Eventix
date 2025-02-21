@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use ical::col::CalItem;
+use ical::col::CalStore;
 use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use std::sync::Arc;
+use tokio::sync::MutexGuard;
 
 use crate::error::HTMLError;
 use crate::extract::MultiForm;
@@ -15,9 +16,14 @@ use super::{CompAction, CompEdit};
 fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
-    item: &mut CalItem,
+    mut store: MutexGuard<'_, CalStore>,
     form: &mut CompEdit,
 ) -> anyhow::Result<bool> {
+    let item = store.item_by_id_mut(&form.req.uid).context(format!(
+        "Unable to find component with uid '{}'",
+        form.req.uid
+    ))?;
+
     let rid = if let Some(ref rid) = form.req.rid {
         Some(
             rid.parse::<CalDate>()
@@ -72,9 +78,23 @@ fn action_update(
             return Err(anyhow!("Component {} is not recurrent", form.req.uid));
         }
 
-        item.overwrite_component(rid.unwrap(), locale.timezone(), |c| {
+        item.create_overwrite(rid.unwrap(), locale.timezone(), |c| {
             form.update(c, locale);
         });
+    }
+
+    // should we move the item to a different source?
+    if form.req.rid.is_none() {
+        let cal = form
+            .calendar
+            .as_ref()
+            .ok_or_else(|| anyhow!("Calendar not specified"))?;
+        if *cal != **item.source() {
+            let path = item.path().clone();
+            let src = item.source().clone();
+            store.switch_source(path, &src, &Arc::new(cal.to_string()))?;
+            return Ok(true);
+        }
     }
 
     item.save()?;
@@ -90,14 +110,8 @@ pub async fn handler(
 
     let req = form.req.clone();
     let form = {
-        let mut store = state.store().lock().await;
-
-        let item = store.item_by_id_mut(&form.req.uid).context(format!(
-            "Unable to find component with uid '{}'",
-            form.req.uid
-        ))?;
-
-        if action_update(&mut page, &locale, item, &mut form)? {
+        let store = state.store().lock().await;
+        if action_update(&mut page, &locale, store, &mut form)? {
             None
         } else {
             Some(form)

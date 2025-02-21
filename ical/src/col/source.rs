@@ -153,6 +153,28 @@ impl CalSource {
             .flat_map(move |i| i.filtered_occurrences_within(start, end, filter.clone()))
     }
 
+    pub fn delete_by_uid<S: AsRef<str>>(&mut self, uid: S) -> Result<(), ColError> {
+        let item = self.item_by_id_mut(&uid).unwrap();
+        item.delete_by_uid(uid);
+        if item.components().is_empty() {
+            let path = item.path().clone();
+            self.delete_item(&path).map(|_| ())
+        } else {
+            item.save()
+        }
+    }
+
+    pub(crate) fn delete_item(&mut self, path: &PathBuf) -> Result<CalItem, ColError> {
+        let idx = self
+            .items
+            .iter()
+            .position(|i| i.path() == path)
+            .ok_or_else(|| ColError::ItemNotFound(path.clone()))?;
+        let mut item = self.items.remove(idx);
+        item.remove()?;
+        Ok(item)
+    }
+
     pub fn save(&self) -> Result<(), ColError> {
         for i in &self.items {
             i.save()?;

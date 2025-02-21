@@ -31,6 +31,7 @@ pub struct Request {
 pub struct CompEdit {
     #[serde(flatten)]
     req: Request,
+    calendar: Option<String>,
     summary: String,
     location: String,
     description: String,
@@ -42,8 +43,14 @@ pub struct CompEdit {
 }
 
 impl CompEdit {
-    pub fn new_from_occurrence(req: Request, occ: &Occurrence, tz: &Tz) -> Self {
+    pub fn new_from_occurrence(
+        req: Request,
+        occ: &Occurrence,
+        calendar: Option<String>,
+        tz: &Tz,
+    ) -> Self {
         Self {
+            calendar,
             summary: occ.summary().cloned().unwrap_or(String::from("")),
             location: occ.location().cloned().unwrap_or(String::from("")),
             description: occ.description().cloned().unwrap_or(String::from("")),
