@@ -44,7 +44,7 @@ pub fn router(state: crate::state::State) -> Router {
 }
 
 #[derive(Template)]
-#[template(path = "pages/occlist.htm")]
+#[template(path = "ajax/occlist.htm")]
 struct OccListTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     occs: Vec<DayOccurrence<'a>>,

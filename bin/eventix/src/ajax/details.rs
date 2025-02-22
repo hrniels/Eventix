@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
+use axum::{routing::get, Router};
 use ical::col::CalSource;
 use ical::objects::EventLike;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,12 @@ use crate::locale::{self, DateFlags, Locale};
 
 use crate::objects::DayOccurrence;
 
+pub fn router(state: crate::state::State) -> Router {
+    Router::new()
+        .route("/details", get(handler))
+        .with_state(state)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
@@ -28,7 +35,7 @@ struct Response {
 }
 
 #[derive(Template)]
-#[template(path = "pages/details.htm")]
+#[template(path = "ajax/details.htm")]
 struct DetailsTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     source: &'a CalSource,
@@ -36,7 +43,7 @@ struct DetailsTemplate<'a> {
     org: Option<OrganizerTemplate<'a>>,
 }
 
-pub async fn handler(
+async fn handler(
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {

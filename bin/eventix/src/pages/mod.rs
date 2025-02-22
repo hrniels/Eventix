@@ -1,15 +1,7 @@
-pub mod attendees;
-pub mod complete;
-pub mod delete;
-pub mod details;
 pub mod edit;
 pub mod list;
 pub mod monthly;
 pub mod new;
-pub mod occlist;
-pub mod reload;
-pub mod togglecal;
-pub mod toggleexcl;
 pub mod weekly;
 
 mod events;

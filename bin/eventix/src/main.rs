@@ -1,3 +1,4 @@
+mod ajax;
 mod comp;
 mod comps;
 mod error;
@@ -11,13 +12,11 @@ mod settings;
 mod state;
 mod util;
 
+use ajax::{attendees, complete, delete, details, occlist, reload, togglecal, toggleexcl};
 use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
-use pages::{
-    attendees, complete, delete, details, edit, list, monthly, new, occlist, reload, togglecal,
-    toggleexcl, weekly,
-};
+use pages::{edit, list, monthly, new, weekly};
 use std::env;
 use tower_http::{
     services::{ServeDir, ServeFile},
