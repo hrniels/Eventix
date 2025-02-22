@@ -66,6 +66,17 @@ function completeTodo(uid, rid) {
     });
 }
 
+function toggleExcl(uid, rid, onsuccess) {
+    $.ajax({
+        type: 'GET',
+        url: '/toggleexcl?uid=' + uid + '&rid=' + rid,
+        dataType: 'json',
+        success: function(data) {
+            onsuccess(data);
+        },
+    });
+}
+
 function deleteItem(uid, rid, onDeleted) {
     var url = '/delete?uid=' + uid;
     if(rid != null)

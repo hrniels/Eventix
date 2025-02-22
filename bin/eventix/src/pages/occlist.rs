@@ -28,6 +28,7 @@ pub struct Request {
     uid: String,
     date: String,
     dir: Direction,
+    count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -73,8 +74,6 @@ pub async fn handler(
     State(state): State<crate::state::State>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    const COUNT: usize = 5;
-
     let locale = locale::default();
 
     let date = req
@@ -92,21 +91,27 @@ pub async fn handler(
         Direction::Forward => {
             let start = date + Duration::seconds(1);
             let end = max_datetime(*locale.timezone());
-            item.occurrences_within(start, end)
-                .take(COUNT + 1)
+            item.occurrences_within(start, end, |_| true)
+                .take(req.count + 1)
                 .collect()
         }
         Direction::Backwards => {
             let start = min_datetime(*locale.timezone());
             let end = date;
-            let occs = item.occurrences_within(start, end).collect::<Vec<_>>();
-            occs[occs.len().saturating_sub(COUNT + 1)..].to_vec()
+            let occs = item
+                .occurrences_within(start, end, |_| true)
+                .collect::<Vec<_>>();
+            occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
     };
 
-    let more = occs.len() > COUNT;
+    let more = occs.len() > req.count;
     let occs: Vec<_> = match req.dir {
-        Direction::Forward => occs.iter().take(COUNT).map(DayOccurrence::new).collect(),
+        Direction::Forward => occs
+            .iter()
+            .take(req.count)
+            .map(DayOccurrence::new)
+            .collect(),
         Direction::Backwards => occs
             .iter()
             .skip(if more { 1 } else { 0 })

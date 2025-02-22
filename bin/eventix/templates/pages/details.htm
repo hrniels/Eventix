@@ -152,9 +152,10 @@
                 </a>
                 {% endif %}
                 {% if occ.is_recurrent() %}
-                <a id="delete-occ-button" style="float: left" class="ev_button ev_button_critical" href="#">
-                    <i class="bi bi-trash"></i>
-                    <span>{{ "Delete occ.:"|t(locale) }}</span>
+                <a style="float: left" class="ev_button ev_button_normal"
+                                       href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">
+                    <i class="bi bi-dash-circle"></i>
+                    <span>{{ "Exclude"|t(locale) }}</span>
                 </a>
                 {% endif %}
             </td>
@@ -165,11 +166,6 @@
 <div id="delete-series-confirm-{{ occ.uid_html() }}" title="{{ "Are you sure?"|t(locale) }}">
     {{ "This will permanently delete this series."|t(locale) }}
 </div>
-{% if occ.is_recurrent() %}
-<div id="delete-occ-confirm-{{ occ.uid_html() }}" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "This will permanently delete this occurrence."|t(locale) }}
-</div>
-{% endif %}
 <script>
     $(function() {
         confirmDialog(
@@ -179,15 +175,5 @@
                 deleteItem('{{ occ.uid() }}', null, reloadPage);
             }
         );
-
-        {% if occ.is_recurrent() %}
-        confirmDialog(
-            'delete-occ-confirm-{{ occ.uid_html() }}',
-            'delete-occ-button',
-            function() {
-                deleteItem('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage);
-            }
-        );
-        {% endif %}
     });
 </script>

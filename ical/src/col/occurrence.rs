@@ -28,6 +28,7 @@ pub struct Occurrence<'c> {
     end: Option<DateTime<Tz>>,
     base: &'c CalComponent,
     occ: Option<&'c CalComponent>,
+    excluded: bool,
 }
 
 impl<'c> Occurrence<'c> {
@@ -36,6 +37,7 @@ impl<'c> Occurrence<'c> {
         base: &'c CalComponent,
         start: Option<DateTime<Tz>>,
         end: Option<DateTime<Tz>>,
+        excluded: bool,
     ) -> Self {
         Self {
             source,
@@ -43,6 +45,7 @@ impl<'c> Occurrence<'c> {
             end,
             base,
             occ: None,
+            excluded,
         }
     }
 
@@ -51,6 +54,7 @@ impl<'c> Occurrence<'c> {
         base: &'c CalComponent,
         ty: CompDateType,
         date: DateTime<Tz>,
+        excluded: bool,
     ) -> Self {
         Self::new(
             source,
@@ -65,6 +69,7 @@ impl<'c> Occurrence<'c> {
             } else {
                 None
             },
+            excluded,
         )
     }
 
@@ -85,6 +90,10 @@ impl<'c> Occurrence<'c> {
 
     pub fn is_overwritten(&self) -> bool {
         self.occ.is_some()
+    }
+
+    pub fn is_excluded(&self) -> bool {
+        self.excluded
     }
 
     pub fn event_status(&self) -> Option<CalEventStatus> {

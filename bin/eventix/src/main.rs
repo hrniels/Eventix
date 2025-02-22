@@ -16,7 +16,7 @@ use clap::Parser;
 use error::HTMLError;
 use pages::{
     attendees, complete, delete, details, edit, list, monthly, new, occlist, reload, togglecal,
-    weekly,
+    toggleexcl, weekly,
 };
 use std::env;
 use tower_http::{
@@ -68,6 +68,7 @@ async fn main() {
         .merge(list::router(state.clone()))
         .merge(complete::router(state.clone()))
         .merge(delete::router(state.clone()))
+        .merge(toggleexcl::router(state.clone()))
         .merge(togglecal::router(state.clone()))
         .merge(occlist::router(state.clone()))
         .merge(attendees::router(state.clone()))

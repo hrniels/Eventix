@@ -9,6 +9,7 @@ pub mod new;
 pub mod occlist;
 pub mod reload;
 pub mod togglecal;
+pub mod toggleexcl;
 pub mod weekly;
 
 mod events;

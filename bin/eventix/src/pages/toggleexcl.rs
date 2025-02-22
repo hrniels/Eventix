@@ -1,9 +1,10 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use ical::col::CalStore;
+use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -13,6 +14,7 @@ use crate::error::HTMLError;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
     uid: String,
+    rid: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -20,7 +22,7 @@ struct Response {}
 
 pub fn router(state: crate::state::State) -> Router {
     Router::new()
-        .route("/delete", get(handler))
+        .route("/toggleexcl", get(handler))
         .with_state(state)
 }
 
@@ -30,8 +32,17 @@ async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::R
         .item_by_id_mut(&form.uid)
         .ok_or_else(|| anyhow!("Unable to find item with uid {}", form.uid))?;
 
-    let src = item.source().clone();
-    store.source_mut(&src).unwrap().delete_by_uid(&form.uid)?;
+    let date = form
+        .rid
+        .parse::<CalDate>()
+        .context(format!("Invalid rid date: {}", form.rid))?;
+
+    let base = item
+        .component_with_mut(|c| c.rid().is_none() && c.uid() == &form.uid)
+        .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
+
+    base.toggle_exclude(date);
+    item.save()?;
 
     Ok(())
 }

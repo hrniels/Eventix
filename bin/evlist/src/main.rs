@@ -31,7 +31,7 @@ fn main() -> Result<(), anyhow::Error> {
     let end = start + Duration::days(14);
 
     let mut occurrences = store
-        .occurrences_within(start, end)
+        .occurrences_within(start, end, |_| true)
         .filter(|o| o.ctype() == CalCompType::Event)
         .collect::<Vec<_>>();
     occurrences.sort_by_key(|a| a.occurrence_start());

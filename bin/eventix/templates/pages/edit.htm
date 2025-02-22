@@ -84,15 +84,11 @@
                 <table width="100%" class="ev_noborder">
                     <tr>
                         <td width="25%" align="left">
+                            {% if rid.is_none() %}
                             <a id="delete-button" class="ev_button_big ev_button_critical" href="#">
-                                <span>
-                                    {% if let Some(rid) = rid %}
-                                    {{ "Delete occurrence"|t(locale) }}
-                                    {% else %}
-                                    {{ "Delete series"|t(locale) }}
-                                    {% endif %}
-                                </span>
+                                <span>{{ "Delete series"|t(locale) }}</span>
                             </a>
+                            {% endif %}
                         </td>
                         <td width="50%" align="center">
                             <a class="ev_button_big ev_button_normal" style="width: 80px"
@@ -122,17 +118,15 @@
     }
 
     $(function() {
+        {% if rid.is_none() %}
         confirmDialog(
             'delete-confirm',
             'delete-button',
             function() {
-                {% if let Some(rid) = rid %}
-                deleteItem('{{ uid }}', '{{ rid }}', onDeleted);
-                {% else %}
                 deleteItem('{{ uid }}', null, onDeleted);
-                {% endif %}
             }
         );
+        {% endif %}
 
         $("#tabs").tabs({
             create: function(event, ui) {
@@ -141,12 +135,10 @@
         });
     });
 </script>
+{% if rid.is_none() %}
 <div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
-    {% if let Some(rid) = rid %}
-    {{ "This will permanently delete this occurrence."|t(locale) }}
-    {% else %}
     {{ "This will permanently delete this series."|t(locale) }}
-    {% endif %}
 </div>
+{% endif %}
 
 {% endblock inner %}

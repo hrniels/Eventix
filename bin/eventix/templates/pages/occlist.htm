@@ -1,5 +1,5 @@
 {% for occ in occs %}
-<tr>
+<tr id="occrow_{{ occ.rid_html() }}">
     <td>
         &bull;&nbsp;
         <span class="ev_summary
@@ -7,7 +7,10 @@
                      {% when Some with (cl) %}
                      ev_status_{{ cl }}
                      {% when _ %}
-                     {% endmatch %}">
+                     {% endmatch %}
+                     {% if occ.is_excluded() %}
+                     ev_status_Completed
+                     {% endif %}">
         {{ occ.summary().unwrap() }}
         </span>
         &nbsp;
@@ -28,11 +31,18 @@
             <i class="bi bi-pencil"></i>
             <span>{{ "Edit"|t(locale) }}</span>
         </a>
-        <a id="delete-occ-button-{{ occ.rid_html() }}" style="float: right" class="ev_button ev_button_critical">
-            <i class="bi bi-trash"></i>
-            <span>{{ "Delete"|t(locale) }}</span>
+        <a style="float: right; width: 60px"
+           class="ev_button ev_button_normal"
+           href="javascript:toggleExclAndRefresh('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+            {% if !occ.is_excluded() %}
+            <i class="bi bi-dash-circle"></i>
+            <span>{{ "Exclude"|t(locale) }}</span>
+            {% else %}
+            <i class="bi bi-plus-circle"></i>
+            <span>{{ "Include"|t(locale) }}</span>
+            {% endif %}
         </a>
-        {% if occ.ctype() == CalCompType::Todo %}
+        {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
         {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
         <a style="float: right" class="ev_button ev_button_good"
                                 href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}')"
@@ -42,18 +52,6 @@
         </a>
         {% endif %}
         {% endif %}
-        <div id="delete-occ-confirm-{{ occ.rid_html() }}" title="{{ "Are you sure?"|t(locale) }}">
-            {{ "This will permanently delete this occurrence."|t(locale) }}
-        </div>
-        <script type="text/javascript">
-            confirmDialog(
-                'delete-occ-confirm-{{ occ.rid_html() }}',
-                'delete-occ-button-{{ occ.rid_html() }}',
-                function() {
-                    deleteItem('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage);
-                }
-            );
-        </script>
     </td>
 </tr>
 {% endfor %}

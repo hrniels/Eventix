@@ -69,15 +69,26 @@
         Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
     }
 
+    function toggleExclAndRefresh(uid, rid) {
+        toggleExcl(uid, rid, function(data) {
+            loadOccs(uid, rid, 'Forward', 1, function(data) {
+                var row = document.getElementById('occrow_' + rid);
+                var prev = row.previousSibling;
+                row.remove();
+                $(prev).after(data.html);
+            });
+        });
+    }
+
     if(Cookies.get('ev_list_filter') != 1)
         $('#filter_box').hide();
 
     var occs_state = {};
 
-    function loadOccs(uid, ndate, dir, onsuccess) {
+    function loadOccs(uid, ndate, dir, count, onsuccess) {
         $.ajax({
             type: 'GET',
-            url: '/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir,
+            url: '/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir + '&count=' + count,
             dataType: 'json',
             success: function(data) {
                 onsuccess(data);
@@ -87,7 +98,7 @@
 
     function loadPrev(id, uid) {
         if(occs_state[uid].prev) {
-            loadOccs(uid, occs_state[uid].prev, 'Backwards', function(data) {
+            loadOccs(uid, occs_state[uid].prev, 'Backwards', 5, function(data) {
                 occs_state[uid].prev = data.date;
                 var row = $('#row_' + id + '_prev');
                 row.after(data.html);
@@ -99,7 +110,7 @@
 
     function loadNext(id, uid) {
         if(occs_state[uid].next) {
-            loadOccs(uid, occs_state[uid].next, 'Forward', function(data) {
+            loadOccs(uid, occs_state[uid].next, 'Forward', 5, function(data) {
                 occs_state[uid].next = data.date;
                 var row = $('#row_' + id + '_next');
                 row.before(data.html);

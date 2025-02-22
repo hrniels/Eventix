@@ -295,8 +295,12 @@ impl UpdatableEventLike for EventLikeComponent {
         self.rid = rid;
     }
 
-    fn add_exdate(&mut self, date: CalDate) {
-        self.exdates.push(date);
+    fn toggle_exclude(&mut self, date: CalDate) {
+        if self.exdates.contains(&date) {
+            self.exdates.retain(|d| d != &date);
+        } else {
+            self.exdates.push(date);
+        }
     }
 
     fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {
@@ -353,18 +357,15 @@ impl<'a> CompDateIterator<'a> {
 }
 
 impl Iterator for CompDateIterator<'_> {
-    type Item = (CompDateType, DateTime<Tz>);
+    type Item = (CompDateType, DateTime<Tz>, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(recur) = &mut self.recur {
-            for date in recur {
-                if !self.exdates.contains(&date) {
-                    return Some((CompDateType::Start, date));
-                }
-            }
-            None
+            recur
+                .next()
+                .map(|date| (CompDateType::Start, date, self.exdates.contains(&date)))
         } else {
-            self.single.take()
+            self.single.take().map(|(ty, date)| (ty, date, false))
         }
     }
 }
@@ -613,8 +614,8 @@ impl UpdatableEventLike for CalComponent {
         set_with_ev_or_todo!(self, set_rid, rid);
     }
 
-    fn add_exdate(&mut self, date: CalDate) {
-        set_with_ev_or_todo!(self, add_exdate, date);
+    fn toggle_exclude(&mut self, date: CalDate) {
+        set_with_ev_or_todo!(self, toggle_exclude, date);
     }
 
     fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {

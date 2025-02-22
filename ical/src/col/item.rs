@@ -52,8 +52,8 @@ impl<'a> OccurrenceIterator<'a> {
     fn fetch_next_recurrence(&mut self) -> Option<Occurrence<'a>> {
         // unwrap the base component and the recurring date iterator.
         let (base, ref mut date_iter) = self.dates.as_mut()?;
-        for (ty, d) in date_iter {
-            let mut occ = Occurrence::new_single(self.item.source.clone(), base, ty, d);
+        for (ty, d, excluded) in date_iter {
+            let mut occ = Occurrence::new_single(self.item.source.clone(), base, ty, d, excluded);
             // check if an overwritten event exists for this occurrence.
             if let Some(overwritten) = self.item.cal.components().iter().find(|c| {
                 matches!(c.rid(),
@@ -97,6 +97,7 @@ impl<'a> OccurrenceIterator<'a> {
                     base,
                     CompDateType::Start,
                     start_date,
+                    false,
                 );
                 occ.set_occurrence(overwritten);
                 if Self::is_in_range(&occ, self.start, self.end) {
@@ -218,10 +219,13 @@ impl CalItem {
                     alarms.extend(
                         first
                             .dates_within(start - *duration, end - *duration)
-                            .map(|(ty, d)| {
-                                Occurrence::new_single(self.source.clone(), first, ty, d)
+                            .map(|(ty, d, excluded)| {
+                                Occurrence::new_single(self.source.clone(), first, ty, d, excluded)
                             })
                             .filter(|o| {
+                                if o.is_excluded() {
+                                    return false;
+                                }
                                 if let Some(alarm) = o.alarm_date() {
                                     alarm >= start && alarm < end
                                 } else {
@@ -237,7 +241,13 @@ impl CalItem {
                         let fend = first
                             .end_or_due()
                             .map(|d| d.as_end_with_tz(&start.timezone()));
-                        alarms.push(Occurrence::new(self.source.clone(), first, fstart, fend))
+                        alarms.push(Occurrence::new(
+                            self.source.clone(),
+                            first,
+                            fstart,
+                            fend,
+                            false,
+                        ))
                     }
                 }
             }
@@ -249,12 +259,18 @@ impl CalItem {
             for c in overwritten {
                 if let Some(rid) = c.rid() {
                     let rid_tz = rid.as_start_with_tz(&start.timezone());
-                    let mut tmp_occ =
-                        Occurrence::new(self.source.clone(), first, Some(rid_tz), None);
+                    let mut tmp_occ = Occurrence::new(
+                        self.source.clone(),
+                        first,
+                        Some(rid_tz),
+                        None,
+                        first.exdates().contains(rid),
+                    );
                     tmp_occ.set_occurrence(c);
                     match tmp_occ.alarm_date() {
-                        // if the alarm is also within the time frame, just set the overwritten event
-                        Some(alarm) if alarm >= start && alarm < end => {
+                        // if the alarm is also within the time frame (and not excluded), just set
+                        // the overwritten event
+                        Some(alarm) if !tmp_occ.is_excluded() && alarm >= start && alarm < end => {
                             if let Some(occ) = alarms
                                 .iter_mut()
                                 .find(|o| o.occurrence_start() == Some(rid_tz))
@@ -279,14 +295,19 @@ impl CalItem {
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let first = self.component_with(|c| c.rid().is_none() && c.uid() == uid.as_ref())?;
-        let (fstart, fend) = match rid {
-            Some(rid) => (Some(rid.as_start_with_tz(tz)), None),
+        let (fstart, fend, excluded) = match rid {
+            Some(rid) => (
+                Some(rid.as_start_with_tz(tz)),
+                None,
+                first.exdates().contains(rid),
+            ),
             None => (
                 first.start().map(|d| d.as_start_with_tz(tz)),
                 first.end_or_due().map(|d| d.as_end_with_tz(tz)),
+                false,
             ),
         };
-        let mut res = Occurrence::new(self.source.clone(), first, fstart, fend);
+        let mut res = Occurrence::new(self.source.clone(), first, fstart, fend, excluded);
 
         if let Some(rid) = rid {
             let occ = self
@@ -301,15 +322,7 @@ impl CalItem {
         Some(res)
     }
 
-    pub fn occurrences_within(
-        &self,
-        start: DateTime<Tz>,
-        end: DateTime<Tz>,
-    ) -> OccurrenceIterator<'_> {
-        self.filtered_occurrences_within(start, end, |_| true)
-    }
-
-    pub fn filtered_occurrences_within<F>(
+    pub fn occurrences_within<F>(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
@@ -485,7 +498,7 @@ mod tests {
         }
 
         fn exdate(mut self, date: CalDate) -> Self {
-            self.ev.add_exdate(date);
+            self.ev.toggle_exclude(date);
             self
         }
 
@@ -575,7 +588,8 @@ mod tests {
             "no2",
         ));
 
-        let comps = source.occurrences_within(new_date(2024, 10, 1), new_date(2024, 10, 31));
+        let comps =
+            source.occurrences_within(new_date(2024, 10, 1), new_date(2024, 10, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
     }
 
@@ -602,10 +616,12 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
-        let comps = source.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31));
+        let comps =
+            source.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2"]));
 
-        let comps = source.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31));
+        let comps =
+            source.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
         let all = comps.collect::<Vec<_>>();
         assert_eq!(all[0].occurrence_start(), None);
         assert_eq!(
@@ -676,7 +692,8 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
-        let comps = source.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31));
+        let comps =
+            source.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2"]));
         assert_eq!(
             source.occurrence_by_id("yes1", None, tz).unwrap().uid(),
@@ -717,7 +734,8 @@ mod tests {
         ));
 
         let occs = source
-            .occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31))
+            .occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true)
+            .filter(|o| !o.is_excluded())
             .collect::<Vec<_>>();
         assert_eq!(occs[0].uid(), "yes");
         assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 5)));
@@ -957,14 +975,14 @@ mod tests {
         // this includes the 6th, but this is overwritten to happen on the 4th, which is outside
         // the range
         let occs = source
-            .occurrences_within(new_date(1990, 1, 5), new_date(1990, 1, 7))
+            .occurrences_within(new_date(1990, 1, 5), new_date(1990, 1, 7), |_| true)
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 0);
 
         // this leads to an empty list from the recurrence itself, but should consider the
         // overwritten one, which is indeed in the requested range.
         let occs = source
-            .occurrences_within(new_date(1990, 1, 3), new_date(1990, 1, 9))
+            .occurrences_within(new_date(1990, 1, 3), new_date(1990, 1, 9), |_| true)
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
         assert_eq!(occs[0].uid(), "id1");

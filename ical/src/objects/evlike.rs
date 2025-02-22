@@ -54,6 +54,6 @@ pub trait UpdatableEventLike: EventLike {
     fn set_rrule(&mut self, rrule: Option<CalRRule>);
     fn set_rid(&mut self, rid: Option<CalDate>);
     fn set_alarms(&mut self, alarms: Vec<CalAlarm>);
-    fn add_exdate(&mut self, date: CalDate);
+    fn toggle_exclude(&mut self, date: CalDate);
     fn set_attendees(&mut self, attendees: Option<Vec<CalAttendee>>);
 }

@@ -102,9 +102,8 @@ pub async fn content(
         .sources()
         .iter()
         .filter(|s| !disabled.contains(s.id()))
-        .flat_map(move |s| {
-            s.filtered_occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event)
-        })
+        .flat_map(move |s| s.occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event))
+        .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();
 
     let mut days = Vec::new();

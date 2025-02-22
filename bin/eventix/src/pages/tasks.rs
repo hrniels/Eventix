@@ -44,16 +44,16 @@ impl<'a> Tasks<'a> {
             .sources()
             .iter()
             .filter(|s| !disabled.contains(s.id()))
-            .flat_map(move |s| {
-                s.filtered_occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo)
-            })
+            .flat_map(move |s| s.occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo))
             .filter(|o| {
-                o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
+                !o.is_excluded()
+                    && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction)
+                        != CalTodoStatus::Completed
             })
             .collect::<Vec<_>>();
 
         let overdue_tds = store
-            .filtered_occurrences_within(
+            .occurrences_within(
                 DateTime::<Tz>::MIN_UTC.with_timezone(timezone),
                 start,
                 |c| c.ctype() == CalCompType::Todo,
@@ -63,6 +63,7 @@ impl<'a> Tasks<'a> {
                 // interested in the ones that are due before the start and are not complete yet.
                 o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
                     && o.occurrence_end().unwrap_or(start) < start
+                    && !o.is_excluded()
             });
 
         let mut days = Vec::new();
@@ -107,6 +108,8 @@ impl<'a> Tasks<'a> {
                     c,
                     c.start().map(|d| d.as_start_with_tz(timezone)),
                     None,
+                    // non-recurrent occurrences are never excluded
+                    false,
                 )
             })
             .collect::<Vec<_>>();

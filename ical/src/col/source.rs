@@ -131,15 +131,7 @@ impl CalSource {
             .find_map(|i| i.occurrence_by_id(uid_str, rid, tz))
     }
 
-    pub fn occurrences_within(
-        &self,
-        start: DateTime<Tz>,
-        end: DateTime<Tz>,
-    ) -> impl Iterator<Item = Occurrence<'_>> {
-        self.filtered_occurrences_within(start, end, |_| true)
-    }
-
-    pub fn filtered_occurrences_within<F>(
+    pub fn occurrences_within<F>(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
@@ -150,7 +142,7 @@ impl CalSource {
     {
         self.items
             .iter()
-            .flat_map(move |i| i.filtered_occurrences_within(start, end, filter.clone()))
+            .flat_map(move |i| i.occurrences_within(start, end, filter.clone()))
     }
 
     pub fn delete_by_uid<S: AsRef<str>>(&mut self, uid: S) -> Result<(), ColError> {
