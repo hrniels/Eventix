@@ -92,6 +92,9 @@ pub async fn handler(
             let start = date + Duration::seconds(1);
             let end = max_datetime(*locale.timezone());
             item.occurrences_within(start, end, |_| true)
+                // ignore the occurrences where the start is earlier, but the end is in the range,
+                // because we'll find these when walking backwards
+                .filter(|o| o.occurrence_start().unwrap() >= start)
                 .take(req.count + 1)
                 .collect()
         }
