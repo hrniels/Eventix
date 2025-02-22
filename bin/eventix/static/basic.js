@@ -54,7 +54,7 @@ function hideArrowBottom(inst) {
     $('.ui-datepicker-header').css('zIndex', 2);
 }
 
-function completeTodo(uid, rid) {
+function completeTodo(uid, rid, onsuccess) {
     var url = '/complete?uid=' + uid;
     if(rid != null)
         url += '&rid=' + rid;
@@ -62,7 +62,9 @@ function completeTodo(uid, rid) {
         type: 'GET',
         url: url,
         dataType: 'json',
-        success: reloadPage,
+        success: function(data) {
+            onsuccess(data)
+        },
     });
 }
 

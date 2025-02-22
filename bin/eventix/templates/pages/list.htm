@@ -69,14 +69,24 @@
         Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
     }
 
+    function refreshRow(uid, rid, data) {
+        loadOccs(uid, rid, 'Forward', 1, function(data) {
+            var row = document.getElementById('occrow_' + rid);
+            var prev = row.previousSibling;
+            row.remove();
+            $(prev).after(data.html);
+        });
+    }
+
     function toggleExclAndRefresh(uid, rid) {
         toggleExcl(uid, rid, function(data) {
-            loadOccs(uid, rid, 'Forward', 1, function(data) {
-                var row = document.getElementById('occrow_' + rid);
-                var prev = row.previousSibling;
-                row.remove();
-                $(prev).after(data.html);
-            });
+            refreshRow(uid, rid, data);
+        });
+    }
+
+    function completeTodoAndRefresh(uid, rid) {
+        completeTodo(uid, rid, function(data) {
+            refreshRow(uid, rid, data);
         });
     }
 
@@ -184,7 +194,8 @@
         <td width="32%" align="right">
             {% if let Some(td) = c.comp.as_todo() %}
             {% if !td.is_recurrent() && td.status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed %}
-            <a class="ev_button ev_button_good" href="javascript:completeTodo('{{ c.comp.uid() }}')">
+            <a class="ev_button ev_button_good"
+               href="javascript:completeTodo('{{ c.comp.uid() }}', null, reloadPage)">
                 <i class="bi bi-check-lg"></i>
                 <span>{{ "Complete"|t(locale) }}</span>
             </a>

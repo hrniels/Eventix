@@ -44,11 +44,11 @@
         </a>
         {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
         {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
-        <a style="float: right" class="ev_button ev_button_good"
-                                href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}')"
-                                >
-                                <i class="bi bi-check-lg"></i>
-                                <span>{{ "Complete"|t(locale) }}</span>
+        <a style="float: right"
+           class="ev_button ev_button_good"
+           href="javascript:completeTodoAndRefresh('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+            <i class="bi bi-check-lg"></i>
+            <span>{{ "Complete"|t(locale) }}</span>
         </a>
         {% endif %}
         {% endif %}
