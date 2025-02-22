@@ -481,6 +481,10 @@ span.ev_cal_src_disabled {
 
 /* ------------ JQUERY ------------ */
 
+.bi-check-circle {
+    color: #198754;
+}
+
 .ui-autocomplete {
     max-height: 200px;
     overflow-y: auto;
