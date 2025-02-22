@@ -10,7 +10,7 @@
 - show icon if there is a description
 - add tooltips
 - prevent that recurrent events break if we change the date of all occurrences and have overwrites
-- show deleted occurrences in occurrence list (marked accordingly) and allow "undelete"
+- reload next events/tasks after toggling exclude status or completing a task
 - add calendar management (add/edit/delete)
 - more filtering: date range, ordering, status, ...?
 - generate link to OSM for locations
