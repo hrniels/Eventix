@@ -227,8 +227,8 @@ pub async fn content(
     let html = WeeklyTemplate {
         page,
         locale: locale.clone(),
-        week_start: locale.fmt_weekdate(&week_start, DateFlags::None),
-        week_end: locale.fmt_weekdate(&week_end.pred_opt().unwrap(), DateFlags::None),
+        week_start: locale.fmt_weekdate(&week_start, DateFlags::NoToday),
+        week_end: locale.fmt_weekdate(&week_end.pred_opt().unwrap(), DateFlags::NoToday),
         prev_week: prev_week.format("%Y-%m-%d").to_string(),
         next_week: next_week.format("%Y-%m-%d").to_string(),
         today: now.date_naive(),
