@@ -6,6 +6,11 @@ use std::{
 
 use crate::parser::{LineReader, ParseError};
 
+/// A property according to RFC 5545.
+///
+/// It has a name, a value, and optional one or more parameters, represented by [`Parameter`].
+/// [`Display`](fmt::Display) and [`FromStr`] are implemented to convert from an object to its
+/// string representation and vice versa.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Property {
     name: String,
@@ -15,6 +20,10 @@ pub struct Property {
 }
 
 impl Property {
+    /// Creates a new property with given name, parameters and value.
+    ///
+    /// In contrast to [`new_escaped`](Self::new_escaped), this method does escape the value when
+    /// converting it to a string.
     pub fn new<N: ToString, V: ToString>(name: N, params: Vec<Parameter>, value: V) -> Self {
         Self {
             name: name.to_string(),
@@ -24,6 +33,10 @@ impl Property {
         }
     }
 
+    /// Creates a new property with given name, parameters and the already escaped value.
+    ///
+    /// In contrast to [`new`](Self::new), this method does *not* escape the value when
+    /// converting it to a string, but assumes that this has already been done.
     pub fn new_escaped<N: ToString, V: ToString>(
         name: N,
         params: Vec<Parameter>,
@@ -37,14 +50,17 @@ impl Property {
         }
     }
 
+    /// Returns a reference to the property name.
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    /// Returns a reference to the parameter with given name.
     pub fn param(&self, name: &str) -> Option<&Parameter> {
         self.params.iter().find(|p| p.name() == name)
     }
 
+    /// Returns true if this property has a parameter with given name and value.
     pub fn has_param_value(&self, name: &str, value: &str) -> bool {
         matches!(
             self.params.iter().find(|p| p.name() == name),
@@ -52,14 +68,17 @@ impl Property {
         )
     }
 
+    /// Returns a slice of all parameters.
     pub fn params(&self) -> &[Parameter] {
         &self.params
     }
 
+    /// Returns a reference to the value.
     pub fn value(&self) -> &String {
         &self.value
     }
 
+    /// Takes ownership of the value.
     pub fn take_value(self) -> String {
         self.value
     }
@@ -155,7 +174,15 @@ impl FromStr for Property {
     }
 }
 
+/// A consumer of [`Property`].
+///
+/// Receives a [`Property`] and supports the construction of itself based on this property.
 pub trait PropertyConsumer {
+    /// Returns a new instance of [`Self`] based on given property and lines.
+    ///
+    /// The given [`Property`] `prop` was already read out from the [`LineReader`] by the caller.
+    /// This method constructs a new instance of [`Self`] from that and potentially by reading more
+    /// lines out of the [`LineReader`].
     fn from_lines<R: BufRead>(
         lines: &mut LineReader<R>,
         prop: Property,
@@ -164,10 +191,18 @@ pub trait PropertyConsumer {
         Self: Sized;
 }
 
+/// A producer of [`Property`].
 pub trait PropertyProducer {
+    /// Converts this object into a [`Vec`] of [`Property`] instances.
+    ///
+    /// This can be later used to, for example, produce a string representation of this object.
     fn to_props(&self) -> Vec<Property>;
 }
 
+/// A parameter according to RFC 5545.
+///
+/// [`Display`](fmt::Display) and [`FromStr`] are implemented to convert from an object to its
+/// string representation and vice versa.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Parameter {
     name: String,
@@ -175,6 +210,7 @@ pub struct Parameter {
 }
 
 impl Parameter {
+    /// Creates a new parameter with given name and value
     pub fn new<N: ToString, V: ToString>(name: N, value: V) -> Self {
         Self {
             name: name.to_string(),
@@ -182,10 +218,12 @@ impl Parameter {
         }
     }
 
+    /// Returns a reference to the name
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    /// Returns a reference to the value
     pub fn value(&self) -> &String {
         &self.value
     }

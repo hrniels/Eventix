@@ -2,12 +2,18 @@ use std::io::{self, BufRead, Write};
 
 const MAX_LINE_LEN: usize = 75;
 
+/// Reads lines according to RFC 5545.
+///
+/// Logical lines are split into potentially multiple physical lines, each at most 75 bytes long
+/// according to RFC 5545. For that reason, this reader merges these physical lines together to
+/// logical lines.
 pub struct LineReader<R: BufRead> {
     reader: R,
     last: Option<String>,
 }
 
 impl<R: BufRead> LineReader<R> {
+    /// Creates a new [`LineReader`] from given [`BufRead`] implementation.
     pub fn new(reader: R) -> Self {
         Self { reader, last: None }
     }
@@ -53,15 +59,22 @@ impl<R: BufRead> Iterator for LineReader<R> {
     }
 }
 
+/// Writes lines according to RFC 5545.
+///
+/// Conversely to [`LineReader`], this writer splits the given logical lines into potentially
+/// multiple physical lines, each at most 75 bytes long as required by RFC 5545. These physical
+/// lines are written into the given [`Write`] implementation.
 pub struct LineWriter<W: Write> {
     writer: W,
 }
 
 impl<W: Write> LineWriter<W> {
+    /// Creates a new [`LineWriter`] with given [`Write`] implementation.
     pub fn new(writer: W) -> Self {
         Self { writer }
     }
 
+    /// Writes the given line into the underlying [`Write`] implementation.
     pub fn write_line<S: AsRef<str>>(&mut self, line: S) -> io::Result<()> {
         let mut first = true;
         let mut line = line.as_ref();

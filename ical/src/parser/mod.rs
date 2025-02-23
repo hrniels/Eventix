@@ -1,3 +1,18 @@
+//! Parser utilities for RFC 5545.
+//!
+//! This module implements various abstractions to deal with the iCalendar format according to RFC
+//! 5545.
+//!
+//! The lowest level provide the [`LineReader`] and [`LineWriter`] that allow their users to work
+//! with logical lines, while parsing or producing physical lines as expected by the format (at
+//! most 75 bytes per line).
+//!
+//! On top of them, a line can be turned into a [`Property`] (and a property back into a line),
+//! having a name, value, and optionally [`Parameter`]s.
+//!
+//! Finally, [`PropertyConsumer`] and [`PropertyProducer`] provide means to parse multiple lines
+//! into a recursive object structure and back into a vector of [`Property`]s.
+
 mod line;
 mod prop;
 
@@ -8,6 +23,7 @@ use thiserror::Error;
 pub use self::line::{LineReader, LineWriter};
 pub use self::prop::{Parameter, Property, PropertyConsumer, PropertyProducer};
 
+/// Errors that occur during parsing of iCalendar objects.
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum ParseError {
     #[error("Missing name end")]
