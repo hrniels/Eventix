@@ -8,11 +8,20 @@ use crate::{
     parser::{LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer},
 };
 
+/// The action for VALARM components.
+///
+/// Implements [`Display`] and [`FromStr`] to be turned into a string representation and vice
+/// versa.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.6.1>.
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CalAction {
+    /// Play a sound
     Audio,
+    /// Display a text message
     #[default]
     Display,
+    /// Send an email
     Email,
 }
 
@@ -39,9 +48,12 @@ impl FromStr for CalAction {
     }
 }
 
+/// The relation of alarms durations (start/end of event).
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalRelated {
+    /// Relative to the start of the event.
     Start,
+    /// Relative to the end of the event.
     End,
 }
 
@@ -54,12 +66,17 @@ impl Display for CalRelated {
     }
 }
 
+/// The trigger for iCalendar alarms.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.6.3>.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CalTrigger {
+    /// Fires at a time relative to the start/end of the event.
     Relative {
         related: CalRelated,
         duration: Duration,
     },
+    /// Fires at an absolute time.
     Absolute(CalDate),
 }
 
@@ -73,6 +90,7 @@ impl Default for CalTrigger {
 }
 
 impl CalTrigger {
+    /// Turns this trigger into a [`Property`].
     pub fn to_prop(&self) -> Property {
         let mut params = Vec::new();
         let value = match self {
@@ -165,6 +183,7 @@ fn parse_num<'a>(org: &'_ str, d: &'a str) -> Result<(&'a str, i64, char), Parse
 fn parse_duration(d: &str) -> Result<Duration, ParseError> {
     let org = d;
 
+    // negative or positive duration? the default is positive
     let (d, neg) = if d.starts_with('-') || d.starts_with('+') {
         (&d[1..], d.starts_with('-'))
     } else {
@@ -272,6 +291,16 @@ impl TryFrom<Property> for CalTrigger {
     }
 }
 
+/// Represents an iCalendar alarm.
+///
+/// Such an alarm has a [`CalAction`] (e.g., display message) and a [`CalTrigger`] (e.g., trigger
+/// 10minutes after the start of the event). Optionally, there are other properties such as a
+/// description or a repetition.
+///
+/// Note that the [`Display`] implementation turns the object into a human readable description of
+/// the alarm.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.6>
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct CalAlarm {
     action: CalAction,
@@ -283,6 +312,7 @@ pub struct CalAlarm {
 }
 
 impl CalAlarm {
+    /// Creates a new alarm with given action and trigger.
     pub fn new(action: CalAction, trigger: CalTrigger) -> Self {
         Self {
             action,
@@ -291,18 +321,29 @@ impl CalAlarm {
         }
     }
 
+    /// Returns the action of the alarm.
     pub fn action(&self) -> CalAction {
         self.action
     }
 
+    /// Returns the trigger of the alarm.
     pub fn trigger(&self) -> &CalTrigger {
         &self.trigger
     }
 
+    /// Returns the duration.
+    ///
+    /// The duration specifies the delay between repeating alarms.
     pub fn duration(&self) -> Option<Duration> {
         self.duration
     }
 
+    /// Returns the trigger date from the given start/end of an event.
+    ///
+    /// Assuming that the event starts at `start` and ends at `end`, this method returns the
+    /// absolute time at which the alarm should trigger. Note that both start and end are optional,
+    /// potentially leading to `None` being returned. That is, if the alarm is relative to the
+    /// start and the start is `None`, the result will be `None` as well.
     pub fn trigger_date(
         &self,
         start: Option<DateTime<Tz>>,
