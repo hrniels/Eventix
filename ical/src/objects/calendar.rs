@@ -8,34 +8,46 @@ use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
 };
 
+/// Represents an iCalendar object.
+///
+/// Such a calendar consists of one or more [`CalComponent`]s, each being either an event or TODO.
+/// Additionally, the calendar itself can have properties such as the version or product id.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.4>.
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct Calendar {
     comps: Vec<CalComponent>,
     props: Vec<Property>,
-    other: Vec<Other>,
+    unknown: Vec<Unknown>,
 }
 
 impl Calendar {
+    /// Returns a slice of the calendar properties.
     pub fn properties(&self) -> &[Property] {
         &self.props
     }
 
+    /// Returns a slice of the calendar components.
     pub fn components(&self) -> &[CalComponent] {
         &self.comps
     }
 
+    /// Returns a mutable slice of the calendar properties.
     pub fn components_mut(&mut self) -> &mut [CalComponent] {
         &mut self.comps
     }
 
-    pub fn add(&mut self, comp: CalComponent) {
+    /// Adds the given component to the calendar.
+    pub fn add_component(&mut self, comp: CalComponent) {
         self.comps.push(comp);
     }
 
+    /// Deletes the components with given uid from the calendar.
     pub fn delete_components<N: AsRef<str>>(&mut self, uid: N) {
         self.comps.retain(|c| c.uid() != uid.as_ref());
     }
 
+    /// Writes this calendar in iCalendar format into the given writer.
     pub fn write<W: Write>(&self, writer: W) -> io::Result<()> {
         let mut wr = LineWriter::new(writer);
         wr.write_line("BEGIN:VCALENDAR")?;
@@ -51,7 +63,7 @@ impl PropertyProducer for Calendar {
     fn to_props(&self) -> Vec<Property> {
         let mut props = vec![];
         props.extend(self.props.iter().cloned());
-        for other in &self.other {
+        for other in &self.unknown {
             props.extend(other.to_props().into_iter());
         }
         for comp in &self.comps {
@@ -85,8 +97,8 @@ impl PropertyConsumer for Calendar {
                     Ok(ev) => cal.comps.push(CalComponent::Event(ev)),
                     Err(e) => warn!("ignoring malformed event: {}", e),
                 },
-                "BEGIN" => match Other::from_lines(lines, prop) {
-                    Ok(other) => cal.other.push(other),
+                "BEGIN" => match Unknown::from_lines(lines, prop) {
+                    Ok(other) => cal.unknown.push(other),
                     Err(e) => warn!("ignoring unknown component: {}", e),
                 },
                 "END" => {
@@ -124,25 +136,25 @@ impl FromStr for Calendar {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Other {
+struct Unknown {
     name: String,
     props: Vec<Property>,
 }
 
-impl Other {
-    pub fn new<N: ToString>(name: N) -> Self {
+impl Unknown {
+    fn new<N: ToString>(name: N) -> Self {
         Self {
             name: name.to_string(),
             props: Vec::new(),
         }
     }
 
-    pub fn add(&mut self, prop: Property) {
+    fn add(&mut self, prop: Property) {
         self.props.push(prop);
     }
 }
 
-impl PropertyProducer for Other {
+impl PropertyProducer for Unknown {
     fn to_props(&self) -> Vec<Property> {
         let mut props = vec![Property::new("BEGIN", vec![], self.name.clone())];
         props.extend(self.props.iter().cloned());
@@ -151,12 +163,12 @@ impl PropertyProducer for Other {
     }
 }
 
-impl PropertyConsumer for Other {
+impl PropertyConsumer for Unknown {
     fn from_lines<R: BufRead>(lines: &mut LineReader<R>, prop: Property) -> Result<Self, ParseError>
     where
         Self: Sized,
     {
-        let mut other = Other::new(prop.take_value());
+        let mut other = Unknown::new(prop.take_value());
         loop {
             let Some(line) = lines.next() else {
                 break Err(ParseError::UnexpectedEOF);

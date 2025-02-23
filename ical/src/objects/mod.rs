@@ -12,7 +12,7 @@ mod todo;
 
 pub use alarm::{CalAction, CalAlarm, CalRelated, CalTrigger};
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
-pub use calendar::{Calendar, Other};
+pub use calendar::Calendar;
 pub use component::{
     CalCompType, CalComponent, CompDateIterator, CompDateType, EventLikeComponent,
 };

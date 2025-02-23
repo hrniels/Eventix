@@ -430,7 +430,7 @@ impl CalItem {
     }
 
     pub fn add_component(&mut self, comp: CalComponent) {
-        self.cal.add(comp);
+        self.cal.add_component(comp);
     }
 
     pub(crate) fn delete_by_uid<N: AsRef<str>>(&mut self, uid: N) {
@@ -541,13 +541,13 @@ mod tests {
 
     fn new_item(event: CalEvent) -> CalItem {
         let mut cal = Calendar::default();
-        cal.add(CalComponent::Event(event));
+        cal.add_component(CalComponent::Event(event));
         CalItem::new_simple(cal)
     }
 
     fn new_allday_item(date: NaiveDate, uid: &str) -> CalItem {
         let mut cal = Calendar::default();
-        cal.add(CalComponent::Event(new_allday_event(date, uid).done()));
+        cal.add_component(CalComponent::Event(new_allday_event(date, uid).done()));
         CalItem::new_simple(cal)
     }
 
@@ -883,7 +883,7 @@ mod tests {
     fn alarms_with_recurrence_overwrite() {
         let mut source = CalSource::default();
         let mut cal = Calendar::default();
-        cal.add(CalComponent::Event(
+        cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
                 .rrule("FREQ=DAILY;INTERVAL=4;COUNT=3".parse().unwrap())
                 .alarm(CalAlarm::new(
@@ -895,7 +895,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        cal.add(CalComponent::Event(
+        cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(), "id1")
                 .rid(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
@@ -910,7 +910,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        cal.add(CalComponent::Event(
+        cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 10).unwrap(), "id1")
                 .rid(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 10).unwrap(),
@@ -949,12 +949,12 @@ mod tests {
     fn recurrence_overwrite_with_date_change() {
         let mut source = CalSource::default();
         let mut cal = Calendar::default();
-        cal.add(CalComponent::Event(
+        cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
                 .rrule("FREQ=DAILY;INTERVAL=4;COUNT=3".parse().unwrap())
                 .done(),
         ));
-        cal.add(CalComponent::Event(
+        cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 8).unwrap(), "id1")
                 .rid(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 10).unwrap(),
@@ -962,7 +962,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        cal.add(CalComponent::Event(
+        cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(), "id1")
                 .rid(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
