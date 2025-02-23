@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent};
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct CalTodo {
     pub(crate) inner: EventLikeComponent,
     due: Option<CalDate>,
@@ -14,6 +14,16 @@ pub struct CalTodo {
 }
 
 impl CalTodo {
+    pub fn new<T: ToString>(uid: T) -> Self {
+        Self {
+            inner: EventLikeComponent::new(uid),
+            due: None,
+            status: None,
+            completed: None,
+            percent: None,
+        }
+    }
+
     pub fn due(&self) -> Option<&CalDate> {
         self.due.as_ref()
     }
@@ -94,7 +104,7 @@ impl PropertyConsumer for CalTodo {
     where
         Self: Sized,
     {
-        let mut comp = Self::default();
+        let mut comp = Self::new("");
         loop {
             let Some(line) = lines.next() else {
                 break Err(ParseError::UnexpectedEOF);

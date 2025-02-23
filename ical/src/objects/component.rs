@@ -14,7 +14,7 @@ use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, Property
 
 use super::recur::RecurIterator;
 
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
     uid: String,
     stamp: CalDate,
@@ -37,8 +37,26 @@ pub struct EventLikeComponent {
 }
 
 impl EventLikeComponent {
-    pub fn set_uid<T: ToString>(&mut self, uid: T) {
-        self.uid = uid.to_string();
+    pub fn new<T: ToString>(uid: T) -> Self {
+        Self {
+            uid: uid.to_string(),
+            stamp: CalDate::now(),
+            created: Some(CalDate::now()),
+            last_mod: Some(CalDate::now()),
+            start: None,
+            summary: None,
+            desc: None,
+            location: None,
+            categories: None,
+            organizer: None,
+            attendees: None,
+            exdates: vec![],
+            alarms: vec![],
+            priority: None,
+            rrule: None,
+            rid: None,
+            props: vec![],
+        }
     }
 
     pub fn set_start(&mut self, start: Option<CalDate>) {
@@ -255,10 +273,6 @@ impl EventLike for EventLikeComponent {
 }
 
 impl UpdatableEventLike for EventLikeComponent {
-    fn set_uid(&mut self, uid: String) {
-        self.uid = uid;
-    }
-
     fn set_start(&mut self, start: Option<CalDate>) {
         self.start = start;
     }
@@ -574,10 +588,6 @@ impl EventLike for CalComponent {
 }
 
 impl UpdatableEventLike for CalComponent {
-    fn set_uid(&mut self, uid: String) {
-        set_with_ev_or_todo!(self, set_uid, uid);
-    }
-
     fn set_start(&mut self, start: Option<CalDate>) {
         set_with_ev_or_todo!(self, set_start, start);
     }

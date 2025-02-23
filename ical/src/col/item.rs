@@ -375,12 +375,11 @@ impl CalItem {
             .unwrap();
 
         let mut comp = if base.ctype() == CalCompType::Event {
-            CalComponent::Event(CalEvent::default())
+            CalComponent::Event(CalEvent::new(base.uid()))
         } else {
-            CalComponent::Todo(CalTodo::default())
+            CalComponent::Todo(CalTodo::new(base.uid()))
         };
 
-        comp.set_uid(base.uid().clone());
         let start = CalDate::DateTime(CalDateTime::Timezone(
             rid.as_start_with_tz(tz).naive_local(),
             tz.name().to_string(),
@@ -466,17 +465,19 @@ mod tests {
 
     use super::*;
 
-    #[derive(Default)]
     struct EventBuilder {
         ev: CalEvent,
     }
 
     impl EventBuilder {
-        fn uid(mut self, uid: &str) -> Self {
-            self.ev.set_uid(uid);
-            self
+        fn new<T: ToString>(uid: T) -> Self {
+            Self {
+                ev: CalEvent::new(uid),
+            }
         }
+    }
 
+    impl EventBuilder {
         fn start(mut self, start: CalDate) -> Self {
             self.ev.set_start(Some(start));
             self
@@ -530,8 +531,7 @@ mod tests {
     }
 
     fn new_allday_event(date: NaiveDate, uid: &str) -> EventBuilder {
-        EventBuilder::default()
-            .uid(uid)
+        EventBuilder::new(uid)
             .start(CalDate::Date(date, CalCompType::Event.into()))
             .end(CalDate::Date(
                 date.succ_opt().unwrap(),
@@ -597,8 +597,7 @@ mod tests {
     fn items_within_no_start() {
         let mut source = CalSource::default();
         source.add(new_item(
-            EventBuilder::default()
-                .uid("yes1")
+            EventBuilder::new("yes1")
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
                     CalCompType::Event.into(),
@@ -606,8 +605,7 @@ mod tests {
                 .done(),
         ));
         source.add(new_item(
-            EventBuilder::default()
-                .uid("yes2")
+            EventBuilder::new("yes2")
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
                     CalCompType::Event.into(),
@@ -660,25 +658,23 @@ mod tests {
             "yes1",
         ));
         source.add(new_item(
-            EventBuilder::default()
+            EventBuilder::new("yes2")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
                     CalCompType::Event.into(),
                 ))
-                .uid("yes2")
                 .done(),
         ));
         source.add(new_item(
-            EventBuilder::default()
+            EventBuilder::new("no1")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(2000, 2, 1).unwrap(),
                     CalCompType::Event.into(),
                 ))
-                .uid("no1")
                 .done(),
         ));
         source.add(new_item(
-            EventBuilder::default()
+            EventBuilder::new("no2")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1988, 2, 1).unwrap(),
                     CalCompType::Event.into(),
@@ -687,7 +683,6 @@ mod tests {
                     NaiveDate::from_ymd_opt(1989, 12, 31).unwrap(),
                     CalCompType::Event.into(),
                 ))
-                .uid("no2")
                 .done(),
         ));
 
@@ -715,7 +710,7 @@ mod tests {
         rrule.set_count(7);
 
         source.add(new_item(
-            EventBuilder::default()
+            EventBuilder::new("yes")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
                     CalCompType::Event.into(),
@@ -729,7 +724,6 @@ mod tests {
                     NaiveDate::from_ymd_opt(1990, 1, 9).unwrap(),
                     CalCompType::Event.into(),
                 ))
-                .uid("yes")
                 .done(),
         ));
 

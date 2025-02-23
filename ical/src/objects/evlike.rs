@@ -43,7 +43,6 @@ pub trait EventLike: PropertyProducer {
 }
 
 pub trait UpdatableEventLike: EventLike {
-    fn set_uid(&mut self, uid: String);
     fn set_start(&mut self, start: Option<CalDate>);
     fn set_summary(&mut self, summary: Option<String>);
     fn set_location(&mut self, location: Option<String>);

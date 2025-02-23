@@ -6,7 +6,7 @@ use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, Property
 
 use super::component::EventLikeComponent;
 
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct CalEvent {
     pub(crate) inner: EventLikeComponent,
     status: Option<CalEventStatus>,
@@ -14,6 +14,14 @@ pub struct CalEvent {
 }
 
 impl CalEvent {
+    pub fn new<T: ToString>(uid: T) -> Self {
+        Self {
+            inner: EventLikeComponent::new(uid),
+            status: None,
+            end: None,
+        }
+    }
+
     pub fn status(&self) -> Option<CalEventStatus> {
         self.status
     }
@@ -64,7 +72,7 @@ impl PropertyConsumer for CalEvent {
     where
         Self: Sized,
     {
-        let mut comp = Self::default();
+        let mut comp = Self::new("");
         loop {
             let Some(line) = lines.next() else {
                 break Err(ParseError::UnexpectedEOF);
