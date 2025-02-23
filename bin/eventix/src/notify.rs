@@ -44,7 +44,7 @@ impl Notification {
             icon: icon.into_os_string().into_string().unwrap(),
             summary: occ.summary().cloned().unwrap_or(String::from("?")),
             body,
-            timeout: 0,
+            timeout: 24 * 3600 * 1000,
         }
     }
 
