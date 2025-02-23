@@ -8,9 +8,19 @@ use crate::parser::{Parameter, ParseError, Property};
 
 use super::CalCompType;
 
+/// The type of date.
+///
+/// The iCalendar format has interestingly two different ways to interpret dates of type
+/// [`CalDate::Date`]. For events, the end is interpreted as "exclusive", meaning that an event
+/// that starts on 2025-02-23 and ends on 2025-02-24 is actually just one day long (the entire
+/// 2025-02-23) and ends at the start of 2025-02-24. For TODOs however, the due date is
+/// "inclusive". For example, if the due date is 2025-02-23, the TODO is due until the *end* of
+/// that day.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDateType {
+    /// The date is inclusive, meaning that the event ends *after* that date.
     Inclusive,
+    /// The date is exclusive, meaning that the event ends *before* that date.
     Exclusive,
 }
 
@@ -23,9 +33,19 @@ impl From<CalCompType> for CalDateType {
     }
 }
 
+/// An iCalendar date.
+///
+/// Dates in iCalendar objects come in two forms: date and datetime. The former specifies a day,
+/// whereas the latter specifies a day and a time.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDate {
+    /// Specifies a date.
+    ///
+    /// As the interpretation depends on the the component type, this variant consists of both the
+    /// [`NaiveDate`] holding the day and the [`CalDateType`] holding the type.
     Date(NaiveDate, CalDateType),
+
+    /// Specifies a date and a time.
     DateTime(CalDateTime),
 }
 
@@ -36,18 +56,30 @@ impl Default for CalDate {
 }
 
 impl CalDate {
+    /// Returns a new [`CalDate::Date`] instance for the current day.
     pub fn today() -> Self {
         CalDate::Date(Utc::now().date_naive(), CalDateType::Inclusive)
     }
 
+    /// Returns a new [`CalDate::DateTime`] instance for the current time.
     pub fn now() -> Self {
         CalDate::DateTime(CalDateTime::Utc(Utc::now()))
     }
 
+    /// Returns a string representation when using this date as the start of an event.
+    ///
+    /// Note that start/end makes a difference when this date is of variant [`CalDate::Date`],
+    /// because its interpretation of the end is different depending on the context. See
+    /// [`Self::as_end_with_tz`] for a detailed description.
     pub fn fmt_start_with_tz(&self, tz: &Tz) -> String {
         self.fmt_date(self.as_start_with_tz(tz))
     }
 
+    /// Returns a string representation when using this date as the end of an event.
+    ///
+    /// Note that start/end makes a difference when this date is of variant [`CalDate::Date`],
+    /// because its interpretation of the end is different depending on the context. See
+    /// [`Self::as_end_with_tz`] for a detailed description.
     pub fn fmt_end_with_tz(&self, tz: &Tz) -> String {
         self.fmt_date(self.as_end_with_tz(tz))
     }
@@ -59,6 +91,7 @@ impl CalDate {
         }
     }
 
+    /// Returns the [`NaiveDate`] instance corresponding to this [`CalDate`].
     pub fn as_naive_date(&self) -> NaiveDate {
         match self {
             Self::Date(date, _) => *date,
@@ -66,6 +99,7 @@ impl CalDate {
         }
     }
 
+    /// Returns a [`CalDate`] instance with UTC time.
     pub fn to_utc(self) -> CalDate {
         match self {
             Self::Date(date, ty) => Self::Date(date, ty),
@@ -73,6 +107,12 @@ impl CalDate {
         }
     }
 
+    /// Returns the corresponding [`DateTime`] instance when using this date as the start of an
+    /// event.
+    ///
+    /// Note that start/end makes a difference when this date is of variant [`CalDate::Date`],
+    /// because its interpretation of the end is different depending on the context. See
+    /// [`Self::as_end_with_tz`] for a detailed description.
     pub fn as_start_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Date(date, _) => tz
@@ -82,6 +122,17 @@ impl CalDate {
         }
     }
 
+    /// Returns the corresponding [`DateTime`] instance when using this date as the end of an
+    /// event.
+    ///
+    /// In contrast to the iCalendar format, which interpretes dates sometimes inclusive and
+    /// sometimes exclusive, we define the end of an event (or the due date of a TODO) always in an
+    /// inclusive sense. That is, an event that starts on 2025-02-23 and and is one day long ends
+    /// on 2025-02-23.
+    ///
+    /// As this method requests the [`DateTime`] for this date as the end of an event, this method
+    /// returns the end of the last day. In the above example that would be 2025-02-23 23:59:59.
+    /// Conversely, [`Self::as_start_with_tz`] would return 2025-02-23 00:00:00.
     pub fn as_end_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Date(date, CalDateType::Exclusive) => {
@@ -97,6 +148,7 @@ impl CalDate {
         }
     }
 
+    /// Builds and returns a [`Property`] for this date.
     pub fn to_prop<N: ToString>(&self, name: N) -> Property {
         match self {
             Self::Date(date, _) => Property::new(
@@ -138,14 +190,23 @@ impl fmt::Display for CalDate {
     }
 }
 
+/// An iCalendar date in datetime format.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalDateTime {
+    /// The datetime is floating in the sense that the date/time is always the same, independent of
+    /// the timezone of the user. For example, if it was created for 8 AM by a user in UTC, it will
+    /// also be displayed as 8 AM for a user in UTC-6.
     Floating(NaiveDateTime),
+
+    /// Datetime in UTC.
     Utc(DateTime<Utc>),
+
+    /// Datetime with a specific timezone.
     Timezone(NaiveDateTime, String),
 }
 
 impl CalDateTime {
+    /// Returns the [`NaiveDate`] instance corresponding to this [`CalDateTime`].
     pub fn as_naive_date(&self) -> NaiveDate {
         match self {
             Self::Utc(dt) => dt.date_naive(),
@@ -154,6 +215,7 @@ impl CalDateTime {
         }
     }
 
+    /// Returns the [`NaiveTime`] instance corresponding to this [`CalDateTime`].
     pub fn as_naive_time(&self) -> NaiveTime {
         match self {
             Self::Utc(dt) => dt.naive_local().time(),
@@ -162,6 +224,7 @@ impl CalDateTime {
         }
     }
 
+    /// Returns the corresponding [`DateTime`] instance with the given timezone.
     pub fn with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Utc(dt) => dt.with_timezone(tz),
@@ -182,11 +245,13 @@ impl CalDateTime {
         }
     }
 
+    /// Returns a [`CalDateTime`] instance with UTC time.
     pub fn to_utc(self) -> CalDateTime {
         let dt = self.with_tz(&Tz::UTC);
         Self::Utc(dt.to_utc())
     }
 
+    /// Builds and returns a [`Property`] for this datetime.
     pub fn to_prop<N: ToString>(&self, name: N) -> Property {
         let (params, date) = match self {
             Self::Floating(date) => (vec![], date.format("%Y%m%dT%H%M%S")),
