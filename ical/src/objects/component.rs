@@ -14,6 +14,10 @@ use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, Property
 
 use super::recur::RecurIterator;
 
+/// Common parts of events and TODOs.
+///
+/// As events and TODOs share many properties and behaviours, these are captured in this struct.
+/// For example, both have a UID, summary, can be recurrent, and so on.
 #[derive(Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
     uid: String,
@@ -37,6 +41,10 @@ pub struct EventLikeComponent {
 }
 
 impl EventLikeComponent {
+    /// Creates a new object with given UID.
+    ///
+    /// Note that the stamp, creation date, and last-modification date are all set to
+    /// `CalDate::now`.
     pub fn new<T: ToString>(uid: T) -> Self {
         Self {
             uid: uid.to_string(),
@@ -59,6 +67,7 @@ impl EventLikeComponent {
         }
     }
 
+    /// Sets the start of the component.
     pub fn set_start(&mut self, start: Option<CalDate>) {
         self.start = start;
     }
@@ -326,10 +335,13 @@ impl UpdatableEventLike for EventLikeComponent {
     }
 }
 
+/// The component type.
 #[derive(Default, Copy, Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CalCompType {
+    /// Represents a VEVENT.
     #[default]
     Event,
+    /// Represents a VTODO.
     Todo,
 }
 
@@ -339,12 +351,21 @@ impl Display for CalCompType {
     }
 }
 
+/// The type of component date.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CompDateType {
+    /// Start of an event/TODO.
     Start,
+    /// End of an event or due date of a TODO.
     EndOrDue,
 }
 
+/// Iterator for the dates of a specific component.
+///
+/// For non-recurrent components, it simply delivers the single date it occurs on. For recurrent
+/// components, it delivers its occurrences, sorted by dates ascendingly. Typically, this iterator
+/// is created by methods like [`CalComponent::dates_within`], which deliver all occurrences within
+/// a certain time period.
 #[derive(Default)]
 pub struct CompDateIterator<'a> {
     recur: Option<RecurIterator<'a>>,
@@ -384,13 +405,17 @@ impl Iterator for CompDateIterator<'_> {
     }
 }
 
+/// Represents a component in an iCalendar object.
 #[derive(Debug, Eq, PartialEq)]
 pub enum CalComponent {
+    /// A VEVENT component.
     Event(CalEvent),
+    /// A VTODO component.
     Todo(CalTodo),
 }
 
 impl CalComponent {
+    /// Returns the component type.
     pub fn ctype(&self) -> CalCompType {
         match self {
             Self::Event(_) => CalCompType::Event,
@@ -398,6 +423,7 @@ impl CalComponent {
         }
     }
 
+    /// Returns the component as an [`CalEvent`], if it is an event.
     pub fn as_event(&self) -> Option<&CalEvent> {
         match self {
             Self::Event(ev) => Some(ev),
@@ -405,6 +431,7 @@ impl CalComponent {
         }
     }
 
+    /// Returns the component as a mutable [`CalEvent`], if it is an event.
     pub fn as_event_mut(&mut self) -> Option<&mut CalEvent> {
         match self {
             Self::Event(ev) => Some(ev),
@@ -412,6 +439,7 @@ impl CalComponent {
         }
     }
 
+    /// Returns the component as an [`CalTodo`], if it is a TODO.
     pub fn as_todo(&self) -> Option<&CalTodo> {
         match self {
             Self::Todo(todo) => Some(todo),
@@ -419,6 +447,7 @@ impl CalComponent {
         }
     }
 
+    /// Returns the component as a mutable [`CalTodo`], if it is a TODO.
     pub fn as_todo_mut(&mut self) -> Option<&mut CalTodo> {
         match self {
             Self::Todo(todo) => Some(todo),
@@ -426,6 +455,9 @@ impl CalComponent {
         }
     }
 
+    /// Returns the duration of the component, if known.
+    ///
+    /// If either the start or end of the component is not known, the method returns `None`.
     pub fn duration(&self, tz: &Tz) -> Option<Duration> {
         let start = self.start()?;
 
@@ -447,6 +479,17 @@ impl CalComponent {
             .collect::<Vec<_>>()
     }
 
+    /// Returns an iterator with the occurrence dates in the given time period.
+    ///
+    /// For non-recurrent components, the occurrence is simply the start/end date when this
+    /// component takes place. For recurrent components, there are potentially many occurrences.
+    /// The iterator delivers the dates of these occurrences within the given time period. An
+    /// occurrence is considered to be within this time period, if it overlaps with the period.
+    /// That is, if either start or the end is within the period or the occurrence starts before
+    /// and ends after the period.
+    ///
+    /// Note that the iterator returns excluded occurrences as well and requires the caller to
+    /// ignore these, if desired.
     pub fn dates_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> CompDateIterator {
         if let Some(rrule) = self.rrule() {
             let Some(dtstart) = self.start() else {
