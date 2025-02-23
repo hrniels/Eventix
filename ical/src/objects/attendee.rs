@@ -2,12 +2,19 @@ use std::{fmt, str::FromStr};
 
 use crate::parser::{Parameter, ParseError, Property};
 
+/// The participation role
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.16>.
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalRole {
+    /// The participant chairs the event
     Chair,
+    /// The attendance of the participant is required
     #[default]
     Required,
+    /// The attendance of the participant is optional
     Optional,
+    /// Participant will not attend; listed only for information purposes
     None,
 }
 
@@ -36,15 +43,25 @@ impl FromStr for CalRole {
     }
 }
 
+/// The participation status for [`CalAttendee`].
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.12>.
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalPartStat {
+    /// TODO/Event needs action
     #[default]
     NeedsAction,
+    /// For events: the participant accepted the invitation
     Accepted,
+    /// For events: the participant declined the invitation
     Declined,
+    /// For events: the participant is undecided
     Tentative,
+    /// For events: the participant delegated it to someone else
     Delegated,
+    /// For TODOs: completed
     Completed,
+    /// For TODOs: still in process
     InProcess,
 }
 
@@ -79,6 +96,12 @@ impl FromStr for CalPartStat {
     }
 }
 
+/// Represents an attendee in an ICalendar.
+///
+/// An attendee is identified by its address and optionally has a name, role, and participation
+/// status.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.4.1>.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct CalAttendee {
     address: String,
@@ -89,6 +112,7 @@ pub struct CalAttendee {
 }
 
 impl CalAttendee {
+    /// Creates a new attendee with given address.
     pub fn new(address: String) -> Self {
         Self {
             address,
@@ -96,30 +120,40 @@ impl CalAttendee {
         }
     }
 
+    /// Returns a reference to the address.
     pub fn address(&self) -> &String {
         &self.address
     }
 
+    /// Returns the attendee's role.
     pub fn role(&self) -> Option<CalRole> {
         self.role
     }
 
+    /// Sets the attendee's role.
     pub fn set_role(&mut self, role: CalRole) {
         self.role = Some(role);
     }
 
+    /// Returns the participation status.
     pub fn part_stat(&self) -> Option<CalPartStat> {
         self.part_stat
     }
 
+    /// Returns the common name.
     pub fn common_name(&self) -> Option<&String> {
         self.common_name.as_ref()
     }
 
+    /// Sets the common name.
     pub fn set_common_name(&mut self, cn: String) {
         self.common_name = Some(cn);
     }
 
+    /// Returns a pretty name for this attendee.
+    ///
+    /// If the name is known, the pretty name is returned '$name <$address>'. Otherwise, only the
+    /// address is returned.
     pub fn pretty_name(&self) -> String {
         let address = match self.address.strip_prefix("mailto:") {
             Some(addr) => addr,
@@ -132,6 +166,7 @@ impl CalAttendee {
         }
     }
 
+    /// Builds and returns a [`Property`] for this attendee.
     pub fn to_prop(&self) -> Property {
         let mut params = Vec::new();
         if let Some(role) = &self.role {
