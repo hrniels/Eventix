@@ -4,6 +4,17 @@ use std::ops::{Deref, DerefMut};
 use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent};
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
+/// Represents an iCalendar TODO.
+///
+/// Each TODO has a unique id (uid) and several optional properties such as a summary, a
+/// description, or alarms. A TODO shares many properties with
+/// [`CalEvent`](crate::objects::CalEvent), which are implemented in [`EventLikeComponent`]. In
+/// contrast to events, TODOs have a [`CalTodoStatus`] and a due date instead of an end date.
+/// Furthermore, a TODO stores the progress in case the status is
+/// [`InProcess`](CalTodoStatus::InProcess`) or when it was completed if the status is
+/// [`Completed`](`CalTodoStatus::Completed`).
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.2>.
 #[derive(Debug, Eq, PartialEq)]
 pub struct CalTodo {
     pub(crate) inner: EventLikeComponent,
@@ -14,6 +25,7 @@ pub struct CalTodo {
 }
 
 impl CalTodo {
+    /// Creates a new TODO with given uid.
     pub fn new<T: ToString>(uid: T) -> Self {
         Self {
             inner: EventLikeComponent::new(uid),
@@ -24,34 +36,69 @@ impl CalTodo {
         }
     }
 
+    /// Returns the due date of the TODO (DUE).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.3>.
     pub fn due(&self) -> Option<&CalDate> {
         self.due.as_ref()
     }
 
+    /// Sets the due date for this TODO (DUE).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.3>.
     pub fn set_due(&mut self, due: Option<CalDate>) {
         self.due = due;
     }
 
+    /// Returns the status of the TODO (STATUS).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11>.
     pub fn status(&self) -> Option<CalTodoStatus> {
         self.status
     }
 
+    /// Sets the status of this TODO (STATUS).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.11>.
     pub fn set_status(&mut self, status: Option<CalTodoStatus>) {
         self.status = status;
     }
 
+    /// Returns the date when this TODO was completed (COMPLETE).
+    ///
+    /// TODOs only have a completed date if the status is [`Completed`](CalTodoStatus::Completed).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.1>.
     pub fn completed(&self) -> Option<&CalDate> {
         self.completed.as_ref()
     }
 
+    /// Sets the completion date of this TODO (COMPLETE).
+    ///
+    /// Note that TODOs should only have a completed date if the status is
+    /// [`Completed`](CalTodoStatus::Completed).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.1>.
     pub fn set_completed(&mut self, completed: Option<CalDate>) {
         self.completed = completed;
     }
 
+    /// Returns the percentage of completion (PERCENT-COMPLETE).
+    ///
+    /// TODOs only have a percentage of completion if the status is
+    /// [`InProcess`](CalTodoStatus::InProcess).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.8>.
     pub fn percent(&self) -> Option<u8> {
         self.percent
     }
 
+    /// Sets the percentage of completion (PERCENT-COMPLETE).
+    ///
+    /// Note that TODOs should only have a percentage of completion if the status is
+    /// [`InProcess`](CalTodoStatus::InProcess).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.8>.
     pub fn set_percent(&mut self, percent: Option<u8>) {
         self.percent = percent;
     }
