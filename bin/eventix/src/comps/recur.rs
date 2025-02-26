@@ -154,13 +154,13 @@ fn monthly_nth_from_rrule(rrule: Option<&CalRRule>) -> Option<Nth> {
             r.by_day().unwrap()[0]
                 .nth()
                 .and_then(|(num, side)| match side {
-                    CalRRuleSide::Front => match num {
+                    CalRRuleSide::Start => match num {
                         1 => Some(Nth::First),
                         2 => Some(Nth::Second),
                         3 => Some(Nth::Third),
                         _ => None,
                     },
-                    CalRRuleSide::Back if num == 1 => Some(Nth::Last),
+                    CalRRuleSide::End if num == 1 => Some(Nth::Last),
                     _ => None,
                 })
         }
@@ -294,10 +294,10 @@ impl RecurRequest {
                 Frequency::Monthly => {
                     if self.monthly_type == MonthlyType::ByDay {
                         let nth = match self.monthly_nth.as_ref().unwrap() {
-                            Nth::First => Some((1, CalRRuleSide::Front)),
-                            Nth::Second => Some((2, CalRRuleSide::Front)),
-                            Nth::Third => Some((3, CalRRuleSide::Front)),
-                            Nth::Last => Some((1, CalRRuleSide::Back)),
+                            Nth::First => Some((1, CalRRuleSide::Start)),
+                            Nth::Second => Some((2, CalRRuleSide::Start)),
+                            Nth::Third => Some((3, CalRRuleSide::Start)),
+                            Nth::Last => Some((1, CalRRuleSide::End)),
                         };
                         rrule.set_by_day(Some(vec![CalWDayDesc::new(
                             self.monthly_wday.unwrap().into(),

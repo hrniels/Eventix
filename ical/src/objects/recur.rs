@@ -71,8 +71,8 @@ impl FromStr for CalRRuleFreq {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CalRRuleSide {
-    Front,
-    Back,
+    Start,
+    End,
 }
 
 impl FromStr for CalRRuleSide {
@@ -80,8 +80,8 @@ impl FromStr for CalRRuleSide {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.as_bytes()[0] {
-            b'+' => Ok(Self::Front),
-            b'-' => Ok(Self::Back),
+            b'+' => Ok(Self::Start),
+            b'-' => Ok(Self::End),
             _ => Err(ParseError::InvalidSide(s.to_string())),
         }
     }
@@ -140,8 +140,8 @@ impl CalWDayDesc {
                     || (rrule.freq == CalRRuleFreq::Yearly && rrule.by_month.is_some())
                 {
                     match side {
-                        CalRRuleSide::Front => util::nth_weekday_of_month_front(date, self.day, n),
-                        CalRRuleSide::Back => util::nth_weekday_of_month_back(date, self.day, n),
+                        CalRRuleSide::Start => util::nth_weekday_of_month_front(date, self.day, n),
+                        CalRRuleSide::End => util::nth_weekday_of_month_back(date, self.day, n),
                     }
                     .map(|d| d == date.date_naive())
                     .unwrap_or(false)
@@ -149,8 +149,8 @@ impl CalWDayDesc {
                 // offset within the year
                 else if rrule.freq == CalRRuleFreq::Yearly {
                     match side {
-                        CalRRuleSide::Front => util::nth_weekday_of_year_front(date, self.day, n),
-                        CalRRuleSide::Back => util::nth_weekday_of_year_back(date, self.day, n),
+                        CalRRuleSide::Start => util::nth_weekday_of_year_front(date, self.day, n),
+                        CalRRuleSide::End => util::nth_weekday_of_year_back(date, self.day, n),
                     }
                     .map(|d| d == date.date_naive())
                     .unwrap_or(false)
@@ -176,7 +176,7 @@ impl FromStr for CalWDayDesc {
         let (s, side) = if s.starts_with('-') || s.starts_with('+') {
             (&s[1..], s.parse::<CalRRuleSide>()?)
         } else {
-            (s, CalRRuleSide::Front)
+            (s, CalRRuleSide::Start)
         };
 
         if s.is_empty() {
@@ -206,8 +206,8 @@ impl fmt::Display for CalWDayDesc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some((num, side)) = self.nth {
             match side {
-                CalRRuleSide::Front => write!(f, "+")?,
-                CalRRuleSide::Back => write!(f, "-")?,
+                CalRRuleSide::Start => write!(f, "+")?,
+                CalRRuleSide::End => write!(f, "-")?,
             }
             write!(f, "{}", num)?;
         }
@@ -216,14 +216,18 @@ impl fmt::Display for CalWDayDesc {
     }
 }
 
+/// Implements [`Display`](fmt::Display) to create a human-readable representation of a
+/// [`CalWDayDesc`].
+///
+/// For example, it could say "3rd to last Wednesday".
 pub struct WeekdayHuman<'a>(&'a CalWDayDesc);
 
 impl fmt::Display for WeekdayHuman<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some((num, side)) = self.0.nth {
             match side {
-                CalRRuleSide::Front => write!(f, "{} {}", util::nth(num as u64), self.0.day),
-                CalRRuleSide::Back => {
+                CalRRuleSide::Start => write!(f, "{} {}", util::nth(num as u64), self.0.day),
+                CalRRuleSide::End => {
                     if num == 1 {
                         write!(f, "last {}", self.0.day)
                     } else {
@@ -257,7 +261,7 @@ impl FromStr for DayDesc {
         let (s, side) = if s.starts_with('-') || s.starts_with('+') {
             (&s[1..], s.parse::<CalRRuleSide>()?)
         } else {
-            (s, CalRRuleSide::Front)
+            (s, CalRRuleSide::Start)
         };
         let num = s.parse::<u16>()?;
         Ok(Self { num, side })
@@ -267,8 +271,8 @@ impl FromStr for DayDesc {
 impl fmt::Display for DayDesc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.side {
-            CalRRuleSide::Front => write!(f, "{}", util::nth(self.num as u64)),
-            CalRRuleSide::Back => {
+            CalRRuleSide::Start => write!(f, "{}", util::nth(self.num as u64)),
+            CalRRuleSide::End => {
                 if self.num == 1 {
                     write!(f, "last")
                 } else {
@@ -454,8 +458,8 @@ impl CalRRule {
         if let Some(by_yday) = &self.by_year_day {
             if self.freq <= CalRRuleFreq::Hourly
                 && !by_yday.iter().any(|yd| match yd.side {
-                    CalRRuleSide::Front => yd.num as u32 == util::year_day(date),
-                    CalRRuleSide::Back => {
+                    CalRRuleSide::Start => yd.num as u32 == util::year_day(date),
+                    CalRRuleSide::End => {
                         let days = util::year_days(date.year());
                         days - (yd.num - 1) as u32 == util::year_day(date)
                     }
@@ -467,8 +471,8 @@ impl CalRRule {
         if let Some(by_mday) = &self.by_mon_day {
             if self.freq <= CalRRuleFreq::Daily
                 && !by_mday.iter().any(|wd| match wd.side {
-                    CalRRuleSide::Front => wd.num as u32 == date.day(),
-                    CalRRuleSide::Back => {
+                    CalRRuleSide::Start => wd.num as u32 == date.day(),
+                    CalRRuleSide::End => {
                         let days = util::month_days(date.year(), date.month());
                         days - (wd.num - 1) as u32 == date.day()
                     }
@@ -548,8 +552,8 @@ impl CalRRule {
                 mon_days = by_mon_day
                     .iter()
                     .map(|md| match md.side {
-                        CalRRuleSide::Front => md.num,
-                        CalRRuleSide::Back => {
+                        CalRRuleSide::Start => md.num,
+                        CalRRuleSide::End => {
                             util::month_days(date.year(), date.month()) as u16 - (md.num - 1)
                         }
                     })
@@ -924,15 +928,15 @@ mod tests {
         );
         assert_eq!(
             "-3SA".parse::<CalWDayDesc>().unwrap(),
-            CalWDayDesc::new(Weekday::Sat, Some((3, CalRRuleSide::Back)))
+            CalWDayDesc::new(Weekday::Sat, Some((3, CalRRuleSide::End)))
         );
         assert_eq!(
             "+1TU".parse::<CalWDayDesc>().unwrap(),
-            CalWDayDesc::new(Weekday::Tue, Some((1, CalRRuleSide::Front)))
+            CalWDayDesc::new(Weekday::Tue, Some((1, CalRRuleSide::Start)))
         );
         assert_eq!(
             "1FR".parse::<CalWDayDesc>().unwrap(),
-            CalWDayDesc::new(Weekday::Fri, Some((1, CalRRuleSide::Front)))
+            CalWDayDesc::new(Weekday::Fri, Some((1, CalRRuleSide::Start)))
         );
     }
 
@@ -940,19 +944,19 @@ mod tests {
     fn parse_day_desc() {
         assert_eq!(
             "4".parse::<DayDesc>().unwrap(),
-            DayDesc::new(4, CalRRuleSide::Front)
+            DayDesc::new(4, CalRRuleSide::Start)
         );
         assert_eq!(
             "17".parse::<DayDesc>().unwrap(),
-            DayDesc::new(17, CalRRuleSide::Front)
+            DayDesc::new(17, CalRRuleSide::Start)
         );
         assert_eq!(
             "-20".parse::<DayDesc>().unwrap(),
-            DayDesc::new(20, CalRRuleSide::Back)
+            DayDesc::new(20, CalRRuleSide::End)
         );
         assert_eq!(
             "+19".parse::<DayDesc>().unwrap(),
-            DayDesc::new(19, CalRRuleSide::Front)
+            DayDesc::new(19, CalRRuleSide::Start)
         );
     }
 
@@ -1001,8 +1005,8 @@ mod tests {
         rule.freq = CalRRuleFreq::Yearly;
         rule.by_month = Some(vec![1]);
         rule.by_set_pos = Some(vec![
-            DayDesc::new(2, CalRRuleSide::Front),
-            DayDesc::new(5, CalRRuleSide::Front),
+            DayDesc::new(2, CalRRuleSide::Start),
+            DayDesc::new(5, CalRRuleSide::Start),
         ]);
         rule.by_day = Some(vec![
             CalWDayDesc::new(Weekday::Sun, None),
