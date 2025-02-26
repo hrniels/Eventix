@@ -1,3 +1,14 @@
+//! Provides abstractions for the iCalendar objects.
+//!
+//! A iCalendar object is represented by [`Calendar`], which contains one or more _components_,
+//! represented as [`CalComponent`]. Such a component is either a [`CalEvent`] or a [`CalTodo`].
+//! Both share most of their properties, implemented by [`EventLikeComponent`], but have small
+//! differences as well.
+//!
+//! The properties can be alarms ([`CalAlarm`]), attendees ([`CalAttendee`]), dates ([`CalDate`]),
+//! organizers ([`CalOrganizer`]), recurrency rules ([`CalRRule`]), and a status
+//! ([`CalEventStatus`] or [`CalTodoStatus`]).
+
 mod alarm;
 mod attendee;
 mod calendar;
