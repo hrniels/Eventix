@@ -6,6 +6,14 @@ use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, Property
 
 use super::component::EventLikeComponent;
 
+/// Represents an iCalendar event.
+///
+/// Each event has a unique id (uid) and several optional properties such as a summary, a
+/// description, or alarms. An event shares many properties with
+/// [`CalTodo`](crate::objects::CalTodo), which are implemented in [`EventLikeComponent`]. In
+/// contrast to TODOs, events have a [`CalEventStatus`] and an end date instead of a due date.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1>.
 #[derive(Debug, Eq, PartialEq)]
 pub struct CalEvent {
     pub(crate) inner: EventLikeComponent,
@@ -14,6 +22,7 @@ pub struct CalEvent {
 }
 
 impl CalEvent {
+    /// Creates a new event with given uid.
     pub fn new<T: ToString>(uid: T) -> Self {
         Self {
             inner: EventLikeComponent::new(uid),
@@ -22,14 +31,17 @@ impl CalEvent {
         }
     }
 
+    /// Returns the status of the event.
     pub fn status(&self) -> Option<CalEventStatus> {
         self.status
     }
 
+    /// Returns the end of the event.
     pub fn end(&self) -> Option<&CalDate> {
         self.end.as_ref()
     }
 
+    /// Sets the event end to given value.
     pub fn set_end(&mut self, end: Option<CalDate>) {
         self.end = end;
     }
