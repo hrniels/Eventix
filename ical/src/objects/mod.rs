@@ -31,6 +31,6 @@ pub use date::{CalDate, CalDateTime, CalDateType};
 pub use event::CalEvent;
 pub use evlike::{EventLike, UpdatableEventLike};
 pub use organizer::CalOrganizer;
-pub use recur::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
+pub use recur::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, WeekdayHuman};
 pub use status::{CalEventStatus, CalTodoStatus};
 pub use todo::CalTodo;

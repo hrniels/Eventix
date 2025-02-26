@@ -11,6 +11,7 @@ use crate::objects::CalDate;
 use crate::parser::{ParseError, Property};
 use crate::util;
 
+/// The frequency for recurrences.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CalRRuleFreq {
     Secondly,
@@ -24,6 +25,10 @@ pub enum CalRRuleFreq {
 }
 
 impl CalRRuleFreq {
+    /// Advances the given date based on this frequency and given interval.
+    ///
+    /// For example, if `self` is [`Self::Daily`], the given date will be advanced by `interval`
+    /// days forward.
     pub fn advance(&self, now: NaiveDateTime, interval: u32) -> Option<NaiveDateTime> {
         match self {
             Self::Secondly => now.checked_add_signed(TimeDelta::seconds(interval.into())),
@@ -69,9 +74,16 @@ impl FromStr for CalRRuleFreq {
     }
 }
 
+/// The "side" for start/end relative repetitions.
+///
+/// For example, the second to last Tuesday in a month is [`End`](Self::End) as it is relative to
+/// the end of the month.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CalRRuleSide {
+    /// Relative to the start of the month/year.
     Start,
+
+    /// Relative to the end of the month/year.
     End,
 }
 
@@ -87,6 +99,10 @@ impl FromStr for CalRRuleSide {
     }
 }
 
+/// Represents a weekday repetition.
+///
+/// For example, this allows to specify a repetition of an event on every Wednesday or on every
+/// third Saturday of the month.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CalWDayDesc {
     day: Weekday,
@@ -94,6 +110,9 @@ pub struct CalWDayDesc {
 }
 
 impl CalWDayDesc {
+    /// Parses the given weekday name into a [`Weekday`].
+    ///
+    /// The weekday is expected to be the first two letters in uppercase.
     pub fn parse_weekday(s: &str) -> Result<Weekday, ParseError> {
         match s {
             "SU" => Ok(Weekday::Sun),
@@ -107,6 +126,9 @@ impl CalWDayDesc {
         }
     }
 
+    /// The string representation of the given [`Weekday`].
+    ///
+    /// The string representation uses the first two letters in uppercase.
     pub fn to_weekday_str(wday: Weekday) -> &'static str {
         match wday {
             Weekday::Mon => "MO",
@@ -119,18 +141,34 @@ impl CalWDayDesc {
         }
     }
 
+    /// Creates a new instance of [`CalWDayDesc`].
+    ///
+    /// The `day` specifies the weekday, whereas `nth` optionally describes the specific instance
+    /// of that weekday starting at either the start or end of the month/year.
+    ///
+    /// For example, `CalWDayDesc::new(Weekday::Tue, Some((2, CalRRuleSide::Start)))` creates a
+    /// repetition on every second Tuesday from the start of the month/year.
     pub fn new(day: Weekday, nth: Option<(u8, CalRRuleSide)>) -> Self {
         Self { day, nth }
     }
 
+    /// The weekday on which it occurs.
     pub fn day(&self) -> Weekday {
         self.day
     }
 
+    /// The nth instance of that weekday.
+    ///
+    /// This optionally describes the specific instance of the weekday starting at either the
+    /// start or end of the month/year.
     pub fn nth(&self) -> Option<(u8, CalRRuleSide)> {
         self.nth
     }
 
+    /// Returns true if the date matches this weekday repetition for the given recurrence rule.
+    ///
+    /// For example, if `rrule` repeats monthly and `self` specifies that it occurs on every second
+    /// Wednesday, this method returns true if `date` is the second Wednesday of any month.
     pub fn matches(&self, date: DateTime<Tz>, rrule: &CalRRule) -> bool {
         match self.nth {
             None => self.day == date.weekday(),
@@ -164,6 +202,7 @@ impl CalWDayDesc {
         }
     }
 
+    /// Returns a human-readable representation of this description.
     pub fn human(&self) -> WeekdayHuman<'_> {
         WeekdayHuman(self)
     }
@@ -242,7 +281,7 @@ impl fmt::Display for WeekdayHuman<'_> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct DayDesc {
+struct DayDesc {
     num: u16,
     side: CalRRuleSide,
 }
@@ -283,6 +322,14 @@ impl fmt::Display for DayDesc {
     }
 }
 
+/// Represents a recurrence rule.
+///
+/// Each recurrence has at least a frequency (daily, weekly, ...) and optionally several other
+/// properties that further restrict it or expand upon this. Furthermore, recurrences repeat by
+/// default indefinitely and can optionally be restricted to repeat a certain number of times or
+/// until a specific date.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.10>.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct CalRRule {
     freq: CalRRuleFreq,
@@ -316,6 +363,7 @@ fn next_date(date: DateTime<Tz>, freq: CalRRuleFreq, interval: u32) -> Option<Da
     unreachable!();
 }
 
+/// Iterator for [`CalRRule`].
 pub struct RecurIterator<'a> {
     rrule: &'a CalRRule,
     start: DateTime<Tz>,
@@ -376,41 +424,77 @@ impl Iterator for RecurIterator<'_> {
 }
 
 impl CalRRule {
+    /// Returns the frequency of this recurrence rule (FREQ).
     pub fn frequency(&self) -> CalRRuleFreq {
         self.freq
     }
+    /// Sets the frequency of this recurrence rule (FREQ).
     pub fn set_frequency(&mut self, freq: CalRRuleFreq) {
         self.freq = freq;
     }
 
+    /// Returns the date until the recurrence lasts (UNTIL).
     pub fn until(&self) -> Option<&CalDate> {
         self.until.as_ref()
     }
+    /// Sets the date until the recurrence lasts (UNTIL).
     pub fn set_until(&mut self, until: CalDate) {
         self.until = Some(until);
     }
 
+    /// Returns the number of recurrences (COUNT).
+    ///
+    /// If it is `None`, the recurrence occurs indefinitely.
     pub fn count(&self) -> Option<u8> {
         self.count
     }
+    /// Sets the number of recurrences (COUNT).
+    ///
+    /// If set to `None`, the recurrence occurs indefinitely.
     pub fn set_count(&mut self, count: u8) {
         self.count = Some(count);
     }
 
+    /// Returns the interval between recurrences (INTERVAL).
+    ///
+    /// For example, a frequency of daily and an interval of 4 leads to an recurrence every 4 days.
     pub fn interval(&self) -> Option<u8> {
         self.interval
     }
+    /// Sets the interval between recurrences (INTERVAL).
+    ///
+    /// For example, a frequency of daily and an interval of 4 leads to an recurrence every 4 days.
     pub fn set_interval(&mut self, interval: u8) {
         self.interval = Some(interval);
     }
 
+    /// Returns the by-day specification (BYDAY).
+    ///
+    /// The by-day specification is used to create recurrences on specific weekdays. For example,
+    /// it can be used to create a recurrence on every 3rd Monday of each month. As a recurrence
+    /// can also happen on multiple of such weekday descriptions, it is specified as a `Vec`.
     pub fn by_day(&self) -> Option<&Vec<CalWDayDesc>> {
         self.by_day.as_ref()
     }
+    /// Sets the by-day specification (BYDAY).
+    ///
+    /// The by-day specification is used to create recurrences on specific weekdays. For example,
+    /// it can be used to create a recurrence on every 3rd Monday of each month. As a recurrence
+    /// can also happen on multiple of such weekday descriptions, it is specified as a `Vec`.
     pub fn set_by_day(&mut self, by_day: Option<Vec<CalWDayDesc>>) {
         self.by_day = by_day;
     }
 
+    /// Returns an iterator with all recurrences between `start` and `end`.
+    ///
+    /// The recurrence starts with `dtstart` (DTSTART of the calendar component) and each has a
+    /// duration of `dtdur` (DTDUR). `start` and `end` specify the time interval the caller is
+    /// interested in.
+    ///
+    /// The iterator returns a sequence of points in time given as [`DateTime`] of the recurrences
+    /// in this interval. Note that an overlap of the recurrences with this interval is sufficient.
+    /// For example, if an recurrence starts before `end`, but ends after `end`, it will still be
+    /// delivered by the iterator.
     pub fn dates_within(
         &self,
         dtstart: DateTime<Tz>,
@@ -699,11 +783,16 @@ impl CalRRule {
         Some(res)
     }
 
+    /// Returns a human-readable representation of this recurrence rule.
     pub fn human(&self) -> RRuleHuman<'_> {
         RRuleHuman(self)
     }
 }
 
+/// Implements [`Display`](fmt::Display) to create a human-readable representation of a
+/// [`CalRRule`].
+///
+/// For example, it could say "Occurs every 2 years".
 pub struct RRuleHuman<'a>(&'a CalRRule);
 
 impl fmt::Display for RRuleHuman<'_> {
