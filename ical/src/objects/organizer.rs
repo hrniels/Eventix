@@ -1,5 +1,8 @@
 use crate::parser::{Parameter, ParseError, Property};
 
+/// Represents an organizers of an event or TODO.
+///
+/// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.4.3>.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct CalOrganizer {
     address: String,
@@ -9,18 +12,24 @@ pub struct CalOrganizer {
 }
 
 impl CalOrganizer {
+    /// Returns the email address of the organizer.
     pub fn address(&self) -> &String {
         &self.address
     }
 
+    /// Returns the common name of the organizer.
     pub fn common_name(&self) -> Option<&String> {
         self.common_name.as_ref()
     }
 
+    /// Returns the send-by address, if specified.
+    ///
+    /// If this property is specified, it denotes that this person acts on behalf of the organizer.
     pub fn sent_by(&self) -> Option<&String> {
         self.sent_by.as_ref()
     }
 
+    /// Turns this organizer into a [`Property`].
     pub fn to_prop(&self) -> Property {
         let mut params = Vec::new();
         if let Some(cn) = &self.common_name {
