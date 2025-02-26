@@ -10,12 +10,6 @@ pub trait EventLike: PropertyProducer {
     fn last_modified(&self) -> Option<&CalDate>;
 
     fn start(&self) -> Option<&CalDate>;
-    fn start_or_created(&self) -> Option<&CalDate> {
-        match self.start() {
-            Some(st) => Some(st),
-            None => self.created(),
-        }
-    }
     fn end_or_due(&self) -> Option<&CalDate>;
     fn is_all_day(&self) -> bool {
         matches!(self.start(), Some(CalDate::Date(..)))
