@@ -5,7 +5,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use ical::objects::{CalComponent, CalDate, CalTodoStatus, EventLike};
+use ical::objects::{CalComponent, CalDate, CalTodoStatus, EventLike, UpdatableEventLike};
 use serde::{Deserialize, Serialize};
 
 use crate::{error::HTMLError, locale};
@@ -51,6 +51,8 @@ async fn handler(
         td.set_status(Some(CalTodoStatus::Completed));
         td.set_percent(Some(100));
         td.set_completed(Some(CalDate::now()));
+        td.set_last_modified(CalDate::now());
+        td.set_stamp(CalDate::now());
     };
 
     if let Some(comp) = item.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())

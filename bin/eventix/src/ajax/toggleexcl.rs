@@ -42,6 +42,8 @@ async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::R
         .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
 
     base.toggle_exclude(date);
+    base.set_last_modified(CalDate::now());
+    base.set_stamp(CalDate::now());
     item.save()?;
 
     Ok(())
