@@ -19,7 +19,7 @@ pub struct State {
 }
 
 impl State {
-    pub async fn reload(&self) -> anyhow::Result<()> {
+    pub async fn reload(&self) -> anyhow::Result<bool> {
         let settings = settings::Settings::load_from_file()
             .await
             .context("load settings")?;
@@ -49,6 +49,8 @@ impl State {
             );
         }
 
+        let changed = *self.store.lock().await != store;
+
         *self.store().lock().await = store;
         *self.disabled_cals().lock().await = disabled_cals;
         *self.last_calendar.lock().await = settings.last_calendar;
@@ -56,7 +58,7 @@ impl State {
             .last_alarm_check
             .unwrap_or(chrono::Utc::now().naive_utc() - Duration::days(7));
 
-        Ok(())
+        Ok(changed)
     }
 
     pub fn store(&self) -> &Arc<Mutex<CalStore>> {

@@ -1,11 +1,19 @@
 use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
+use ical::objects::CalDate;
 use serde::Serialize;
 use tracing::error;
 
-use crate::error::HTMLError;
+use crate::{
+    error::HTMLError,
+    html,
+    locale::{self, TimeFlags},
+};
 
 #[derive(Debug, Serialize)]
-struct Response {}
+struct Response {
+    changed: bool,
+    date: String,
+}
 
 pub fn router(state: crate::state::State) -> Router {
     Router::new()
@@ -14,9 +22,23 @@ pub fn router(state: crate::state::State) -> Router {
 }
 
 async fn handler(State(state): State<crate::state::State>) -> Result<impl IntoResponse, HTMLError> {
-    if let Err(e) = state.reload().await {
-        error!("Unable to reload state: {}", e);
-    }
+    let locale = locale::default();
 
-    Ok(Json(Response {}))
+    let changed = match state.reload().await {
+        Err(e) => {
+            error!("Unable to reload state: {}", e);
+            false
+        }
+        Ok(changed) => changed,
+    };
+
+    Ok(Json(Response {
+        changed,
+        date: html::filters::time(
+            &CalDate::now().as_start_with_tz(locale.timezone()),
+            &locale,
+            TimeFlags::None,
+        )
+        .unwrap(),
+    }))
 }

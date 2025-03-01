@@ -4,11 +4,12 @@ use axum::{
     http::{header, StatusCode},
     response::{IntoResponse, Response},
 };
+use ical::objects::CalDate;
 use std::fmt;
 use std::sync::Arc;
 
 use crate::html::filters;
-use crate::locale::{self, Locale};
+use crate::locale::{self, Locale, TimeFlags};
 use crate::pages::Page;
 
 #[derive(Template)]

@@ -2,6 +2,12 @@
 
 {% block inner %}
 
+<script type="text/javascript">
+    onInactivity(function() {
+        reloadDB('last-update');
+    });
+</script>
+
 <h1 class="ev_header">
     <div style="float: left" class="ev_jump">
         <input type="text" id="jump_location" size="10" />

@@ -2,6 +2,12 @@
 
 {% block inner %}
 
+<script type="text/javascript">
+    onInactivity(function() {
+        reloadDB('last-update');
+    });
+</script>
+
 <form id="form" method="get" action="/list">
     <div class="ev_border">
         <fieldset class="ev_form">
