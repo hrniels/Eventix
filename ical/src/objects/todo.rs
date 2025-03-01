@@ -25,15 +25,21 @@ pub struct CalTodo {
 }
 
 impl CalTodo {
-    /// Creates a new TODO with given uid.
-    pub fn new<T: ToString>(uid: T) -> Self {
+    fn new_empty() -> Self {
         Self {
-            inner: EventLikeComponent::new(uid),
+            inner: EventLikeComponent::new_empty(),
             due: None,
             status: None,
             completed: None,
             percent: None,
         }
+    }
+
+    /// Creates a new TODO with given uid.
+    pub fn new<T: ToString>(uid: T) -> Self {
+        let mut new = Self::new_empty();
+        new.inner = EventLikeComponent::new(uid);
+        new
     }
 
     /// Returns the due date of the TODO (DUE).
@@ -151,7 +157,7 @@ impl PropertyConsumer for CalTodo {
     where
         Self: Sized,
     {
-        let mut comp = Self::new("");
+        let mut comp = Self::new_empty();
         loop {
             let Some(line) = lines.next() else {
                 break Err(ParseError::UnexpectedEOF);

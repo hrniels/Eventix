@@ -22,13 +22,19 @@ pub struct CalEvent {
 }
 
 impl CalEvent {
-    /// Creates a new event with given uid.
-    pub fn new<T: ToString>(uid: T) -> Self {
+    fn new_empty() -> Self {
         Self {
-            inner: EventLikeComponent::new(uid),
+            inner: EventLikeComponent::new_empty(),
             status: None,
             end: None,
         }
+    }
+
+    /// Creates a new event with given uid.
+    pub fn new<T: ToString>(uid: T) -> Self {
+        let mut new = Self::new_empty();
+        new.inner = EventLikeComponent::new(uid);
+        new
     }
 
     /// Returns the status of the event.
@@ -84,7 +90,7 @@ impl PropertyConsumer for CalEvent {
     where
         Self: Sized,
     {
-        let mut comp = Self::new("");
+        let mut comp = Self::new_empty();
         loop {
             let Some(line) = lines.next() else {
                 break Err(ParseError::UnexpectedEOF);

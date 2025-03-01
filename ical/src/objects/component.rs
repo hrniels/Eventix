@@ -41,16 +41,12 @@ pub struct EventLikeComponent {
 }
 
 impl EventLikeComponent {
-    /// Creates a new object with given UID.
-    ///
-    /// Note that the stamp, creation date, and last-modification date are all set to
-    /// `CalDate::now`.
-    pub fn new<T: ToString>(uid: T) -> Self {
+    pub(crate) fn new_empty() -> Self {
         Self {
-            uid: uid.to_string(),
-            stamp: CalDate::now(),
-            created: Some(CalDate::now()),
-            last_mod: Some(CalDate::now()),
+            uid: String::from(""),
+            stamp: CalDate::default(),
+            created: None,
+            last_mod: None,
             start: None,
             summary: None,
             desc: None,
@@ -65,6 +61,19 @@ impl EventLikeComponent {
             rid: None,
             props: vec![],
         }
+    }
+
+    /// Creates a new object with given UID.
+    ///
+    /// Note that the stamp, creation date, and last-modification date are all set to
+    /// `CalDate::now`.
+    pub fn new<T: ToString>(uid: T) -> Self {
+        let mut new = Self::new_empty();
+        new.uid = uid.to_string();
+        new.stamp = CalDate::now();
+        new.created = Some(CalDate::now());
+        new.last_mod = Some(CalDate::now());
+        new
     }
 
     /// Sets the start of the component.
