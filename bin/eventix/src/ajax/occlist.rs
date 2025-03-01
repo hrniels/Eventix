@@ -83,15 +83,15 @@ pub async fn handler(
         .as_start_with_tz(locale.timezone());
 
     let store = state.store().lock().await;
-    let item = store
-        .item_by_id(&req.uid)
-        .context(format!("Unable to find item with uid {}", req.uid))?;
+    let file = store
+        .file_by_id(&req.uid)
+        .context(format!("Unable to find file with uid {}", req.uid))?;
 
     let occs: Vec<_> = match req.dir {
         Direction::Forward => {
             let start = date + Duration::seconds(1);
             let end = max_datetime(*locale.timezone());
-            item.occurrences_within(start, end, |_| true)
+            file.occurrences_within(start, end, |_| true)
                 // ignore the occurrences where the start is earlier, but the end is in the range,
                 // because we'll find these when walking backwards
                 .filter(|o| o.occurrence_start().unwrap() >= start)
@@ -101,7 +101,7 @@ pub async fn handler(
         Direction::Backwards => {
             let start = min_datetime(*locale.timezone());
             let end = date;
-            let occs = item
+            let occs = file
                 .occurrences_within(start, end, |_| true)
                 .collect::<Vec<_>>();
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()

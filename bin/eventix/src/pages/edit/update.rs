@@ -19,7 +19,7 @@ fn action_update(
     mut store: MutexGuard<'_, CalStore>,
     form: &mut CompEdit,
 ) -> anyhow::Result<bool> {
-    let item = store.item_by_id_mut(&form.req.uid).context(format!(
+    let file = store.files_by_id_mut(&form.req.uid).context(format!(
         "Unable to find component with uid '{}'",
         form.req.uid
     ))?;
@@ -33,7 +33,7 @@ fn action_update(
         None
     };
 
-    let base = item
+    let base = file
         .component_with(|c| c.uid() == &form.req.uid && c.rid().is_none())
         .context("Unable to find base component")?;
     let ctype = base.ctype();
@@ -66,38 +66,38 @@ fn action_update(
     };
 
     if let Some(comp) =
-        item.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
+        file.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
     {
         form.update(comp, locale);
         if rid.is_none() {
             comp.set_rrule(rrule);
         }
     } else {
-        let comp = item.component_with(|c| c.uid() == &form.req.uid).unwrap();
+        let comp = file.component_with(|c| c.uid() == &form.req.uid).unwrap();
         if !comp.is_recurrent() {
             return Err(anyhow!("Component {} is not recurrent", form.req.uid));
         }
 
-        item.create_overwrite(rid.unwrap(), locale.timezone(), |c| {
+        file.create_overwrite(rid.unwrap(), locale.timezone(), |c| {
             form.update(c, locale);
         });
     }
 
-    // should we move the item to a different source?
+    // should we move the file to a different source?
     if form.req.rid.is_none() {
         let cal = form
             .calendar
             .as_ref()
             .ok_or_else(|| anyhow!("Calendar not specified"))?;
-        if *cal != **item.source() {
-            let path = item.path().clone();
-            let src = item.source().clone();
+        if *cal != **file.source() {
+            let path = file.path().clone();
+            let src = file.source().clone();
             store.switch_source(path, &src, &Arc::new(cal.to_string()))?;
             return Ok(true);
         }
     }
 
-    item.save()?;
+    file.save()?;
     Ok(true)
 }
 

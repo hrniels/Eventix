@@ -3,12 +3,12 @@ use std::{io, path::PathBuf};
 use crate::parser::ParseError;
 use thiserror::Error;
 
-mod item;
+mod file;
 mod occurrence;
 mod source;
 mod store;
 
-pub use item::CalItem;
+pub use file::CalFile;
 pub use occurrence::Occurrence;
 pub use source::CalSource;
 pub use store::CalStore;
@@ -31,6 +31,6 @@ pub enum ColError {
     FileType(PathBuf, io::Error),
     #[error("Unable to find source with id {0}")]
     SourceNotFound(String),
-    #[error("Unable to find item with path {0}")]
-    ItemNotFound(PathBuf),
+    #[error("Unable to find file with path {0}")]
+    FileNotFound(PathBuf),
 }

@@ -42,8 +42,8 @@ async fn handler(
 
     let mut store = state.store().lock().await;
 
-    let item = store
-        .item_by_id_mut(&req.uid)
+    let file = store
+        .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
     let complete = |c: &mut CalComponent| {
@@ -55,19 +55,19 @@ async fn handler(
         td.set_stamp(CalDate::now());
     };
 
-    if let Some(comp) = item.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
+    if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
     {
         complete(comp);
     } else {
-        let comp = item.component_with(|c| c.uid() == &req.uid).unwrap();
+        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {
             return Err(anyhow!("Component {} is not recurrent", req.uid).into());
         }
 
-        item.create_overwrite(rid.unwrap(), locale.timezone(), complete);
+        file.create_overwrite(rid.unwrap(), locale.timezone(), complete);
     }
-    item.save()
-        .context(format!("Save item {}:{:?}", req.uid, req.rid))?;
+    file.save()
+        .context(format!("Save file {}:{:?}", req.uid, req.rid))?;
 
     Ok(Json(Response {}))
 }

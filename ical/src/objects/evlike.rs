@@ -129,9 +129,9 @@ pub trait EventLike: PropertyProducer {
 
     /// Returns the recurrence id (RECURRENCE-ID).
     ///
-    /// The recurrence id is `Some` if this calendar object is not the ``base'' item, but an
-    /// overwritten item. For example, the overwrite might change the summary, date, or location,
-    /// or cancel this specific occurrence.
+    /// The recurrence id is `Some` if this calendar object is not the ``base'' component, but an
+    /// overwritten component. For example, the overwrite might change the summary, date, or
+    /// location, or cancel this specific occurrence.
     ///
     /// Note that a calendar object that has a RECURRENCE-ID has no RRULE and vice versa.
     ///

@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use ical::col::{CalItem, CalStore};
+use ical::col::{CalFile, CalStore};
 use ical::objects::{CalCompType, CalComponent, CalEvent, CalTodo, Calendar, UpdatableEventLike};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -42,7 +42,7 @@ async fn action_update(
     let uid = Uuid::new_v4();
     let mut path = source.path().clone();
     path.push(format!("{}.ics", uid));
-    let mut item = CalItem::new(calendar, path, Calendar::default());
+    let mut file = CalFile::new(calendar, path, Calendar::default());
 
     let mut comp = if form.req.ctype == CalCompType::Event {
         CalComponent::Event(CalEvent::new(uid))
@@ -53,10 +53,10 @@ async fn action_update(
     comp.set_rrule(rrule);
     form.update(&mut comp, locale);
 
-    item.add_component(comp);
-    item.save()?;
+    file.add_component(comp);
+    file.save()?;
 
-    source.add(item);
+    source.add(file);
     Ok(true)
 }
 

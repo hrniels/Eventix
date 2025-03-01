@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::col::{CalItem, ColError, Occurrence};
+use crate::col::{CalFile, ColError, Occurrence};
 use crate::objects::{CalComponent, CalDate, Calendar};
 
 #[derive(Default, Debug)]
@@ -16,7 +16,7 @@ pub struct CalSource {
     path: PathBuf,
     name: String,
     props: HashMap<String, String>,
-    items: Vec<CalItem>,
+    files: Vec<CalFile>,
 }
 
 impl Display for CalSource {
@@ -27,7 +27,7 @@ impl Display for CalSource {
 
 impl PartialEq for CalSource {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.items == other.items
+        self.name == other.name && self.files == other.files
     }
 }
 impl Eq for CalSource {}
@@ -39,9 +39,9 @@ impl CalSource {
         name: String,
         props: HashMap<String, String>,
     ) -> Result<Self, ColError> {
-        let mut items = Vec::new();
-        let dir_items = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
-        for entry in dir_items {
+        let mut files = Vec::new();
+        let dir_files = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
+        for entry in dir_files {
             let entry = entry.map_err(|e| ColError::ReadDir(path.clone(), e))?;
             if !entry
                 .file_type()
@@ -62,8 +62,8 @@ impl CalSource {
             let cal = input
                 .parse::<Calendar>()
                 .map_err(|e| ColError::FileParse(filename.clone(), e))?;
-            let cal = CalItem::new(id.clone(), filename, cal);
-            items.push(cal);
+            let file = CalFile::new(id.clone(), filename, cal);
+            files.push(file);
         }
 
         Ok(Self {
@@ -71,7 +71,7 @@ impl CalSource {
             path,
             name,
             props,
-            items,
+            files,
         })
     }
 
@@ -91,22 +91,22 @@ impl CalSource {
         &self.props
     }
 
-    pub fn add(&mut self, item: CalItem) {
-        self.items.push(item);
+    pub fn add(&mut self, file: CalFile) {
+        self.files.push(file);
     }
 
-    pub fn items(&self) -> &[CalItem] {
-        &self.items
+    pub fn files(&self) -> &[CalFile] {
+        &self.files
     }
 
-    pub fn item_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalItem> {
+    pub fn file_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalFile> {
         let uid_ref = uid.as_ref();
-        self.items.iter().find(|i| i.contains_uid(uid_ref))
+        self.files.iter().find(|i| i.contains_uid(uid_ref))
     }
 
-    pub fn item_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalItem> {
+    pub fn file_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalFile> {
         let uid_ref = uid.as_ref();
-        self.items.iter_mut().find(|i| i.contains_uid(uid_ref))
+        self.files.iter_mut().find(|i| i.contains_uid(uid_ref))
     }
 
     pub fn due_alarms_within(
@@ -114,7 +114,7 @@ impl CalSource {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> impl Iterator<Item = Occurrence<'_>> {
-        self.items
+        self.files
             .iter()
             .flat_map(move |i| i.due_alarms_within(start, end))
     }
@@ -126,7 +126,7 @@ impl CalSource {
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let uid_str = uid.as_ref();
-        self.items
+        self.files
             .iter()
             .find_map(|i| i.occurrence_by_id(uid_str, rid, tz))
     }
@@ -140,35 +140,35 @@ impl CalSource {
     where
         F: Fn(&CalComponent) -> bool + Clone,
     {
-        self.items
+        self.files
             .iter()
             .flat_map(move |i| i.occurrences_within(start, end, filter.clone()))
     }
 
     pub fn delete_by_uid<S: AsRef<str>>(&mut self, uid: S) -> Result<(), ColError> {
-        let item = self.item_by_id_mut(&uid).unwrap();
-        item.delete_by_uid(uid);
-        if item.components().is_empty() {
-            let path = item.path().clone();
-            self.delete_item(&path).map(|_| ())
+        let file = self.file_by_id_mut(&uid).unwrap();
+        file.delete_by_uid(uid);
+        if file.components().is_empty() {
+            let path = file.path().clone();
+            self.delete_file(&path).map(|_| ())
         } else {
-            item.save()
+            file.save()
         }
     }
 
-    pub(crate) fn delete_item(&mut self, path: &PathBuf) -> Result<CalItem, ColError> {
+    pub(crate) fn delete_file(&mut self, path: &PathBuf) -> Result<CalFile, ColError> {
         let idx = self
-            .items
+            .files
             .iter()
             .position(|i| i.path() == path)
-            .ok_or_else(|| ColError::ItemNotFound(path.clone()))?;
-        let mut item = self.items.remove(idx);
-        item.remove()?;
-        Ok(item)
+            .ok_or_else(|| ColError::FileNotFound(path.clone()))?;
+        let mut file = self.files.remove(idx);
+        file.remove()?;
+        Ok(file)
     }
 
     pub fn save(&self) -> Result<(), ColError> {
-        for i in &self.items {
+        for i in &self.files {
             i.save()?;
         }
         Ok(())

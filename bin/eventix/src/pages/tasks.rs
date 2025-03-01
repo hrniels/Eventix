@@ -89,7 +89,7 @@ impl<'a> Tasks<'a> {
         }
 
         let unplanned_occs = store
-            .items()
+            .files()
             .filter(|s| !disabled.contains(s.source()))
             .flat_map(|i| i.components().iter().map(|c| (i.source(), c)))
             .filter(|(_source, c)| {

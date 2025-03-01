@@ -28,23 +28,23 @@ pub fn router(state: crate::state::State) -> Router {
 
 async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::Result<()> {
     let mut store = store.lock().await;
-    let item = store
-        .item_by_id_mut(&form.uid)
-        .ok_or_else(|| anyhow!("Unable to find item with uid {}", form.uid))?;
+    let file = store
+        .files_by_id_mut(&form.uid)
+        .ok_or_else(|| anyhow!("Unable to find file with uid {}", form.uid))?;
 
     let date = form
         .rid
         .parse::<CalDate>()
         .context(format!("Invalid rid date: {}", form.rid))?;
 
-    let base = item
+    let base = file
         .component_with_mut(|c| c.rid().is_none() && c.uid() == &form.uid)
         .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
 
     base.toggle_exclude(date);
     base.set_last_modified(CalDate::now());
     base.set_stamp(CalDate::now());
-    item.save()?;
+    file.save()?;
 
     Ok(())
 }

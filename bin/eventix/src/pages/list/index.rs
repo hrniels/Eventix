@@ -114,7 +114,7 @@ pub async fn handler(
 
     let iter = || {
         store
-            .items()
+            .files()
             .flat_map(|i| {
                 i.components()
                     .iter()

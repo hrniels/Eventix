@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::col::{CalItem, CalSource, ColError, Occurrence};
+use crate::col::{CalFile, CalSource, ColError, Occurrence};
 use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo};
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -41,20 +41,20 @@ impl CalStore {
             })
     }
 
-    pub fn items(&self) -> impl Iterator<Item = &CalItem> {
-        self.sources.iter().flat_map(|c| c.items().iter())
+    pub fn files(&self) -> impl Iterator<Item = &CalFile> {
+        self.sources.iter().flat_map(|c| c.files().iter())
     }
 
-    pub fn item_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalItem> {
+    pub fn file_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalFile> {
         let uid_str = uid.as_ref();
-        self.sources.iter().find_map(|c| c.item_by_id(uid_str))
+        self.sources.iter().find_map(|c| c.file_by_id(uid_str))
     }
 
-    pub fn item_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalItem> {
+    pub fn files_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalFile> {
         let uid_str = uid.as_ref();
         self.sources
             .iter_mut()
-            .find_map(|c| c.item_by_id_mut(uid_str))
+            .find_map(|c| c.file_by_id_mut(uid_str))
     }
 
     pub fn due_alarms_within(
@@ -90,15 +90,15 @@ impl CalStore {
     {
         self.sources
             .iter()
-            .flat_map(|c| c.items().iter())
+            .flat_map(|c| c.files().iter())
             .flat_map(move |i| i.occurrences_within(start, end, filter.clone()))
     }
 
     pub fn contacts(&self) -> HashMap<String, String> {
         let mut contacts = HashMap::new();
-        for i in self.items() {
-            let item_contacts = i.contacts();
-            for (k, v) in item_contacts {
+        for i in self.files() {
+            let file_contacts = i.contacts();
+            for (k, v) in file_contacts {
                 match contacts.get_mut(&k) {
                     Some(cur_name) if *cur_name == k => {
                         *cur_name = v;
@@ -114,11 +114,11 @@ impl CalStore {
     }
 
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
-        self.items().flat_map(|i| i.todos())
+        self.files().flat_map(|i| i.todos())
     }
 
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
-        self.items().flat_map(|i| i.events())
+        self.files().flat_map(|i| i.events())
     }
 
     pub fn switch_source(
@@ -130,30 +130,30 @@ impl CalStore {
         let old_src = self
             .source_mut(old)
             .ok_or_else(|| ColError::SourceNotFound((*old).to_string()))?;
-        let mut item = old_src.delete_item(&path)?;
+        let mut file = old_src.delete_file(&path)?;
 
         let new_src = match self.source_mut(new) {
             Some(src) => src,
             None => {
-                // if that failed, store the item in the old source again
-                item.save().unwrap();
-                self.source_mut(old).unwrap().add(item);
+                // if that failed, store the file in the old source again
+                file.save().unwrap();
+                self.source_mut(old).unwrap().add(file);
                 return Err(ColError::SourceNotFound((*new).to_string()));
             }
         };
 
-        item.set_source(new.clone());
-        item.set_path(new_src.path().join(item.path().file_name().unwrap()));
-        if let Err(e) = item.save() {
+        file.set_source(new.clone());
+        file.set_path(new_src.path().join(file.path().file_name().unwrap()));
+        if let Err(e) = file.save() {
             // if that failed, change everything back
             let old_src = self.source(old).unwrap();
-            item.set_source(old.clone());
-            item.set_path(old_src.path().join(item.path().file_name().unwrap()));
-            item.save().unwrap();
-            self.source_mut(old).unwrap().add(item);
+            file.set_source(old.clone());
+            file.set_path(old_src.path().join(file.path().file_name().unwrap()));
+            file.save().unwrap();
+            self.source_mut(old).unwrap().add(file);
             return Err(e);
         }
-        new_src.add(item);
+        new_src.add(file);
         Ok(())
     }
 

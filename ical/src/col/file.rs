@@ -14,7 +14,7 @@ use crate::objects::{
 use crate::util;
 
 pub struct OccurrenceIterator<'a> {
-    item: &'a CalItem,
+    file: &'a CalFile,
     start: DateTime<Tz>,
     end: DateTime<Tz>,
     dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
@@ -29,17 +29,17 @@ pub struct OccurrenceIterator<'a> {
 
 impl<'a> OccurrenceIterator<'a> {
     fn new(
-        item: &'a CalItem,
+        file: &'a CalFile,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
         dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
     ) -> Self {
-        let mut sorted_overwritten: Vec<&CalComponent> = item.components().iter().collect();
+        let mut sorted_overwritten: Vec<&CalComponent> = file.components().iter().collect();
         sorted_overwritten.sort_by_key(|comp| comp.start());
         Self {
             start,
             end,
-            item,
+            file,
             dates,
             sorted_overwritten,
             overwritten_index: 0,
@@ -53,9 +53,9 @@ impl<'a> OccurrenceIterator<'a> {
         // unwrap the base component and the recurring date iterator.
         let (base, ref mut date_iter) = self.dates.as_mut()?;
         for (ty, d, excluded) in date_iter {
-            let mut occ = Occurrence::new_single(self.item.source.clone(), base, ty, d, excluded);
+            let mut occ = Occurrence::new_single(self.file.source.clone(), base, ty, d, excluded);
             // check if an overwritten event exists for this occurrence.
-            if let Some(overwritten) = self.item.cal.components().iter().find(|c| {
+            if let Some(overwritten) = self.file.cal.components().iter().find(|c| {
                 matches!(c.rid(),
                 Some(rid)
                     if occ.occurrence_start()
@@ -93,7 +93,7 @@ impl<'a> OccurrenceIterator<'a> {
 
                 let start_date = overwritten.start().unwrap().as_start_with_tz(&timezone);
                 let mut occ = Occurrence::new_single(
-                    self.item.source.clone(),
+                    self.file.source.clone(),
                     base,
                     CompDateType::Start,
                     start_date,
@@ -150,20 +150,20 @@ impl<'a> Iterator for OccurrenceIterator<'a> {
 }
 
 #[derive(Debug)]
-pub struct CalItem {
+pub struct CalFile {
     source: Arc<String>,
     path: PathBuf,
     cal: Calendar,
 }
 
-impl PartialEq for CalItem {
+impl PartialEq for CalFile {
     fn eq(&self, other: &Self) -> bool {
         self.cal == other.cal
     }
 }
-impl Eq for CalItem {}
+impl Eq for CalFile {}
 
-impl CalItem {
+impl CalFile {
     #[cfg(test)]
     fn new_simple(cal: Calendar) -> Self {
         Self {
@@ -539,16 +539,16 @@ mod tests {
             ))
     }
 
-    fn new_item(event: CalEvent) -> CalItem {
+    fn new_file(event: CalEvent) -> CalFile {
         let mut cal = Calendar::default();
         cal.add_component(CalComponent::Event(event));
-        CalItem::new_simple(cal)
+        CalFile::new_simple(cal)
     }
 
-    fn new_allday_item(date: NaiveDate, uid: &str) -> CalItem {
+    fn new_allday_file(date: NaiveDate, uid: &str) -> CalFile {
         let mut cal = Calendar::default();
         cal.add_component(CalComponent::Event(new_allday_event(date, uid).done()));
-        CalItem::new_simple(cal)
+        CalFile::new_simple(cal)
     }
 
     fn has_uids<'a, I: Iterator<Item = Occurrence<'a>>>(result: I, uids: &[&str]) -> bool {
@@ -563,27 +563,27 @@ mod tests {
     }
 
     #[test]
-    fn items_within_simple() {
+    fn files_within_simple() {
         let mut source = CalSource::default();
-        source.add(new_allday_item(
+        source.add(new_allday_file(
             NaiveDate::from_ymd_opt(2024, 10, 2).unwrap(),
             "yes1",
         ));
-        source.add(new_allday_item(
+        source.add(new_allday_file(
             NaiveDate::from_ymd_opt(2024, 10, 1).unwrap(),
             "yes2",
         ));
-        source.add(new_allday_item(
+        source.add(new_allday_file(
             // TODO 2024-10-31 does not work; what does DATE=... mean exactly? doesn't that have a
             // different meaning in different time zones?
             NaiveDate::from_ymd_opt(2024, 10, 30).unwrap(),
             "yes3",
         ));
-        source.add(new_allday_item(
+        source.add(new_allday_file(
             NaiveDate::from_ymd_opt(2023, 10, 31).unwrap(),
             "no1",
         ));
-        source.add(new_allday_item(
+        source.add(new_allday_file(
             NaiveDate::from_ymd_opt(2024, 9, 30).unwrap(),
             "no2",
         ));
@@ -594,9 +594,9 @@ mod tests {
     }
 
     #[test]
-    fn items_within_no_start() {
+    fn files_within_no_start() {
         let mut source = CalSource::default();
-        source.add(new_item(
+        source.add(new_file(
             EventBuilder::new("yes1")
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
@@ -604,7 +604,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_item(
+        source.add(new_file(
             EventBuilder::new("yes2")
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
@@ -651,13 +651,13 @@ mod tests {
     }
 
     #[test]
-    fn items_within_missing() {
+    fn files_within_missing() {
         let mut source = CalSource::default();
-        source.add(new_allday_item(
+        source.add(new_allday_file(
             NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(),
             "yes1",
         ));
-        source.add(new_item(
+        source.add(new_file(
             EventBuilder::new("yes2")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
@@ -665,7 +665,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_item(
+        source.add(new_file(
             EventBuilder::new("no1")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(2000, 2, 1).unwrap(),
@@ -673,7 +673,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_item(
+        source.add(new_file(
             EventBuilder::new("no2")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1988, 2, 1).unwrap(),
@@ -709,7 +709,7 @@ mod tests {
         rrule.set_frequency(crate::objects::CalRRuleFreq::Daily);
         rrule.set_count(7);
 
-        source.add(new_item(
+        source.add(new_file(
             EventBuilder::new("yes")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
@@ -742,7 +742,7 @@ mod tests {
     #[test]
     fn alarms() {
         let mut source = CalSource::default();
-        source.add(new_item(
+        source.add(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 3).unwrap(), "id1")
                 .alarm(CalAlarm::new(
                     CalAction::Display,
@@ -753,7 +753,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_item(
+        source.add(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(), "id2")
                 .alarm(CalAlarm::new(
                     CalAction::Display,
@@ -764,7 +764,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_item(
+        source.add(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(), "id3")
                 .alarm(CalAlarm::new(
                     CalAction::Display,
@@ -799,7 +799,7 @@ mod tests {
     #[test]
     fn alarms_with_recurrence() {
         let mut source = CalSource::default();
-        source.add(new_item(
+        source.add(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
                 .rrule("FREQ=DAILY;INTERVAL=4;COUNT=2".parse().unwrap())
                 .alarm(CalAlarm::new(
@@ -811,7 +811,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_item(
+        source.add(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 8).unwrap(), "id2")
                 .rrule("FREQ=WEEKLY".parse().unwrap())
                 .alarm(CalAlarm::new(
@@ -919,7 +919,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(CalItem::new_simple(cal));
+        source.add(CalFile::new_simple(cal));
 
         let occs = source
             .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 11))
@@ -964,7 +964,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(CalItem::new_simple(cal));
+        source.add(CalFile::new_simple(cal));
 
         // this includes the 6th, but this is overwritten to happen on the 4th, which is outside
         // the range

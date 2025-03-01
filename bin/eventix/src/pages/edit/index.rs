@@ -67,8 +67,8 @@ pub async fn content(
 ) -> Result<impl IntoResponse, HTMLError> {
     let (store, disabled) = state.acquire_store_and_disabled().await;
 
-    let item = store
-        .item_by_id(&req.uid)
+    let file = store
+        .file_by_id(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
     let rid = if let Some(ref rid) = req.rid {
@@ -80,7 +80,7 @@ pub async fn content(
         None
     };
 
-    let occ = item
+    let occ = file
         .occurrence_by_id(&req.uid, rid.as_ref(), locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
@@ -96,7 +96,7 @@ pub async fn content(
         Some(f) => f,
         None => {
             let cal = if req.rid.is_none() {
-                Some((*item.source()).to_string())
+                Some((*file.source()).to_string())
             } else {
                 None
             };
@@ -104,7 +104,7 @@ pub async fn content(
         }
     };
 
-    let source = store.source(item.source()).unwrap();
+    let source = store.source(file.source()).unwrap();
 
     let events = Events::new(&store, &disabled, &locale);
     let tasks = Tasks::new(&store, &disabled, &locale);
