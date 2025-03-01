@@ -96,6 +96,18 @@ impl<'c> Occurrence<'c> {
         self.excluded
     }
 
+    pub fn is_cancelled(&self) -> bool {
+        match self.ctype() {
+            CalCompType::Todo => {
+                self.todo_status().unwrap_or(CalTodoStatus::InProcess) == CalTodoStatus::Cancelled
+            }
+            CalCompType::Event => {
+                self.event_status().unwrap_or(CalEventStatus::Tentative)
+                    == CalEventStatus::Cancelled
+            }
+        }
+    }
+
     pub fn event_status(&self) -> Option<CalEventStatus> {
         ctype_method!(self, as_event, status)
     }
