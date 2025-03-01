@@ -64,7 +64,8 @@ async fn handler(
             return Err(anyhow!("Component {} is not recurrent", req.uid).into());
         }
 
-        file.create_overwrite(rid.unwrap(), locale.timezone(), complete);
+        file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), complete)
+            .context("Creating overwrite failed")?;
     }
     file.save()
         .context(format!("Save file {}:{:?}", req.uid, req.rid))?;

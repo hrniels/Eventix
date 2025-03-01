@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use crate::parser::ParseError;
+use crate::{objects::CalDate, parser::ParseError};
 use thiserror::Error;
 
 mod file;
@@ -33,4 +33,8 @@ pub enum ColError {
     SourceNotFound(String),
     #[error("Unable to find file with path {0}")]
     FileNotFound(PathBuf),
+    #[error("Component with uid {0} not found")]
+    ComponentNotFound(String),
+    #[error("An overwrite with rid {0} exists")]
+    RidExists(CalDate),
 }

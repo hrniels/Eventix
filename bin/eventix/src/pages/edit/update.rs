@@ -78,9 +78,10 @@ fn action_update(
             return Err(anyhow!("Component {} is not recurrent", form.req.uid));
         }
 
-        file.create_overwrite(rid.unwrap(), locale.timezone(), |c| {
+        file.create_overwrite(&form.req.uid, rid.unwrap(), locale.timezone(), |c| {
             form.update(c, locale);
-        });
+        })
+        .context("Creating overwrite failed")?;
     }
 
     // should we move the file to a different source?

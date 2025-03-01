@@ -13,6 +13,12 @@ use crate::objects::{
 };
 use crate::util;
 
+/// Iterator that produces occurrences.
+///
+/// This iterator uses the [`CompDateIterator`] to generate occurrences, but combines these with
+/// the overwrites that are present in the used [`CalFile`]. In particular, it ignores occurrences
+/// that overwrite the date to be outside of the desired time period and adds occurrences where the
+/// overwrite changes the date to be inside of the desired time period.
 pub struct OccurrenceIterator<'a> {
     file: &'a CalFile,
     start: DateTime<Tz>,
@@ -149,6 +155,10 @@ impl<'a> Iterator for OccurrenceIterator<'a> {
     }
 }
 
+/// A single file containing a [`Calendar`].
+///
+/// A [`CalFile`] always belongs to a specific [`CalSource`](crate::col::CalSource) and
+/// contains exactly one [`Calendar`] (which can contain several [`CalComponent`]s though).
 #[derive(Debug)]
 pub struct CalFile {
     source: Arc<String>,
@@ -173,10 +183,12 @@ impl CalFile {
         }
     }
 
+    /// Creates a new [`CalFile`] for given source and path, containing the given calendar.
     pub fn new(source: Arc<String>, path: PathBuf, cal: Calendar) -> Self {
         Self { source, path, cal }
     }
 
+    /// Returns the id of the source this file belongs to.
     pub fn source(&self) -> &Arc<String> {
         &self.source
     }
@@ -185,6 +197,7 @@ impl CalFile {
         self.source = src;
     }
 
+    /// Returns the path of the file this [`CalFile`] is stored in.
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
@@ -193,15 +206,20 @@ impl CalFile {
         self.path = path;
     }
 
+    /// Returns the contained [`Calendar`].
     pub fn calendar(&self) -> &Calendar {
         &self.cal
     }
 
+    /// Returns true if any component in the contained [`Calendar`] has the given uid.
     pub fn contains_uid<S: AsRef<str>>(&self, uid: S) -> bool {
         let uid_ref = uid.as_ref();
         self.cal.components().iter().any(|c| c.uid() == uid_ref)
     }
 
+    /// Returns a vector of occurrences whose alarm is due within the given time period.
+    ///
+    /// Note that excluded occurrences are not returned.
     pub fn due_alarms_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> Vec<Occurrence<'_>> {
         // this should never happen, but if there is no base component, we're done here
         let Some(first) = self.component_with(|c| c.rid().is_none()) else {
@@ -288,6 +306,12 @@ impl CalFile {
         alarms
     }
 
+    /// Returns the occurrence with given uid/rid.
+    ///
+    /// If `rid` is `None`, this method simply returns the base component with the given uid as an
+    /// [`Occurrence`], if it does exist. If `rid` is `Some`, it will determine the whether an
+    /// overwrite for this specific date (given by the `rid`) exists and if so, it will be
+    /// contained in the [`Occurrence`].
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
@@ -322,6 +346,27 @@ impl CalFile {
         Some(res)
     }
 
+    /// Returns an iterator with all occurrences in the given period of time.
+    ///
+    /// The filter is used to find the base component and can therefore be leveraged to, for
+    /// example, only consider components with a certain uid.
+    ///
+    /// The returned occurrences are ordered by date. Additionally, overwritten components are
+    /// taken into account. That means:
+    ///
+    /// 1. the overwritten properties will take precedence.
+    /// 2. if the overwritten component changes the date to be outside of the period, the
+    ///    occurrence will not be delivered by the iterator.
+    /// 3. if the overwritten component changes the date to be inside of the period, the occurrence
+    ///    will be delivered by the iterator even if the recurrence of the base component is not
+    ///    within that period.
+    ///
+    /// Note that an overlap of the occurrence dates with this period is sufficient. For example,
+    /// if an occurrence starts before `end`, but ends after `end`, it will still be delivered by
+    /// the iterator.
+    ///
+    /// Note also that excluded occurrences will be delivered by the iterator, but can be
+    /// identified via [`Occurrence::is_excluded`].
     pub fn occurrences_within<F>(
         &self,
         start: DateTime<Tz>,
@@ -346,6 +391,7 @@ impl CalFile {
         )
     }
 
+    /// Returns a reference to the component that matches the given filter.
     pub fn component_with<F>(&self, filter: F) -> Option<&CalComponent>
     where
         F: Fn(&CalComponent) -> bool,
@@ -353,6 +399,7 @@ impl CalFile {
         self.cal.components().iter().find(|c| filter(c))
     }
 
+    /// Returns a mutable reference to the component that matches the given filter.
     pub fn component_with_mut<F>(&mut self, filter: F) -> Option<&mut CalComponent>
     where
         F: Fn(&CalComponent) -> bool,
@@ -360,38 +407,12 @@ impl CalFile {
         self.cal.components_mut().iter_mut().find(|c| filter(c))
     }
 
+    /// Returns all components that are part of this file.
     pub fn components(&self) -> &[CalComponent] {
         self.cal.components()
     }
 
-    pub fn create_overwrite<F>(&mut self, rid: CalDate, tz: &Tz, func: F)
-    where
-        F: FnOnce(&mut CalComponent),
-    {
-        let base = self
-            .components()
-            .iter()
-            .find(|c| c.rid().is_none())
-            .unwrap();
-
-        let mut comp = if base.ctype() == CalCompType::Event {
-            CalComponent::Event(CalEvent::new(base.uid()))
-        } else {
-            CalComponent::Todo(CalTodo::new(base.uid()))
-        };
-
-        let start = CalDate::DateTime(CalDateTime::Timezone(
-            rid.as_start_with_tz(tz).naive_local(),
-            tz.name().to_string(),
-        ));
-        comp.set_start(Some(start));
-        comp.set_rid(Some(rid));
-        comp.set_last_modified(CalDate::now());
-        comp.set_stamp(CalDate::now());
-        func(&mut comp);
-        self.add_component(comp);
-    }
-
+    /// Returns an iterator with all TODOs.
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
         self.components()
             .iter()
@@ -399,6 +420,7 @@ impl CalFile {
             .map(|t| t.as_todo().unwrap())
     }
 
+    /// Returns an iterator with all events.
     pub fn events(&self) -> impl Iterator<Item = &CalEvent> {
         self.components()
             .iter()
@@ -406,6 +428,11 @@ impl CalFile {
             .map(|e| e.as_event().unwrap())
     }
 
+    /// Returns a [`HashMap`] with all contacts that occur in this file.
+    ///
+    /// The key of the hashmap is the address, whereas the value is the common name, if known, or
+    /// the address otherwise. The contacts are collected by the list of attendees in all
+    /// components.
     pub fn contacts(&self) -> HashMap<String, String> {
         let mut contacts = HashMap::new();
         for c in self.components() {
@@ -428,14 +455,80 @@ impl CalFile {
         contacts
     }
 
+    /// Adds the given component to this file.
+    ///
+    /// Note that this does not save to file. Please call [`Self::save`] to do so.
     pub fn add_component(&mut self, comp: CalComponent) {
         self.cal.add_component(comp);
     }
 
+    /// Deletes the component with given uid (including overwrites) from this file.
+    ///
+    /// Note that this does not save to file. Please call [`Self::save`] to do so.
     pub(crate) fn delete_by_uid<N: AsRef<str>>(&mut self, uid: N) {
         self.cal.delete_components(uid);
     }
 
+    /// Creates a new overwrite for the occurrence of the component with given uid at given date.
+    ///
+    /// The `uid` specifies the id of the base component, whereas the `rid` specifies the date of
+    /// the occurrence in UTC. The timezone will be used to for the start date of the occurrence.
+    /// The function `func` will be called with a mutable reference to the created overwrite, so
+    /// that changes can be made before it is stored.
+    ///
+    /// Expects that the component with given uid exists, but *not* the overwrite.
+    ///
+    /// Note that this does not save to file. Please call [`Self::save`] to do so.
+    pub fn create_overwrite<F, U>(
+        &mut self,
+        uid: U,
+        rid: CalDate,
+        tz: &Tz,
+        func: F,
+    ) -> Result<(), ColError>
+    where
+        F: FnOnce(&mut CalComponent),
+        U: ToString,
+    {
+        let uid = uid.to_string();
+        let base = self
+            .components()
+            .iter()
+            .find(|c| c.uid() == &uid && c.rid().is_none())
+            .ok_or_else(|| ColError::ComponentNotFound(uid.clone()))?;
+
+        // does the overwrite exist?
+        if self
+            .components()
+            .iter()
+            .find(|c| c.uid() == &uid && c.rid() == Some(&rid))
+            .is_some()
+        {
+            return Err(ColError::RidExists(rid));
+        }
+
+        let mut comp = if base.ctype() == CalCompType::Event {
+            CalComponent::Event(CalEvent::new(base.uid()))
+        } else {
+            CalComponent::Todo(CalTodo::new(base.uid()))
+        };
+
+        let start = CalDate::DateTime(CalDateTime::Timezone(
+            rid.as_start_with_tz(tz).naive_local(),
+            tz.name().to_string(),
+        ));
+        comp.set_start(Some(start));
+        comp.set_rid(Some(rid));
+        comp.set_last_modified(CalDate::now());
+        comp.set_stamp(CalDate::now());
+
+        func(&mut comp);
+
+        self.add_component(comp);
+        Ok(())
+    }
+
+    /// Saves the current state to file.
     pub fn save(&self) -> Result<(), ColError> {
         let file = File::options()
             .write(true)
@@ -448,6 +541,7 @@ impl CalFile {
             .map_err(|e| ColError::FileWrite(self.path.clone(), e))
     }
 
+    /// Removes this file.
     pub fn remove(&mut self) -> Result<(), ColError> {
         fs::remove_file(&self.path).map_err(|e| ColError::FileRemove(self.path.clone(), e))
     }
