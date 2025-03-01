@@ -28,3 +28,5 @@
 - websocket between server and website for remote control (open specific page from trayicon etc.):
   https://dev.to/campbellgoe/websocket-starter-in-rust-with-client-and-server-example-4ahj
 - bug if recurrent task has no due date? then we only get 5 occurrences in the list!?
+- support multiple alarms: handy for birthdays - remind a week before and on that day
+- add ability to accept/cancel invitations
