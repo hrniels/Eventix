@@ -1,4 +1,4 @@
-//! This module provides utility functions.
+//! Utility functions.
 
 use std::fmt::{Display, Write};
 

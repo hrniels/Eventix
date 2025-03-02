@@ -1,4 +1,4 @@
-//! Provides abstractions for the iCalendar objects.
+//! Abstractions for iCalendar objects.
 //!
 //! A iCalendar object is represented by [`Calendar`], which contains one or more _components_,
 //! represented as [`CalComponent`]. Such a component is either a [`CalEvent`] or a [`CalTodo`].
