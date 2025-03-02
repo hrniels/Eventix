@@ -311,7 +311,8 @@ impl CalFile {
     /// If `rid` is `None`, this method simply returns the base component with the given uid as an
     /// [`Occurrence`], if it does exist. If `rid` is `Some`, it will determine the whether an
     /// overwrite for this specific date (given by the `rid`) exists and if so, it will be
-    /// contained in the [`Occurrence`].
+    /// contained in the [`Occurrence`]. The timezone is used to create the date instances in the
+    /// returned occurrence.
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,

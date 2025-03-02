@@ -10,6 +10,10 @@ use std::sync::Arc;
 use crate::col::{CalFile, ColError, Occurrence};
 use crate::objects::{CalComponent, CalDate, Calendar};
 
+/// A directory with calendar files.
+///
+/// A [`CalDir`] is a container for [`CalFile`] objects with additional properties. At first, each
+/// directory has a unique id and a human-readable name. Furthermore, custom properties can be set.
 #[derive(Default, Debug)]
 pub struct CalDir {
     id: Arc<String>,
@@ -33,6 +37,11 @@ impl PartialEq for CalDir {
 impl Eq for CalDir {}
 
 impl CalDir {
+    /// Creates a new directory from the given path.
+    ///
+    /// This method reads all files in the given directory and tries to parse them into a
+    /// [`Calendar`]. These are added to the created [`CalDir`]. Note that it expects all files to
+    /// be calendar files, but ignores directories.
     pub fn new_from_dir(
         id: Arc<String>,
         path: PathBuf,
@@ -75,40 +84,51 @@ impl CalDir {
         })
     }
 
+    /// Returns the unique id of this directory.
     pub fn id(&self) -> &Arc<String> {
         &self.id
     }
 
+    /// Returns the file system path of this directory.
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
 
+    /// Returns the human-readable name of this directory.
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    /// Returns the additional properties that have been set for this directory.
     pub fn props(&self) -> &HashMap<String, String> {
         &self.props
     }
 
+    /// Returns a slice with all files in this directory.
     pub fn files(&self) -> &[CalFile] {
         &self.files
     }
 
+    /// Returns a reference to the file that hosts the component with given uid.
     pub fn file_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalFile> {
         let uid_ref = uid.as_ref();
         self.files.iter().find(|i| i.contains_uid(uid_ref))
     }
 
+    /// Returns a mutable reference to the file that hosts the component with given uid.
     pub fn file_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalFile> {
         let uid_ref = uid.as_ref();
         self.files.iter_mut().find(|i| i.contains_uid(uid_ref))
     }
 
+    /// Adds the given file to this directory.
     pub fn add_file(&mut self, file: CalFile) {
         self.files.push(file);
     }
 
+    /// Returns a vector of occurrences whose alarm is due within the given time period.
+    ///
+    /// Note that excluded occurrences are not returned.
     pub fn due_alarms_within(
         &self,
         start: DateTime<Tz>,
@@ -119,6 +139,13 @@ impl CalDir {
             .flat_map(move |i| i.due_alarms_within(start, end))
     }
 
+    /// Returns the occurrence with given uid/rid.
+    ///
+    /// If `rid` is `None`, this method simply returns the base component with the given uid as an
+    /// [`Occurrence`], if it does exist. If `rid` is `Some`, it will determine the whether an
+    /// overwrite for this specific date (given by the `rid`) exists and if so, it will be
+    /// contained in the [`Occurrence`]. The timezone is used to create the date instances in the
+    /// returned occurrence.
     pub fn occurrence_by_id<S: AsRef<str>>(
         &self,
         uid: S,
@@ -131,6 +158,9 @@ impl CalDir {
             .find_map(|i| i.occurrence_by_id(uid_str, rid, tz))
     }
 
+    /// Returns an iterator with all occurrences in the given period of time.
+    ///
+    /// See [`CalFile::occurrences_within`] for details.
     pub fn occurrences_within<F>(
         &self,
         start: DateTime<Tz>,
@@ -145,6 +175,10 @@ impl CalDir {
             .flat_map(move |i| i.occurrences_within(start, end, filter.clone()))
     }
 
+    /// Deletes the component with given uid (including overwrites).
+    ///
+    /// If the containing file is empty afterwards, the file will be deleted. Otherwise, the file
+    /// will just be saved.
     pub fn delete_by_uid<S: AsRef<str>>(&mut self, uid: S) -> Result<(), ColError> {
         let file = self.file_by_id_mut(&uid).unwrap();
         file.delete_by_uid(uid);
@@ -167,6 +201,7 @@ impl CalDir {
         Ok(file)
     }
 
+    /// Saves the current state of all files to disk.
     pub fn save(&self) -> Result<(), ColError> {
         for i in &self.files {
             i.save()?;
