@@ -43,7 +43,7 @@ impl<'a> Events<'a> {
             .iter()
             .filter(|s| !disabled.contains(s.id()))
             .flat_map(move |s| {
-                s.occurrences_within(start, end, |c| c.ctype() == CalCompType::Event)
+                s.occurrences_between(start, end, |c| c.ctype() == CalCompType::Event)
             })
             .filter(|o| !o.is_excluded())
             .collect::<Vec<_>>();

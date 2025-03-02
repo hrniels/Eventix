@@ -44,7 +44,9 @@ impl<'a> Tasks<'a> {
             .directories()
             .iter()
             .filter(|s| !disabled.contains(s.id()))
-            .flat_map(move |s| s.occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo))
+            .flat_map(move |s| {
+                s.occurrences_between(start, end, |c| c.ctype() == CalCompType::Todo)
+            })
             .filter(|o| {
                 !o.is_excluded()
                     && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction)
@@ -53,7 +55,7 @@ impl<'a> Tasks<'a> {
             .collect::<Vec<_>>();
 
         let overdue_tds = store
-            .occurrences_within(
+            .occurrences_between(
                 DateTime::<Tz>::MIN_UTC.with_timezone(timezone),
                 start,
                 |c| c.ctype() == CalCompType::Todo,

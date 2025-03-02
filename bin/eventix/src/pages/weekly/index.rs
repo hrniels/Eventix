@@ -187,7 +187,7 @@ pub async fn content(
         .directories()
         .iter()
         .filter(|s| !disabled.contains(s.id()))
-        .flat_map(move |s| s.occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event))
+        .flat_map(move |s| s.occurrences_between(mstart, mend, |c| c.ctype() == CalCompType::Event))
         .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();
 

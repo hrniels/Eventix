@@ -126,17 +126,17 @@ impl CalDir {
         self.files.push(file);
     }
 
-    /// Returns a vector of occurrences whose alarm is due within the given time period.
+    /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
-    pub fn due_alarms_within(
+    pub fn due_alarms_between(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> impl Iterator<Item = Occurrence<'_>> {
         self.files
             .iter()
-            .flat_map(move |i| i.due_alarms_within(start, end))
+            .flat_map(move |i| i.due_alarms_between(start, end))
     }
 
     /// Returns the occurrence with given uid/rid.
@@ -160,8 +160,8 @@ impl CalDir {
 
     /// Returns an iterator with all occurrences in the given period of time.
     ///
-    /// See [`CalFile::occurrences_within`] for details.
-    pub fn occurrences_within<F>(
+    /// See [`CalFile::occurrences_between`] for details.
+    pub fn occurrences_between<F>(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
@@ -172,7 +172,7 @@ impl CalDir {
     {
         self.files
             .iter()
-            .flat_map(move |i| i.occurrences_within(start, end, filter.clone()))
+            .flat_map(move |i| i.occurrences_between(start, end, filter.clone()))
     }
 
     /// Deletes the component with given uid (including overwrites).

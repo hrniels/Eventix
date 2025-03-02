@@ -495,7 +495,7 @@ impl CalRRule {
     /// in this interval. Note that an overlap of the recurrences with this interval is sufficient.
     /// For example, if an recurrence starts before `end`, but ends after `end`, it will still be
     /// delivered by the iterator.
-    pub fn dates_within(
+    pub fn dates_between(
         &self,
         dtstart: DateTime<Tz>,
         dtdur: Option<Duration>,
@@ -507,7 +507,7 @@ impl CalRRule {
         // want to see all occurrences until December 20th of a monthly event starting at 25th of
         // January, we will not consider the December as the 25th is already out of range. going
         // one interval further means that we will consider the December and might set the day to
-        // something else, which might indeed be within the range.
+        // something else, which might indeed be in the range.
         let beyond_end = next_date(end, self.freq, interval).unwrap_or(end);
         let until = if let Some(ref until) = self.until {
             until.as_end_with_tz(&start.timezone()).min(beyond_end)
@@ -1133,7 +1133,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily\nRepeats 3 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1154,7 +1154,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             dtstart,
             Some(Duration::hours(1)),
             start,
@@ -1176,7 +1176,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily\nRepeats until October 27, 1997".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1191,7 +1191,7 @@ mod tests {
     fn range_every_other_day() {
         let start = ny_datetime(1997, 10, 25, 9, 0, 0);
         let rrule = "FREQ=DAILY;INTERVAL=2".parse::<CalRRule>().unwrap();
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1219,7 +1219,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 10 days\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1241,7 +1241,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs weekly\nRepeats 10 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1263,7 +1263,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily, on Mon\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1288,7 +1288,7 @@ mod tests {
             "Occurs secondly, at hour(s) 10 and 12, at minute(s) 20, 30, and 40, at second(s) 10\nRepeats 5 times"
                 .to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1313,7 +1313,7 @@ mod tests {
             "Occurs daily, on the 3rd, 10th, and last day of the month\nRepeats 7 times"
                 .to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1340,7 +1340,7 @@ mod tests {
             "Occurs hourly, on the 2nd, 35th, and 10th to last day of the year, at hour(s) 12\nRepeats 4 times"
                 .to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1364,7 +1364,7 @@ mod tests {
             "Occurs hourly, at minute(s) 4 and 5, at second(s) 10, 20, and 30\nRepeats 8 times"
                 .to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1389,7 +1389,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs daily, at hour(s) 4 and 8\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1413,7 +1413,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs monthly, on the 1st and last day of the month\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1437,7 +1437,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs yearly, in October and November\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1461,7 +1461,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs weekly, on Mon and 2nd Tue\nRepeats 6 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1486,7 +1486,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 weeks, on Tue and Thu\nRepeats 6 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1511,7 +1511,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs monthly, on Mon, 2nd Tue, and last Wed\nRepeats 6 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1537,7 +1537,7 @@ mod tests {
             "Occurs yearly, in September, on Mon, 2nd Tue, and last Wed\nRepeats 6 times"
                 .to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1562,7 +1562,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs yearly, on 5th Mon and last Fri\nRepeats 6 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1588,7 +1588,7 @@ mod tests {
             "Occurs yearly, in January, on Sun, Mon, Tue, Wed, Thu, Fri, and Sat\nRepeats 5 times"
                 .to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1612,7 +1612,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 weeks\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1636,7 +1636,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 months, on 1st Sun and last Sun\nRepeats 5 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1661,7 +1661,7 @@ mod tests {
             "Occurs every 18 months, on the 10th, 11th, and 15th day of the month\nRepeats 5 times"
                 .to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,
@@ -1685,7 +1685,7 @@ mod tests {
             format!("{}", rrule.human()),
             "Occurs every 2 weeks, on Tue and Sun\nRepeats 4 times".to_string()
         );
-        let mut iter = rrule.dates_within(
+        let mut iter = rrule.dates_between(
             start,
             Some(Duration::hours(1)),
             start,

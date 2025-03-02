@@ -78,7 +78,7 @@ pub async fn watch_alarms(state: State, locale: Arc<dyn Locale + Send + Sync>) {
 
             // find all due alarms since the last check and sort them by alarm time
             let mut alarms = store
-                .due_alarms_within(last_check, now)
+                .due_alarms_between(last_check, now)
                 .filter(|o| !o.is_cancelled())
                 .collect::<Vec<_>>();
             alarms.sort_by_key(|o| o.alarm_date().unwrap());

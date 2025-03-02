@@ -9,7 +9,7 @@
 //! to disk.
 //!
 //! Second, the [`objects`] module hosts various iCalendar objects and offers operations to
-//! manipulate them and determining event occurrences within a given time frame.
+//! manipulate them and determining event occurrences in a given time frame.
 //!
 //! Finally, the [`col`] module offers collections to manage these objects, starting with
 //! [`CalFile`](col::CalFile) over [`CalDir`](col::CalDir) to [`CalStore`](col::CalStore).
@@ -71,7 +71,7 @@
 //! let tz = chrono_tz::Europe::Berlin;
 //! let start = tz.with_ymd_and_hms(2024, 10, 1, 10, 0, 0).unwrap();
 //! let end = tz.with_ymd_and_hms(2024, 12, 1, 10, 0, 0).unwrap();
-//! let mut occs = file.occurrences_within(start, end, |_| true);
+//! let mut occs = file.occurrences_between(start, end, |_| true);
 //!
 //! // the first is on 2024-10-24
 //! let next = occs.next().unwrap();

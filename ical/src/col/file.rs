@@ -217,10 +217,14 @@ impl CalFile {
         self.cal.components().iter().any(|c| c.uid() == uid_ref)
     }
 
-    /// Returns a vector of occurrences whose alarm is due within the given time period.
+    /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
-    pub fn due_alarms_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> Vec<Occurrence<'_>> {
+    pub fn due_alarms_between(
+        &self,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+    ) -> Vec<Occurrence<'_>> {
         // this should never happen, but if there is no base component, we're done here
         let Some(first) = self.component_with(|c| c.rid().is_none()) else {
             return vec![];
@@ -236,7 +240,7 @@ impl CalFile {
                 } => {
                     alarms.extend(
                         first
-                            .dates_within(start - *duration, end - *duration)
+                            .dates_between(start - *duration, end - *duration)
                             .map(|(ty, d, excluded)| {
                                 Occurrence::new_single(self.dir.clone(), first, ty, d, excluded)
                             })
@@ -286,8 +290,8 @@ impl CalFile {
                     );
                     tmp_occ.set_overwrite(c);
                     match tmp_occ.alarm_date() {
-                        // if the alarm is also within the time frame (and not excluded), just set
-                        // the overwritten event
+                        // if the alarm is also in the time frame (and not excluded), just set the
+                        // overwritten event
                         Some(alarm) if !tmp_occ.is_excluded() && alarm >= start && alarm < end => {
                             if let Some(occ) = alarms
                                 .iter_mut()
@@ -360,7 +364,7 @@ impl CalFile {
     ///    occurrence will not be delivered by the iterator.
     /// 3. if the overwritten component changes the date to be inside of the period, the occurrence
     ///    will be delivered by the iterator even if the recurrence of the base component is not
-    ///    within that period.
+    ///    in that period.
     ///
     /// Note that an overlap of the occurrence dates with this period is sufficient. For example,
     /// if an occurrence starts before `end`, but ends after `end`, it will still be delivered by
@@ -368,7 +372,7 @@ impl CalFile {
     ///
     /// Note also that excluded occurrences will be delivered by the iterator, but can be
     /// identified via [`Occurrence::is_excluded`].
-    pub fn occurrences_within<F>(
+    pub fn occurrences_between<F>(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
@@ -388,7 +392,7 @@ impl CalFile {
             self,
             start,
             end,
-            Some((first, first.dates_within(start, end))),
+            Some((first, first.dates_between(start, end))),
         )
     }
 
@@ -658,7 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn files_within_simple() {
+    fn files_between_simple() {
         let mut dir = CalDir::default();
         dir.add_file(new_allday_file(
             NaiveDate::from_ymd_opt(2024, 10, 2).unwrap(),
@@ -683,12 +687,13 @@ mod tests {
             "no2",
         ));
 
-        let comps = dir.occurrences_within(new_date(2024, 10, 1), new_date(2024, 10, 31), |_| true);
+        let comps =
+            dir.occurrences_between(new_date(2024, 10, 1), new_date(2024, 10, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
     }
 
     #[test]
-    fn files_within_no_start() {
+    fn files_between_no_start() {
         let mut dir = CalDir::default();
         dir.add_file(new_file(
             EventBuilder::new("yes1")
@@ -708,10 +713,10 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
-        let comps = dir.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
+        let comps = dir.occurrences_between(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2"]));
 
-        let comps = dir.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
+        let comps = dir.occurrences_between(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
         let all = comps.collect::<Vec<_>>();
         assert_eq!(all[0].occurrence_start(), None);
         assert_eq!(
@@ -743,7 +748,7 @@ mod tests {
     }
 
     #[test]
-    fn files_within_missing() {
+    fn files_between_missing() {
         let mut dir = CalDir::default();
         dir.add_file(new_allday_file(
             NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(),
@@ -779,7 +784,7 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
-        let comps = dir.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31), |_| true);
+        let comps = dir.occurrences_between(new_date(1990, 1, 1), new_date(2000, 1, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2"]));
         assert_eq!(
             dir.occurrence_by_id("yes1", None, tz).unwrap().uid(),
@@ -816,7 +821,7 @@ mod tests {
         ));
 
         let occs = dir
-            .occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true)
+            .occurrences_between(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true)
             .filter(|o| !o.is_excluded())
             .collect::<Vec<_>>();
         assert_eq!(occs[0].uid(), "yes");
@@ -865,14 +870,14 @@ mod tests {
         ));
 
         let occs = dir
-            .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 2))
+            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 2))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 1);
         assert_eq!(occs[0].uid(), "id1");
         assert_eq!(occs[0].alarm_date(), Some(new_date(1990, 1, 1)));
 
         let occs = dir
-            .due_alarms_within(new_date(1990, 1, 5), new_date(1990, 1, 8))
+            .due_alarms_between(new_date(1990, 1, 5), new_date(1990, 1, 8))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
         assert_eq!(occs[0].uid(), "id2");
@@ -913,7 +918,7 @@ mod tests {
         ));
 
         let occs = dir
-            .due_alarms_within(
+            .due_alarms_between(
                 new_datetime(1990, 1, 5, 23, 45, 0),
                 new_datetime(1990, 1, 5, 23, 55, 0),
             )
@@ -927,7 +932,7 @@ mod tests {
         );
 
         let occs = dir
-            .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 7))
+            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 7))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
         assert_eq!(occs[0].uid(), "id1");
@@ -944,7 +949,7 @@ mod tests {
         );
 
         let occs = dir
-            .due_alarms_within(new_date(1990, 1, 7), new_date(1990, 1, 15))
+            .due_alarms_between(new_date(1990, 1, 7), new_date(1990, 1, 15))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
         assert_eq!(occs[0].uid(), "id2");
@@ -1010,7 +1015,7 @@ mod tests {
         dir.add_file(CalFile::new_simple(cal));
 
         let occs = dir
-            .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 11))
+            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 11))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
         assert_eq!(occs[0].uid(), "id1");
@@ -1057,14 +1062,14 @@ mod tests {
         // this includes the 6th, but this is overwritten to happen on the 4th, which is outside
         // the range
         let occs = dir
-            .occurrences_within(new_date(1990, 1, 5), new_date(1990, 1, 7), |_| true)
+            .occurrences_between(new_date(1990, 1, 5), new_date(1990, 1, 7), |_| true)
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 0);
 
         // this leads to an empty list from the recurrence itself, but should consider the
         // overwritten one, which is indeed in the requested range.
         let occs = dir
-            .occurrences_within(new_date(1990, 1, 3), new_date(1990, 1, 9), |_| true)
+            .occurrences_between(new_date(1990, 1, 3), new_date(1990, 1, 9), |_| true)
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
         assert_eq!(occs[0].uid(), "id1");

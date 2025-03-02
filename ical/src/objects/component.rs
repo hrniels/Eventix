@@ -369,7 +369,7 @@ pub enum CompDateType {
 ///
 /// For non-recurrent components, it simply delivers the single date it occurs on. For recurrent
 /// components, it delivers its occurrences, sorted by dates ascendingly. Typically, this iterator
-/// is created by methods like [`CalComponent::dates_within`], which deliver all occurrences within
+/// is created by methods like [`CalComponent::dates_between`], which deliver all occurrences in
 /// a certain time period.
 #[derive(Default)]
 pub struct CompDateIterator<'a> {
@@ -488,20 +488,20 @@ impl CalComponent {
     ///
     /// For non-recurrent components, the occurrence is simply the start/end date when this
     /// component takes place. For recurrent components, there are potentially many occurrences.
-    /// The iterator delivers the dates of these occurrences within the given time period. An
-    /// occurrence is considered to be within this time period, if it overlaps with the period.
-    /// That is, if either start or the end is within the period or the occurrence starts before
-    /// and ends after the period.
+    /// The iterator delivers the dates of these occurrences in the given time period. An
+    /// occurrence is considered to be in this time period, if it overlaps with the period. That
+    /// is, if either start or the end is in the period or the occurrence starts before and ends
+    /// after the period.
     ///
     /// Note that the iterator returns excluded occurrences as well and requires the caller to
     /// ignore these, if desired.
-    pub fn dates_within(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> CompDateIterator {
+    pub fn dates_between(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> CompDateIterator {
         if let Some(rrule) = self.rrule() {
             let Some(dtstart) = self.start() else {
                 return CompDateIterator::default();
             };
 
-            let dates = rrule.dates_within(
+            let dates = rrule.dates_between(
                 dtstart.as_start_with_tz(&start.timezone()),
                 self.duration(&start.timezone()),
                 start,

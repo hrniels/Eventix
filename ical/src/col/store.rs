@@ -49,7 +49,7 @@ impl CalStore {
             })
     }
 
-    /// Returns an iterator with all files within all directories.
+    /// Returns an iterator with all files in all directories.
     pub fn files(&self) -> impl Iterator<Item = &CalFile> {
         self.dirs.iter().flat_map(|c| c.files().iter())
     }
@@ -66,17 +66,17 @@ impl CalStore {
         self.dirs.iter_mut().find_map(|c| c.file_by_id_mut(uid_str))
     }
 
-    /// Returns a vector of occurrences whose alarm is due within the given time period.
+    /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
-    pub fn due_alarms_within(
+    pub fn due_alarms_between(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> impl Iterator<Item = Occurrence<'_>> {
         self.dirs
             .iter()
-            .flat_map(move |c| c.due_alarms_within(start, end))
+            .flat_map(move |c| c.due_alarms_between(start, end))
     }
 
     /// Returns the occurrence with given uid/rid.
@@ -100,8 +100,8 @@ impl CalStore {
 
     /// Returns an iterator with all occurrences in the given period of time.
     ///
-    /// See [`CalFile::occurrences_within`] for details.
-    pub fn occurrences_within<F>(
+    /// See [`CalFile::occurrences_between`] for details.
+    pub fn occurrences_between<F>(
         &self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
@@ -113,7 +113,7 @@ impl CalStore {
         self.dirs
             .iter()
             .flat_map(|c| c.files().iter())
-            .flat_map(move |i| i.occurrences_within(start, end, filter.clone()))
+            .flat_map(move |i| i.occurrences_between(start, end, filter.clone()))
     }
 
     /// Returns a [`HashMap`] with all contacts that occur in this store.

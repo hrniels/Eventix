@@ -91,7 +91,7 @@ pub async fn handler(
         Direction::Forward => {
             let start = date + Duration::seconds(1);
             let end = max_datetime(*locale.timezone());
-            file.occurrences_within(start, end, |_| true)
+            file.occurrences_between(start, end, |_| true)
                 // ignore the occurrences where the start is earlier, but the end is in the range,
                 // because we'll find these when walking backwards
                 .filter(|o| o.occurrence_start().unwrap() >= start)
@@ -102,7 +102,7 @@ pub async fn handler(
             let start = min_datetime(*locale.timezone());
             let end = date;
             let occs = file
-                .occurrences_within(start, end, |_| true)
+                .occurrences_between(start, end, |_| true)
                 .collect::<Vec<_>>();
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
