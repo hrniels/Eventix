@@ -74,7 +74,7 @@ impl<'a> OccurrenceIterator<'a> {
                 }
                 self.seen_rids.push(rid);
 
-                occ.set_occurrence(overwritten);
+                occ.set_overwrite(overwritten);
                 // if it isn't in the range anymore, do not consider it
                 if !Self::is_in_range(&occ, self.start, self.end) {
                     continue;
@@ -105,7 +105,7 @@ impl<'a> OccurrenceIterator<'a> {
                     start_date,
                     false,
                 );
-                occ.set_occurrence(overwritten);
+                occ.set_overwrite(overwritten);
                 if Self::is_in_range(&occ, self.start, self.end) {
                     return Some(occ);
                 }
@@ -284,7 +284,7 @@ impl CalFile {
                         None,
                         first.exdates().contains(rid),
                     );
-                    tmp_occ.set_occurrence(c);
+                    tmp_occ.set_overwrite(c);
                     match tmp_occ.alarm_date() {
                         // if the alarm is also within the time frame (and not excluded), just set
                         // the overwritten event
@@ -293,7 +293,7 @@ impl CalFile {
                                 .iter_mut()
                                 .find(|o| o.occurrence_start() == Some(rid_tz))
                             {
-                                occ.set_occurrence(c);
+                                occ.set_overwrite(c);
                             }
                         }
                         // otherwise remove the occurrence from the results
@@ -341,7 +341,7 @@ impl CalFile {
                 .iter()
                 .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid));
             if let Some(occ) = occ {
-                res.set_occurrence(occ);
+                res.set_overwrite(occ);
             }
         }
         Some(res)
