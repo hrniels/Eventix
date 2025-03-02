@@ -273,7 +273,4 @@ END:VCALENDAR\r
 "
         );
     }
-
-    #[test]
-    fn basic_tostr() {}
 }
