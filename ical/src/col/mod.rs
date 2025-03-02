@@ -1,3 +1,17 @@
+//! Collections for iCalendar objects.
+//!
+//! These collections are not part of RFC 5545, but are provided on top of these to provide a layer
+//! of abstraction for applications that want to work with these objects.
+//!
+//! The first layer on top is provided by [`CalFile`], which represents a file on disk that
+//! contains exactly one [`Calendar`](crate::objects::Calendar) object. Besides access to this
+//! calendar, it knows the [`CalDir`] it is contained in. So, a [`CalDir`] is a container for
+//! several [`CalFile`] objects that all belong together and live in the same directory on disk. On
+//! top of that, [`CalStore`] is a container for multiple [`CalDir`] objects.
+//!
+//! Besides these containers, this module also provides [`Occurrence`], which is used to represent
+//! individual occurrences of events/TODOs.
+
 use std::{io, path::PathBuf};
 
 use crate::{objects::CalDate, parser::ParseError};
@@ -13,6 +27,7 @@ pub use file::CalFile;
 pub use occurrence::Occurrence;
 pub use store::CalStore;
 
+/// Errors that can occur in the collections module.
 #[derive(Debug, Error)]
 pub enum ColError {
     #[error("Reading directory {0} failed: {1}")]
