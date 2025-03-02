@@ -3,14 +3,14 @@ use std::{io, path::PathBuf};
 use crate::{objects::CalDate, parser::ParseError};
 use thiserror::Error;
 
+mod dir;
 mod file;
 mod occurrence;
-mod source;
 mod store;
 
+pub use dir::CalDir;
 pub use file::CalFile;
 pub use occurrence::Occurrence;
-pub use source::CalSource;
 pub use store::CalStore;
 
 #[derive(Debug, Error)]
@@ -29,8 +29,8 @@ pub enum ColError {
     FileParse(PathBuf, ParseError),
     #[error("Getting file type for {0} failed: {1}")]
     FileType(PathBuf, io::Error),
-    #[error("Unable to find source with id {0}")]
-    SourceNotFound(String),
+    #[error("Unable to find directory with id {0}")]
+    DirNotFound(String),
     #[error("Unable to find file with path {0}")]
     FileNotFound(PathBuf),
     #[error("Component with uid {0} not found")]

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ical::col::CalSource;
+use ical::col::CalDir;
 
 use crate::state::State;
 
@@ -19,7 +19,7 @@ impl Calendars {
     pub async fn new_with_disabled(state: &State) -> Self {
         let (store, disabled) = state.acquire_store_and_disabled().await;
         let mut calendars = store
-            .sources()
+            .directories()
             .iter()
             .map(|s| Calendar {
                 id: s.id().clone(),
@@ -35,7 +35,7 @@ impl Calendars {
 
     pub fn new<'a, I>(calendars: I) -> Self
     where
-        I: Iterator<Item = &'a CalSource>,
+        I: Iterator<Item = &'a CalDir>,
     {
         let mut calendars = calendars
             .map(|s| Calendar {

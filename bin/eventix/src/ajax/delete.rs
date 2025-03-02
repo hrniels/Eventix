@@ -30,8 +30,11 @@ async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::R
         .files_by_id_mut(&form.uid)
         .ok_or_else(|| anyhow!("Unable to find file with uid {}", form.uid))?;
 
-    let src = file.source().clone();
-    store.source_mut(&src).unwrap().delete_by_uid(&form.uid)?;
+    let src = file.directory().clone();
+    store
+        .directory_mut(&src)
+        .unwrap()
+        .delete_by_uid(&form.uid)?;
 
     Ok(())
 }

@@ -39,7 +39,7 @@ impl<'a> Events<'a> {
         let end = start + Duration::days(days as i64);
 
         let next_ev_occs = store
-            .sources()
+            .directories()
             .iter()
             .filter(|s| !disabled.contains(s.id()))
             .flat_map(move |s| {

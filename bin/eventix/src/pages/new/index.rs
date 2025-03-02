@@ -78,11 +78,7 @@ pub async fn content(
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
-        calendars: CalComboTemplate::new(
-            "calendar",
-            store.sources_for_type(form.req.ctype),
-            calendar,
-        ),
+        calendars: CalComboTemplate::new("calendar", store.dirs_for_type(form.req.ctype), calendar),
         attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
         status: form
             .status

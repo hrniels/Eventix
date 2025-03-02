@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use anyhow::Context;
 use chrono::{Duration, NaiveDateTime};
 use ical::{
-    col::{CalSource, CalStore},
+    col::{CalDir, CalStore},
     objects::CalCompType,
 };
 use tokio::sync::{Mutex, MutexGuard};
@@ -39,7 +39,7 @@ impl State {
             }
 
             store.add(
-                CalSource::new_from_dir(
+                CalDir::new_from_dir(
                     Arc::from(id.clone()),
                     PathBuf::from(cal.path.clone()),
                     cal.name.clone(),

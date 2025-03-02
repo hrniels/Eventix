@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse};
-use ical::col::CalSource;
+use ical::col::CalDir;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -28,7 +28,7 @@ const PER_PAGE: usize = 15;
 pub struct Filter {
     keywords: String,
     page: usize,
-    sources: Vec<String>,
+    dirs: Vec<String>,
 }
 
 impl Default for Filter {
@@ -36,7 +36,7 @@ impl Default for Filter {
         Self {
             keywords: String::from(""),
             page: 1,
-            sources: Vec::new(),
+            dirs: Vec::new(),
         }
     }
 }
@@ -50,13 +50,13 @@ impl Filter {
         Self {
             keywords: self.keywords.clone(),
             page,
-            sources: self.sources.clone(),
+            dirs: self.dirs.clone(),
         }
     }
 }
 
 struct ListComponent<'a> {
-    source: &'a Arc<String>,
+    dir: &'a Arc<String>,
     comp: &'a CalComponent,
     org: Option<OrganizerTemplate<'a>>,
 }
@@ -67,7 +67,7 @@ struct ListTemplate<'a, F: Fn(&usize) -> String> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     filter: Filter,
-    sources: Vec<&'a CalSource>,
+    directories: Vec<&'a CalDir>,
     comps: Vec<ListComponent<'a>>,
     pagination: PaginationTemplate<F>,
     events: Events<'a>,
@@ -94,9 +94,9 @@ pub async fn handler(
 
     let (store, disabled) = state.acquire_store_and_disabled().await;
 
-    let sources = store.sources().iter().collect::<Vec<_>>();
-    if filter.sources.is_empty() {
-        filter.sources = sources.iter().map(|s| s.id().deref().clone()).collect();
+    let directories = store.directories().iter().collect::<Vec<_>>();
+    if filter.dirs.is_empty() {
+        filter.dirs = directories.iter().map(|s| s.id().deref().clone()).collect();
     }
 
     let keywords = filter.keywords.to_lowercase();
@@ -120,7 +120,7 @@ pub async fn handler(
                     .iter()
                     .filter(|c| c.rid().is_none())
                     .map(|c| ListComponent {
-                        source: i.source(),
+                        dir: i.directory(),
                         org: c
                             .organizer()
                             .map(|org| OrganizerTemplate::new(locale.clone(), org)),
@@ -128,7 +128,7 @@ pub async fn handler(
                     })
             })
             .filter(|l| {
-                if !filter.sources.contains(l.source) {
+                if !filter.dirs.contains(l.dir) {
                     return false;
                 }
                 if keywords.is_empty() {
@@ -173,7 +173,7 @@ pub async fn handler(
         page,
         locale,
         filter,
-        sources,
+        directories,
         comps,
         pagination,
         events,

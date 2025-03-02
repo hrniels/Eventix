@@ -64,7 +64,7 @@
                      style="text-align: center" id="{{ occ.id() }}"
                      class="
                         ev_event_occurrence
-                        ev_cal_src ev_cal_src_{{ occ.source() }}
+                        ev_cal_src ev_cal_src_{{ occ.directory() }}
                         ev_id_{{ occ.uid_html() }}
                         {% match occ.status_class() %}
                         {% when Some with (cl) %}
@@ -142,7 +142,7 @@
                                         '{{ occ.id() }}')"
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
-                    ev_cal_src ev_cal_src_{{ occ.source() }}
+                    ev_cal_src ev_cal_src_{{ occ.directory() }}
                     ev_id_{{ occ.uid_html() }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}

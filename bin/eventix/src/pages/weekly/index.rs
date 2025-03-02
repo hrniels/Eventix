@@ -184,7 +184,7 @@ pub async fn content(
     let (store, disabled) = state.acquire_store_and_disabled().await;
 
     let ev_occs = store
-        .sources()
+        .directories()
         .iter()
         .filter(|s| !disabled.contains(s.id()))
         .flat_map(move |s| s.occurrences_within(mstart, mend, |c| c.ctype() == CalCompType::Event))

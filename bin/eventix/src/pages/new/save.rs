@@ -35,12 +35,12 @@ async fn action_update(
 
     let calendar = Arc::from(form.calendar.clone());
     let mut store = store.lock().await;
-    let source = store
-        .source_mut(&calendar)
-        .ok_or_else(|| anyhow!("Unable to find source with id {}", form.calendar))?;
+    let dir = store
+        .directory_mut(&calendar)
+        .ok_or_else(|| anyhow!("Unable to find directory with id {}", form.calendar))?;
 
     let uid = Uuid::new_v4();
-    let mut path = source.path().clone();
+    let mut path = dir.path().clone();
     path.push(format!("{}.ics", uid));
     let mut file = CalFile::new(calendar, path, Calendar::default());
 
@@ -56,7 +56,7 @@ async fn action_update(
     file.add_component(comp);
     file.save()?;
 
-    source.add(file);
+    dir.add_file(file);
     Ok(true)
 }
 

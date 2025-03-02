@@ -3,7 +3,7 @@ use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::{routing::get, Router};
-use ical::col::CalSource;
+use ical::col::CalDir;
 use ical::objects::EventLike;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -38,7 +38,7 @@ struct Response {
 #[template(path = "ajax/details.htm")]
 struct DetailsTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
-    source: &'a CalSource,
+    dir: &'a CalDir,
     occ: DayOccurrence<'a>,
     org: Option<OrganizerTemplate<'a>>,
 }
@@ -67,7 +67,7 @@ async fn handler(
             &req.uid, rid
         ))?;
     let day_occ = DayOccurrence::new(&occ);
-    let source = store.source(occ.source()).unwrap();
+    let dir = store.directory(occ.directory()).unwrap();
 
     let html = DetailsTemplate {
         org: occ
@@ -75,7 +75,7 @@ async fn handler(
             .map(|org| OrganizerTemplate::new(locale.clone(), org)),
         occ: day_occ,
         locale,
-        source,
+        dir,
     }
     .render()
     .context("details template")?;

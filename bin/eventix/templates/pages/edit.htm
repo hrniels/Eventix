@@ -23,8 +23,8 @@
                         {{ calendars|safe }}
                         {% else %}
                         <div style="display: flex; gap: .4em">
-                            <span class="ev_cal_src ev_cal_src_{{ source.id() }}"></span>
-                            {{ source.name() }}
+                            <span class="ev_cal_src ev_cal_src_{{ dir.id() }}"></span>
+                            {{ dir.name() }}
                         </div>
                         {% endif %}
                         </dd>

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use chrono::{Duration, Local};
-use ical::col::{CalSource, CalStore};
+use ical::col::{CalDir, CalStore};
 use ical::objects::{CalCompType, EventLike};
 
 fn main() -> Result<(), anyhow::Error> {
@@ -11,13 +11,13 @@ fn main() -> Result<(), anyhow::Error> {
 
     let mut store = CalStore::default();
     store.add(
-        CalSource::new_from_dir(
+        CalDir::new_from_dir(
             Arc::new(String::from("test")),
             dir.clone().into(),
             "".to_string(),
             HashMap::new(),
         )
-        .context(format!("Unable to parse calendar source {:?}", dir))?,
+        .context(format!("Unable to parse calendar {:?}", dir))?,
     );
 
     println!("TODOs:");
@@ -54,13 +54,13 @@ fn main() -> Result<(), anyhow::Error> {
 
     let mut store2 = CalStore::default();
     store2.add(
-        CalSource::new_from_dir(
+        CalDir::new_from_dir(
             Arc::new(String::from("test")),
             dir.into(),
             "".to_string(),
             HashMap::new(),
         )
-        .context("Unable to parse calendar source")?,
+        .context("Unable to parse calendar")?,
     );
 
     if store != store2 {

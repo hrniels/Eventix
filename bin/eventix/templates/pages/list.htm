@@ -25,17 +25,17 @@
                     <dt>{{ "Calendars"|t(locale) }}:</dt>
                     <dd>
                         <table class="ev_noborder">
-                        {% for (idx, src) in sources.iter().enumerate() %}
+                        {% for (idx, src) in directories.iter().enumerate() %}
                             {% if idx % 6 == 0 %}
                             <tr>
                             {% endif %}
                                 <td>
-                                    <input type="checkbox" id="source_{{ idx + 1 }}"
-                                           name="sources[]" value="{{ src.id() }}"
-                                           {% if filter.sources.contains(src.id()) %}
+                                    <input type="checkbox" id="dir_{{ idx + 1 }}"
+                                           name="dirs[]" value="{{ src.id() }}"
+                                           {% if filter.dirs.contains(src.id()) %}
                                            checked="checked"
                                            {% endif %}/>
-                                    <label for="source_{{ idx + 1 }}">
+                                    <label for="dir_{{ idx + 1 }}">
                                         <div style="display: inline"
                                              class="ev_cal_src ev_cal_src_{{ src.id() }}">
                                             {{ src.name() }}
@@ -49,7 +49,7 @@
                         </table>
                         <div style="padding-top: 0.5em">
                             <input type="button" value="{{ "Invert selection"|t(locale) }}"
-                                   onclick="invertSelection('source_')" />
+                                   onclick="invertSelection('dir_')" />
                         </div>
                     </dd>
                 </dl>
@@ -168,7 +168,7 @@
         </td>
         <td width="32%">
             <div style="display: flex; gap: .4em">
-                <span class="ev_cal_src ev_cal_src_{{ c.source }}"></span>
+                <span class="ev_cal_src ev_cal_src_{{ c.dir }}"></span>
                 <span class="ev_summary
                              {% if let Some(td) = c.comp.as_todo() %}
                              {% if td.status().unwrap_or(CalTodoStatus::NeedsAction) == CalTodoStatus::Completed %}

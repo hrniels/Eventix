@@ -55,7 +55,7 @@
                  class="ev_event_occurrence
                         ev_id_{{ occ.uid_html() }}
                         {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
-                        ev_cal_src ev_cal_src_{{ occ.source() }}
+                        ev_cal_src ev_cal_src_{{ occ.directory() }}
                         {% endif %}
                         {% match occ.status_class() %}
                         {% when Some with (cl) %}
@@ -76,7 +76,7 @@
                 {{ occ.summary().unwrap() }}
                 {% else %}
                 <div style="display: flex; gap: .4em">
-                    <span class="ev_cal_src ev_cal_src_{{ occ.source() }}"></span>
+                    <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}"></span>
                     {% if occ.occurrence_starts_on(day.date.unwrap()) &&
                           !occ.occurrence_ends_on(day.date.unwrap()) %}
                     <i class="bi bi-arrow-bar-right"></i>
@@ -137,7 +137,7 @@
                         {% when _ %}
                         {% endmatch %}
                         ">
-                <span class="ev_cal_src ev_cal_src_{{ occ.source() }}"></span>
+                <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}"></span>
                 {% if let Some(due) = occ.occurrence_enddate() %}
                 {% match due %}
                 {% when CalDate::DateTime with (due_date) %}

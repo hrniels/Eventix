@@ -59,7 +59,7 @@ impl<'a> OccurrenceIterator<'a> {
         // unwrap the base component and the recurring date iterator.
         let (base, ref mut date_iter) = self.dates.as_mut()?;
         for (ty, d, excluded) in date_iter {
-            let mut occ = Occurrence::new_single(self.file.source.clone(), base, ty, d, excluded);
+            let mut occ = Occurrence::new_single(self.file.dir.clone(), base, ty, d, excluded);
             // check if an overwritten event exists for this occurrence.
             if let Some(overwritten) = self.file.cal.components().iter().find(|c| {
                 matches!(c.rid(),
@@ -99,7 +99,7 @@ impl<'a> OccurrenceIterator<'a> {
 
                 let start_date = overwritten.start().unwrap().as_start_with_tz(&timezone);
                 let mut occ = Occurrence::new_single(
-                    self.file.source.clone(),
+                    self.file.dir.clone(),
                     base,
                     CompDateType::Start,
                     start_date,
@@ -157,11 +157,11 @@ impl<'a> Iterator for OccurrenceIterator<'a> {
 
 /// A single file containing a [`Calendar`].
 ///
-/// A [`CalFile`] always belongs to a specific [`CalSource`](crate::col::CalSource) and
-/// contains exactly one [`Calendar`] (which can contain several [`CalComponent`]s though).
+/// A [`CalFile`] always belongs to a specific [`CalDir`](crate::col::CalDir) and contains exactly
+/// one [`Calendar`] (which can contain several [`CalComponent`]s though).
 #[derive(Debug)]
 pub struct CalFile {
-    source: Arc<String>,
+    dir: Arc<String>,
     path: PathBuf,
     cal: Calendar,
 }
@@ -177,24 +177,24 @@ impl CalFile {
     #[cfg(test)]
     fn new_simple(cal: Calendar) -> Self {
         Self {
-            source: Arc::default(),
+            dir: Arc::default(),
             path: PathBuf::default(),
             cal,
         }
     }
 
-    /// Creates a new [`CalFile`] for given source and path, containing the given calendar.
-    pub fn new(source: Arc<String>, path: PathBuf, cal: Calendar) -> Self {
-        Self { source, path, cal }
+    /// Creates a new [`CalFile`] for given directory and path, containing the given calendar.
+    pub fn new(dir: Arc<String>, path: PathBuf, cal: Calendar) -> Self {
+        Self { dir, path, cal }
     }
 
-    /// Returns the id of the source this file belongs to.
-    pub fn source(&self) -> &Arc<String> {
-        &self.source
+    /// Returns the id of the directory this file belongs to.
+    pub fn directory(&self) -> &Arc<String> {
+        &self.dir
     }
 
-    pub(crate) fn set_source(&mut self, src: Arc<String>) {
-        self.source = src;
+    pub(crate) fn set_directory(&mut self, src: Arc<String>) {
+        self.dir = src;
     }
 
     /// Returns the path of the file this [`CalFile`] is stored in.
@@ -238,7 +238,7 @@ impl CalFile {
                         first
                             .dates_within(start - *duration, end - *duration)
                             .map(|(ty, d, excluded)| {
-                                Occurrence::new_single(self.source.clone(), first, ty, d, excluded)
+                                Occurrence::new_single(self.dir.clone(), first, ty, d, excluded)
                             })
                             .filter(|o| {
                                 if o.is_excluded() {
@@ -260,7 +260,7 @@ impl CalFile {
                             .end_or_due()
                             .map(|d| d.as_end_with_tz(&start.timezone()));
                         alarms.push(Occurrence::new(
-                            self.source.clone(),
+                            self.dir.clone(),
                             first,
                             fstart,
                             fend,
@@ -278,7 +278,7 @@ impl CalFile {
                 if let Some(rid) = c.rid() {
                     let rid_tz = rid.as_start_with_tz(&start.timezone());
                     let mut tmp_occ = Occurrence::new(
-                        self.source.clone(),
+                        self.dir.clone(),
                         first,
                         Some(rid_tz),
                         None,
@@ -331,7 +331,7 @@ impl CalFile {
                 false,
             ),
         };
-        let mut res = Occurrence::new(self.source.clone(), first, fstart, fend, excluded);
+        let mut res = Occurrence::new(self.dir.clone(), first, fstart, fend, excluded);
 
         if let Some(rid) = rid {
             let occ = self
@@ -551,7 +551,7 @@ impl CalFile {
 mod tests {
     use chrono::{Duration, NaiveDate, TimeZone};
 
-    use crate::col::CalSource;
+    use crate::col::CalDir;
     use crate::objects::{
         CalAction, CalAlarm, CalComponent, CalDate, CalRRule, CalRelated, CalTrigger,
         UpdatableEventLike,
@@ -658,39 +658,38 @@ mod tests {
 
     #[test]
     fn files_within_simple() {
-        let mut source = CalSource::default();
-        source.add(new_allday_file(
+        let mut dir = CalDir::default();
+        dir.add_file(new_allday_file(
             NaiveDate::from_ymd_opt(2024, 10, 2).unwrap(),
             "yes1",
         ));
-        source.add(new_allday_file(
+        dir.add_file(new_allday_file(
             NaiveDate::from_ymd_opt(2024, 10, 1).unwrap(),
             "yes2",
         ));
-        source.add(new_allday_file(
+        dir.add_file(new_allday_file(
             // TODO 2024-10-31 does not work; what does DATE=... mean exactly? doesn't that have a
             // different meaning in different time zones?
             NaiveDate::from_ymd_opt(2024, 10, 30).unwrap(),
             "yes3",
         ));
-        source.add(new_allday_file(
+        dir.add_file(new_allday_file(
             NaiveDate::from_ymd_opt(2023, 10, 31).unwrap(),
             "no1",
         ));
-        source.add(new_allday_file(
+        dir.add_file(new_allday_file(
             NaiveDate::from_ymd_opt(2024, 9, 30).unwrap(),
             "no2",
         ));
 
-        let comps =
-            source.occurrences_within(new_date(2024, 10, 1), new_date(2024, 10, 31), |_| true);
+        let comps = dir.occurrences_within(new_date(2024, 10, 1), new_date(2024, 10, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2", "yes3"]));
     }
 
     #[test]
     fn files_within_no_start() {
-        let mut source = CalSource::default();
-        source.add(new_file(
+        let mut dir = CalDir::default();
+        dir.add_file(new_file(
             EventBuilder::new("yes1")
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
@@ -698,7 +697,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_file(
+        dir.add_file(new_file(
             EventBuilder::new("yes2")
                 .end(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
@@ -708,12 +707,10 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
-        let comps =
-            source.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
+        let comps = dir.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2"]));
 
-        let comps =
-            source.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
+        let comps = dir.occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true);
         let all = comps.collect::<Vec<_>>();
         assert_eq!(all[0].occurrence_start(), None);
         assert_eq!(
@@ -738,20 +735,20 @@ mod tests {
             )
         );
         assert_eq!(
-            source.occurrence_by_id("yes1", None, tz).unwrap().uid(),
+            dir.occurrence_by_id("yes1", None, tz).unwrap().uid(),
             "yes1"
         );
-        assert!(source.occurrence_by_id("not-found", None, tz).is_none());
+        assert!(dir.occurrence_by_id("not-found", None, tz).is_none());
     }
 
     #[test]
     fn files_within_missing() {
-        let mut source = CalSource::default();
-        source.add(new_allday_file(
+        let mut dir = CalDir::default();
+        dir.add_file(new_allday_file(
             NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(),
             "yes1",
         ));
-        source.add(new_file(
+        dir.add_file(new_file(
             EventBuilder::new("yes2")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
@@ -759,7 +756,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_file(
+        dir.add_file(new_file(
             EventBuilder::new("no1")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(2000, 2, 1).unwrap(),
@@ -767,7 +764,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_file(
+        dir.add_file(new_file(
             EventBuilder::new("no2")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1988, 2, 1).unwrap(),
@@ -781,29 +778,25 @@ mod tests {
         ));
 
         let tz = &chrono_tz::Europe::Berlin;
-        let comps =
-            source.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31), |_| true);
+        let comps = dir.occurrences_within(new_date(1990, 1, 1), new_date(2000, 1, 31), |_| true);
         assert!(has_uids(comps, &["yes1", "yes2"]));
         assert_eq!(
-            source.occurrence_by_id("yes1", None, tz).unwrap().uid(),
+            dir.occurrence_by_id("yes1", None, tz).unwrap().uid(),
             "yes1"
         );
-        assert_eq!(
-            source.occurrence_by_id("no2", None, tz).unwrap().uid(),
-            "no2"
-        );
-        assert!(source.occurrence_by_id("not-found", None, tz).is_none());
+        assert_eq!(dir.occurrence_by_id("no2", None, tz).unwrap().uid(), "no2");
+        assert!(dir.occurrence_by_id("not-found", None, tz).is_none());
     }
 
     #[test]
     fn recur_with_exdates() {
-        let mut source = CalSource::default();
+        let mut dir = CalDir::default();
 
         let mut rrule = CalRRule::default();
         rrule.set_frequency(crate::objects::CalRRuleFreq::Daily);
         rrule.set_count(7);
 
-        source.add(new_file(
+        dir.add_file(new_file(
             EventBuilder::new("yes")
                 .start(CalDate::Date(
                     NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(),
@@ -821,7 +814,7 @@ mod tests {
                 .done(),
         ));
 
-        let occs = source
+        let occs = dir
             .occurrences_within(new_date(1990, 1, 1), new_date(1990, 1, 31), |_| true)
             .filter(|o| !o.is_excluded())
             .collect::<Vec<_>>();
@@ -835,8 +828,8 @@ mod tests {
 
     #[test]
     fn alarms() {
-        let mut source = CalSource::default();
-        source.add(new_file(
+        let mut dir = CalDir::default();
+        dir.add_file(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 3).unwrap(), "id1")
                 .alarm(CalAlarm::new(
                     CalAction::Display,
@@ -847,7 +840,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_file(
+        dir.add_file(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 4).unwrap(), "id2")
                 .alarm(CalAlarm::new(
                     CalAction::Display,
@@ -858,7 +851,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_file(
+        dir.add_file(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 5).unwrap(), "id3")
                 .alarm(CalAlarm::new(
                     CalAction::Display,
@@ -870,14 +863,14 @@ mod tests {
                 .done(),
         ));
 
-        let occs = source
+        let occs = dir
             .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 2))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 1);
         assert_eq!(occs[0].uid(), "id1");
         assert_eq!(occs[0].alarm_date(), Some(new_date(1990, 1, 1)));
 
-        let occs = source
+        let occs = dir
             .due_alarms_within(new_date(1990, 1, 5), new_date(1990, 1, 8))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
@@ -892,8 +885,8 @@ mod tests {
 
     #[test]
     fn alarms_with_recurrence() {
-        let mut source = CalSource::default();
-        source.add(new_file(
+        let mut dir = CalDir::default();
+        dir.add_file(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
                 .rrule("FREQ=DAILY;INTERVAL=4;COUNT=2".parse().unwrap())
                 .alarm(CalAlarm::new(
@@ -905,7 +898,7 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(new_file(
+        dir.add_file(new_file(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 8).unwrap(), "id2")
                 .rrule("FREQ=WEEKLY".parse().unwrap())
                 .alarm(CalAlarm::new(
@@ -918,7 +911,7 @@ mod tests {
                 .done(),
         ));
 
-        let occs = source
+        let occs = dir
             .due_alarms_within(
                 new_datetime(1990, 1, 5, 23, 45, 0),
                 new_datetime(1990, 1, 5, 23, 55, 0),
@@ -932,7 +925,7 @@ mod tests {
             Some(new_datetime(1990, 1, 5, 23, 50, 0))
         );
 
-        let occs = source
+        let occs = dir
             .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 7))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
@@ -949,7 +942,7 @@ mod tests {
             Some(new_datetime(1990, 1, 5, 23, 50, 0))
         );
 
-        let occs = source
+        let occs = dir
             .due_alarms_within(new_date(1990, 1, 7), new_date(1990, 1, 15))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
@@ -969,7 +962,7 @@ mod tests {
 
     #[test]
     fn alarms_with_recurrence_overwrite() {
-        let mut source = CalSource::default();
+        let mut dir = CalDir::default();
         let mut cal = Calendar::default();
         cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
@@ -1013,9 +1006,9 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(CalFile::new_simple(cal));
+        dir.add_file(CalFile::new_simple(cal));
 
-        let occs = source
+        let occs = dir
             .due_alarms_within(new_date(1990, 1, 1), new_date(1990, 1, 11))
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
@@ -1035,7 +1028,7 @@ mod tests {
 
     #[test]
     fn recurrence_overwrite_with_date_change() {
-        let mut source = CalSource::default();
+        let mut dir = CalDir::default();
         let mut cal = Calendar::default();
         cal.add_component(CalComponent::Event(
             new_allday_event(NaiveDate::from_ymd_opt(1990, 1, 2).unwrap(), "id1")
@@ -1058,18 +1051,18 @@ mod tests {
                 ))
                 .done(),
         ));
-        source.add(CalFile::new_simple(cal));
+        dir.add_file(CalFile::new_simple(cal));
 
         // this includes the 6th, but this is overwritten to happen on the 4th, which is outside
         // the range
-        let occs = source
+        let occs = dir
             .occurrences_within(new_date(1990, 1, 5), new_date(1990, 1, 7), |_| true)
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 0);
 
         // this leads to an empty list from the recurrence itself, but should consider the
         // overwritten one, which is indeed in the requested range.
-        let occs = source
+        let occs = dir
             .occurrences_within(new_date(1990, 1, 3), new_date(1990, 1, 9), |_| true)
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);

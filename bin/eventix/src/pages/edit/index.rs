@@ -5,7 +5,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use ical::{
-    col::{CalSource, Occurrence},
+    col::{CalDir, Occurrence},
     objects::{CalDate, EventLike},
 };
 use std::sync::Arc;
@@ -29,7 +29,7 @@ struct EditTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     uid: String,
     rid: Option<String>,
-    source: &'a CalSource,
+    dir: &'a CalDir,
     calendars: Option<CalComboTemplate>,
     summary: &'a String,
     location: &'a String,
@@ -96,7 +96,7 @@ pub async fn content(
         Some(f) => f,
         None => {
             let cal = if req.rid.is_none() {
-                Some((*file.source()).to_string())
+                Some((*file.directory()).to_string())
             } else {
                 None
             };
@@ -104,7 +104,7 @@ pub async fn content(
         }
     };
 
-    let source = store.source(file.source()).unwrap();
+    let dir = store.directory(file.directory()).unwrap();
 
     let events = Events::new(&store, &disabled, &locale);
     let tasks = Tasks::new(&store, &disabled, &locale);
@@ -113,13 +113,9 @@ pub async fn content(
         page,
         uid: form.req.uid.clone(),
         rid: form.req.rid.clone(),
-        source,
+        dir,
         calendars: form.calendar.map(|cal| {
-            CalComboTemplate::new(
-                "calendar",
-                store.sources_for_type(occ.ctype()),
-                Arc::new(cal),
-            )
+            CalComboTemplate::new("calendar", store.dirs_for_type(occ.ctype()), Arc::new(cal))
         }),
         summary: &form.summary,
         location: &form.location,

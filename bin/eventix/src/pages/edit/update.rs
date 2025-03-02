@@ -84,16 +84,16 @@ fn action_update(
         .context("Creating overwrite failed")?;
     }
 
-    // should we move the file to a different source?
+    // should we move the file to a different directory?
     if form.req.rid.is_none() {
         let cal = form
             .calendar
             .as_ref()
             .ok_or_else(|| anyhow!("Calendar not specified"))?;
-        if *cal != **file.source() {
+        if *cal != **file.directory() {
             let path = file.path().clone();
-            let src = file.source().clone();
-            store.switch_source(path, &src, &Arc::new(cal.to_string()))?;
+            let src = file.directory().clone();
+            store.switch_directory(path, &src, &Arc::new(cal.to_string()))?;
             return Ok(true);
         }
     }

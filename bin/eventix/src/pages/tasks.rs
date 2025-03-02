@@ -41,7 +41,7 @@ impl<'a> Tasks<'a> {
         let end = start + Duration::days(days as i64);
 
         let mut next_td_occs = store
-            .sources()
+            .directories()
             .iter()
             .filter(|s| !disabled.contains(s.id()))
             .flat_map(move |s| s.occurrences_within(start, end, |c| c.ctype() == CalCompType::Todo))
@@ -90,9 +90,9 @@ impl<'a> Tasks<'a> {
 
         let unplanned_occs = store
             .files()
-            .filter(|s| !disabled.contains(s.source()))
-            .flat_map(|i| i.components().iter().map(|c| (i.source(), c)))
-            .filter(|(_source, c)| {
+            .filter(|s| !disabled.contains(s.directory()))
+            .flat_map(|i| i.components().iter().map(|c| (i.directory(), c)))
+            .filter(|(_dir, c)| {
                 c.ctype() == CalCompType::Todo
                     && !c.is_recurrent()
                     && c.end_or_due().is_none()
@@ -102,9 +102,9 @@ impl<'a> Tasks<'a> {
                         .unwrap_or(CalTodoStatus::NeedsAction)
                         != CalTodoStatus::Completed
             })
-            .map(|(source, c)| {
+            .map(|(dir, c)| {
                 Occurrence::new(
-                    source.clone(),
+                    dir.clone(),
                     c,
                     c.start().map(|d| d.as_start_with_tz(timezone)),
                     None,

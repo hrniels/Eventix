@@ -23,7 +23,7 @@ macro_rules! ctype_method {
 
 #[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
-    source: Arc<String>,
+    dir: Arc<String>,
     start: Option<DateTime<Tz>>,
     end: Option<DateTime<Tz>>,
     base: &'c CalComponent,
@@ -33,14 +33,14 @@ pub struct Occurrence<'c> {
 
 impl<'c> Occurrence<'c> {
     pub fn new(
-        source: Arc<String>,
+        dir: Arc<String>,
         base: &'c CalComponent,
         start: Option<DateTime<Tz>>,
         end: Option<DateTime<Tz>>,
         excluded: bool,
     ) -> Self {
         Self {
-            source,
+            dir,
             start,
             end,
             base,
@@ -50,14 +50,14 @@ impl<'c> Occurrence<'c> {
     }
 
     pub fn new_single(
-        source: Arc<String>,
+        dir: Arc<String>,
         base: &'c CalComponent,
         ty: CompDateType,
         date: DateTime<Tz>,
         excluded: bool,
     ) -> Self {
         Self::new(
-            source,
+            dir,
             base,
             if ty == CompDateType::Start {
                 Some(date)
@@ -80,8 +80,8 @@ impl<'c> Occurrence<'c> {
         }
     }
 
-    pub fn source(&self) -> &Arc<String> {
-        &self.source
+    pub fn directory(&self) -> &Arc<String> {
+        &self.dir
     }
 
     pub fn ctype(&self) -> CalCompType {

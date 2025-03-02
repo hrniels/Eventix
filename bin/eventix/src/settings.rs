@@ -40,24 +40,16 @@ impl Settings {
         let calendars = {
             let mut calendars = BTreeMap::new();
             let (store, disabled) = state.acquire_store_and_disabled().await;
-            for source in store.sources() {
+            for dir in store.directories() {
                 calendars.insert(
-                    source.id().to_string(),
+                    dir.id().to_string(),
                     Calendar {
-                        path: source.path().to_str().unwrap().to_string(),
-                        name: source.name().to_string(),
-                        disabled: Some(disabled.contains(source.id())),
-                        fgcolor: source
-                            .props()
-                            .get(&String::from("fgcolor"))
-                            .unwrap()
-                            .clone(),
-                        bgcolor: source
-                            .props()
-                            .get(&String::from("bgcolor"))
-                            .unwrap()
-                            .clone(),
-                        types: source
+                        path: dir.path().to_str().unwrap().to_string(),
+                        name: dir.name().to_string(),
+                        disabled: Some(disabled.contains(dir.id())),
+                        fgcolor: dir.props().get(&String::from("fgcolor")).unwrap().clone(),
+                        bgcolor: dir.props().get(&String::from("bgcolor")).unwrap().clone(),
+                        types: dir
                             .props()
                             .get(&String::from("types"))
                             .map(|ty| serde_json::from_str(ty).unwrap()),
@@ -83,10 +75,10 @@ impl Settings {
             .read(true)
             .open(FILENAME)
             .context(format!("open {}", FILENAME))?;
-        let mut sources = String::new();
-        file.read_to_string(&mut sources)
+        let mut dirs = String::new();
+        file.read_to_string(&mut dirs)
             .context(format!("read {}", FILENAME))?;
-        toml::from_str(&sources).context(format!("parse {}", FILENAME))
+        toml::from_str(&dirs).context(format!("parse {}", FILENAME))
     }
 
     pub async fn write_to_file(&self) -> anyhow::Result<()> {

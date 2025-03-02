@@ -4,33 +4,33 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::col::{CalFile, CalSource, ColError, Occurrence};
+use crate::col::{CalDir, CalFile, ColError, Occurrence};
 use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo};
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct CalStore {
-    sources: Vec<CalSource>,
+    dirs: Vec<CalDir>,
 }
 
 impl CalStore {
-    pub fn add(&mut self, source: CalSource) {
-        self.sources.push(source);
+    pub fn add(&mut self, dir: CalDir) {
+        self.dirs.push(dir);
     }
 
-    pub fn source(&self, id: &Arc<String>) -> Option<&CalSource> {
-        self.sources.iter().find(|s| s.id() == id)
+    pub fn directory(&self, id: &Arc<String>) -> Option<&CalDir> {
+        self.dirs.iter().find(|s| s.id() == id)
     }
 
-    pub fn source_mut(&mut self, id: &Arc<String>) -> Option<&mut CalSource> {
-        self.sources.iter_mut().find(|s| s.id() == id)
+    pub fn directory_mut(&mut self, id: &Arc<String>) -> Option<&mut CalDir> {
+        self.dirs.iter_mut().find(|s| s.id() == id)
     }
 
-    pub fn sources(&self) -> &[CalSource] {
-        &self.sources
+    pub fn directories(&self) -> &[CalDir] {
+        &self.dirs
     }
 
-    pub fn sources_for_type(&self, ty: CalCompType) -> impl Iterator<Item = &CalSource> {
-        self.sources
+    pub fn dirs_for_type(&self, ty: CalCompType) -> impl Iterator<Item = &CalDir> {
+        self.dirs
             .iter()
             .filter(move |src| match src.props().get("types") {
                 Some(src_ty) => {
@@ -42,19 +42,17 @@ impl CalStore {
     }
 
     pub fn files(&self) -> impl Iterator<Item = &CalFile> {
-        self.sources.iter().flat_map(|c| c.files().iter())
+        self.dirs.iter().flat_map(|c| c.files().iter())
     }
 
     pub fn file_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalFile> {
         let uid_str = uid.as_ref();
-        self.sources.iter().find_map(|c| c.file_by_id(uid_str))
+        self.dirs.iter().find_map(|c| c.file_by_id(uid_str))
     }
 
     pub fn files_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalFile> {
         let uid_str = uid.as_ref();
-        self.sources
-            .iter_mut()
-            .find_map(|c| c.file_by_id_mut(uid_str))
+        self.dirs.iter_mut().find_map(|c| c.file_by_id_mut(uid_str))
     }
 
     pub fn due_alarms_within(
@@ -62,7 +60,7 @@ impl CalStore {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
     ) -> impl Iterator<Item = Occurrence<'_>> {
-        self.sources
+        self.dirs
             .iter()
             .flat_map(move |c| c.due_alarms_within(start, end))
     }
@@ -74,7 +72,7 @@ impl CalStore {
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
         let uid_str = uid.as_ref();
-        self.sources
+        self.dirs
             .iter()
             .find_map(|c| c.occurrence_by_id(uid_str, rid, tz))
     }
@@ -88,7 +86,7 @@ impl CalStore {
     where
         F: Fn(&CalComponent) -> bool + Clone,
     {
-        self.sources
+        self.dirs
             .iter()
             .flat_map(|c| c.files().iter())
             .flat_map(move |i| i.occurrences_within(start, end, filter.clone()))
@@ -121,44 +119,44 @@ impl CalStore {
         self.files().flat_map(|i| i.events())
     }
 
-    pub fn switch_source(
+    pub fn switch_directory(
         &mut self,
         path: PathBuf,
         old: &Arc<String>,
         new: &Arc<String>,
     ) -> Result<(), ColError> {
         let old_src = self
-            .source_mut(old)
-            .ok_or_else(|| ColError::SourceNotFound((*old).to_string()))?;
+            .directory_mut(old)
+            .ok_or_else(|| ColError::DirNotFound((*old).to_string()))?;
         let mut file = old_src.delete_file(&path)?;
 
-        let new_src = match self.source_mut(new) {
+        let new_src = match self.directory_mut(new) {
             Some(src) => src,
             None => {
-                // if that failed, store the file in the old source again
+                // if that failed, store the file in the old directory again
                 file.save().unwrap();
-                self.source_mut(old).unwrap().add(file);
-                return Err(ColError::SourceNotFound((*new).to_string()));
+                self.directory_mut(old).unwrap().add_file(file);
+                return Err(ColError::DirNotFound((*new).to_string()));
             }
         };
 
-        file.set_source(new.clone());
+        file.set_directory(new.clone());
         file.set_path(new_src.path().join(file.path().file_name().unwrap()));
         if let Err(e) = file.save() {
             // if that failed, change everything back
-            let old_src = self.source(old).unwrap();
-            file.set_source(old.clone());
+            let old_src = self.directory(old).unwrap();
+            file.set_directory(old.clone());
             file.set_path(old_src.path().join(file.path().file_name().unwrap()));
             file.save().unwrap();
-            self.source_mut(old).unwrap().add(file);
+            self.directory_mut(old).unwrap().add_file(file);
             return Err(e);
         }
-        new_src.add(file);
+        new_src.add_file(file);
         Ok(())
     }
 
     pub fn save(&self) -> Result<(), ColError> {
-        for s in &self.sources {
+        for s in &self.dirs {
             s.save()?;
         }
         Ok(())

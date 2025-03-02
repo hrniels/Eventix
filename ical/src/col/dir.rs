@@ -11,7 +11,7 @@ use crate::col::{CalFile, ColError, Occurrence};
 use crate::objects::{CalComponent, CalDate, Calendar};
 
 #[derive(Default, Debug)]
-pub struct CalSource {
+pub struct CalDir {
     id: Arc<String>,
     path: PathBuf,
     name: String,
@@ -19,20 +19,20 @@ pub struct CalSource {
     files: Vec<CalFile>,
 }
 
-impl Display for CalSource {
+impl Display for CalDir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)
     }
 }
 
-impl PartialEq for CalSource {
+impl PartialEq for CalDir {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name && self.files == other.files
     }
 }
-impl Eq for CalSource {}
+impl Eq for CalDir {}
 
-impl CalSource {
+impl CalDir {
     pub fn new_from_dir(
         id: Arc<String>,
         path: PathBuf,
@@ -91,10 +91,6 @@ impl CalSource {
         &self.props
     }
 
-    pub fn add(&mut self, file: CalFile) {
-        self.files.push(file);
-    }
-
     pub fn files(&self) -> &[CalFile] {
         &self.files
     }
@@ -107,6 +103,10 @@ impl CalSource {
     pub fn file_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Option<&mut CalFile> {
         let uid_ref = uid.as_ref();
         self.files.iter_mut().find(|i| i.contains_uid(uid_ref))
+    }
+
+    pub fn add_file(&mut self, file: CalFile) {
+        self.files.push(file);
     }
 
     pub fn due_alarms_within(

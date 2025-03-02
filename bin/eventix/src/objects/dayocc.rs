@@ -47,7 +47,7 @@ impl<'a> DayOccurrence<'a> {
             (
                 !(i.is_all_day() || i.is_all_day_on(date)),
                 i.occurrence_start(),
-                i.source().clone(),
+                i.directory().clone(),
                 i.summary().cloned(),
             )
         });
@@ -70,7 +70,7 @@ impl<'a> DayOccurrence<'a> {
             (
                 !(i.is_all_day() || i.is_all_day_on(date)),
                 i.end_or_due().cloned(),
-                i.source().clone(),
+                i.directory().clone(),
                 i.summary().cloned(),
             )
         });
