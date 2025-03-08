@@ -4,19 +4,19 @@ use axum::response::IntoResponse;
 use ical::col::CalStore;
 use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use std::sync::Arc;
-use tokio::sync::MutexGuard;
 
 use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
+use crate::state::EventixState;
 
 use super::{CompAction, CompEdit};
 
 fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
-    mut store: MutexGuard<'_, CalStore>,
+    store: &mut CalStore,
     form: &mut CompEdit,
 ) -> anyhow::Result<bool> {
     let file = store.files_by_id_mut(&form.req.uid).context(format!(
@@ -103,7 +103,7 @@ fn action_update(
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     MultiForm(mut form): MultiForm<CompEdit>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
@@ -111,8 +111,8 @@ pub async fn handler(
 
     let req = form.req.clone();
     let form = {
-        let store = state.store().lock().await;
-        if action_update(&mut page, &locale, store, &mut form)? {
+        let mut state = state.lock().await;
+        if action_update(&mut page, &locale, state.store_mut(), &mut form)? {
             None
         } else {
             Some(form)

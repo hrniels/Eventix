@@ -7,6 +7,7 @@ use crate::{
     error::HTMLError,
     html,
     locale::{self, TimeFlags},
+    state::EventixState,
 };
 
 #[derive(Debug, Serialize)]
@@ -15,15 +16,16 @@ struct Response {
     date: String,
 }
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/reload", get(handler))
         .with_state(state)
 }
 
-async fn handler(State(state): State<crate::state::State>) -> Result<impl IntoResponse, HTMLError> {
+async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
+    let mut state = state.lock().await;
     let changed = match state.reload().await {
         Err(e) => {
             error!("Unable to reload state: {}", e);

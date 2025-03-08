@@ -16,7 +16,7 @@ use crate::{
         alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange,
         recur::RecurRequest, todostatus::TodoStatus,
     },
-    state::State,
+    state::EventixState,
 };
 
 use super::Page;
@@ -129,11 +129,11 @@ pub fn build_title(occ: &Occurrence, rid: &Option<String>) -> String {
     title
 }
 
-pub async fn new_page(state: &State) -> Page {
+pub async fn new_page(state: &EventixState) -> Page {
     Page::new(state).await
 }
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/edit", get(self::index::handler))
         .route("/edit/update", post(self::update::handler))

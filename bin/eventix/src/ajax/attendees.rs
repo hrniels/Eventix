@@ -6,7 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::error::HTMLError;
+use crate::{error::HTMLError, state::EventixState};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -16,18 +16,19 @@ pub struct Request {
 #[derive(Debug, Serialize)]
 struct Response(Vec<String>);
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/attendees", get(handler))
         .with_state(state)
 }
 
 async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let store = state.store().lock().await;
-    let mut contacts = store
+    let state = state.lock().await;
+    let mut contacts = state
+        .store()
         .contacts()
         .iter()
         .filter(|(address, name)| name.contains(&req.term) || address.contains(&req.term))

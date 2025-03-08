@@ -4,7 +4,6 @@ use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
 use ical::col::{CalStore, Occurrence};
 use ical::objects::{CalCompType, CalTodoStatus, EventLike};
-use tokio::sync::MutexGuard;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
@@ -21,16 +20,16 @@ pub struct Tasks<'a> {
 
 impl<'a> Tasks<'a> {
     pub fn new(
-        store: &'a MutexGuard<'_, CalStore>,
-        disabled: &'a MutexGuard<'_, Vec<String>>,
+        store: &'a CalStore,
+        disabled: &'a Vec<String>,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> Tasks<'a> {
         Self::new_with_days(store, disabled, locale, 21)
     }
 
     pub fn new_with_days(
-        store: &'a MutexGuard<'_, CalStore>,
-        disabled: &'a MutexGuard<'_, Vec<String>>,
+        store: &'a CalStore,
+        disabled: &'a Vec<String>,
         locale: &Arc<dyn Locale + Send + Sync>,
         days: u32,
     ) -> Tasks<'a> {

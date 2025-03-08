@@ -15,6 +15,7 @@ use crate::{
         datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
     locale::{self, DateFlags, Locale, TimeFlags},
+    state::EventixState,
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
@@ -39,11 +40,11 @@ struct NewTemplate<'a> {
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let calendar = state.last_calendar().lock().await.get(&req.ctype).cloned();
+    let calendar = state.lock().await.last_calendar().get(&req.ctype).cloned();
     content(
         super::new_page(&state, &req).await,
         locale.clone(),
@@ -56,13 +57,13 @@ pub async fn handler(
 pub async fn content(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     form: CompNew,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let (store, disabled) = state.acquire_store_and_disabled().await;
+    let state = state.lock().await;
 
-    let events = Events::new(&store, &disabled, &locale);
-    let tasks = Tasks::new(&store, &disabled, &locale);
+    let events = Events::new(state.store(), state.disabled_cals(), &locale);
+    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
     let calendar = Arc::from(form.calendar.clone());
 
     let html = NewTemplate {
@@ -78,7 +79,11 @@ pub async fn content(
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
-        calendars: CalComboTemplate::new("calendar", store.dirs_for_type(form.req.ctype), calendar),
+        calendars: CalComboTemplate::new(
+            "calendar",
+            state.store().dirs_for_type(form.req.ctype),
+            calendar,
+        ),
         attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
         status: form
             .status

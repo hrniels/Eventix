@@ -2,7 +2,7 @@ use anyhow::Context;
 use chrono::NaiveDateTime;
 use ical::objects::CalCompType;
 use once_cell::sync::Lazy;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -36,17 +36,16 @@ const FILENAME: &str = "settings.toml";
 static MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 impl Settings {
-    pub async fn new_from_state(state: State) -> Self {
+    pub async fn new_from_state(state: &MutexGuard<'_, State>) -> Self {
         let calendars = {
             let mut calendars = BTreeMap::new();
-            let (store, disabled) = state.acquire_store_and_disabled().await;
-            for dir in store.directories() {
+            for dir in state.store().directories() {
                 calendars.insert(
                     dir.id().to_string(),
                     Calendar {
                         path: dir.path().to_str().unwrap().to_string(),
                         name: dir.name().to_string(),
-                        disabled: Some(disabled.contains(dir.id())),
+                        disabled: Some(state.disabled_cals().contains(dir.id())),
                         fgcolor: dir.props().get(&String::from("fgcolor")).unwrap().clone(),
                         bgcolor: dir.props().get(&String::from("bgcolor")).unwrap().clone(),
                         types: dir
@@ -58,13 +57,11 @@ impl Settings {
             }
             calendars
         };
-        let last_alarm_check = *state.last_alarm_check().lock().await;
-        let last_calendar = state.last_calendar().lock().await.clone();
 
         Self {
             calendars,
-            last_alarm_check: Some(last_alarm_check),
-            last_calendar,
+            last_alarm_check: Some(state.last_alarm_check()),
+            last_calendar: state.last_calendar().clone(),
         }
     }
 

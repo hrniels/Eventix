@@ -2,15 +2,15 @@ pub mod index;
 
 use axum::{routing::get, Router};
 
-use crate::state::State;
+use crate::state::EventixState;
 
 use super::Page;
 
-pub async fn new_page(state: &State) -> Page {
+pub async fn new_page(state: &EventixState) -> Page {
     Page::new(state).await
 }
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/", get(self::index::handler))
         .with_state(state)

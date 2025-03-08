@@ -3,7 +3,6 @@ use std::sync::Arc;
 use chrono::{Duration, Local, NaiveDate};
 use ical::col::CalStore;
 use ical::objects::CalCompType;
-use tokio::sync::MutexGuard;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
@@ -19,16 +18,16 @@ pub struct Events<'a> {
 
 impl<'a> Events<'a> {
     pub fn new(
-        store: &'a MutexGuard<'_, CalStore>,
-        disabled: &'a MutexGuard<'_, Vec<String>>,
+        store: &'a CalStore,
+        disabled: &'a Vec<String>,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> Events<'a> {
         Self::new_with_days(store, disabled, locale, 7)
     }
 
     pub fn new_with_days(
-        store: &'a MutexGuard<'_, CalStore>,
-        disabled: &'a MutexGuard<'_, Vec<String>>,
+        store: &'a CalStore,
+        disabled: &'a Vec<String>,
         locale: &Arc<dyn Locale + Send + Sync>,
         days: u32,
     ) -> Events<'a> {

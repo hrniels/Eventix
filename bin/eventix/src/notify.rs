@@ -12,7 +12,7 @@ use tracing::warn;
 use crate::{
     locale::{DateFlags, Locale},
     settings::Settings,
-    state::State,
+    state::EventixState,
 };
 
 struct Notification {
@@ -63,21 +63,18 @@ impl Notification {
     }
 }
 
-pub async fn watch_alarms(state: State, locale: Arc<dyn Locale + Send + Sync>) {
+pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + Sync>) {
     loop {
-        let last_check = {
-            let last_check = state.last_alarm_check().lock().await;
-            chrono::Utc
-                .from_utc_datetime(&last_check)
-                .with_timezone(locale.timezone())
-        };
-        let now = chrono::Utc::now().with_timezone(locale.timezone());
-
         {
-            let store = state.store().lock().await;
+            let mut state = state.lock().await;
+            let last_check = chrono::Utc
+                .from_utc_datetime(&state.last_alarm_check())
+                .with_timezone(locale.timezone());
+            let now = chrono::Utc::now().with_timezone(locale.timezone());
 
             // find all due alarms since the last check and sort them by alarm time
-            let mut alarms = store
+            let mut alarms = state
+                .store()
                 .due_alarms_between(last_check, now)
                 .filter(|o| !o.is_cancelled())
                 .collect::<Vec<_>>();
@@ -87,17 +84,14 @@ pub async fn watch_alarms(state: State, locale: Arc<dyn Locale + Send + Sync>) {
                 let notification = Notification::from_occurrence(&alarm, &locale);
                 notification.send().unwrap();
             }
-        }
 
-        {
-            let mut last_check = state.last_alarm_check().lock().await;
-            *last_check = now.naive_utc();
-        }
+            state.set_last_alarm_check(now.naive_utc());
 
-        // permanently remember last time of check
-        let settings = Settings::new_from_state(state.clone()).await;
-        if let Err(e) = settings.write_to_file().await {
-            warn!("Unable to save settings: {}", e);
+            // permanently remember last time of check
+            let settings = Settings::new_from_state(&state).await;
+            if let Err(e) = settings.write_to_file().await {
+                warn!("Unable to save settings: {}", e);
+            }
         }
 
         time::sleep(time::Duration::from_secs(30)).await;

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use crate::{
     objects::{Calendar, Calendars},
-    state::State,
+    state::EventixState,
 };
 
 #[derive(Debug, Clone)]
@@ -51,7 +51,7 @@ impl Default for Page {
 }
 
 impl Page {
-    pub async fn new(state: &State) -> Self {
+    pub async fn new(state: &EventixState) -> Self {
         Self {
             start: Instant::now(),
             calendars: Calendars::new_with_disabled(state).await,

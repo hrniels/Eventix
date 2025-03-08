@@ -18,6 +18,7 @@ use crate::{
     },
     locale::{self, DateFlags, Locale, TimeFlags},
     pages::Breadcrumb,
+    state::EventixState,
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
@@ -45,7 +46,7 @@ struct EditTemplate<'a> {
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
@@ -61,13 +62,14 @@ pub async fn handler(
 pub async fn content(
     mut page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
     form: Option<CompEdit>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let (store, disabled) = state.acquire_store_and_disabled().await;
+    let state = state.lock().await;
 
-    let file = store
+    let file = state
+        .store()
         .file_by_id(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
@@ -104,10 +106,10 @@ pub async fn content(
         }
     };
 
-    let dir = store.directory(file.directory()).unwrap();
+    let dir = state.store().directory(file.directory()).unwrap();
 
-    let events = Events::new(&store, &disabled, &locale);
-    let tasks = Tasks::new(&store, &disabled, &locale);
+    let events = Events::new(state.store(), state.disabled_cals(), &locale);
+    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
 
     let html = EditTemplate {
         page,
@@ -115,7 +117,11 @@ pub async fn content(
         rid: form.req.rid.clone(),
         dir,
         calendars: form.calendar.map(|cal| {
-            CalComboTemplate::new("calendar", store.dirs_for_type(occ.ctype()), Arc::new(cal))
+            CalComboTemplate::new(
+                "calendar",
+                state.store().dirs_for_type(occ.ctype()),
+                Arc::new(cal),
+            )
         }),
         summary: &form.summary,
         location: &form.location,

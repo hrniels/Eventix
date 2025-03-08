@@ -16,8 +16,9 @@ use crate::html::{self, filters};
 use crate::locale::{self, DateFlags, Locale};
 
 use crate::objects::DayOccurrence;
+use crate::state::EventixState;
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/details", get(handler))
         .with_state(state)
@@ -44,7 +45,7 @@ struct DetailsTemplate<'a> {
 }
 
 async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
@@ -58,16 +59,17 @@ async fn handler(
         None
     };
 
-    let store = state.store().lock().await;
+    let state = state.lock().await;
 
-    let occ = store
+    let occ = state
+        .store()
         .occurrence_by_id(&req.uid, rid.as_ref(), locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
             &req.uid, rid
         ))?;
     let day_occ = DayOccurrence::new(&occ);
-    let dir = store.directory(occ.directory()).unwrap();
+    let dir = state.store().directory(occ.directory()).unwrap();
 
     let html = DetailsTemplate {
         org: occ

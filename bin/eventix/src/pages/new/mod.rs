@@ -16,7 +16,7 @@ use crate::{
         alarm::AlarmRequest, attendees::Attendees, date::Date, datetime::DateTime,
         datetimerange::DateTimeRange, recur::RecurRequest, todostatus::TodoStatus,
     },
-    state::State,
+    state::EventixState,
 };
 
 use super::{Breadcrumb, Page};
@@ -132,7 +132,7 @@ impl CompAction for CompNew {
     }
 }
 
-pub async fn new_page(state: &State, req: &Request) -> Page {
+pub async fn new_page(state: &EventixState, req: &Request) -> Page {
     let mut page = Page::new(state).await;
     match req.ctype {
         CalCompType::Todo => page.add_breadcrumb(Breadcrumb::new(
@@ -147,7 +147,7 @@ pub async fn new_page(state: &State, req: &Request) -> Page {
     page
 }
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/new", get(self::index::handler))
         .route("/new/save", post(self::save::handler))

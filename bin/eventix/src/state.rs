@@ -6,20 +6,23 @@ use ical::{
     col::{CalDir, CalStore},
     objects::CalCompType,
 };
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::Mutex;
 
 use crate::settings;
 
-#[derive(Clone, Default)]
+pub type EventixState = Arc<Mutex<State>>;
+
+#[derive(Default)]
 pub struct State {
-    store: Arc<Mutex<CalStore>>,
-    disabled_cals: Arc<Mutex<Vec<String>>>,
-    last_alarm_check: Arc<Mutex<NaiveDateTime>>,
-    last_calendar: Arc<Mutex<HashMap<CalCompType, String>>>,
+    store: CalStore,
+    disabled_cals: Vec<String>,
+    last_alarm_check: NaiveDateTime,
+    last_reload: NaiveDateTime,
+    last_calendar: HashMap<CalCompType, String>,
 }
 
 impl State {
-    pub async fn reload(&self) -> anyhow::Result<bool> {
+    pub async fn reload(&mut self) -> anyhow::Result<bool> {
         let settings = settings::Settings::load_from_file()
             .await
             .context("load settings")?;
@@ -49,39 +52,55 @@ impl State {
             );
         }
 
-        let changed = *self.store.lock().await != store;
+        let changed = self.store != store;
 
-        *self.store().lock().await = store;
-        *self.disabled_cals().lock().await = disabled_cals;
-        *self.last_calendar.lock().await = settings.last_calendar;
-        *self.last_alarm_check.lock().await = settings
+        self.store = store;
+        self.disabled_cals = disabled_cals;
+        self.last_calendar = settings.last_calendar;
+        self.last_alarm_check = settings
             .last_alarm_check
             .unwrap_or(chrono::Utc::now().naive_utc() - Duration::days(7));
 
         Ok(changed)
     }
 
-    pub fn store(&self) -> &Arc<Mutex<CalStore>> {
+    pub fn store(&self) -> &CalStore {
         &self.store
     }
 
-    pub fn disabled_cals(&self) -> &Arc<Mutex<Vec<String>>> {
+    pub fn store_mut(&mut self) -> &mut CalStore {
+        &mut self.store
+    }
+
+    pub fn disabled_cals(&self) -> &Vec<String> {
         &self.disabled_cals
     }
 
-    pub fn last_alarm_check(&self) -> &Arc<Mutex<NaiveDateTime>> {
-        &self.last_alarm_check
+    pub fn toggle_calendar(&mut self, cal: &String) {
+        if self.disabled_cals.contains(cal) {
+            self.disabled_cals.retain(|d| d != cal);
+        } else {
+            self.disabled_cals.push(cal.to_string());
+        }
     }
 
-    pub fn last_calendar(&self) -> &Arc<Mutex<HashMap<CalCompType, String>>> {
+    pub fn last_alarm_check(&self) -> NaiveDateTime {
+        self.last_alarm_check
+    }
+
+    pub fn set_last_alarm_check(&mut self, datetime: NaiveDateTime) {
+        self.last_alarm_check = datetime;
+    }
+
+    pub fn last_calendar(&self) -> &HashMap<CalCompType, String> {
         &self.last_calendar
     }
 
-    pub async fn acquire_store_and_disabled(
-        &self,
-    ) -> (MutexGuard<'_, CalStore>, MutexGuard<'_, Vec<String>>) {
-        let disabled = self.disabled_cals.lock().await;
-        let store = self.store.lock().await;
-        (store, disabled)
+    pub fn set_last_calendar(&mut self, ty: CalCompType, cal: String) {
+        if let Some(e) = self.last_calendar.get_mut(&ty) {
+            *e = cal;
+        } else {
+            self.last_calendar.insert(ty, cal);
+        }
     }
 }

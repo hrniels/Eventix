@@ -10,9 +10,12 @@ use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 
 use super::Page;
-use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
+use crate::{
+    locale::{self, DateFlags, Locale, TimeFlags},
+    state::EventixState,
+};
 use crate::{objects::DayOccurrence, util::parse_human_date};
 
 struct Day<'a> {
@@ -43,7 +46,7 @@ struct WeeklyTemplate<'a> {
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
@@ -159,7 +162,7 @@ fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, (usize, usize)> {
 pub async fn content(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let timezone = *locale.timezone();
@@ -181,12 +184,13 @@ pub async fn content(
         .from_local_datetime(&end.pred_opt().unwrap().and_hms_opt(23, 59, 59).unwrap())
         .unwrap();
 
-    let (store, disabled) = state.acquire_store_and_disabled().await;
+    let state = state.lock().await;
 
-    let ev_occs = store
+    let ev_occs = state
+        .store()
         .directories()
         .iter()
-        .filter(|s| !disabled.contains(s.id()))
+        .filter(|s| !state.disabled_cals().contains(s.id()))
         .flat_map(move |s| s.occurrences_between(mstart, mend, |c| c.ctype() == CalCompType::Event))
         .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();
@@ -219,8 +223,8 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&store, &disabled, &locale);
-    let tasks = Tasks::new(&store, &disabled, &locale);
+    let events = Events::new(state.store(), state.disabled_cals(), &locale);
+    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
 
     let now = Utc::now().with_timezone(&timezone);
 

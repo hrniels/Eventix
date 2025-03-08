@@ -20,6 +20,7 @@ use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
 use crate::pages::Page;
+use crate::state::EventixState;
 
 const PER_PAGE: usize = 15;
 
@@ -86,15 +87,15 @@ impl<F: Fn(&usize) -> String> ListTemplate<'_, F> {
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     MultiQuery(mut filter): MultiQuery<Filter>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state, &filter).await;
     let locale = locale::default();
 
-    let (store, disabled) = state.acquire_store_and_disabled().await;
+    let state = state.lock().await;
 
-    let directories = store.directories().iter().collect::<Vec<_>>();
+    let directories = state.store().directories().iter().collect::<Vec<_>>();
     if filter.dirs.is_empty() {
         filter.dirs = directories.iter().map(|s| s.id().deref().clone()).collect();
     }
@@ -113,7 +114,8 @@ pub async fn handler(
     };
 
     let iter = || {
-        store
+        state
+            .store()
             .files()
             .flat_map(|i| {
                 i.components()
@@ -158,8 +160,8 @@ pub async fn handler(
         .take(PER_PAGE)
         .collect::<Vec<_>>();
 
-    let events = Events::new(&store, &disabled, &locale);
-    let tasks = Tasks::new(&store, &disabled, &locale);
+    let events = Events::new(state.store(), state.disabled_cals(), &locale);
+    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
 
     let filter_clone = filter.clone();
     let pagination = PaginationTemplate::new(

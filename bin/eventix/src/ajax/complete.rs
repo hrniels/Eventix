@@ -8,7 +8,7 @@ use axum::{
 use ical::objects::{CalComponent, CalDate, CalTodoStatus, EventLike, UpdatableEventLike};
 use serde::{Deserialize, Serialize};
 
-use crate::{error::HTMLError, locale};
+use crate::{error::HTMLError, locale, state::EventixState};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -19,14 +19,14 @@ pub struct Request {
 #[derive(Debug, Serialize)]
 struct Response {}
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/complete", get(handler))
         .with_state(state)
 }
 
 async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
@@ -40,9 +40,10 @@ async fn handler(
         None
     };
 
-    let mut store = state.store().lock().await;
+    let mut state = state.lock().await;
 
-    let file = store
+    let file = state
+        .store_mut()
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 

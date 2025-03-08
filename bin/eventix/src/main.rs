@@ -17,7 +17,8 @@ use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
 use pages::{edit, list, monthly, new, weekly};
-use std::env;
+use std::{env, sync::Arc};
+use tokio::sync::Mutex;
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::{DefaultOnResponse, TraceLayer},
@@ -53,8 +54,8 @@ async fn main() {
 
     let args = Args::parse();
 
-    let state = state::State::default();
-    state.reload().await.expect("loading state");
+    let state = Arc::new(Mutex::new(state::State::default()));
+    state.lock().await.reload().await.expect("loading state");
 
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))

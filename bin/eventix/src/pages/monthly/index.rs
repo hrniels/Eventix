@@ -13,11 +13,14 @@ use serde::Deserialize;
 use std::sync::Arc;
 
 use super::Page;
-use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::DayOccurrence;
 use crate::util::parse_human_date;
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
+use crate::{
+    locale::{self, DateFlags, Locale, TimeFlags},
+    state::EventixState,
+};
 
 struct Day<'a> {
     date: Option<NaiveDate>,
@@ -47,7 +50,7 @@ struct MonthlyTemplate<'a> {
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
@@ -62,7 +65,7 @@ pub async fn handler(
 pub async fn content(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let timezone = *locale.timezone();
@@ -96,7 +99,8 @@ pub async fn content(
         .from_local_datetime(&end.pred_opt().unwrap().and_hms_opt(23, 59, 59).unwrap())
         .unwrap();
 
-    let (store, disabled) = state.acquire_store_and_disabled().await;
+    let state = state.lock().await;
+    let (store, disabled) = (state.store(), state.disabled_cals());
 
     let ev_occs = store
         .directories()
@@ -120,8 +124,8 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&store, &disabled, &locale);
-    let tasks = Tasks::new(&store, &disabled, &locale);
+    let events = Events::new(store, disabled, &locale);
+    let tasks = Tasks::new(store, disabled, &locale);
 
     let html = MonthlyTemplate {
         page,

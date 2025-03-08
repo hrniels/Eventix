@@ -3,13 +3,11 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
-use ical::col::CalStore;
 use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::error::HTMLError;
+use crate::state::EventixState;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -20,15 +18,20 @@ pub struct Request {
 #[derive(Debug, Serialize)]
 struct Response {}
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/toggleexcl", get(handler))
         .with_state(state)
 }
 
-async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::Result<()> {
-    let mut store = store.lock().await;
-    let file = store
+pub async fn handler(
+    State(state): State<EventixState>,
+    Query(form): Query<Request>,
+) -> anyhow::Result<impl IntoResponse, HTMLError> {
+    let mut state = state.lock().await;
+
+    let file = state
+        .store_mut()
         .files_by_id_mut(&form.uid)
         .ok_or_else(|| anyhow!("Unable to find file with uid {}", form.uid))?;
 
@@ -44,16 +47,8 @@ async fn action_delete(store: Arc<Mutex<CalStore>>, form: &Request) -> anyhow::R
     base.toggle_exclude(date);
     base.set_last_modified(CalDate::now());
     base.set_stamp(CalDate::now());
-    file.save()?;
-
-    Ok(())
-}
-
-pub async fn handler(
-    State(state): State<crate::state::State>,
-    Query(form): Query<Request>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    action_delete(state.store().clone(), &form).await?;
+    file.save()
+        .with_context(|| format!("Unable to save item with uid {}", form.uid))?;
 
     Ok(Json(Response {}))
 }

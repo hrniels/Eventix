@@ -4,7 +4,6 @@ use axum::response::IntoResponse;
 use ical::col::{CalFile, CalStore};
 use ical::objects::{CalCompType, CalComponent, CalEvent, CalTodo, Calendar, UpdatableEventLike};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::comp::CompAction;
@@ -12,13 +11,14 @@ use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
+use crate::state::EventixState;
 
 use super::CompNew;
 
 async fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
-    store: &Arc<Mutex<CalStore>>,
+    store: &mut CalStore,
     form: &mut CompNew,
 ) -> anyhow::Result<bool> {
     if !form.check(page, locale, form.req.ctype) {
@@ -34,7 +34,6 @@ async fn action_update(
     };
 
     let calendar = Arc::from(form.calendar.clone());
-    let mut store = store.lock().await;
     let dir = store
         .directory_mut(&calendar)
         .ok_or_else(|| anyhow!("Unable to find directory with id {}", form.calendar))?;
@@ -61,25 +60,22 @@ async fn action_update(
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     MultiForm(mut form): MultiForm<CompNew>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
     let mut page = super::new_page(&state, &form.req).await;
 
-    if action_update(&mut page, &locale, state.store(), &mut form).await? {
-        page.add_info(locale.translate("New event was added successfully"));
+    {
+        let mut state = state.lock().await;
+        if action_update(&mut page, &locale, state.store_mut(), &mut form).await? {
+            page.add_info(locale.translate("New event was added successfully"));
 
-        // remember the last used calendar
-        {
-            let mut last_cal = state.last_calendar().lock().await;
-            if let Some(e) = last_cal.get_mut(&form.req.ctype) {
-                *e = form.calendar.clone();
-            } else {
-                last_cal.insert(form.req.ctype, form.calendar.clone());
-            }
+            // remember the last used calendar
+            state.set_last_calendar(form.req.ctype, form.calendar.clone());
+
+            form = CompNew::new(&form.req, locale.timezone(), Some(form.calendar));
         }
-        form = CompNew::new(&form.req, locale.timezone(), Some(form.calendar));
     }
 
     super::index::content(page, locale, State(state), form).await

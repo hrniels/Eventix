@@ -16,6 +16,7 @@ use crate::html::{self, filters};
 use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
+use crate::state::EventixState;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
@@ -37,7 +38,7 @@ struct Response {
     date: Option<String>,
 }
 
-pub fn router(state: crate::state::State) -> Router {
+pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/occlist", get(handler))
         .with_state(state)
@@ -71,7 +72,7 @@ fn max_datetime(timezone: Tz) -> DateTime<Tz> {
 }
 
 pub async fn handler(
-    State(state): State<crate::state::State>,
+    State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
@@ -82,8 +83,10 @@ pub async fn handler(
         .context(format!("Invalid date: {}", req.date))?
         .as_start_with_tz(locale.timezone());
 
-    let store = state.store().lock().await;
-    let file = store
+    let state = state.lock().await;
+
+    let file = state
+        .store()
         .file_by_id(&req.uid)
         .context(format!("Unable to find file with uid {}", req.uid))?;
 
