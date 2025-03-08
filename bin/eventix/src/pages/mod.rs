@@ -7,9 +7,16 @@ pub mod weekly;
 mod events;
 mod tasks;
 
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use chrono::{DateTime, NaiveDateTime, TimeZone};
+use chrono_tz::Tz;
 
 use crate::{
+    locale::Locale,
     objects::{Calendar, Calendars},
     state::EventixState,
 };
@@ -36,6 +43,7 @@ pub struct Page {
     errors: Vec<String>,
     infos: Vec<String>,
     calendars: Calendars,
+    last_reload: NaiveDateTime,
 }
 
 impl Default for Page {
@@ -46,6 +54,7 @@ impl Default for Page {
             errors: Vec::new(),
             infos: Vec::new(),
             calendars: Calendars::default(),
+            last_reload: NaiveDateTime::default(),
         }
     }
 }
@@ -55,8 +64,13 @@ impl Page {
         Self {
             start: Instant::now(),
             calendars: Calendars::new_with_disabled(state).await,
+            last_reload: state.lock().await.last_reload(),
             ..Default::default()
         }
+    }
+
+    pub fn last_reload(&self, locale: &Arc<dyn Locale + Send + Sync>) -> DateTime<Tz> {
+        locale.timezone().from_utc_datetime(&self.last_reload)
     }
 
     pub fn calendars(&self) -> &[Calendar] {

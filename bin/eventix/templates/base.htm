@@ -77,7 +77,7 @@
                 style="width: 70px; text-align: center" href="javascript:reloadDB('last-update')">
                 <i class="bi bi-arrow-clockwise"></i>
                 <span id="last-update">
-                    {{ CalDate::now().as_start_with_tz(locale.timezone())|as_ref|time(locale, TimeFlags::None) }}
+                    {{ page.last_reload(locale)|as_ref|time(locale, TimeFlags::None) }}
                 </span>
             </a>
         </div>

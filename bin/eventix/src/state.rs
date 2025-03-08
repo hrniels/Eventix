@@ -53,13 +53,13 @@ impl State {
         }
 
         let changed = self.store != store;
+        let now = chrono::Utc::now().naive_utc();
 
         self.store = store;
         self.disabled_cals = disabled_cals;
+        self.last_reload = now;
         self.last_calendar = settings.last_calendar;
-        self.last_alarm_check = settings
-            .last_alarm_check
-            .unwrap_or(chrono::Utc::now().naive_utc() - Duration::days(7));
+        self.last_alarm_check = settings.last_alarm_check.unwrap_or(now - Duration::days(7));
 
         Ok(changed)
     }
@@ -82,6 +82,10 @@ impl State {
         } else {
             self.disabled_cals.push(cal.to_string());
         }
+    }
+
+    pub fn last_reload(&self) -> NaiveDateTime {
+        self.last_reload
     }
 
     pub fn last_alarm_check(&self) -> NaiveDateTime {

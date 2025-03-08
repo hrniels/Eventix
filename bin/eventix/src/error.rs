@@ -4,7 +4,6 @@ use axum::{
     http::{header, StatusCode},
     response::{IntoResponse, Response},
 };
-use ical::objects::CalDate;
 use std::fmt;
 use std::sync::Arc;
 
