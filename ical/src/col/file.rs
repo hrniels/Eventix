@@ -506,8 +506,7 @@ impl CalFile {
         if self
             .components()
             .iter()
-            .find(|c| c.uid() == &uid && c.rid() == Some(&rid))
-            .is_some()
+            .any(|c| c.uid() == &uid && c.rid() == Some(&rid))
         {
             return Err(ColError::RidExists(rid));
         }

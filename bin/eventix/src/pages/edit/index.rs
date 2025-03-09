@@ -117,16 +117,15 @@ pub async fn content(
         uid: form.req.uid.clone(),
         rid: form.req.rid.clone(),
         dir,
-        calendars: match &form.calendar {
-            Some(cal) => Some(CalComboTemplate::new(
+        calendars: form.calendar.map(|cal| {
+            CalComboTemplate::new(
                 "calendar",
                 Calendars::new(&state, |_dir, settings| {
                     settings.types().contains(&occ.ctype()) && !settings.disabled()
                 }),
                 Arc::new(cal.to_string()),
-            )),
-            None => None,
-        },
+            )
+        }),
         summary: &form.summary,
         location: &form.location,
         description: &form.description,

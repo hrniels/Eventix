@@ -14,7 +14,7 @@ pub struct CalComboTemplate {
 }
 
 impl CalComboTemplate {
-    pub fn new<'a, N>(name: N, calendars: Calendars, calendar: Arc<String>) -> Self
+    pub fn new<N>(name: N, calendars: Calendars, calendar: Arc<String>) -> Self
     where
         N: ToString,
     {
