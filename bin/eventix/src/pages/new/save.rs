@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use ical::col::{CalFile, CalStore};
+use ical::col::CalFile;
 use ical::objects::{CalCompType, CalComponent, CalEvent, CalTodo, Calendar, UpdatableEventLike};
 use std::sync::Arc;
 use tracing::warn;
@@ -19,7 +19,7 @@ use super::CompNew;
 async fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
-    store: &mut CalStore,
+    state: &mut crate::state::State,
     form: &mut CompNew,
 ) -> anyhow::Result<bool> {
     if !form.check(page, locale, form.req.ctype) {
@@ -35,7 +35,14 @@ async fn action_update(
     };
 
     let calendar = Arc::from(form.calendar.clone());
-    let dir = store
+    let organizer = state
+        .settings()
+        .calendar(&calendar)
+        .unwrap()
+        .build_organizer();
+
+    let dir = state
+        .store_mut()
         .directory_mut(&calendar)
         .ok_or_else(|| anyhow!("Unable to find directory with id {}", form.calendar))?;
 
@@ -51,7 +58,7 @@ async fn action_update(
     };
 
     comp.set_rrule(rrule);
-    form.update(&mut comp, locale);
+    form.update(&mut comp, organizer, locale);
 
     file.add_component(comp);
     file.save()?;
@@ -69,7 +76,7 @@ pub async fn handler(
 
     {
         let mut state = state.lock().await;
-        if action_update(&mut page, &locale, state.store_mut(), &mut form).await? {
+        if action_update(&mut page, &locale, &mut state, &mut form).await? {
             page.add_info(locale.translate("New event was added successfully"));
 
             // remember the last used calendar

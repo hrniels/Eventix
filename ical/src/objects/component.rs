@@ -338,6 +338,10 @@ impl UpdatableEventLike for EventLikeComponent {
     fn set_attendees(&mut self, attendees: Option<Vec<CalAttendee>>) {
         self.attendees = attendees;
     }
+
+    fn set_organizer(&mut self, organizer: Option<CalOrganizer>) {
+        self.organizer = organizer;
+    }
 }
 
 /// The component type.
@@ -678,5 +682,9 @@ impl UpdatableEventLike for CalComponent {
 
     fn set_attendees(&mut self, attendees: Option<Vec<CalAttendee>>) {
         set_with_ev_or_todo!(self, set_attendees, attendees);
+    }
+
+    fn set_organizer(&mut self, organizer: Option<CalOrganizer>) {
+        set_with_ev_or_todo!(self, set_organizer, organizer);
     }
 }

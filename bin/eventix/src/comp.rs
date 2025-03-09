@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ical::objects::{CalCompType, CalTodoStatus};
+use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus};
 use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 
 use crate::comps::alarm::AlarmRequest;
@@ -89,7 +89,12 @@ pub trait CompAction {
         }
     }
 
-    fn update(&self, comp: &mut CalComponent, locale: &Arc<dyn Locale + Send + Sync>) {
+    fn update(
+        &self,
+        comp: &mut CalComponent,
+        organizer: Option<CalOrganizer>,
+        locale: &Arc<dyn Locale + Send + Sync>,
+    ) {
         let dtype = comp.ctype().into();
         let (start, end) = self.start_end().as_caldates(locale, dtype);
 
@@ -108,8 +113,10 @@ pub trait CompAction {
             comp.set_alarms(vec![]);
         }
         if let Some(att) = self.attendees() {
+            comp.set_organizer(organizer);
             comp.set_attendees(att.to_cal_attendees());
         } else {
+            comp.set_organizer(None);
             comp.set_attendees(None);
         }
 

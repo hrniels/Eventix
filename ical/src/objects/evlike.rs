@@ -192,4 +192,7 @@ pub trait UpdatableEventLike: EventLike {
     /// attendees from the base calendar object. Whereas `Some(vec[])` means that the attendee list
     /// for this specific overwritten calendar object is empty.
     fn set_attendees(&mut self, attendees: Option<Vec<CalAttendee>>);
+
+    /// Sets the organizer.
+    fn set_organizer(&mut self, organizer: Option<CalOrganizer>);
 }

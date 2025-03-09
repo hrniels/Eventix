@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::NaiveDateTime;
-use ical::objects::CalCompType;
+use ical::objects::{CalCompType, CalOrganizer};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -120,6 +120,14 @@ impl EmailAccount {
     pub fn pretty_name(&self) -> String {
         format!("{} <{}>", self.name, self.address)
     }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn address(&self) -> &String {
+        &self.address
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -144,6 +152,11 @@ impl CalendarSettings {
 
     pub fn email(&self) -> Option<&EmailAccount> {
         self.email.as_ref()
+    }
+
+    pub fn build_organizer(&self) -> Option<CalOrganizer> {
+        self.email()
+            .map(|em| CalOrganizer::new_named(em.name().to_string(), em.address().to_string()))
     }
 
     pub fn disabled(&self) -> bool {

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::parser::{Parameter, ParseError, Property};
 
 /// Represents an organizers of an event or TODO.
@@ -12,6 +14,16 @@ pub struct CalOrganizer {
 }
 
 impl CalOrganizer {
+    /// Creates a new organizer instance with `name` as the common name and given email address.
+    pub fn new_named<T: ToString, S: Display>(name: T, address: S) -> Self {
+        Self {
+            address: format!("mailto:{}", address),
+            common_name: Some(name.to_string()),
+            sent_by: None,
+            params: vec![],
+        }
+    }
+
     /// Returns the email address of the organizer.
     pub fn address(&self) -> &String {
         &self.address

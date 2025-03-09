@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use ical::col::CalStore;
 use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use std::sync::Arc;
 
@@ -16,13 +15,27 @@ use super::{CompAction, CompEdit};
 fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
-    store: &mut CalStore,
+    state: &mut crate::state::State,
     form: &mut CompEdit,
 ) -> anyhow::Result<bool> {
-    let file = store.files_by_id_mut(&form.req.uid).context(format!(
+    let file = state.store().file_by_id(&form.req.uid).context(format!(
         "Unable to find component with uid '{}'",
         form.req.uid
     ))?;
+    let calendar = form.calendar.as_ref().unwrap_or(file.directory());
+    let organizer = state
+        .settings()
+        .calendar(calendar)
+        .unwrap()
+        .build_organizer();
+
+    let file = state
+        .store_mut()
+        .files_by_id_mut(&form.req.uid)
+        .context(format!(
+            "Unable to find component with uid '{}'",
+            form.req.uid
+        ))?;
 
     let rid = if let Some(ref rid) = form.req.rid {
         Some(
@@ -68,7 +81,7 @@ fn action_update(
     if let Some(comp) =
         file.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
     {
-        form.update(comp, locale);
+        form.update(comp, organizer, locale);
         if rid.is_none() {
             comp.set_rrule(rrule);
         }
@@ -79,7 +92,7 @@ fn action_update(
         }
 
         file.create_overwrite(&form.req.uid, rid.unwrap(), locale.timezone(), |c| {
-            form.update(c, locale);
+            form.update(c, organizer, locale);
         })
         .context("Creating overwrite failed")?;
     }
@@ -93,7 +106,9 @@ fn action_update(
         if *cal != **file.directory() {
             let path = file.path().clone();
             let src = file.directory().clone();
-            store.switch_directory(path, &src, &Arc::new(cal.to_string()))?;
+            state
+                .store_mut()
+                .switch_directory(path, &src, &Arc::new(cal.to_string()))?;
             return Ok(true);
         }
     }
@@ -112,7 +127,7 @@ pub async fn handler(
     let req = form.req.clone();
     let form = {
         let mut state = state.lock().await;
-        if action_update(&mut page, &locale, state.store_mut(), &mut form)? {
+        if action_update(&mut page, &locale, &mut state, &mut form)? {
             None
         } else {
             Some(form)
