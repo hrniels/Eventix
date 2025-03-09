@@ -79,9 +79,6 @@ New attendee: <input id="{{ id }}-new-attendee" size="50" />
         $("#{{ id }}-new-attendee").autocomplete({
             source: "/attendees",
             minLength: 2,
-            select: function(event, ui) {
-                console.log("Selected: " + ui.item.value + " aka " + ui.item.id);
-            }
         });
         $('#{{ id }}-new-attendee').keyup(function(e) {
             if(e.keyCode == 13) {
