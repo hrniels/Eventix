@@ -1,6 +1,5 @@
 use chrono::DateTime;
 use chrono_tz::Tz;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_dir, File};
 use std::io::Read;
@@ -12,14 +11,13 @@ use crate::objects::{CalComponent, CalDate, Calendar};
 
 /// A directory with calendar files.
 ///
-/// A [`CalDir`] is a container for [`CalFile`] objects with additional properties. At first, each
-/// directory has a unique id and a human-readable name. Furthermore, custom properties can be set.
+/// A [`CalDir`] is a container for [`CalFile`] objects that are stored in a specific directory.
+/// Additionally, each directory has a unique id and a human-readable name.
 #[derive(Default, Debug)]
 pub struct CalDir {
     id: Arc<String>,
     path: PathBuf,
     name: String,
-    props: HashMap<String, String>,
     files: Vec<CalFile>,
 }
 
@@ -42,12 +40,7 @@ impl CalDir {
     /// This method reads all files in the given directory and tries to parse them into a
     /// [`Calendar`]. These are added to the created [`CalDir`]. Note that it expects all files to
     /// be calendar files, but ignores directories.
-    pub fn new_from_dir(
-        id: Arc<String>,
-        path: PathBuf,
-        name: String,
-        props: HashMap<String, String>,
-    ) -> Result<Self, ColError> {
+    pub fn new_from_dir(id: Arc<String>, path: PathBuf, name: String) -> Result<Self, ColError> {
         let mut files = Vec::new();
         let dir_files = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
         for entry in dir_files {
@@ -79,7 +72,6 @@ impl CalDir {
             id,
             path,
             name,
-            props,
             files,
         })
     }
@@ -97,11 +89,6 @@ impl CalDir {
     /// Returns the human-readable name of this directory.
     pub fn name(&self) -> &String {
         &self.name
-    }
-
-    /// Returns the additional properties that have been set for this directory.
-    pub fn props(&self) -> &HashMap<String, String> {
-        &self.props
     }
 
     /// Returns a slice with all files in this directory.

@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::col::{CalDir, CalFile, ColError, Occurrence};
-use crate::objects::{CalCompType, CalComponent, CalDate, CalEvent, CalTodo};
+use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo};
 
 /// A container for multiple [`CalDir`]s.
 ///
@@ -34,19 +34,6 @@ impl CalStore {
     /// Returns a slice of the contained directories.
     pub fn directories(&self) -> &[CalDir] {
         &self.dirs
-    }
-
-    /// Returns an iterator with all directories that support the given [`CalCompType`].
-    pub fn dirs_for_type(&self, ty: CalCompType) -> impl Iterator<Item = &CalDir> {
-        self.dirs
-            .iter()
-            .filter(move |src| match src.props().get("types") {
-                Some(src_ty) => {
-                    let types: Vec<CalCompType> = serde_json::from_str(src_ty).unwrap();
-                    types.contains(&ty)
-                }
-                None => true,
-            })
     }
 
     /// Returns an iterator with all files in all directories.

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use chrono::NaiveDateTime;
@@ -29,7 +29,6 @@ impl State {
                     Arc::from(id.clone()),
                     PathBuf::from(cal.path().clone()),
                     cal.name().clone(),
-                    HashMap::new(),
                 )
                 .with_context(|| format!("Loading calendar {} from '{}' failed", id, cal.path()))?,
             );
