@@ -150,15 +150,20 @@ impl CalAttendee {
         self.common_name = Some(cn);
     }
 
+    /// Returns the address with the "mailto:" prefix removed.
+    pub fn pretty_address(&self) -> &str {
+        match self.address.strip_prefix("mailto:") {
+            Some(addr) => addr,
+            None => &self.address,
+        }
+    }
+
     /// Returns a pretty name for this attendee.
     ///
     /// If the name is known, the pretty name is returned '$name <$address>'. Otherwise, only the
     /// address is returned.
     pub fn pretty_name(&self) -> String {
-        let address = match self.address.strip_prefix("mailto:") {
-            Some(addr) => addr,
-            None => &self.address,
-        };
+        let address = self.pretty_address();
         if let Some(name) = &self.common_name {
             format!("{} <{}>", name, address)
         } else {
