@@ -61,10 +61,11 @@ impl Default for Page {
 
 impl Page {
     pub async fn new(state: &EventixState) -> Self {
+        let state = state.lock().await;
         Self {
             start: Instant::now(),
-            calendars: Calendars::new_with_disabled(state).await,
-            last_reload: state.lock().await.last_reload(),
+            calendars: Calendars::new(&state, |_dir, _settings| true),
+            last_reload: state.last_reload(),
             ..Default::default()
         }
     }

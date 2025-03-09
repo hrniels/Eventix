@@ -15,6 +15,7 @@ use crate::{
         datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
     locale::{self, DateFlags, Locale, TimeFlags},
+    objects::Calendars,
     state::EventixState,
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
@@ -44,12 +45,17 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let calendar = state.lock().await.last_calendar().get(&req.ctype).cloned();
+    let calendar = state
+        .lock()
+        .await
+        .settings()
+        .last_calendar(req.ctype)
+        .clone();
     content(
         super::new_page(&state, &req).await,
         locale.clone(),
         State(state),
-        CompNew::new(&req, locale.timezone(), calendar),
+        CompNew::new(&req, locale.timezone(), Some(calendar)),
     )
     .await
 }
@@ -62,8 +68,8 @@ pub async fn content(
 ) -> Result<impl IntoResponse, HTMLError> {
     let state = state.lock().await;
 
-    let events = Events::new(state.store(), state.disabled_cals(), &locale);
-    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
+    let events = Events::new(&state, &locale);
+    let tasks = Tasks::new(&state, &locale);
     let calendar = Arc::from(form.calendar.clone());
 
     let html = NewTemplate {
@@ -81,7 +87,9 @@ pub async fn content(
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
         calendars: CalComboTemplate::new(
             "calendar",
-            state.store().dirs_for_type(form.req.ctype),
+            Calendars::new(&state, |_dir, settings| {
+                settings.types().contains(&form.req.ctype) && !settings.disabled()
+            }),
             calendar,
         ),
         attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),

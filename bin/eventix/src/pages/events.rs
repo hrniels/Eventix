@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use chrono::{Duration, Local, NaiveDate};
-use ical::col::CalStore;
 use ical::objects::CalCompType;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
+use crate::state::State;
 
 pub struct Day<'a> {
     pub date: Option<NaiveDate>,
@@ -17,17 +17,12 @@ pub struct Events<'a> {
 }
 
 impl<'a> Events<'a> {
-    pub fn new(
-        store: &'a CalStore,
-        disabled: &'a Vec<String>,
-        locale: &Arc<dyn Locale + Send + Sync>,
-    ) -> Events<'a> {
-        Self::new_with_days(store, disabled, locale, 7)
+    pub fn new(state: &'a State, locale: &Arc<dyn Locale + Send + Sync>) -> Events<'a> {
+        Self::new_with_days(state, locale, 7)
     }
 
     pub fn new_with_days(
-        store: &'a CalStore,
-        disabled: &'a Vec<String>,
+        state: &'a State,
         locale: &Arc<dyn Locale + Send + Sync>,
         days: u32,
     ) -> Events<'a> {
@@ -37,10 +32,11 @@ impl<'a> Events<'a> {
         let start = now.with_timezone(locale.timezone());
         let end = start + Duration::days(days as i64);
 
-        let next_ev_occs = store
+        let next_ev_occs = state
+            .store()
             .directories()
             .iter()
-            .filter(|s| !disabled.contains(s.id()))
+            .filter(|s| !state.settings().calendar_disabled(s.id()))
             .flat_map(move |s| {
                 s.occurrences_between(start, end, |c| c.ctype() == CalCompType::Event)
             })

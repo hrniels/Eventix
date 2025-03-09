@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::{error::HTMLError, settings::Settings, state::EventixState};
+use crate::{error::HTMLError, state::EventixState};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -29,10 +29,9 @@ async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let mut state = state.lock().await;
 
-    state.toggle_calendar(&req.id);
-
+    let settings = state.settings_mut();
+    settings.toggle_calendar(&req.id);
     // permanently remember the new calendar state
-    let settings = Settings::new_from_state(&state).await;
     if let Err(e) = settings.write_to_file().await {
         warn!("Unable to save settings: {}", e);
     }

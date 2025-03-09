@@ -4,6 +4,7 @@ use axum::response::IntoResponse;
 use ical::col::{CalFile, CalStore};
 use ical::objects::{CalCompType, CalComponent, CalEvent, CalTodo, Calendar, UpdatableEventLike};
 use std::sync::Arc;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::comp::CompAction;
@@ -72,7 +73,11 @@ pub async fn handler(
             page.add_info(locale.translate("New event was added successfully"));
 
             // remember the last used calendar
-            state.set_last_calendar(form.req.ctype, form.calendar.clone());
+            let settings = state.settings_mut();
+            settings.set_last_calendar(form.req.ctype, form.calendar.clone());
+            if let Err(e) = settings.write_to_file().await {
+                warn!("Unable to save settings: {}", e);
+            }
 
             form = CompNew::new(&form.req, locale.timezone(), Some(form.calendar));
         }

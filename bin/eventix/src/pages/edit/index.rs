@@ -17,6 +17,7 @@ use crate::{
         datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
     locale::{self, DateFlags, Locale, TimeFlags},
+    objects::Calendars,
     pages::Breadcrumb,
     state::EventixState,
 };
@@ -108,21 +109,24 @@ pub async fn content(
 
     let dir = state.store().directory(file.directory()).unwrap();
 
-    let events = Events::new(state.store(), state.disabled_cals(), &locale);
-    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
+    let events = Events::new(&state, &locale);
+    let tasks = Tasks::new(&state, &locale);
 
     let html = EditTemplate {
         page,
         uid: form.req.uid.clone(),
         rid: form.req.rid.clone(),
         dir,
-        calendars: form.calendar.map(|cal| {
-            CalComboTemplate::new(
+        calendars: match form.calendar {
+            Some(cal) => Some(CalComboTemplate::new(
                 "calendar",
-                state.store().dirs_for_type(occ.ctype()),
+                Calendars::new(&state, |_dir, settings| {
+                    settings.types().contains(&occ.ctype()) && !settings.disabled()
+                }),
                 Arc::new(cal),
-            )
-        }),
+            )),
+            None => None,
+        },
         summary: &form.summary,
         location: &form.location,
         description: &form.description,

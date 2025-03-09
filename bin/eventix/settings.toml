@@ -6,6 +6,7 @@ name = "BI"
 disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#1d77c0"
+types = ["Event", "Todo"]
 
 [calendar.holidays]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3"

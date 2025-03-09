@@ -160,8 +160,8 @@ pub async fn handler(
         .take(PER_PAGE)
         .collect::<Vec<_>>();
 
-    let events = Events::new(state.store(), state.disabled_cals(), &locale);
-    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
+    let events = Events::new(&state, &locale);
+    let tasks = Tasks::new(&state, &locale);
 
     let filter_clone = filter.clone();
     let pagination = PaginationTemplate::new(

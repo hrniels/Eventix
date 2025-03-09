@@ -2,66 +2,70 @@ use anyhow::Context;
 use chrono::NaiveDateTime;
 use ical::objects::CalCompType;
 use once_cell::sync::Lazy;
-use tokio::sync::{Mutex, MutexGuard};
-
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::File,
     io::{Read, Write},
 };
-
-use serde::{Deserialize, Serialize};
-
-use crate::state::State;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Settings {
-    #[serde(rename = "calendar")]
-    pub calendars: BTreeMap<String, Calendar>,
-    pub last_alarm_check: Option<NaiveDateTime>,
-    pub last_calendar: HashMap<CalCompType, String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Calendar {
-    pub path: String,
-    pub name: String,
-    pub disabled: Option<bool>,
-    pub fgcolor: String,
-    pub bgcolor: String,
-    pub types: Option<Vec<CalCompType>>,
-}
+use tokio::sync::Mutex;
 
 const FILENAME: &str = "settings.toml";
 static MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-impl Settings {
-    pub async fn new_from_state(state: &MutexGuard<'_, State>) -> Self {
-        let calendars = {
-            let mut calendars = BTreeMap::new();
-            for dir in state.store().directories() {
-                calendars.insert(
-                    dir.id().to_string(),
-                    Calendar {
-                        path: dir.path().to_str().unwrap().to_string(),
-                        name: dir.name().to_string(),
-                        disabled: Some(state.disabled_cals().contains(dir.id())),
-                        fgcolor: dir.props().get(&String::from("fgcolor")).unwrap().clone(),
-                        bgcolor: dir.props().get(&String::from("bgcolor")).unwrap().clone(),
-                        types: dir
-                            .props()
-                            .get(&String::from("types"))
-                            .map(|ty| serde_json::from_str(ty).unwrap()),
-                    },
-                );
-            }
-            calendars
-        };
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(rename = "calendar")]
+    calendars: BTreeMap<String, CalendarSettings>,
+    last_alarm_check: NaiveDateTime,
+    last_calendar: HashMap<CalCompType, String>,
+}
 
+impl Default for Settings {
+    fn default() -> Self {
         Self {
-            calendars,
-            last_alarm_check: Some(state.last_alarm_check()),
-            last_calendar: state.last_calendar().clone(),
+            calendars: BTreeMap::default(),
+            last_alarm_check: chrono::Local::now().naive_utc(),
+            last_calendar: HashMap::default(),
+        }
+    }
+}
+
+impl Settings {
+    pub fn calendars(&self) -> &BTreeMap<String, CalendarSettings> {
+        &self.calendars
+    }
+
+    pub fn calendar(&self, id: &String) -> Option<&CalendarSettings> {
+        self.calendars.get(id)
+    }
+
+    pub fn calendar_disabled(&self, id: &String) -> bool {
+        self.calendars.get(id).unwrap().disabled
+    }
+
+    pub fn toggle_calendar(&mut self, id: &String) {
+        let cal = self.calendars.get_mut(id).unwrap();
+        cal.disabled = !cal.disabled;
+    }
+
+    pub fn last_alarm_check(&self) -> NaiveDateTime {
+        self.last_alarm_check
+    }
+
+    pub fn set_last_alarm_check(&mut self, datetime: NaiveDateTime) {
+        self.last_alarm_check = datetime;
+    }
+
+    pub fn last_calendar(&self, ty: CalCompType) -> &String {
+        self.last_calendar.get(&ty).unwrap()
+    }
+
+    pub fn set_last_calendar(&mut self, ty: CalCompType, cal: String) {
+        if let Some(e) = self.last_calendar.get_mut(&ty) {
+            *e = cal;
+        } else {
+            self.last_calendar.insert(ty, cal);
         }
     }
 
@@ -93,5 +97,41 @@ impl Settings {
         )
         .context("write settings")?;
         Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CalendarSettings {
+    path: String,
+    name: String,
+    disabled: bool,
+    fgcolor: String,
+    bgcolor: String,
+    types: Vec<CalCompType>,
+}
+
+impl CalendarSettings {
+    pub fn path(&self) -> &String {
+        &self.path
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn disabled(&self) -> bool {
+        self.disabled
+    }
+
+    pub fn types(&self) -> &[CalCompType] {
+        &self.types
+    }
+
+    pub fn fgcolor(&self) -> &String {
+        &self.fgcolor
+    }
+
+    pub fn bgcolor(&self) -> &String {
+        &self.bgcolor
     }
 }

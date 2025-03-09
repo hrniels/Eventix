@@ -11,7 +11,6 @@ use tracing::warn;
 
 use crate::{
     locale::{DateFlags, Locale},
-    settings::Settings,
     state::EventixState,
 };
 
@@ -68,7 +67,7 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
         {
             let mut state = state.lock().await;
             let last_check = chrono::Utc
-                .from_utc_datetime(&state.last_alarm_check())
+                .from_utc_datetime(&state.settings().last_alarm_check())
                 .with_timezone(locale.timezone());
             let now = chrono::Utc::now().with_timezone(locale.timezone());
 
@@ -85,10 +84,9 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
                 notification.send().unwrap();
             }
 
-            state.set_last_alarm_check(now.naive_utc());
-
+            let settings = state.settings_mut();
+            settings.set_last_alarm_check(now.naive_utc());
             // permanently remember last time of check
-            let settings = Settings::new_from_state(&state).await;
             if let Err(e) = settings.write_to_file().await {
                 warn!("Unable to save settings: {}", e);
             }

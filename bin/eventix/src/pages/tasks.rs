@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
-use ical::col::{CalStore, Occurrence};
+use ical::col::Occurrence;
 use ical::objects::{CalCompType, CalTodoStatus, EventLike};
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
+use crate::state::State;
 
 pub struct Day<'a> {
     pub date: Option<NaiveDate>,
@@ -19,17 +20,12 @@ pub struct Tasks<'a> {
 }
 
 impl<'a> Tasks<'a> {
-    pub fn new(
-        store: &'a CalStore,
-        disabled: &'a Vec<String>,
-        locale: &Arc<dyn Locale + Send + Sync>,
-    ) -> Tasks<'a> {
-        Self::new_with_days(store, disabled, locale, 21)
+    pub fn new(state: &'a State, locale: &Arc<dyn Locale + Send + Sync>) -> Tasks<'a> {
+        Self::new_with_days(state, locale, 21)
     }
 
     pub fn new_with_days(
-        store: &'a CalStore,
-        disabled: &'a Vec<String>,
+        state: &'a State,
         locale: &Arc<dyn Locale + Send + Sync>,
         days: u32,
     ) -> Tasks<'a> {
@@ -39,10 +35,11 @@ impl<'a> Tasks<'a> {
         let start = now.with_timezone(locale.timezone());
         let end = start + Duration::days(days as i64);
 
-        let mut next_td_occs = store
+        let mut next_td_occs = state
+            .store()
             .directories()
             .iter()
-            .filter(|s| !disabled.contains(s.id()))
+            .filter(|s| !state.settings().calendar_disabled(s.id()))
             .flat_map(move |s| {
                 s.occurrences_between(start, end, |c| c.ctype() == CalCompType::Todo)
             })
@@ -53,7 +50,8 @@ impl<'a> Tasks<'a> {
             })
             .collect::<Vec<_>>();
 
-        let overdue_tds = store
+        let overdue_tds = state
+            .store()
             .occurrences_between(
                 DateTime::<Tz>::MIN_UTC.with_timezone(timezone),
                 start,
@@ -89,9 +87,10 @@ impl<'a> Tasks<'a> {
             cur_date += Duration::days(1);
         }
 
-        let unplanned_occs = store
+        let unplanned_occs = state
+            .store()
             .files()
-            .filter(|s| !disabled.contains(s.directory()))
+            .filter(|s| !state.settings().calendar_disabled(s.directory()))
             .flat_map(|i| i.components().iter().map(|c| (i.directory(), c)))
             .filter(|(_dir, c)| {
                 c.ctype() == CalCompType::Todo

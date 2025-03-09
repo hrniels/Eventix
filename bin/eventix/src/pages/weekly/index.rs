@@ -190,7 +190,7 @@ pub async fn content(
         .store()
         .directories()
         .iter()
-        .filter(|s| !state.disabled_cals().contains(s.id()))
+        .filter(|s| !state.settings().calendar_disabled(s.id()))
         .flat_map(move |s| s.occurrences_between(mstart, mend, |c| c.ctype() == CalCompType::Event))
         .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();
@@ -223,8 +223,8 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(state.store(), state.disabled_cals(), &locale);
-    let tasks = Tasks::new(state.store(), state.disabled_cals(), &locale);
+    let events = Events::new(&state, &locale);
+    let tasks = Tasks::new(&state, &locale);
 
     let now = Utc::now().with_timezone(&timezone);
 

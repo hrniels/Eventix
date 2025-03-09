@@ -100,12 +100,12 @@ pub async fn content(
         .unwrap();
 
     let state = state.lock().await;
-    let (store, disabled) = (state.store(), state.disabled_cals());
+    let store = state.store();
 
     let ev_occs = store
         .directories()
         .iter()
-        .filter(|s| !disabled.contains(s.id()))
+        .filter(|s| !state.settings().calendar_disabled(s.id()))
         .flat_map(move |s| s.occurrences_between(mstart, mend, |c| c.ctype() == CalCompType::Event))
         .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();
@@ -124,8 +124,8 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(store, disabled, &locale);
-    let tasks = Tasks::new(store, disabled, &locale);
+    let events = Events::new(&state, &locale);
+    let tasks = Tasks::new(&state, &locale);
 
     let html = MonthlyTemplate {
         page,
