@@ -70,7 +70,7 @@ pub async fn content(
 
     let events = Events::new(&state, &locale);
     let tasks = Tasks::new(&state, &locale);
-    let calendar = Arc::from(form.calendar.clone());
+    let calendar: Arc<String> = Arc::from(form.calendar.clone());
 
     let html = NewTemplate {
         page,
@@ -90,9 +90,15 @@ pub async fn content(
             Calendars::new(&state, |_dir, settings| {
                 settings.types().contains(&form.req.ctype) && !settings.disabled()
             }),
-            calendar,
+            calendar.clone(),
         ),
-        attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
+        attendees: AttendeesTemplate::new(
+            locale.clone(),
+            "attendees",
+            state.settings().emails(),
+            Some(String::from("calendar")),
+            form.attendees,
+        ),
         status: form
             .status
             .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),

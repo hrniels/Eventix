@@ -8,6 +8,10 @@ fgcolor = "#ffffff"
 bgcolor = "#1d77c0"
 types = ["Event", "Todo"]
 
+[calendar.bi.email]
+name = "Nils Asmussen"
+address = "nils.asmussen@barkhauseninstitut.org"
+
 [calendar.holidays]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3"
 name = "Holidays"
@@ -24,6 +28,10 @@ fgcolor = "#000000"
 bgcolor = "#a8c1e1"
 types = ["Event"]
 
+[calendar.oschair.email]
+name = "Nils Asmussen"
+address = "nils@os.inf.tu-dresden.de"
+
 [calendar.oslss]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslss/lehre-ss_shared_by_d688b6f0-b6c0-1031-9c9d-3f576beecc46"
 name = "OS Lehre SS"
@@ -31,6 +39,10 @@ disabled = true
 fgcolor = "#000000"
 bgcolor = "#e5bc41"
 types = ["Event"]
+
+[calendar.oslss.email]
+name = "Nils Asmussen"
+address = "nils@os.inf.tu-dresden.de"
 
 [calendar.oslwl]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"
@@ -40,6 +52,10 @@ fgcolor = "#000000"
 bgcolor = "#e1c4a8"
 types = ["Event"]
 
+[calendar.oslwl.email]
+name = "Nils Asmussen"
+address = "nils@os.inf.tu-dresden.de"
+
 [calendar.oslws]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslws/lehre-ws_shared_by_d688b6f0-b6c0-1031-9c9d-3f576beecc46"
 name = "OS Lehre WS"
@@ -47,6 +63,10 @@ disabled = true
 fgcolor = "#000000"
 bgcolor = "#f9f06a"
 types = ["Event"]
+
+[calendar.oslws.email]
+name = "Nils Asmussen"
+address = "nils@os.inf.tu-dresden.de"
 
 [calendar.ospr]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-ospr/prüfungstermine_shared_by_mhaehnel"
@@ -56,6 +76,10 @@ fgcolor = "#ffffff"
 bgcolor = "#e42629"
 types = ["Event"]
 
+[calendar.ospr.email]
+name = "Nils Asmussen"
+address = "nils@os.inf.tu-dresden.de"
+
 [calendar.scriptsolution]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
 name = "Script-Solution"
@@ -63,6 +87,10 @@ disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#2ec17d"
 types = ["Event"]
+
+[calendar.scriptsolution.email]
+name = "Nils Asmussen"
+address = "nils@script-solution.de"
 
 [calendar.scriptsolution_tasks]
 path = "/home/hrniels/.config/vdirsyncer-test/tasks"

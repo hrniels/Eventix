@@ -1,4 +1,4 @@
-use std::{fmt, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use askama::Template;
 use ical::objects::{CalAttendee, CalRole};
@@ -97,6 +97,8 @@ pub struct AttendeesTemplate {
     locale: Arc<dyn Locale + Send + Sync>,
     name: String,
     id: String,
+    emails: HashMap<String, String>,
+    cal_combo_id: Option<String>,
     attendees: Attendees,
 }
 
@@ -104,6 +106,8 @@ impl AttendeesTemplate {
     pub fn new<N: ToString>(
         locale: Arc<dyn Locale + Send + Sync>,
         name: N,
+        emails: HashMap<String, String>,
+        cal_combo_id: Option<String>,
         attendees: Option<Attendees>,
     ) -> Self {
         let name = name.to_string();
@@ -111,6 +115,8 @@ impl AttendeesTemplate {
             locale,
             id: name.replace("[", "_").replace("]", "_"),
             name,
+            emails,
+            cal_combo_id,
             attendees: attendees.unwrap_or_default(),
         }
     }

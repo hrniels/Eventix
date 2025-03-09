@@ -49,6 +49,16 @@ impl Settings {
         cal.disabled = !cal.disabled;
     }
 
+    pub fn emails(&self) -> HashMap<String, String> {
+        let mut res = HashMap::new();
+        for (id, settings) in &self.calendars {
+            if let Some(email) = settings.email() {
+                res.insert(id.clone(), email.pretty_name());
+            }
+        }
+        res
+    }
+
     pub fn last_alarm_check(&self) -> NaiveDateTime {
         self.last_alarm_check
     }
@@ -101,9 +111,22 @@ impl Settings {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct EmailAccount {
+    name: String,
+    address: String,
+}
+
+impl EmailAccount {
+    pub fn pretty_name(&self) -> String {
+        format!("{} <{}>", self.name, self.address)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CalendarSettings {
     path: String,
     name: String,
+    email: Option<EmailAccount>,
     disabled: bool,
     fgcolor: String,
     bgcolor: String,
@@ -117,6 +140,10 @@ impl CalendarSettings {
 
     pub fn name(&self) -> &String {
         &self.name
+    }
+
+    pub fn email(&self) -> Option<&EmailAccount> {
+        self.email.as_ref()
     }
 
     pub fn disabled(&self) -> bool {

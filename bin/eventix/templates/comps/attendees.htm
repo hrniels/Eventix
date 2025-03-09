@@ -37,19 +37,38 @@ New attendee: <input id="{{ id }}-new-attendee" size="50" />
         }
     }
 
+    var cal_emails = {
+        {% for (cal, email) in emails %}
+        '{{ cal }}': '{{ email }}',
+        {% endfor %}
+    };
+
     function addAttendee() {
         var list = $('#{{ id }}-attendees');
         if(list.html().trim() == '-') {
             list.html('');
-        }
-
-        var id = 0;
-        for(; ; ++id) {
-            if(document.getElementById('{{ id }}-attendee_' + id) == null)
-                break;
+            {% if let Some(cal_combo_id) = cal_combo_id %}
+            var cal = $('#{{ cal_combo_id }}').val();
+            if(cal && cal_emails[cal])
+                doAddAttendee(list, cal_emails[cal]);
+            {% endif %}
         }
 
         var attendee = $('#{{ id }}-new-attendee').val();
+        doAddAttendee(list, attendee);
+        $('#{{ id }}-new-attendee').val('');
+    }
+
+    function doAddAttendee(list, attendee) {
+        var id = 0;
+        for(; ; ++id) {
+            var el = document.getElementById('{{ id }}-attendee_' + id);
+            if(el == null)
+                break;
+            if($('#{{ id }}-attendee-name-' + id).val() == attendee)
+                return;
+        }
+
         list.html(list.html() + '\
             <div id="{{ id }}-attendee_' + id + '" style="padding-bottom: .5em">\
             <a href="javascript:toggleRole(' + id + ')">\
@@ -57,13 +76,13 @@ New attendee: <input id="{{ id }}-new-attendee" size="50" />
             </a>\
             <input type="hidden" id="{{ id }}_role_' + id + '"\
                    name="{{ name }}[role][' + id + ']" value="Required"/>\
-            <input type="text" size="50" name="{{ name }}[name][' + id + ']"\
+            <input type="text" size="50" id="{{ id }}-attendee-name-' + id + '"\
+                   name="{{ name }}[name][' + id + ']"\
                    value="' + attendee + '"/>\
             <input type="button" value="{{ "Remove"|t(locale) }}"\
                    onclick="removeAttendee(' + id + ')" />\
             </div>\
         ');
-        $('#{{ id }}-new-attendee').val('');
     }
 
     function removeAttendee(id) {

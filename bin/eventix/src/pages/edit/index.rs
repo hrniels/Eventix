@@ -117,13 +117,13 @@ pub async fn content(
         uid: form.req.uid.clone(),
         rid: form.req.rid.clone(),
         dir,
-        calendars: match form.calendar {
+        calendars: match &form.calendar {
             Some(cal) => Some(CalComboTemplate::new(
                 "calendar",
                 Calendars::new(&state, |_dir, settings| {
                     settings.types().contains(&occ.ctype()) && !settings.disabled()
                 }),
-                Arc::new(cal),
+                Arc::new(cal.to_string()),
             )),
             None => None,
         },
@@ -140,7 +140,13 @@ pub async fn content(
             .rrule
             .map(|rr| RecurTemplate::new(locale.clone(), "rrule", rr)),
         reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
-        attendees: AttendeesTemplate::new(locale.clone(), "attendees", form.attendees),
+        attendees: AttendeesTemplate::new(
+            locale.clone(),
+            "attendees",
+            state.settings().emails(),
+            Some(String::from("calendar")),
+            form.attendees,
+        ),
         status: form
             .status
             .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),
