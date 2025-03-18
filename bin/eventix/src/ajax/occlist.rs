@@ -95,9 +95,6 @@ pub async fn handler(
             let start = date + Duration::seconds(1);
             let end = max_datetime(*locale.timezone());
             file.occurrences_between(start, end, |_| true)
-                // ignore the occurrences where the start is earlier, but the end is in the range,
-                // because we'll find these when walking backwards
-                .filter(|o| o.occurrence_start().unwrap() >= start)
                 .take(req.count + 1)
                 .collect()
         }
@@ -106,6 +103,9 @@ pub async fn handler(
             let end = date;
             let occs = file
                 .occurrences_between(start, end, |_| true)
+                // ignore the occurrences where the start is earlier, but the end is in the range,
+                // because we'll find these when walking forward
+                .filter(|o| o.occurrence_start().unwrap() >= start)
                 .collect::<Vec<_>>();
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
