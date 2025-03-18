@@ -35,7 +35,7 @@ async fn error_handler() -> impl IntoResponse {
 #[command(version, about, long_about = None)]
 struct Args {
     /// the address for the webserver
-    #[arg(long, default_value = "0.0.0.0")]
+    #[arg(long, default_value = "127.0.0.1")]
     address: String,
 
     /// the port number for the webserver
