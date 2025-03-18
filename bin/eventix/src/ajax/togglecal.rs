@@ -1,7 +1,7 @@
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
-    routing::get,
+    routing::post,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/toggle-calendar", get(handler))
+        .route("/toggle-calendar", post(handler))
         .with_state(state)
 }
 

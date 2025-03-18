@@ -70,7 +70,7 @@ function completeTodo(uid, rid, onsuccess) {
 
 function toggleExcl(uid, rid, onsuccess) {
     $.ajax({
-        type: 'GET',
+        type: 'POST',
         url: '/toggleexcl?uid=' + uid + '&rid=' + rid,
         dataType: 'json',
         success: function(data) {
@@ -84,7 +84,7 @@ function deleteItem(uid, rid, onDeleted) {
     if(rid != null)
         url += '&rid=' + rid;
     $.ajax({
-        type: 'GET',
+        type: 'POST',
         url: url,
         dataType: 'json',
         success: onDeleted,
@@ -93,7 +93,7 @@ function deleteItem(uid, rid, onDeleted) {
 
 function toggleCalendar(id) {
     $.ajax({
-        type: 'GET',
+        type: 'POST',
         url: '/toggle-calendar?id=' + id,
         dataType: 'json',
         success: reloadPage,
@@ -102,7 +102,7 @@ function toggleCalendar(id) {
 
 function reloadDB(id) {
     $.ajax({
-        type: 'GET',
+        type: 'POST',
         url: '/reload',
         dataType: 'json',
         success: function(data) {

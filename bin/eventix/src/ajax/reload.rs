@@ -1,4 +1,4 @@
-use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
+use axum::{extract::State, response::IntoResponse, routing::post, Json, Router};
 use ical::objects::CalDate;
 use serde::Serialize;
 use tracing::error;
@@ -18,7 +18,7 @@ struct Response {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/reload", get(handler))
+        .route("/reload", post(handler))
         .with_state(state)
 }
 

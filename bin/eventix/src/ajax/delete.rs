@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::post;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/delete", get(handler))
+        .route("/delete", post(handler))
         .with_state(state)
 }
 
