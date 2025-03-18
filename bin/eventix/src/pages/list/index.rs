@@ -136,16 +136,16 @@ pub async fn handler(
                 if keywords.is_empty() {
                     return true;
                 }
-                if matches_keywords(l.comp.summary(), &filter.keywords) {
+                if matches_keywords(l.comp.summary(), &keywords) {
                     return true;
                 }
-                if matches_keywords(l.comp.description(), &filter.keywords) {
+                if matches_keywords(l.comp.description(), &keywords) {
                     return true;
                 }
-                if matches_keywords(l.comp.location(), &filter.keywords) {
+                if matches_keywords(l.comp.location(), &keywords) {
                     return true;
                 }
-                if matches_keywords(Some(l.comp.uid()), &filter.keywords) {
+                if matches_keywords(Some(l.comp.uid()), &keywords) {
                     return true;
                 }
                 false
