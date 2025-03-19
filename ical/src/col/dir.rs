@@ -38,8 +38,8 @@ impl CalDir {
     /// Creates a new directory from the given path.
     ///
     /// This method reads all files in the given directory and tries to parse them into a
-    /// [`Calendar`]. These are added to the created [`CalDir`]. Note that it expects all files to
-    /// be calendar files, but ignores directories.
+    /// [`Calendar`]. These are added to the created [`CalDir`]. Note that it only considers files
+    /// ending in `.ics`.
     pub fn new_from_dir(id: Arc<String>, path: PathBuf, name: String) -> Result<Self, ColError> {
         let mut files = Vec::new();
         let dir_files = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
@@ -54,6 +54,13 @@ impl CalDir {
             }
 
             let filename = entry.path();
+            if filename
+                .extension()
+                .and_then(|ex| ex.to_str())
+                .is_none_or(|ex| ex != "ics")
+            {
+                continue;
+            }
 
             let mut input = String::new();
             File::open(filename.as_path())
