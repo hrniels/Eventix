@@ -88,16 +88,14 @@ function inBoundingBox(e, id) {
 }
 
 function loadOccurrence(id, uid, rid) {
-    $.ajax({
-        type: 'GET',
-        url: '/details?uid=' + uid + (rid ? '&rid=' + rid : ''),
-        dataType: 'json',
-        success: function(data) {
+    getRequest(
+        '/details?uid=' + uid + (rid ? '&rid=' + rid : ''),
+        function(data) {
             $('#popup').html(data.html);
             setTimeout(function() {
                 correctPosition(id)
             }, 10);
         }
-    });
+    );
 }
 

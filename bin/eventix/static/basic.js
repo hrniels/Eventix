@@ -54,28 +54,34 @@ function hideArrowBottom(inst) {
     $('.ui-datepicker-header').css('zIndex', 2);
 }
 
-function completeTodo(uid, rid, onsuccess) {
-    var url = '/complete?uid=' + uid;
-    if(rid != null)
-        url += '&rid=' + rid;
+function getRequest(url, success) {
     $.ajax({
         type: 'GET',
         url: url,
         dataType: 'json',
-        success: function(data) {
-            onsuccess(data)
-        },
+        success: success,
     });
 }
 
-function toggleExcl(uid, rid, onsuccess) {
+function postRequest(url, success) {
     $.ajax({
         type: 'POST',
-        url: '/toggleexcl?uid=' + uid + '&rid=' + rid,
+        url: url,
         dataType: 'json',
-        success: function(data) {
-            onsuccess(data);
-        },
+        success: success,
+    });
+}
+
+function completeTodo(uid, rid, onsuccess) {
+    var url = '/complete?uid=' + uid;
+    if(rid != null)
+        url += '&rid=' + rid;
+    getRequest(url, onsuccess);
+}
+
+function toggleExcl(uid, rid, onsuccess) {
+    postRequest('/toggleexcl?uid=' + uid + '&rid=' + rid, function(data) {
+        onsuccess(data);
     });
 }
 
@@ -83,34 +89,19 @@ function deleteItem(uid, rid, onDeleted) {
     var url = '/delete?uid=' + uid;
     if(rid != null)
         url += '&rid=' + rid;
-    $.ajax({
-        type: 'POST',
-        url: url,
-        dataType: 'json',
-        success: onDeleted,
-    });
+    postRequest(url, onDeleted);
 }
 
 function toggleCalendar(id) {
-    $.ajax({
-        type: 'POST',
-        url: '/toggle-calendar?id=' + id,
-        dataType: 'json',
-        success: reloadPage,
-    });
+    postRequest('/toggle-calendar?id=' + id, reloadPage);
 }
 
 function reloadDB(id) {
-    $.ajax({
-        type: 'POST',
-        url: '/reload',
-        dataType: 'json',
-        success: function(data) {
-            if(data.changed)
-                reloadPage();
-            else
-                $('#' + id).html(data.date);
-        },
+    postRequest('/reload', function(data) {
+        if(data.changed)
+            reloadPage();
+        else
+            $('#' + id).html(data.date);
     });
 }
 

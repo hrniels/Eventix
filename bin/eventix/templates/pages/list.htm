@@ -102,14 +102,10 @@
     var occs_state = {};
 
     function loadOccs(uid, ndate, dir, count, onsuccess) {
-        $.ajax({
-            type: 'GET',
-            url: '/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir + '&count=' + count,
-            dataType: 'json',
-            success: function(data) {
-                onsuccess(data);
-            },
-        });
+        getRequest(
+            '/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir + '&count=' + count,
+            onsuccess
+        );
     }
 
     function loadPrev(id, uid) {
