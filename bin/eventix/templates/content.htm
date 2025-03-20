@@ -64,13 +64,13 @@
                         {% endmatch %}
                         ">
                 {% if occ.rid().is_some() || occ.rrule().is_some() %}
-                <i style="float: right" class="bi bi-arrow-clockwise"></i>
+                <i class="bi bi-arrow-clockwise ev_right_icon"></i>
                 {% endif %}
                 {% if occ.is_overwritten() %}
-                <i style="float: right" class="bi bi-pencil"></i>
+                <i class="bi bi-pencil ev_right_icon"></i>
                 {% endif %}
                 {% if occ.has_alarms() %}
-                <i style="float: right" class="bi bi-alarm"></i>
+                <i class="bi bi-alarm ev_right_icon"></i>
                 {% endif %}
                 {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
                 {{ occ.summary().unwrap() }}
@@ -121,7 +121,6 @@
                                     '{{ occ.rid_html() }}',
                                     '{{ occ.id() }}')"
                  id="{{ occ.id() }}"
-                 style="display: flex; gap: .4em"
                  class="ev_event_occurrence
                         ev_id_{{ occ.uid_html() }}
                         {% if let Some(end) = occ.occurrence_end() %}
@@ -137,24 +136,26 @@
                         {% when _ %}
                         {% endmatch %}
                         ">
-                <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}"></span>
-                {% if let Some(due) = occ.occurrence_enddate() %}
-                {% match due %}
-                {% when CalDate::DateTime with (due_date) %}
-                <span><b>{{ due_date.with_tz(locale.timezone())|as_ref|time(locale, TimeFlags::Short) }}</b></span>
-                {% when _ %}
-                {% endmatch %}
-                {% endif %}
-                <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                 {% if occ.rid().is_some() || occ.rrule().is_some() %}
-                <i style="float: right" class="bi bi-arrow-clockwise"></i>
+                <i class="bi bi-arrow-clockwise ev_right_icon"></i>
                 {% endif %}
                 {% if occ.is_overwritten() %}
-                <i style="float: right" class="bi bi-pencil"></i>
+                <i class="bi bi-pencil ev_right_icon"></i>
                 {% endif %}
                 {% if occ.has_alarms() %}
-                <i style="float: right" class="bi bi-alarm"></i>
+                <i class="bi bi-alarm ev_right_icon"></i>
                 {% endif %}
+                <div style="display: flex; gap: .4em">
+                    <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}"></span>
+                    {% if let Some(due) = occ.occurrence_enddate() %}
+                    {% match due %}
+                    {% when CalDate::DateTime with (due_date) %}
+                    <span><b>{{ due_date.with_tz(locale.timezone())|as_ref|time(locale, TimeFlags::Short) }}</b></span>
+                    {% when _ %}
+                    {% endmatch %}
+                    {% endif %}
+                    <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                </div>
             </div>
             {% endfor %}
             {% endfor %}

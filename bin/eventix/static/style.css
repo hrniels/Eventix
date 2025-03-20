@@ -433,6 +433,11 @@ span.ev_msg_error span.ev_msg_info {
     display: inline;
 }
 
+.ev_right_icon {
+    float: right;
+    margin-left: .2em;
+}
+
 /* ------------ EVENT/TODO POPUP ------------ */
 
 div.ev_selected {
