@@ -247,13 +247,6 @@ impl<'c> Occurrence<'c> {
         self.tz().and_then(|tz| self.base.duration(&tz))
     }
 
-    /// Returns the first alarm date of this occurrence, if it has an alarm.
-    pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
-        self.alarms()
-            .first()
-            .and_then(|a| a.trigger_date(self.occurrence_start(), self.occurrence_end()))
-    }
-
     /// Returns whether this occurrence overlaps with given time period.
     pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
         if let Some(ostart) = self.start {
@@ -344,8 +337,8 @@ impl EventLike for Occurrence<'_> {
         self.base.exdates()
     }
 
-    fn alarms(&self) -> &[CalAlarm] {
-        occ_or_base!(self, alarms)
+    fn alarms(&self) -> Option<&[CalAlarm]> {
+        occ_or_base_opt!(self, alarms)
     }
 
     fn rrule(&self) -> Option<&CalRRule> {
@@ -354,5 +347,38 @@ impl EventLike for Occurrence<'_> {
 
     fn rid(&self) -> Option<&CalDate> {
         occ_or_base_opt!(self, rid)
+    }
+}
+
+/// An occurrence with a due alarm.
+pub struct AlarmOccurrence<'o> {
+    occ: Occurrence<'o>,
+    alarm: CalAlarm,
+}
+
+impl<'o> AlarmOccurrence<'o> {
+    /// Creates a new instance for the given alarm that is associated with the given occurrence.
+    pub fn new(occ: Occurrence<'o>, alarm: CalAlarm) -> Self {
+        Self { occ, alarm }
+    }
+
+    /// Returns a reference to the occurrence for which the alarm should trigger
+    pub fn occurrence(&self) -> &Occurrence<'o> {
+        &self.occ
+    }
+
+    pub(crate) fn occurrence_mut(&mut self) -> &mut Occurrence<'o> {
+        &mut self.occ
+    }
+
+    /// Returns the alarm that should trigger
+    pub fn alarm(&self) -> &CalAlarm {
+        &self.alarm
+    }
+
+    /// Returns the first alarm date of this occurrence, if it has an alarm.
+    pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
+        self.alarm
+            .trigger_date(self.occ.occurrence_start(), self.occ.occurrence_end())
     }
 }

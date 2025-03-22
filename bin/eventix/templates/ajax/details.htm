@@ -68,7 +68,7 @@
         {% if occ.has_alarms() %}
         <tr>
             <td width="30%">{{ "Reminder"|t(locale) }}:</td>
-            <td width="70%">{{ occ.alarms().first().unwrap()|safe }}</td>
+            <td width="70%">{{ occ.alarms().as_ref().unwrap()[0]|safe }}</td>
         </tr>
         {% endif %}
         {% if let Some(org) = org %}

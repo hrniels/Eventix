@@ -1,6 +1,9 @@
 use anyhow::anyhow;
 use chrono::TimeZone;
-use ical::{col::Occurrence, objects::EventLike};
+use ical::{
+    col::AlarmOccurrence,
+    objects::{DefaultAlarmOverlay, EventLike},
+};
 use std::{
     path::{self, PathBuf},
     process::Command,
@@ -23,12 +26,12 @@ struct Notification {
 }
 
 impl Notification {
-    fn from_occurrence(occ: &Occurrence<'_>, locale: &Arc<dyn Locale + Send + Sync>) -> Self {
+    fn from_alarm(occ: &AlarmOccurrence<'_>, locale: &Arc<dyn Locale + Send + Sync>) -> Self {
         let mut body = String::new();
-        if let Some(start) = occ.occurrence_start() {
+        if let Some(start) = occ.occurrence().occurrence_start() {
             body = format!("Start: {}", locale.fmt_datetime(&start, DateFlags::None));
         }
-        if let Some(loc) = occ.location() {
+        if let Some(loc) = occ.occurrence().location() {
             body.push_str(&format!("\nWhere: {}", loc));
         }
         body.push_str(&format!(
@@ -41,7 +44,11 @@ impl Notification {
         Self {
             appname: String::from("Eventix"),
             icon: icon.into_os_string().into_string().unwrap(),
-            summary: occ.summary().cloned().unwrap_or(String::from("?")),
+            summary: occ
+                .occurrence()
+                .summary()
+                .cloned()
+                .unwrap_or(String::from("?")),
             body,
             timeout: 24 * 3600 * 1000,
         }
@@ -72,15 +79,16 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
             let now = chrono::Utc::now().with_timezone(locale.timezone());
 
             // find all due alarms since the last check and sort them by alarm time
+            let overlay = DefaultAlarmOverlay::default();
             let mut alarms = state
                 .store()
-                .due_alarms_between(last_check, now)
-                .filter(|o| !o.is_cancelled())
+                .due_alarms_between(last_check, now, &overlay)
+                .filter(|a| !a.occurrence().is_cancelled())
                 .collect::<Vec<_>>();
             alarms.sort_by_key(|o| o.alarm_date().unwrap());
 
             for alarm in alarms {
-                let notification = Notification::from_occurrence(&alarm, &locale);
+                let notification = Notification::from_alarm(&alarm, &locale);
                 notification.send().unwrap();
             }
 

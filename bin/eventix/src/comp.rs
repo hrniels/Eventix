@@ -108,9 +108,9 @@ pub trait CompAction {
             comp.as_todo_mut().unwrap().set_due(end);
         }
         if let Some(alarm) = self.reminder().to_alarm(locale).unwrap() {
-            comp.set_alarms(vec![alarm]);
+            comp.set_alarms(Some(vec![alarm]));
         } else {
-            comp.set_alarms(vec![]);
+            comp.set_alarms(None);
         }
         if let Some(att) = self.attendees() {
             comp.set_organizer(organizer);

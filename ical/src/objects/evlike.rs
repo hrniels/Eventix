@@ -111,11 +111,11 @@ pub trait EventLike: PropertyProducer {
     /// Returns a slice of alarms that are set for this calendar object (VALARM).
     ///
     /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.6>.
-    fn alarms(&self) -> &[CalAlarm];
+    fn alarms(&self) -> Option<&[CalAlarm]>;
 
     /// Returns true if this calendar object has alarms.
     fn has_alarms(&self) -> bool {
-        !self.alarms().is_empty()
+        self.alarms().map(|a| !a.is_empty()).unwrap_or(false)
     }
 
     /// Returns the recurrence rule for this calendar object (RRULE).
@@ -178,7 +178,7 @@ pub trait UpdatableEventLike: EventLike {
     fn set_rid(&mut self, rid: Option<CalDate>);
 
     /// Sets the alarms to given vector of [`CalAlarm`].
-    fn set_alarms(&mut self, alarms: Vec<CalAlarm>);
+    fn set_alarms(&mut self, alarms: Option<Vec<CalAlarm>>);
 
     /// Toggles the exclusion for given date.
     ///

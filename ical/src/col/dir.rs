@@ -6,8 +6,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::col::{CalFile, ColError, Occurrence};
-use crate::objects::{CalComponent, CalDate, Calendar};
+use crate::col::{AlarmOccurrence, CalFile, ColError, Occurrence};
+use crate::objects::{AlarmOverlay, CalComponent, CalDate, Calendar};
 
 /// A directory with calendar files.
 ///
@@ -123,14 +123,15 @@ impl CalDir {
     /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
-    pub fn due_alarms_between(
-        &self,
+    pub fn due_alarms_between<'d, 'a>(
+        &'d self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = Occurrence<'_>> {
+        overlay: &'a dyn AlarmOverlay,
+    ) -> impl Iterator<Item = AlarmOccurrence<'d>> + use<'d, 'a> {
         self.files
             .iter()
-            .flat_map(move |i| i.due_alarms_between(start, end))
+            .flat_map(move |i| i.due_alarms_between(start, end, overlay))
     }
 
     /// Returns the occurrence with given uid/rid.

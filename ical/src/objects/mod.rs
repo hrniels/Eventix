@@ -21,7 +21,7 @@ mod recur;
 mod status;
 mod todo;
 
-pub use alarm::{CalAction, CalAlarm, CalRelated, CalTrigger};
+pub use alarm::{AlarmOverlay, CalAction, CalAlarm, CalRelated, CalTrigger, DefaultAlarmOverlay};
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
 pub use calendar::Calendar;
 pub use component::{

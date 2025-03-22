@@ -32,7 +32,7 @@ pub struct EventLikeComponent {
     organizer: Option<CalOrganizer>,
     attendees: Option<Vec<CalAttendee>>,
     exdates: Vec<CalDate>,
-    alarms: Vec<CalAlarm>,
+    alarms: Option<Vec<CalAlarm>>,
     // 0 = undefined; 1 = highest, 9 = lowest
     priority: Option<u8>,
     rrule: Option<CalRRule>,
@@ -55,7 +55,7 @@ impl EventLikeComponent {
             organizer: None,
             attendees: None,
             exdates: vec![],
-            alarms: vec![],
+            alarms: None,
             priority: None,
             rrule: None,
             rid: None,
@@ -155,8 +155,11 @@ impl EventLikeComponent {
                 if prop.value() != "VALARM" {
                     return Err(ParseError::UnexpectedBegin(prop.take_value()));
                 }
+                if self.alarms.is_none() {
+                    self.alarms = Some(vec![]);
+                }
                 match CalAlarm::from_lines(lines, prop) {
-                    Ok(alarm) => self.alarms.push(alarm),
+                    Ok(alarm) => self.alarms.as_mut().unwrap().push(alarm),
                     Err(e) => warn!("ignoring malformed alarm: {}", e),
                 }
             }
@@ -216,8 +219,10 @@ impl PropertyProducer for EventLikeComponent {
         if let Some(ref rid) = self.rid {
             props.push(rid.to_prop("RECURRENCE-ID"));
         }
-        for a in &self.alarms {
-            props.extend(a.to_props().into_iter());
+        if let Some(ref alarms) = self.alarms {
+            for a in alarms {
+                props.extend(a.to_props().into_iter());
+            }
         }
         props.extend(self.props.iter().cloned());
         props
@@ -277,8 +282,8 @@ impl EventLike for EventLikeComponent {
         &self.exdates
     }
 
-    fn alarms(&self) -> &[CalAlarm] {
-        &self.alarms
+    fn alarms(&self) -> Option<&[CalAlarm]> {
+        self.alarms.as_ref().map(|a| a.as_ref())
     }
 
     fn rrule(&self) -> Option<&CalRRule> {
@@ -331,7 +336,7 @@ impl UpdatableEventLike for EventLikeComponent {
         }
     }
 
-    fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {
+    fn set_alarms(&mut self, alarms: Option<Vec<CalAlarm>>) {
         self.alarms = alarms;
     }
 
@@ -626,7 +631,7 @@ impl EventLike for CalComponent {
         get_with_ev_or_todo!(self, exdates)
     }
 
-    fn alarms(&self) -> &[CalAlarm] {
+    fn alarms(&self) -> Option<&[CalAlarm]> {
         get_with_ev_or_todo!(self, alarms)
     }
 
@@ -676,7 +681,7 @@ impl UpdatableEventLike for CalComponent {
         set_with_ev_or_todo!(self, toggle_exclude, date);
     }
 
-    fn set_alarms(&mut self, alarms: Vec<CalAlarm>) {
+    fn set_alarms(&mut self, alarms: Option<Vec<CalAlarm>>) {
         set_with_ev_or_todo!(self, set_alarms, alarms);
     }
 

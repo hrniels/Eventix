@@ -59,8 +59,8 @@ impl CompEdit {
             } else {
                 None
             },
-            reminder: if !occ.alarms().is_empty() {
-                AlarmRequest::from_alarm(occ.alarms(), tz)
+            reminder: if let Some(alarms) = occ.alarms() {
+                AlarmRequest::from_alarm(alarms, tz)
             } else {
                 AlarmRequest::default()
             },

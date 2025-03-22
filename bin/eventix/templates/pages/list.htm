@@ -270,7 +270,7 @@
                         {% if c.comp.has_alarms() %}
                         <tr>
                             <td width="20%"><b>{{ "Reminder"|t(locale) }}:</b></td>
-                            <td width="80%">{{ c.comp.alarms().first().unwrap()|safe }}</td>
+                            <td width="80%">{{ c.comp.alarms().as_ref().unwrap()[0]|safe }}</td>
                         </tr>
                         {% endif %}
                         {% if let Some(loc) = c.comp.location() %}

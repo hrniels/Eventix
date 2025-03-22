@@ -16,7 +16,7 @@ use super::CalCompType;
 /// 2025-02-23) and ends at the start of 2025-02-24. For TODOs however, the due date is
 /// "inclusive". For example, if the due date is 2025-02-23, the TODO is due until the *end* of
 /// that day.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum CalDateType {
     /// The date is inclusive, meaning that the event ends *after* that date.
     Inclusive,
@@ -37,7 +37,7 @@ impl From<CalCompType> for CalDateType {
 ///
 /// Dates in iCalendar objects come in two forms: date and datetime. The former specifies a day,
 /// whereas the latter specifies a day and a time.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum CalDate {
     /// Specifies a date.
     ///
@@ -191,7 +191,7 @@ impl fmt::Display for CalDate {
 }
 
 /// An iCalendar date in datetime format.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum CalDateTime {
     /// The datetime is floating in the sense that the date/time is always the same, independent of
     /// the timezone of the user. For example, if it was created for 8 AM by a user in UTC, it will

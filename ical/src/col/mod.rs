@@ -24,7 +24,7 @@ mod store;
 
 pub use dir::CalDir;
 pub use file::CalFile;
-pub use occurrence::Occurrence;
+pub use occurrence::{AlarmOccurrence, Occurrence};
 pub use store::CalStore;
 
 /// Errors that can occur in the collections module.

@@ -1,10 +1,10 @@
-use std::{fmt::Display, io::BufRead, str::FromStr};
+use std::{collections::HashMap, fmt::Display, io::BufRead, str::FromStr};
 
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 
 use crate::{
-    objects::CalDate,
+    objects::{CalComponent, CalDate, EventLike},
     parser::{LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer},
 };
 
@@ -301,7 +301,7 @@ impl TryFrom<Property> for CalTrigger {
 /// the alarm.
 ///
 /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.6>
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct CalAlarm {
     action: CalAction,
     trigger: CalTrigger,
@@ -447,6 +447,58 @@ impl PropertyConsumer for CalAlarm {
                 }
             }
         }
+    }
+}
+
+/// A per-component and per-occurrence overlay for alarms.
+///
+/// This trait is used to gather due alarms within a specific time frame and allows to customize
+/// the alarms on a per-component and per-occurrence basis.
+pub trait AlarmOverlay {
+    /// Returns the alarms for the given component.
+    ///
+    /// This method will be called for every component, regardless of whether it's recurrent or
+    /// not. The component might have alarms set, but any list of alarms can be returned. Both
+    /// `None` and `Some(vec![])` indicate no alarms in this case.
+    fn alarms_for_component(&self, comp: &CalComponent) -> Option<Vec<CalAlarm>>;
+
+    /// Returns the alarms that are overwritten for specific occurrences of the given component.
+    ///
+    /// This method will be called for every recurrent component. It receives the overwritten
+    /// alarms for its occurrences and allows to customize these.
+    ///
+    /// This method returns a [`BTreeMap`] with the recurrence-id (CalDate in UTC) as the key and a
+    /// [`Vec`] of [`CalAlarm`] as the vaues. If the map does not have an entry for a specific
+    /// occurrence, the alarms from the base component will be taken. Otherwise the set alarms will
+    /// be taken (which can be none).
+    fn alarm_overwrites(
+        &self,
+        comp: &CalComponent,
+        overwrites: HashMap<CalDate, &[CalAlarm]>,
+    ) -> HashMap<CalDate, Vec<CalAlarm>>;
+}
+
+/// The default alarm overlay.
+///
+/// The default implementation simply takes the alarms from the calendar components.
+#[derive(Default)]
+pub struct DefaultAlarmOverlay;
+
+impl AlarmOverlay for DefaultAlarmOverlay {
+    fn alarms_for_component<'c>(&self, comp: &'c CalComponent) -> Option<Vec<CalAlarm>> {
+        comp.alarms().map(|a| a.to_vec())
+    }
+
+    fn alarm_overwrites(
+        &self,
+        _comp: &CalComponent,
+        overwrites: HashMap<CalDate, &[CalAlarm]>,
+    ) -> HashMap<CalDate, Vec<CalAlarm>> {
+        let mut res = HashMap::new();
+        for (rid, alarms) in overwrites {
+            res.insert(rid, alarms.to_vec());
+        }
+        res
     }
 }
 

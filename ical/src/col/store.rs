@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::col::{CalDir, CalFile, ColError, Occurrence};
-use crate::objects::{CalComponent, CalDate, CalEvent, CalTodo};
+use crate::col::{AlarmOccurrence, CalDir, CalFile, ColError, Occurrence};
+use crate::objects::{AlarmOverlay, CalComponent, CalDate, CalEvent, CalTodo};
 
 /// A container for multiple [`CalDir`]s.
 ///
@@ -56,14 +56,15 @@ impl CalStore {
     /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
-    pub fn due_alarms_between(
-        &self,
+    pub fn due_alarms_between<'s, 'a>(
+        &'s self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> impl Iterator<Item = Occurrence<'_>> {
+        overlay: &'a dyn AlarmOverlay,
+    ) -> impl Iterator<Item = AlarmOccurrence<'s>> + use<'s, 'a> {
         self.dirs
             .iter()
-            .flat_map(move |c| c.due_alarms_between(start, end))
+            .flat_map(move |c| c.due_alarms_between(start, end, overlay))
     }
 
     /// Returns the occurrence with given uid/rid.

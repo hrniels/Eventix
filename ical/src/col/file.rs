@@ -6,10 +6,10 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono_tz::Tz;
 
-use crate::col::{ColError, Occurrence};
+use crate::col::{AlarmOccurrence, ColError, Occurrence};
 use crate::objects::{
-    CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger, Calendar,
-    CompDateIterator, CompDateType, EventLike, UpdatableEventLike,
+    AlarmOverlay, CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger,
+    Calendar, CompDateIterator, CompDateType, EventLike, UpdatableEventLike,
 };
 use crate::util;
 
@@ -220,11 +220,12 @@ impl CalFile {
     /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
-    pub fn due_alarms_between(
-        &self,
+    pub fn due_alarms_between<'o, 'a>(
+        &'o self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> Vec<Occurrence<'_>> {
+        overlay: &'a dyn AlarmOverlay,
+    ) -> Vec<AlarmOccurrence<'o>> {
         // this should never happen, but if there is no base component, we're done here
         let Some(first) = self.component_with(|c| c.rid().is_none()) else {
             return vec![];
@@ -232,76 +233,99 @@ impl CalFile {
 
         // get the alarms for occurrences of the base component
         let mut alarms = vec![];
-        if let Some(alarm) = first.alarms().first() {
-            match alarm.trigger() {
-                CalTrigger::Relative {
-                    related: _,
-                    duration,
-                } => {
-                    alarms.extend(
-                        first
-                            .dates_between(start - *duration, end - *duration)
-                            .map(|(ty, d, excluded)| {
-                                Occurrence::new_single(self.dir.clone(), first, ty, d, excluded)
-                            })
-                            .filter(|o| {
-                                if o.is_excluded() {
-                                    return false;
-                                }
-                                if let Some(alarm) = o.alarm_date() {
-                                    alarm >= start && alarm < end
-                                } else {
-                                    false
-                                }
-                            }),
-                    );
-                }
-                CalTrigger::Absolute(date) => {
-                    let alarm_date = date.as_start_with_tz(&start.timezone());
-                    if alarm_date >= start && alarm_date < end {
-                        let fstart = first.start().map(|d| d.as_start_with_tz(&start.timezone()));
-                        let fend = first
-                            .end_or_due()
-                            .map(|d| d.as_end_with_tz(&start.timezone()));
-                        alarms.push(Occurrence::new(
-                            self.dir.clone(),
-                            first,
-                            fstart,
-                            fend,
-                            false,
-                        ))
+        if let Some(base_alarms) = overlay.alarms_for_component(&first) {
+            for alarm in base_alarms {
+                match alarm.trigger() {
+                    CalTrigger::Relative {
+                        related: _,
+                        duration,
+                    } => {
+                        alarms.extend(
+                            first
+                                .dates_between(start - *duration, end - *duration)
+                                .filter_map(|(ty, d, excluded)| {
+                                    let occ = Occurrence::new_single(
+                                        self.dir.clone(),
+                                        first,
+                                        ty,
+                                        d,
+                                        excluded,
+                                    );
+                                    let aocc = AlarmOccurrence::new(occ, alarm.clone());
+                                    match (aocc.occurrence().is_excluded(), aocc.alarm_date()) {
+                                        (false, Some(adate)) if adate >= start && adate < end => {
+                                            Some(aocc)
+                                        }
+                                        _ => None,
+                                    }
+                                }),
+                        );
+                    }
+                    CalTrigger::Absolute(date) => {
+                        let alarm_date = date.as_start_with_tz(&start.timezone());
+                        if alarm_date >= start && alarm_date < end {
+                            let fstart =
+                                first.start().map(|d| d.as_start_with_tz(&start.timezone()));
+                            let fend = first
+                                .end_or_due()
+                                .map(|d| d.as_end_with_tz(&start.timezone()));
+                            alarms.push(AlarmOccurrence::new(
+                                Occurrence::new(self.dir.clone(), first, fstart, fend, false),
+                                alarm,
+                            ))
+                        }
                     }
                 }
             }
         }
 
         // now let's find the alarms for all overwritten components
-        if !alarms.is_empty() {
-            let overwritten = self.cal.components().iter().filter(|c| c.rid().is_some());
-            for c in overwritten {
-                if let Some(rid) = c.rid() {
-                    let rid_tz = rid.as_start_with_tz(&start.timezone());
-                    let mut tmp_occ = Occurrence::new(
-                        self.dir.clone(),
-                        first,
-                        Some(rid_tz),
-                        None,
-                        first.exdates().contains(rid),
-                    );
-                    tmp_occ.set_overwrite(c);
-                    match tmp_occ.alarm_date() {
-                        // if the alarm is also in the time frame (and not excluded), just set the
-                        // overwritten event
-                        Some(alarm) if !tmp_occ.is_excluded() && alarm >= start && alarm < end => {
-                            if let Some(occ) = alarms
-                                .iter_mut()
-                                .find(|o| o.occurrence_start() == Some(rid_tz))
-                            {
-                                occ.set_overwrite(c);
-                            }
+        if first.is_recurrent() {
+            // collect overwritten alarms
+            let mut alarm_overwrites = HashMap::new();
+            for overwrite in self.cal.components().iter().filter(|c| c.rid().is_some()) {
+                // set the overwrite to get the correct summary etc.
+                let rid = overwrite.rid().unwrap().clone();
+                let rid_tz = rid.as_start_with_tz(&start.timezone());
+                if let Some(alarm) = alarms
+                    .iter_mut()
+                    .find(|a| a.occurrence().occurrence_start() == Some(rid_tz))
+                {
+                    alarm.occurrence_mut().set_overwrite(overwrite);
+                }
+
+                if let Some(alarms) = overwrite.alarms() {
+                    alarm_overwrites.insert(rid, alarms);
+                }
+            }
+
+            // let the overlay customize these overwrites
+            let alarm_overwrites = overlay.alarm_overwrites(first, alarm_overwrites);
+
+            for (rid, rid_alarms) in alarm_overwrites {
+                // construct a new occurrence
+                let rid_tz = rid.as_start_with_tz(&start.timezone());
+                let fend = first.duration(&start.timezone()).map(|d| rid_tz + d);
+                let mut rid_occ =
+                    Occurrence::new(self.dir.clone(), first, Some(rid_tz), fend, false);
+                if let Some(overwrite) =
+                    self.cal.components().iter().find(|c| c.rid() == Some(&rid))
+                {
+                    rid_occ.set_overwrite(overwrite);
+                }
+
+                // remove all alarms we already had for this occurrence
+                alarms.retain(|a| a.occurrence().occurrence_start() != Some(rid_tz));
+
+                // add the desired ones (if they are in the specified time frame)
+                for rid_alarm in rid_alarms {
+                    let trigger_date = rid_alarm
+                        .trigger_date(rid_occ.occurrence_start(), rid_occ.occurrence_end());
+                    match trigger_date {
+                        Some(alarm) if alarm >= start && alarm < end => {
+                            alarms.push(AlarmOccurrence::new(rid_occ.clone(), rid_alarm));
                         }
-                        // otherwise remove the occurrence from the results
-                        _ => alarms.retain(|a| a.occurrence_start() != Some(rid_tz)),
+                        _ => {}
                     }
                 }
             }
@@ -553,12 +577,12 @@ impl CalFile {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, NaiveDate, TimeZone};
+    use chrono::{Datelike, Duration, NaiveDate, TimeDelta, TimeZone};
 
     use crate::col::CalDir;
     use crate::objects::{
         CalAction, CalAlarm, CalComponent, CalDate, CalRRule, CalRelated, CalTrigger,
-        UpdatableEventLike,
+        DefaultAlarmOverlay, UpdatableEventLike,
     };
 
     use super::*;
@@ -602,7 +626,7 @@ mod tests {
         }
 
         fn alarm(mut self, alarm: CalAlarm) -> Self {
-            self.ev.set_alarms(vec![alarm]);
+            self.ev.set_alarms(Some(vec![alarm]));
             self
         }
 
@@ -868,22 +892,23 @@ mod tests {
                 .done(),
         ));
 
-        let occs = dir
-            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 2))
+        let overlay = DefaultAlarmOverlay::default();
+        let alarms = dir
+            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 2), &overlay)
             .collect::<Vec<_>>();
-        assert_eq!(occs.len(), 1);
-        assert_eq!(occs[0].uid(), "id1");
-        assert_eq!(occs[0].alarm_date(), Some(new_date(1990, 1, 1)));
+        assert_eq!(alarms.len(), 1);
+        assert_eq!(alarms[0].occurrence().uid(), "id1");
+        assert_eq!(alarms[0].alarm_date(), Some(new_date(1990, 1, 1)));
 
-        let occs = dir
-            .due_alarms_between(new_date(1990, 1, 5), new_date(1990, 1, 8))
+        let alarms = dir
+            .due_alarms_between(new_date(1990, 1, 5), new_date(1990, 1, 8), &overlay)
             .collect::<Vec<_>>();
-        assert_eq!(occs.len(), 2);
-        assert_eq!(occs[0].uid(), "id2");
-        assert_eq!(occs[0].alarm_date(), Some(new_date(1990, 1, 7)));
-        assert_eq!(occs[1].uid(), "id3");
+        assert_eq!(alarms.len(), 2);
+        assert_eq!(alarms[0].occurrence().uid(), "id2");
+        assert_eq!(alarms[0].alarm_date(), Some(new_date(1990, 1, 7)));
+        assert_eq!(alarms[1].occurrence().uid(), "id3");
         assert_eq!(
-            occs[1].alarm_date(),
+            alarms[1].alarm_date(),
             Some(new_datetime(1990, 1, 6, 23, 59, 59))
         );
     }
@@ -916,51 +941,68 @@ mod tests {
                 .done(),
         ));
 
-        let occs = dir
+        let overlay = DefaultAlarmOverlay::default();
+        let alarms = dir
             .due_alarms_between(
                 new_datetime(1990, 1, 5, 23, 45, 0),
                 new_datetime(1990, 1, 5, 23, 55, 0),
+                &overlay,
             )
             .collect::<Vec<_>>();
-        assert_eq!(occs.len(), 1);
-        assert_eq!(occs[0].uid(), "id1");
-        assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 6)));
+        assert_eq!(alarms.len(), 1);
+        assert_eq!(alarms[0].occurrence().uid(), "id1");
         assert_eq!(
-            occs[0].alarm_date(),
+            alarms[0].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 6))
+        );
+        assert_eq!(
+            alarms[0].alarm_date(),
             Some(new_datetime(1990, 1, 5, 23, 50, 0))
         );
 
-        let occs = dir
-            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 7))
+        let alarms = dir
+            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 7), &overlay)
             .collect::<Vec<_>>();
-        assert_eq!(occs.len(), 2);
-        assert_eq!(occs[0].uid(), "id1");
-        assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 2)));
+        assert_eq!(alarms.len(), 2);
+        assert_eq!(alarms[0].occurrence().uid(), "id1");
         assert_eq!(
-            occs[0].alarm_date(),
+            alarms[0].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 2))
+        );
+        assert_eq!(
+            alarms[0].alarm_date(),
             Some(new_datetime(1990, 1, 1, 23, 50, 0))
         );
-        assert_eq!(occs[1].uid(), "id1");
-        assert_eq!(occs[1].occurrence_start(), Some(new_date(1990, 1, 6)));
+        assert_eq!(alarms[1].occurrence().uid(), "id1");
         assert_eq!(
-            occs[1].alarm_date(),
+            alarms[1].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 6))
+        );
+        assert_eq!(
+            alarms[1].alarm_date(),
             Some(new_datetime(1990, 1, 5, 23, 50, 0))
         );
 
-        let occs = dir
-            .due_alarms_between(new_date(1990, 1, 7), new_date(1990, 1, 15))
+        let alarms = dir
+            .due_alarms_between(new_date(1990, 1, 7), new_date(1990, 1, 15), &overlay)
             .collect::<Vec<_>>();
-        assert_eq!(occs.len(), 2);
-        assert_eq!(occs[0].uid(), "id2");
-        assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 8)));
+        assert_eq!(alarms.len(), 2);
+        assert_eq!(alarms[0].occurrence().uid(), "id2");
         assert_eq!(
-            occs[0].alarm_date(),
+            alarms[0].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 8))
+        );
+        assert_eq!(
+            alarms[0].alarm_date(),
             Some(new_datetime(1990, 1, 7, 23, 59, 59))
         );
-        assert_eq!(occs[1].uid(), "id2");
-        assert_eq!(occs[1].occurrence_start(), Some(new_date(1990, 1, 15)));
+        assert_eq!(alarms[1].occurrence().uid(), "id2");
         assert_eq!(
-            occs[1].alarm_date(),
+            alarms[1].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 15))
+        );
+        assert_eq!(
+            alarms[1].alarm_date(),
             Some(new_datetime(1990, 1, 14, 23, 59, 59))
         );
     }
@@ -1013,21 +1055,95 @@ mod tests {
         ));
         dir.add_file(CalFile::new_simple(cal));
 
-        let occs = dir
-            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 11))
+        let overlay = DefaultAlarmOverlay::default();
+        let alarms = dir
+            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 11), &overlay)
             .collect::<Vec<_>>();
-        assert_eq!(occs.len(), 2);
-        assert_eq!(occs[0].uid(), "id1");
-        assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 2)));
+        assert_eq!(alarms.len(), 2);
+        assert_eq!(alarms[0].occurrence().uid(), "id1");
         assert_eq!(
-            occs[0].alarm_date(),
+            alarms[0].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 2))
+        );
+        assert_eq!(
+            alarms[0].alarm_date(),
             Some(new_datetime(1990, 1, 1, 23, 50, 0))
         );
-        assert_eq!(occs[1].uid(), "id1");
-        assert_eq!(occs[1].occurrence_start(), Some(new_date(1990, 1, 6)));
+        assert_eq!(alarms[1].occurrence().uid(), "id1");
         assert_eq!(
-            occs[1].alarm_date(),
+            alarms[1].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 6))
+        );
+        assert_eq!(
+            alarms[1].alarm_date(),
             Some(new_datetime(1990, 1, 6, 1, 0, 0))
+        );
+
+        struct MyOverlay;
+        impl AlarmOverlay for MyOverlay {
+            fn alarms_for_component(&self, _comp: &CalComponent) -> Option<Vec<CalAlarm>> {
+                Some(vec![CalAlarm::new(
+                    CalAction::Display,
+                    CalTrigger::Relative {
+                        related: CalRelated::Start,
+                        duration: TimeDelta::hours(1),
+                    },
+                )])
+            }
+
+            fn alarm_overwrites(
+                &self,
+                _comp: &CalComponent,
+                overwrites: HashMap<CalDate, &[CalAlarm]>,
+            ) -> HashMap<CalDate, Vec<CalAlarm>> {
+                let mut res = HashMap::new();
+                for (rid, _alarms) in overwrites {
+                    let date = rid.as_naive_date();
+                    if date.day() == 2 {
+                        // no entry for rid to take the ones from the base component
+                    } else if date.day() == 6 {
+                        res.insert(rid, vec![]);
+                    } else {
+                        res.insert(
+                            rid,
+                            vec![CalAlarm::new(
+                                CalAction::Display,
+                                CalTrigger::Relative {
+                                    related: CalRelated::Start,
+                                    duration: -TimeDelta::days(1),
+                                },
+                            )],
+                        );
+                    }
+                }
+                res
+            }
+        }
+
+        let alarms = dir
+            .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 11), &MyOverlay)
+            .collect::<Vec<_>>();
+        assert_eq!(alarms.len(), 2);
+        assert_eq!(alarms[0].occurrence().uid(), "id1");
+        assert_eq!(
+            alarms[0].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 2))
+        );
+        assert_eq!(
+            alarms[0].alarm_date(),
+            Some(new_datetime(1990, 1, 2, 1, 0, 0))
+        );
+        // we don't get the alarm for Jan 6, because we disabled it above
+        // instead we get the alarm for Jan 10, because we changed it to one day before, so that it
+        // falls into that time frame again.
+        assert_eq!(alarms[1].occurrence().uid(), "id1");
+        assert_eq!(
+            alarms[1].occurrence().occurrence_start(),
+            Some(new_date(1990, 1, 10))
+        );
+        assert_eq!(
+            alarms[1].alarm_date(),
+            Some(new_datetime(1990, 1, 9, 0, 0, 0))
         );
     }
 
