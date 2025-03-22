@@ -357,11 +357,22 @@ impl CalAlarm {
             CalTrigger::Absolute(date) => start.map(|s| date.as_start_with_tz(&s.timezone())),
         }
     }
+
+    /// Returns a human-readable representation of this description.
+    pub fn human(&self) -> AlarmHuman<'_> {
+        AlarmHuman(self)
+    }
 }
 
-impl Display for CalAlarm {
+/// Implements [`Display`](fmt::Display) to create a human-readable representation of a
+/// [`CalAlarm`].
+///
+/// For example, it could say "3rd to last Wednesday".
+pub struct AlarmHuman<'a>(&'a CalAlarm);
+
+impl std::fmt::Display for AlarmHuman<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.trigger {
+        match &self.0.trigger {
             CalTrigger::Relative { related, duration } => {
                 let (prefix, duration) = if *duration < Duration::zero() {
                     ("before", -*duration)
