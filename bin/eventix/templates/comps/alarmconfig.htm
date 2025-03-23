@@ -1,0 +1,38 @@
+<table class="ev_date">
+    <tr>
+        <td colspan="2">
+            <input type="radio" id="{{ id }}_none" name="{{ name }}[trigger]" value="NONE"
+                {% if trigger == "NONE" %}checked="checked"{% endif %}/>
+            <label for="{{ id }}_none">{{ "None"|t(locale) }}</label>
+        </td>
+    </tr>
+    <tr>
+        <td width="20%">
+            <input type="radio" id="{{ id }}_relative" name="{{ name }}[trigger]" value="RELATIVE"
+                {% if trigger == "RELATIVE" %}checked="checked"{% endif %}/>
+            <label for="{{ id }}_relative">{{ "Relative:"|t(locale) }}</label>
+        </td>
+        <td width="80%">
+            <input id="{{ id }}_duration" name="{{ name }}[duration]" size="5"
+                                                                      value="{{ duration }}" />
+            {{ durunit|safe }}
+            {{ durtype|safe }}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <input type="radio" id="{{ id }}_absolute" name="{{ name }}[trigger]" value="ABSOLUTE"
+                {% if trigger == "ABSOLUTE" %}checked="checked"{% endif %}/>
+            <label for="{{ id }}_absolute">{{ "Absolute:"|t(locale) }}</label>
+        </td>
+        <td>{{ datetime|safe }}</td>
+    </tr>
+</table>
+
+<script>
+    $(function() {
+        $("#{{ id }}_duration").spinner({
+            min: 1,
+        });
+    });
+</script>

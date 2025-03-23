@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use chrono_tz::Tz;
-use ical::objects::EventLike;
+use ical::objects::{CalAlarm, EventLike};
 use ical::{col::Occurrence, objects::CalCompType};
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +36,7 @@ pub struct CompEdit {
     location: String,
     description: String,
     rrule: Option<RecurRequest>,
-    reminder: AlarmRequest,
+    alarm: AlarmRequest,
     start_end: DateTimeRange,
     attendees: Option<Attendees>,
     status: Option<TodoStatus>,
@@ -46,6 +46,7 @@ impl CompEdit {
     pub fn new_from_occurrence(
         req: Request,
         occ: &Occurrence,
+        pers_alarms: Option<&[CalAlarm]>,
         calendar: Option<String>,
         tz: &Tz,
     ) -> Self {
@@ -59,8 +60,8 @@ impl CompEdit {
             } else {
                 None
             },
-            reminder: if let Some(alarms) = occ.alarms() {
-                AlarmRequest::from_alarm(alarms, tz)
+            alarm: if let Some(alarms) = occ.alarms() {
+                AlarmRequest::from_alarms(alarms, pers_alarms, tz)
             } else {
                 AlarmRequest::default()
             },
@@ -104,8 +105,8 @@ impl CompAction for CompEdit {
     fn start_end(&self) -> &DateTimeRange {
         &self.start_end
     }
-    fn reminder(&self) -> &AlarmRequest {
-        &self.reminder
+    fn alarm(&self) -> &AlarmRequest {
+        &self.alarm
     }
     fn attendees(&self) -> Option<&Attendees> {
         self.attendees.as_ref()

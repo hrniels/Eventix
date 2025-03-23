@@ -194,10 +194,11 @@ pub async fn content(
         .flat_map(move |s| s.occurrences_between(mstart, mend, |c| c.ctype() == CalCompType::Event))
         .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();
+    let pers_alarms = state.personal_alarms();
 
     let mut days = Vec::new();
     while date < end {
-        let mut day_occs = DayOccurrence::occurrences_on(&ev_occs, date, &timezone);
+        let mut day_occs = DayOccurrence::occurrences_on(&ev_occs, pers_alarms, date, &timezone);
 
         let mut allday = vec![];
         let mut i = 0;

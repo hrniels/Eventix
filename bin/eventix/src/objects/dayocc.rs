@@ -7,14 +7,17 @@ use ical::col::Occurrence;
 use ical::objects::{CalAttendee, EventLike};
 use once_cell::sync::Lazy;
 
+use crate::persalarms::PersonalAlarms;
+
 pub struct DayOccurrence<'a> {
     id: u64,
     inner: Occurrence<'a>,
     overlap: Option<(usize, usize)>,
+    effective_alarms: bool,
 }
 
 impl<'a> DayOccurrence<'a> {
-    pub fn new(inner: &Occurrence<'a>) -> Self {
+    pub fn new(inner: &Occurrence<'a>, effective_alarms: bool) -> Self {
         static NEXT_ID: Lazy<Mutex<u64>> = Lazy::new(|| Mutex::new(0));
         let mut next = NEXT_ID.lock().unwrap();
         let id = *next + 1;
@@ -23,11 +26,17 @@ impl<'a> DayOccurrence<'a> {
             id,
             inner: inner.clone(),
             overlap: None,
+            effective_alarms,
         }
+    }
+
+    pub fn has_effective_alarms(&self) -> bool {
+        self.effective_alarms
     }
 
     pub fn occurrences_on<'occ: 'a>(
         occs: &'a [Occurrence<'occ>],
+        pers_alarms: &PersonalAlarms,
         date: NaiveDate,
         timezone: &Tz,
     ) -> Vec<DayOccurrence<'occ>> {
@@ -41,7 +50,7 @@ impl<'a> DayOccurrence<'a> {
         let mut day_occs = occs
             .iter()
             .filter(|o| o.overlaps(day_start, day_end))
-            .map(DayOccurrence::new)
+            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (
@@ -56,6 +65,7 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn due_occurrences<'occ: 'a>(
         occs: &'a [Occurrence<'occ>],
+        pers_alarms: &PersonalAlarms,
         date: NaiveDate,
     ) -> Vec<DayOccurrence<'occ>> {
         let mut day_occs = occs
@@ -64,7 +74,7 @@ impl<'a> DayOccurrence<'a> {
                 Some(end) => end.date_naive() == date,
                 None => false,
             })
-            .map(DayOccurrence::new)
+            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (

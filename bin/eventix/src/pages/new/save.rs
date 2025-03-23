@@ -41,16 +41,7 @@ async fn action_update(
         .unwrap()
         .build_organizer();
 
-    let dir = state
-        .store_mut()
-        .directory_mut(&calendar)
-        .ok_or_else(|| anyhow!("Unable to find directory with id {}", form.calendar))?;
-
     let uid = Uuid::new_v4();
-    let mut path = dir.path().clone();
-    path.push(format!("{}.ics", uid));
-    let mut file = CalFile::new(calendar, path, Calendar::default());
-
     let mut comp = if form.req.ctype == CalCompType::Event {
         CalComponent::Event(CalEvent::new(uid))
     } else {
@@ -58,7 +49,22 @@ async fn action_update(
     };
 
     comp.set_rrule(rrule);
-    form.update(&mut comp, organizer, locale);
+    form.update(
+        &calendar,
+        &mut comp,
+        state.personal_alarms_mut(),
+        organizer,
+        locale,
+    );
+
+    let dir = state
+        .store_mut()
+        .directory_mut(&calendar)
+        .ok_or_else(|| anyhow!("Unable to find directory with id {}", form.calendar))?;
+
+    let mut path = dir.path().clone();
+    path.push(format!("{}.ics", uid));
+    let mut file = CalFile::new(calendar, path, Calendar::default());
 
     file.add_component(comp);
     file.save()?;

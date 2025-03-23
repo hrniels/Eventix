@@ -65,10 +65,10 @@
             <td width="70%">{{ rrule.human()|newlines()|safe }}</td>
         </tr>
         {% endif %}
-        {% if occ.has_alarms() %}
+        {% if let Some(effective) = effective_alarms %}
         <tr>
             <td width="30%">{{ "Reminder"|t(locale) }}:</td>
-            <td width="70%">{{ occ.alarms().as_ref().unwrap()[0].human()|safe }}</td>
+            <td width="70%">{{ effective[0].human(locale.timezone()) }}</td>
         </tr>
         {% endif %}
         {% if let Some(org) = org %}

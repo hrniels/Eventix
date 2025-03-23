@@ -32,6 +32,8 @@ impl<'a> Events<'a> {
         let start = now.with_timezone(locale.timezone());
         let end = start + Duration::days(days as i64);
 
+        let pers_alarms = state.personal_alarms();
+
         let next_ev_occs = state
             .store()
             .directories()
@@ -47,7 +49,8 @@ impl<'a> Events<'a> {
         let mut cur_date = start.date_naive();
         let end_date = end.date_naive();
         while cur_date < end_date {
-            let day_occs = DayOccurrence::occurrences_on(&next_ev_occs, cur_date, timezone);
+            let day_occs =
+                DayOccurrence::occurrences_on(&next_ev_occs, pers_alarms, cur_date, timezone);
             if !day_occs.is_empty() {
                 days.push(Day {
                     date: Some(cur_date),

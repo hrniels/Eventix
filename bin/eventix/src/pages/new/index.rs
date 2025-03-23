@@ -32,7 +32,7 @@ struct NewTemplate<'a> {
     description: &'a String,
     start_end: DateTimeRangeTemplate<'a>,
     rrule: RecurTemplate<'a>,
-    reminder: AlarmTemplate<'a>,
+    alarm: AlarmTemplate<'a>,
     calendars: CalComboTemplate,
     attendees: AttendeesTemplate,
     status: Option<TodoStatusTemplate>,
@@ -84,7 +84,7 @@ pub async fn content(
             Some(form.start_end),
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
-        reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
+        alarm: AlarmTemplate::new(locale.clone(), "alarm", false, None, form.alarm),
         calendars: CalComboTemplate::new(
             "calendar",
             Calendars::new(&state, |_dir, settings| {

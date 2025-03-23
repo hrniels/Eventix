@@ -8,6 +8,7 @@ mod locale;
 mod notify;
 mod objects;
 mod pages;
+mod persalarms;
 mod settings;
 mod state;
 mod util;

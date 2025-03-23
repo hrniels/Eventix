@@ -1,4 +1,5 @@
 pub mod alarm;
+pub mod alarmconfig;
 pub mod attendees;
 pub mod calcombo;
 pub mod combobox;

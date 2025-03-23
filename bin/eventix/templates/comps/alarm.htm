@@ -1,26 +1,32 @@
-<input type="hidden" id="{{ id }}_trigger" name="{{ name }}[trigger]" value="{{ trigger }}" />
 <div id="{{ id }}-tabs">
     <ul>
-        <li><a href="#{{ id }}-tabs-NONE">{{ "None"|t(locale) }}</a></li>
-        <li><a href="#{{ id }}-tabs-RELATIVE">{{ "Relative"|t(locale) }}</a></li>
-        <li><a href="#{{ id }}-tabs-ABSOLUTE">{{ "Absolute"|t(locale) }}</a></li>
+        <li><a href="#{{ id }}-tabs-CALENDAR">{{ "Calendar"|t(locale) }}</a></li>
+        <li><a href="#{{ id }}-tabs-PERSONAL">{{ "Personal"|t(locale) }}</a></li>
     </ul>
-    <div id="{{ id }}-tabs-NONE">
+    <div id="{{ id }}-tabs-CALENDAR">
+        {{ calendar|safe }}
     </div>
-    <div id="{{ id }}-tabs-RELATIVE">
+    <div id="{{ id }}-tabs-PERSONAL">
         <div style="padding: .4em">
-            <input id="{{ id }}_duration" name="{{ name }}[duration]" size="5"
-                                          value="{{ duration }}" />
-            {{ durunit|safe }}
-            {{ durtype|safe }}
+            <input type="checkbox" id="{{ id }}_personal_overwrite"
+                                   name="{{ name }}_personal_overwrite"
+                                   {% if personal_overwrite %}checked="checked"{% endif %}/>
+            <label for="{{ id }}_personal_overwrite">{{ "Overwrite alarm"|t(locale) }}</label>
         </div>
-    </div>
-    <div id="{{ id }}-tabs-ABSOLUTE">
-        <div style="padding: .4em">
-            {{ "On:"|t(locale) }} {{ datetime|safe }}
-        </div>
+        {{ personal|safe }}
     </div>
 </div>
+
+{% if edit %}
+<div style="padding-top: .6em; padding-left: .4em">
+    <b>{{ "Effective:"|t(locale) }}</b>
+    {% if let Some(effective) = effective %}
+    {{ effective[0].human(locale.timezone()) }}
+    {% else %}
+    -
+    {% endif %}
+</div>
+{% endif %}
 
 <style type="text/css">
 #{{ id }}-tabs > div {
@@ -29,22 +35,23 @@
 </style>
 <script>
     $(function() {
-        $("#{{ id }}_duration").spinner({
-            min: 1,
-        });
+        $("#{{ id }}-tabs").tabs();
 
-        $("#{{ id }}-tabs").tabs({
-            activate: function(event, data) {
-                var name = data.newPanel.attr('id').replace("{{ id }}-tabs-", "");
-                $("#{{ id }}_trigger").attr('value', name);
-            }
+        $("#{{ id }}_personal_overwrite").click(function() {
+            setPersonalOverwrite(this.checked)
         });
-
-        var tab = $("#{{ id }}_trigger").attr('value');
-        if(tab != 'NONE') {
-            var tabs = ['NONE', 'RELATIVE', 'ABSOLUTE'];
-            $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
-        }
+        {% if !personal_overwrite %}
+        setPersonalOverwrite(false);
+        {% endif %}
     });
+
+    function setPersonalOverwrite(overwrite) {
+        var ids = ["none", "relative", "absolute", "durunit_", "durtype_", "datetime__time"];
+        for(id in ids) {
+            $("#{{ id }}_personal__" + ids[id]).prop("disabled", !overwrite);
+        }
+        $("#{{ id }}_personal__duration").spinner(overwrite ? "enable" : "disable");
+        $("#{{ id }}_personal__datetime__date_").datepicker("option", "disabled", !overwrite);
+    }
 </script>
 

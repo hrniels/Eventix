@@ -1,11 +1,13 @@
 use std::sync::Arc;
+use tracing::warn;
 
-use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus};
+use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike};
 use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 
 use crate::comps::alarm::AlarmRequest;
 use crate::comps::attendees::Attendees;
 use crate::comps::todostatus::TodoStatus;
+use crate::persalarms::PersonalAlarms;
 use crate::{
     comps::{datetimerange::DateTimeRange, recur::RecurRequest},
     locale::Locale,
@@ -17,7 +19,7 @@ pub trait CompAction {
     fn location(&self) -> &String;
     fn description(&self) -> &String;
     fn rrule(&self) -> Option<&RecurRequest>;
-    fn reminder(&self) -> &AlarmRequest;
+    fn alarm(&self) -> &AlarmRequest;
     fn start_end(&self) -> &DateTimeRange;
     fn attendees(&self) -> Option<&Attendees>;
     fn status(&self) -> Option<&TodoStatus>;
@@ -74,7 +76,7 @@ pub trait CompAction {
             return false;
         }
 
-        if !self.reminder().check(page, locale) {
+        if !self.alarm().check(page, locale) {
             return false;
         }
 
@@ -91,7 +93,9 @@ pub trait CompAction {
 
     fn update(
         &self,
+        calendar: &String,
         comp: &mut CalComponent,
+        personal_alarms: &mut PersonalAlarms,
         organizer: Option<CalOrganizer>,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) {
@@ -107,11 +111,29 @@ pub trait CompAction {
         } else {
             comp.as_todo_mut().unwrap().set_due(end);
         }
-        if let Some(alarm) = self.reminder().to_alarm(locale).unwrap() {
-            comp.set_alarms(Some(vec![alarm]));
+
+        let (cal_alarms, pers_alarms) = self.alarm().to_alarms(locale).unwrap();
+        if let Some(cal_alarms) = cal_alarms {
+            comp.set_alarms(Some(cal_alarms));
         } else {
             comp.set_alarms(None);
         }
+
+        let pers_cal = personal_alarms.get_or_create(calendar);
+        let changed = if let Some(pers_alarms) = pers_alarms {
+            pers_cal.set(comp.uid(), comp.rid(), pers_alarms.unwrap_or_default())
+        } else {
+            pers_cal.unset(comp.uid(), comp.rid())
+        };
+        if changed {
+            if let Err(e) = pers_cal.save() {
+                warn!(
+                    "Unable to save personal alarms for calendar {}: {}",
+                    calendar, e
+                );
+            }
+        }
+
         if let Some(att) = self.attendees() {
             comp.set_organizer(organizer);
             comp.set_attendees(att.to_cal_attendees());

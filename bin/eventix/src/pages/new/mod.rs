@@ -37,7 +37,7 @@ pub struct CompNew {
     location: String,
     description: String,
     rrule: RecurRequest,
-    reminder: AlarmRequest,
+    alarm: AlarmRequest,
     attendees: Option<Attendees>,
     start_end: DateTimeRange,
     status: Option<TodoStatus>,
@@ -121,8 +121,8 @@ impl CompAction for CompNew {
     fn start_end(&self) -> &DateTimeRange {
         &self.start_end
     }
-    fn reminder(&self) -> &AlarmRequest {
-        &self.reminder
+    fn alarm(&self) -> &AlarmRequest {
+        &self.alarm
     }
     fn attendees(&self) -> Option<&Attendees> {
         self.attendees.as_ref()

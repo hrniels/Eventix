@@ -18,24 +18,26 @@ fn action_update(
     state: &mut crate::state::State,
     form: &mut CompEdit,
 ) -> anyhow::Result<bool> {
-    let file = state.store().file_by_id(&form.req.uid).context(format!(
-        "Unable to find component with uid '{}'",
-        form.req.uid
-    ))?;
-    let calendar = form.calendar.as_ref().unwrap_or(file.directory());
-    let organizer = state
-        .settings()
-        .calendar(calendar)
-        .unwrap()
-        .build_organizer();
-
-    let file = state
-        .store_mut()
-        .files_by_id_mut(&form.req.uid)
-        .context(format!(
+    let (calendar, organizer) = {
+        let file = state.store().file_by_id(&form.req.uid).context(format!(
             "Unable to find component with uid '{}'",
             form.req.uid
         ))?;
+        let calendar = form.calendar.as_ref().unwrap_or(file.directory());
+        let organizer = state
+            .settings()
+            .calendar(calendar)
+            .unwrap()
+            .build_organizer();
+        (calendar.clone(), organizer)
+    };
+
+    let (store, personal_alarms) = state.store_and_alarms_mut();
+
+    let file = store.files_by_id_mut(&form.req.uid).context(format!(
+        "Unable to find component with uid '{}'",
+        form.req.uid
+    ))?;
 
     let rid = if let Some(ref rid) = form.req.rid {
         Some(
@@ -78,10 +80,18 @@ fn action_update(
         }
     };
 
+    let new_cal = if form.req.rid.is_none() {
+        form.calendar
+            .clone()
+            .ok_or_else(|| anyhow!("Calendar not specified"))?
+    } else {
+        calendar
+    };
+
     if let Some(comp) =
         file.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
     {
-        form.update(comp, organizer, locale);
+        form.update(&new_cal, comp, personal_alarms, organizer, locale);
         if rid.is_none() {
             comp.set_rrule(rrule);
         }
@@ -92,7 +102,7 @@ fn action_update(
         }
 
         file.create_overwrite(&form.req.uid, rid.unwrap(), locale.timezone(), |c| {
-            form.update(c, organizer, locale);
+            form.update(&new_cal, c, personal_alarms, organizer, locale);
         })
         .context("Creating overwrite failed")?;
     }

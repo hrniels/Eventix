@@ -38,7 +38,7 @@ struct EditTemplate<'a> {
     description: &'a String,
     start_end: DateTimeRangeTemplate<'a>,
     rrule: Option<RecurTemplate<'a>>,
-    reminder: AlarmTemplate<'a>,
+    alarm: AlarmTemplate<'a>,
     attendees: AttendeesTemplate,
     status: Option<TodoStatusTemplate>,
     occ: &'a Occurrence<'a>,
@@ -90,6 +90,12 @@ pub async fn content(
             &req.uid, rid
         ))?;
 
+    let pers_calendar = state.personal_alarms().get(&*file.directory());
+    let pers_alarms = pers_calendar
+        .and_then(|cal_alarms| cal_alarms.get(&req.uid, rid.as_ref()))
+        .map(|pers_alarms| pers_alarms.alarms());
+    let effective_alarms = state.personal_alarms().effective_alarms(&occ);
+
     page.add_breadcrumb(Breadcrumb::new(
         format!("/edit?{}", serde_qs::to_string(&req).unwrap()),
         super::build_title(&occ, &req.rid),
@@ -103,7 +109,7 @@ pub async fn content(
             } else {
                 None
             };
-            CompEdit::new_from_occurrence(req, &occ, cal, locale.timezone())
+            CompEdit::new_from_occurrence(req, &occ, pers_alarms, cal, locale.timezone())
         }
     };
 
@@ -138,7 +144,13 @@ pub async fn content(
         rrule: form
             .rrule
             .map(|rr| RecurTemplate::new(locale.clone(), "rrule", rr)),
-        reminder: AlarmTemplate::new(locale.clone(), "reminder", form.reminder),
+        alarm: AlarmTemplate::new(
+            locale.clone(),
+            "alarm",
+            true,
+            effective_alarms.as_ref(),
+            form.alarm,
+        ),
         attendees: AttendeesTemplate::new(
             locale.clone(),
             "attendees",

@@ -2,9 +2,10 @@ use anyhow::anyhow;
 use chrono::TimeZone;
 use ical::{
     col::AlarmOccurrence,
-    objects::{DefaultAlarmOverlay, EventLike},
+    objects::{AlarmOverlay, CalAlarm, CalComponent, CalDate, DefaultAlarmOverlay, EventLike},
 };
 use std::{
+    collections::HashMap,
     path::{self, PathBuf},
     process::Command,
     sync::Arc,
@@ -14,6 +15,7 @@ use tracing::warn;
 
 use crate::{
     locale::{DateFlags, Locale},
+    persalarms::PersonalCalendarAlarms,
     state::EventixState,
 };
 
@@ -69,6 +71,48 @@ impl Notification {
     }
 }
 
+struct NotifyAlarmOverlay<'a> {
+    personal: Option<&'a PersonalCalendarAlarms>,
+    default: DefaultAlarmOverlay,
+}
+
+impl<'a> NotifyAlarmOverlay<'a> {
+    fn new(personal: Option<&'a PersonalCalendarAlarms>) -> Self {
+        Self {
+            personal,
+            default: DefaultAlarmOverlay::default(),
+        }
+    }
+}
+
+impl AlarmOverlay for NotifyAlarmOverlay<'_> {
+    fn alarms_for_component(&self, comp: &CalComponent) -> Option<Vec<CalAlarm>> {
+        if let Some(personal) = self.personal {
+            personal.get(comp.uid(), None).map(|a| a.alarms().to_vec())
+        } else {
+            self.default.alarms_for_component(comp)
+        }
+    }
+
+    fn alarm_overwrites(
+        &self,
+        comp: &CalComponent,
+        overwrites: HashMap<CalDate, &[CalAlarm]>,
+    ) -> HashMap<CalDate, Vec<CalAlarm>> {
+        if let Some(personal) = self.personal {
+            let mut personal = personal.all_for_occurrences(comp.uid());
+            for (rid, alarms) in overwrites {
+                if !personal.contains_key(&rid) {
+                    personal.insert(rid, alarms.to_vec());
+                }
+            }
+            personal
+        } else {
+            self.default.alarm_overwrites(comp, overwrites)
+        }
+    }
+}
+
 pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + Sync>) {
     loop {
         {
@@ -79,10 +123,15 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
             let now = chrono::Utc::now().with_timezone(locale.timezone());
 
             // find all due alarms since the last check and sort them by alarm time
-            let overlay = DefaultAlarmOverlay::default();
             let mut alarms = state
                 .store()
-                .due_alarms_between(last_check, now, &overlay)
+                .directories()
+                .iter()
+                .flat_map(|dir| {
+                    let overlay = NotifyAlarmOverlay::new(state.personal_alarms().get(&*dir.id()));
+                    dir.due_alarms_between(last_check, now, &overlay)
+                        .collect::<Vec<_>>()
+                })
                 .filter(|a| !a.occurrence().is_cancelled())
                 .collect::<Vec<_>>();
             alarms.sort_by_key(|o| o.alarm_date().unwrap());

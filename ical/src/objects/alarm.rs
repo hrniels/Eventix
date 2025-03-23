@@ -1,5 +1,8 @@
 use std::{collections::HashMap, fmt::Display, io::BufRead, str::FromStr};
 
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, Serializer};
+
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 
@@ -359,8 +362,8 @@ impl CalAlarm {
     }
 
     /// Returns a human-readable representation of this description.
-    pub fn human(&self) -> AlarmHuman<'_> {
-        AlarmHuman(self)
+    pub fn human<'a, 't>(&'a self, tz: &'t Tz) -> AlarmHuman<'a, 't> {
+        AlarmHuman { alarm: self, tz }
     }
 }
 
@@ -368,11 +371,14 @@ impl CalAlarm {
 /// [`CalAlarm`].
 ///
 /// For example, it could say "3rd to last Wednesday".
-pub struct AlarmHuman<'a>(&'a CalAlarm);
+pub struct AlarmHuman<'a, 't> {
+    alarm: &'a CalAlarm,
+    tz: &'t Tz,
+}
 
-impl std::fmt::Display for AlarmHuman<'_> {
+impl std::fmt::Display for AlarmHuman<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0.trigger {
+        match &self.alarm.trigger {
             CalTrigger::Relative { related, duration } => {
                 let (prefix, duration) = if *duration < Duration::zero() {
                     ("before", -*duration)
@@ -390,8 +396,46 @@ impl std::fmt::Display for AlarmHuman<'_> {
                     }
                 )
             }
-            CalTrigger::Absolute(dt) => write!(f, "On {}", dt.fmt_start_with_tz(&Tz::UTC)),
+            CalTrigger::Absolute(dt) => write!(f, "On {}", dt.fmt_start_with_tz(&self.tz)),
         }
+    }
+}
+
+impl Display for CalAlarm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for prop in self.to_props() {
+            writeln!(f, "{}", prop.to_string())?;
+        }
+        Ok(())
+    }
+}
+
+impl FromStr for CalAlarm {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut lines = LineReader::new(s.as_bytes());
+        lines.next().unwrap(); // skip BEGIN:VALARM
+        CalAlarm::from_lines(&mut lines, Property::new("", vec![], ""))
+    }
+}
+
+impl Serialize for CalAlarm {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("{}", self))
+    }
+}
+
+impl<'de> Deserialize<'de> for CalAlarm {
+    fn deserialize<D>(deserializer: D) -> Result<CalAlarm, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let buf = String::deserialize(deserializer)?;
+        Ok(buf.parse().map_err(serde::de::Error::custom)?)
     }
 }
 

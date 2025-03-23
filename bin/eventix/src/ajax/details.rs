@@ -4,7 +4,7 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::{routing::get, Router};
 use ical::col::CalDir;
-use ical::objects::EventLike;
+use ical::objects::{CalAlarm, EventLike};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -42,6 +42,7 @@ struct DetailsTemplate<'a> {
     dir: &'a CalDir,
     occ: DayOccurrence<'a>,
     org: Option<OrganizerTemplate<'a>>,
+    effective_alarms: Option<Vec<CalAlarm>>,
 }
 
 async fn handler(
@@ -68,7 +69,9 @@ async fn handler(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
             &req.uid, rid
         ))?;
-    let day_occ = DayOccurrence::new(&occ);
+
+    let effective_alarms = state.personal_alarms().effective_alarms(&occ);
+    let day_occ = DayOccurrence::new(&occ, effective_alarms.is_some());
     let dir = state.store().directory(occ.directory()).unwrap();
 
     let html = DetailsTemplate {
@@ -78,6 +81,7 @@ async fn handler(
         occ: day_occ,
         locale,
         dir,
+        effective_alarms,
     }
     .render()
     .context("details template")?;

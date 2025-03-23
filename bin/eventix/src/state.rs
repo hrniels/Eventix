@@ -5,13 +5,17 @@ use chrono::NaiveDateTime;
 use ical::col::{CalDir, CalStore};
 use tokio::sync::Mutex;
 
-use crate::settings::{self, Settings};
+use crate::{
+    persalarms::PersonalAlarms,
+    settings::{self, Settings},
+};
 
 pub type EventixState = Arc<Mutex<State>>;
 
 #[derive(Default)]
 pub struct State {
     store: CalStore,
+    personal_alarms: PersonalAlarms,
     settings: settings::Settings,
     last_reload: NaiveDateTime,
 }
@@ -34,9 +38,12 @@ impl State {
             );
         }
 
-        let changed = self.store != store;
+        let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
+
+        let changed = self.store != store || self.personal_alarms != personal_alarms;
 
         self.store = store;
+        self.personal_alarms = personal_alarms;
         self.settings = settings;
         self.last_reload = chrono::Utc::now().naive_utc();
 
@@ -49,6 +56,18 @@ impl State {
 
     pub fn store_mut(&mut self) -> &mut CalStore {
         &mut self.store
+    }
+
+    pub fn store_and_alarms_mut(&mut self) -> (&mut CalStore, &mut PersonalAlarms) {
+        (&mut self.store, &mut self.personal_alarms)
+    }
+
+    pub fn personal_alarms(&self) -> &PersonalAlarms {
+        &self.personal_alarms
+    }
+
+    pub fn personal_alarms_mut(&mut self) -> &mut PersonalAlarms {
+        &mut self.personal_alarms
     }
 
     pub fn settings(&self) -> &Settings {

@@ -79,7 +79,7 @@
                         {% if occ.is_overwritten() %}
                         <i class="bi bi-pencil ev_right_icon"></i>
                         {% endif %}
-                        {% if occ.has_alarms() %}
+                        {% if occ.has_effective_alarms() %}
                         <i class="bi bi-alarm ev_right_icon"></i>
                         {% endif %}
                         {{ occ.summary().unwrap() }}
@@ -158,7 +158,7 @@
                         {% if occ.is_overwritten() %}
                         <i class="bi bi-pencil ev_right_icon"></i>
                         {% endif %}
-                        {% if occ.has_alarms() %}
+                        {% if occ.has_effective_alarms() %}
                         <i class="bi bi-alarm ev_right_icon"></i>
                         {% endif %}
                         {% if occ.occurrence_starts_on(day.date.clone()) &&

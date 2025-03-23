@@ -65,6 +65,8 @@ impl<'a> Tasks<'a> {
                     && !o.is_excluded()
             });
 
+        let pers_alarms = state.personal_alarms();
+
         let mut days = Vec::new();
 
         next_td_occs.extend(overdue_tds);
@@ -76,7 +78,7 @@ impl<'a> Tasks<'a> {
             .date_naive();
         let end_date = end.date_naive();
         while cur_date < end_date {
-            let day_occs = DayOccurrence::due_occurrences(&next_td_occs, cur_date);
+            let day_occs = DayOccurrence::due_occurrences(&next_td_occs, pers_alarms, cur_date);
             if !day_occs.is_empty() {
                 days.push(Day {
                     date: Some(cur_date),
@@ -116,7 +118,7 @@ impl<'a> Tasks<'a> {
 
         let mut unplanned_occs = unplanned_occs
             .iter()
-            .map(DayOccurrence::new)
+            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
             .collect::<Vec<_>>();
         unplanned_occs.sort_by_key(|i| i.created().cloned());
         if !unplanned_occs.is_empty() {

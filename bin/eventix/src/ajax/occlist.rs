@@ -110,18 +110,19 @@ pub async fn handler(
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
     };
+    let pers_alarms = state.personal_alarms();
 
     let more = occs.len() > req.count;
     let occs: Vec<_> = match req.dir {
         Direction::Forward => occs
             .iter()
             .take(req.count)
-            .map(DayOccurrence::new)
+            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
             .collect(),
         Direction::Backwards => occs
             .iter()
             .skip(if more { 1 } else { 0 })
-            .map(DayOccurrence::new)
+            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
             .collect(),
     };
 
