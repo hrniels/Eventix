@@ -1,4 +1,4 @@
-last_alarm_check = "2024-12-31T10:40:18.080478122"
+last_alarm_check = "2025-03-28T19:45:20.091622966"
 
 [calendar.bi]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"
@@ -12,37 +12,9 @@ types = ["Event", "Todo"]
 name = "Nils Asmussen"
 address = "nils.asmussen@barkhauseninstitut.org"
 
-[calendar.holidays]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-holidays/iorbbNt57wxpN2K3"
-name = "Holidays"
-disabled = false
-fgcolor = "#000000"
-bgcolor = "#f6d22d"
-types = []
-
-[calendar.oschair]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/osstaff_shared_by_adam"
-name = "OS Chair"
-disabled = false
-fgcolor = "#000000"
-bgcolor = "#a8c1e1"
-types = ["Event"]
-
-[calendar.oschair.email]
-name = "Nils Asmussen"
-address = "nils@os.inf.tu-dresden.de"
-
-[calendar.oslss]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslss/lehre-ss_shared_by_d688b6f0-b6c0-1031-9c9d-3f576beecc46"
-name = "OS Lehre SS"
-disabled = true
-fgcolor = "#000000"
-bgcolor = "#e5bc41"
-types = ["Event"]
-
-[calendar.oslss.email]
-name = "Nils Asmussen"
-address = "nils@os.inf.tu-dresden.de"
+[calendar.bi.syncer.VDirSyncer]
+cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_bi"]
+local_name = "calendar_bi_local"
 
 [calendar.oslwl]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"
@@ -56,29 +28,9 @@ types = ["Event"]
 name = "Nils Asmussen"
 address = "nils@os.inf.tu-dresden.de"
 
-[calendar.oslws]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslws/lehre-ws_shared_by_d688b6f0-b6c0-1031-9c9d-3f576beecc46"
-name = "OS Lehre WS"
-disabled = true
-fgcolor = "#000000"
-bgcolor = "#f9f06a"
-types = ["Event"]
-
-[calendar.oslws.email]
-name = "Nils Asmussen"
-address = "nils@os.inf.tu-dresden.de"
-
-[calendar.ospr]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-ospr/prüfungstermine_shared_by_mhaehnel"
-name = "OS Prüfung"
-disabled = true
-fgcolor = "#ffffff"
-bgcolor = "#e42629"
-types = ["Event"]
-
-[calendar.ospr.email]
-name = "Nils Asmussen"
-address = "nils@os.inf.tu-dresden.de"
+[calendar.oslwl.syncer.VDirSyncer]
+cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_oslwl"]
+local_name = "calendar_oslwl_local"
 
 [calendar.scriptsolution]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
@@ -92,6 +44,10 @@ types = ["Event"]
 name = "Nils Asmussen"
 address = "nils@script-solution.de"
 
+[calendar.scriptsolution.syncer.VDirSyncer]
+cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_scso"]
+local_name = "calendar_scso_local"
+
 [calendar.scriptsolution_tasks]
 path = "/home/hrniels/.config/vdirsyncer-test/tasks"
 name = "ScSo Tasks"
@@ -99,7 +55,24 @@ disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#128421"
 types = ["Todo"]
+syncer = "FileSystem"
+
+[calendar.test]
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-test/calendar~xTVGWlaUtoYnj4TOSK7v-ZV"
+name = "Test"
+disabled = false
+fgcolor = "#ffffff"
+bgcolor = "#00a915"
+types = ["Event"]
+
+[calendar.test.email]
+name = "Nils Asmussen"
+address = "nils@script-solution.de"
+
+[calendar.test.syncer.VDirSyncer]
+cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_test"]
+local_name = "calendar_test_local"
 
 [last_calendar]
-Event = "scriptsolution"
+Event = "test"
 Todo = "scriptsolution_tasks"

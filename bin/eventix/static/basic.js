@@ -95,29 +95,3 @@ function deleteItem(uid, rid, onDeleted) {
 function toggleCalendar(id) {
     postRequest('/toggle-calendar?id=' + id, reloadPage);
 }
-
-function reloadDB(id) {
-    postRequest('/reload', function(data) {
-        if(data.changed)
-            reloadPage();
-        else
-            $('#' + id).html(data.date);
-    });
-}
-
-function onInactivity(func) {
-    let timeout;
-
-    function startTimer() {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            func();
-            startTimer();
-        }, 15 * 60 * 1000);
-    }
-
-    document.addEventListener("mousemove", startTimer);
-    document.addEventListener("keydown", startTimer);
-
-    startTimer();
-}

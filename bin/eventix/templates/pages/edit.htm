@@ -2,6 +2,10 @@
 
 {% block inner %}
 
+<script type="text/javascript">
+    syncFormPage = true;
+</script>
+
 <form id="form" method="post" action="/edit/update">
     <input type="hidden" name="uid" value="{{ uid }}" />
     {% if let Some(rid) = rid %}

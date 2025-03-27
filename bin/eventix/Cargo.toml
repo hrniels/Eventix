@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.97"
 askama = "0.12.1"
+async-trait = "0.1.88"
 axum = { version = "0.8.1", features = ["macros", "multipart"] }
 bitflags = "2.9.0"
 chrono = { version = "0.4.40", features = ["serde"] }

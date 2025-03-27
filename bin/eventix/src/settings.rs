@@ -139,6 +139,16 @@ pub struct CalendarSettings {
     fgcolor: String,
     bgcolor: String,
     types: Vec<CalCompType>,
+    syncer: Syncer,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Syncer {
+    FileSystem,
+    VDirSyncer {
+        cmd: Vec<String>,
+        local_name: String,
+    },
 }
 
 impl CalendarSettings {
@@ -173,5 +183,9 @@ impl CalendarSettings {
 
     pub fn bgcolor(&self) -> &String {
         &self.bgcolor
+    }
+
+    pub fn syncer(&self) -> &Syncer {
+        &self.syncer
     }
 }

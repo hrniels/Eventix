@@ -52,4 +52,8 @@ pub enum ColError {
     ComponentNotFound(String),
     #[error("An overwrite with rid {0} exists")]
     RidExists(CalDate),
+    #[error("Getting metadata of {0} failed")]
+    FileMetadata(PathBuf),
+    #[error("Getting last modified timestamp of {0} failed")]
+    FileModified(PathBuf),
 }

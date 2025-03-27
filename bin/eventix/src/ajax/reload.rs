@@ -25,8 +25,7 @@ pub fn router(state: EventixState) -> Router {
 async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
-    let mut state = state.lock().await;
-    let changed = match state.reload().await {
+    let changed = match crate::state::State::reload(state).await {
         Err(e) => {
             error!("Unable to reload state: {}", e);
             false

@@ -17,9 +17,13 @@
             {% endfor %}
         </style>
         <script type="text/javascript" src="/static/basic.js"></script>
+        <script type="text/javascript" src="/static/sync.js"></script>
         <script type="text/javascript" src="/static/jquery-3.7.1.min.js"></script>
         <script type="text/javascript" src="/static/jquery-ui.js"></script>
         <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
+        <script type="text/javascript">
+            reloadDBEvery(1000 * 5 * 60, 'last-update', 'sync-spinner', 'out-of-sync');
+        </script>
     </head>
     <body>
         <div style="float: left;">
@@ -74,11 +78,13 @@
                 <span>{{ "List"|t(locale) }}</span>
             </a>
             <a id="link-refresh" class="ev_button ev_button_normal"
-                style="width: 70px; text-align: center" href="javascript:reloadDB('last-update')">
-                <i class="bi bi-arrow-clockwise"></i>
+                style="width: 80px; text-align: center"
+                href="javascript:reloadDB('last-update', 'sync-spinner', 'out-of-sync', true)">
+                <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
                 <span id="last-update">
                     {{ page.last_reload(locale)|as_ref|time(locale, TimeFlags::None) }}
                 </span>
+                <i id="out-of-sync" style="color: transparent" class="bi bi-exclamation-circle-fill"></i>
             </a>
         </div>
         <br style="clear: both;" />

@@ -159,7 +159,7 @@ impl CalStore {
         let old_src = self
             .directory_mut(old)
             .ok_or_else(|| ColError::DirNotFound((*old).to_string()))?;
-        let mut file = old_src.delete_file(&path)?;
+        let mut file = old_src.remove_file(&path)?;
 
         let new_src = match self.directory_mut(new) {
             Some(src) => src,

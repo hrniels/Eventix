@@ -1,13 +1,12 @@
-use chrono::DateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use std::fmt::Display;
-use std::fs::{read_dir, File};
-use std::io::Read;
+use std::fs::{self, read_dir};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::col::{AlarmOccurrence, CalFile, ColError, Occurrence};
-use crate::objects::{AlarmOverlay, CalComponent, CalDate, Calendar};
+use crate::objects::{AlarmOverlay, CalComponent, CalDate};
 
 /// A directory with calendar files.
 ///
@@ -42,6 +41,92 @@ impl CalDir {
     /// ending in `.ics`.
     pub fn new_from_dir(id: Arc<String>, path: PathBuf, name: String) -> Result<Self, ColError> {
         let mut files = Vec::new();
+        Self::with_files(&path, |filename| {
+            files.push(CalFile::new_from_file(id.clone(), filename)?);
+            Ok(())
+        })?;
+
+        Ok(Self {
+            id,
+            path,
+            name,
+            files,
+        })
+    }
+
+    /// Rescans the directory for added files.
+    ///
+    /// These files are added to the collection. The method returns `true` if new files were found
+    /// and `false` otherwise.
+    pub fn rescan_for_additions(&mut self) -> Result<bool, ColError> {
+        let mut seen_changes = false;
+        Self::with_files(&self.path, |filename| {
+            if !self.files.iter().any(|f| f.path() == &filename) {
+                self.files
+                    .push(CalFile::new_from_file(self.id.clone(), filename)?);
+                seen_changes = true;
+            }
+            Ok(())
+        })
+        .map(|_| seen_changes)
+    }
+
+    /// Rescans the directory for changes.
+    ///
+    /// If a file's last modification time is newer than `last_check` the contained calendar will
+    /// be reloaded from file to update the collection. The method returns `true` if changed files
+    /// were found and `false` otherwise.
+    pub fn rescan_for_updates(&mut self, last_check: NaiveDateTime) -> Result<bool, ColError> {
+        let mut seen_changes = false;
+        Self::with_files(&self.path, |filename| {
+            let metadata =
+                fs::metadata(&filename).map_err(|_| ColError::FileMetadata(filename.clone()))?;
+            let last_mod = metadata
+                .modified()
+                .map_err(|_| ColError::FileModified(filename.clone()))?;
+            let last_mod: DateTime<Utc> = last_mod.into();
+            let last_mod = last_mod.naive_utc();
+            if last_mod > last_check {
+                let file = self
+                    .files
+                    .iter_mut()
+                    .find(|f| f.path() == &filename)
+                    .ok_or_else(|| ColError::FileNotFound(filename.clone()))?;
+                seen_changes = true;
+                file.reload_calendar()
+            } else {
+                Ok(())
+            }
+        })
+        .map(|_| seen_changes)
+    }
+
+    /// Rescans the directory for deleted files.
+    ///
+    /// These files are deleted from the collection. The method returns `true` if deleted files
+    /// were found and `false` otherwise.
+    pub fn rescan_for_deletions(&mut self) -> bool {
+        // collect all files
+        let mut files = Vec::new();
+        Self::with_files(&self.path, |filename| {
+            files.push(filename);
+            Ok(())
+        })
+        .unwrap();
+
+        // now remove all objects that do no longer exists in the filesystem
+        let old_len = self.files.len();
+        self.files.retain(|f| {
+            let exists = files.contains(f.path());
+            exists
+        });
+        self.files.len() != old_len
+    }
+
+    fn with_files<F>(path: &PathBuf, mut func: F) -> Result<(), ColError>
+    where
+        F: FnMut(PathBuf) -> Result<(), ColError>,
+    {
         let dir_files = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
         for entry in dir_files {
             let entry = entry.map_err(|e| ColError::ReadDir(path.clone(), e))?;
@@ -62,25 +147,9 @@ impl CalDir {
                 continue;
             }
 
-            let mut input = String::new();
-            File::open(filename.as_path())
-                .map_err(|e| ColError::FileOpen(filename.clone(), e))?
-                .read_to_string(&mut input)
-                .map_err(|e| ColError::FileRead(filename.clone(), e))?;
-
-            let cal = input
-                .parse::<Calendar>()
-                .map_err(|e| ColError::FileParse(filename.clone(), e))?;
-            let file = CalFile::new(id.clone(), filename, cal);
-            files.push(file);
+            func(filename)?;
         }
-
-        Ok(Self {
-            id,
-            path,
-            name,
-            files,
-        })
+        Ok(())
     }
 
     /// Returns the unique id of this directory.
@@ -174,18 +243,30 @@ impl CalDir {
     ///
     /// If the containing file is empty afterwards, the file will be deleted. Otherwise, the file
     /// will just be saved.
-    pub fn delete_by_uid<S: AsRef<str>>(&mut self, uid: S) -> Result<(), ColError> {
-        let file = self.file_by_id_mut(&uid).unwrap();
+    pub fn delete_by_uid<S: AsRef<str> + ToString>(&mut self, uid: S) -> Result<(), ColError> {
+        let file = self
+            .file_by_id_mut(&uid)
+            .ok_or_else(|| ColError::ComponentNotFound(uid.to_string()))?;
         file.delete_by_uid(uid);
         if file.components().is_empty() {
             let path = file.path().clone();
-            self.delete_file(&path).map(|_| ())
+            self.remove_file(&path).map(|_| ())
         } else {
             file.save()
         }
     }
 
-    pub(crate) fn delete_file(&mut self, path: &PathBuf) -> Result<CalFile, ColError> {
+    /// Removes the [`CalFile`] from the collection that contains given uid.
+    pub fn remove_by_uid<S: AsRef<str> + ToString>(&mut self, uid: S) -> Result<CalFile, ColError> {
+        let idx = self
+            .files
+            .iter()
+            .position(|i| i.contains_uid(uid.as_ref()))
+            .ok_or_else(|| ColError::ComponentNotFound(uid.to_string()))?;
+        Ok(self.files.remove(idx))
+    }
+
+    pub(crate) fn remove_file(&mut self, path: &PathBuf) -> Result<CalFile, ColError> {
         let idx = self
             .files
             .iter()

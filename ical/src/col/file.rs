@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -186,6 +187,12 @@ impl CalFile {
     /// Creates a new [`CalFile`] for given directory and path, containing the given calendar.
     pub fn new(dir: Arc<String>, path: PathBuf, cal: Calendar) -> Self {
         Self { dir, path, cal }
+    }
+
+    /// Creates a new [`CalFile`] for given directory by reading it from given path.
+    pub fn new_from_file(dir: Arc<String>, path: PathBuf) -> Result<Self, ColError> {
+        let cal = Self::read_calendar(&path)?;
+        Ok(Self::new(dir, path, cal))
     }
 
     /// Returns the id of the directory this file belongs to.
@@ -554,6 +561,25 @@ impl CalFile {
 
         self.add_component(comp);
         Ok(())
+    }
+
+    /// Reloads the calendar from file.
+    pub fn reload_calendar(&mut self) -> Result<(), ColError> {
+        let cal = Self::read_calendar(&self.path)?;
+        self.cal = cal;
+        Ok(())
+    }
+
+    fn read_calendar(path: &PathBuf) -> Result<Calendar, ColError> {
+        let mut input = String::new();
+        File::open(path.as_path())
+            .map_err(|e| ColError::FileOpen(path.clone(), e))?
+            .read_to_string(&mut input)
+            .map_err(|e| ColError::FileRead(path.clone(), e))?;
+
+        input
+            .parse::<Calendar>()
+            .map_err(|e| ColError::FileParse(path.clone(), e))
     }
 
     /// Saves the current state to file.

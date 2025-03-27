@@ -8,11 +8,11 @@ use tokio::sync::Mutex;
 use crate::{
     persalarms::PersonalAlarms,
     settings::{self, Settings},
+    sync,
 };
 
 pub type EventixState = Arc<Mutex<State>>;
 
-#[derive(Default)]
 pub struct State {
     store: CalStore,
     personal_alarms: PersonalAlarms,
@@ -21,10 +21,12 @@ pub struct State {
 }
 
 impl State {
-    pub async fn reload(&mut self) -> anyhow::Result<bool> {
+    pub async fn new() -> anyhow::Result<Self> {
         let settings = settings::Settings::load_from_file()
             .await
             .context("load settings")?;
+
+        let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
 
         let mut store = CalStore::default();
         for (id, cal) in settings.calendars() {
@@ -38,14 +40,37 @@ impl State {
             );
         }
 
-        let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
+        Ok(Self {
+            settings,
+            personal_alarms,
+            store,
+            last_reload: chrono::Utc::now().naive_utc(),
+        })
+    }
 
-        let changed = self.store != store || self.personal_alarms != personal_alarms;
+    pub async fn reload(state: EventixState) -> anyhow::Result<bool> {
+        // first reload the settings and personal alarms
+        let mut changed = {
+            let mut state = state.lock().await;
+            let settings = settings::Settings::load_from_file()
+                .await
+                .context("load settings")?;
 
-        self.store = store;
-        self.personal_alarms = personal_alarms;
-        self.settings = settings;
-        self.last_reload = chrono::Utc::now().naive_utc();
+            let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
+
+            let changed = state.personal_alarms != personal_alarms;
+
+            state.personal_alarms = personal_alarms;
+            state.settings = settings;
+
+            changed
+        };
+
+        // now synchronize and update the store
+        changed |= sync::sync_all(state.clone()).await;
+
+        // remember last reload
+        state.lock().await.last_reload = chrono::Utc::now().naive_utc();
 
         Ok(changed)
     }

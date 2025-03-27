@@ -306,6 +306,18 @@ a.ev_button_critical:hover {
     color: #ffffff !important;
 }
 
+/* ------------ ICONS ------------ */
+
+i.ev_spin {
+    animation: rotate 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 /* ------------ MESSAGES ------------ */
 
 .ev_error {
