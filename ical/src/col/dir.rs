@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use std::fmt::Display;
 use std::fs::{self, read_dir};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::col::{AlarmOccurrence, CalFile, ColError, Occurrence};
@@ -123,16 +123,16 @@ impl CalDir {
         self.files.len() != old_len
     }
 
-    fn with_files<F>(path: &PathBuf, mut func: F) -> Result<(), ColError>
+    fn with_files<F>(path: &Path, mut func: F) -> Result<(), ColError>
     where
         F: FnMut(PathBuf) -> Result<(), ColError>,
     {
-        let dir_files = read_dir(path.as_path()).map_err(|e| ColError::ReadDir(path.clone(), e))?;
+        let dir_files = read_dir(path).map_err(|e| ColError::ReadDir(path.to_path_buf(), e))?;
         for entry in dir_files {
-            let entry = entry.map_err(|e| ColError::ReadDir(path.clone(), e))?;
+            let entry = entry.map_err(|e| ColError::ReadDir(path.to_path_buf(), e))?;
             if !entry
                 .file_type()
-                .map_err(|e| ColError::FileType(path.clone(), e))?
+                .map_err(|e| ColError::FileType(path.to_path_buf(), e))?
                 .is_file()
             {
                 continue;

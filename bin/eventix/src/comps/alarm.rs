@@ -39,6 +39,7 @@ impl AlarmRequest {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn to_alarms(
         &self,
         locale: &Arc<dyn Locale + Send + Sync>,

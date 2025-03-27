@@ -11,7 +11,7 @@ use std::{
     path::PathBuf,
 };
 
-const ALARMS_DIRECTORY: &'static str = "data/alarms";
+const ALARMS_DIRECTORY: &str = "data/alarms";
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct PersonalAlarms {
@@ -80,7 +80,7 @@ impl PersonalAlarms {
     }
 
     pub fn has_alarms(&self, occ: &Occurrence<'_>) -> bool {
-        if let Some(cal) = self.get(&*occ.directory()) {
+        if let Some(cal) = self.get(occ.directory()) {
             cal.has_alarms(occ)
         } else {
             occ.has_alarms()
@@ -88,7 +88,7 @@ impl PersonalAlarms {
     }
 
     pub fn effective_alarms(&self, occ: &Occurrence<'_>) -> Option<Vec<CalAlarm>> {
-        if let Some(cal) = self.get(&*occ.directory()) {
+        if let Some(cal) = self.get(occ.directory()) {
             cal.effective_alarms(occ)
         } else {
             occ.alarms().map(|a| a.to_vec())

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -227,11 +227,11 @@ impl CalFile {
     /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
-    pub fn due_alarms_between<'o, 'a>(
+    pub fn due_alarms_between<'o>(
         &'o self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-        overlay: &'a dyn AlarmOverlay,
+        overlay: &dyn AlarmOverlay,
     ) -> Vec<AlarmOccurrence<'o>> {
         // this should never happen, but if there is no base component, we're done here
         let Some(first) = self.component_with(|c| c.rid().is_none()) else {
@@ -240,7 +240,7 @@ impl CalFile {
 
         // get the alarms for occurrences of the base component
         let mut alarms = vec![];
-        if let Some(base_alarms) = overlay.alarms_for_component(&first) {
+        if let Some(base_alarms) = overlay.alarms_for_component(first) {
             for alarm in base_alarms {
                 match alarm.trigger() {
                     CalTrigger::Relative {
@@ -570,16 +570,16 @@ impl CalFile {
         Ok(())
     }
 
-    fn read_calendar(path: &PathBuf) -> Result<Calendar, ColError> {
+    fn read_calendar(path: &Path) -> Result<Calendar, ColError> {
         let mut input = String::new();
-        File::open(path.as_path())
-            .map_err(|e| ColError::FileOpen(path.clone(), e))?
+        File::open(path)
+            .map_err(|e| ColError::FileOpen(path.to_path_buf(), e))?
             .read_to_string(&mut input)
-            .map_err(|e| ColError::FileRead(path.clone(), e))?;
+            .map_err(|e| ColError::FileRead(path.to_path_buf(), e))?;
 
         input
             .parse::<Calendar>()
-            .map_err(|e| ColError::FileParse(path.clone(), e))
+            .map_err(|e| ColError::FileParse(path.to_path_buf(), e))
     }
 
     /// Saves the current state to file.

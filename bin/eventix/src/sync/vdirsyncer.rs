@@ -77,7 +77,7 @@ impl VDirSyncer {
         let mut state = state.lock().await;
         let dir = state
             .store_mut()
-            .directory_mut(&cal)
+            .directory_mut(cal)
             .ok_or_else(|| anyhow!("directory '{}' does not exist", cal))?;
         if added {
             // rescan the whole directory for new files as we only know the new UIDs, but not

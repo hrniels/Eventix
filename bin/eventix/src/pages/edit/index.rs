@@ -90,7 +90,7 @@ pub async fn content(
             &req.uid, rid
         ))?;
 
-    let pers_calendar = state.personal_alarms().get(&*file.directory());
+    let pers_calendar = state.personal_alarms().get(file.directory());
     let pers_alarms = pers_calendar
         .and_then(|cal_alarms| cal_alarms.get(&req.uid, rid.as_ref()))
         .map(|pers_alarms| pers_alarms.alarms());

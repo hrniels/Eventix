@@ -14,7 +14,7 @@ impl Syncer for FSSyncer {
         let last_reload = state.last_reload();
         let dir = state
             .store_mut()
-            .directory_mut(&cal)
+            .directory_mut(cal)
             .ok_or_else(|| anyhow!("directory '{}' does not exist", cal))?;
 
         let mut seen_changes = false;

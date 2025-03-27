@@ -80,7 +80,7 @@ impl<'a> NotifyAlarmOverlay<'a> {
     fn new(personal: Option<&'a PersonalCalendarAlarms>) -> Self {
         Self {
             personal,
-            default: DefaultAlarmOverlay::default(),
+            default: DefaultAlarmOverlay,
         }
     }
 }
@@ -102,9 +102,7 @@ impl AlarmOverlay for NotifyAlarmOverlay<'_> {
         if let Some(personal) = self.personal {
             let mut personal = personal.all_for_occurrences(comp.uid());
             for (rid, alarms) in overwrites {
-                if !personal.contains_key(&rid) {
-                    personal.insert(rid, alarms.to_vec());
-                }
+                personal.entry(rid).or_insert_with(|| alarms.to_vec());
             }
             personal
         } else {
@@ -128,7 +126,7 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
                 .directories()
                 .iter()
                 .flat_map(|dir| {
-                    let overlay = NotifyAlarmOverlay::new(state.personal_alarms().get(&*dir.id()));
+                    let overlay = NotifyAlarmOverlay::new(state.personal_alarms().get(dir.id()));
                     dir.due_alarms_between(last_check, now, &overlay)
                         .collect::<Vec<_>>()
                 })

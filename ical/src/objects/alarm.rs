@@ -396,7 +396,7 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
                     }
                 )
             }
-            CalTrigger::Absolute(dt) => write!(f, "On {}", dt.fmt_start_with_tz(&self.tz)),
+            CalTrigger::Absolute(dt) => write!(f, "On {}", dt.fmt_start_with_tz(self.tz)),
         }
     }
 }
@@ -404,7 +404,7 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
 impl Display for CalAlarm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for prop in self.to_props() {
-            writeln!(f, "{}", prop.to_string())?;
+            writeln!(f, "{}", prop)?;
         }
         Ok(())
     }
@@ -435,7 +435,7 @@ impl<'de> Deserialize<'de> for CalAlarm {
         D: Deserializer<'de>,
     {
         let buf = String::deserialize(deserializer)?;
-        Ok(buf.parse().map_err(serde::de::Error::custom)?)
+        buf.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -540,7 +540,7 @@ pub trait AlarmOverlay {
 pub struct DefaultAlarmOverlay;
 
 impl AlarmOverlay for DefaultAlarmOverlay {
-    fn alarms_for_component<'c>(&self, comp: &'c CalComponent) -> Option<Vec<CalAlarm>> {
+    fn alarms_for_component(&self, comp: &CalComponent) -> Option<Vec<CalAlarm>> {
         comp.alarms().map(|a| a.to_vec())
     }
 
