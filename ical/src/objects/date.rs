@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fmt, str::FromStr};
 
-use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
@@ -237,11 +237,7 @@ impl CalDateTime {
                 };
                 date_tz.from_local_datetime(dt).unwrap().with_timezone(tz)
             }
-            Self::Floating(dt) => {
-                // TODO that's certainly not correct
-                let local = Local.from_utc_datetime(dt);
-                local.with_timezone(tz)
-            }
+            Self::Floating(dt) => tz.from_local_datetime(dt).unwrap(),
         }
     }
 
