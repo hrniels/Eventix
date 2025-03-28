@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ical::col::CalDir;
 
-use crate::{settings::CalendarSettings, state::State};
+use crate::{state::CalendarSettings, state::State};
 
 pub struct Calendar {
     pub id: Arc<String>,
@@ -30,7 +30,7 @@ impl Calendars {
                     Some(Calendar {
                         id: dir.id().clone(),
                         name: dir.name().clone(),
-                        enabled: !settings.disabled(),
+                        enabled: !state.misc().calendar_disabled(dir.id()),
                         fgcolor: settings.fgcolor().clone(),
                         bgcolor: settings.bgcolor().clone(),
                     })

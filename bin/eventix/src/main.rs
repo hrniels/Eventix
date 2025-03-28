@@ -8,8 +8,6 @@ mod locale;
 mod notify;
 mod objects;
 mod pages;
-mod persalarms;
-mod settings;
 mod state;
 mod sync;
 mod util;
@@ -56,9 +54,7 @@ async fn main() {
 
     let args = Args::parse();
 
-    let state = Arc::new(Mutex::new(
-        state::State::new().await.expect("loading state"),
-    ));
+    let state = Arc::new(Mutex::new(state::State::new().expect("loading state")));
 
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))

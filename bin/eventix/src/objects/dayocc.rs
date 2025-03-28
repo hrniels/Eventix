@@ -7,7 +7,7 @@ use ical::col::Occurrence;
 use ical::objects::{CalAttendee, EventLike};
 use once_cell::sync::Lazy;
 
-use crate::persalarms::PersonalAlarms;
+use crate::state::PersonalAlarms;
 
 pub struct DayOccurrence<'a> {
     id: u64,

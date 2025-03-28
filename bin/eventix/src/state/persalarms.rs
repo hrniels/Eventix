@@ -6,8 +6,7 @@ use ical::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     collections::{BTreeMap, HashMap},
-    fs::{create_dir_all, read_dir, File},
-    io::{Read, Write},
+    fs::{create_dir_all, read_dir},
     path::PathBuf,
 };
 
@@ -130,17 +129,10 @@ impl PersonalCalendarAlarms {
     }
 
     pub fn new_from_file(path: PathBuf) -> anyhow::Result<Self> {
-        let mut input = String::new();
-        File::open(path.as_path())
-            .context(anyhow!("opening {:?} for reading", path.as_path()))?
-            .read_to_string(&mut input)
-            .context(anyhow!("reading {:?}", path.as_path()))?;
-        toml::from_str::<Self>(&input)
-            .context(anyhow!("parsing {:?}", path.as_path()))
-            .map(|res| Self {
-                path,
-                alarms: res.alarms,
-            })
+        super::load_from_file::<Self>(&path).map(|res| Self {
+            path,
+            alarms: res.alarms,
+        })
     }
 
     pub fn has_alarms(&self, occ: &Occurrence<'_>) -> bool {
@@ -231,16 +223,7 @@ impl PersonalCalendarAlarms {
     }
 
     pub fn save(&self) -> anyhow::Result<()> {
-        let mut file = File::options()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(&self.path)
-            .context(anyhow!("opening {:?} for writing", self.path))?;
-
-        let toml = toml::to_string_pretty(&self).context(anyhow!("serializing"))?;
-        file.write_all(toml.as_bytes())
-            .context(anyhow!("writing to {:?}", self.path))
+        super::write_to_file(&self.path, self)
     }
 }
 

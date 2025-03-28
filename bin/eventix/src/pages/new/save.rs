@@ -86,10 +86,10 @@ pub async fn handler(
             page.add_info(locale.translate("New event was added successfully"));
 
             // remember the last used calendar
-            let settings = state.settings_mut();
-            settings.set_last_calendar(form.req.ctype, form.calendar.clone());
-            if let Err(e) = settings.write_to_file().await {
-                warn!("Unable to save settings: {}", e);
+            let misc = state.misc_mut();
+            misc.set_last_calendar(form.req.ctype, form.calendar.clone());
+            if let Err(e) = misc.write_to_file() {
+                warn!("Unable to misc state: {}", e);
             }
 
             form = CompNew::new(&form.req, locale.timezone(), Some(form.calendar));

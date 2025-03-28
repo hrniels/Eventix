@@ -7,7 +7,7 @@ use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 use crate::comps::alarm::AlarmRequest;
 use crate::comps::attendees::Attendees;
 use crate::comps::todostatus::TodoStatus;
-use crate::persalarms::PersonalAlarms;
+use crate::state::PersonalAlarms;
 use crate::{
     comps::{datetimerange::DateTimeRange, recur::RecurRequest},
     locale::Locale,

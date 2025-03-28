@@ -4,8 +4,8 @@ mod vdirsyncer;
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::state::EventixState;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
-use crate::{settings, state::EventixState};
 
 #[async_trait]
 pub trait Syncer: Send {
@@ -49,10 +49,10 @@ async fn get_syncs(state: EventixState) -> Vec<CalendarSync> {
         .iter()
         .map(|(id, settings)| {
             let syncer: Box<dyn Syncer> = match settings.syncer() {
-                settings::Syncer::VDirSyncer { cmd, local_name } => {
+                crate::state::Syncer::VDirSyncer { cmd, local_name } => {
                     Box::new(VDirSyncer::new(cmd.clone(), local_name.clone()))
                 }
-                settings::Syncer::FileSystem => Box::new(FSSyncer),
+                crate::state::Syncer::FileSystem => Box::new(FSSyncer),
             };
             CalendarSync {
                 id: Arc::new(id.to_string()),

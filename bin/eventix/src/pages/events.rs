@@ -38,7 +38,7 @@ impl<'a> Events<'a> {
             .store()
             .directories()
             .iter()
-            .filter(|s| !state.settings().calendar_disabled(s.id()))
+            .filter(|s| !state.misc().calendar_disabled(s.id()))
             .flat_map(move |s| {
                 s.occurrences_between(start, end, |c| c.ctype() == CalCompType::Event)
             })

@@ -105,7 +105,7 @@ pub async fn content(
     let ev_occs = store
         .directories()
         .iter()
-        .filter(|s| !state.settings().calendar_disabled(s.id()))
+        .filter(|s| !state.misc().calendar_disabled(s.id()))
         .flat_map(move |s| s.occurrences_between(mstart, mend, |c| c.ctype() == CalCompType::Event))
         .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();

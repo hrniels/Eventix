@@ -29,11 +29,11 @@ async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let mut state = state.lock().await;
 
-    let settings = state.settings_mut();
-    settings.toggle_calendar(&req.id);
+    let misc = state.misc_mut();
+    misc.toggle_calendar(&req.id);
     // permanently remember the new calendar state
-    if let Err(e) = settings.write_to_file().await {
-        warn!("Unable to save settings: {}", e);
+    if let Err(e) = misc.write_to_file() {
+        warn!("Unable to misc state: {}", e);
     }
 
     Ok(Json(Response {}))

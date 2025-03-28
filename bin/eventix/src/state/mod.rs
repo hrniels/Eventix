@@ -1,15 +1,23 @@
-use std::{path::PathBuf, sync::Arc};
+mod misc;
+mod persalarms;
+mod settings;
 
 use anyhow::Context;
 use chrono::NaiveDateTime;
 use ical::col::{CalDir, CalStore};
+use serde::{de::DeserializeOwned, Serialize};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::PathBuf,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 
-use crate::{
-    persalarms::PersonalAlarms,
-    settings::{self, Settings},
-    sync,
-};
+use crate::sync;
+
+pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
+pub use settings::{CalendarSettings, Settings, Syncer};
 
 pub type EventixState = Arc<Mutex<State>>;
 
@@ -17,16 +25,17 @@ pub struct State {
     store: CalStore,
     personal_alarms: PersonalAlarms,
     settings: settings::Settings,
+    misc: misc::Misc,
     last_reload: NaiveDateTime,
 }
 
 impl State {
-    pub async fn new() -> anyhow::Result<Self> {
-        let settings = settings::Settings::load_from_file()
-            .await
-            .context("load settings")?;
+    pub fn new() -> anyhow::Result<Self> {
+        let settings = settings::Settings::load_from_file().context("load settings")?;
 
         let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
+
+        let misc = misc::Misc::load_from_file().context("load misc state")?;
 
         let mut store = CalStore::default();
         for (id, cal) in settings.calendars() {
@@ -44,6 +53,7 @@ impl State {
             settings,
             personal_alarms,
             store,
+            misc,
             last_reload: chrono::Utc::now().naive_utc(),
         })
     }
@@ -52,16 +62,16 @@ impl State {
         // first reload the settings and personal alarms
         let mut changed = {
             let mut state = state.lock().await;
-            let settings = settings::Settings::load_from_file()
-                .await
-                .context("load settings")?;
 
+            let settings = settings::Settings::load_from_file().context("load settings")?;
             let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
+            let misc = misc::Misc::load_from_file().context("load misc state")?;
 
-            let changed = state.personal_alarms != personal_alarms;
+            let changed = state.personal_alarms != personal_alarms || state.misc != misc;
 
             state.personal_alarms = personal_alarms;
             state.settings = settings;
+            state.misc = misc;
 
             changed
         };
@@ -99,11 +109,42 @@ impl State {
         &self.settings
     }
 
-    pub fn settings_mut(&mut self) -> &mut Settings {
-        &mut self.settings
+    pub fn misc(&self) -> &misc::Misc {
+        &self.misc
+    }
+
+    pub fn misc_mut(&mut self) -> &mut misc::Misc {
+        &mut self.misc
     }
 
     pub fn last_reload(&self) -> NaiveDateTime {
         self.last_reload
     }
+}
+
+pub fn load_from_file<D: DeserializeOwned>(filename: &PathBuf) -> anyhow::Result<D> {
+    let mut file = File::options()
+        .read(true)
+        .open(filename)
+        .context(format!("open {:?}", filename))?;
+    let mut data = String::new();
+    file.read_to_string(&mut data)
+        .context(format!("read {:?}", filename))?;
+    toml::from_str(&data).context(format!("parse {:?}", filename))
+}
+
+pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Result<()> {
+    let mut file = File::options()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(filename)
+        .context(format!("open {:?}", filename))?;
+    file.write_all(
+        toml::to_string(&data)
+            .context(format!("serialize {:?}", filename))?
+            .as_bytes(),
+    )
+    .context(format!("write {:?}", filename))?;
+    Ok(())
 }

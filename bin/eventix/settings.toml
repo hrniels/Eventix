@@ -1,5 +1,3 @@
-last_alarm_check = "2025-03-28T19:45:20.091622966"
-
 [calendar.bi]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"
 name = "BI"
@@ -72,7 +70,3 @@ address = "nils@script-solution.de"
 [calendar.test.syncer.VDirSyncer]
 cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_test"]
 local_name = "calendar_test_local"
-
-[last_calendar]
-Event = "test"
-Todo = "scriptsolution_tasks"

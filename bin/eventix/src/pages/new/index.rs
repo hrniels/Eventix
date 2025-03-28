@@ -45,17 +45,12 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let calendar = state
-        .lock()
-        .await
-        .settings()
-        .last_calendar(req.ctype)
-        .clone();
+    let calendar = state.lock().await.misc().last_calendar(req.ctype).cloned();
     content(
         super::new_page(&state, &req).await,
         locale.clone(),
         State(state),
-        CompNew::new(&req, locale.timezone(), Some(calendar)),
+        CompNew::new(&req, locale.timezone(), calendar),
     )
     .await
 }
@@ -88,7 +83,7 @@ pub async fn content(
         calendars: CalComboTemplate::new(
             "calendar",
             Calendars::new(&state, |_dir, settings| {
-                settings.types().contains(&form.req.ctype) && !settings.disabled()
+                settings.types().contains(&form.req.ctype)
             }),
             calendar.clone(),
         ),

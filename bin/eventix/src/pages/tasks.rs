@@ -39,7 +39,7 @@ impl<'a> Tasks<'a> {
             .store()
             .directories()
             .iter()
-            .filter(|s| !state.settings().calendar_disabled(s.id()))
+            .filter(|s| !state.misc().calendar_disabled(s.id()))
             .flat_map(move |s| {
                 s.occurrences_between(start, end, |c| c.ctype() == CalCompType::Todo)
             })
@@ -92,7 +92,7 @@ impl<'a> Tasks<'a> {
         let unplanned_occs = state
             .store()
             .files()
-            .filter(|s| !state.settings().calendar_disabled(s.directory()))
+            .filter(|s| !state.misc().calendar_disabled(s.directory()))
             .flat_map(|i| i.components().iter().map(|c| (i.directory(), c)))
             .filter(|(_dir, c)| {
                 c.ctype() == CalCompType::Todo

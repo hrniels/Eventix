@@ -127,7 +127,7 @@ pub async fn content(
             CalComboTemplate::new(
                 "calendar",
                 Calendars::new(&state, |_dir, settings| {
-                    settings.types().contains(&occ.ctype()) && !settings.disabled()
+                    settings.types().contains(&occ.ctype())
                 }),
                 Arc::new(cal.to_string()),
             )
