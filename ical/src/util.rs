@@ -2,7 +2,7 @@
 
 use std::fmt::{Display, Write};
 
-use chrono::{DateTime, Datelike, Duration, NaiveDate, Weekday};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Weekday};
 use chrono_tz::Tz;
 
 /// Returns true if the given date ranges overlap.
@@ -69,6 +69,51 @@ pub fn nth_weekday_of_year_back(date: DateTime<Tz>, day: Weekday, n: u8) -> Opti
     let first_to_dow = (7 + last_weekday.number_from_monday() - day.number_from_monday()) % 7;
     let day = (n - 1) as u32 * 7 + first_to_dow;
     Some(year_end - Duration::days(day as i64))
+}
+
+/// Returns the start of the week from given date.
+///
+/// That is, this function walks back to the beginning of the week, keeping the time as is, even if
+/// DST changes during that time period.
+pub fn week_start(date: DateTime<Tz>, first_day: Option<Weekday>) -> DateTime<Tz> {
+    let day_of_week = match first_day {
+        Some(wkst) => date.weekday().days_since(wkst),
+        _ => date.weekday().num_days_from_monday(),
+    };
+    if date.day() > day_of_week {
+        date.with_day(date.day() - day_of_week).unwrap()
+    } else {
+        let (pyear, pmonth) = prev_month(date.year(), date.month());
+        let days = month_days(pyear, pmonth);
+        let day = days - (day_of_week - date.day());
+        let naive_dt = NaiveDate::from_ymd_opt(pyear, pmonth, day)
+            .unwrap()
+            .and_time(date.time());
+        date.timezone().from_local_datetime(&naive_dt).unwrap()
+    }
+}
+
+/// Returns the end of the week from given date.
+///
+/// That is, this function walks forward to the end of the week, keeping the time as is, even if
+/// DST changes during that time period.
+pub fn week_end(date: DateTime<Tz>, first_day: Option<Weekday>) -> DateTime<Tz> {
+    let day_of_week = match first_day {
+        Some(wkst) => date.weekday().days_since(wkst),
+        _ => date.weekday().num_days_from_monday(),
+    };
+    let days = month_days(date.year(), date.month());
+    let diff = 7 - day_of_week - 1;
+    if date.day() + diff <= days {
+        date.with_day(date.day() + diff).unwrap()
+    } else {
+        let (nyear, nmonth) = next_month(date.year(), date.month());
+        let day = diff - (days - date.day());
+        let naive_dt = NaiveDate::from_ymd_opt(nyear, nmonth, day)
+            .unwrap()
+            .and_time(date.time());
+        date.timezone().from_local_datetime(&naive_dt).unwrap()
+    }
 }
 
 /// Returns the day number in the year of given date.
@@ -184,5 +229,48 @@ where
         }
     } else {
         itertools::join(objs.iter(), ", ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use chrono::TimeZone;
+
+    #[test]
+    fn week_start_basics() {
+        let tz = chrono_tz::Europe::Berlin;
+        let date = tz.with_ymd_and_hms(2025, 3, 1, 10, 0, 0).unwrap();
+        let expected = tz.with_ymd_and_hms(2025, 2, 24, 10, 0, 0).unwrap();
+        assert_eq!(week_start(date, Some(chrono::Weekday::Mon)), expected);
+        assert_eq!((date - expected).num_hours(), 5 * 24);
+    }
+
+    #[test]
+    fn week_start_with_dst_change() {
+        let tz = chrono_tz::Europe::Berlin;
+        let date = tz.with_ymd_and_hms(2025, 3, 30, 10, 0, 0).unwrap();
+        let expected = tz.with_ymd_and_hms(2025, 3, 24, 10, 0, 0).unwrap();
+        assert_eq!(week_start(date, Some(chrono::Weekday::Mon)), expected);
+        assert_eq!((date - expected).num_hours(), 6 * 24 - 1);
+    }
+
+    #[test]
+    fn week_end_basics() {
+        let tz = chrono_tz::Europe::Berlin;
+        let date = tz.with_ymd_and_hms(2024, 12, 30, 10, 0, 0).unwrap();
+        let expected = tz.with_ymd_and_hms(2025, 1, 5, 10, 0, 0).unwrap();
+        assert_eq!(week_end(date, Some(chrono::Weekday::Mon)), expected);
+        assert_eq!((expected - date).num_hours(), 6 * 24);
+    }
+
+    #[test]
+    fn week_end_with_dst_change() {
+        let tz = chrono_tz::Europe::Berlin;
+        let date = tz.with_ymd_and_hms(2025, 3, 24, 10, 0, 0).unwrap();
+        let expected = tz.with_ymd_and_hms(2025, 3, 30, 10, 0, 0).unwrap();
+        assert_eq!(week_end(date, Some(chrono::Weekday::Mon)), expected);
+        assert_eq!((expected - date).num_hours(), 6 * 24 - 1);
     }
 }

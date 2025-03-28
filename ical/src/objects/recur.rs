@@ -667,12 +667,9 @@ impl CalRRule {
                     // is not 1, in which case we might otherwise accidentally consider dates in
                     // the next week. starting too early is not an issue, because we drop the dates
                     // before start anyway.
-                    let day_of_week = match self.week_start {
-                        Some(wkst) => date.weekday().days_since(wkst),
-                        _ => date.weekday().num_days_from_monday(),
-                    };
-                    let vcur = date - Duration::days(day_of_week as i64);
-                    (Some(vcur), Some(vcur + Duration::days(7)))
+                    let vcur = util::week_start(date, self.week_start);
+                    let vend = util::week_end(date, self.week_start);
+                    (Some(vcur), Some(vend))
                 }
                 CalRRuleFreq::Monthly => {
                     // start at beginning of month (same as above)
@@ -1695,6 +1692,41 @@ mod tests {
         assert_eq!(iter.next().unwrap(), ny_datetime(1997, 8, 17, 9, 0, 0));
         assert_eq!(iter.next().unwrap(), ny_datetime(1997, 8, 19, 9, 0, 0));
         assert_eq!(iter.next().unwrap(), ny_datetime(1997, 8, 31, 9, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn range_by_day_dst_change() {
+        fn berlin_datetime(
+            year: i32,
+            month: u32,
+            day: u32,
+            hour: u32,
+            min: u32,
+            sec: u32,
+        ) -> DateTime<Tz> {
+            chrono_tz::Europe::Berlin
+                .with_ymd_and_hms(year, month, day, hour, min, sec)
+                .unwrap()
+        }
+
+        let start = berlin_datetime(2025, 3, 24, 10, 0, 0);
+        let rrule = "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;WKST=MO"
+            .parse::<CalRRule>()
+            .unwrap();
+        assert_eq!(
+            format!("{}", rrule.human()),
+            "Occurs weekly, on Mon".to_string()
+        );
+        let mut iter = rrule.dates_between(
+            start,
+            Some(Duration::hours(1)),
+            start,
+            start + Duration::weeks(2),
+        );
+        assert_eq!(iter.next().unwrap(), berlin_datetime(2025, 3, 24, 10, 0, 0));
+        assert_eq!(iter.next().unwrap(), berlin_datetime(2025, 3, 31, 10, 0, 0));
+        assert_eq!(iter.next().unwrap(), berlin_datetime(2025, 4, 7, 10, 0, 0));
         assert_eq!(iter.next(), None);
     }
 }
