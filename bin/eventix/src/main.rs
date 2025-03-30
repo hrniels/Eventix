@@ -57,7 +57,7 @@ async fn main() {
     let state = Arc::new(Mutex::new(state::State::new().expect("loading state")));
 
     let app = Router::new()
-        .nest_service("/favicon.ico", ServeFile::new("static/images/icon.png"))
+        .nest_service("/favicon.ico", ServeFile::new("static/icon.png"))
         .nest_service("/static", ServeDir::new("static"))
         .merge(monthly::router(state.clone()))
         .merge(weekly::router(state.clone()))
