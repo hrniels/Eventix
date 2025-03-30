@@ -25,6 +25,12 @@
         <script type="text/javascript">
             trackActivity();
             reloadDBEvery(1000 * 5 * 60, 'last-update', 'sync-spinner', 'out-of-sync');
+
+            var startDay = curUTCDay();
+            setInterval(function() {
+                if(curUTCDay() != startDay)
+                    requestReload('out-of-sync', false);
+            }, 60 * 1000);
         </script>
     </head>
     <body>

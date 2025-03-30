@@ -2,6 +2,14 @@ function reloadPage() {
     window.location.reload();
 }
 
+function curUTCDay() {
+    var date = new Date();
+    var y = date.getUTCFullYear();
+    var m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    var d = date.getUTCDate().toString().padStart(2, '0');
+    return `${y}${m}${d}`;
+}
+
 function curISODate() {
     var date = new Date();
     var y = date.getUTCFullYear();
