@@ -1,6 +1,3 @@
-var syncPopupOpen = false;
-var syncFormPage = false;
-var syncRecentActivity = false;
 var syncForce = false;
 var syncing = false;
 var outOfSync = false;
@@ -9,22 +6,6 @@ function reloadDBEvery(period, lastReloadId, spinnerId, iconId) {
     setInterval(function() {
         reloadDB(lastReloadId, spinnerId, iconId, false);
     }, period);
-
-    // determine whether the user is active
-    let timeout;
-    function onActivity() {
-        // is active now
-        syncRecentActivity = true;
-
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // timeout: user wasn't active recently
-            syncRecentActivity = false;
-        }, 5 * 60 * 1000);
-    }
-
-    document.addEventListener("mousemove", onActivity);
-    document.addEventListener("keydown", onActivity);
 }
 
 function reloadDB(lastReloadId, spinnerId, iconId, force) {
@@ -48,14 +29,17 @@ function reloadDB(lastReloadId, spinnerId, iconId, force) {
     postRequest('/reload', function(data) {
         $('#' + spinnerId).removeClass('ev_spin');
         $('#' + lastReloadId).html(data.date);
-        if(data.changed) {
-            if(syncForce || (!syncRecentActivity && !syncFormPage && !syncPopupOpen))
-                reloadPage();
-            else {
-                outOfSync = true;
-                $('#' + iconId).css('color', 'red');
-            }
-        }
+        if(data.changed)
+            requestReload(iconId, syncForce);
         syncing = false;
     });
+}
+
+function requestReload(iconId, force) {
+    if(force || !userIsActive())
+        reloadPage();
+    else {
+        outOfSync = true;
+        $('#' + iconId).css('color', 'red');
+    }
 }

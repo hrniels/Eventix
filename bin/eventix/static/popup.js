@@ -29,7 +29,7 @@ function openPopup(uid, jsuid, rid, id) {
 function select(newid) {
     var e = $('.' + newid.jsuid);
     e.addClass('ev_selected');
-    syncPopupOpen = true;
+    setPopupOpen(true);
 
     var el = document.getElementById(newid.id);
     var elRect = pageBoundingBox(el);
@@ -63,7 +63,7 @@ function deselect(oldid, newid) {
     $('#popup').slideFadeToggle(function() {
         var old = $('.' + oldid.jsuid);
         old.removeClass('ev_selected');
-        syncPopupOpen = false;
+        setPopupOpen(false);
         if(newid != null)
             select(newid);
     });

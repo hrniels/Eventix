@@ -16,12 +16,14 @@
             }
             {% endfor %}
         </style>
+        <script type="text/javascript" src="/static/activity.js"></script>
         <script type="text/javascript" src="/static/basic.js"></script>
         <script type="text/javascript" src="/static/sync.js"></script>
         <script type="text/javascript" src="/static/jquery-3.7.1.min.js"></script>
         <script type="text/javascript" src="/static/jquery-ui.js"></script>
         <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js"></script>
         <script type="text/javascript">
+            trackActivity();
             reloadDBEvery(1000 * 5 * 60, 'last-update', 'sync-spinner', 'out-of-sync');
         </script>
     </head>
