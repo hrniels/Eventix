@@ -171,10 +171,8 @@
                 </div>
                 {% endfor %}
                 {% if day.date == today %}
-                <div style="position: absolute;
-                            top: {{ minutes }}px;
-                            width: 100%;
-                            border-top: .1em solid red;"></div>
+                <div id="now_line"
+                     style="position: absolute; width: 100%; border-top: .1em solid red;"></div>
                 {% endif %}
                 </div>
             </div>
@@ -185,6 +183,14 @@
 </div>
 
 <script type="text/javascript">
+    function setNowLine() {
+        var now = new Date();
+        $('#now_line').css('top', (now.getHours() * 60 + now.getMinutes()) + 'px');
+    }
+
+    setNowLine();
+    setInterval(setNowLine, 60 * 1000);
+
     $(function() {
         var area = document.getElementById("week_scroll_area");
         area.scrollTop = 60 * 8;
