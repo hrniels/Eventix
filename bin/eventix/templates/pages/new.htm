@@ -82,6 +82,27 @@
 </form>
 
 <script>
+    var calendars = {};
+    {% for (id, personal) in cal_personal %}
+    calendars['{{ id }}'] = {{ personal }};
+    {% endfor %}
+
+    function setPersonalAlarms(cal) {
+        if(!calendars[cal]) {
+            $("#alarm-tabs").tabs("option", "active", 0);
+            $("#alarm-tabs ul li:eq(1)").hide();
+        }
+        else
+            $("#alarm-tabs ul li:eq(1)").show();
+    }
+
+    $(document).ready(function() {
+        $("#calendar").on("change", function(event, ui) {
+            setPersonalAlarms($(this).val());
+        });
+        setPersonalAlarms($('#calendar').val());
+    });
+
     $(window).on('load', function() {
         moveToTabCenter('title', 'tabs', 'tab-bar');
     });

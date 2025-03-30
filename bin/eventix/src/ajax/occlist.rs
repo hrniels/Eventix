@@ -110,6 +110,12 @@ pub async fn handler(
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
     };
+
+    let alarm_type = state
+        .settings()
+        .calendar(file.directory())
+        .unwrap()
+        .alarms();
     let pers_alarms = state.personal_alarms();
 
     let more = occs.len() > req.count;
@@ -117,12 +123,12 @@ pub async fn handler(
         Direction::Forward => occs
             .iter()
             .take(req.count)
-            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
+            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)))
             .collect(),
         Direction::Backwards => occs
             .iter()
             .skip(if more { 1 } else { 0 })
-            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
+            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)))
             .collect(),
     };
 

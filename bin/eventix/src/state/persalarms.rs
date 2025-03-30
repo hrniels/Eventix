@@ -10,6 +10,8 @@ use std::{
     path::PathBuf,
 };
 
+use crate::state::CalendarAlarmType;
+
 const ALARMS_DIRECTORY: &str = "data/alarms";
 
 #[derive(Default, Debug, Eq, PartialEq)]
@@ -78,19 +80,33 @@ impl PersonalAlarms {
         })
     }
 
-    pub fn has_alarms(&self, occ: &Occurrence<'_>) -> bool {
-        if let Some(cal) = self.get(occ.directory()) {
-            cal.has_alarms(occ)
-        } else {
-            occ.has_alarms()
+    pub fn has_alarms(&self, occ: &Occurrence<'_>, settings: &CalendarAlarmType) -> bool {
+        match settings {
+            CalendarAlarmType::Personal { default } => {
+                if let Some(cal) = self.get(occ.directory()) {
+                    cal.has_alarms(occ, default)
+                } else {
+                    default.is_some()
+                }
+            }
+            CalendarAlarmType::Calendar => occ.has_alarms(),
         }
     }
 
-    pub fn effective_alarms(&self, occ: &Occurrence<'_>) -> Option<Vec<CalAlarm>> {
-        if let Some(cal) = self.get(occ.directory()) {
-            cal.effective_alarms(occ)
-        } else {
-            occ.alarms().map(|a| a.to_vec())
+    pub fn effective_alarms(
+        &self,
+        occ: &Occurrence<'_>,
+        alarm_type: &CalendarAlarmType,
+    ) -> Option<Vec<CalAlarm>> {
+        match alarm_type {
+            CalendarAlarmType::Personal { default } => {
+                if let Some(cal) = self.get(occ.directory()) {
+                    cal.effective_alarms(occ, default)
+                } else {
+                    default.clone().map(|alarm| vec![alarm])
+                }
+            }
+            CalendarAlarmType::Calendar => occ.alarms().map(|a| a.to_vec()),
         }
     }
 }
@@ -135,14 +151,18 @@ impl PersonalCalendarAlarms {
         })
     }
 
-    pub fn has_alarms(&self, occ: &Occurrence<'_>) -> bool {
+    pub fn has_alarms(&self, occ: &Occurrence<'_>, default: &Option<CalAlarm>) -> bool {
         match self.get(occ.uid(), occ.rid()) {
             Some(overwrite) => !overwrite.alarms().is_empty(),
-            None => occ.has_alarms(),
+            None => default.is_some(),
         }
     }
 
-    pub fn effective_alarms(&self, occ: &Occurrence<'_>) -> Option<Vec<CalAlarm>> {
+    pub fn effective_alarms(
+        &self,
+        occ: &Occurrence<'_>,
+        default: &Option<CalAlarm>,
+    ) -> Option<Vec<CalAlarm>> {
         match self.get(occ.uid(), occ.rid()) {
             Some(overwrite) => {
                 // an empty alarm list here means that we have overwritten it to disable all
@@ -153,7 +173,7 @@ impl PersonalCalendarAlarms {
                     Some(overwrite.alarms().to_vec())
                 }
             }
-            None => occ.alarms().map(|a| a.to_vec()),
+            None => default.clone().map(|alarm| vec![alarm]),
         }
     }
 

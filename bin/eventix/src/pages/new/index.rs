@@ -16,7 +16,7 @@ use crate::{
     },
     locale::{self, DateFlags, Locale, TimeFlags},
     objects::Calendars,
-    state::EventixState,
+    state::{CalendarAlarmType, EventixState},
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
@@ -34,6 +34,7 @@ struct NewTemplate<'a> {
     rrule: RecurTemplate<'a>,
     alarm: AlarmTemplate<'a>,
     calendars: CalComboTemplate,
+    cal_personal: Vec<(&'a String, bool)>,
     attendees: AttendeesTemplate,
     status: Option<TodoStatusTemplate>,
     events: Events<'a>,
@@ -67,6 +68,18 @@ pub async fn content(
     let tasks = Tasks::new(&state, &locale);
     let calendar: Arc<String> = Arc::from(form.calendar.clone());
 
+    let cal_personal = state
+        .settings()
+        .calendars()
+        .iter()
+        .map(|(id, settings)| {
+            (
+                id,
+                matches!(settings.alarms(), CalendarAlarmType::Personal { .. }),
+            )
+        })
+        .collect();
+
     let html = NewTemplate {
         page,
         summary: &form.summary,
@@ -79,7 +92,7 @@ pub async fn content(
             Some(form.start_end),
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
-        alarm: AlarmTemplate::new(locale.clone(), "alarm", false, None, form.alarm),
+        alarm: AlarmTemplate::new(locale.clone(), "alarm", false, true, None, form.alarm),
         calendars: CalComboTemplate::new(
             "calendar",
             Calendars::new(&state, |_dir, settings| {
@@ -87,6 +100,7 @@ pub async fn content(
             }),
             calendar.clone(),
         ),
+        cal_personal,
         attendees: AttendeesTemplate::new(
             locale.clone(),
             "attendees",

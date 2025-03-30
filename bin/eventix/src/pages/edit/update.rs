@@ -18,18 +18,15 @@ fn action_update(
     state: &mut crate::state::State,
     form: &mut CompEdit,
 ) -> anyhow::Result<bool> {
-    let (calendar, organizer) = {
+    let (calendar, alarm_type, organizer) = {
         let file = state.store().file_by_id(&form.req.uid).context(format!(
             "Unable to find component with uid '{}'",
             form.req.uid
         ))?;
         let calendar = form.calendar.as_ref().unwrap_or(file.directory());
-        let organizer = state
-            .settings()
-            .calendar(calendar)
-            .unwrap()
-            .build_organizer();
-        (calendar.clone(), organizer)
+        let cal_settings = state.settings().calendar(calendar).unwrap();
+        let organizer = cal_settings.build_organizer();
+        (calendar.clone(), cal_settings.alarms().clone(), organizer)
     };
 
     let (store, personal_alarms) = state.store_and_alarms_mut();
@@ -91,7 +88,14 @@ fn action_update(
     if let Some(comp) =
         file.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
     {
-        form.update(&new_cal, comp, personal_alarms, organizer, locale);
+        form.update(
+            &new_cal,
+            &alarm_type,
+            comp,
+            personal_alarms,
+            organizer,
+            locale,
+        );
         if rid.is_none() {
             comp.set_rrule(rrule);
         }
@@ -102,7 +106,7 @@ fn action_update(
         }
 
         file.create_overwrite(&form.req.uid, rid.unwrap(), locale.timezone(), |c| {
-            form.update(&new_cal, c, personal_alarms, organizer, locale);
+            form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
         })
         .context("Creating overwrite failed")?;
     }

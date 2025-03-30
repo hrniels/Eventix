@@ -1,21 +1,13 @@
-use ical::objects::{CalCompType, CalOrganizer};
+use ical::objects::{CalAlarm, CalCompType, CalOrganizer};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 const FILENAME: &str = "settings.toml";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(rename = "calendar")]
     calendars: BTreeMap<String, CalendarSettings>,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            calendars: BTreeMap::default(),
-        }
-    }
 }
 
 impl Settings {
@@ -62,15 +54,10 @@ impl EmailAccount {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CalendarSettings {
-    path: String,
-    name: String,
-    email: Option<EmailAccount>,
-    fgcolor: String,
-    bgcolor: String,
-    types: Vec<CalCompType>,
-    syncer: Syncer,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CalendarAlarmType {
+    Calendar,
+    Personal { default: Option<CalAlarm> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,6 +67,18 @@ pub enum Syncer {
         cmd: Vec<String>,
         local_name: String,
     },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CalendarSettings {
+    path: String,
+    name: String,
+    email: Option<EmailAccount>,
+    fgcolor: String,
+    bgcolor: String,
+    types: Vec<CalCompType>,
+    alarms: CalendarAlarmType,
+    syncer: Syncer,
 }
 
 impl CalendarSettings {
@@ -110,6 +109,10 @@ impl CalendarSettings {
 
     pub fn bgcolor(&self) -> &String {
         &self.bgcolor
+    }
+
+    pub fn alarms(&self) -> &CalendarAlarmType {
+        &self.alarms
     }
 
     pub fn syncer(&self) -> &Syncer {

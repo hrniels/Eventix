@@ -19,7 +19,7 @@ use crate::{
     locale::{self, DateFlags, Locale, TimeFlags},
     objects::Calendars,
     pages::Breadcrumb,
-    state::EventixState,
+    state::{CalendarAlarmType, EventixState},
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
@@ -90,11 +90,16 @@ pub async fn content(
             &req.uid, rid
         ))?;
 
+    let alarm_type = state
+        .settings()
+        .calendar(file.directory())
+        .unwrap()
+        .alarms();
     let pers_calendar = state.personal_alarms().get(file.directory());
     let pers_alarms = pers_calendar
         .and_then(|cal_alarms| cal_alarms.get(&req.uid, rid.as_ref()))
         .map(|pers_alarms| pers_alarms.alarms());
-    let effective_alarms = state.personal_alarms().effective_alarms(&occ);
+    let effective_alarms = state.personal_alarms().effective_alarms(&occ, alarm_type);
 
     page.add_breadcrumb(Breadcrumb::new(
         format!("/edit?{}", serde_qs::to_string(&req).unwrap()),
@@ -114,6 +119,10 @@ pub async fn content(
     };
 
     let dir = state.store().directory(file.directory()).unwrap();
+    let have_personal = matches!(
+        state.settings().calendar(dir.id()).unwrap().alarms(),
+        CalendarAlarmType::Personal { .. }
+    );
 
     let events = Events::new(&state, &locale);
     let tasks = Tasks::new(&state, &locale);
@@ -148,6 +157,7 @@ pub async fn content(
             locale.clone(),
             "alarm",
             true,
+            have_personal,
             effective_alarms.as_ref(),
             form.alarm,
         ),

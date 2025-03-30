@@ -7,7 +7,7 @@ use ical::col::Occurrence;
 use ical::objects::{CalAttendee, EventLike};
 use once_cell::sync::Lazy;
 
-use crate::state::PersonalAlarms;
+use crate::state::{PersonalAlarms, Settings};
 
 pub struct DayOccurrence<'a> {
     id: u64,
@@ -36,6 +36,7 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn occurrences_on<'occ: 'a>(
         occs: &'a [Occurrence<'occ>],
+        settings: &Settings,
         pers_alarms: &PersonalAlarms,
         date: NaiveDate,
         timezone: &Tz,
@@ -50,7 +51,10 @@ impl<'a> DayOccurrence<'a> {
         let mut day_occs = occs
             .iter()
             .filter(|o| o.overlaps(day_start, day_end))
-            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
+            .map(|o| {
+                let alarm_type = settings.calendar(o.directory()).unwrap().alarms();
+                DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type))
+            })
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (
@@ -65,6 +69,7 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn due_occurrences<'occ: 'a>(
         occs: &'a [Occurrence<'occ>],
+        settings: &Settings,
         pers_alarms: &PersonalAlarms,
         date: NaiveDate,
     ) -> Vec<DayOccurrence<'occ>> {
@@ -74,7 +79,10 @@ impl<'a> DayOccurrence<'a> {
                 Some(end) => end.date_naive() == date,
                 None => false,
             })
-            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o)))
+            .map(|o| {
+                let alarm_type = settings.calendar(o.directory()).unwrap().alarms();
+                DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type))
+            })
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (

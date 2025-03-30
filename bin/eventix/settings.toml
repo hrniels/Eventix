@@ -6,6 +6,14 @@ fgcolor = "#ffffff"
 bgcolor = "#1d77c0"
 types = ["Event", "Todo"]
 
+[calendar.bi.alarms.Personal]
+default = """
+BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER;RELATED=START:-PT5M
+END:VALARM
+"""
+
 [calendar.bi.email]
 name = "Nils Asmussen"
 address = "nils.asmussen@barkhauseninstitut.org"
@@ -21,6 +29,7 @@ disabled = true
 fgcolor = "#000000"
 bgcolor = "#e1c4a8"
 types = ["Event"]
+alarms = "Calendar"
 
 [calendar.oslwl.email]
 name = "Nils Asmussen"
@@ -37,6 +46,7 @@ disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#2ec17d"
 types = ["Event"]
+alarms = "Calendar"
 
 [calendar.scriptsolution.email]
 name = "Nils Asmussen"
@@ -53,6 +63,7 @@ disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#128421"
 types = ["Todo"]
+alarms = "Calendar"
 syncer = "FileSystem"
 
 [calendar.test]
@@ -60,8 +71,9 @@ path = "/home/hrniels/.config/vdirsyncer-test/calendar-test/calendar~xTVGWlaUtoY
 name = "Test"
 disabled = false
 fgcolor = "#ffffff"
-bgcolor = "#00a915"
+bgcolor = "#aa0000"
 types = ["Event"]
+alarms = "Calendar"
 
 [calendar.test.email]
 name = "Nils Asmussen"

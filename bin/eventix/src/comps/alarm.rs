@@ -54,6 +54,12 @@ impl AlarmRequest {
     }
 }
 
+pub struct PersonalAlarms<'a> {
+    config: AlarmConfigTemplate,
+    overwrite: bool,
+    effective: Option<&'a Vec<CalAlarm>>,
+}
+
 #[derive(Template)]
 #[template(path = "comps/alarm.htm")]
 pub struct AlarmTemplate<'a> {
@@ -61,10 +67,8 @@ pub struct AlarmTemplate<'a> {
     name: &'a str,
     id: String,
     edit: bool,
-    effective: Option<&'a Vec<CalAlarm>>,
     calendar: AlarmConfigTemplate,
-    personal: AlarmConfigTemplate,
-    personal_overwrite: bool,
+    personal: Option<PersonalAlarms<'a>>,
 }
 
 impl<'a> AlarmTemplate<'a> {
@@ -72,6 +76,7 @@ impl<'a> AlarmTemplate<'a> {
         locale: Arc<dyn Locale + Send + Sync>,
         name: &'a str,
         edit: bool,
+        personal: bool,
         effective: Option<&'a Vec<CalAlarm>>,
         value: AlarmRequest,
     ) -> Self {
@@ -79,18 +84,24 @@ impl<'a> AlarmTemplate<'a> {
             name,
             edit,
             id: name.replace("[", "_").replace("]", "_"),
-            effective,
             calendar: AlarmConfigTemplate::new(
                 locale.clone(),
                 format!("{}[calendar]", name),
                 Some(value.calendar),
             ),
-            personal_overwrite: value.personal.is_some(),
-            personal: AlarmConfigTemplate::new(
-                locale.clone(),
-                format!("{}[personal]", name),
-                value.personal,
-            ),
+            personal: if personal {
+                Some(PersonalAlarms {
+                    effective,
+                    overwrite: value.personal.is_some(),
+                    config: AlarmConfigTemplate::new(
+                        locale.clone(),
+                        format!("{}[personal]", name),
+                        value.personal,
+                    ),
+                })
+            } else {
+                None
+            },
             locale,
         }
     }

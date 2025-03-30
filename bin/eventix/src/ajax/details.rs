@@ -70,7 +70,8 @@ async fn handler(
             &req.uid, rid
         ))?;
 
-    let effective_alarms = state.personal_alarms().effective_alarms(&occ);
+    let alarm_type = state.settings().calendar(occ.directory()).unwrap().alarms();
+    let effective_alarms = state.personal_alarms().effective_alarms(&occ, alarm_type);
     let day_occ = DayOccurrence::new(&occ, effective_alarms.is_some());
     let dir = state.store().directory(occ.directory()).unwrap();
 

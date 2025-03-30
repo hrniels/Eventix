@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 use crate::sync;
 
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
-pub use settings::{CalendarSettings, Settings, Syncer};
+pub use settings::{CalendarAlarmType, CalendarSettings, Settings, Syncer};
 
 pub type EventixState = Arc<Mutex<State>>;
 

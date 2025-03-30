@@ -7,7 +7,7 @@ use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 use crate::comps::alarm::AlarmRequest;
 use crate::comps::attendees::Attendees;
 use crate::comps::todostatus::TodoStatus;
-use crate::state::PersonalAlarms;
+use crate::state::{CalendarAlarmType, PersonalAlarms};
 use crate::{
     comps::{datetimerange::DateTimeRange, recur::RecurRequest},
     locale::Locale,
@@ -94,6 +94,7 @@ pub trait CompAction {
     fn update(
         &self,
         calendar: &String,
+        cal_alarm_type: &CalendarAlarmType,
         comp: &mut CalComponent,
         personal_alarms: &mut PersonalAlarms,
         organizer: Option<CalOrganizer>,
@@ -119,18 +120,20 @@ pub trait CompAction {
             comp.set_alarms(None);
         }
 
-        let pers_cal = personal_alarms.get_or_create(calendar);
-        let changed = if let Some(pers_alarms) = pers_alarms {
-            pers_cal.set(comp.uid(), comp.rid(), pers_alarms.unwrap_or_default())
-        } else {
-            pers_cal.unset(comp.uid(), comp.rid())
-        };
-        if changed {
-            if let Err(e) = pers_cal.save() {
-                warn!(
-                    "Unable to save personal alarms for calendar {}: {}",
-                    calendar, e
-                );
+        if let CalendarAlarmType::Personal { .. } = cal_alarm_type {
+            let pers_cal = personal_alarms.get_or_create(calendar);
+            let changed = if let Some(pers_alarms) = pers_alarms {
+                pers_cal.set(comp.uid(), comp.rid(), pers_alarms.unwrap_or_default())
+            } else {
+                pers_cal.unset(comp.uid(), comp.rid())
+            };
+            if changed {
+                if let Err(e) = pers_cal.save() {
+                    warn!(
+                        "Unable to save personal alarms for calendar {}: {}",
+                        calendar, e
+                    );
+                }
             }
         }
 

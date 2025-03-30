@@ -60,11 +60,7 @@ impl CompEdit {
             } else {
                 None
             },
-            alarm: if let Some(alarms) = occ.alarms() {
-                AlarmRequest::from_alarms(alarms, pers_alarms, tz)
-            } else {
-                AlarmRequest::default()
-            },
+            alarm: AlarmRequest::from_alarms(occ.alarms().unwrap_or_default(), pers_alarms, tz),
             start_end: DateTimeRange::new_from_caldate(
                 if occ.is_recurrent() {
                     occ.occurrence_startdate()

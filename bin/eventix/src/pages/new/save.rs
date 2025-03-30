@@ -35,11 +35,9 @@ async fn action_update(
     };
 
     let calendar = Arc::from(form.calendar.clone());
-    let organizer = state
-        .settings()
-        .calendar(&calendar)
-        .unwrap()
-        .build_organizer();
+    let cal_settings = state.settings().calendar(&calendar).unwrap();
+    let organizer = cal_settings.build_organizer();
+    let alarm_type = cal_settings.alarms().clone();
 
     let uid = Uuid::new_v4();
     let mut comp = if form.req.ctype == CalCompType::Event {
@@ -51,6 +49,7 @@ async fn action_update(
     comp.set_rrule(rrule);
     form.update(
         &calendar,
+        &alarm_type,
         &mut comp,
         state.personal_alarms_mut(),
         organizer,

@@ -15,8 +15,7 @@ use tracing::warn;
 
 use crate::{
     locale::{DateFlags, Locale},
-    state::EventixState,
-    state::PersonalCalendarAlarms,
+    state::{CalendarAlarmType, EventixState, PersonalCalendarAlarms},
 };
 
 struct Notification {
@@ -73,24 +72,24 @@ impl Notification {
 
 struct NotifyAlarmOverlay<'a> {
     personal: Option<&'a PersonalCalendarAlarms>,
-    default: DefaultAlarmOverlay,
+    default: &'a Option<CalAlarm>,
 }
 
 impl<'a> NotifyAlarmOverlay<'a> {
-    fn new(personal: Option<&'a PersonalCalendarAlarms>) -> Self {
-        Self {
-            personal,
-            default: DefaultAlarmOverlay,
-        }
+    fn new(personal: Option<&'a PersonalCalendarAlarms>, default: &'a Option<CalAlarm>) -> Self {
+        Self { personal, default }
     }
 }
 
 impl AlarmOverlay for NotifyAlarmOverlay<'_> {
     fn alarms_for_component(&self, comp: &CalComponent) -> Option<Vec<CalAlarm>> {
         if let Some(personal) = self.personal {
-            personal.get(comp.uid(), None).map(|a| a.alarms().to_vec())
+            match personal.get(comp.uid(), None) {
+                Some(overwrite) => Some(overwrite.alarms().to_vec()),
+                None => self.default.clone().map(|alarm| vec![alarm]),
+            }
         } else {
-            self.default.alarms_for_component(comp)
+            self.default.clone().map(|alarm| vec![alarm])
         }
     }
 
@@ -99,6 +98,9 @@ impl AlarmOverlay for NotifyAlarmOverlay<'_> {
         comp: &CalComponent,
         overwrites: HashMap<CalDate, &[CalAlarm]>,
     ) -> HashMap<CalDate, Vec<CalAlarm>> {
+        // we only need to specify our personal overwrites here as we already specify the default
+        // for the base component above. So, we automatically fall back to this alarm if we have no
+        // overwrite for a specific occurrence.
         if let Some(personal) = self.personal {
             let mut personal = personal.all_for_occurrences(comp.uid());
             for (rid, alarms) in overwrites {
@@ -106,7 +108,7 @@ impl AlarmOverlay for NotifyAlarmOverlay<'_> {
             }
             personal
         } else {
-            self.default.alarm_overwrites(comp, overwrites)
+            HashMap::default()
         }
     }
 }
@@ -126,8 +128,17 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
                 .directories()
                 .iter()
                 .flat_map(|dir| {
-                    let overlay = NotifyAlarmOverlay::new(state.personal_alarms().get(dir.id()));
-                    dir.due_alarms_between(last_check, now, &overlay)
+                    let overlay: Box<dyn AlarmOverlay> =
+                        match state.settings().calendar(dir.id()).unwrap().alarms() {
+                            CalendarAlarmType::Personal { default } => {
+                                Box::new(NotifyAlarmOverlay::new(
+                                    state.personal_alarms().get(dir.id()),
+                                    default,
+                                ))
+                            }
+                            CalendarAlarmType::Calendar => Box::new(DefaultAlarmOverlay),
+                        };
+                    dir.due_alarms_between(last_check, now, &*overlay)
                         .collect::<Vec<_>>()
                 })
                 .filter(|a| !a.occurrence().is_cancelled())

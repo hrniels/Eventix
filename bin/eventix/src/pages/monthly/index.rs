@@ -109,11 +109,14 @@ pub async fn content(
         .flat_map(move |s| s.occurrences_between(mstart, mend, |c| c.ctype() == CalCompType::Event))
         .filter(|o| !o.is_excluded())
         .collect::<Vec<_>>();
+
+    let settings = state.settings();
     let pers_alarms = state.personal_alarms();
 
     let mut days = Vec::new();
     while date < end {
-        let day_occs = DayOccurrence::occurrences_on(&ev_occs, pers_alarms, date, &timezone);
+        let day_occs =
+            DayOccurrence::occurrences_on(&ev_occs, settings, pers_alarms, date, &timezone);
         days.push(Day {
             date: Some(date),
             show_month: date.day() == 1

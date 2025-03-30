@@ -1,31 +1,37 @@
 <div id="{{ id }}-tabs">
     <ul>
         <li><a href="#{{ id }}-tabs-CALENDAR">{{ "Calendar"|t(locale) }}</a></li>
+        {% if personal.is_some() %}
         <li><a href="#{{ id }}-tabs-PERSONAL">{{ "Personal"|t(locale) }}</a></li>
+        {% endif %}
     </ul>
     <div id="{{ id }}-tabs-CALENDAR">
         {{ calendar|safe }}
     </div>
+    {% if let Some(personal) = personal %}
     <div id="{{ id }}-tabs-PERSONAL">
         <div style="padding: .4em">
             <input type="checkbox" id="{{ id }}_personal_overwrite"
                                    name="{{ name }}_personal_overwrite"
-                                   {% if personal_overwrite %}checked="checked"{% endif %}/>
-            <label for="{{ id }}_personal_overwrite">{{ "Overwrite alarm"|t(locale) }}</label>
+                                   {% if personal.overwrite %}checked="checked"{% endif %}/>
+            <label for="{{ id }}_personal_overwrite">{{ "Overwrite default"|t(locale) }}</label>
         </div>
-        {{ personal|safe }}
+        {{ personal.config|safe }}
     </div>
+    {% endif %}
 </div>
 
+{% if let Some(personal) = personal %}
 {% if edit %}
 <div style="padding-top: .6em; padding-left: .4em">
     <b>{{ "Effective:"|t(locale) }}</b>
-    {% if let Some(effective) = effective %}
+    {% if let Some(effective) = personal.effective %}
     {{ effective[0].human(locale.timezone()) }}
     {% else %}
     -
     {% endif %}
 </div>
+{% endif %}
 {% endif %}
 
 <style type="text/css">
@@ -37,14 +43,17 @@
     $(function() {
         $("#{{ id }}-tabs").tabs();
 
+        {% if let Some(personal) = personal %}
         $("#{{ id }}_personal_overwrite").click(function() {
             setPersonalOverwrite(this.checked)
         });
-        {% if !personal_overwrite %}
+        {% if !personal.overwrite %}
         setPersonalOverwrite(false);
+        {% endif %}
         {% endif %}
     });
 
+    {% if let Some(personal) = personal %}
     function setPersonalOverwrite(overwrite) {
         var ids = ["none", "relative", "absolute", "durunit_", "durtype_", "datetime__time"];
         for(id in ids) {
@@ -53,5 +62,6 @@
         $("#{{ id }}_personal__duration").spinner(overwrite ? "enable" : "disable");
         $("#{{ id }}_personal__datetime__date_").datepicker("option", "disabled", !overwrite);
     }
+    {% endif %}
 </script>
 
