@@ -65,10 +65,12 @@
             <td width="70%">{{ rrule.human()|newlines()|safe }}</td>
         </tr>
         {% endif %}
-        {% if let Some(effective) = effective_alarms %}
+        {% if let Some(alarms) = alarms %}
         <tr>
             <td width="30%">{{ "Reminder"|t(locale) }}:</td>
-            <td width="70%">{{ effective[0].human(locale.timezone()) }}</td>
+            <td width="70%">
+                <div id="alarms">{{ alarms|safe }}</div>
+            </td>
         </tr>
         {% endif %}
         {% if let Some(org) = org %}
@@ -167,6 +169,25 @@
     {{ "This will permanently delete this series."|t(locale) }}
 </div>
 <script>
+    function alarmURL(uid, rid, edit) {
+        var url = '/editalarm?edit=' + edit + '&uid=' + uid;
+        if(rid)
+            url += '&' + rid;
+        return url;
+    }
+
+    function editAlarm(uid, rid) {
+        getRequest(alarmURL(uid, rid, true), function(data) {
+            $('#alarms').html(data.html);
+        });
+    }
+
+    function cancelAlarm(uid, rid) {
+        getRequest(alarmURL(uid, rid, false), function(data) {
+            $('#alarms').html(data.html);
+        });
+    }
+
     $(function() {
         confirmDialog(
             'delete-series-confirm-{{ occ.uid_html() }}',

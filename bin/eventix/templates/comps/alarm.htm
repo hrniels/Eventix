@@ -45,23 +45,12 @@
 
         {% if let Some(personal) = personal %}
         $("#{{ id }}_personal_overwrite").click(function() {
-            setPersonalOverwrite(this.checked)
+            setPersonalOverwrite('{{ id }}_personal_', this.checked)
         });
         {% if !personal.overwrite %}
-        setPersonalOverwrite(false);
+        setPersonalOverwrite('{{ id }}_personal_', false);
         {% endif %}
         {% endif %}
     });
-
-    {% if let Some(personal) = personal %}
-    function setPersonalOverwrite(overwrite) {
-        var ids = ["none", "relative", "absolute", "durunit_", "durtype_", "datetime__time"];
-        for(id in ids) {
-            $("#{{ id }}_personal__" + ids[id]).prop("disabled", !overwrite);
-        }
-        $("#{{ id }}_personal__duration").spinner(overwrite ? "enable" : "disable");
-        $("#{{ id }}_personal__datetime__date_").datepicker("option", "disabled", !overwrite);
-    }
-    {% endif %}
 </script>
 

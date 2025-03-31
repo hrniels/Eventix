@@ -12,7 +12,9 @@ mod state;
 mod sync;
 mod util;
 
-use ajax::{attendees, complete, delete, details, occlist, reload, togglecal, toggleexcl};
+use ajax::{
+    attendees, complete, delete, details, editalarm, occlist, reload, togglecal, toggleexcl,
+};
 use axum::{http::Request, response::IntoResponse, Router};
 use clap::Parser;
 use error::HTMLError;
@@ -72,6 +74,7 @@ async fn main() {
         .merge(occlist::router(state.clone()))
         .merge(attendees::router(state.clone()))
         .merge(reload::router(state.clone()))
+        .merge(editalarm::router(state.clone()))
         .fallback(error_handler)
         .layer(
             TraceLayer::new_for_http()

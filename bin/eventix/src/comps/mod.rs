@@ -6,6 +6,7 @@ pub mod combobox;
 pub mod date;
 pub mod datetime;
 pub mod datetimerange;
+pub mod editalarm;
 pub mod organizer;
 pub mod pagination;
 pub mod recur;

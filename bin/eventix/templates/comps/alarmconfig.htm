@@ -7,13 +7,13 @@
         </td>
     </tr>
     <tr>
-        <td width="20%">
+        <td width="25%">
             <input type="radio" id="{{ id }}_relative" name="{{ name }}[trigger]" value="RELATIVE"
                 {% if trigger == "RELATIVE" %}checked="checked"{% endif %}/>
             <label for="{{ id }}_relative">{{ "Relative:"|t(locale) }}</label>
         </td>
-        <td width="80%">
-            <input id="{{ id }}_duration" name="{{ name }}[duration]" size="5"
+        <td width="75%">
+            <input id="{{ id }}_duration" name="{{ name }}[duration]" size="3"
                                                                       value="{{ duration }}" />
             {{ durunit|safe }}
             {{ durtype|safe }}

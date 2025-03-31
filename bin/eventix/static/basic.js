@@ -103,3 +103,12 @@ function deleteItem(uid, rid, onDeleted) {
 function toggleCalendar(id) {
     postRequest('/toggle-calendar?id=' + id, reloadPage);
 }
+
+function setPersonalOverwrite(id_prefix, overwrite) {
+    var ids = ["none", "relative", "absolute", "durunit_", "durtype_", "datetime__time"];
+    for(id in ids) {
+        $("#" + id_prefix + "_" + ids[id]).prop("disabled", !overwrite);
+    }
+    $("#" + id_prefix + "_duration").spinner(overwrite ? "enable" : "disable");
+    $("#" + id_prefix + "_datetime__date_").datepicker("option", "disabled", !overwrite);
+}

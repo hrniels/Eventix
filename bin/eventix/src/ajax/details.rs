@@ -4,19 +4,20 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::{routing::get, Router};
 use ical::col::CalDir;
-use ical::objects::{CalAlarm, EventLike};
+use ical::objects::EventLike;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use ical::objects::{CalCompType, CalDate};
 
+use crate::comps::editalarm::EditAlarmTemplate;
 use crate::comps::organizer::OrganizerTemplate;
 use crate::error::HTMLError;
 use crate::html::{self, filters};
 use crate::locale::{self, DateFlags, Locale};
 
 use crate::objects::DayOccurrence;
-use crate::state::EventixState;
+use crate::state::{CalendarAlarmType, EventixState};
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -42,7 +43,7 @@ struct DetailsTemplate<'a> {
     dir: &'a CalDir,
     occ: DayOccurrence<'a>,
     org: Option<OrganizerTemplate<'a>>,
-    effective_alarms: Option<Vec<CalAlarm>>,
+    alarms: Option<EditAlarmTemplate<'a>>,
 }
 
 async fn handler(
@@ -51,7 +52,7 @@ async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
-    let rid = if let Some(rid) = req.rid {
+    let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()
                 .context(format!("Invalid rid date: {}", rid))?,
@@ -80,9 +81,18 @@ async fn handler(
             .organizer()
             .map(|org| OrganizerTemplate::new(locale.clone(), org)),
         occ: day_occ,
-        locale,
         dir,
-        effective_alarms,
+        alarms: match alarm_type {
+            CalendarAlarmType::Personal { .. } => Some(EditAlarmTemplate::new(
+                locale.clone(),
+                &state,
+                req.uid,
+                req.rid,
+                false,
+            )?),
+            CalendarAlarmType::Calendar => None,
+        },
+        locale,
     }
     .render()
     .context("details template")?;

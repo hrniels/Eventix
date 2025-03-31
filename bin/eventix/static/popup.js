@@ -1,7 +1,8 @@
 var selected = null;
 
-$(document).click(function(e) {
-    if(selected != null && !inBoundingBox(e, 'popup'))
+$(document).mousedown(function(e) {
+    var popup = document.getElementById('popup');
+    if(selected != null && !popup.contains(e.target))
         deselect(selected, null);
 });
 $(document).keydown(function(e) {
@@ -35,7 +36,7 @@ function select(newid) {
     var elRect = pageBoundingBox(el);
 
     var popup = $('#popup');
-    var popWidth = 500;
+    var popWidth = 600;
     if(elRect.right + popWidth > window.innerWidth)
         popup.css('left', elRect.left - popWidth);
     else
@@ -81,12 +82,6 @@ function pageBoundingBox(el) {
     rect.left += left;
     rect.right += left;
     return rect;
-}
-
-function inBoundingBox(e, id) {
-    var box = pageBoundingBox(document.getElementById(id));
-    return e.pageX >= box.left && e.pageX <= box.left + box.width &&
-        e.pageY >= box.top && e.pageY <= box.top + box.height;
 }
 
 function loadOccurrence(id, uid, rid) {
