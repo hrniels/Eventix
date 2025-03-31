@@ -678,6 +678,12 @@ mod tests {
             .unwrap()
     }
 
+    fn ny_datetime(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> DateTime<Tz> {
+        chrono_tz::America::New_York
+            .with_ymd_and_hms(year, month, day, hour, min, sec)
+            .unwrap()
+    }
+
     fn new_allday_event(date: NaiveDate, uid: &str) -> EventBuilder {
         EventBuilder::new(uid)
             .start(CalDate::Date(date, CalCompType::Event.into()))
@@ -1217,5 +1223,140 @@ mod tests {
         assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 4)));
         assert_eq!(occs[1].uid(), "id1");
         assert_eq!(occs[1].occurrence_start(), Some(new_date(1990, 1, 8)));
+    }
+
+    #[test]
+    fn range_with_local_caldate() {
+        let mut dir = CalDir::default();
+        let mut cal = Calendar::default();
+        let start = NaiveDate::from_ymd_opt(2025, 3, 29)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
+        let end = start + TimeDelta::hours(1);
+        cal.add_component(CalComponent::Event(
+            EventBuilder::new("id1")
+                .start(CalDate::DateTime(CalDateTime::Timezone(
+                    start,
+                    "Europe/Berlin".to_string(),
+                )))
+                .end(CalDate::DateTime(CalDateTime::Timezone(
+                    end,
+                    "Europe/Berlin".to_string(),
+                )))
+                .rrule("FREQ=DAILY;COUNT=4".parse().unwrap())
+                .done(),
+        ));
+        dir.add_file(CalFile::new_simple(cal));
+
+        let start = ny_datetime(2025, 3, 29, 0, 0, 0);
+        let end = start + TimeDelta::days(7);
+
+        let mut iter = dir.occurrences_between(start, end, |_| true);
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            ny_datetime(2025, 3, 29, 5, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            ny_datetime(2025, 3, 30, 4, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            ny_datetime(2025, 3, 31, 4, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            ny_datetime(2025, 4, 1, 4, 0, 0)
+        );
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn range_with_foreign_caldate() {
+        let mut dir = CalDir::default();
+        let mut cal = Calendar::default();
+        let start = NaiveDate::from_ymd_opt(2025, 3, 29)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
+        let end = start + TimeDelta::hours(1);
+        cal.add_component(CalComponent::Event(
+            EventBuilder::new("id1")
+                .start(CalDate::DateTime(CalDateTime::Timezone(
+                    start,
+                    "America/New_York".to_string(),
+                )))
+                .end(CalDate::DateTime(CalDateTime::Timezone(
+                    end,
+                    "America/New_York".to_string(),
+                )))
+                .rrule("FREQ=DAILY;COUNT=4".parse().unwrap())
+                .done(),
+        ));
+        dir.add_file(CalFile::new_simple(cal));
+
+        let start = new_datetime(2025, 3, 29, 0, 0, 0);
+        let end = start + TimeDelta::days(7);
+
+        let mut iter = dir.occurrences_between(start, end, |_| true);
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 3, 29, 15, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 3, 30, 16, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 3, 31, 16, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 4, 1, 16, 0, 0)
+        );
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn range_with_floating_caldate() {
+        let mut dir = CalDir::default();
+        let mut cal = Calendar::default();
+        let start = NaiveDate::from_ymd_opt(2025, 3, 29)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
+        let end = start + TimeDelta::hours(1);
+        cal.add_component(CalComponent::Event(
+            EventBuilder::new("id1")
+                .start(CalDate::DateTime(CalDateTime::Floating(start)))
+                .end(CalDate::DateTime(CalDateTime::Floating(end)))
+                .rrule("FREQ=DAILY;COUNT=4".parse().unwrap())
+                .done(),
+        ));
+        dir.add_file(CalFile::new_simple(cal));
+
+        let start = new_datetime(2025, 3, 29, 0, 0, 0);
+        let end = start + TimeDelta::days(7);
+
+        let mut iter = dir.occurrences_between(start, end, |_| true);
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 3, 29, 10, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 3, 30, 10, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 3, 31, 10, 0, 0)
+        );
+        assert_eq!(
+            iter.next().unwrap().occurrence_start().unwrap(),
+            new_datetime(2025, 4, 1, 10, 0, 0)
+        );
+        assert!(iter.next().is_none());
     }
 }

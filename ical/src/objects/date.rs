@@ -99,6 +99,20 @@ impl CalDate {
         }
     }
 
+    /// Returns a [`DateTime`] instance for this [`CalDate`].
+    ///
+    /// If this calendar date has specified a timezone (or is in UTC), this timezone will be used.
+    /// If this calendar date is floating, the given timezone will be used. Furthermore, if this
+    /// calendar date is not a [`CalDate::DateTime`], the given timezone will be used.
+    pub fn as_datetime(&self, local: &Tz) -> DateTime<Tz> {
+        match self {
+            Self::Date(date, _ty) => local
+                .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
+                .unwrap(),
+            Self::DateTime(datetime) => datetime.as_datetime(local),
+        }
+    }
+
     /// Returns a [`CalDate`] instance with UTC time.
     pub fn to_utc(self) -> CalDate {
         match self {
@@ -228,17 +242,31 @@ impl CalDateTime {
     pub fn with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Utc(dt) => dt.with_timezone(tz),
-            Self::Timezone(dt, tzid) => {
-                let date_tz = if let Ok(date_tz) = tzid.parse::<Tz>() {
-                    date_tz
-                } else {
-                    // we fall back to UTC for all weird values that we see
-                    Tz::UTC
-                };
-                date_tz.from_local_datetime(dt).unwrap().with_timezone(tz)
-            }
+            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, &tzid).with_timezone(tz),
             Self::Floating(dt) => tz.from_local_datetime(dt).unwrap(),
         }
+    }
+
+    /// Returns a [`DateTime`] instance for this [`CalDate`].
+    ///
+    /// If this calendar date has specified a timezone (or is in UTC), this timezone will be used.
+    /// If this calendar date is floating, the given timezone will be used.
+    pub fn as_datetime(&self, local: &Tz) -> DateTime<Tz> {
+        match self {
+            Self::Utc(dt) => dt.with_timezone(&Tz::UTC),
+            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, &tzid),
+            Self::Floating(dt) => local.from_local_datetime(&dt).unwrap(),
+        }
+    }
+
+    fn resolve_timezone(dt: NaiveDateTime, tzid: &String) -> DateTime<Tz> {
+        let date_tz = if let Ok(date_tz) = tzid.parse::<Tz>() {
+            date_tz
+        } else {
+            // we fall back to UTC for all weird values that we see
+            Tz::UTC
+        };
+        date_tz.from_local_datetime(&dt).unwrap()
     }
 
     /// Returns a [`CalDateTime`] instance with UTC time.

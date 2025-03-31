@@ -710,7 +710,9 @@ impl CalRRule {
                                                         start,
                                                         end,
                                                     ) {
-                                                        res.push(ndate);
+                                                        res.push(
+                                                            ndate.with_timezone(&start.timezone()),
+                                                        );
                                                     }
                                                     *count += 1;
                                                 }
@@ -754,7 +756,9 @@ impl CalRRule {
                                                         start,
                                                         end,
                                                     ) {
-                                                        res.push(ndate);
+                                                        res.push(
+                                                            ndate.with_timezone(&start.timezone()),
+                                                        );
                                                     }
                                                     *count += 1;
                                                 }
@@ -1118,6 +1122,19 @@ mod tests {
 
     fn ny_datetime(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> DateTime<Tz> {
         chrono_tz::America::New_York
+            .with_ymd_and_hms(year, month, day, hour, min, sec)
+            .unwrap()
+    }
+
+    fn berlin_datetime(
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        min: u32,
+        sec: u32,
+    ) -> DateTime<Tz> {
+        chrono_tz::Europe::Berlin
             .with_ymd_and_hms(year, month, day, hour, min, sec)
             .unwrap()
     }
@@ -1697,19 +1714,6 @@ mod tests {
 
     #[test]
     fn range_by_day_dst_change() {
-        fn berlin_datetime(
-            year: i32,
-            month: u32,
-            day: u32,
-            hour: u32,
-            min: u32,
-            sec: u32,
-        ) -> DateTime<Tz> {
-            chrono_tz::Europe::Berlin
-                .with_ymd_and_hms(year, month, day, hour, min, sec)
-                .unwrap()
-        }
-
         let start = berlin_datetime(2025, 3, 24, 10, 0, 0);
         let rrule = "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;WKST=MO"
             .parse::<CalRRule>()

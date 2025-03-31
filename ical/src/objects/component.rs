@@ -510,12 +510,9 @@ impl CalComponent {
                 return CompDateIterator::default();
             };
 
-            let dates = rrule.dates_between(
-                dtstart.as_start_with_tz(&start.timezone()),
-                self.duration(&start.timezone()),
-                start,
-                end,
-            );
+            let dtstart = dtstart.as_datetime(&start.timezone());
+            let dates =
+                rrule.dates_between(dtstart, self.duration(&dtstart.timezone()), start, end);
             let exdates = self.exdates_as_datetime(&start.timezone());
             return CompDateIterator::new_recur(dates, exdates);
         }
