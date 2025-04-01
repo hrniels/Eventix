@@ -73,8 +73,6 @@ pub async fn post_handler(
         None
     };
 
-    println!("{:#?}", req);
-
     let mut state = state.lock().await;
 
     let occ = state
