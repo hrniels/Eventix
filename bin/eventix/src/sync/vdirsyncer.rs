@@ -19,14 +19,12 @@ pub struct VDirSyncer {
 }
 
 impl VDirSyncer {
-    pub fn new(args: Vec<String>, mut local_name: String) -> Self {
+    pub fn new(args: Vec<String>, local_name: String) -> Self {
         assert!(!args.is_empty());
         let mut cmd = Command::new(args[0].clone());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
         cmd.args(&args[1..]);
-        // push the separator between calendar name and folder name
-        local_name.push('/');
         Self { cmd, local_name }
     }
 
@@ -60,11 +58,11 @@ impl VDirSyncer {
                 match ev {
                     // as the filename is not necessarily the UID and we only know the UID here, we
                     // do not collect them, but just remember that we found a new item.
-                    EventType::Add(cal) if cal.starts_with(&self.local_name) => added = true,
-                    EventType::Update(uid, cal) if cal.starts_with(&self.local_name) => {
+                    EventType::Add(cal) if cal == self.local_name => added = true,
+                    EventType::Update(uid, cal) if cal == self.local_name => {
                         changed.push(uid.to_string())
                     }
-                    EventType::Delete(uid, cal) if cal.starts_with(&self.local_name) => {
+                    EventType::Delete(uid, cal) if cal == self.local_name => {
                         deleted.push(uid.to_string())
                     }
                     _ => {}

@@ -20,10 +20,10 @@ address = "nils.asmussen@barkhauseninstitut.org"
 
 [calendar.bi.syncer.VDirSyncer]
 cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_bi"]
-local_name = "calendar_bi_local"
+local_name = "calendar_bi_local/calendar"
 
 [calendar.oslwl]
-path = "/home/hrniels/.config/vdirsyncer-test/calendar-oslwl/-_shared_by_adam"
+path = "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/-_shared_by_adam"
 name = "OS LWL"
 disabled = true
 fgcolor = "#000000"
@@ -36,8 +36,8 @@ name = "Nils Asmussen"
 address = "nils@os.inf.tu-dresden.de"
 
 [calendar.oslwl.syncer.VDirSyncer]
-cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_oslwl"]
-local_name = "calendar_oslwl_local"
+cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_oschair/-_shared_by_adam"]
+local_name = "calendar_oschair_local/-_shared_by_adam"
 
 [calendar.scriptsolution]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
@@ -54,7 +54,7 @@ address = "nils@script-solution.de"
 
 [calendar.scriptsolution.syncer.VDirSyncer]
 cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_scso"]
-local_name = "calendar_scso_local"
+local_name = "calendar_scso_local/calendar~jt7D6iFxhujcnk_A7SJmbFq"
 
 [calendar.scriptsolution_tasks]
 path = "/home/hrniels/.config/vdirsyncer-test/tasks"
@@ -81,4 +81,4 @@ address = "nils@script-solution.de"
 
 [calendar.test.syncer.VDirSyncer]
 cmd = ["/home/hrniels/Projects/eventix/tools/sync.sh", "calendar_test"]
-local_name = "calendar_test_local"
+local_name = "calendar_test_local/calendar~xTVGWlaUtoYnj4TOSK7v-ZV"
