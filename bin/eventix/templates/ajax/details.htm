@@ -172,7 +172,7 @@
     function alarmURL(uid, rid, edit) {
         var url = '/editalarm?edit=' + edit + '&uid=' + uid;
         if(rid)
-            url += '&' + rid;
+            url += '&rid=' + rid;
         return url;
     }
 

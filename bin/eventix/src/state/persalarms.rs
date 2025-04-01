@@ -152,7 +152,8 @@ impl PersonalCalendarAlarms {
     }
 
     pub fn has_alarms(&self, occ: &Occurrence<'_>, default: &Option<CalAlarm>) -> bool {
-        match self.get(occ.uid(), occ.rid()) {
+        let rid = occ.occurrence_startdate().map(|d| d.to_utc());
+        match self.get(occ.uid(), rid.as_ref()) {
             Some(overwrite) => !overwrite.alarms().is_empty(),
             None => default.is_some(),
         }
@@ -163,7 +164,8 @@ impl PersonalCalendarAlarms {
         occ: &Occurrence<'_>,
         default: &Option<CalAlarm>,
     ) -> Option<Vec<CalAlarm>> {
-        match self.get(occ.uid(), occ.rid()) {
+        let rid = occ.occurrence_startdate().map(|d| d.to_utc());
+        match self.get(occ.uid(), rid.as_ref()) {
             Some(overwrite) => {
                 // an empty alarm list here means that we have overwritten it to disable all
                 // alarms, but the caller expects this as None.
