@@ -186,6 +186,28 @@ impl CalAttendee {
         params.extend(self.params.iter().cloned());
         Property::new("ATTENDEE", params, self.address.clone())
     }
+
+    /// Merges the given attendee into `self`.
+    ///
+    /// The properties of the given attendee take preference, overwriting existing properties.
+    pub fn merge_with(&mut self, att: CalAttendee) {
+        if let Some(role) = att.role {
+            self.role = Some(role);
+        }
+        if let Some(part_stat) = att.part_stat {
+            self.part_stat = Some(part_stat);
+        }
+        if let Some(cn) = att.common_name {
+            self.common_name = Some(cn);
+        }
+        for param in att.params {
+            if let Some(ex_param) = self.params.iter_mut().find(|p| p.name() == param.name()) {
+                *ex_param = param;
+            } else {
+                self.params.push(param);
+            }
+        }
+    }
 }
 
 impl TryFrom<Property> for CalAttendee {
