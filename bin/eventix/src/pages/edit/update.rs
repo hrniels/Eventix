@@ -9,6 +9,7 @@ use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::Page;
 use crate::state::EventixState;
+use crate::util;
 
 use super::{CompAction, CompEdit};
 
@@ -49,6 +50,10 @@ fn action_update(
         .component_with(|c| c.uid() == &form.req.uid && c.rid().is_none())
         .context("Unable to find base component")?;
     let ctype = base.ctype();
+
+    if !util::is_event_owner(organizer.as_ref(), base.organizer()) {
+        return Err(anyhow!("No edit permission").into());
+    }
 
     if !form.check(page, locale, ctype) {
         return Ok(false);

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use askama::Template;
 use axum::{
     extract::{Query, State},
@@ -20,6 +20,7 @@ use crate::{
     objects::Calendars,
     pages::Breadcrumb,
     state::{CalendarAlarmType, EventixState},
+    util,
 };
 use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
@@ -89,6 +90,10 @@ pub async fn content(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
             &req.uid, rid
         ))?;
+
+    if !util::user_is_event_owner(file.directory(), &state, occ.organizer()) {
+        return Err(anyhow!("No edit permission").into());
+    }
 
     let alarm_type = state
         .settings()

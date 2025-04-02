@@ -113,6 +113,7 @@
             </td>
         </tr>
         {% endif %}
+        {% if owner %}
         <tr>
             <td colspan="2" align="right">
                 {% if occ.is_recurrent() %}
@@ -162,6 +163,7 @@
                 {% endif %}
             </td>
         </tr>
+        {% endif %}
     </table>
 </div>
 

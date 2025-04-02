@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::HTMLError;
 use crate::state::EventixState;
+use crate::util;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -30,10 +31,20 @@ pub async fn handler(
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let mut state = state.lock().await;
 
-    let file = state
-        .store_mut()
-        .files_by_id_mut(&form.uid)
-        .ok_or_else(|| anyhow!("Unable to find file with uid {}", form.uid))?;
+    let own_org = {
+        let file = state
+            .store()
+            .file_by_id(&form.uid)
+            .ok_or_else(|| anyhow!("Unable to find file with uid {}", form.uid))?;
+
+        state
+            .settings()
+            .calendar(file.directory())
+            .unwrap()
+            .build_organizer()
+    };
+
+    let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 
     let date = form
         .rid
@@ -43,6 +54,10 @@ pub async fn handler(
     let base = file
         .component_with_mut(|c| c.rid().is_none() && c.uid() == &form.uid)
         .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
+
+    if !util::is_event_owner(own_org.as_ref(), base.organizer()) {
+        return Err(anyhow!("No edit permission").into());
+    }
 
     base.toggle_exclude(date);
     base.set_last_modified(CalDate::now());

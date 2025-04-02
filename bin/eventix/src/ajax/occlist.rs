@@ -9,6 +9,7 @@ use chrono::{DateTime, Duration, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
 use ical::objects::{CalCompType, CalDate, CalTodoStatus, EventLike};
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::error::HTMLError;
@@ -17,6 +18,7 @@ use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
 use crate::state::EventixState;
+use crate::util;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
@@ -44,11 +46,24 @@ pub fn router(state: EventixState) -> Router {
         .with_state(state)
 }
 
+struct ListOccurrence<'a> {
+    occ: DayOccurrence<'a>,
+    owner: bool,
+}
+
+impl<'a> Deref for ListOccurrence<'a> {
+    type Target = DayOccurrence<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.occ
+    }
+}
+
 #[derive(Template)]
 #[template(path = "ajax/occlist.htm")]
 struct OccListTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
-    occs: Vec<DayOccurrence<'a>>,
+    occs: Vec<ListOccurrence<'a>>,
 }
 
 fn min_datetime(timezone: Tz) -> DateTime<Tz> {
@@ -111,24 +126,28 @@ pub async fn handler(
         }
     };
 
-    let alarm_type = state
-        .settings()
-        .calendar(file.directory())
-        .unwrap()
-        .alarms();
+    let cal_settings = state.settings().calendar(file.directory()).unwrap();
+    let alarm_type = cal_settings.alarms();
     let pers_alarms = state.personal_alarms();
+    let own_org = cal_settings.build_organizer();
 
     let more = occs.len() > req.count;
     let occs: Vec<_> = match req.dir {
         Direction::Forward => occs
             .iter()
             .take(req.count)
-            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)))
+            .map(|o| ListOccurrence {
+                occ: DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)),
+                owner: util::is_event_owner(own_org.as_ref(), o.organizer()),
+            })
             .collect(),
         Direction::Backwards => occs
             .iter()
             .skip(if more { 1 } else { 0 })
-            .map(|o| DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)))
+            .map(|o| ListOccurrence {
+                occ: DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)),
+                owner: util::is_event_owner(own_org.as_ref(), o.organizer()),
+            })
             .collect(),
     };
 

@@ -18,6 +18,7 @@ use crate::locale::{self, DateFlags, Locale};
 
 use crate::objects::DayOccurrence;
 use crate::state::{CalendarAlarmType, EventixState};
+use crate::util;
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -44,6 +45,7 @@ struct DetailsTemplate<'a> {
     occ: DayOccurrence<'a>,
     org: Option<OrganizerTemplate<'a>>,
     alarms: Option<EditAlarmTemplate<'a>>,
+    owner: bool,
 }
 
 async fn handler(
@@ -92,6 +94,7 @@ async fn handler(
             )?),
             CalendarAlarmType::Calendar => None,
         },
+        owner: util::user_is_event_owner(occ.directory(), &state, occ.organizer()),
         locale,
     }
     .render()

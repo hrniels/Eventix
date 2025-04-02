@@ -21,6 +21,7 @@ use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
 use crate::pages::Page;
 use crate::state::EventixState;
+use crate::util;
 
 const PER_PAGE: usize = 15;
 
@@ -60,6 +61,7 @@ struct ListComponent<'a> {
     dir: &'a Arc<String>,
     comp: &'a CalComponent,
     org: Option<OrganizerTemplate<'a>>,
+    owner: bool,
 }
 
 #[derive(Template)]
@@ -127,6 +129,7 @@ pub async fn handler(
                             .organizer()
                             .map(|org| OrganizerTemplate::new(locale.clone(), org)),
                         comp: c,
+                        owner: util::user_is_event_owner(i.directory(), &state, c.organizer()),
                     })
             })
             .filter(|l| {

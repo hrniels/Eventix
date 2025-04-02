@@ -1,6 +1,6 @@
 {% for occ in occs %}
 <tr id="occrow_{{ occ.rid_html() }}">
-    <td>
+    <td style="height: 2em">
         &bull;&nbsp;
         <span class="ev_summary
                      {% match occ.status_class() %}
@@ -30,6 +30,7 @@
         {{ html::date_range(locale, occ.occurrence_startdate().as_ref(), occ.occurrence_enddate().as_ref())|safe }}
     </td>
     <td>
+        {% if occ.owner %}
         <a style="float: right" class="ev_button ev_button_normal" href="/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}">
             <i class="bi bi-pencil"></i>
             <span>{{ "Edit"|t(locale) }}</span>
@@ -45,6 +46,7 @@
             <span>{{ "Include"|t(locale) }}</span>
             {% endif %}
         </a>
+        {% endif %}
         {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
         {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
         <a style="float: right"
