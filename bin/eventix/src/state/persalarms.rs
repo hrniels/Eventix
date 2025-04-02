@@ -3,7 +3,7 @@ use ical::{
     col::Occurrence,
     objects::{CalAlarm, CalDate, EventLike},
 };
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{create_dir_all, read_dir},
@@ -114,11 +114,7 @@ impl PersonalAlarms {
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AlarmOverwrite {
     uid: String,
-    #[serde(
-        serialize_with = "serde_impl::serialize_date",
-        deserialize_with = "serde_impl::deserialize_date",
-        default
-    )]
+    #[serde(default)]
     rid: Option<CalDate>,
     alarms: Vec<CalAlarm>,
 }
@@ -246,32 +242,6 @@ impl PersonalCalendarAlarms {
 
     pub fn save(&self) -> anyhow::Result<()> {
         super::write_to_file(&self.path, self)
-    }
-}
-
-mod serde_impl {
-    use super::*;
-
-    pub fn serialize_date<S>(date: &Option<CalDate>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match date {
-            Some(date) => serializer.serialize_some(&format!("{}", date)),
-            None => serializer.serialize_none(),
-        }
-    }
-
-    pub fn deserialize_date<'de, D>(deserializer: D) -> Result<Option<CalDate>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let buf = String::deserialize(deserializer)?;
-        if buf.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(buf.parse().map_err(serde::de::Error::custom)?))
-        }
     }
 }
 

@@ -2,7 +2,7 @@ use std::{cmp::Ordering, fmt, str::FromStr};
 
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::Tz;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::parser::{Parameter, ParseError, Property};
 
@@ -37,7 +37,7 @@ impl From<CalCompType> for CalDateType {
 ///
 /// Dates in iCalendar objects come in two forms: date and datetime. The former specifies a day,
 /// whereas the latter specifies a day and a time.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum CalDate {
     /// Specifies a date.
     ///
@@ -47,6 +47,25 @@ pub enum CalDate {
 
     /// Specifies a date and a time.
     DateTime(CalDateTime),
+}
+
+impl Serialize for CalDate {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("{}", self))
+    }
+}
+
+impl<'de> Deserialize<'de> for CalDate {
+    fn deserialize<D>(deserializer: D) -> Result<CalDate, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let buf = String::deserialize(deserializer)?;
+        buf.parse().map_err(serde::de::Error::custom)
+    }
 }
 
 impl Default for CalDate {
@@ -61,7 +80,7 @@ impl CalDate {
         CalDate::Date(Utc::now().date_naive(), CalDateType::Inclusive)
     }
 
-    /// Returns a new [`CalDate::DateTime`] instance for the current time.
+    /// Returns a new [`CalDate::DateTime`] instance for the current time in UTC.
     pub fn now() -> Self {
         CalDate::DateTime(CalDateTime::Utc(Utc::now()))
     }
