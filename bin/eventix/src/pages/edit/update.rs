@@ -37,6 +37,15 @@ fn action_update(
         form.req.uid
     ))?;
 
+    let last_modified = util::system_time_stamp(file.last_modified()?);
+    if last_modified > form.edit_start {
+        page.add_error(format!(
+            "This component has been modified. Please <a href=\"/edit?{}\">restart</a> the editing.",
+            serde_qs::to_string(&form.req).unwrap()
+        ));
+        return Ok(false);
+    }
+
     let rid = if let Some(ref rid) = form.req.rid {
         Some(
             rid.parse::<CalDate>()

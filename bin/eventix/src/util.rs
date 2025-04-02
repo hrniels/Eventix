@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context};
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
 use ical::objects::CalOrganizer;
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, time::SystemTime};
 use tokio::sync::MutexGuard;
 
 use crate::state::State;
@@ -33,6 +33,11 @@ pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<N
         }
         _ => Ok(now),
     }
+}
+
+pub fn system_time_stamp(systime: SystemTime) -> u128 {
+    let duration_since_epoch = systime.duration_since(SystemTime::UNIX_EPOCH).unwrap();
+    duration_since_epoch.as_nanos()
 }
 
 pub fn user_is_event_owner(

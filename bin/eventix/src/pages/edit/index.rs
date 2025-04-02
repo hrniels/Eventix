@@ -30,6 +30,7 @@ use crate::{html::filters, pages::events::Events};
 struct EditTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
+    edit_start: String,
     uid: String,
     rid: Option<String>,
     dir: &'a CalDir,
@@ -134,6 +135,7 @@ pub async fn content(
 
     let html = EditTemplate {
         page,
+        edit_start: format!("{}", form.edit_start),
         uid: form.req.uid.clone(),
         rid: form.req.rid.clone(),
         dir,

@@ -3,6 +3,7 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use chrono::DateTime;
 use chrono_tz::Tz;
@@ -211,6 +212,16 @@ impl CalFile {
 
     pub(crate) fn set_path(&mut self, path: PathBuf) {
         self.path = path;
+    }
+
+    /// Returns the last modification time of the underlying file.
+    pub fn last_modified(&self) -> Result<SystemTime, ColError> {
+        let metadata =
+            fs::metadata(&self.path).map_err(|_| ColError::FileMetadata(self.path.clone()))?;
+        let last_mod = metadata
+            .modified()
+            .map_err(|_| ColError::FileModified(self.path.clone()))?;
+        Ok(last_mod)
     }
 
     /// Returns the contained [`Calendar`].
