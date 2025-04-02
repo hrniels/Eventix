@@ -242,7 +242,7 @@ impl CalDateTime {
     pub fn with_tz(&self, tz: &Tz) -> DateTime<Tz> {
         match self {
             Self::Utc(dt) => dt.with_timezone(tz),
-            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, &tzid).with_timezone(tz),
+            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, tzid).with_timezone(tz),
             Self::Floating(dt) => tz.from_local_datetime(dt).unwrap(),
         }
     }
@@ -254,12 +254,12 @@ impl CalDateTime {
     pub fn as_datetime(&self, local: &Tz) -> DateTime<Tz> {
         match self {
             Self::Utc(dt) => dt.with_timezone(&Tz::UTC),
-            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, &tzid),
-            Self::Floating(dt) => local.from_local_datetime(&dt).unwrap(),
+            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, tzid),
+            Self::Floating(dt) => local.from_local_datetime(dt).unwrap(),
         }
     }
 
-    fn resolve_timezone(dt: NaiveDateTime, tzid: &String) -> DateTime<Tz> {
+    fn resolve_timezone(dt: NaiveDateTime, tzid: &str) -> DateTime<Tz> {
         let date_tz = if let Ok(date_tz) = tzid.parse::<Tz>() {
             date_tz
         } else {

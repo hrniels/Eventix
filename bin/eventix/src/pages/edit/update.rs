@@ -52,7 +52,7 @@ fn action_update(
     let ctype = base.ctype();
 
     if !util::is_event_owner(organizer.as_ref(), base.organizer()) {
-        return Err(anyhow!("No edit permission").into());
+        return Err(anyhow!("No edit permission"));
     }
 
     if !form.check(page, locale, ctype) {
