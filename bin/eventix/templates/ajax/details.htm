@@ -59,7 +59,13 @@
         {% endif %}
         {% if let Some(alarms) = alarms %}
         <tr>
-            <td width="30%">{{ "Reminder"|t(locale) }}:</td>
+            <td width="30%">
+                {% if personal_alarms %}
+                {{ "Personal reminder"|t(locale) }}:
+                {% else %}
+                {{ "Reminder"|t(locale) }}:
+                {% endif %}
+            </td>
             <td width="70%">
                 <div id="alarms">{{ alarms|safe }}</div>
             </td>

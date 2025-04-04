@@ -44,6 +44,7 @@ struct DetailsTemplate<'a> {
     dir: &'a CalDir,
     occ: DayOccurrence<'a>,
     org: Option<OrganizerTemplate<'a>>,
+    personal_alarms: bool,
     alarms: Option<EditAlarmTemplate<'a>>,
     owner: bool,
 }
@@ -84,15 +85,19 @@ async fn handler(
             .map(|org| OrganizerTemplate::new(locale.clone(), org)),
         occ: day_occ,
         dir,
-        alarms: match alarm_type {
-            CalendarAlarmType::Personal { .. } => Some(EditAlarmTemplate::new(
+        personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
+        alarms: if matches!(alarm_type, CalendarAlarmType::Personal { .. })
+            || effective_alarms.is_some()
+        {
+            Some(EditAlarmTemplate::new(
                 locale.clone(),
                 &state,
                 req.uid,
                 req.rid,
                 false,
-            )?),
-            CalendarAlarmType::Calendar => None,
+            )?)
+        } else {
+            None
         },
         owner: util::user_is_event_owner(occ.directory(), &state, occ.organizer()),
         locale,
