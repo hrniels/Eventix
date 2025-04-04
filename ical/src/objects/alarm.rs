@@ -114,10 +114,6 @@ fn duration_tostr(mut duration: Duration) -> String {
         duration = -duration;
     }
     s.push('P');
-    if duration >= Duration::weeks(1) {
-        s.push_str(&format!("{}W", duration.num_weeks()));
-        duration -= Duration::weeks(duration.num_weeks());
-    }
     if duration >= Duration::days(1) {
         s.push_str(&format!("{}D", duration.num_days()));
         duration -= Duration::days(duration.num_days());
