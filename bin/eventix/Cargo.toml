@@ -24,7 +24,8 @@ serde_qs = "0.14.0"
 strum = { version = "0.27.1", features = ["derive"] }
 tokio = { version = "1.44.1", features = ["full"] }
 toml = "0.8.20"
-tower-http = { version = "0.6.2", features = ["fs", "trace"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.2", features = ["fs", "trace", "set-header"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 uuid = { version = "1.16.0", features = ["v4"] }

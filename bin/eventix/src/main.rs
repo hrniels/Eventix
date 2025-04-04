@@ -15,7 +15,11 @@ mod util;
 use ajax::{
     attendees, complete, delete, details, editalarm, occlist, reload, togglecal, toggleexcl,
 };
-use axum::{http::Request, response::IntoResponse, Router};
+use axum::{
+    http::{header, HeaderValue, Request},
+    response::IntoResponse,
+    Router,
+};
 use clap::Parser;
 use error::HTMLError;
 use pages::{edit, list, monthly, new, weekly};
@@ -23,6 +27,7 @@ use std::{env, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::{
     services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
     trace::{DefaultOnResponse, TraceLayer},
     LatencyUnit,
 };
@@ -76,6 +81,10 @@ async fn main() {
         .merge(reload::router(state.clone()))
         .merge(editalarm::router(state.clone()))
         .fallback(error_handler)
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-cache"),
+        ))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<_>| {
