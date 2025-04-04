@@ -14,7 +14,7 @@ use crate::comps::editalarm::EditAlarmTemplate;
 use crate::comps::organizer::OrganizerTemplate;
 use crate::error::HTMLError;
 use crate::html::{self, filters};
-use crate::locale::{self, DateFlags, Locale};
+use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
 use crate::state::{CalendarAlarmType, EventixState};

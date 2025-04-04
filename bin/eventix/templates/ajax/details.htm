@@ -11,33 +11,25 @@
                 </span>
             </th>
         </tr>
-        {% if let Some(start) = occ.occurrence_start() %}
-        <tr>
-            <td width="30%">{{ "Start date"|t(locale) }}:</td>
-            <td width="70%">
-                {% if occ.is_all_day() %}
-                {{ start|date(locale, DateFlags::None) }}
-                {% else %}
-                {{ start|datetime(locale, DateFlags::None) }}
-                {% endif %}
-            </td>
-        </tr>
-        {% endif %}
-        {% if let Some(end) = occ.occurrence_end() %}
+        {% if occ.occurrence_start().is_some() || occ.occurrence_end().is_some() %}
         <tr>
             <td width="30%">
-                {% if occ.ctype() == CalCompType::Event %}
-                {{ "End date"|t(locale) }}:
+                {% if occ.occurrence_start().is_some() && occ.occurrence_end().is_some() %}
+                {{ "Date"|t(locale) }}:
+                {% else if occ.occurrence_start().is_some() %}
+                {{ "Start"|t(locale) }}:
                 {% else %}
+                {% if occ.ctype() == CalCompType::Todo %}
                 {{ "Due"|t(locale) }}:
+                {% else %}
+                {{ "End"|t(locale) }}:
+                {% endif %}
                 {% endif %}
             </td>
             <td width="70%">
-                {% if occ.is_all_day() %}
-                {{ end|date(locale, DateFlags::None) }}
-                {% else %}
-                {{ end|datetime(locale, DateFlags::None) }}
-                {% endif %}
+                {{ html::date_range(locale,
+                                    occ.occurrence_startdate().as_ref(),
+                                    occ.occurrence_enddate().as_ref())|safe }}
             </td>
         </tr>
         {% endif %}
