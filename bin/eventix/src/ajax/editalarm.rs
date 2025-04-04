@@ -32,6 +32,7 @@ pub struct PostRequest {
     uid: String,
     rid: Option<String>,
     target_url: String,
+    #[serde(default)]
     personal: AlarmConfig,
     personal_overwrite: Option<String>,
 }
