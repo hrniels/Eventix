@@ -8,14 +8,14 @@
  *
  * https://api.jqueryui.com/category/theming/
  *
- * To view and modify this theme, visit https://jqueryui.com/themeroller/?ffDefault=Arial%2CHelvetica%2Csans-serif&fsDefault=1em&fwDefault=normal&cornerRadius=3px&bgColorHeader=%23637591&bgTextureHeader=flat&borderColorHeader=%23dddddd&fcHeader=%23fff&iconColorHeader=%23444444&bgColorContent=%23ffffff&bgTextureContent=flat&borderColorContent=%23dddddd&fcContent=%23333333&iconColorContent=%23444444&bgColorDefault=%23f6f6f6&bgTextureDefault=flat&borderColorDefault=%23c5c5c5&fcDefault=%23454545&iconColorDefault=%23777777&bgColorHover=%23ededed&bgTextureHover=flat&borderColorHover=%23cccccc&fcHover=%232b2b2b&iconColorHover=%23555555&bgColorActive=%23c0e5f7&bgTextureActive=flat&borderColorActive=%23bbb&fcActive=%23000&iconColorActive=%23ffffff&bgColorHighlight=%23637591&bgTextureHighlight=flat&borderColorHighlight=%23ebebeb&fcHighlight=%23fff&iconColorHighlight=%23777620&bgColorError=%23fddfdf&bgTextureError=flat&borderColorError=%23f1a899&fcError=%235f3f3f&iconColorError=%23cc0000&bgColorOverlay=%23aaaaaa&bgTextureOverlay=flat&bgImgOpacityOverlay=0&opacityOverlay=30&bgColorShadow=%23666666&bgTextureShadow=flat&bgImgOpacityShadow=0&opacityShadow=30&thicknessShadow=5px&offsetTopShadow=0px&offsetLeftShadow=0px&cornerRadiusShadow=8px&bgImgOpacityError=&bgImgOpacityHighlight=&bgImgOpacityActive=&bgImgOpacityHover=&bgImgOpacityDefault=&bgImgOpacityContent=&bgImgOpacityHeader=
+ * To view and modify this theme, visit https://jqueryui.com/themeroller/?ffDefault=system-ui%2C-apple-system%2C%20%22Segoe%20UI%22%2C%20Roboto%2C%20%22Helvetica%20Neue%22%2C%20%22Noto%20Sans%22%2C%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22Liberation%20Sans%22%2C%20Arial%2C%20sans-serif%2C%20%22Apple%20Color%20Emoji%22%2C%20%22Segoe%20UI%20Emoji%22%2C%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22Segoe%20UI%20Symbol%22%2C%20%22Noto%20Color%20Emoji%22&fsDefault=1em&fwDefault=normal&cornerRadius=3px&bgColorHeader=%23637591&bgTextureHeader=flat&borderColorHeader=%23dddddd&fcHeader=%23fff&iconColorHeader=%23444444&bgColorContent=%23ffffff&bgTextureContent=flat&borderColorContent=%23dddddd&fcContent=%23333333&iconColorContent=%23444444&bgColorDefault=%23f6f6f6&bgTextureDefault=flat&borderColorDefault=%23c5c5c5&fcDefault=%23454545&iconColorDefault=%23777777&bgColorHover=%23ededed&bgTextureHover=flat&borderColorHover=%23cccccc&fcHover=%232b2b2b&iconColorHover=%23555555&bgColorActive=%23c0e5f7&bgTextureActive=flat&borderColorActive=%23bbb&fcActive=%23000&iconColorActive=%23ffffff&bgColorHighlight=%23637591&bgTextureHighlight=flat&borderColorHighlight=%23ebebeb&fcHighlight=%23fff&iconColorHighlight=%23777620&bgColorError=%23fddfdf&bgTextureError=flat&borderColorError=%23f1a899&fcError=%235f3f3f&iconColorError=%23cc0000&bgColorOverlay=%23aaaaaa&bgTextureOverlay=flat&bgImgOpacityOverlay=0&opacityOverlay=30&bgColorShadow=%23666666&bgTextureShadow=flat&bgImgOpacityShadow=0&opacityShadow=30&thicknessShadow=5px&offsetTopShadow=0px&offsetLeftShadow=0px&cornerRadiusShadow=8px&bgImgOpacityError=&bgImgOpacityHighlight=&bgImgOpacityActive=&bgImgOpacityHover=&bgImgOpacityDefault=&bgImgOpacityContent=&bgImgOpacityHeader=
  */
 
 
 /* Component containers
 ----------------------------------*/
 .ui-widget {
-	font-family: Arial,Helvetica,sans-serif;
+	font-family: system-ui,-apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",                  "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",                  "Segoe UI Symbol", "Noto Color Emoji";
 	font-size: 1em;
 }
 .ui-widget .ui-widget {
@@ -25,7 +25,7 @@
 .ui-widget select,
 .ui-widget textarea,
 .ui-widget button {
-	font-family: Arial,Helvetica,sans-serif;
+	font-family: system-ui,-apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",                  "Liberation Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",                  "Segoe UI Symbol", "Noto Color Emoji";
 	font-size: 1em;
 }
 .ui-widget.ui-widget-content {
