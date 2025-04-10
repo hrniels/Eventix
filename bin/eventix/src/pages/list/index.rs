@@ -2,14 +2,16 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse};
-use ical::col::CalDir;
+use ical::col::{CalDir, Occurrence};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use ical::objects::{CalAttendee, CalCompType, CalComponent, CalDate, CalTodoStatus, EventLike};
+use ical::objects::{
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalTodoStatus, EventLike,
+};
 
 use crate::comps::organizer::OrganizerTemplate;
 use crate::comps::pagination::PaginationTemplate;
@@ -62,6 +64,7 @@ struct ListComponent<'a> {
     comp: &'a CalComponent,
     org: Option<OrganizerTemplate<'a>>,
     owner: bool,
+    alarms: Option<Vec<CalAlarm>>,
 }
 
 #[derive(Template)]
@@ -115,6 +118,9 @@ pub async fn handler(
         false
     };
 
+    let settings = state.settings();
+    let pers_alarms = state.personal_alarms();
+
     let iter = || {
         state
             .store()
@@ -123,13 +129,25 @@ pub async fn handler(
                 i.components()
                     .iter()
                     .filter(|c| c.rid().is_none())
-                    .map(|c| ListComponent {
-                        dir: i.directory(),
-                        org: c
-                            .organizer()
-                            .map(|org| OrganizerTemplate::new(locale.clone(), org)),
-                        comp: c,
-                        owner: util::user_is_event_owner(i.directory(), &state, c.organizer()),
+                    .map(|c| {
+                        let cal_settings = settings.calendar(i.directory()).unwrap();
+                        let occ = Occurrence::new(
+                            i.directory().clone(),
+                            c,
+                            c.start().map(|d| d.as_start_with_tz(locale.timezone())),
+                            c.end_or_due()
+                                .map(|d| d.as_start_with_tz(locale.timezone())),
+                            false,
+                        );
+                        ListComponent {
+                            dir: i.directory(),
+                            org: c
+                                .organizer()
+                                .map(|org| OrganizerTemplate::new(locale.clone(), org)),
+                            comp: c,
+                            owner: util::user_is_event_owner(i.directory(), &state, c.organizer()),
+                            alarms: pers_alarms.effective_alarms(&occ, cal_settings.alarms()),
+                        }
                     })
             })
             .filter(|l| {
