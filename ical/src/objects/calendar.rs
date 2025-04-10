@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use tracing::warn;
 
-use crate::objects::{CalComponent, CalEvent, CalTodo, EventLike};
+use crate::objects::{CalCompType, CalComponent, CalEvent, CalTodo, EventLike};
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
 };
@@ -57,6 +57,21 @@ impl Calendar {
         wr.write_line("END:VCALENDAR")?;
         Ok(())
     }
+
+    fn checked_add(&mut self, comp: CalComponent) {
+        // if it's a base component and we already have the same UID, just pretend we don't know it
+        if comp.rid().is_none() && self.comps.iter().any(|c| c.uid() == comp.uid()) {
+            self.unknown.push(Unknown {
+                name: match comp.ctype() {
+                    CalCompType::Event => String::from("VEVENT"),
+                    CalCompType::Todo => String::from("VTODO"),
+                },
+                props: comp.to_props(),
+            });
+        } else {
+            self.comps.push(comp);
+        }
+    }
 }
 
 impl PropertyProducer for Calendar {
@@ -90,11 +105,11 @@ impl PropertyConsumer for Calendar {
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
                 "BEGIN" if prop.value() == "VTODO" => match CalTodo::from_lines(lines, prop) {
-                    Ok(todo) => cal.comps.push(CalComponent::Todo(todo)),
+                    Ok(todo) => cal.checked_add(CalComponent::Todo(todo)),
                     Err(e) => warn!("ignoring malformed todo: {}", e),
                 },
                 "BEGIN" if prop.value() == "VEVENT" => match CalEvent::from_lines(lines, prop) {
-                    Ok(ev) => cal.comps.push(CalComponent::Event(ev)),
+                    Ok(ev) => cal.checked_add(CalComponent::Event(ev)),
                     Err(e) => warn!("ignoring malformed event: {}", e),
                 },
                 "BEGIN" => match Unknown::from_lines(lines, prop) {
