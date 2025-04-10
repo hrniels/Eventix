@@ -67,7 +67,7 @@ $(function() {
             {% else %}
             <input type="hidden" name="{{ name}}[from_enabled]" value="true"/>
             {% endif %}
-            <input id="{{ id }}from_date" type="text" name="{{ name }}[from][date]" size="8"
+            <input id="{{ id }}from_date" type="text" name="{{ name }}[from][date]" size="10"
                    maxlength="10" value="{{ from_date|naive_date }}" />
             <input id="{{ id }}from_time" type="text" name="{{ name }}[from][time]" size="8"
                    maxlength="5" value="{{ from_time|naive_time }}" />
@@ -88,7 +88,7 @@ $(function() {
             {% else %}
             <input type="hidden" name="{{ name}}[to_enabled]" value="true"/>
             {% endif %}
-            <input id="{{ id }}to_date" type="text" name="{{ name }}[to][date]" size="8"
+            <input id="{{ id }}to_date" type="text" name="{{ name }}[to][date]" size="10"
                    maxlength="10" value="{{ to_date|naive_date }}" />
             <input id="{{ id }}to_time" type="text" name="{{ name }}[to][time]" size="8"
                    maxlength="5" value="{{ to_time|naive_time }}" />
