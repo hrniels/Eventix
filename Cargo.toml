@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
+members = [ "bin/app",
     "bin/eventix",
     "bin/evlist",
     "ical",

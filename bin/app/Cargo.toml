@@ -1,0 +1,11 @@
+[package]
+name = "eventix-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-channel = "2.3.1"
+clap = { version = "4.5.34", features = ["derive"] }
+gtk = "0.18.2"
+ksni = { version = "0.3.1", features = ["blocking"] }
+webkit2gtk = { version = "2.0.1", features = ["v2_6"] }
