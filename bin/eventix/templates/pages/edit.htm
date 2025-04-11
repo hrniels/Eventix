@@ -140,6 +140,14 @@
             }
         });
     });
+
+    $(document).keydown(function(e) {
+        if(e.ctrlKey && e.code == "Enter") {
+            $('#form').submit();
+            return false;
+        }
+        return true;
+    });
 </script>
 {% if rid.is_none() %}
 <div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
