@@ -35,6 +35,8 @@ $(function() {
     to.datepicker("option", "beforeShow", addArrowToDatePicker);
     from.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
     to.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
+    from.datepicker("option", "showAnim", "");
+    to.datepicker("option", "showAnim", "");
 
     function getDate(element) {
         var date;
