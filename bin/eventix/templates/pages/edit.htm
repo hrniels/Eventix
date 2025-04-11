@@ -36,7 +36,7 @@
                     </dl>
                     <dl>
                         <dt>{{ "Summary"|t(locale) }}:</dt>
-                        <dd><input type="text" size="50" name="summary" value="{{ summary }}" /></dd>
+                        <dd><input type="text" size="50" id="summary" name="summary" value="{{ summary }}" /></dd>
                     </dl>
                     <dl>
                         <dt>{{ "Location"|t(locale) }}:</dt>
@@ -116,6 +116,7 @@
 <script>
     $(window).on('load', function() {
         moveToTabCenter('title', 'tabs', 'tab-bar');
+        $('#summary').focus();
     });
 
     function onDeleted() {
