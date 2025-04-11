@@ -44,8 +44,8 @@
         </div>
 
         <div style="float: right;" class="ev_padbottom">
-            <div style="cursor: default; float: left" class="ev_button ev_button_normal">
-                <span style="vertical-align: middle">Calendars:</span>
+            <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
+                <span>Calendars:</span>
                 {% for cal in page.calendars() %}
                 <a style="vertical-align: middle" title="{{ cal.name }}"
                    href="javascript:toggleCalendar('{{ cal.id }}')">
@@ -73,20 +73,20 @@
                 {% endfor %}
             </div>
             &nbsp;
-            <a id="link-monthly" class="ev_button ev_button_normal"
-               style="width: 70px; text-align: center" href="/">
+            <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/">
+                <i class="bi bi-calendar2-month"></i>
                 <span>{{ "Monthly"|t(locale) }}</span>
             </a>
-            <a id="link-weekly" class="ev_button ev_button_normal"
-               style="width: 70px; text-align: center" href="/weekly">
+            <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/weekly">
+                <i class="bi bi-calendar2-week"></i>
                 <span>{{ "Weekly"|t(locale) }}</span>
             </a>
-            <a id="link-list" class="ev_button ev_button_normal"
-               style="width: 70px; text-align: center" href="/list">
+            <a id="link-list" class="ev_button_medium ev_button_normal"
+               style="padding-left: 1em; padding-right: 1em" href="/list">
+                <i class="bi bi-card-list"></i>
                 <span>{{ "List"|t(locale) }}</span>
             </a>
-            <a id="link-refresh" class="ev_button ev_button_normal"
-                style="width: 85px; text-align: center"
+            <a id="link-refresh" class="ev_button_medium ev_button_normal"
                 href="javascript:reloadDB('last-update', 'sync-spinner', 'out-of-sync', true)">
                 <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
                 <span id="last-update">

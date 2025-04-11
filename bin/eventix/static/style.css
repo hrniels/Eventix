@@ -241,7 +241,7 @@ td.ev_status_need_info {
 
 /* ------------ BUTTONS ------------ */
 
-.ev_button, .ev_button_big {
+.ev_button, .ev_button_medium, .ev_button_big {
     background-image: linear-gradient(#f9f9f9, #f1f1f1);
     border-radius: 5px;
     display: inline-block;
@@ -254,19 +254,25 @@ td.ev_status_need_info {
 	font-weight: bold;
     cursor: pointer;
 }
+.ev_button *, .ev_button_medium *, .ev_button_big * {
+    vertical-align: sub;
+}
+
 .ev_button {
     height: 16px;
 	font-size: .8em;
     padding-bottom: 4px;
 }
+.ev_button_medium {
+    height: 20px;
+	font-size: 1em;
+    padding-bottom: 6px;
+}
 .ev_button_big {
     text-align: center;
     height: 30px;
 	font-size: 1.1em;
-    padding-bottom: 2px;
-}
-.ev_button *, .ev_button_big * {
-    vertical-align: sub;
+    padding-bottom: 7px;
 }
 
 .ev_button_normal {
