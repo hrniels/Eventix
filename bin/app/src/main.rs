@@ -15,11 +15,20 @@ fn to_abs_path(path: &str) -> Option<String> {
 }
 
 enum TrayMessage {
+    LoadPage(String),
     ToggleWindow,
 }
 
 struct MyTray {
     sender: Sender<TrayMessage>,
+}
+
+impl MyTray {
+    fn load_page(&self, uri: &str) {
+        if let Err(e) = self.sender.try_send(TrayMessage::LoadPage(uri.into())) {
+            eprintln!("Failed to send message: {:?}", e);
+        }
+    }
 }
 
 impl ksni::Tray for MyTray {
@@ -42,6 +51,53 @@ impl ksni::Tray for MyTray {
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
         vec![
+            StandardItem {
+                label: "Monthly".into(),
+                icon_name: "month".into(),
+                activate: Box::new(|tray: &mut MyTray| {
+                    tray.load_page("/");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Weekly".into(),
+                icon_name: "week".into(),
+                activate: Box::new(|tray: &mut MyTray| {
+                    tray.load_page("/weekly");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "List".into(),
+                icon_name: "list".into(),
+                activate: Box::new(|tray: &mut MyTray| {
+                    tray.load_page("/list");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            MenuItem::Separator,
+            StandardItem {
+                label: "New Event".into(),
+                icon_name: "event".into(),
+                activate: Box::new(|tray: &mut MyTray| {
+                    tray.load_page("/new?ctype=Event");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "New Task".into(),
+                icon_name: "todo".into(),
+                activate: Box::new(|tray: &mut MyTray| {
+                    tray.load_page("/new?ctype=Todo");
+                }),
+                ..Default::default()
+            }
+            .into(),
+            MenuItem::Separator,
             StandardItem {
                 label: "Exit".into(),
                 icon_name: "application-exit".into(),
@@ -146,9 +202,16 @@ fn main() {
 
         // handle messages in main GTK thread
         if !args.no_tray {
+            let base_url = url.clone();
             glib::MainContext::default().spawn_local(async move {
                 while let Ok(msg) = main_rx.recv().await {
                     match msg {
+                        TrayMessage::LoadPage(uri) => {
+                            if !window.is_visible() {
+                                window.show_all();
+                            }
+                            webview.load_uri(&format!("{}{}", base_url, uri));
+                        }
                         TrayMessage::ToggleWindow => {
                             if window.is_visible() {
                                 window.hide();
