@@ -17,6 +17,13 @@
                                                                       value="{{ duration }}" />
             {{ durunit|safe }}
             {{ durtype|safe }}
+            <script>
+                $(function() {
+                    $("#{{ id }}_duration").spinner({
+                        min: 1,
+                    });
+                });
+            </script>
         </td>
     </tr>
     <tr>
@@ -28,11 +35,3 @@
         <td>{{ datetime|safe }}</td>
     </tr>
 </table>
-
-<script>
-    $(function() {
-        $("#{{ id }}_duration").spinner({
-            min: 1,
-        });
-    });
-</script>

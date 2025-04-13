@@ -30,7 +30,9 @@
         setPersonalOverwrite('personal', this.checked)
     });
     {% if !overwrite %}
-    setPersonalOverwrite('personal', false);
+    $(function() {
+        setPersonalOverwrite('personal', false);
+    });
     {% endif %}
 </script>
 

@@ -71,8 +71,7 @@ $(function() {
             {% endif %}
             <input id="{{ id }}from_date" type="text" name="{{ name }}[from][date]" size="10"
                    maxlength="10" value="{{ from_date|naive_date }}" />
-            <input id="{{ id }}from_time" type="text" name="{{ name }}[from][time]" size="8"
-                   maxlength="5" value="{{ from_time|naive_time }}" />
+            {{ from_time|safe }}
         </td>
     </tr>
     <tr>
@@ -92,14 +91,11 @@ $(function() {
             {% endif %}
             <input id="{{ id }}to_date" type="text" name="{{ name }}[to][date]" size="10"
                    maxlength="10" value="{{ to_date|naive_date }}" />
-            <input id="{{ id }}to_time" type="text" name="{{ name }}[to][time]" size="8"
-                   maxlength="5" value="{{ to_time|naive_time }}" />
+            {{ to_time|safe }}
         </td>
     </tr>
 </table>
 
-<link rel="stylesheet" type="text/css" href="/static/contrib/jquery-clockpicker.min.css">
-<script type="text/javascript" src="/static/contrib/jquery-clockpicker.min.js"></script>
 <script type="text/javascript">
 $(function() {
     {% if all_day %}
@@ -109,22 +105,16 @@ $(function() {
     $("#{{ id }}all_day").click(function() {
         setAllDay(this.checked)
     });
-
-    var options = {
-        autoclose: true,
-    };
-    $('#{{ id }}to_time').clockpicker(options);
-    $('#{{ id }}from_time').clockpicker(options);
 });
 
 function setAllDay(allday) {
     if(allday) {
-        $("#{{ id }}from_time").prop("disabled", true);
-        $("#{{ id }}to_time").prop("disabled", true);
+        $("#{{ id }}_from__time_").prop("disabled", true);
+        $("#{{ id }}_to__time_").prop("disabled", true);
     }
     else {
-        $("#{{ id }}from_time").prop("disabled", false);
-        $("#{{ id }}to_time").prop("disabled", false);
+        $("#{{ id }}_from__time_").prop("disabled", false);
+        $("#{{ id }}_to__time_").prop("disabled", false);
     }
 }
 </script>

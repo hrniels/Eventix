@@ -105,7 +105,7 @@ function toggleCalendar(id) {
 }
 
 function setPersonalOverwrite(id_prefix, overwrite) {
-    var ids = ["none", "relative", "absolute", "durunit_", "durtype_", "datetime__time"];
+    var ids = ["none", "relative", "absolute", "durunit_", "durtype_", "datetime__time_"];
     for(id in ids) {
         $("#" + id_prefix + "_" + ids[id]).prop("disabled", !overwrite);
     }

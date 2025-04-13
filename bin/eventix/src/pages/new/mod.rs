@@ -14,7 +14,7 @@ use crate::{
     comp::CompAction,
     comps::{
         alarm::AlarmRequest, attendees::Attendees, date::Date, datetime::DateTime,
-        datetimerange::DateTimeRange, recur::RecurRequest, todostatus::TodoStatus,
+        datetimerange::DateTimeRange, recur::RecurRequest, time::Time, todostatus::TodoStatus,
     },
     state::EventixState,
 };
@@ -77,11 +77,11 @@ impl CompNew {
             CalCompType::Event => {
                 let start = DateTime::new(
                     Date::new(Some(next_hour.date_naive())),
-                    Some(next_hour.naive_local().time()),
+                    Some(Time::new(next_hour.naive_local().time())),
                 );
                 let end = DateTime::new(
                     Date::new(Some(next_next_hour.date_naive())),
-                    Some(next_next_hour.naive_local().time()),
+                    Some(Time::new(next_next_hour.naive_local().time())),
                 );
                 DateTimeRange::new(start, end)
             }

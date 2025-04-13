@@ -10,4 +10,5 @@ pub mod editalarm;
 pub mod organizer;
 pub mod pagination;
 pub mod recur;
+pub mod time;
 pub mod todostatus;

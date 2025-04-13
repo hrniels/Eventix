@@ -1,5 +1,5 @@
 use askama::Template;
-use chrono::{NaiveDate, NaiveTime};
+use chrono::NaiveDate;
 use chrono_tz::Tz;
 use ical::objects::{CalCompType, CalDate, CalDateType};
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,7 @@ use crate::locale::Locale;
 
 use super::date::Date;
 use super::datetime::DateTime;
+use super::time::{Time, TimeTemplate};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct DateTimeRange {
@@ -34,14 +35,14 @@ impl DateTimeRange {
             from: DateTime::new(
                 Date::new(from.as_ref().map(|f| f.as_start_with_tz(tz).date_naive())),
                 from.as_ref().and_then(|f| match f {
-                    CalDate::DateTime(dt) => Some(dt.with_tz(tz).time()),
+                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(tz).time())),
                     CalDate::Date(..) => None,
                 }),
             ),
             to: DateTime::new(
                 Date::new(to.as_ref().map(|t| t.as_end_with_tz(tz).date_naive())),
                 to.as_ref().and_then(|t| match t {
-                    CalDate::DateTime(dt) => Some(dt.with_tz(tz).time()),
+                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(tz).time())),
                     CalDate::Date(..) => None,
                 }),
             ),
@@ -83,8 +84,8 @@ pub struct DateTimeRangeTemplate<'a> {
     id: String,
     from_date: Option<NaiveDate>,
     to_date: Option<NaiveDate>,
-    from_time: Option<NaiveTime>,
-    to_time: Option<NaiveTime>,
+    from_time: TimeTemplate,
+    to_time: TimeTemplate,
     from_enabled: bool,
     to_enabled: bool,
     all_day: bool,
@@ -104,8 +105,14 @@ impl<'a> DateTimeRangeTemplate<'a> {
             id: name.replace("[", "_").replace("]", "_"),
             from_date: value.as_ref().and_then(|v| v.from.date()),
             to_date: value.as_ref().and_then(|v| v.to.date()),
-            from_time: value.as_ref().and_then(|v| v.from.time()),
-            to_time: value.as_ref().and_then(|v| v.to.time()),
+            from_time: TimeTemplate::new(
+                format!("{}[from][time]", name),
+                value.as_ref().and_then(|v| v.from.time()),
+            ),
+            to_time: TimeTemplate::new(
+                format!("{}[to][time]", name),
+                value.as_ref().and_then(|v| v.to.time()),
+            ),
             all_day: value.as_ref().map(|v| v.is_all_day()).unwrap_or(false),
             from_enabled: value
                 .as_ref()

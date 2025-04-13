@@ -1,28 +1,28 @@
 use askama::Template;
-use chrono::{NaiveDate, NaiveTime};
+use chrono::NaiveDate;
 use chrono_tz::Tz;
 use ical::objects::{CalDate, CalDateTime, CalDateType};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::html::filters;
 use crate::locale::Locale;
 
 use super::date::{Date, DateTemplate};
+use super::time::{Time, TimeTemplate};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct DateTime {
     date: Date,
-    time: Option<NaiveTime>,
+    time: Option<Time>,
 }
 
 impl DateTime {
     pub fn from_caldate(date: &CalDate, timezone: &Tz) -> Self {
         let dt = date.as_start_with_tz(timezone);
-        Self::new(Date::new(Some(dt.date_naive())), Some(dt.time()))
+        Self::new(Date::new(Some(dt.date_naive())), Some(Time::new(dt.time())))
     }
 
-    pub fn new(date: Date, time: Option<NaiveTime>) -> Self {
+    pub fn new(date: Date, time: Option<Time>) -> Self {
         Self { date, time }
     }
 
@@ -30,8 +30,8 @@ impl DateTime {
         self.date.date()
     }
 
-    pub fn time(&self) -> Option<NaiveTime> {
-        self.time
+    pub fn time(&self) -> Option<Time> {
+        self.time.clone()
     }
 
     pub fn to_caldate(
@@ -40,9 +40,9 @@ impl DateTime {
         ty: CalDateType,
         end: bool,
     ) -> Option<CalDate> {
-        match self.time {
+        match &self.time {
             Some(time) => Some(CalDate::DateTime(CalDateTime::Timezone(
-                self.date.date()?.and_time(time),
+                self.date.date()?.and_time(time.value()),
                 locale.timezone().name().to_string(),
             ))),
             None => Some(self.date.to_caldate(ty, end)?),
@@ -53,10 +53,8 @@ impl DateTime {
 #[derive(Template)]
 #[template(path = "comps/datetime.htm")]
 pub struct DateTimeTemplate {
-    name: String,
-    id: String,
     date: DateTemplate,
-    time: Option<NaiveTime>,
+    time: TimeTemplate,
 }
 
 impl DateTimeTemplate {
@@ -64,10 +62,11 @@ impl DateTimeTemplate {
     pub fn new<N: ToString>(name: N, date: Option<DateTime>) -> Self {
         let name = name.to_string();
         Self {
-            time: date.as_ref().and_then(|d| d.time()),
+            time: TimeTemplate::new(
+                format!("{}[time]", name),
+                date.as_ref().and_then(|d| d.time()),
+            ),
             date: DateTemplate::new(format!("{}[date]", name), date.map(|d| d.date)),
-            id: name.replace("[", "_").replace("]", "_"),
-            name,
         }
     }
 }
