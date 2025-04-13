@@ -118,9 +118,9 @@ pub async fn handler(
             let end = date;
             let occs = file
                 .occurrences_between(start, end, |_| true)
-                // ignore the occurrences where the start is earlier, but the end is in the range,
-                // because we'll find these when walking forward
-                .filter(|o| o.occurrence_start().unwrap() >= start)
+                // ignore the occurrences where the end is later, because we'll find these when
+                // walking forward
+                .filter(|o| o.occurrence_end().unwrap() < end)
                 .collect::<Vec<_>>();
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
