@@ -516,6 +516,13 @@ span.ev_cal_src_disabled {
     overflow-x: hidden;
 }
 
+.ui-selectmenu-text {
+    margin-right: 5px !important;
+}
+.ui-button {
+    padding: .4em .5em !important;
+}
+
 .popup {
     box-shadow: 0 1px 4px rgba(0,0,0,.4);
 }

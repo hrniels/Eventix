@@ -7,3 +7,10 @@
         >{{ opt.name|t(locale) }}</option>
     {% endfor %}
 </select>
+<script type="text/javascript">
+    $(function() {
+        $('#{{ id }}').selectmenu({
+            width: 'auto',
+        });
+    });
+</script>

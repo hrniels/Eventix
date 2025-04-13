@@ -1,20 +1,22 @@
 {% if edit %}
 
-<form id="form" method="post" action="/editalarm">
+<form id="alarm-form" method="post" action="/editalarm">
     <input id="target_url" type="hidden" name="target_url" value="" />
     <input type="hidden" name="uid" value="{{ uid }}" />
     {% if let Some(rid) = rid %}
     <input type="hidden" name="rid" value="{{ rid }}" />
     {% endif %}
-    <div style="padding: .4em">
-        <input type="checkbox" id="personal_overwrite"
-                               name="personal_overwrite"
-                               {% if overwrite %}checked="checked"{% endif %}/>
-        <label for="personal_overwrite">{{ "Overwrite default"|t(locale) }}</label>
+    <div id="smaller-font">
+        <div style="padding: .4em">
+            <input type="checkbox" id="personal_overwrite"
+                                   name="personal_overwrite"
+                                   {% if overwrite %}checked="checked"{% endif %}/>
+            <label for="personal_overwrite">{{ "Overwrite default"|t(locale) }}</label>
+        </div>
+        {{ config|safe }}
     </div>
-    {{ config|safe }}
     <a class="ev_button ev_button_normal"
-       href="javascript:$('#form').submit()">
+       href="javascript:$('#alarm-form').submit()">
         <span>{{ "Save"|t(locale) }}</span>
     </a>
     <a class="ev_button ev_button_normal"
@@ -22,6 +24,12 @@
         <span>{{ "Cancel"|t(locale) }}</span>
     </a>
 </form>
+
+<style type="text/css">
+#smaller-font * {
+    font-size: 11pt;
+}
+</style>
 
 <script type="text/javascript">
     $('#target_url').val(document.location.href);
