@@ -2,7 +2,7 @@ var selected = null;
 
 $(document).mousedown(function(e) {
     var popup = document.getElementById('popup');
-    if(selected != null && !popup.contains(e.target))
+    if(selected != null && !popup.contains(e.target) && !inBoundingBox(e, 'popup'))
         deselect(selected, null);
 });
 $(document).keydown(function(e) {
@@ -82,6 +82,12 @@ function pageBoundingBox(el) {
     rect.left += left;
     rect.right += left;
     return rect;
+}
+
+function inBoundingBox(e, id) {
+    var box = pageBoundingBox(document.getElementById(id));
+    return e.pageX >= box.left && e.pageX <= box.left + box.width &&
+        e.pageY >= box.top && e.pageY <= box.top + box.height;
 }
 
 function loadOccurrence(id, uid, rid) {
