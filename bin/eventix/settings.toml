@@ -1,7 +1,6 @@
 [calendar.bi]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-bi/calendar"
 name = "BI"
-disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#1d77c0"
 types = ["Event", "Todo"]
@@ -25,7 +24,6 @@ local_name = "calendar_bi_local/calendar"
 [calendar.oslwl]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-oschair/-_shared_by_adam"
 name = "OS LWL"
-disabled = true
 fgcolor = "#000000"
 bgcolor = "#e1c4a8"
 types = ["Event"]
@@ -42,7 +40,6 @@ local_name = "calendar_oschair_local/-_shared_by_adam"
 [calendar.scriptsolution]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-scso/calendar~jt7D6iFxhujcnk_A7SJmbFq"
 name = "Script-Solution"
-disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#2ec17d"
 types = ["Event"]
@@ -59,7 +56,6 @@ local_name = "calendar_scso_local/calendar~jt7D6iFxhujcnk_A7SJmbFq"
 [calendar.scriptsolution_tasks]
 path = "/home/hrniels/.config/vdirsyncer-test/tasks"
 name = "ScSo Tasks"
-disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#128421"
 types = ["Todo"]
@@ -69,7 +65,6 @@ syncer = "FileSystem"
 [calendar.test]
 path = "/home/hrniels/.config/vdirsyncer-test/calendar-test/calendar~xTVGWlaUtoYnj4TOSK7v-ZV"
 name = "Test"
-disabled = false
 fgcolor = "#ffffff"
 bgcolor = "#aa0000"
 types = ["Event"]
