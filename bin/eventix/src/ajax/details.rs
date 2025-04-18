@@ -75,8 +75,8 @@ async fn handler(
         ))?;
 
     let alarm_type = state.settings().calendar(occ.directory()).unwrap().alarms();
-    let effective_alarms = state.personal_alarms().effective_alarms(&occ, alarm_type);
-    let day_occ = DayOccurrence::new(&occ, effective_alarms.is_some());
+    let has_alarms = state.personal_alarms().has_alarms(&occ, alarm_type);
+    let day_occ = DayOccurrence::new(&occ, has_alarms);
     let dir = state.store().directory(occ.directory()).unwrap();
 
     let html = DetailsTemplate {
@@ -86,9 +86,7 @@ async fn handler(
         occ: day_occ,
         dir,
         personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
-        alarms: if matches!(alarm_type, CalendarAlarmType::Personal { .. })
-            || effective_alarms.is_some()
-        {
+        alarms: if matches!(alarm_type, CalendarAlarmType::Personal { .. }) || has_alarms {
             Some(EditAlarmTemplate::new(
                 locale.clone(),
                 &state,
