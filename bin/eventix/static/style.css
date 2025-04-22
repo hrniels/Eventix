@@ -150,30 +150,30 @@ fieldset.ev_form div.ev_submit {
 
 /* ------------ TABLES ------------ */
 
-table.ev_noborder td, td.ev_noborder {
-    border: none !important;
-    padding: 0em !important;
+table.ev_noborder > tbody > tr > td, td.ev_noborder {
+    border: none;
+    padding: 0em;
 }
 table.ev_table {
 	border-collapse: collapse;
 	border-spacing: 2px;
 }
-table.ev_table td {
+table.ev_table > tbody > tr > td {
 	border: 1px solid #bbb;
 	padding: 0.5em;
 }
-table.ev_table th {
+table.ev_table > tbody > tr > th {
 	background-color: #637591;
 	border: 1px solid #bbb;
 	color: #fff;
 	padding: 0.5em;
 	font-size: 1.3em;
 }
-table.ev_table th a {
+table.ev_table > tbody > tr > th > a {
 	color: #fff;
 	text-decoration: underline;
 }
-table.ev_table th a:hover {
+table.ev_table > tbody > tr > th > a:hover {
 	color: #fff;
 	text-decoration: none;
 }
