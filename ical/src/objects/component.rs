@@ -163,12 +163,18 @@ impl EventLikeComponent {
                 if prop.value() != "VALARM" {
                     return Err(ParseError::UnexpectedBegin(prop.take_value()));
                 }
-                if self.alarms.is_none() {
-                    self.alarms = Some(vec![]);
-                }
-                match CalAlarm::from_lines(lines, prop) {
-                    Ok(alarm) => self.alarms.as_mut().unwrap().push(alarm),
-                    Err(e) => warn!("ignoring malformed alarm: {}", e),
+                let alarm = match CalAlarm::from_lines(lines, prop) {
+                    Ok(alarm) => Some(alarm),
+                    Err(e) => {
+                        warn!("ignoring malformed alarm: {}", e);
+                        None
+                    }
+                };
+                if let Some(alarm) = alarm {
+                    if self.alarms.is_none() {
+                        self.alarms = Some(vec![]);
+                    }
+                    self.alarms.as_mut().unwrap().push(alarm);
                 }
             }
             _ => {
