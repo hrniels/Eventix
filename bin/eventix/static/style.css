@@ -196,6 +196,20 @@ table.ev_date td {
 	border: 1px solid #7F90AE;
 }
 
+td.ev_table_sep {
+    position: relative;
+    height: 1em;
+}
+td.ev_table_sep::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: .05em solid #000;
+    transform: translateY(-50%);
+}
+
 /* ------------ LISTS ------------ */
 
 ul.ev_iconlist {
