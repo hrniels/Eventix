@@ -4,6 +4,29 @@
 
 <script type="text/javascript" src="/static/popup.js"></script>
 <script type="text/javascript">
+    function resizeBoxes() {
+        // resize events and tasks box to fit within the available height
+        var top = $('#box_events').offset().top;
+        var bottom = $(window).height() - 70;
+        var available_yspace = Math.max(400, bottom - top);
+        $('#box_events').css('height', available_yspace / 2 - 10);
+        $('#box_tasks').css('height', available_yspace / 2 - 10);
+
+        // as the week area is scrollable, resize it to fit within the height as well
+        var week_scroll_area = $('#week_scroll_area');
+        if(week_scroll_area) {
+            var top = week_scroll_area.offset().top;
+            week_scroll_area.css('height', bottom - top);
+        }
+    }
+
+    $(window).resize(function() {
+        resizeBoxes();
+    });
+    $(window).on('load', function() {
+        resizeBoxes();
+    });
+
     function confirmDialog(id, btn, onClick) {
         $("#" + id).dialog({
             resizable: false,
@@ -34,7 +57,7 @@
 </div>
 
 <div style="float: right; width: 19%">
-    <div class="ev_box">
+    <div class="ev_box" id="box_events">
         <div class="ev_header">
             {{ "Next Events"|t(locale) }}
             <a id="link-event" style="float: right" href="/new?ctype=Event">
@@ -99,7 +122,7 @@
 
     <br />
 
-    <div class="ev_box">
+    <div class="ev_box" id="box_tasks">
         <div class="ev_header">
             {{ "Next Tasks"|t(locale) }}
             <a id="link-todo" style="float: right" href="/new?ctype=Todo">
