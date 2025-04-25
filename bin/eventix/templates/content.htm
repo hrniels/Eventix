@@ -14,7 +14,7 @@
 
         // as the week area is scrollable, resize it to fit within the height as well
         var week_scroll_area = $('#week_scroll_area');
-        if(week_scroll_area) {
+        if(week_scroll_area.length) {
             var top = week_scroll_area.offset().top;
             week_scroll_area.css('height', bottom - top);
         }
