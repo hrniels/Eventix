@@ -5,9 +5,9 @@
 <script type="text/javascript" src="/static/contrib/jquery-clockpicker.js"></script>
 <script type="text/javascript">
     function getClockTime(el) {
-        var value = $(el).prop('value').split(':');
-        var hours = + value[0] || 0;
-        var mins = + value[1] || 0;
+        const value = $(el).prop('value').split(':');
+        const hours = + value[0] || 0;
+        const mins = + value[1] || 0;
         return [hours, mins];
     }
 
@@ -22,8 +22,8 @@
     }
 
     function setClockTime(el, pair) {
-        var hours = pair[0].toString().padStart(2, '0');
-        var mins = pair[1].toString().padStart(2, '0');
+        const hours = pair[0].toString().padStart(2, '0');
+        const mins = pair[1].toString().padStart(2, '0');
         updateClockTime(el, hours + ':' + mins);
     }
 
@@ -34,10 +34,10 @@
     }
 
     $(function() {
-        var options = {
+        const options = {
             autoclose: true,
         };
-        var el = $('#{{ id }}');
+        let el = $('#{{ id }}');
         el.clockpicker(options);
         el.on('input', function() {
             updateClockTime(this, $(this).prop('value'));

@@ -184,15 +184,15 @@
 
 <script type="text/javascript">
     function setNowLine() {
-        var now = new Date();
+        const now = new Date();
         $('#now_line').css('top', (now.getHours() * 60 + now.getMinutes()) + 'px');
     }
 
     setNowLine();
     setInterval(setNowLine, 60 * 1000);
 
-    $(function() {
-        var area = document.getElementById("week_scroll_area");
+    $(document).ready(function() {
+        let area = document.getElementById("week_scroll_area");
         area.scrollTop = 60 * 8;
     });
 

@@ -82,7 +82,7 @@
 </form>
 
 <script>
-    var calendars = {};
+    const calendars = {};
     {% for (id, personal) in cal_personal %}
     calendars['{{ id }}'] = {{ personal }};
     {% endfor %}

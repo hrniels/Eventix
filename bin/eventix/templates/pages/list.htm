@@ -64,15 +64,15 @@
 
 <script>
     function toggleFilter() {
-        var hidden = document.getElementById('filter_box').style.display == 'none';
+        const hidden = document.getElementById('filter_box').style.display == 'none';
         $('#filter_box').toggle('blind', {}, 300);
         Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
     }
 
     function refreshRow(uid, rid, data) {
         loadOccs(uid, rid, 'Forward', 1, function(data) {
-            var row = document.getElementById('occrow_' + rid);
-            var prev = row.previousSibling;
+            let row = document.getElementById('occrow_' + rid);
+            let prev = row.previousSibling;
             row.remove();
             $(prev).after(data.html);
         });
@@ -93,7 +93,7 @@
     if(Cookies.get('ev_list_filter') != 1)
         $('#filter_box').hide();
 
-    var occs_state = {};
+    let occs_state = {};
 
     function loadOccs(uid, ndate, dir, count, onsuccess) {
         getRequest(
@@ -106,7 +106,7 @@
         if(occs_state[uid].prev) {
             loadOccs(uid, occs_state[uid].prev, 'Backwards', 5, function(data) {
                 occs_state[uid].prev = data.date;
-                var row = $('#row_' + id + '_prev');
+                let row = $('#row_' + id + '_prev');
                 row.after(data.html);
                 if(data.date == null)
                     row.hide();
@@ -118,7 +118,7 @@
         if(occs_state[uid].next) {
             loadOccs(uid, occs_state[uid].next, 'Forward', 5, function(data) {
                 occs_state[uid].next = data.date;
-                var row = $('#row_' + id + '_next');
+                let row = $('#row_' + id + '_next');
                 row.before(data.html);
                 if(data.date == null)
                     row.hide();
@@ -351,12 +351,12 @@
 {% endfor %}
 
 <script>
-    var ids = [
+    const ids = [
         {% for (id, c) in comps.iter().enumerate() %}
         '{{ c.comp.uid() }}',
         {% endfor %}
     ];
-    for(var i = 0; i < ids.length; i++) {
+    for(let i = 0; i < ids.length; i++) {
         // ensure that we pass the current value of i to the closure
         (function(i) {
             confirmDialog(

@@ -1,6 +1,6 @@
-var popupOpen = false;
-var formPage = false;
-var keyMouse = false;
+let popupOpen = false;
+let formPage = false;
+let keyMouse = false;
 
 function userIsActive() {
     return popupOpen || formPage || keyMouse;

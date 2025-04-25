@@ -1,6 +1,6 @@
-var syncForce = false;
-var syncing = false;
-var outOfSync = false;
+let syncForce = false;
+let syncing = false;
+let outOfSync = false;
 
 function reloadDBEvery(period, lastReloadId, spinnerId, iconId) {
     setInterval(function() {

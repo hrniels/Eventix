@@ -99,7 +99,7 @@
 </style>
 <script>
     function toggle_wday(wday) {
-        var wdaylist = $("#{{ id }}_weekdays").attr('value');
+        let wdaylist = $("#{{ id }}_weekdays").attr('value');
         if(wdaylist.indexOf(wday) != -1)
             wdaylist = wdaylist.replace(wday + ",", "");
         else
@@ -117,18 +117,18 @@
             min: 1,
         });
 
-        var weekdays = $("#{{ id }}_weekdays").attr('value');
-        for(var i = 0; i < weekdays.length; i += 3) {
-            var wday = weekdays.substr(i, 2);
+        const weekdays = $("#{{ id }}_weekdays").attr('value');
+        for(let i = 0; i < weekdays.length; i += 3) {
+            const wday = weekdays.substr(i, 2);
             $("#{{ id }}_weekday_" + wday).toggleClass('ev_button_selected');
         }
 
         $("#{{ id }}-tabs").tabs({
             activate: function(event, data) {
-                var name = data.newPanel.attr('id').replace("{{ id }}-tabs-", "");
+                const name = data.newPanel.attr('id').replace("{{ id }}-tabs-", "");
                 if(name != 'NONE') {
                     $("#{{ id }}-tabs-end").show();
-                    var label = $("#{{ id }}_interval_label");
+                    let label = $("#{{ id }}_interval_label");
                     switch(name) {
                         case "HOURLY":
                             label.html("{{ "hour(s)"|t(locale) }}");
@@ -153,9 +153,9 @@
             }
         });
 
-        var tab = $("#{{ id }}_freq").attr('value');
+        const tab = $("#{{ id }}_freq").attr('value');
         if(tab != 'NONE') {
-            var tabs = ['NONE', 'HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+            const tabs = ['NONE', 'HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
             $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
             $("#{{ id }}-tabs-end").show();
         }

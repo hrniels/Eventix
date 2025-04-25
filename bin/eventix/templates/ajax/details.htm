@@ -170,7 +170,7 @@
 </div>
 <script>
     function alarmURL(uid, rid, edit) {
-        var url = '/editalarm?edit=' + edit + '&uid=' + uid;
+        let url = '/editalarm?edit=' + edit + '&uid=' + uid;
         if(rid)
             url += '&rid=' + rid;
         return url;

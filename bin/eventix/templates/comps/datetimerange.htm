@@ -14,8 +14,8 @@ function setChecked(id, value) {
 }
 
 $(function() {
-    var settings = calSettings();
-    var from = $("#{{ id }}from_date")
+    const settings = calSettings();
+    let from = $("#{{ id }}from_date")
         .datepicker(settings)
         .on("change", function() {
             {% if ctype == CalCompType::Todo %}
@@ -23,7 +23,7 @@ $(function() {
             {% endif %}
             to.datepicker("option", "minDate", getDate(this));
         });
-    var to = $("#{{ id }}to_date")
+    let to = $("#{{ id }}to_date")
         .datepicker(settings)
         .on("change", function() {
             {% if ctype == CalCompType::Todo %}
@@ -39,7 +39,7 @@ $(function() {
     to.datepicker("option", "showAnim", "");
 
     function getDate(element) {
-        var date;
+        let date;
         try {
             date = $.datepicker.parseDate(settings.dateFormat, element.value);
         }

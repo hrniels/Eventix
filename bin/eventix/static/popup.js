@@ -1,7 +1,7 @@
-var selected = null;
+let selected = null;
 
 $(document).mousedown(function(e) {
-    var popup = document.getElementById('popup');
+    let popup = document.getElementById('popup');
     if(selected != null && !popup.contains(e.target) && !inBoundingBox(e, 'popup'))
         deselect(selected, null);
 });
@@ -15,7 +15,7 @@ $.fn.slideFadeToggle = function(easing, callback) {
 };
 
 function openPopup(uid, jsuid, rid, id) {
-    var newid = {
+    const newid = {
         'uid': uid,
         'jsuid': jsuid,
         'rid': rid,
@@ -32,11 +32,11 @@ function select(newid) {
     $('.' + newid.jsuid).addClass('ev_selected');
     setPopupOpen(true);
 
-    var el = document.getElementById(newid.id);
-    var elRect = pageBoundingBox(el);
+    let el = document.getElementById(newid.id);
+    const elRect = pageBoundingBox(el);
+    const popWidth = 600;
 
-    var popup = $('#popup');
-    var popWidth = 600;
+    let popup = $('#popup');
     if(elRect.right + popWidth > window.innerWidth)
         popup.css('left', elRect.left - popWidth);
     else
@@ -51,10 +51,10 @@ function select(newid) {
 }
 
 function correctPosition(id) {
-    var el = document.getElementById(id);
-    var elRect = pageBoundingBox(el);
-    var popup = $('#popup');
-    var popupRect = pageBoundingBox(document.getElementById('popup'));
+    let el = document.getElementById(id);
+    const elRect = pageBoundingBox(el);
+    const popupRect = pageBoundingBox(document.getElementById('popup'));
+    let popup = $('#popup');
     if(elRect.top + popupRect.height > window.innerHeight && elRect.bottom >= popupRect.height)
         popup.css('top', elRect.bottom - popupRect.height);
 }
@@ -71,10 +71,10 @@ function deselect(oldid, newid) {
 }
 
 function pageBoundingBox(el) {
-    var rect = el.getBoundingClientRect();
-    var doc = document.documentElement;
-    var left = (window.pageXOffset || doc.scrollLeft) - (doc.clientLeft || 0);
-    var top = (window.pageYOffset || doc.scrollTop)  - (doc.clientTop || 0);
+    let rect = el.getBoundingClientRect();
+    const doc = document.documentElement;
+    const left = (window.pageXOffset || doc.scrollLeft) - (doc.clientLeft || 0);
+    const top = (window.pageYOffset || doc.scrollTop)  - (doc.clientTop || 0);
     rect.x += left;
     rect.y += top;
     rect.top += top;
@@ -85,7 +85,7 @@ function pageBoundingBox(el) {
 }
 
 function inBoundingBox(e, id) {
-    var box = pageBoundingBox(document.getElementById(id));
+    const box = pageBoundingBox(document.getElementById(id));
     return e.pageX >= box.left && e.pageX <= box.left + box.width &&
         e.pageY >= box.top && e.pageY <= box.top + box.height;
 }

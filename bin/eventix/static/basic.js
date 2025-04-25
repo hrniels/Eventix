@@ -3,28 +3,28 @@ function reloadPage() {
 }
 
 function curUTCDay() {
-    var date = new Date();
-    var y = date.getUTCFullYear();
-    var m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-    var d = date.getUTCDate().toString().padStart(2, '0');
+    const date = new Date();
+    const y = date.getUTCFullYear();
+    const m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    const d = date.getUTCDate().toString().padStart(2, '0');
     return `${y}${m}${d}`;
 }
 
 function curISODate() {
-    var date = new Date();
-    var y = date.getUTCFullYear();
-    var m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-    var d = date.getUTCDate().toString().padStart(2, '0');
-    var H = date.getUTCHours().toString().padStart(2, '0');
-    var M = date.getUTCMinutes().toString().padStart(2, '0');
-    var S = date.getUTCSeconds().toString().padStart(2, '0');
+    const date = new Date();
+    const y = date.getUTCFullYear();
+    const m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    const d = date.getUTCDate().toString().padStart(2, '0');
+    const H = date.getUTCHours().toString().padStart(2, '0');
+    const M = date.getUTCMinutes().toString().padStart(2, '0');
+    const S = date.getUTCSeconds().toString().padStart(2, '0');
     return `${y}${m}${d}T${H}${M}${S}Z`;
 }
 
 function invertSelection(prefix) {
-    for(var i = 1;;i++)
+    for(let i = 1;;i++)
     {
-        var checkbox = document.getElementById(prefix + i);
+        let checkbox = document.getElementById(prefix + i);
         if(checkbox == null)
             break;
 
@@ -33,14 +33,14 @@ function invertSelection(prefix) {
 }
 
 function toggleCheckbox(id) {
-    var el = document.getElementById(id);
+    let el = document.getElementById(id);
     el.checked = !el.checked;
 }
 
 function moveToTabCenter(elId, tabsId, tabBarId) {
-    var pos = $('#' + tabsId).position().top;
-    var tab = $('#' + tabBarId);
-    var el = $('#' + elId);
+    const pos = $('#' + tabsId).position().top;
+    let tab = $('#' + tabBarId);
+    let el = $('#' + elId);
     el.css({
         position: "absolute",
         top: (pos +
@@ -81,7 +81,7 @@ function postRequest(url, success) {
 }
 
 function completeTodo(uid, rid, onsuccess) {
-    var url = '/complete?uid=' + uid;
+    let url = '/complete?uid=' + uid;
     if(rid != null)
         url += '&rid=' + rid;
     getRequest(url, onsuccess);
@@ -94,7 +94,7 @@ function toggleExcl(uid, rid, onsuccess) {
 }
 
 function deleteItem(uid, rid, onDeleted) {
-    var url = '/delete?uid=' + uid;
+    let url = '/delete?uid=' + uid;
     if(rid != null)
         url += '&rid=' + rid;
     postRequest(url, onDeleted);
@@ -105,7 +105,7 @@ function toggleCalendar(id) {
 }
 
 function setPersonalOverwrite(id_prefix, overwrite) {
-    var ids = ["none", "relative", "absolute", "datetime__time_"];
+    const ids = ["none", "relative", "absolute", "datetime__time_"];
     for(id in ids) {
         $("#" + id_prefix + "_" + ids[id]).prop("disabled", !overwrite);
     }

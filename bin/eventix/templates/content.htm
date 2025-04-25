@@ -6,16 +6,16 @@
 <script type="text/javascript">
     function resizeBoxes() {
         // resize events and tasks box to fit within the available height
-        var top = $('#box_events').offset().top;
-        var bottom = $(window).height() - 70;
-        var available_yspace = Math.max(400, bottom - top);
+        const top = $('#box_events').offset().top;
+        const bottom = $(window).height() - 70;
+        const available_yspace = Math.max(400, bottom - top);
         $('#box_events').css('height', available_yspace / 2 - 10);
         $('#box_tasks').css('height', available_yspace / 2 - 10);
 
         // as the week area is scrollable, resize it to fit within the height as well
-        var week_scroll_area = $('#week_scroll_area');
+        let week_scroll_area = $('#week_scroll_area');
         if(week_scroll_area.length) {
-            var top = week_scroll_area.offset().top;
+            const top = week_scroll_area.offset().top;
             week_scroll_area.css('height', bottom - top);
         }
     }

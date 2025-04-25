@@ -37,32 +37,32 @@ New attendee: <input id="{{ id }}-new-attendee" size="50" />
         }
     }
 
-    var cal_emails = {
+    const cal_emails = {
         {% for (cal, email) in emails %}
         '{{ cal }}': '{{ email }}',
         {% endfor %}
     };
 
     function addAttendee() {
-        var list = $('#{{ id }}-attendees');
+        const list = $('#{{ id }}-attendees');
         if(list.html().trim() == '-') {
             list.html('');
             {% if let Some(cal_combo_id) = cal_combo_id %}
-            var cal = $('#{{ cal_combo_id }}').val();
+            const cal = $('#{{ cal_combo_id }}').val();
             if(cal && cal_emails[cal])
                 doAddAttendee(list, cal_emails[cal]);
             {% endif %}
         }
 
-        var attendee = $('#{{ id }}-new-attendee').val();
+        const attendee = $('#{{ id }}-new-attendee').val();
         doAddAttendee(list, attendee);
         $('#{{ id }}-new-attendee').val('');
     }
 
     function doAddAttendee(list, attendee) {
-        var id = 0;
+        let id = 0;
         for(; ; ++id) {
-            var el = document.getElementById('{{ id }}-attendee_' + id);
+            const el = document.getElementById('{{ id }}-attendee_' + id);
             if(el == null)
                 break;
             if($('#{{ id }}-attendee-name-' + id).val() == attendee)
@@ -88,7 +88,7 @@ New attendee: <input id="{{ id }}-new-attendee" size="50" />
     function removeAttendee(id) {
         $('#{{ id }}-attendee_' + id).remove();
 
-        var list = $('#{{ id }}-attendees');
+        const list = $('#{{ id }}-attendees');
         if(list.html().trim() == '') {
             list.html('-');
         }

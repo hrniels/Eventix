@@ -14,9 +14,9 @@
             },
 
             _renderButtonItem: function(item) {
-                var buttonItem = this._super(item);
+                let buttonItem = this._super(item);
 
-                var icon = $("<span>", {
+                let icon = $("<span>", {
                     style: item.element.attr("data-style"),
                     "class": "ev_cal_src ev_cal_src_" + item.element.attr("data-class")
                 });
@@ -26,8 +26,8 @@
             },
 
             _renderItem: function(ul, item) {
-                var li = $("<li>");
-                var wrapper = $("<div>", { text: item.label } );
+                let li = $("<li>");
+                let wrapper = $("<div>", { text: item.label } );
 
                 if(item.disabled)
                     li.addClass("ui-state-disabled");
