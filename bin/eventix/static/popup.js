@@ -28,8 +28,8 @@ function openPopup(uid, jsuid, rid, id) {
 }
 
 function select(newid) {
-    var e = $('.' + newid.jsuid);
-    e.addClass('ev_selected');
+    $('#' + newid.id).addClass('ev_current');
+    $('.' + newid.jsuid).addClass('ev_selected');
     setPopupOpen(true);
 
     var el = document.getElementById(newid.id);
@@ -62,8 +62,8 @@ function correctPosition(id) {
 function deselect(oldid, newid) {
     selected = null;
     $('#popup').slideFadeToggle(function() {
-        var old = $('.' + oldid.jsuid);
-        old.removeClass('ev_selected');
+        $('#' + oldid.id).removeClass('ev_current');
+        $('.' + oldid.jsuid).removeClass('ev_selected');
         setPopupOpen(false);
         if(newid != null)
             select(newid);

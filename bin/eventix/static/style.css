@@ -473,9 +473,12 @@ span.ev_msg_error span.ev_msg_info {
 
 /* ------------ EVENT/TODO POPUP ------------ */
 
+div.ev_current {
+  font-weight: bold !important;
+}
+
 div.ev_selected {
   border: 1px solid #555 !important;
-  font-weight: bold !important;
 }
 
 .ev_popup {
