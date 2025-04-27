@@ -371,7 +371,7 @@ span.ev_msg_error span.ev_msg_info {
     justify-content: flex-start;
 }
 .ev_box .ev_scrollbox {
-    max-height: 25em;
+    height: 100%;
     overflow-y: scroll;
 }
 .ev_box > .ev_scrollbox > div {
