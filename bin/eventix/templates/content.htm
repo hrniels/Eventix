@@ -67,7 +67,7 @@
         <div class="ev_scrollbox">
             {% for day in events.days %}
             <div class="ev_next_day_header">
-                {{ day.date.unwrap()|as_ref|weekdate(locale, DateFlags::Short) }}
+                {{ day.date.unwrap()|as_ref|weekdate(locale, DateFlags::empty()) }}
             </div>
             {% for occ in day.occurrences %}
             <div onclick="openPopup('{{ occ.uid() }}',
@@ -133,7 +133,7 @@
             {% for day in tasks.days %}
             <div class="ev_next_day_header">
                 {% if let Some(date) = day.date %}
-                {{ date|weekdate(locale, DateFlags::Short) }}
+                {{ date|weekdate(locale, DateFlags::empty()) }}
                 {% else %}
                 {{ "Unplanned"|t(locale) }}
                 {% endif %}

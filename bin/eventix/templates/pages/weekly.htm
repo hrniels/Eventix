@@ -34,7 +34,7 @@
         <td width="12%" align="center">
             {% if day.date == today %}
             <b>
-                {{ day.date.format("%A") }},
+                {{ day.date.format("%a") }},
                 <span class="ev_today">{{ day.date.format("%b %d") }}</span>
             </b>
             {% else %}

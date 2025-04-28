@@ -99,7 +99,7 @@ pub trait Locale {
 
     fn fmt_weekdate(&self, date: &dyn DateLike, flags: DateFlags) -> String {
         let fmt = if flags.contains(DateFlags::Short) {
-            "%A, %b %d"
+            "%a, %b %d"
         } else {
             "%A, %b %d %Y"
         };
