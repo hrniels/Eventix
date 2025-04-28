@@ -23,7 +23,7 @@ mod todo;
 
 pub use alarm::{AlarmOverlay, CalAction, CalAlarm, CalRelated, CalTrigger, DefaultAlarmOverlay};
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
-pub use calendar::Calendar;
+pub use calendar::{CalTimeZone, Calendar};
 pub use component::{
     CalCompType, CalComponent, CompDateIterator, CompDateType, EventLikeComponent,
 };

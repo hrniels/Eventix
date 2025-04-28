@@ -17,6 +17,7 @@ use crate::parser::{
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct Calendar {
     comps: Vec<CalComponent>,
+    timezones: Vec<CalTimeZone>,
     props: Vec<Property>,
     unknown: Vec<Unknown>,
 }
@@ -25,6 +26,16 @@ impl Calendar {
     /// Returns a slice of the calendar properties.
     pub fn properties(&self) -> &[Property] {
         &self.props
+    }
+
+    /// Returns a slice of the timezone components.
+    pub fn timezones(&self) -> &[CalTimeZone] {
+        &self.timezones
+    }
+
+    /// Adds the given timezone to the calendar.
+    pub fn add_timezone(&mut self, tz: CalTimeZone) {
+        self.timezones.push(tz);
     }
 
     /// Returns a slice of the calendar components.
@@ -81,6 +92,9 @@ impl PropertyProducer for Calendar {
         for other in &self.unknown {
             props.extend(other.to_props().into_iter());
         }
+        for tz in &self.timezones {
+            props.extend(tz.to_props().into_iter());
+        }
         for comp in &self.comps {
             props.extend(comp.to_props().into_iter());
         }
@@ -112,6 +126,12 @@ impl PropertyConsumer for Calendar {
                     Ok(ev) => cal.checked_add(CalComponent::Event(ev)),
                     Err(e) => warn!("ignoring malformed event: {}", e),
                 },
+                "BEGIN" if prop.value() == "VTIMEZONE" => {
+                    match CalTimeZone::from_lines(lines, prop) {
+                        Ok(tz) => cal.timezones.push(tz),
+                        Err(e) => warn!("ignoring malformed timezone: {}", e),
+                    }
+                }
                 "BEGIN" => match Unknown::from_lines(lines, prop) {
                     Ok(other) => cal.unknown.push(other),
                     Err(e) => warn!("ignoring unknown component: {}", e),
@@ -146,6 +166,56 @@ impl FromStr for Calendar {
                 Ok(cal)
             }
             _ => Err(ParseError::UnexpectedProp(prop.name().to_string())),
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct CalTimeZone {
+    tzid: String,
+    props: Vec<Property>,
+}
+
+impl CalTimeZone {
+    pub fn new(tzid: String) -> Self {
+        Self {
+            tzid,
+            props: vec![],
+        }
+    }
+}
+
+impl PropertyProducer for CalTimeZone {
+    fn to_props(&self) -> Vec<Property> {
+        let mut props = vec![Property::new("BEGIN", vec![], "VTIMEZONE")];
+        props.push(Property::new("TZID", vec![], self.tzid.clone()));
+        props.extend(self.props.iter().cloned());
+        props.push(Property::new("END", vec![], "VTIMEZONE"));
+        props
+    }
+}
+
+impl PropertyConsumer for CalTimeZone {
+    fn from_lines<R: BufRead>(lines: &mut LineReader<R>, _: Property) -> Result<Self, ParseError>
+    where
+        Self: Sized,
+    {
+        let mut tz = CalTimeZone::new("".into());
+        loop {
+            let Some(line) = lines.next() else {
+                break Err(ParseError::UnexpectedEOF);
+            };
+
+            let prop = line.parse::<Property>()?;
+            match prop.name().as_str() {
+                "END" if prop.value() == "VTIMEZONE" => {
+                    break Ok(tz);
+                }
+                "TZID" => tz.tzid = prop.take_value(),
+                _ => {
+                    tz.props.push(prop);
+                }
+            }
         }
     }
 }
@@ -235,6 +305,9 @@ RID:20221110T111111Z
 UID:1234-5678
 TEST;FOO=bar;A=B:\"value\"
 END:VTODO
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+END:VTIMEZONE
 END:VCALENDAR";
 
         let ical = ical.parse::<Calendar>().unwrap();
@@ -269,6 +342,9 @@ END:VCALENDAR";
             res,
             "BEGIN:VCALENDAR\r
 VERSION:2.0\r
+BEGIN:VTIMEZONE\r
+TZID:Europe/Berlin\r
+END:VTIMEZONE\r
 BEGIN:VTODO\r
 UID:1234-5678\r
 CREATED:20241010T101222Z\r
