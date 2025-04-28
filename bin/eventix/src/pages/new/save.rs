@@ -2,7 +2,9 @@ use anyhow::anyhow;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use ical::col::CalFile;
-use ical::objects::{CalCompType, CalComponent, CalEvent, CalTodo, Calendar, UpdatableEventLike};
+use ical::objects::{
+    CalCompType, CalComponent, CalEvent, CalTimeZone, CalTodo, Calendar, UpdatableEventLike,
+};
 use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
@@ -63,7 +65,23 @@ async fn action_update(
 
     let mut path = dir.path().clone();
     path.push(format!("{}.ics", uid));
-    let mut file = CalFile::new(calendar, path, Calendar::default());
+
+    let mut cal = Calendar::default();
+    // add a VTIMEZONE entry to the calendar with just the name of the timezone to work around a
+    // problem in the interaction of davmail and MS exchange. davmail translates the timezones to
+    // in ICS files to different names for compatibility reasons (I guess) by taking the timezone
+    // from the VTIMEZONE entries and setting the same timezone in all DTSTART, DTEND, etc.
+    // properties. If there is no VTIMEZONE entry, this translation isn't done, but davmail inserts
+    // a new VTIMEZONE entry, which then has a different timezone name than in DTSTART etc.. This
+    // apparently is only a problem when updating ICS files, not when creating them. Therefore, it
+    // worked often fine so far, because MS exchange added the VTIMEZONE entry for us. This however
+    // does not always happen, so that we run into this issue.
+    //
+    // A working fix is to add a VTIMEZONE entry with just the timezone name and let davmail/MS
+    // exchange add the daylight/standard information for us.
+    cal.add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
+
+    let mut file = CalFile::new(calendar, path, cal);
 
     file.add_component(comp);
     file.save()?;

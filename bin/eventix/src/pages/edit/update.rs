@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use ical::objects::{CalDate, EventLike, UpdatableEventLike};
+use ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
 use std::sync::Arc;
 
 use crate::error::HTMLError;
@@ -123,6 +123,13 @@ fn action_update(
             form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
         })
         .context("Creating overwrite failed")?;
+    }
+
+    // add "empty" timezone information as a workaround for davmail/exchange
+    // see comment in new/save.rs for details.
+    if file.calendar().timezones().is_empty() {
+        file.calendar_mut()
+            .add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
     }
 
     // should we move the file to a different directory?
