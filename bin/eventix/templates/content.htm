@@ -70,10 +70,10 @@
                 {{ day.date.unwrap()|as_ref|weekdate(locale, DateFlags::empty()) }}
             </div>
             {% for occ in day.occurrences %}
-            <div onclick="openPopup('{{ occ.uid() }}',
-                                    'ev_id_{{ occ.uid_html() }}',
-                                    '{{ occ.rid_html() }}',
-                                    '{{ occ.id() }}')"
+            <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                    'ev_id_{{ occ.uid_html() }}',
+                                                    '{{ occ.rid_html() }}',
+                                                    '{{ occ.id() }}'))"
                  id="{{ occ.id() }}"
                  class="ev_event_occurrence
                         ev_id_{{ occ.uid_html() }}
@@ -139,10 +139,10 @@
                 {% endif %}
             </div>
             {% for occ in day.occurrences %}
-            <div onclick="openPopup('{{ occ.uid() }}',
-                                    'ev_id_{{ occ.uid_html() }}',
-                                    '{{ occ.rid_html() }}',
-                                    '{{ occ.id() }}')"
+            <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                    'ev_id_{{ occ.uid_html() }}',
+                                                    '{{ occ.rid_html() }}',
+                                                    '{{ occ.id() }}'))"
                  id="{{ occ.id() }}"
                  class="ev_event_occurrence
                         ev_id_{{ occ.uid_html() }}
@@ -186,8 +186,6 @@
     </div>
 </div>
 <br style="clear: both" />
-
-<div id="popup" class="ev_popup"></div>
 
 <script type="text/javascript">
     $(document).keydown(function(e) {

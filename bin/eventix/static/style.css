@@ -485,6 +485,7 @@ div.ev_selected {
   background-color: #ffffff;
   border: 1px solid #555;
   box-shadow: 2px 2px 3px #555;
+  position: absolute;
   cursor: default;
   display: none;
   width: 600px;

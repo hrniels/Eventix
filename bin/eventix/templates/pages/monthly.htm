@@ -61,10 +61,10 @@
             </div>
             <div class="ev_month_cell">
                 {% for occ in day.occurrences %}
-                <div onclick="openPopup('{{ occ.uid() }}',
-                                        'ev_id_{{ occ.uid_html() }}',
-                                        '{{ occ.rid_html() }}',
-                                        '{{ occ.id() }}')"
+                <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid_html() }}',
+                                                        '{{ occ.rid_html() }}',
+                                                        '{{ occ.id() }}'))"
                      {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
                      style="text-align: center"
                      {% endif %}

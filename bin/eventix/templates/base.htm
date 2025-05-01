@@ -34,113 +34,117 @@
         </script>
     </head>
     <body>
-        <div style="float: left;">
-            <b>{{ "Position"|t(locale) }}:</b>
-            <a href="/">{{ "Eventix"|t(locale) }}</a>
-            {% for bc in page.breadcrumbs() %}
-            &raquo;
-            <a href="{{ bc.url }}">{{ bc.name }}</a>
-            {% endfor %}
-        </div>
-
-        <div style="float: right;" class="ev_padbottom">
-            <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
-                <span>Calendars:</span>
-                {% for cal in page.calendars() %}
-                <a style="vertical-align: middle" title="{{ cal.name }}"
-                   href="javascript:toggleCalendar('{{ cal.id }}')">
-                    <span id="calendar_enabled_{{ cal.id }}" class="ev_cal_src
-                                 {% if cal.enabled %}
-                                 ev_cal_src_{{ cal.id }}
-                                 {% else %}
-                                 ev_cal_src_disabled
-                                 {% endif %}
-                                 "></span>
-                </a>
-                <script type="text/javascript">
-                $(document).ready(function() {
-                    {% if !cal.enabled %}
-                    $("#calendar_enabled_{{ cal.id }}").hover(function() {
-                        $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");
-                    });
-                    {% else %}
-                    $("#calendar_enabled_{{ cal.id }}").hover(function() {
-                        $(this).toggleClass("ev_cal_src_highlight");
-                    });
-                    {% endif %}
-                });
-                </script>
+        <div id="outer">
+            <div style="float: left;">
+                <b>{{ "Position"|t(locale) }}:</b>
+                <a href="/">{{ "Eventix"|t(locale) }}</a>
+                {% for bc in page.breadcrumbs() %}
+                &raquo;
+                <a href="{{ bc.url }}">{{ bc.name }}</a>
                 {% endfor %}
             </div>
-            &nbsp;
-            <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/">
-                <i class="bi bi-calendar2-month"></i>
-                <span>{{ "Monthly"|t(locale) }}</span>
-            </a>
-            <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/weekly">
-                <i class="bi bi-calendar2-week"></i>
-                <span>{{ "Weekly"|t(locale) }}</span>
-            </a>
-            <a id="link-list" class="ev_button_medium ev_button_normal"
-               style="padding-left: 1em; padding-right: 1em" href="/list">
-                <i class="bi bi-card-list"></i>
-                <span>{{ "List"|t(locale) }}</span>
-            </a>
-            <a id="link-refresh" class="ev_button_medium ev_button_normal"
-                href="javascript:reloadDB('last-update', 'sync-spinner', 'out-of-sync', true)">
-                <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
-                <span id="last-update">
-                    {{ page.last_reload(locale)|as_ref|time(locale, TimeFlags::None) }}
-                </span>
-                <i id="out-of-sync" style="color: transparent" class="bi bi-exclamation-circle-fill"></i>
-            </a>
-        </div>
-        <br style="clear: both;" />
 
-        {% if page.errors().len() > 0 %}
-        <div class="ev_border ev_padbottom_big">
-            <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
-            <div class="ev_main">
-                <div style="padding: 0.3em;">
-                    <ul>
-                        {% for err in page.errors() %}
-                        <li><span class="ev_msg_error">{{ err|safe }}</span></li>
-                        {% endfor %}
-                    </ul>
+            <div style="float: right;" class="ev_padbottom">
+                <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
+                    <span>Calendars:</span>
+                    {% for cal in page.calendars() %}
+                    <a style="vertical-align: middle" title="{{ cal.name }}"
+                                                      href="javascript:toggleCalendar('{{ cal.id }}')">
+                        <span id="calendar_enabled_{{ cal.id }}" class="ev_cal_src
+                                  {% if cal.enabled %}
+                                  ev_cal_src_{{ cal.id }}
+                                  {% else %}
+                                  ev_cal_src_disabled
+                                  {% endif %}
+                                  "></span>
+                    </a>
+                    <script type="text/javascript">
+                        $(document).ready(function() {
+                            {% if !cal.enabled %}
+                            $("#calendar_enabled_{{ cal.id }}").hover(function() {
+                                $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");
+                            });
+                            {% else %}
+                            $("#calendar_enabled_{{ cal.id }}").hover(function() {
+                                $(this).toggleClass("ev_cal_src_highlight");
+                            });
+                            {% endif %}
+                        });
+                    </script>
+                    {% endfor %}
+                </div>
+                &nbsp;
+                <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/">
+                    <i class="bi bi-calendar2-month"></i>
+                    <span>{{ "Monthly"|t(locale) }}</span>
+                </a>
+                <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/weekly">
+                    <i class="bi bi-calendar2-week"></i>
+                    <span>{{ "Weekly"|t(locale) }}</span>
+                </a>
+                <a id="link-list" class="ev_button_medium ev_button_normal"
+                                  style="padding-left: 1em; padding-right: 1em" href="/list">
+                    <i class="bi bi-card-list"></i>
+                    <span>{{ "List"|t(locale) }}</span>
+                </a>
+                <a id="link-refresh" class="ev_button_medium ev_button_normal"
+                                     href="javascript:reloadDB('last-update', 'sync-spinner', 'out-of-sync', true)">
+                    <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
+                    <span id="last-update">
+                        {{ page.last_reload(locale)|as_ref|time(locale, TimeFlags::None) }}
+                    </span>
+                    <i id="out-of-sync" style="color: transparent" class="bi bi-exclamation-circle-fill"></i>
+                </a>
+            </div>
+            <br style="clear: both;" />
+
+            {% if page.errors().len() > 0 %}
+            <div class="ev_border ev_padbottom_big">
+                <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
+                <div class="ev_main">
+                    <div style="padding: 0.3em;">
+                        <ul>
+                            {% for err in page.errors() %}
+                            <li><span class="ev_msg_error">{{ err|safe }}</span></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if page.infos().len() > 0 %}
+            <div class="ev_border ev_padbottom_big">
+                <h1 class="ev_header ev_info">{{ "Information"|t(locale) }}</h1>
+                <div class="ev_main">
+                    <div style="padding: 0.3em;">
+                        <ul>
+                            {% for info in page.infos() %}
+                            <li><span class="ev_msg_info">{{ info|safe }}</span></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% block content %}
+            <h1>Dummy content</h1>
+            {% endblock %}
+
+            <div class="ev_padtop ev_border">
+                <div class="ev_main">
+                    <div style="float: left;">
+                        {{ "Page generation time"|t(locale) }}: <b>{{ page.time_elapsed()|as_time }}</b>
+                    </div>
+                    <div style="float: right;">
+                        Eventix v0.1 &copy; Nils Asmussen 2024
+                    </div>
+                    <br style="clear: both" />
                 </div>
             </div>
         </div>
-        {% endif %}
 
-        {% if page.infos().len() > 0 %}
-        <div class="ev_border ev_padbottom_big">
-            <h1 class="ev_header ev_info">{{ "Information"|t(locale) }}</h1>
-            <div class="ev_main">
-                <div style="padding: 0.3em;">
-                    <ul>
-                        {% for info in page.infos() %}
-                        <li><span class="ev_msg_info">{{ info|safe }}</span></li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        {% block content %}
-        <h1>Dummy content</h1>
-        {% endblock %}
-
-        <div class="ev_padtop ev_border">
-            <div class="ev_main">
-                <div style="float: left;">
-                    {{ "Page generation time"|t(locale) }}: <b>{{ page.time_elapsed()|as_time }}</b>
-                </div>
-                <div style="float: right;">
-                    Eventix v0.1 &copy; Nils Asmussen 2024
-                </div>
-                <br style="clear: both" />
-            </div>
-        </div>
+        <div id="popup" class="ev_popup"></div>
     </body>
 </html>

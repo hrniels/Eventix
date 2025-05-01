@@ -22,7 +22,7 @@ use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
 use crate::pages::Page;
-use crate::state::EventixState;
+use crate::state::{CalendarAlarmType, EventixState};
 use crate::util;
 
 const PER_PAGE: usize = 15;
@@ -64,6 +64,7 @@ struct ListComponent<'a> {
     comp: &'a CalComponent,
     org: Option<OrganizerTemplate<'a>>,
     owner: bool,
+    personal_alarms: bool,
     alarms: Option<Vec<CalAlarm>>,
 }
 
@@ -147,6 +148,10 @@ pub async fn handler(
                             comp: c,
                             owner: util::user_is_event_owner(i.directory(), &state, c.organizer()),
                             alarms: pers_alarms.effective_alarms(&occ, cal_settings.alarms()),
+                            personal_alarms: matches!(
+                                cal_settings.alarms(),
+                                CalendarAlarmType::Personal { .. }
+                            ),
                         }
                     })
             })

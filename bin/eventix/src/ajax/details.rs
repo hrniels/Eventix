@@ -30,6 +30,7 @@ pub fn router(state: EventixState) -> Router {
 pub struct Request {
     uid: String,
     rid: Option<String>,
+    edit: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -92,7 +93,7 @@ async fn handler(
                 &state,
                 req.uid,
                 req.rid,
-                false,
+                req.edit,
             )?)
         } else {
             None

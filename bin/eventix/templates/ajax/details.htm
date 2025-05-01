@@ -177,12 +177,14 @@
     }
 
     function editAlarm(uid, rid) {
+        fireEvent(new EditEvent(null, uid, rid));
         getRequest(alarmURL(uid, rid, true), function(data) {
             $('#alarms').html(data.html);
         });
     }
 
     function cancelAlarm(uid, rid) {
+        fireEvent(new CancelEvent());
         getRequest(alarmURL(uid, rid, false), function(data) {
             $('#alarms').html(data.html);
         });

@@ -51,10 +51,10 @@
                                        style="height: auto">
             <div class="ev_week_cell">
                 {% for occ in day.allday %}
-                <div onclick="openPopup('{{ occ.uid() }}',
-                                        'ev_id_{{ occ.uid_html() }}',
-                                        '{{ occ.rid_html() }}',
-                                        '{{ occ.id() }}')"
+                <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid_html() }}',
+                                                        '{{ occ.rid_html() }}',
+                                                        '{{ occ.id() }}'))"
                      style="text-align: center" id="{{ occ.id() }}"
                      class="
                         ev_event_occurrence
@@ -130,10 +130,10 @@
                             width: {{ 100 / occ.overlap_count() }}%;
                             left: {{ occ.overlap_off() * (100 / occ.overlap_count()) }}%;
                             padding: 0px"
-                     onclick="openPopup('{{ occ.uid() }}',
-                                        'ev_id_{{ occ.uid_html() }}',
-                                        '{{ occ.rid_html() }}',
-                                        '{{ occ.id() }}')"
+                     onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid_html() }}',
+                                                        '{{ occ.rid_html() }}',
+                                                        '{{ occ.id() }}'))"
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
                     ev_cal_src ev_cal_src_{{ occ.directory() }}

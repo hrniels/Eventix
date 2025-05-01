@@ -17,7 +17,7 @@ use crate::html::{self, filters};
 use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
-use crate::state::EventixState;
+use crate::state::{CalendarAlarmType, EventixState};
 use crate::util;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -64,6 +64,7 @@ impl<'a> Deref for ListOccurrence<'a> {
 struct OccListTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     occs: Vec<ListOccurrence<'a>>,
+    personal_alarms: bool,
 }
 
 fn min_datetime(timezone: Tz) -> DateTime<Tz> {
@@ -161,9 +162,13 @@ pub async fn handler(
         None
     };
 
-    let html = OccListTemplate { occs, locale }
-        .render()
-        .context("details template")?;
+    let html = OccListTemplate {
+        locale,
+        occs,
+        personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
+    }
+    .render()
+    .context("details template")?;
 
     Ok(Json(Response { html, date }))
 }

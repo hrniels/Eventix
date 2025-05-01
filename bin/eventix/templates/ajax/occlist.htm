@@ -46,6 +46,14 @@
             <span>{{ "Include"|t(locale) }}</span>
             {% endif %}
         </a>
+        {% else if personal_alarms %}
+        <a id="alarm-button-{{ occ.uid() }}-{{ occ.rid_html() }}"
+           style="float: right; width: 60px" class="ev_button ev_button_normal"
+           href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_html() }}',
+                                       '{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+            <i class="bi bi-pencil"></i>
+            <span>{{ "Alarms"|t(locale) }}</span>
+        </a>
         {% endif %}
         {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
         {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
