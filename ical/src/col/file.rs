@@ -229,6 +229,11 @@ impl CalFile {
         &self.cal
     }
 
+    /// Returns a mutable reference to the the contained [`Calendar`].
+    pub fn calendar_mut(&mut self) -> &mut Calendar {
+        &mut self.cal
+    }
+
     /// Returns true if any component in the contained [`Calendar`] has the given uid.
     pub fn contains_uid<S: AsRef<str>>(&self, uid: S) -> bool {
         let uid_ref = uid.as_ref();
