@@ -148,8 +148,7 @@ impl PersonalCalendarAlarms {
     }
 
     pub fn has_alarms(&self, occ: &Occurrence<'_>, default: &Option<CalAlarm>) -> bool {
-        let rid = occ.occurrence_startdate().map(|d| d.to_utc());
-        match self.get(occ.uid(), rid.as_ref()) {
+        match self.get(occ.uid(), Self::occurrence_rid(occ).as_ref()) {
             Some(overwrite) => !overwrite.alarms().is_empty(),
             None => default.is_some(),
         }
@@ -160,8 +159,7 @@ impl PersonalCalendarAlarms {
         occ: &Occurrence<'_>,
         default: &Option<CalAlarm>,
     ) -> Option<Vec<CalAlarm>> {
-        let rid = occ.occurrence_startdate().map(|d| d.to_utc());
-        match self.get(occ.uid(), rid.as_ref()) {
+        match self.get(occ.uid(), Self::occurrence_rid(occ).as_ref()) {
             Some(overwrite) => {
                 // an empty alarm list here means that we have overwritten it to disable all
                 // alarms, but the caller expects this as None.
@@ -172,6 +170,19 @@ impl PersonalCalendarAlarms {
                 }
             }
             None => default.clone().map(|alarm| vec![alarm]),
+        }
+    }
+
+    fn occurrence_rid(occ: &Occurrence<'_>) -> Option<CalDate> {
+        // if we have an overwrite for this occurrence, use its rid because the start date might be
+        // overwritten.
+        if occ.is_overwritten() {
+            occ.rid().cloned()
+        }
+        // if there is no overwrite, we have no rid and thus have to use the start date (which also
+        // cannot have been changed here).
+        else {
+            occ.occurrence_startdate().map(|d| d.to_utc())
         }
     }
 
