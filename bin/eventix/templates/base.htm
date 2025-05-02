@@ -59,7 +59,7 @@
                                   "></span>
                     </a>
                     <script type="text/javascript">
-                        $(document).ready(function() {
+                        $(function() {
                             {% if !cal.enabled %}
                             $("#calendar_enabled_{{ cal.id }}").hover(function() {
                                 $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");

@@ -114,11 +114,6 @@
 </form>
 
 <script>
-    $(window).on('load', function() {
-        moveToTabCenter('title', 'tabs', 'tab-bar');
-        $('#summary').focus();
-    });
-
     function onDeleted() {
         window.location.href = '/';
     }
@@ -133,6 +128,9 @@
             }
         );
         {% endif %}
+
+        moveToTabCenter('title', 'tabs', 'tab-bar');
+        $('#summary').focus();
 
         $("#tabs").tabs({
             create: function(event, ui) {

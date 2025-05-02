@@ -96,19 +96,15 @@
             $("#alarm-tabs ul li:eq(1)").show();
     }
 
-    $(document).ready(function() {
+    $(function() {
         $("#calendar").on("change", function(event, ui) {
             setPersonalAlarms($(this).val());
         });
         setPersonalAlarms($('#calendar').val());
-    });
 
-    $(window).on('load', function() {
         moveToTabCenter('title', 'tabs', 'tab-bar');
         $('#summary').focus();
-    });
 
-    $(function() {
         $("#tabs").tabs({
             create: function(event, ui) {
                 moveToTabCenter('title', 'tabs', 'tab-bar');
