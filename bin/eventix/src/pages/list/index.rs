@@ -146,7 +146,7 @@ pub async fn handler(
                                 .organizer()
                                 .map(|org| OrganizerTemplate::new(locale.clone(), org)),
                             comp: c,
-                            owner: util::user_is_event_owner(i.directory(), &state, c.organizer()),
+                            owner: util::user_is_event_owner(i.directory(), &state, c),
                             alarms: pers_alarms.effective_alarms(&occ, cal_settings.alarms()),
                             personal_alarms: matches!(
                                 cal_settings.alarms(),

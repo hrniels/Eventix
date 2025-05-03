@@ -18,7 +18,6 @@ use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
 use crate::state::{CalendarAlarmType, EventixState};
-use crate::util;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
@@ -130,7 +129,7 @@ pub async fn handler(
     let cal_settings = state.settings().calendar(file.directory()).unwrap();
     let alarm_type = cal_settings.alarms();
     let pers_alarms = state.personal_alarms();
-    let own_org = cal_settings.build_organizer();
+    let user_mail = cal_settings.email().map(|e| e.address());
 
     let more = occs.len() > req.count;
     let occs: Vec<_> = match req.dir {
@@ -139,7 +138,7 @@ pub async fn handler(
             .take(req.count)
             .map(|o| ListOccurrence {
                 occ: DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)),
-                owner: util::is_event_owner(own_org.as_ref(), o.organizer()),
+                owner: o.is_owned_by(user_mail),
             })
             .collect(),
         Direction::Backwards => occs
@@ -147,7 +146,7 @@ pub async fn handler(
             .skip(if more { 1 } else { 0 })
             .map(|o| ListOccurrence {
                 occ: DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)),
-                owner: util::is_event_owner(own_org.as_ref(), o.organizer()),
+                owner: o.is_owned_by(user_mail),
             })
             .collect(),
     };

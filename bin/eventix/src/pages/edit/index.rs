@@ -92,7 +92,7 @@ pub async fn content(
             &req.uid, rid
         ))?;
 
-    if !util::user_is_event_owner(file.directory(), &state, occ.organizer()) {
+    if !util::user_is_event_owner(file.directory(), &state, &occ) {
         return Err(anyhow!("No edit permission").into());
     }
 

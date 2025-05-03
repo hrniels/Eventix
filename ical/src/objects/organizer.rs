@@ -29,6 +29,14 @@ impl CalOrganizer {
         &self.address
     }
 
+    /// Returns the address with the "mailto:" prefix removed.
+    pub fn pretty_address(&self) -> &str {
+        match self.address.strip_prefix("mailto:") {
+            Some(addr) => addr,
+            None => &self.address,
+        }
+    }
+
     /// Returns the common name of the organizer.
     pub fn common_name(&self) -> Option<&String> {
         self.common_name.as_ref()

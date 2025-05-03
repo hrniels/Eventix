@@ -98,7 +98,7 @@ async fn handler(
         } else {
             None
         },
-        owner: util::user_is_event_owner(occ.directory(), &state, occ.organizer()),
+        owner: util::user_is_event_owner(occ.directory(), &state, &occ),
         locale,
     }
     .render()

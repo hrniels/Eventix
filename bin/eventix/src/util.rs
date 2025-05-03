@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context};
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
-use ical::objects::CalOrganizer;
+use ical::objects::EventLike;
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 use tokio::sync::MutexGuard;
 
@@ -40,19 +40,16 @@ pub fn system_time_stamp(systime: SystemTime) -> u128 {
     duration_since_epoch.as_nanos()
 }
 
-pub fn user_is_event_owner(
+pub fn user_is_event_owner<E: EventLike>(
     dir: &Arc<String>,
     state: &MutexGuard<'_, State>,
-    ev_org: Option<&CalOrganizer>,
+    ev: &E,
 ) -> bool {
-    let own_org = state.settings().calendar(dir).unwrap().build_organizer();
-    is_event_owner(own_org.as_ref(), ev_org)
-}
-
-pub fn is_event_owner(own_org: Option<&CalOrganizer>, ev_org: Option<&CalOrganizer>) -> bool {
-    match (ev_org, own_org) {
-        (Some(ev_org), Some(own_org)) if ev_org.address() == own_org.address() => true,
-        (Some(_), _) => false,
-        (None, _) => true,
-    }
+    let user_mail = state
+        .settings()
+        .calendar(dir)
+        .unwrap()
+        .email()
+        .map(|e| e.address());
+    ev.is_owned_by(user_mail)
 }

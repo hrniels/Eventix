@@ -89,6 +89,22 @@ pub trait EventLike: PropertyProducer {
     /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.4.3>.
     fn organizer(&self) -> Option<&CalOrganizer>;
 
+    /// Returns true if this calendar object is owned by the given user.
+    ///
+    /// The user is expected to be an email address that is compared to the organizer's email
+    /// address.
+    fn is_owned_by(&self, user: Option<&String>) -> bool {
+        match (self.organizer(), user) {
+            (Some(ev_org), Some(user))
+                if ev_org.pretty_address().to_lowercase() == user.to_lowercase() =>
+            {
+                true
+            }
+            (Some(_), _) => false,
+            (None, _) => true,
+        }
+    }
+
     /// Returns a slice of attendees for this calendar object (ATTENDEE).
     ///
     /// Note that attendees are an `Option` of a slice, because not having specified attendees

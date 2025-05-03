@@ -3,7 +3,6 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use ical::objects::EventLike;
 use serde::{Deserialize, Serialize};
 
 use crate::error::HTMLError;
@@ -37,7 +36,7 @@ pub async fn handler(
             .store()
             .occurrence_by_id(&form.uid, None, locale.timezone())
             .ok_or_else(|| anyhow!("Unable to find occurrence with uid {}", form.uid))?;
-        if !util::user_is_event_owner(occ.directory(), &state, occ.organizer()) {
+        if !util::user_is_event_owner(occ.directory(), &state, &occ) {
             return Err(anyhow!("No delete permission").into());
         }
     }

@@ -60,7 +60,7 @@ fn action_update(
         .context("Unable to find base component")?;
     let ctype = base.ctype();
 
-    if !util::is_event_owner(organizer.as_ref(), base.organizer()) {
+    if !base.is_owned_by(organizer.as_ref().map(|o| o.address())) {
         return Err(anyhow!("No edit permission"));
     }
 
