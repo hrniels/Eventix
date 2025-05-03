@@ -82,7 +82,7 @@ function postRequest(url, success) {
 
 function completeTodo(uid, rid, onsuccess) {
     let url = '/complete?uid=' + uid;
-    if(rid != null)
+    if(rid)
         url += '&rid=' + rid;
     getRequest(url, onsuccess);
 }

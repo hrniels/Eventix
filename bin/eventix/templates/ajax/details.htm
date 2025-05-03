@@ -142,12 +142,7 @@
                 </a>
                 {% if occ.ctype() == CalCompType::Todo %}
                 <a style="float: right" class="ev_button ev_button_good"
-                   {% if occ.is_recurrent() %}
-                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)"
-                   {% else %}
-                   href="javascript:completeTodo('{{ occ.uid() }}', null, reloadPage)"
-                   {% endif %}
-                   >
+                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">
                     <i class="bi bi-check-lg"></i>
                     <span>{{ "Complete"|t(locale) }}</span>
                 </a>
