@@ -105,7 +105,10 @@ impl<'a> OccurrenceIterator<'a> {
                     base,
                     CompDateType::Start,
                     start_date,
-                    false,
+                    base.exdates()
+                        .iter()
+                        .map(|d| d.as_start_with_tz(&timezone))
+                        .any(|d| d == rid.as_start_with_tz(&timezone)),
                 );
                 occ.set_overwrite(overwritten);
                 if Self::is_in_range(&occ, self.start, self.end) {
