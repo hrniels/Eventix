@@ -72,12 +72,16 @@ impl Calendar {
     fn checked_add(&mut self, comp: CalComponent) {
         // if it's a base component and we already have the same UID, just pretend we don't know it
         if comp.rid().is_none() && self.comps.iter().any(|c| c.uid() == comp.uid()) {
+            let props = comp.to_props();
+            // ignore the first and last property as this is BEGIN:*/END:*, which Unknown also adds
+            let len = props.len();
+            let props = props.into_iter().skip(1).take(len - 2).collect();
             self.unknown.push(Unknown {
                 name: match comp.ctype() {
                     CalCompType::Event => String::from("VEVENT"),
                     CalCompType::Todo => String::from("VTODO"),
                 },
-                props: comp.to_props(),
+                props,
             });
         } else {
             self.comps.push(comp);
@@ -89,14 +93,16 @@ impl PropertyProducer for Calendar {
     fn to_props(&self) -> Vec<Property> {
         let mut props = vec![];
         props.extend(self.props.iter().cloned());
-        for other in &self.unknown {
-            props.extend(other.to_props().into_iter());
-        }
         for tz in &self.timezones {
             props.extend(tz.to_props().into_iter());
         }
         for comp in &self.comps {
             props.extend(comp.to_props().into_iter());
+        }
+        // since we also store duplicate components (same UID without RID, see above) in here, they
+        // have to go last
+        for other in &self.unknown {
+            props.extend(other.to_props().into_iter());
         }
         props
     }
