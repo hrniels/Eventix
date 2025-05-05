@@ -93,6 +93,15 @@ function toggleExcl(uid, rid, onsuccess) {
     });
 }
 
+function changePartStat(uid, rid, stat, onsuccess) {
+    let url = '/setpartstat?stat=' + stat + '&uid=' + uid;
+    if(rid)
+        url += '&rid=' + rid;
+    postRequest(url, function(data) {
+        onsuccess(data);
+    });
+}
+
 function deleteItem(uid, rid, onDeleted) {
     let url = '/delete?uid=' + uid;
     if(rid != null)

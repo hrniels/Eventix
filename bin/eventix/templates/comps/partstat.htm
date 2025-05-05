@@ -1,0 +1,68 @@
+<div class="ev_response_dropdown" id="{{ id }}-dropdown">
+    {% match stat %}
+    {% when CalPartStat::Accepted %}
+    <a id="{{ id }}-toggle" class="ev_button ev_button_good" style="width: auto">
+        <i class="bi bi-check-lg"></i>
+        <span>{{ "Accepted"|t(locale) }} {{ prefix }}</span>
+    </a>
+    {% when CalPartStat::Declined %}
+    <a id="{{ id }}-toggle" class="ev_button ev_button_critical" style="width: auto">
+        <i class="bi bi-x-lg"></i>
+        <span>{{ "Declined"|t(locale) }} {{ prefix }}</span>
+    </a>
+    {% when CalPartStat::Tentative %}
+    <a id="{{ id }}-toggle" class="ev_button ev_button_warn" style="width: auto">
+        <i class="bi bi-question-lg"></i>
+        <span>{{ "Tentative"|t(locale) }} {{ prefix }}</span>
+    </a>
+    {% when _ %}
+    <a id="{{ id }}-toggle" class="ev_button ev_button_normal">
+        <i class="bi bi-reply"></i>
+        <span>
+            {% if recurrent && rid.is_some() %}
+            {{ "Occ."|t(locale) }}
+            {% else if recurrent && rid.is_none() %}
+            {{ "Series"|t(locale) }}
+            {% else %}
+            {{ "Respond"|t(locale) }}
+            {% endif %}
+        </span>
+    </a>
+    {% endmatch %}
+    <div id="{{ id }}-menu" class="ev_response_menu">
+        <a class="ev_button ev_button_good" data-value="Accept">
+            <i class="bi bi-check-lg"></i>
+            <span>{{ "Accept"|t(locale) }}</span>
+        </a>
+        <a class="ev_button ev_button_warn" data-value="Tentative">
+            <i class="bi bi-question-lg"></i>
+            <span>{{ "Tentative"|t(locale) }}</span>
+        </a>
+        <a class="ev_button ev_button_critical" data-value="Decline">
+            <i class="bi bi-x-lg"></i>
+            <span>{{ "Decline"|t(locale) }}</span>
+        </a>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('#{{ id }}-toggle').on('click', function() {
+            $('#{{ id }}-menu').toggle();
+        });
+
+        $('#{{ id }}-menu a').on('click', function() {
+            {% if let Some(rid) = rid %}
+            changePartStat('{{ uid }}', '{{ rid }}', $(this).data('value'), reloadPage);
+            {% else %}
+            changePartStat('{{ uid }}', null, $(this).data('value'), reloadPage);
+            {% endif %}
+        });
+
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('#{{ id }}-dropdown').length) {
+                $('#{{ id }}-menu').hide();
+            }
+        });
+    });
+</script>

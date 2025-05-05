@@ -5,5 +5,6 @@ pub mod details;
 pub mod editalarm;
 pub mod occlist;
 pub mod reload;
+pub mod setpartstat;
 pub mod togglecal;
 pub mod toggleexcl;

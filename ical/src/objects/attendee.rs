@@ -140,6 +140,11 @@ impl CalAttendee {
         self.part_stat
     }
 
+    /// Sets the participation status to given value.
+    pub fn set_part_stat(&mut self, stat: Option<CalPartStat>) {
+        self.part_stat = stat;
+    }
+
     /// Returns the common name.
     pub fn common_name(&self) -> Option<&String> {
         self.common_name.as_ref()

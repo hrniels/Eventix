@@ -119,7 +119,7 @@ fn action_update(
             return Err(anyhow!("Component {} is not recurrent", form.req.uid));
         }
 
-        file.create_overwrite(&form.req.uid, rid.unwrap(), locale.timezone(), |c| {
+        file.create_overwrite(&form.req.uid, rid.unwrap(), locale.timezone(), |_, c| {
             form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
         })
         .context("Creating overwrite failed")?;

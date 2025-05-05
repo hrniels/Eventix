@@ -310,6 +310,17 @@ a.ev_button_good:hover {
     text-decoration: none;
 }
 
+.ev_button_warn {
+    border: 1px solid #d56c05;
+    border-left: 5px solid #d56c05;
+    color: #d56c05;
+}
+a.ev_button_warn:hover {
+    background-image: linear-gradient(#d56c05, #b48d12) !important;
+    color: white;
+    text-decoration: none;
+}
+
 .ev_button_critical {
     border: 1px solid red;
     border-left: 5px solid red;
@@ -325,6 +336,37 @@ a.ev_button_critical:hover {
 .ev_button_selected:link, .ev_button_selected:visited {
     background-color: #627492 !important;
     color: #ffffff !important;
+}
+
+/* ------------ RESPONSE MENU ------------ */
+
+.ev_response_dropdown {
+    position: relative;
+    display: inline-block;
+}
+.ev_response_dropdown a {
+    width: 80px;
+}
+.ev_response_dropdown a i {
+    margin-right: 8px;
+}
+
+.ev_response_menu {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 100%;
+    margin: 0;
+    margin-left: 2px;
+    padding: 0;
+    list-style: none;
+    z-index: 1000;
+}
+.ev_response_menu a {
+    width: 80px;
+    margin: 0;
+    margin-bottom: 2px;
+    float: left;
 }
 
 /* ------------ ICONS ------------ */

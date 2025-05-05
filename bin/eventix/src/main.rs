@@ -13,7 +13,8 @@ mod sync;
 mod util;
 
 use ajax::{
-    attendees, complete, delete, details, editalarm, occlist, reload, togglecal, toggleexcl,
+    attendees, complete, delete, details, editalarm, occlist, reload, setpartstat, togglecal,
+    toggleexcl,
 };
 use axum::{
     http::{header, HeaderValue, Request},
@@ -76,6 +77,7 @@ async fn main() {
         .merge(delete::router(state.clone()))
         .merge(toggleexcl::router(state.clone()))
         .merge(togglecal::router(state.clone()))
+        .merge(setpartstat::router(state.clone()))
         .merge(occlist::router(state.clone()))
         .merge(attendees::router(state.clone()))
         .merge(reload::router(state.clone()))

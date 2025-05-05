@@ -528,8 +528,8 @@ impl CalFile {
     ///
     /// The `uid` specifies the id of the base component, whereas the `rid` specifies the date of
     /// the occurrence in UTC. The timezone will be used to for the start date of the occurrence.
-    /// The function `func` will be called with a mutable reference to the created overwrite, so
-    /// that changes can be made before it is stored.
+    /// The function `func` will be called with a reference to the base component and a mutable
+    /// reference to the created overwrite, so that changes can be made before it is stored.
     ///
     /// Expects that the component with given uid exists, but *not* the overwrite.
     ///
@@ -542,7 +542,7 @@ impl CalFile {
         func: F,
     ) -> Result<(), ColError>
     where
-        F: FnOnce(&mut CalComponent),
+        F: FnOnce(&CalComponent, &mut CalComponent),
         U: ToString,
     {
         let uid = uid.to_string();
@@ -576,7 +576,7 @@ impl CalFile {
         comp.set_last_modified(CalDate::now());
         comp.set_stamp(CalDate::now());
 
-        func(&mut comp);
+        func(base, &mut comp);
 
         self.add_component(comp);
         Ok(())

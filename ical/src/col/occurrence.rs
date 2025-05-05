@@ -120,6 +120,11 @@ impl<'c> Occurrence<'c> {
         self.base.ctype()
     }
 
+    /// Returns the base component.
+    pub fn base(&self) -> &CalComponent {
+        self.base
+    }
+
     /// Returns true if the component has been overwritten.
     pub fn is_overwritten(&self) -> bool {
         self.overwrite.is_some()

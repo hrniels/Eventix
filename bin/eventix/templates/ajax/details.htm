@@ -111,14 +111,15 @@
             </td>
         </tr>
         {% endif %}
-        {% if owner %}
         <tr>
             <td colspan="2" align="right">
+                {% if owner %}
                 {% if occ.is_recurrent() %}
                 <a style="float: right" class="ev_button ev_button_normal" href="/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}">
                     <i class="bi bi-pencil"></i>
                     <span>{{ "Edit occ.:"|t(locale) }}</span>
                 </a>
+                {% endif %}
                 {% endif %}
                 <a id="delete-series-button" style="float: left" class="ev_button ev_button_critical" href="#">
                     <i class="bi bi-trash"></i>
@@ -130,6 +131,7 @@
                         {% endif %}
                     </span>
                 </a>
+                {% if owner %}
                 <a style="float: right" class="ev_button ev_button_normal" href="/edit?uid={{ occ.uid() }}">
                     <i class="bi bi-pencil"></i>
                     <span>
@@ -154,9 +156,16 @@
                     <span>{{ "Exclude"|t(locale) }}</span>
                 </a>
                 {% endif %}
+                {% else %}
+                {% if let Some(series_partstat) = series_partstat %}
+                {{ series_partstat|safe }}
+                {% endif %}
+                {% if let Some(occ_partstat) = occ_partstat %}
+                {{ occ_partstat|safe }}
+                {% endif %}
+                {% endif %}
             </td>
         </tr>
-        {% endif %}
     </table>
 </div>
 
