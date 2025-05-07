@@ -62,13 +62,13 @@ fn attendee_status<E: EventLike>(
     }
 
     let user_mail = user_mail.unwrap();
-    ev.attendees().and_then(|atts| {
+    ev.attendees().map(|atts| {
         if let Some(att) = atts.iter().find(|a| a.address() == user_mail) {
-            Some(att.part_stat().unwrap_or(CalPartStat::NeedsAction))
+            att.part_stat().unwrap_or(CalPartStat::NeedsAction)
         } else {
             // if the user is not part of the list (e.g., invited via mailing list), it's
             // considered as "needs action".
-            Some(CalPartStat::NeedsAction)
+            CalPartStat::NeedsAction
         }
     })
 }
