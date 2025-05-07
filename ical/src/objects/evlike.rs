@@ -93,10 +93,10 @@ pub trait EventLike: PropertyProducer {
     ///
     /// The user is expected to be an email address that is compared to the organizer's email
     /// address.
-    fn is_owned_by(&self, user: Option<&String>) -> bool {
+    fn is_owned_by<S: AsRef<str>>(&self, user: Option<S>) -> bool {
         match (self.organizer(), user) {
             (Some(ev_org), Some(user))
-                if ev_org.pretty_address().to_lowercase() == user.to_lowercase() =>
+                if ev_org.address().to_lowercase() == user.as_ref().to_lowercase() =>
             {
                 true
             }
