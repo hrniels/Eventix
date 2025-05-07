@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use askama::Template;
+use axum::Router;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json, Redirect};
 use axum::routing::{get, post};
-use axum::Router;
 use ical::objects::CalDate;
 use serde::{Deserialize, Serialize};
 
@@ -65,7 +65,7 @@ pub async fn post_handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
-    let rid = if let Some(ref rid) = &req.rid {
+    let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()
                 .context(format!("Invalid rid date: {}", rid))?,

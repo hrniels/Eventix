@@ -59,7 +59,7 @@ impl<'a> OccurrenceIterator<'a> {
 
     fn fetch_next_recurrence(&mut self) -> Option<Occurrence<'a>> {
         // unwrap the base component and the recurring date iterator.
-        let (base, ref mut date_iter) = self.dates.as_mut()?;
+        let (base, date_iter) = self.dates.as_mut()?;
         for (ty, d, excluded) in date_iter {
             let mut occ = Occurrence::new_single(self.file.dir.clone(), base, ty, d, excluded);
             // check if an overwritten event exists for this occurrence.
