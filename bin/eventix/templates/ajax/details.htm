@@ -91,7 +91,7 @@
                             {% if let Some(cn) = att.common_name() %}
                             {{ cn }}
                             {% else %}
-                            {{ att.pretty_address() }}
+                            {{ att.address() }}
                             {% endif %}
                             </a>
                         </li>

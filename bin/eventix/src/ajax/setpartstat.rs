@@ -90,10 +90,7 @@ pub async fn handler(
             .attendees()
             .unwrap_or(base.and_then(|b| b.attendees()).unwrap_or(&[]))
             .to_vec();
-        if let Some(att) = atts
-            .iter_mut()
-            .find(|a| a.pretty_address() == user.address())
-        {
+        if let Some(att) = atts.iter_mut().find(|a| a.address() == user.address()) {
             att.set_part_stat(Some(req.stat));
         } else {
             let mut att = CalAttendee::new(user.address().clone());

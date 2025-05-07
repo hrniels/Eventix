@@ -120,11 +120,6 @@ impl CalAttendee {
         }
     }
 
-    /// Returns a reference to the address.
-    pub fn address(&self) -> &String {
-        &self.address
-    }
-
     /// Returns the attendee's role.
     pub fn role(&self) -> Option<CalRole> {
         self.role
@@ -156,7 +151,7 @@ impl CalAttendee {
     }
 
     /// Returns the address with the "mailto:" prefix removed.
-    pub fn pretty_address(&self) -> &str {
+    pub fn address(&self) -> &str {
         match self.address.strip_prefix("mailto:") {
             Some(addr) => addr,
             None => &self.address,
@@ -168,7 +163,7 @@ impl CalAttendee {
     /// If the name is known, the pretty name is returned '$name <$address>'. Otherwise, only the
     /// address is returned.
     pub fn pretty_name(&self) -> String {
-        let address = self.pretty_address();
+        let address = self.address();
         if let Some(name) = &self.common_name {
             format!("{} <{}>", name, address)
         } else {

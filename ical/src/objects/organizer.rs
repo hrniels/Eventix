@@ -24,13 +24,8 @@ impl CalOrganizer {
         }
     }
 
-    /// Returns the email address of the organizer.
-    pub fn address(&self) -> &String {
-        &self.address
-    }
-
     /// Returns the address with the "mailto:" prefix removed.
-    pub fn pretty_address(&self) -> &str {
+    pub fn address(&self) -> &str {
         match self.address.strip_prefix("mailto:") {
             Some(addr) => addr,
             None => &self.address,

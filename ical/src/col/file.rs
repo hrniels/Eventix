@@ -499,8 +499,8 @@ impl CalFile {
                             *cur_name = a.common_name().unwrap().clone();
                         }
                         None => {
-                            let name = a.common_name().unwrap_or(a.address()).clone();
-                            contacts.insert(a.address().clone(), name);
+                            let name = a.common_name().cloned().unwrap_or(a.address().to_string());
+                            contacts.insert(a.address().to_string(), name);
                         }
                         _ => {}
                     }
