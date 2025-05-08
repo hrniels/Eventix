@@ -70,6 +70,10 @@ impl Page {
         }
     }
 
+    pub fn git_hash(&self) -> &str {
+        &env!("GIT_HASH")[..7]
+    }
+
     pub fn last_reload(&self, locale: &Arc<dyn Locale + Send + Sync>) -> DateTime<Tz> {
         locale.timezone().from_utc_datetime(&self.last_reload)
     }
