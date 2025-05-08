@@ -267,16 +267,8 @@ impl CalFile {
                         duration,
                     } => {
                         alarms.extend(
-                            first
-                                .dates_between(start - *duration, end - *duration)
-                                .filter_map(|(ty, d, excluded)| {
-                                    let occ = Occurrence::new_single(
-                                        self.dir.clone(),
-                                        first,
-                                        ty,
-                                        d,
-                                        excluded,
-                                    );
+                            self.occurrences_between(start - *duration, end - *duration, |_| true)
+                                .filter_map(|occ| {
                                     let aocc = AlarmOccurrence::new(occ, alarm.clone());
                                     match (aocc.occurrence().is_excluded(), aocc.alarm_date()) {
                                         (false, Some(adate)) if adate >= start && adate < end => {
