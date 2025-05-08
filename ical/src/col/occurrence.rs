@@ -356,6 +356,7 @@ impl EventLike for Occurrence<'_> {
 }
 
 /// An occurrence with a due alarm.
+#[derive(Debug)]
 pub struct AlarmOccurrence<'o> {
     occ: Occurrence<'o>,
     alarm: CalAlarm,
