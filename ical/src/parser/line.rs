@@ -91,7 +91,7 @@ impl<W: Write> LineWriter<W> {
                     break;
                 }
                 self.writer
-                    .write_all(line[pos..pos + c.len_utf8()].as_bytes())?;
+                    .write_all(&line.as_bytes()[pos..pos + c.len_utf8()])?;
                 left -= c.len_utf8();
             }
 
