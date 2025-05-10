@@ -2,16 +2,15 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse};
-use ical::col::{CalDir, Occurrence};
+use ical::col::{CalDir, CalFile, Occurrence};
+use ical::objects::{
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalTodoStatus, EventLike,
+};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::ops::Deref;
 use std::sync::Arc;
-
-use ical::objects::{
-    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalTodoStatus, EventLike,
-};
 
 use crate::comps::organizer::OrganizerTemplate;
 use crate::comps::pagination::PaginationTemplate;
@@ -23,8 +22,7 @@ use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::pages::Page;
 use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
-use crate::state::{CalendarAlarmType, EventixState};
-use crate::util;
+use crate::state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 
 const PER_PAGE: usize = 15;
 
@@ -68,6 +66,54 @@ struct ListComponent<'a> {
     personal_alarms: bool,
     alarms: Option<Vec<CalAlarm>>,
     partstat: Option<PartStatTemplate>,
+}
+
+impl<'a> ListComponent<'a> {
+    fn new<'f: 'a>(
+        c: &'a CalComponent,
+        file: &'f CalFile,
+        locale: Arc<dyn Locale + Send + Sync>,
+        settings: &'_ Settings,
+        pers_alarms: &'_ PersonalAlarms,
+    ) -> ListComponent<'a> {
+        let occ = Occurrence::new(
+            file.directory().clone(),
+            c,
+            c.start().map(|d| d.as_start_with_tz(locale.timezone())),
+            c.end_or_due()
+                .map(|d| d.as_start_with_tz(locale.timezone())),
+            false,
+        );
+
+        let cal_settings = settings.calendar(file.directory()).unwrap();
+        let user_mail = cal_settings.email().map(|e| e.address());
+        let owner = c.is_owned_by(user_mail);
+        let part_stat = match (user_mail, owner) {
+            (Some(user_mail), false) => occ.base().attendee_status(user_mail),
+            _ => None,
+        };
+
+        ListComponent {
+            dir: file.directory(),
+            org: c
+                .organizer()
+                .map(|org| OrganizerTemplate::new(locale.clone(), org)),
+            comp: c,
+            owner,
+            alarms: pers_alarms.effective_alarms(&occ, cal_settings.alarms()),
+            personal_alarms: matches!(cal_settings.alarms(), CalendarAlarmType::Personal { .. }),
+            partstat: part_stat.map(|stat| {
+                PartStatTemplate::new(
+                    locale.clone(),
+                    format!("base-{}", c.uid()),
+                    stat,
+                    c.uid().clone(),
+                    None,
+                    false,
+                )
+            }),
+        }
+    }
 }
 
 #[derive(Template)]
@@ -132,46 +178,7 @@ pub async fn handler(
                 i.components()
                     .iter()
                     .filter(|c| c.rid().is_none())
-                    .map(|c| {
-                        let cal_settings = settings.calendar(i.directory()).unwrap();
-                        let occ = Occurrence::new(
-                            i.directory().clone(),
-                            c,
-                            c.start().map(|d| d.as_start_with_tz(locale.timezone())),
-                            c.end_or_due()
-                                .map(|d| d.as_start_with_tz(locale.timezone())),
-                            false,
-                        );
-                        let owner = util::user_is_event_owner(i.directory(), &state, c);
-                        let user_mail = cal_settings.email().map(|e| e.address());
-                        let part_stat = match (user_mail, owner) {
-                            (Some(user_mail), false) => occ.base().attendee_status(user_mail),
-                            _ => None,
-                        };
-                        ListComponent {
-                            dir: i.directory(),
-                            org: c
-                                .organizer()
-                                .map(|org| OrganizerTemplate::new(locale.clone(), org)),
-                            comp: c,
-                            owner,
-                            alarms: pers_alarms.effective_alarms(&occ, cal_settings.alarms()),
-                            personal_alarms: matches!(
-                                cal_settings.alarms(),
-                                CalendarAlarmType::Personal { .. }
-                            ),
-                            partstat: part_stat.map(|stat| {
-                                PartStatTemplate::new(
-                                    locale.clone(),
-                                    format!("base-{}", c.uid()),
-                                    stat,
-                                    c.uid().clone(),
-                                    None,
-                                    false,
-                                )
-                            }),
-                        }
-                    })
+                    .map(|c| ListComponent::new(c, i, locale.clone(), settings, pers_alarms))
             })
             .filter(|l| {
                 if !filter.dirs.contains(l.dir) {
