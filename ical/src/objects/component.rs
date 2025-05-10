@@ -14,6 +14,13 @@ use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, Property
 
 use super::recur::RecurIterator;
 
+/// Represents the low priority (9)
+pub const PRIORITY_LOW: u8 = 9;
+/// Represents the medium priority (5)
+pub const PRIORITY_MEDIUM: u8 = 5;
+/// Represents the high priority (1)
+pub const PRIORITY_HIGH: u8 = 1;
+
 /// Common parts of events and TODOs.
 ///
 /// As events and TODOs share many properties and behaviours, these are captured in this struct.
@@ -307,6 +314,10 @@ impl EventLike for EventLikeComponent {
     fn rid(&self) -> Option<&CalDate> {
         self.rid.as_ref()
     }
+
+    fn priority(&self) -> Option<u8> {
+        self.priority
+    }
 }
 
 impl UpdatableEventLike for EventLikeComponent {
@@ -360,6 +371,10 @@ impl UpdatableEventLike for EventLikeComponent {
 
     fn set_organizer(&mut self, organizer: Option<CalOrganizer>) {
         self.organizer = organizer;
+    }
+
+    fn set_priority(&mut self, prio: Option<u8>) {
+        self.priority = prio;
     }
 }
 
@@ -653,6 +668,10 @@ impl EventLike for CalComponent {
     fn rid(&self) -> Option<&CalDate> {
         get_with_ev_or_todo!(self, rid)
     }
+
+    fn priority(&self) -> Option<u8> {
+        get_with_ev_or_todo!(self, priority)
+    }
 }
 
 impl UpdatableEventLike for CalComponent {
@@ -702,5 +721,9 @@ impl UpdatableEventLike for CalComponent {
 
     fn set_organizer(&mut self, organizer: Option<CalOrganizer>) {
         set_with_ev_or_todo!(self, set_organizer, organizer);
+    }
+
+    fn set_priority(&mut self, prio: Option<u8>) {
+        set_with_ev_or_todo!(self, set_priority, prio);
     }
 }

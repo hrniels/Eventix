@@ -174,6 +174,11 @@ pub trait EventLike: PropertyProducer {
     fn is_recurrent(&self) -> bool {
         self.rrule().is_some() || self.rid().is_some()
     }
+
+    /// Returns the priority (PRIORITY).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.1.9>.
+    fn priority(&self) -> Option<u8>;
 }
 
 /// Shared changable properties for events and TODOs.
@@ -227,4 +232,7 @@ pub trait UpdatableEventLike: EventLike {
 
     /// Sets the organizer.
     fn set_organizer(&mut self, organizer: Option<CalOrganizer>);
+
+    /// Sets the priority.
+    fn set_priority(&mut self, prio: Option<u8>);
 }

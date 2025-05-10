@@ -353,6 +353,10 @@ impl EventLike for Occurrence<'_> {
     fn rid(&self) -> Option<&CalDate> {
         occ_or_base_opt!(self, rid)
     }
+
+    fn priority(&self) -> Option<u8> {
+        occ_or_base_opt!(self, priority)
+    }
 }
 
 /// An occurrence with a due alarm.
