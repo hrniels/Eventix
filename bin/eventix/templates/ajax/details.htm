@@ -2,6 +2,11 @@
     <table width="100%" class="ev_table">
         <tr>
             <th colspan="2" align="center">
+                <span style="float: left">
+                    <i class="ev_tag bi bi-tag" title="{{ occ.uid() }}"
+                       onclick="copyToClipboard('{{ occ.uid() }}')">
+                    </i>
+                </span>
                 {{ occ.summary().unwrap() }}
                 <span style="float: right">
                     <div class="ev_cal_src ev_cal_src_{{ dir.id() }}"

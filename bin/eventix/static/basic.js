@@ -21,6 +21,14 @@ function curISODate() {
     return `${y}${m}${d}T${H}${M}${S}Z`;
 }
 
+function copyToClipboard(text) {
+    var $temp = $("<input>");
+    $("body").append($temp);
+    $temp.val(text).select();
+    document.execCommand("copy");
+    $temp.remove();
+}
+
 function invertSelection(prefix) {
     for(let i = 1;;i++)
     {

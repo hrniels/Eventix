@@ -534,6 +534,18 @@ div.ev_selected {
   z-index: 50;
 }
 
+/* ------------ TAG ------------ */
+
+.ev_tag {
+    color: white;
+}
+.ev_tag:hover {
+    cursor: pointer;
+}
+.ev_tag:hover::before {
+    content: "\f5af";
+}
+
 /* ------------ JUMP TO DATE ------------ */
 
 .ev_jump input {
