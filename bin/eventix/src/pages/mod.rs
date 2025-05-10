@@ -44,6 +44,7 @@ pub struct Page {
     infos: Vec<String>,
     calendars: Calendars,
     last_reload: NaiveDateTime,
+    debug: bool,
 }
 
 impl Default for Page {
@@ -55,6 +56,7 @@ impl Default for Page {
             infos: Vec::new(),
             calendars: Calendars::default(),
             last_reload: NaiveDateTime::default(),
+            debug: cfg!(debug_assertions),
         }
     }
 }
@@ -68,6 +70,10 @@ impl Page {
             last_reload: state.last_reload(),
             ..Default::default()
         }
+    }
+
+    pub fn debug(&self) -> bool {
+        self.debug
     }
 
     pub fn git_hash(&self) -> &str {

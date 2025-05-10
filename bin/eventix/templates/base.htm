@@ -4,10 +4,17 @@
         <title>{{ "Eventix"|t(locale) }}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         <meta http-equiv="Content-Style-Type" content="text/css" />
+        {% let js_suffix %}
+        {% if page.debug() %}
+        {% let js_suffix = "" %}
+        {% else %}
+        {% let js_suffix = ".min" %}
+        {% endif %}
         <link rel="stylesheet" type="text/css" href="/static/style.css" />
-        <link rel="stylesheet" type="text/css" href="/static/contrib/jquery-ui.min.css">
         <link rel="stylesheet" type="text/css" href="/static/contrib/jquery.minicolors.css">
-        <link rel="stylesheet" href="/static/contrib/bootstrap-icons.min.css">
+        <link rel="stylesheet" type="text/css" href="/static/contrib/jquery-ui{{ js_suffix }}.css">
+        <link rel="stylesheet" type="text/css" href="/static/contrib/jquery-clockpicker{{ js_suffix }}.css">
+        <link rel="stylesheet" href="/static/contrib/bootstrap-icons{{ js_suffix }}.css">
         <style type="text/css">
             {% for cal in page.calendars() %}
             div.ev_cal_src_{{ cal.id }}, span.ev_cal_src_{{ cal.id }} {
@@ -19,9 +26,10 @@
         <script type="text/javascript" src="/static/activity.js"></script>
         <script type="text/javascript" src="/static/basic.js"></script>
         <script type="text/javascript" src="/static/sync.js"></script>
-        <script type="text/javascript" src="/static/contrib/jquery-3.7.1.min.js"></script>
-        <script type="text/javascript" src="/static/contrib/jquery-ui.js"></script>
-        <script type="text/javascript" src="/static/contrib/js.cookie.min.js"></script>
+        <script type="text/javascript" src="/static/contrib/jquery-3.7.1{{ js_suffix }}.js"></script>
+        <script type="text/javascript" src="/static/contrib/jquery-ui{{ js_suffix }}.js"></script>
+        <script type="text/javascript" src="/static/contrib/jquery-clockpicker{{ js_suffix }}.js"></script>
+        <script type="text/javascript" src="/static/contrib/js.cookie{{ js_suffix }}.js"></script>
         <script type="text/javascript">
             trackActivity();
             reloadDBEvery(1000 * 5 * 60, 'last-update', 'sync-spinner', 'out-of-sync');

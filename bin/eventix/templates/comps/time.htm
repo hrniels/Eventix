@@ -1,8 +1,6 @@
 <input id="{{ id }}" type="text" name="{{ name }}" size="8"
        maxlength="5" value="{{ value|naive_time }}" />
 
-<link rel="stylesheet" type="text/css" href="/static/contrib/jquery-clockpicker.min.css">
-<script type="text/javascript" src="/static/contrib/jquery-clockpicker.js"></script>
 <script type="text/javascript">
     function getClockTime(el) {
         const value = $(el).prop('value').split(':');
