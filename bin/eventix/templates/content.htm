@@ -60,7 +60,8 @@
     <div class="ev_box" id="box_events">
         <div class="ev_header">
             {{ "Next Events"|t(locale) }}
-            <a id="link-event" style="float: right" href="/new?ctype=Event">
+            <a id="link-event" style="float: right"
+               href="javascript:gotoWithPrev('/new?ctype=Event')">
                 <i class="bi bi-plus-square" style="color: white"></i>
             </a>
         </div>
@@ -125,7 +126,8 @@
     <div class="ev_box" id="box_tasks">
         <div class="ev_header">
             {{ "Next Tasks"|t(locale) }}
-            <a id="link-todo" style="float: right" href="/new?ctype=Todo">
+            <a id="link-todo" style="float: right"
+               href="javascript:gotoWithPrev('/new?ctype=Todo')">
                 <i class="bi bi-plus-square" style="color: white"></i>
             </a>
         </div>

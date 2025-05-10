@@ -26,6 +26,7 @@ use crate::{html::filters, pages::events::Events};
 struct NewTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
+    prev: Option<&'a String>,
     ctype: CalCompType,
     summary: &'a String,
     location: &'a String,
@@ -52,6 +53,7 @@ pub async fn handler(
         locale.clone(),
         State(state),
         CompNew::new(&req, locale.timezone(), calendar),
+        req,
     )
     .await
 }
@@ -61,6 +63,7 @@ pub async fn content(
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
     form: CompNew,
+    req: Request,
 ) -> Result<impl IntoResponse, HTMLError> {
     let state = state.lock().await;
 
@@ -87,7 +90,7 @@ pub async fn content(
         description: &form.description,
         start_end: DateTimeRangeTemplate::new(
             locale.clone(),
-            form.req.ctype,
+            req.ctype,
             "start_end",
             Some(form.start_end),
         ),
@@ -96,7 +99,7 @@ pub async fn content(
         calendars: CalComboTemplate::new(
             "calendar",
             Calendars::new(&state, |_dir, settings| {
-                settings.types().contains(&form.req.ctype)
+                settings.types().contains(&req.ctype)
             }),
             calendar.clone(),
         ),
@@ -114,7 +117,8 @@ pub async fn content(
         events,
         locale,
         tasks,
-        ctype: form.req.ctype,
+        ctype: req.ctype,
+        prev: req.prev.as_ref(),
     }
     .render()
     .context("new template")?;

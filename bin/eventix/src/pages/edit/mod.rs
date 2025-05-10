@@ -2,8 +2,8 @@ mod index;
 mod update;
 
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 use chrono_tz::Tz;
 use ical::objects::{CalAlarm, EventLike};
@@ -36,12 +36,11 @@ where
 pub struct Request {
     uid: String,
     rid: Option<String>,
+    prev: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CompEdit {
-    #[serde(flatten)]
-    req: Request,
     #[serde(deserialize_with = "deserialize_u128")]
     edit_start: u128,
     calendar: Option<String>,
@@ -57,7 +56,7 @@ pub struct CompEdit {
 
 impl CompEdit {
     pub fn new_from_occurrence(
-        req: Request,
+        req: &Request,
         occ: &Occurrence,
         pers_alarms: Option<&[CalAlarm]>,
         calendar: Option<String>,
@@ -94,7 +93,6 @@ impl CompEdit {
                 None
             },
             attendees: Some(Attendees::new_from_cal_attendees(occ.attendees())),
-            req,
         }
     }
 }
@@ -147,6 +145,6 @@ pub async fn new_page(state: &EventixState) -> Page {
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/edit", get(self::index::handler))
-        .route("/edit/update", post(self::update::handler))
+        .route("/edit", post(self::update::handler))
         .with_state(state)
 }

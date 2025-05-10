@@ -6,12 +6,14 @@
     setFormPage(true);
 </script>
 
-<form id="form" method="post" action="/edit/update">
+{% if let Some(rid) = rid %}
+<form id="form" method="post"
+      action="/edit?uid={{ uid }}&rid={{ rid }}&prev={{ prev|urlencode_strict }}">
+{% else %}
+<form id="form" method="post"
+      action="/edit?uid={{ uid }}&prev={{ prev|urlencode_strict }}">
+{% endif %}
     <input type="hidden" name="edit_start" value="{{ edit_start }}" />
-    <input type="hidden" name="uid" value="{{ uid }}" />
-    {% if let Some(rid) = rid %}
-    <input type="hidden" name="rid" value="{{ rid }}" />
-    {% endif %}
     <div class="ev_border">
         <fieldset class="ev_form">
             <h1 id="title" class="ev_tabheader">{{ super::build_title(occ, rid)|t(locale) }}</h1>
@@ -101,8 +103,8 @@
                                 <span>{{ "Save"|t(locale) }}</span>
                             </a>
                             <a class="ev_button_big ev_button_normal" style="width: 80px"
-                                                                      href="javascript:document.location.href = '/'">
-                                <span>{{ "Cancel"|t(locale) }}</span>
+                               href="javascript:document.location.href = '{{ prev }}'">
+                                <span>{{ "Back"|t(locale) }}</span>
                             </a>
                         </td>
                         <td width="25%"></td>

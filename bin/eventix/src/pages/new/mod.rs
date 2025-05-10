@@ -2,8 +2,8 @@ mod index;
 mod save;
 
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 use chrono::{Duration, NaiveDateTime, NaiveTime, Timelike, Utc};
 use chrono_tz::Tz;
@@ -26,12 +26,11 @@ pub struct Request {
     ctype: CalCompType,
     date: Option<Date>,
     hour: Option<u32>,
+    prev: Option<String>,
 }
 
 #[derive(Default, Debug, Deserialize)]
 pub struct CompNew {
-    #[serde(flatten)]
-    req: Request,
     calendar: String,
     summary: String,
     location: String,
@@ -89,11 +88,6 @@ impl CompNew {
         };
 
         Self {
-            req: Request {
-                ctype: req.ctype,
-                date: None,
-                hour: None,
-            },
             start_end,
             calendar: calendar.unwrap_or_default(),
             status: match req.ctype {
@@ -134,15 +128,10 @@ impl CompAction for CompNew {
 
 pub async fn new_page(state: &EventixState, req: &Request) -> Page {
     let mut page = Page::new(state).await;
+    let url = format!("/new?{}", serde_qs::to_string(&req).unwrap());
     match req.ctype {
-        CalCompType::Todo => page.add_breadcrumb(Breadcrumb::new(
-            format!("/new?ctype={:?}", req.ctype),
-            "New task",
-        )),
-        CalCompType::Event => page.add_breadcrumb(Breadcrumb::new(
-            format!("/new?ctype={:?}", req.ctype),
-            "New event",
-        )),
+        CalCompType::Todo => page.add_breadcrumb(Breadcrumb::new(url, "New task")),
+        CalCompType::Event => page.add_breadcrumb(Breadcrumb::new(url, "New event")),
     }
     page
 }
@@ -150,6 +139,6 @@ pub async fn new_page(state: &EventixState, req: &Request) -> Page {
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/new", get(self::index::handler))
-        .route("/new/save", post(self::save::handler))
+        .route("/new", post(self::save::handler))
         .with_state(state)
 }

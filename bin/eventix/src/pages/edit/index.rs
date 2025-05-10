@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use askama::Template;
 use axum::{
     extract::{Query, State},
@@ -31,6 +31,7 @@ struct EditTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     edit_start: String,
+    prev: &'a String,
     uid: String,
     rid: Option<String>,
     dir: &'a CalDir,
@@ -120,7 +121,7 @@ pub async fn content(
             } else {
                 None
             };
-            CompEdit::new_from_occurrence(req, &occ, pers_alarms, cal, locale.timezone())
+            CompEdit::new_from_occurrence(&req, &occ, pers_alarms, cal, locale.timezone())
         }
     };
 
@@ -135,9 +136,10 @@ pub async fn content(
 
     let html = EditTemplate {
         page,
+        prev: &req.prev,
         edit_start: format!("{}", form.edit_start),
-        uid: form.req.uid.clone(),
-        rid: form.req.rid.clone(),
+        uid: req.uid.clone(),
+        rid: req.rid.clone(),
         dir,
         calendars: form.calendar.map(|cal| {
             CalComboTemplate::new(

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
@@ -11,19 +11,20 @@ use crate::pages::Page;
 use crate::state::EventixState;
 use crate::util;
 
-use super::{CompAction, CompEdit};
+use super::{CompAction, CompEdit, Request};
 
 fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
     state: &mut crate::state::State,
     form: &mut CompEdit,
+    req: &Request,
 ) -> anyhow::Result<bool> {
     let (calendar, alarm_type, organizer) = {
-        let file = state.store().file_by_id(&form.req.uid).context(format!(
-            "Unable to find component with uid '{}'",
-            form.req.uid
-        ))?;
+        let file = state
+            .store()
+            .file_by_id(&req.uid)
+            .context(format!("Unable to find component with uid '{}'", req.uid))?;
         let calendar = form.calendar.as_ref().unwrap_or(file.directory());
         let cal_settings = state.settings().calendar(calendar).unwrap();
         let organizer = cal_settings.build_organizer();
@@ -32,21 +33,20 @@ fn action_update(
 
     let (store, personal_alarms) = state.store_and_alarms_mut();
 
-    let file = store.files_by_id_mut(&form.req.uid).context(format!(
-        "Unable to find component with uid '{}'",
-        form.req.uid
-    ))?;
+    let file = store
+        .files_by_id_mut(&req.uid)
+        .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
     let last_modified = util::system_time_stamp(file.last_modified()?);
     if last_modified > form.edit_start {
         page.add_error(format!(
             "This component has been modified. Please <a href=\"/edit?{}\">restart</a> the editing.",
-            serde_qs::to_string(&form.req).unwrap()
+            serde_qs::to_string(&req).unwrap()
         ));
         return Ok(false);
     }
 
-    let rid = if let Some(ref rid) = form.req.rid {
+    let rid = if let Some(ref rid) = req.rid {
         Some(
             rid.parse::<CalDate>()
                 .context(format!("Invalid rid date: {}", rid))?,
@@ -56,7 +56,7 @@ fn action_update(
     };
 
     let base = file
-        .component_with(|c| c.uid() == &form.req.uid && c.rid().is_none())
+        .component_with(|c| c.uid() == &req.uid && c.rid().is_none())
         .context("Unable to find base component")?;
     let ctype = base.ctype();
 
@@ -68,7 +68,7 @@ fn action_update(
         return Ok(false);
     }
 
-    let rrule = if form.req.rid.is_some() {
+    let rrule = if req.rid.is_some() {
         // inherit from base if we can
         if Some(&form.summary) == base.summary() {
             form.summary.clear();
@@ -91,7 +91,7 @@ fn action_update(
         }
     };
 
-    let new_cal = if form.req.rid.is_none() {
+    let new_cal = if req.rid.is_none() {
         form.calendar
             .clone()
             .ok_or_else(|| anyhow!("Calendar not specified"))?
@@ -99,8 +99,7 @@ fn action_update(
         calendar
     };
 
-    if let Some(comp) =
-        file.component_with_mut(|c| c.uid() == &form.req.uid && c.rid() == rid.as_ref())
+    if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
     {
         form.update(
             &new_cal,
@@ -114,12 +113,12 @@ fn action_update(
             comp.set_rrule(rrule);
         }
     } else {
-        let comp = file.component_with(|c| c.uid() == &form.req.uid).unwrap();
+        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {
-            return Err(anyhow!("Component {} is not recurrent", form.req.uid));
+            return Err(anyhow!("Component {} is not recurrent", req.uid));
         }
 
-        file.create_overwrite(&form.req.uid, rid.unwrap(), locale.timezone(), |_, c| {
+        file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), |_, c| {
             form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
         })
         .context("Creating overwrite failed")?;
@@ -133,7 +132,7 @@ fn action_update(
     }
 
     // should we move the file to a different directory?
-    if form.req.rid.is_none() {
+    if req.rid.is_none() {
         let cal = form
             .calendar
             .as_ref()
@@ -154,15 +153,15 @@ fn action_update(
 
 pub async fn handler(
     State(state): State<EventixState>,
+    Query(req): Query<Request>,
     MultiForm(mut form): MultiForm<CompEdit>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
     let mut page = super::new_page(&state).await;
 
-    let req = form.req.clone();
     let form = {
         let mut state = state.lock().await;
-        if action_update(&mut page, &locale, &mut state, &mut form)? {
+        if action_update(&mut page, &locale, &mut state, &mut form, &req)? {
             None
         } else {
             Some(form)

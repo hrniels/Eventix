@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use ical::col::CalFile;
 use ical::objects::{
@@ -16,15 +16,16 @@ use crate::locale::{self, Locale};
 use crate::pages::Page;
 use crate::state::EventixState;
 
-use super::CompNew;
+use super::{CompNew, Request};
 
 async fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
     state: &mut crate::state::State,
     form: &mut CompNew,
+    req: &Request,
 ) -> anyhow::Result<bool> {
-    if !form.check(page, locale, form.req.ctype) {
+    if !form.check(page, locale, req.ctype) {
         return Ok(false);
     }
 
@@ -42,7 +43,7 @@ async fn action_update(
     let alarm_type = cal_settings.alarms().clone();
 
     let uid = Uuid::new_v4();
-    let mut comp = if form.req.ctype == CalCompType::Event {
+    let mut comp = if req.ctype == CalCompType::Event {
         CalComponent::Event(CalEvent::new(uid))
     } else {
         CalComponent::Todo(CalTodo::new(uid))
@@ -92,26 +93,27 @@ async fn action_update(
 
 pub async fn handler(
     State(state): State<EventixState>,
+    Query(req): Query<Request>,
     MultiForm(mut form): MultiForm<CompNew>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
-    let mut page = super::new_page(&state, &form.req).await;
+    let mut page = super::new_page(&state, &req).await;
 
     {
         let mut state = state.lock().await;
-        if action_update(&mut page, &locale, &mut state, &mut form).await? {
+        if action_update(&mut page, &locale, &mut state, &mut form, &req).await? {
             page.add_info(locale.translate("New event was added successfully"));
 
             // remember the last used calendar
             let misc = state.misc_mut();
-            misc.set_last_calendar(form.req.ctype, form.calendar.clone());
+            misc.set_last_calendar(req.ctype, form.calendar.clone());
             if let Err(e) = misc.write_to_file() {
                 warn!("Unable to misc state: {}", e);
             }
 
-            form = CompNew::new(&form.req, locale.timezone(), Some(form.calendar));
+            form = CompNew::new(&req, locale.timezone(), Some(form.calendar));
         }
     }
 
-    super::index::content(page, locale, State(state), form).await
+    super::index::content(page, locale, State(state), form, req).await
 }

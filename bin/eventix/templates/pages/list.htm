@@ -206,7 +206,8 @@
                 <i class="bi bi-trash"></i>
                 <span>{{ "Delete"|t(locale) }}</span>
             </a>
-            <a class="ev_button ev_button_normal" style="width: 60px" href="/edit?uid={{ c.comp.uid() }}">
+            <a class="ev_button ev_button_normal" style="width: 60px"
+               href="javascript:gotoWithPrev('/edit?uid={{ c.comp.uid() }}')">
                 <i class="bi bi-pencil"></i>
                 <span>{{ "Edit"|t(locale) }}</span>
             </a>
