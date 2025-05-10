@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tracing::warn;
 
-use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike};
+use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
 use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 
 use crate::comps::alarm::AlarmRequest;
@@ -84,11 +84,7 @@ pub trait CompAction {
     }
 
     fn nonempty_or_none(val: String) -> Option<String> {
-        if val.is_empty() {
-            None
-        } else {
-            Some(val)
-        }
+        if val.is_empty() { None } else { Some(val) }
     }
 
     fn update(
@@ -158,6 +154,9 @@ pub trait CompAction {
                     td.set_completed(None);
                 }
             }
+            // set the priority as is required by MS exchange as soon as TODOs are completed - unsure
+            // why; we don't care about the priority at the moment and thus are fine with any value.
+            comp.set_priority(Some(PRIORITY_MEDIUM));
         }
 
         comp.set_last_modified(CalDate::now());

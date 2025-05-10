@@ -1,11 +1,13 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use axum::{
+    Json, Router,
     extract::{Query, State},
     response::IntoResponse,
     routing::get,
-    Json, Router,
 };
-use ical::objects::{CalComponent, CalDate, CalTodoStatus, EventLike, UpdatableEventLike};
+use ical::objects::{
+    CalComponent, CalDate, CalTodoStatus, EventLike, PRIORITY_MEDIUM, UpdatableEventLike,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{error::HTMLError, locale, state::EventixState};
@@ -52,6 +54,9 @@ async fn handler(
         td.set_status(Some(CalTodoStatus::Completed));
         td.set_percent(Some(100));
         td.set_completed(Some(CalDate::now()));
+        // set the priority as is required by MS exchange as soon as TODOs are completed - unsure
+        // why; we don't care about the priority at the moment and thus are fine with any value.
+        td.set_priority(Some(PRIORITY_MEDIUM));
         td.set_last_modified(CalDate::now());
         td.set_stamp(CalDate::now());
     };
