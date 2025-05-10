@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use ical::col::CalDir;
 use ical::objects::{CalPartStat, EventLike};
 use serde::{Deserialize, Serialize};
@@ -57,20 +57,10 @@ fn attendee_status<E: EventLike>(
     user_mail: Option<&String>,
     owner: bool,
 ) -> Option<CalPartStat> {
-    if owner || user_mail.is_none() {
-        return None;
+    match (user_mail, owner) {
+        (Some(user_mail), false) => ev.attendee_status(user_mail),
+        _ => None,
     }
-
-    let user_mail = user_mail.unwrap();
-    ev.attendees().map(|atts| {
-        if let Some(att) = atts.iter().find(|a| a.address() == user_mail) {
-            att.part_stat().unwrap_or(CalPartStat::NeedsAction)
-        } else {
-            // if the user is not part of the list (e.g., invited via mailing list), it's
-            // considered as "needs action".
-            CalPartStat::NeedsAction
-        }
-    })
 }
 
 async fn handler(

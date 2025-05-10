@@ -1,23 +1,25 @@
 use anyhow::{Context, Result};
 use askama::Template;
+use axum::Router;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::routing::get;
-use axum::Router;
 use chrono::offset::LocalResult;
 use chrono::{DateTime, Duration, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
+use ical::col::Occurrence;
 use ical::objects::{CalCompType, CalDate, CalTodoStatus, EventLike};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::comps::partstat::PartStatTemplate;
 use crate::error::HTMLError;
 use crate::html::{self, filters};
 use crate::locale::{self, Locale};
 
 use crate::objects::DayOccurrence;
-use crate::state::{CalendarAlarmType, EventixState};
+use crate::state::{CalendarAlarmType, EventixState, PersonalAlarms};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
@@ -47,7 +49,41 @@ pub fn router(state: EventixState) -> Router {
 
 struct ListOccurrence<'a> {
     occ: DayOccurrence<'a>,
+    partstat: Option<PartStatTemplate>,
     owner: bool,
+}
+
+impl<'a> ListOccurrence<'a> {
+    pub fn new(
+        occ: &'a Occurrence<'a>,
+        locale: Arc<dyn Locale + Send + Sync>,
+        alarm_type: &CalendarAlarmType,
+        pers_alarms: &PersonalAlarms,
+        user_mail: Option<&String>,
+    ) -> Self {
+        let occ = DayOccurrence::new(occ, pers_alarms.has_alarms(occ, alarm_type));
+
+        let owner = occ.is_owned_by(user_mail);
+        let partstat = match (user_mail, owner) {
+            (Some(user_mail), false) => occ.attendee_status(user_mail).map(|stat| {
+                PartStatTemplate::new(
+                    locale,
+                    format!("occ-{}-{}", occ.uid(), occ.rid_html()),
+                    stat,
+                    occ.uid().clone(),
+                    Some(occ.rid_html()),
+                    false,
+                )
+            }),
+            _ => None,
+        };
+
+        Self {
+            occ,
+            partstat,
+            owner,
+        }
+    }
 }
 
 impl<'a> Deref for ListOccurrence<'a> {
@@ -136,18 +172,12 @@ pub async fn handler(
         Direction::Forward => occs
             .iter()
             .take(req.count)
-            .map(|o| ListOccurrence {
-                occ: DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)),
-                owner: o.is_owned_by(user_mail),
-            })
+            .map(|o| ListOccurrence::new(o, locale.clone(), alarm_type, pers_alarms, user_mail))
             .collect(),
         Direction::Backwards => occs
             .iter()
             .skip(if more { 1 } else { 0 })
-            .map(|o| ListOccurrence {
-                occ: DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type)),
-                owner: o.is_owned_by(user_mail),
-            })
+            .map(|o| ListOccurrence::new(o, locale.clone(), alarm_type, pers_alarms, user_mail))
             .collect(),
     };
 

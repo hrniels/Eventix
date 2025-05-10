@@ -1,5 +1,5 @@
 use crate::{
-    objects::{CalAlarm, CalAttendee, CalDate, CalOrganizer, CalRRule},
+    objects::{CalAlarm, CalAttendee, CalDate, CalOrganizer, CalPartStat, CalRRule},
     parser::PropertyProducer,
 };
 
@@ -114,6 +114,22 @@ pub trait EventLike: PropertyProducer {
     ///
     /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.4.1>.
     fn attendees(&self) -> Option<&[CalAttendee]>;
+
+    /// Returns the status of the attendee with given email address.
+    ///
+    /// If there are no attendees, None is returned. Note also that not being in the attendee list
+    /// or not having a status is considered as [`CalPartStat::NeedsAction`].
+    fn attendee_status<M: AsRef<str>>(&self, user_mail: M) -> Option<CalPartStat> {
+        self.attendees().map(|atts| {
+            if let Some(att) = atts.iter().find(|a| a.address() == user_mail.as_ref()) {
+                att.part_stat().unwrap_or(CalPartStat::NeedsAction)
+            } else {
+                // if the user is not part of the list (e.g., invited via mailing list), it's
+                // considered as "needs action".
+                CalPartStat::NeedsAction
+            }
+        })
+    }
 
     /// Returns a slice of occurrence dates that are excluded (EXDATE).
     ///

@@ -15,13 +15,14 @@ use ical::objects::{
 
 use crate::comps::organizer::OrganizerTemplate;
 use crate::comps::pagination::PaginationTemplate;
+use crate::comps::partstat::PartStatTemplate;
 use crate::error::HTMLError;
 use crate::extract::MultiQuery;
 use crate::html::{self, filters};
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
+use crate::pages::Page;
 use crate::pages::events::Events;
 use crate::pages::tasks::Tasks;
-use crate::pages::Page;
 use crate::state::{CalendarAlarmType, EventixState};
 use crate::util;
 
@@ -66,6 +67,7 @@ struct ListComponent<'a> {
     owner: bool,
     personal_alarms: bool,
     alarms: Option<Vec<CalAlarm>>,
+    partstat: Option<PartStatTemplate>,
 }
 
 #[derive(Template)]
@@ -140,18 +142,34 @@ pub async fn handler(
                                 .map(|d| d.as_start_with_tz(locale.timezone())),
                             false,
                         );
+                        let owner = util::user_is_event_owner(i.directory(), &state, c);
+                        let user_mail = cal_settings.email().map(|e| e.address());
+                        let part_stat = match (user_mail, owner) {
+                            (Some(user_mail), false) => occ.base().attendee_status(user_mail),
+                            _ => None,
+                        };
                         ListComponent {
                             dir: i.directory(),
                             org: c
                                 .organizer()
                                 .map(|org| OrganizerTemplate::new(locale.clone(), org)),
                             comp: c,
-                            owner: util::user_is_event_owner(i.directory(), &state, c),
+                            owner,
                             alarms: pers_alarms.effective_alarms(&occ, cal_settings.alarms()),
                             personal_alarms: matches!(
                                 cal_settings.alarms(),
                                 CalendarAlarmType::Personal { .. }
                             ),
+                            partstat: part_stat.map(|stat| {
+                                PartStatTemplate::new(
+                                    locale.clone(),
+                                    format!("base-{}", c.uid()),
+                                    stat,
+                                    c.uid().clone(),
+                                    None,
+                                    false,
+                                )
+                            }),
                         }
                     })
             })

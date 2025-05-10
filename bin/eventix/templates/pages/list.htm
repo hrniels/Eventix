@@ -210,12 +210,17 @@
                 <i class="bi bi-pencil"></i>
                 <span>{{ "Edit"|t(locale) }}</span>
             </a>
-            {% else if c.personal_alarms %}
+            {% else %}
+            {% if let Some(partstat) = c.partstat %}
+            {{ partstat|safe }}
+            {% endif %}
+            {% if c.personal_alarms %}
             <a id="alarm-button-{{ id }}" style="width: 60px" class="ev_button ev_button_normal"
                href="javascript:editAlarms('alarm-button-{{ id }}', '{{ c.comp.uid() }}', null)">
                 <i class="bi bi-pencil"></i>
                 <span>{{ "Alarms"|t(locale) }}</span>
             </a>
+            {% endif %}
             {% endif %}
         </td>
     </tr>
