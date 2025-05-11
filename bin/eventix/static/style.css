@@ -433,15 +433,11 @@ span.ev_msg_error span.ev_msg_info {
 }
 
 .ev_today {
-    border-radius: 10px;
-    border: .05em solid #000;
-    background-color: #d4e3ff;
-    padding: 2px;
-    color: #000;
+    background-color: #fff8a2 !important;
     font-weight: bold;
 }
 .ev_today_bg {
-    background-color: #d4e3ff;
+    background-color: #fff8a2 !important;
 }
 
 .ev_status_Cancelled, .ev_status_Completed {

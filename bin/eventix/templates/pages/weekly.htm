@@ -31,15 +31,8 @@
     <tr>
         <td width="12%"></td>
         {% for day in days %}
-        <td width="12%" align="center">
-            {% if day.date == today %}
-            <b>
-                {{ day.date.format("%a") }},
-                <span class="ev_today">{{ day.date.format("%b %d") }}</span>
-            </b>
-            {% else %}
+        <td width="12%" align="center"{% if day.date == today %} class="ev_today"{% endif %}>
             <b>{{ day.date|weekdate(locale, DateFlags::NoToday | DateFlags::Short) }}</b>
-            {% endif %}
         </td>
         {% endfor %}
     </tr>

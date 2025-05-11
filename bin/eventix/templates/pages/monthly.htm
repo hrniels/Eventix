@@ -45,19 +45,18 @@
         <td width="14%" class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}">
             <div class="
                 ev_month_day_header
+                {% if date == today %}ev_today{% endif %}
                 {% if day.cur_month %}ev_cur_month{% endif %}
                 ">
                 <a href="/new?ctype=Event&date={{ date.format("%Y-%m-%d") }}"
                    style="float: left" class="ev_add_icon">
                     <i class="bi bi-plus-square"></i>
                 </a>
-                {% if date == today %}<span class="ev_today">{% endif %}
                 {% if day.show_month %}
                 {{ date.format("%b %-d") }}
                 {% else %}
                 {{ date.format("%-d") }}
                 {% endif %}
-                {% if date == today %}</span>{% endif %}
             </div>
             <div class="ev_month_cell">
                 {% for occ in day.occurrences %}
