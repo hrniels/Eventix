@@ -11,7 +11,7 @@ use std::{
     sync::Arc,
 };
 use tokio::time;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
     locale::{DateFlags, Locale},
@@ -147,6 +147,12 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
 
             for alarm in alarms {
                 let notification = Notification::from_alarm(&alarm, &locale);
+                info!(
+                    "Sending alarm notification for {} (start={:?}, due={:?})",
+                    alarm.occurrence().uid(),
+                    alarm.occurrence().occurrence_start(),
+                    alarm.alarm_date()
+                );
                 notification.send().unwrap();
             }
 
