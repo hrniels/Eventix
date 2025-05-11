@@ -8,19 +8,16 @@ pub mod weekly;
 mod events;
 mod tasks;
 
+use chrono::{DateTime, NaiveDateTime, TimeZone};
+use chrono_tz::Tz;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use chrono::{DateTime, NaiveDateTime, TimeZone};
-use chrono_tz::Tz;
-
-use crate::{
-    locale::Locale,
-    objects::{Calendar, Calendars},
-    state::EventixState,
-};
+use crate::locale::Locale;
+use crate::objects::{Calendar, Calendars};
+use crate::state::EventixState;
 
 #[derive(Debug, Clone)]
 pub struct Breadcrumb {

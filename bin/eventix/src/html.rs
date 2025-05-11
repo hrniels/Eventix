@@ -1,8 +1,7 @@
-use std::{sync::Arc, time::Duration};
-
 use askama::{Html, MarkupDisplay};
 use ical::objects::{CalAttendee, CalDate, CalPartStat, CalRole};
 use regex::{Captures, Regex};
+use std::{sync::Arc, time::Duration};
 
 use crate::locale::{DateFlags, Locale, TimeFlags};
 

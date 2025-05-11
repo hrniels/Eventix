@@ -5,10 +5,9 @@ use ical::objects::{CalDate, CalDateTime, CalDateType};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::comps::date::{Date, DateTemplate};
+use crate::comps::time::{Time, TimeTemplate};
 use crate::locale::Locale;
-
-use super::date::{Date, DateTemplate};
-use super::time::{Time, TimeTemplate};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct DateTime {

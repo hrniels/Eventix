@@ -8,11 +8,10 @@ use std::fmt::{self, Display};
 use std::sync::Arc;
 use strum::EnumIter;
 
+use crate::comps::{combobox::Named, datetime::DateTime, datetime::DateTimeTemplate};
+use crate::html::filters;
+use crate::locale::Locale;
 use crate::pages::Page;
-use crate::{
-    comps::combobox::Named, comps::datetime::DateTime, comps::datetime::DateTimeTemplate,
-    html::filters, locale::Locale,
-};
 
 use super::combobox::ComboboxTemplate;
 

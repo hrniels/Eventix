@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use askama::Template;
 use ical::objects::CalOrganizer;
+use std::sync::Arc;
 
 use crate::html::filters;
 use crate::locale::Locale;

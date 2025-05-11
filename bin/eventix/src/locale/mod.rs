@@ -3,13 +3,12 @@ mod en;
 
 use bitflags::bitflags;
 use chrono::{DateTime, NaiveDate, Utc};
+use chrono_tz::Tz;
+use std::sync::Arc;
+
 pub use de::LocaleDe;
 #[allow(unused_imports)]
 pub use en::LocaleEn;
-
-use chrono_tz::Tz;
-
-use std::sync::Arc;
 
 pub trait DateLike {
     fn naive(&self) -> NaiveDate;

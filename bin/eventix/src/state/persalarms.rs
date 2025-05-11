@@ -1,8 +1,6 @@
-use anyhow::{anyhow, Context};
-use ical::{
-    col::Occurrence,
-    objects::{CalAlarm, CalDate, EventLike},
-};
+use anyhow::{Context, anyhow};
+use ical::col::Occurrence;
+use ical::objects::{CalAlarm, CalDate, EventLike};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},

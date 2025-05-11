@@ -1,7 +1,9 @@
 use chrono::NaiveDateTime;
 use ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 
 const FILENAME: &str = "data/misc.toml";
 

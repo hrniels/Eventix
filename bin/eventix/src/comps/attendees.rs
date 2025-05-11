@@ -1,11 +1,11 @@
-use std::{collections::HashMap, fmt, sync::Arc};
-
 use askama::Template;
 use ical::objects::{CalAttendee, CalRole};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, fmt, sync::Arc};
 
-use crate::{html::filters, locale::Locale};
+use crate::html::filters;
+use crate::locale::Locale;
 
 #[derive(Default, Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AttendeeRole {

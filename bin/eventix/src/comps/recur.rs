@@ -7,9 +7,9 @@ use std::fmt::{self, Display};
 use std::sync::Arc;
 use strum::EnumIter;
 
-use crate::{comps::date::DateTemplate, html::filters, locale::Locale};
-
-use super::{combobox::ComboboxTemplate, combobox::Named, date::Date};
+use crate::comps::{combobox::ComboboxTemplate, combobox::Named, date::Date, date::DateTemplate};
+use crate::html::filters;
+use crate::locale::Locale;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Frequency {
@@ -175,11 +175,7 @@ fn parse_by_day(wdays: &str) -> Option<Vec<CalWDayDesc>> {
             days.push(CalWDayDesc::new(wday, None));
         }
     }
-    if days.is_empty() {
-        None
-    } else {
-        Some(days)
-    }
+    if days.is_empty() { None } else { Some(days) }
 }
 
 #[derive(Default, Debug, Deserialize, PartialEq, Eq)]

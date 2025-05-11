@@ -1,8 +1,7 @@
+use ical::col::CalDir;
 use std::sync::Arc;
 
-use ical::col::CalDir;
-
-use crate::{state::CalendarSettings, state::State};
+use crate::state::{CalendarSettings, State};
 
 pub struct Calendar {
     pub id: Arc<String>,

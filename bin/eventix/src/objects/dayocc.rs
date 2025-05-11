@@ -1,11 +1,10 @@
-use std::cmp::Ordering;
-use std::{ops::Deref, sync::Mutex};
-
 use chrono::{NaiveDate, TimeZone, Timelike};
 use chrono_tz::Tz;
 use ical::col::Occurrence;
 use ical::objects::{CalAttendee, EventLike};
 use once_cell::sync::Lazy;
+use std::cmp::Ordering;
+use std::{ops::Deref, sync::Mutex};
 
 use crate::state::{PersonalAlarms, Settings};
 

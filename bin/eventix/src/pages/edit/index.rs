@@ -10,20 +10,18 @@ use ical::{
 };
 use std::sync::Arc;
 
-use super::{CompEdit, Page, Request};
-use crate::pages::{error::HTMLError, tasks::Tasks};
-use crate::{
-    comps::{
-        alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
-        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
-    },
-    locale::{self, DateFlags, Locale, TimeFlags},
-    objects::Calendars,
-    pages::Breadcrumb,
-    state::{CalendarAlarmType, EventixState},
-    util,
+use super::{CompEdit, Request};
+use crate::comps::{
+    alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
+    datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
 };
-use crate::{html::filters, pages::events::Events};
+use crate::html::filters;
+use crate::locale::{self, DateFlags, Locale, TimeFlags};
+use crate::objects::Calendars;
+use crate::pages::Breadcrumb;
+use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::state::{CalendarAlarmType, EventixState};
+use crate::util;
 
 #[derive(Template)]
 #[template(path = "pages/edit.htm")]

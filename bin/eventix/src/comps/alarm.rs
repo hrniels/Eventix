@@ -4,11 +4,10 @@ use ical::objects::CalAlarm;
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::comps::{alarmconfig::AlarmConfig, alarmconfig::AlarmConfigTemplate};
+use crate::html::filters;
+use crate::locale::Locale;
 use crate::pages::Page;
-use crate::{
-    comps::alarmconfig::AlarmConfig, comps::alarmconfig::AlarmConfigTemplate, html::filters,
-    locale::Locale,
-};
 
 #[derive(Default, Debug, Deserialize)]
 pub struct AlarmRequest {

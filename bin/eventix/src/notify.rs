@@ -13,10 +13,8 @@ use std::{
 use tokio::time;
 use tracing::{info, warn};
 
-use crate::{
-    locale::{DateFlags, Locale},
-    state::{CalendarAlarmType, EventixState, PersonalCalendarAlarms},
-};
+use crate::locale::{DateFlags, Locale};
+use crate::state::{CalendarAlarmType, EventixState, PersonalCalendarAlarms};
 
 struct Notification {
     pub appname: String,

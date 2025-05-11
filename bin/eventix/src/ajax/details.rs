@@ -3,11 +3,10 @@ use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-
 use ical::col::CalDir;
 use ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::comps::{
     editalarm::EditAlarmTemplate, organizer::OrganizerTemplate, partstat::PartStatTemplate,

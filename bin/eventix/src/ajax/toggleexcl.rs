@@ -3,9 +3,8 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use serde::{Deserialize, Serialize};
-
 use ical::objects::{CalDate, EventLike, UpdatableEventLike};
+use serde::{Deserialize, Serialize};
 
 use crate::pages::error::HTMLError;
 use crate::state::EventixState;

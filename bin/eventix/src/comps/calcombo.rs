@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use askama::Template;
+use std::sync::Arc;
 
 use crate::objects::Calendars;
 

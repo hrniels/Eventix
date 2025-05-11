@@ -1,9 +1,8 @@
-use std::sync::Arc;
-
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
 use ical::col::Occurrence;
 use ical::objects::{CalCompType, CalTodoStatus, EventLike};
+use std::sync::Arc;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;

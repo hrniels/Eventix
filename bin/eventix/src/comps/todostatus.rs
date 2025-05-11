@@ -1,18 +1,16 @@
-use std::sync::Arc;
-
 use askama::Template;
 use ical::{
     col::Occurrence,
     objects::{CalCompType, CalTodoStatus},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
-use crate::locale::Locale;
-
-use super::{
+use crate::comps::{
     combobox::{ComboOption, ComboboxTemplate},
     date::{Date, DateTemplate},
 };
+use crate::locale::Locale;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TodoStatus {

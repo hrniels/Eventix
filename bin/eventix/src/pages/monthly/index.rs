@@ -12,14 +12,12 @@ use ical::{
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::html::filters;
+use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::DayOccurrence;
-use crate::pages::{Page, error::HTMLError, tasks::Tasks};
+use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::state::EventixState;
 use crate::util::parse_human_date;
-use crate::{html::filters, pages::events::Events};
-use crate::{
-    locale::{self, DateFlags, Locale, TimeFlags},
-    state::EventixState,
-};
 
 struct Day<'a> {
     date: Option<NaiveDate>,

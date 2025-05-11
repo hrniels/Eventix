@@ -5,12 +5,11 @@ use ical::objects::{CalCompType, CalDate, CalDateType};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::comps::date::Date;
+use crate::comps::datetime::DateTime;
+use crate::comps::time::{Time, TimeTemplate};
 use crate::html::filters;
 use crate::locale::Locale;
-
-use super::date::Date;
-use super::datetime::DateTime;
-use super::time::{Time, TimeTemplate};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct DateTimeRange {

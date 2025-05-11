@@ -10,12 +10,11 @@ use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::html::filters;
+use crate::locale::{self, DateFlags, Locale, TimeFlags};
+use crate::objects::DayOccurrence;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
-use crate::{
-    locale::{self, DateFlags, Locale, TimeFlags},
-    state::EventixState,
-};
-use crate::{objects::DayOccurrence, util::parse_human_date};
+use crate::state::EventixState;
+use crate::util::parse_human_date;
 
 struct Day<'a> {
     date: NaiveDate,

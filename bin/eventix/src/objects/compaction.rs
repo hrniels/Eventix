@@ -1,18 +1,15 @@
+use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
+use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 use std::sync::Arc;
 use tracing::warn;
 
-use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
-use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
-
-use crate::comps::alarm::AlarmRequest;
-use crate::comps::attendees::Attendees;
-use crate::comps::todostatus::TodoStatus;
-use crate::state::{CalendarAlarmType, PersonalAlarms};
-use crate::{
-    comps::{datetimerange::DateTimeRange, recur::RecurRequest},
-    locale::Locale,
-    pages::Page,
+use crate::comps::{
+    alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange, recur::RecurRequest,
+    todostatus::TodoStatus,
 };
+use crate::locale::Locale;
+use crate::pages::Page;
+use crate::state::{CalendarAlarmType, PersonalAlarms};
 
 pub trait CompAction {
     fn summary(&self) -> &String;

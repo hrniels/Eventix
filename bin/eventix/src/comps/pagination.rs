@@ -1,6 +1,5 @@
-use std::ops::Range;
-
 use askama::Template;
+use std::ops::Range;
 
 use crate::html::filters;
 

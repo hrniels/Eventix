@@ -5,7 +5,7 @@ mod settings;
 use anyhow::Context;
 use chrono::NaiveDateTime;
 use ical::col::{CalDir, CalStore};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs::File,
     io::{Read, Write},

@@ -6,20 +6,18 @@ use axum::{
     routing::{get, post},
 };
 use chrono_tz::Tz;
-use ical::objects::{CalAlarm, EventLike};
-use ical::{col::Occurrence, objects::CalCompType};
+use ical::col::Occurrence;
+use ical::objects::{CalAlarm, CalCompType, EventLike};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::time::SystemTime;
 
-use crate::{
-    comps::{
-        alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange,
-        recur::RecurRequest, todostatus::TodoStatus,
-    },
-    objects::CompAction,
-    state::EventixState,
-    util,
+use crate::comps::{
+    alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange, recur::RecurRequest,
+    todostatus::TodoStatus,
 };
+use crate::objects::CompAction;
+use crate::state::EventixState;
+use crate::util;
 
 use super::Page;
 

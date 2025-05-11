@@ -1,8 +1,7 @@
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
+use ical::objects::CalDate;
 use serde::Serialize;
 use tracing::error;
-
-use ical::objects::CalDate;
 
 use crate::html;
 use crate::locale::{self, TimeFlags};

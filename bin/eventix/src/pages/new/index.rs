@@ -4,22 +4,20 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
+use ical::objects::{CalCompType, CalDate, EventLike};
 use std::sync::Arc;
 
-use ical::objects::{CalCompType, CalDate, EventLike};
+use crate::comps::{
+    alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
+    datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
+};
+use crate::html::filters;
+use crate::locale::{self, DateFlags, Locale, TimeFlags};
+use crate::objects::Calendars;
+use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::state::{CalendarAlarmType, EventixState};
 
 use super::{CompNew, Request};
-use crate::html::filters;
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
-use crate::{
-    comps::{
-        alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
-        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
-    },
-    locale::{self, DateFlags, Locale, TimeFlags},
-    objects::Calendars,
-    state::{CalendarAlarmType, EventixState},
-};
 
 #[derive(Template)]
 #[template(path = "pages/new.htm")]

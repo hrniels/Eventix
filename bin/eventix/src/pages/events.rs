@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use chrono::{Duration, Local, NaiveDate};
 use ical::objects::CalCompType;
+use std::sync::Arc;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;

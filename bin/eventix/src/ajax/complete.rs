@@ -5,11 +5,10 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use serde::{Deserialize, Serialize};
-
 use ical::objects::{
     CalComponent, CalDate, CalTodoStatus, EventLike, PRIORITY_MEDIUM, UpdatableEventLike,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::locale;
 use crate::pages::error::HTMLError;

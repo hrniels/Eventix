@@ -7,7 +7,6 @@ use tokio::sync::MutexGuard;
 use crate::comps::alarmconfig::{AlarmConfig, AlarmConfigTemplate};
 use crate::html::filters;
 use crate::locale::Locale;
-
 use crate::objects::DayOccurrence;
 use crate::state::CalendarAlarmType;
 
