@@ -7,6 +7,7 @@ use std::time::SystemTime;
 
 use chrono::DateTime;
 use chrono_tz::Tz;
+use tracing::info;
 
 use crate::col::{AlarmOccurrence, ColError, Occurrence};
 use crate::objects::{
@@ -553,6 +554,8 @@ impl CalFile {
             return Err(ColError::RidExists(rid));
         }
 
+        info!("{}: creating overwrite for {} @ {}", self.dir, uid, rid);
+
         let mut comp = if base.ctype() == CalCompType::Event {
             CalComponent::Event(CalEvent::new(base.uid()))
         } else {
@@ -595,6 +598,7 @@ impl CalFile {
 
     /// Saves the current state to file.
     pub fn save(&self) -> Result<(), ColError> {
+        info!("{}: writing file {:?}", self.dir, self.path);
         let file = File::options()
             .write(true)
             .truncate(true)
@@ -608,6 +612,7 @@ impl CalFile {
 
     /// Removes this file.
     pub fn remove(&mut self) -> Result<(), ColError> {
+        info!("{}: deleting file {:?}", self.dir, self.path);
         fs::remove_file(&self.path).map_err(|e| ColError::FileRemove(self.path.clone(), e))
     }
 }

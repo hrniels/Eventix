@@ -4,6 +4,7 @@ use std::fmt::Display;
 use std::fs::{self, read_dir};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tracing::info;
 
 use crate::col::{AlarmOccurrence, CalFile, ColError, Occurrence};
 use crate::objects::{AlarmOverlay, CalComponent, CalDate};
@@ -46,6 +47,13 @@ impl CalDir {
             Ok(())
         })?;
 
+        info!(
+            "{}: found {} calendar file(s) in directory {:?}",
+            id,
+            files.len(),
+            path
+        );
+
         Ok(Self {
             id,
             path,
@@ -62,6 +70,7 @@ impl CalDir {
         let mut seen_changes = false;
         Self::with_files(&self.path, |filename| {
             if !self.files.iter().any(|f| f.path() == &filename) {
+                info!("{}: added file {:?} during rescan", self.id, filename);
                 self.files
                     .push(CalFile::new_from_file(self.id.clone(), filename)?);
                 seen_changes = true;
@@ -87,6 +96,7 @@ impl CalDir {
             let last_mod: DateTime<Utc> = last_mod.into();
             let last_mod = last_mod.naive_utc();
             if last_mod > last_check {
+                info!("{}: changed file {:?} during rescan", self.id, filename);
                 let file = self
                     .files
                     .iter_mut()
@@ -118,6 +128,9 @@ impl CalDir {
         let old_len = self.files.len();
         self.files.retain(|f| {
             let exists = files.contains(f.path());
+            if !exists {
+                info!("{}: deleted file {:?} during rescan", self.id, f.path());
+            }
             exists
         });
         self.files.len() != old_len
