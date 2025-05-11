@@ -1,13 +1,14 @@
 use axum::{
+    Json, Router,
     extract::{Query, State},
     response::IntoResponse,
     routing::post,
-    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::{error::HTMLError, state::EventixState};
+use crate::pages::error::HTMLError;
+use crate::state::EventixState;
 
 #[derive(Debug, Deserialize)]
 pub struct Request {

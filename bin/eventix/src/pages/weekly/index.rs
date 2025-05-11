@@ -9,9 +9,8 @@ use ical::objects::{CalCompType, CalDate, EventLike};
 use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 
-use super::Page;
-use crate::{error::HTMLError, pages::tasks::Tasks};
-use crate::{html::filters, pages::events::Events};
+use crate::html::filters;
+use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use crate::{
     locale::{self, DateFlags, Locale, TimeFlags},
     state::EventixState,

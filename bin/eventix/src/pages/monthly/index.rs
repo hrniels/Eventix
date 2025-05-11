@@ -12,10 +12,9 @@ use ical::{
 use serde::Deserialize;
 use std::sync::Arc;
 
-use super::Page;
 use crate::objects::DayOccurrence;
+use crate::pages::{Page, error::HTMLError, tasks::Tasks};
 use crate::util::parse_human_date;
-use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
 use crate::{
     locale::{self, DateFlags, Locale, TimeFlags},

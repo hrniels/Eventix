@@ -3,21 +3,19 @@ use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
-use ical::col::CalDir;
-use ical::objects::{CalPartStat, EventLike};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use ical::objects::{CalCompType, CalDate};
+use ical::col::CalDir;
+use ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
 
-use crate::comps::editalarm::EditAlarmTemplate;
-use crate::comps::organizer::OrganizerTemplate;
-use crate::comps::partstat::PartStatTemplate;
-use crate::error::HTMLError;
+use crate::comps::{
+    editalarm::EditAlarmTemplate, organizer::OrganizerTemplate, partstat::PartStatTemplate,
+};
 use crate::html::{self, filters};
 use crate::locale::{self, Locale};
-
 use crate::objects::DayOccurrence;
+use crate::pages::error::HTMLError;
 use crate::state::{CalendarAlarmType, EventixState};
 
 pub fn router(state: EventixState) -> Router {

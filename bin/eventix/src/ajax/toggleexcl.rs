@@ -1,12 +1,13 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use serde::{Deserialize, Serialize};
 
-use crate::error::HTMLError;
+use ical::objects::{CalDate, EventLike, UpdatableEventLike};
+
+use crate::pages::error::HTMLError;
 use crate::state::EventixState;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

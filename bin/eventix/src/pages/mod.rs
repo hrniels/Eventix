@@ -1,4 +1,5 @@
 pub mod edit;
+pub mod error;
 pub mod list;
 pub mod monthly;
 pub mod new;

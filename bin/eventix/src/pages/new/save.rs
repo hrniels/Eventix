@@ -9,11 +9,10 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::objects::CompAction;
-use crate::pages::Page;
+use crate::pages::{Page, error::HTMLError};
 use crate::state::EventixState;
 
 use super::{CompNew, Request};

@@ -11,6 +11,7 @@ use ical::{
 use std::sync::Arc;
 
 use super::{CompEdit, Page, Request};
+use crate::pages::{error::HTMLError, tasks::Tasks};
 use crate::{
     comps::{
         alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
@@ -22,7 +23,6 @@ use crate::{
     state::{CalendarAlarmType, EventixState},
     util,
 };
-use crate::{error::HTMLError, pages::tasks::Tasks};
 use crate::{html::filters, pages::events::Events};
 
 #[derive(Template)]

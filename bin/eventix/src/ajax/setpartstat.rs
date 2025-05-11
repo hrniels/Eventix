@@ -1,15 +1,16 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
+use serde::{Deserialize, Deserializer, Serialize};
+
 use ical::objects::{
     CalAttendee, CalComponent, CalDate, CalPartStat, EventLike, UpdatableEventLike,
 };
-use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::error::HTMLError;
 use crate::locale;
+use crate::pages::error::HTMLError;
 use crate::state::EventixState;
 
 fn deserialize_partstat<'de, D>(deserializer: D) -> Result<CalPartStat, D::Error>

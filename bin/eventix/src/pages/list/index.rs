@@ -12,16 +12,13 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::comps::organizer::OrganizerTemplate;
-use crate::comps::pagination::PaginationTemplate;
-use crate::comps::partstat::PartStatTemplate;
-use crate::error::HTMLError;
+use crate::comps::{
+    organizer::OrganizerTemplate, pagination::PaginationTemplate, partstat::PartStatTemplate,
+};
 use crate::extract::MultiQuery;
 use crate::html::{self, filters};
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
-use crate::pages::Page;
-use crate::pages::events::Events;
-use crate::pages::tasks::Tasks;
+use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use crate::state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 
 const PER_PAGE: usize = 15;

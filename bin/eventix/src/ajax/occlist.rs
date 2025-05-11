@@ -7,18 +7,18 @@ use axum::routing::get;
 use chrono::offset::LocalResult;
 use chrono::{DateTime, Duration, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
-use ical::col::Occurrence;
-use ical::objects::{CalCompType, CalDate, CalTodoStatus, EventLike};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::sync::Arc;
 
+use ical::col::Occurrence;
+use ical::objects::{CalCompType, CalDate, CalTodoStatus, EventLike};
+
 use crate::comps::partstat::PartStatTemplate;
-use crate::error::HTMLError;
 use crate::html::{self, filters};
 use crate::locale::{self, Locale};
-
 use crate::objects::DayOccurrence;
+use crate::pages::error::HTMLError;
 use crate::state::{CalendarAlarmType, EventixState, PersonalAlarms};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]

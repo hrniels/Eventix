@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use ical::objects::{CalCompType, CalDate, EventLike};
 
-use super::{CompNew, Page, Request};
+use super::{CompNew, Request};
+use crate::html::filters;
+use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use crate::{
     comps::{
         alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
@@ -18,8 +20,6 @@ use crate::{
     objects::Calendars,
     state::{CalendarAlarmType, EventixState},
 };
-use crate::{error::HTMLError, pages::tasks::Tasks};
-use crate::{html::filters, pages::events::Events};
 
 #[derive(Template)]
 #[template(path = "pages/new.htm")]

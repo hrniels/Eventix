@@ -4,10 +4,9 @@ use axum::response::IntoResponse;
 use ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
 use std::sync::Arc;
 
-use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
-use crate::pages::Page;
+use crate::pages::{Page, error::HTMLError};
 use crate::state::EventixState;
 use crate::util;
 

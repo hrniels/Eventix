@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::error::HTMLError;
+use crate::pages::error::HTMLError;
 use crate::state::EventixState;
 use crate::{locale, util};
 

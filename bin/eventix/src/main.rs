@@ -1,6 +1,5 @@
 mod ajax;
 mod comps;
-mod error;
 mod extract;
 mod html;
 mod locale;
@@ -21,8 +20,7 @@ use axum::{
     response::IntoResponse,
 };
 use clap::Parser;
-use error::HTMLError;
-use pages::{edit, list, monthly, new, weekly};
+use pages::{edit, error::HTMLError, list, monthly, new, weekly};
 use std::{env, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::{

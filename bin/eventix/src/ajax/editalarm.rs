@@ -4,14 +4,14 @@ use axum::Router;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json, Redirect};
 use axum::routing::{get, post};
-use ical::objects::CalDate;
 use serde::{Deserialize, Serialize};
 
-use crate::comps::alarmconfig::AlarmConfig;
-use crate::comps::editalarm::EditAlarmTemplate;
-use crate::error::HTMLError;
+use ical::objects::CalDate;
+
+use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};
 use crate::extract::MultiForm;
 use crate::locale;
+use crate::pages::error::HTMLError;
 
 use crate::state::EventixState;
 

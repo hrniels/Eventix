@@ -1,14 +1,13 @@
-use axum::{extract::State, response::IntoResponse, routing::post, Json, Router};
-use ical::objects::CalDate;
+use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use serde::Serialize;
 use tracing::error;
 
-use crate::{
-    error::HTMLError,
-    html,
-    locale::{self, TimeFlags},
-    state::EventixState,
-};
+use ical::objects::CalDate;
+
+use crate::html;
+use crate::locale::{self, TimeFlags};
+use crate::pages::error::HTMLError;
+use crate::state::EventixState;
 
 #[derive(Debug, Serialize)]
 struct Response {
