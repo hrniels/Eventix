@@ -12,11 +12,11 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::time::SystemTime;
 
 use crate::{
-    comp::CompAction,
     comps::{
         alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange,
         recur::RecurRequest, todostatus::TodoStatus,
     },
+    objects::CompAction,
     state::EventixState,
     util,
 };

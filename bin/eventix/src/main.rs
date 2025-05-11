@@ -1,5 +1,4 @@
 mod ajax;
-mod comp;
 mod comps;
 mod error;
 mod extract;
@@ -17,9 +16,9 @@ use ajax::{
     toggleexcl,
 };
 use axum::{
-    http::{header, HeaderValue, Request},
-    response::IntoResponse,
     Router,
+    http::{HeaderValue, Request, header},
+    response::IntoResponse,
 };
 use clap::Parser;
 use error::HTMLError;
@@ -27,10 +26,10 @@ use pages::{edit, list, monthly, new, weekly};
 use std::{env, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http::{
+    LatencyUnit,
     services::{ServeDir, ServeFile},
     set_header::SetResponseHeaderLayer,
     trace::{DefaultOnResponse, TraceLayer},
-    LatencyUnit,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

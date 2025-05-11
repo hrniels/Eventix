@@ -9,10 +9,10 @@ use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::comp::CompAction;
 use crate::error::HTMLError;
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
+use crate::objects::CompAction;
 use crate::pages::Page;
 use crate::state::EventixState;
 

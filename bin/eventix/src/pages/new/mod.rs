@@ -11,11 +11,11 @@ use ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    comp::CompAction,
     comps::{
         alarm::AlarmRequest, attendees::Attendees, date::Date, datetime::DateTime,
         datetimerange::DateTimeRange, recur::RecurRequest, time::Time, todostatus::TodoStatus,
     },
+    objects::CompAction,
     state::EventixState,
 };
 
