@@ -29,10 +29,6 @@ impl<'a> DayOccurrence<'a> {
         }
     }
 
-    pub fn has_effective_alarms(&self) -> bool {
-        self.effective_alarms
-    }
-
     pub fn occurrences_on<'occ: 'a>(
         occs: &'a [Occurrence<'occ>],
         settings: &Settings,
@@ -96,6 +92,10 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn id(&self) -> u64 {
         self.id
+    }
+
+    pub fn has_effective_alarms(&self) -> bool {
+        self.effective_alarms
     }
 
     pub fn attendees_sorted(&self) -> Vec<&CalAttendee> {
