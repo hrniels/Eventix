@@ -60,7 +60,7 @@ impl<'a> ListOccurrence<'a> {
         pers_alarms: &PersonalAlarms,
         user_mail: Option<&String>,
     ) -> Self {
-        let occ = DayOccurrence::new(occ, pers_alarms.has_alarms(occ, alarm_type));
+        let occ = DayOccurrence::new(occ, None, false, pers_alarms.has_alarms(occ, alarm_type));
 
         let owner = occ.is_owned_by(user_mail);
         let partstat = match (user_mail, owner) {

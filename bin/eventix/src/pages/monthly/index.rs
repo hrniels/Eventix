@@ -6,7 +6,7 @@ use axum::{
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use ical::{
-    objects::{CalCompType, CalDate, EventLike},
+    objects::{CalCompType, CalDate, CalPartStat, EventLike},
     util,
 };
 use serde::Deserialize;

@@ -89,7 +89,6 @@ async fn handler(
     let alarm_type = calendar.alarms();
     let user_mail = calendar.email().map(|e| e.address());
     let has_alarms = state.personal_alarms().has_alarms(&occ, alarm_type);
-    let day_occ = DayOccurrence::new(&occ, has_alarms);
     let dir = state.store().directory(occ.directory()).unwrap();
 
     let owner = occ.is_owned_by(user_mail);
@@ -99,6 +98,8 @@ async fn handler(
     } else {
         None
     };
+
+    let day_occ = DayOccurrence::new(&occ, occ_stat, owner, has_alarms);
 
     let html = DetailsTemplate {
         org: occ

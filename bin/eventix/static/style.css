@@ -299,6 +299,9 @@ a.ev_button_normal:hover {
     text-decoration: none;
 }
 
+.ev_good_color {
+    color: #198754;
+}
 .ev_button_good {
     border: 1px solid #198754;
     border-left: 5px solid #198754;
@@ -310,6 +313,9 @@ a.ev_button_good:hover {
     text-decoration: none;
 }
 
+.ev_warn_color {
+    color: #d56c05;
+}
 .ev_button_warn {
     border: 1px solid #d56c05;
     border-left: 5px solid #d56c05;
@@ -321,6 +327,9 @@ a.ev_button_warn:hover {
     text-decoration: none;
 }
 
+.ev_critical_color {
+    color: red;
+}
 .ev_button_critical {
     border: 1px solid red;
     border-left: 5px solid red;
@@ -418,7 +427,6 @@ span.ev_msg_error span.ev_msg_info {
 }
 .ev_box > .ev_scrollbox > div {
 	border: 1px solid #fff;
-    padding: .4em;
     white-space: nowrap;
 }
 .ev_box .ev_summary {
@@ -430,6 +438,7 @@ span.ev_msg_error span.ev_msg_info {
 
 .ev_event_occurrence {
     cursor: pointer;
+    height: 30px;
 }
 
 .ev_today {
@@ -443,6 +452,46 @@ span.ev_msg_error span.ev_msg_info {
 .ev_status_Cancelled, .ev_status_Completed {
     text-decoration: line-through;
     text-decoration-thickness: 2px;
+}
+
+.ev_vertbar {
+    float: left;
+    position: relative;
+    padding: 3px 0px !important;
+    width: 5px;
+    height: calc(100% - 10px);
+}
+.ev_vertbar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 5px;
+    height: 100%;
+    box-sizing: border-box;
+    border: 1px solid white;
+}
+
+.ev_vertbar_spacer {
+    width: 9px;
+    float: left;
+}
+
+.ev_vertbar_needsaction {
+    margin: 2px;
+    background-color: #ffffff;
+}
+.ev_vertbar_ACCEPTED {
+    margin: 2px;
+    background-color: #198754;
+}
+.ev_vertbar_TENTATIVE {
+    margin: 2px;
+    background-color: #d56c05;
+}
+.ev_vertbar_DECLINED {
+    margin: 2px;
+    background-color: red;
 }
 
 /* ------------ MONTH VIEW ------------ */
@@ -474,7 +523,6 @@ span.ev_msg_error span.ev_msg_info {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: .2em;
 }
 
 /* ------------ WEEK VIEW ------------ */
@@ -488,7 +536,6 @@ span.ev_msg_error span.ev_msg_info {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: .2em;
 }
 
 /* ------------ ADD ICON -------------- */
@@ -555,12 +602,24 @@ div.ev_cal_src {
     border: 1px solid #fff;
 }
 span.ev_cal_src {
-    height: 15px;
-    width: 15px;
+    height: 18px;
+    width: 18px;
     border: 1px solid #fff;
     border-radius: 50%;
     display: inline-block;
-    flex: 0 0 15px; /* minimum width */
+    flex: 0 0 18px; /* minimum width */
+}
+
+.ev_cal_src_inner {
+    position: relative;
+    left: 2px;
+    top: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: #fff;
+    font-size: 12px;
+    text-align: center;
 }
 
 span.ev_cal_src_highlight {

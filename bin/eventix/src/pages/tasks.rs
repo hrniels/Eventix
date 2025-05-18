@@ -119,10 +119,7 @@ impl<'a> Tasks<'a> {
 
         let mut unplanned_occs = unplanned_occs
             .iter()
-            .map(|o| {
-                let alarm_type = settings.calendar(o.directory()).unwrap().alarms();
-                DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type))
-            })
+            .map(|o| DayOccurrence::new_from_settings(o, settings, pers_alarms))
             .collect::<Vec<_>>();
         unplanned_occs.sort_by_key(|i| i.created().cloned());
         if !unplanned_occs.is_empty() {

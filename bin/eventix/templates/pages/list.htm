@@ -162,7 +162,21 @@
         </td>
         <td width="32%">
             <div style="display: flex; gap: .4em">
-                <span class="ev_cal_src ev_cal_src_{{ c.dir }}"></span>
+                <span class="ev_cal_src ev_cal_src_{{ c.dir }}">
+                    {% if !c.owner %}
+                    <div class="ev_cal_src_inner">
+                    {% match c.part_stat.unwrap_or(CalPartStat::NeedsAction) %}
+                    {% when CalPartStat::Accepted %}
+                    <i class="ev_good_color bi bi-check-lg"></i>
+                    {% when CalPartStat::Tentative %}
+                    <i class="ev_warn_color bi bi-question-lg"></i>
+                    {% when CalPartStat::Declined %}
+                    <i class="ev_critical_color bi bi-x-lg"></i>
+                    {% when _ %}
+                    {% endmatch %}
+                    </div>
+                    {% endif %}
+                </span>
                 <span class="ev_summary
                              {% if let Some(td) = c.comp.as_todo() %}
                              {% if td.status().unwrap_or(CalTodoStatus::NeedsAction) == CalTodoStatus::Completed %}
@@ -212,8 +226,8 @@
                 <span>{{ "Edit"|t(locale) }}</span>
             </a>
             {% else %}
-            {% if let Some(partstat) = c.partstat %}
-            {{ partstat|safe }}
+            {% if let Some(part_stat_btns) = c.part_stat_btns %}
+            {{ part_stat_btns|safe }}
             {% endif %}
             {% if c.personal_alarms %}
             <a id="alarm-button-{{ id }}" style="width: 60px" class="ev_button ev_button_normal"

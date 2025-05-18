@@ -6,7 +6,7 @@ use axum::{
 };
 use ical::{
     col::{CalDir, Occurrence},
-    objects::{CalDate, EventLike},
+    objects::{CalDate, CalPartStat, EventLike},
 };
 use std::sync::Arc;
 

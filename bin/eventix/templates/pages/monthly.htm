@@ -77,29 +77,44 @@
                     {% when _ %}
                     {% endmatch %}
                     ">
-                    {% if occ.rid().is_some() || occ.rrule().is_some() %}
-                    <i class="bi bi-arrow-clockwise ev_right_icon"></i>
-                    {% endif %}
-                    {% if occ.is_overwritten() %}
-                    <i class="bi bi-pencil ev_right_icon"></i>
-                    {% endif %}
-                    {% if occ.has_effective_alarms() %}
-                    <i class="bi bi-alarm ev_right_icon"></i>
-                    {% endif %}
-                    {% if !occ.is_all_day() && !occ.is_all_day_on(day.date.unwrap()) %}
-                    {% if occ.occurrence_starts_on(day.date.unwrap()) &&
-                          !occ.occurrence_ends_on(day.date.unwrap()) %}
-                    <i class="bi bi-arrow-bar-right"></i>
-                    {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
-                    {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
-                               occ.occurrence_ends_on(day.date.unwrap()) %}
-                    <i class="bi bi-arrow-bar-left"></i>
-                    {{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                    {% if !occ.is_owner() %}
+                    <div class="ev_vertbar
+                        {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
+                        {% when CalPartStat::NeedsAction %}
+                        ev_vertbar_needsaction
+                        {% when stat %}
+                        ev_vertbar_{{ stat }}
+                        {% endmatch %}
+                        ">
+                    </div>
                     {% else %}
-                    {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                    <div class="ev_vertbar_spacer">&nbsp;</div>
                     {% endif %}
-                    {% endif %}
-                    {{ occ.summary().unwrap() }}
+                    <div style="padding: 5px">
+                        {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                        <i class="bi bi-arrow-clockwise ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.is_overwritten() %}
+                        <i class="bi bi-pencil ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.has_effective_alarms() %}
+                        <i class="bi bi-alarm ev_right_icon"></i>
+                        {% endif %}
+                        {% if !occ.is_all_day() && !occ.is_all_day_on(day.date.unwrap()) %}
+                        {% if occ.occurrence_starts_on(day.date.unwrap()) &&
+                              !occ.occurrence_ends_on(day.date.unwrap()) %}
+                        <i class="bi bi-arrow-bar-right"></i>
+                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
+                                   occ.occurrence_ends_on(day.date.unwrap()) %}
+                        <i class="bi bi-arrow-bar-left"></i>
+                        {{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {% else %}
+                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {% endif %}
+                        {% endif %}
+                        {{ occ.summary().unwrap() }}
+                    </div>
                 </div>
                 {% endfor %}
             </div>

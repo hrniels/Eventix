@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, TimeZone, Timelike};
 use chrono_tz::Tz;
 use ical::col::Occurrence;
-use ical::objects::{CalAttendee, EventLike};
+use ical::objects::{CalAttendee, CalPartStat, EventLike};
 use once_cell::sync::Lazy;
 use std::cmp::Ordering;
 use std::{ops::Deref, sync::Mutex};
@@ -12,11 +12,36 @@ pub struct DayOccurrence<'a> {
     id: u64,
     inner: Occurrence<'a>,
     overlap: Option<(usize, usize)>,
+    partstat: Option<CalPartStat>,
+    owner: bool,
     effective_alarms: bool,
 }
 
 impl<'a> DayOccurrence<'a> {
-    pub fn new(inner: &Occurrence<'a>, effective_alarms: bool) -> Self {
+    pub fn new_from_settings(
+        inner: &Occurrence<'a>,
+        settings: &Settings,
+        pers_alarms: &PersonalAlarms,
+    ) -> Self {
+        let cal_settings = settings.calendar(inner.directory()).unwrap();
+        let alarm_type = cal_settings.alarms();
+        let user_mail = cal_settings.email().map(|e| e.address());
+        let partstat = user_mail.and_then(|addr| inner.attendee_status(addr));
+        let owner = inner.is_owned_by(user_mail);
+        Self::new(
+            inner,
+            partstat,
+            owner,
+            pers_alarms.has_alarms(inner, alarm_type),
+        )
+    }
+
+    pub fn new(
+        inner: &Occurrence<'a>,
+        partstat: Option<CalPartStat>,
+        owner: bool,
+        effective_alarms: bool,
+    ) -> Self {
         static NEXT_ID: Lazy<Mutex<u64>> = Lazy::new(|| Mutex::new(0));
         let mut next = NEXT_ID.lock().unwrap();
         let id = *next + 1;
@@ -25,6 +50,8 @@ impl<'a> DayOccurrence<'a> {
             id,
             inner: inner.clone(),
             overlap: None,
+            partstat,
+            owner,
             effective_alarms,
         }
     }
@@ -46,10 +73,7 @@ impl<'a> DayOccurrence<'a> {
         let mut day_occs = occs
             .iter()
             .filter(|o| o.overlaps(day_start, day_end))
-            .map(|o| {
-                let alarm_type = settings.calendar(o.directory()).unwrap().alarms();
-                DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type))
-            })
+            .map(|o| DayOccurrence::new_from_settings(o, settings, pers_alarms))
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (
@@ -74,10 +98,7 @@ impl<'a> DayOccurrence<'a> {
                 Some(end) => end.date_naive() == date,
                 None => false,
             })
-            .map(|o| {
-                let alarm_type = settings.calendar(o.directory()).unwrap().alarms();
-                DayOccurrence::new(o, pers_alarms.has_alarms(o, alarm_type))
-            })
+            .map(|o| DayOccurrence::new_from_settings(o, settings, pers_alarms))
             .collect::<Vec<_>>();
         day_occs.sort_by_key(|i| {
             (
@@ -92,6 +113,14 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn id(&self) -> u64 {
         self.id
+    }
+
+    pub fn is_owner(&self) -> bool {
+        self.owner
+    }
+
+    pub fn participant_status(&self) -> Option<CalPartStat> {
+        self.partstat
     }
 
     pub fn has_effective_alarms(&self) -> bool {

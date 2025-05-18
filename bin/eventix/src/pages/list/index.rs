@@ -4,7 +4,8 @@ use axum::extract::State;
 use axum::response::{Html, IntoResponse};
 use ical::col::{CalDir, CalFile, Occurrence};
 use ical::objects::{
-    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalTodoStatus, EventLike,
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalPartStat, CalTodoStatus,
+    EventLike,
 };
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -62,7 +63,8 @@ struct ListComponent<'a> {
     owner: bool,
     personal_alarms: bool,
     alarms: Option<Vec<CalAlarm>>,
-    partstat: Option<PartStatTemplate>,
+    part_stat: Option<CalPartStat>,
+    part_stat_btns: Option<PartStatTemplate>,
 }
 
 impl<'a> ListComponent<'a> {
@@ -99,7 +101,7 @@ impl<'a> ListComponent<'a> {
             owner,
             alarms: pers_alarms.effective_alarms(&occ, cal_settings.alarms()),
             personal_alarms: matches!(cal_settings.alarms(), CalendarAlarmType::Personal { .. }),
-            partstat: part_stat.map(|stat| {
+            part_stat_btns: part_stat.map(|stat| {
                 PartStatTemplate::new(
                     locale.clone(),
                     format!("base-{}", c.uid()),
@@ -109,6 +111,7 @@ impl<'a> ListComponent<'a> {
                     false,
                 )
             }),
+            part_stat,
         }
     }
 }

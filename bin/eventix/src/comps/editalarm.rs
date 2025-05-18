@@ -58,7 +58,7 @@ impl<'a> EditAlarmTemplate<'a> {
         };
 
         let effective = state.personal_alarms().effective_alarms(&occ, alarm_type);
-        let day_occ = DayOccurrence::new(&occ, effective.is_some());
+        let day_occ = DayOccurrence::new(&occ, None, false, effective.is_some());
 
         let config = Some(AlarmConfig::from_alarms(
             match personal {
