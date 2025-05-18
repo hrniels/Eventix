@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::pages::error::HTMLError;
 use crate::state::EventixState;
-use crate::{locale, util};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -27,20 +26,7 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(form): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
-
     let mut state = state.lock().await;
-
-    {
-        let occ = state
-            .store()
-            .occurrence_by_id(&form.uid, None, locale.timezone())
-            .ok_or_else(|| anyhow!("Unable to find occurrence with uid {}", form.uid))?;
-        if !util::user_is_event_owner(occ.directory(), &state, &occ) {
-            return Err(anyhow!("No delete permission").into());
-        }
-    }
-
     let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 
     let src = file.directory().clone();
