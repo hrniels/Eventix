@@ -121,7 +121,10 @@ pub trait EventLike: PropertyProducer {
     /// or not having a status is considered as [`CalPartStat::NeedsAction`].
     fn attendee_status<M: AsRef<str>>(&self, user_mail: M) -> Option<CalPartStat> {
         self.attendees().map(|atts| {
-            if let Some(att) = atts.iter().find(|a| a.address() == user_mail.as_ref()) {
+            if let Some(att) = atts
+                .iter()
+                .find(|a| a.address().to_lowercase() == user_mail.as_ref().to_lowercase())
+            {
                 att.part_stat().unwrap_or(CalPartStat::NeedsAction)
             } else {
                 // if the user is not part of the list (e.g., invited via mailing list), it's
