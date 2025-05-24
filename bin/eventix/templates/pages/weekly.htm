@@ -2,15 +2,18 @@
 
 {% block inner %}
 
-<h1 class="ev_header">
-    <div style="float: left" class="ev_jump">
+<h1 class="ev_header" style="position: relative">
+    <div style="z-index: 1; position: absolute; float: left" class="ev_jump">
         <input type="text" id="jump_location" size="10" />
         <input type="button" value="{{ "Jump!"|t(locale) }}" onclick="executeJump()" />
     </div>
 
-    <a style="margin-right: .5em" id="link-prev" href="/weekly?date={{ prev_week }}">&laquo;</a>
-    {{ week_start }} - {{ week_end }}
-    <a style="margin-left: .5em" id="link-next" href="/weekly?date={{ next_week }}">&raquo;</a>
+    <div style="z-index: 0; position: absolute; width: calc(100% - 70px); left: 70px; text-align: center">
+        <a style="margin-right: .5em" id="link-prev" href="/weekly?date={{ prev_week }}">&laquo;</a>
+        <div style="display: inline-block; width: 22em">{{ week_start }} - {{ week_end }}</div>
+        <a style="margin-left: .5em" id="link-next" href="/weekly?date={{ next_week }}">&raquo;</a>
+    </div>
+    <br clear="both"/>
 </h1>
 
 <script type="text/javascript">
@@ -27,11 +30,11 @@
     });
 </script>
 
-<table width="100%" class="ev_table">
+<table width="100%" class="ev_table" style="table-layout: fixed">
     <tr>
-        <td width="12%"></td>
+        <td style="padding: 0; width: 70px"></td>
         {% for day in days %}
-        <td width="12%" align="center"
+        <td width="14%" align="center"
             class="ev_week_day_header{% if day.date == today %} ev_today{% endif %}">
             <a href="javascript:gotoWithPrev(
                      '/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
@@ -43,9 +46,9 @@
         {% endfor %}
     </tr>
     <tr>
-        <td width="12%"></td>
+        <td></td>
         {% for day in days %}
-        <td width="12%" align="center" class="ev_month_td
+        <td width="14%" align="center" class="ev_month_td
                                               {% if day.date == today %}ev_today_bg{% endif %}"
                                        style="height: auto">
             <div class="ev_week_cell">
@@ -96,9 +99,9 @@
     </tr>
 </table>
 <div id="week_scroll_area" style="height: 720px; overflow-y: scroll;">
-<table width="100%" class="ev_table">
+<table width="100%" class="ev_table" style="table-layout: fixed">
     <tr>
-        <td width="12%" class="ev_month_td">
+        <td class="ev_month_td" style="padding: 0; width: 70px">
         <div style="position: relative; height: 1440px; padding: 0px">
         {% for hour in 0..24 %}
         <div style="position: absolute;
@@ -114,7 +117,7 @@
         </div>
         </td>
         {% for day in days %}
-        <td width="12%" class="ev_month_td">
+        <td width="14%" class="ev_month_td">
             <div class="ev_week_cell
                         {% if day.date == today %}ev_today_bg{% endif %}">
                 <div style="position: relative; height: 1440px; padding: 0px">
