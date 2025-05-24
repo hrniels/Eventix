@@ -31,7 +31,13 @@
     <tr>
         <td width="12%"></td>
         {% for day in days %}
-        <td width="12%" align="center"{% if day.date == today %} class="ev_today"{% endif %}>
+        <td width="12%" align="center"
+            class="ev_week_day_header{% if day.date == today %} ev_today{% endif %}">
+            <a href="javascript:gotoWithPrev(
+                     '/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
+               style="float: left" class="ev_add_icon">
+                <i class="bi bi-plus-square"></i>
+            </a>
             <b>{{ day.date|weekdate(locale, DateFlags::NoToday | DateFlags::Short) }}</b>
         </td>
         {% endfor %}

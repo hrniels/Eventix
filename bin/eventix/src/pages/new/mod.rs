@@ -24,6 +24,7 @@ pub struct Request {
     ctype: CalCompType,
     date: Option<Date>,
     hour: Option<u32>,
+    allday: Option<bool>,
     prev: Option<String>,
 }
 
@@ -61,28 +62,38 @@ impl CompNew {
             now
         };
 
-        let next_hour = if req.hour.is_some() {
-            date
-        } else {
-            let last_hour =
-                NaiveTime::from_hms_opt(date.naive_local().time().hour(), 0, 0).unwrap();
-            date.with_time(last_hour).unwrap() + Duration::hours(1)
-        };
-        let next_next_hour = next_hour + Duration::hours(1);
+        let start_end = match (req.ctype, req.allday.unwrap_or(false)) {
+            // event on given date at the next hour
+            (CalCompType::Event, false) => {
+                let next_hour = if req.hour.is_some() {
+                    date
+                } else {
+                    let last_hour =
+                        NaiveTime::from_hms_opt(date.naive_local().time().hour(), 0, 0).unwrap();
+                    date.with_time(last_hour).unwrap() + Duration::hours(1)
+                };
+                let next_next_hour = next_hour + Duration::hours(1);
 
-        let start_end = match req.ctype {
-            CalCompType::Event => {
                 let start = DateTime::new(
                     Date::new(Some(next_hour.date_naive())),
                     Some(Time::new(next_hour.naive_local().time())),
                 );
+
                 let end = DateTime::new(
                     Date::new(Some(next_next_hour.date_naive())),
                     Some(Time::new(next_next_hour.naive_local().time())),
                 );
+
                 DateTimeRange::new(start, end)
             }
-            CalCompType::Todo => DateTimeRange::default(),
+
+            // all-day event on given date
+            (CalCompType::Event, true) => {
+                let start = DateTime::new(Date::new(Some(date.date_naive())), None);
+                DateTimeRange::new(start.clone(), start)
+            }
+
+            (CalCompType::Todo, _) => DateTimeRange::default(),
         };
 
         Self {

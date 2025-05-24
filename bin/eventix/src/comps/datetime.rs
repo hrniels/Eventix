@@ -9,7 +9,7 @@ use crate::comps::date::{Date, DateTemplate};
 use crate::comps::time::{Time, TimeTemplate};
 use crate::locale::Locale;
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct DateTime {
     date: Date,
     time: Option<Time>,

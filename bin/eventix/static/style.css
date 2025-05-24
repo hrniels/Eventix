@@ -527,6 +527,17 @@ span.ev_msg_error span.ev_msg_info {
 
 /* ------------ WEEK VIEW ------------ */
 
+.ev_week_day_header {
+    position: relative;
+}
+.ev_week_day_header > .ev_add_icon {
+    position: absolute;
+    left: 0px;
+    top: 50%;
+    transform: translateY(-50%);
+    visibility: hidden;
+}
+
 .ev_week_cell {
     display: flex;
     flex-direction: column;
@@ -542,13 +553,16 @@ span.ev_msg_error span.ev_msg_info {
 
 .ev_add_icon {
     color: #000;
-    display: none;
+    visibility: hidden;
+}
+.ev_week_day_header:hover > .ev_add_icon {
+    visibility: visible;
 }
 .ev_month_day_header:hover > .ev_add_icon {
-    display: inline;
+    visibility: visible;
 }
 .ev_hour_cell:hover > .ev_add_icon {
-    display: inline;
+    visibility: visible;
 }
 
 .ev_right_icon {
