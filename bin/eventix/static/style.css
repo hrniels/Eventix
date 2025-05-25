@@ -623,6 +623,11 @@ span.ev_cal_src {
     display: inline-block;
     flex: 0 0 18px; /* minimum width */
 }
+span.ev_cal_src_button {
+    font-size: .7em;
+    text-align: center;
+    vertical-align: middle;
+}
 
 .ev_cal_src_inner {
     position: relative;

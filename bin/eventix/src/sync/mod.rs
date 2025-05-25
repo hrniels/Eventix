@@ -2,6 +2,7 @@ mod fs;
 mod vdirsyncer;
 
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::state::EventixState;
@@ -12,6 +13,12 @@ pub trait Syncer: Send {
     async fn sync(&mut self, cal: &Arc<String>, state: EventixState) -> anyhow::Result<bool>;
 }
 
+#[derive(Default)]
+pub struct SyncResult {
+    pub changed: bool,
+    pub calendars: HashMap<String, bool>,
+}
+
 struct CalendarSync {
     id: Arc<String>,
     syncer: Box<dyn Syncer + 'static>,
@@ -19,7 +26,7 @@ struct CalendarSync {
 
 impl CalendarSync {}
 
-pub async fn sync_all(state: EventixState) -> bool {
+pub async fn sync_all(state: EventixState) -> SyncResult {
     let mut tasks = Vec::new();
     for mut cmd in get_syncs(state.clone()).await {
         let state_clone = state.clone();
@@ -30,15 +37,22 @@ pub async fn sync_all(state: EventixState) -> bool {
     }
 
     let mut changed = false;
+    let mut calendars = HashMap::new();
     for (id, handle) in tasks {
         let res = handle.await.unwrap();
+        calendars.insert((*id).clone(), res.is_ok());
+        state
+            .lock()
+            .await
+            .misc_mut()
+            .set_sync_error(&id, res.is_err());
         match res {
             Ok(res) => changed |= res,
             Err(e) => tracing::error!("{}: failed with {}", id, e),
         }
     }
 
-    changed
+    SyncResult { changed, calendars }
 }
 
 async fn get_syncs(state: EventixState) -> Vec<CalendarSync> {

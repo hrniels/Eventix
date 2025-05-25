@@ -12,6 +12,7 @@ pub struct Misc {
     last_alarm_check: NaiveDateTime,
     last_calendar: HashMap<CalCompType, String>,
     disabled_calendars: Vec<String>,
+    sync_errors: Vec<String>,
 }
 
 impl Default for Misc {
@@ -20,6 +21,7 @@ impl Default for Misc {
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
+            sync_errors: Vec::default(),
         }
     }
 }
@@ -54,6 +56,18 @@ impl Misc {
             self.disabled_calendars.retain(|c| c != id);
         } else {
             self.disabled_calendars.push(id.to_string());
+        }
+    }
+
+    pub fn has_sync_error(&self, id: &String) -> bool {
+        self.sync_errors.contains(id)
+    }
+
+    pub fn set_sync_error(&mut self, id: &String, error: bool) {
+        match (self.sync_errors.contains(id), error) {
+            (true, false) => self.sync_errors.retain(|c| c != id),
+            (false, true) => self.sync_errors.push(id.to_string()),
+            _ => {}
         }
     }
 

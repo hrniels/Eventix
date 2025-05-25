@@ -58,9 +58,9 @@ impl State {
         })
     }
 
-    pub async fn reload(state: EventixState) -> anyhow::Result<bool> {
+    pub async fn reload(state: EventixState) -> anyhow::Result<sync::SyncResult> {
         // first reload the settings and personal alarms
-        let mut changed = {
+        let changed = {
             let mut state = state.lock().await;
 
             let settings = settings::Settings::load_from_file().context("load settings")?;
@@ -77,12 +77,13 @@ impl State {
         };
 
         // now synchronize and update the store
-        changed |= sync::sync_all(state.clone()).await;
+        let mut sync_res = sync::sync_all(state.clone()).await;
+        sync_res.changed |= changed;
 
         // remember last reload
         state.lock().await.last_reload = chrono::Utc::now().naive_utc();
 
-        Ok(changed)
+        Ok(sync_res)
     }
 
     pub fn store(&self) -> &CalStore {

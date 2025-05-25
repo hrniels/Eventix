@@ -31,6 +31,13 @@ function reloadDB(lastReloadId, spinnerId, iconId, force) {
         $('#' + lastReloadId).html(data.date);
         if(data.changed)
             requestReload(iconId, syncForce);
+        for(var cal in data.calendars) {
+            let btn = $('#ev_cal_src_button_' + cal);
+            if(data.calendars[cal])
+                btn.hide();
+            else
+                btn.show();
+        }
         syncing = false;
     });
 }
