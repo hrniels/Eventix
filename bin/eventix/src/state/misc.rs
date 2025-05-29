@@ -9,9 +9,13 @@ const FILENAME: &str = "data/misc.toml";
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Misc {
+    #[serde(default)]
     last_alarm_check: NaiveDateTime,
+    #[serde(default)]
     last_calendar: HashMap<CalCompType, String>,
+    #[serde(default)]
     disabled_calendars: Vec<String>,
+    #[serde(default)]
     sync_errors: Vec<String>,
 }
 
