@@ -142,6 +142,9 @@ impl<'c> Occurrence<'c> {
         if let Some(ostart) = overwrite.start() {
             self.start = Some(ostart.as_start_with_tz(&self.tz().unwrap()));
         }
+        if let Some(oend) = overwrite.end_or_due() {
+            self.end = Some(oend.as_end_with_tz(&self.tz().unwrap()));
+        }
     }
 
     /// Returns true if this occurrence has been excluded.
@@ -250,7 +253,10 @@ impl<'c> Occurrence<'c> {
 
     /// Returns the duration of this occurrence.
     pub fn duration(&self) -> Option<Duration> {
-        self.tz().and_then(|tz| self.base.duration(&tz))
+        self.tz().and_then(|tz| match self.overwrite {
+            Some(occ) => occ.duration(&tz),
+            None => self.base.duration(&tz),
+        })
     }
 
     /// Returns whether this occurrence overlaps with given time period.
