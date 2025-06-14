@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration};
+use chrono::DateTime;
 use chrono_tz::Tz;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,7 @@ pub const PRIORITY_HIGH: u8 = 1;
 /// For example, both have a UID, summary, can be recurrent, and so on.
 #[derive(Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
+    ctype: CalCompType,
     uid: String,
     stamp: CalDate,
     created: Option<CalDate>,
@@ -48,8 +49,9 @@ pub struct EventLikeComponent {
 }
 
 impl EventLikeComponent {
-    pub(crate) fn new_empty() -> Self {
+    pub(crate) fn new_empty(ctype: CalCompType) -> Self {
         Self {
+            ctype,
             uid: String::from(""),
             stamp: CalDate::default(),
             created: None,
@@ -70,12 +72,12 @@ impl EventLikeComponent {
         }
     }
 
-    /// Creates a new object with given UID.
+    /// Creates a new object with given UID and type.
     ///
     /// Note that the stamp, creation date, and last-modification date are all set to
     /// `CalDate::now`.
-    pub fn new<T: ToString>(uid: T) -> Self {
-        let mut new = Self::new_empty();
+    pub fn new<T: ToString>(uid: T, ctype: CalCompType) -> Self {
+        let mut new = Self::new_empty(ctype);
         new.uid = uid.to_string();
         new.stamp = CalDate::now();
         new.created = Some(CalDate::now());
@@ -251,6 +253,10 @@ impl PropertyProducer for EventLikeComponent {
 }
 
 impl EventLike for EventLikeComponent {
+    fn ctype(&self) -> CalCompType {
+        self.ctype
+    }
+
     fn uid(&self) -> &String {
         &self.uid
     }
@@ -458,14 +464,6 @@ pub enum CalComponent {
 }
 
 impl CalComponent {
-    /// Returns the component type.
-    pub fn ctype(&self) -> CalCompType {
-        match self {
-            Self::Event(_) => CalCompType::Event,
-            Self::Todo(_) => CalCompType::Todo,
-        }
-    }
-
     /// Returns the component as an [`CalEvent`], if it is an event.
     pub fn as_event(&self) -> Option<&CalEvent> {
         match self {
@@ -498,23 +496,6 @@ impl CalComponent {
         }
     }
 
-    /// Returns the duration of the component, if known.
-    ///
-    /// If either the start or end of the component is not known, the method returns `None`.
-    pub fn duration(&self, tz: &Tz) -> Option<Duration> {
-        let start = self.start()?;
-
-        // ensure that we start day-aligned if either start or end is all-day
-        let start = if self.is_all_day() && !matches!(start, CalDate::Date(..)) {
-            CalDate::Date(start.as_naive_date(), self.ctype().into())
-        } else {
-            start.clone()
-        };
-
-        self.end_or_due()
-            .map(|end| end.as_end_with_tz(tz) - start.as_start_with_tz(tz))
-    }
-
     fn exdates_as_datetime(&self, tz: &Tz) -> Vec<DateTime<Tz>> {
         self.exdates()
             .iter()
@@ -540,8 +521,7 @@ impl CalComponent {
             };
 
             let dtstart = dtstart.as_datetime(&start.timezone());
-            let dates =
-                rrule.dates_between(dtstart, self.duration(&dtstart.timezone()), start, end);
+            let dates = rrule.dates_between(dtstart, self.duration(), start, end);
             let exdates = self.exdates_as_datetime(&start.timezone());
             return CompDateIterator::new_recur(dates, exdates);
         }
@@ -602,6 +582,13 @@ macro_rules! set_with_ev_or_todo {
 }
 
 impl EventLike for CalComponent {
+    fn ctype(&self) -> CalCompType {
+        match self {
+            Self::Event(_) => CalCompType::Event,
+            Self::Todo(_) => CalCompType::Todo,
+        }
+    }
+
     fn uid(&self) -> &String {
         get_with_ev_or_todo!(self, uid)
     }

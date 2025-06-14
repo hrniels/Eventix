@@ -4,6 +4,7 @@ use std::ops::{Deref, DerefMut};
 use crate::objects::{CalDate, CalEventStatus};
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
+use super::CalCompType;
 use super::component::EventLikeComponent;
 
 /// Represents an iCalendar event.
@@ -24,7 +25,7 @@ pub struct CalEvent {
 impl CalEvent {
     fn new_empty() -> Self {
         Self {
-            inner: EventLikeComponent::new_empty(),
+            inner: EventLikeComponent::new_empty(CalCompType::Event),
             status: None,
             end: None,
         }
@@ -33,7 +34,7 @@ impl CalEvent {
     /// Creates a new event with given uid.
     pub fn new<T: ToString>(uid: T) -> Self {
         let mut new = Self::new_empty();
-        new.inner = EventLikeComponent::new(uid);
+        new.inner = EventLikeComponent::new(uid, CalCompType::Event);
         new
     }
 

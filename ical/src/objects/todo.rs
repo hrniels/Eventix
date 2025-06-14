@@ -4,6 +4,8 @@ use std::ops::{Deref, DerefMut};
 use crate::objects::{CalDate, CalTodoStatus, EventLikeComponent};
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
+use super::CalCompType;
+
 /// Represents an iCalendar TODO.
 ///
 /// Each TODO has a unique id (uid) and several optional properties such as a summary, a
@@ -27,7 +29,7 @@ pub struct CalTodo {
 impl CalTodo {
     fn new_empty() -> Self {
         Self {
-            inner: EventLikeComponent::new_empty(),
+            inner: EventLikeComponent::new_empty(CalCompType::Todo),
             due: None,
             status: None,
             completed: None,
@@ -38,7 +40,7 @@ impl CalTodo {
     /// Creates a new TODO with given uid.
     pub fn new<T: ToString>(uid: T) -> Self {
         let mut new = Self::new_empty();
-        new.inner = EventLikeComponent::new(uid);
+        new.inner = EventLikeComponent::new(uid, CalCompType::Todo);
         new
     }
 

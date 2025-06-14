@@ -1,13 +1,21 @@
+use chrono::Duration;
+use chrono_tz::Tz;
+
 use crate::{
     objects::{CalAlarm, CalAttendee, CalDate, CalOrganizer, CalPartStat, CalRRule},
     parser::PropertyProducer,
 };
+
+use super::CalCompType;
 
 /// Shared readable properties for events and TODOs.
 ///
 /// This trait offers methods for reading these properties. [`UpdatableEventLike`] offers methods
 /// for changing them.
 pub trait EventLike: PropertyProducer {
+    /// Returns the component type.
+    fn ctype(&self) -> CalCompType;
+
     /// Returns the unique id (UID).
     ///
     /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.4.7>.
@@ -58,6 +66,25 @@ pub trait EventLike: PropertyProducer {
     fn is_all_day(&self) -> bool {
         matches!(self.start(), Some(CalDate::Date(..)))
             || matches!(self.end_or_due(), Some(CalDate::Date(..)))
+    }
+
+    /// Calculates the duration of this calendar object.
+    ///
+    /// The calculation is based on [`Self::start`] and [`Self::end_or_due`] and yields `None` if
+    /// either is `None`.
+    fn duration(&self) -> Option<Duration> {
+        let start = self.start()?;
+
+        // ensure that we start day-aligned if either start or end is all-day
+        let start = if self.is_all_day() && !matches!(start, CalDate::Date(..)) {
+            CalDate::Date(start.as_naive_date(), self.ctype().into())
+        } else {
+            start.clone()
+        };
+
+        let tz = Tz::UTC;
+        self.end_or_due()
+            .map(|end| end.as_end_with_tz(&tz) - start.as_start_with_tz(&tz))
     }
 
     /// Returns the summary of the calendar object (SUMMARY).

@@ -251,14 +251,6 @@ impl<'c> Occurrence<'c> {
         }
     }
 
-    /// Returns the duration of this occurrence.
-    pub fn duration(&self) -> Option<Duration> {
-        self.tz().and_then(|tz| match self.overwrite {
-            Some(occ) => occ.duration(&tz),
-            None => self.base.duration(&tz),
-        })
-    }
-
     /// Returns whether this occurrence overlaps with given time period.
     pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
         if let Some(ostart) = self.start {
@@ -297,6 +289,10 @@ impl PropertyProducer for Occurrence<'_> {
 }
 
 impl EventLike for Occurrence<'_> {
+    fn ctype(&self) -> CalCompType {
+        self.base.ctype()
+    }
+
     fn uid(&self) -> &String {
         occ_or_base!(self, uid)
     }
@@ -363,6 +359,35 @@ impl EventLike for Occurrence<'_> {
 
     fn priority(&self) -> Option<u8> {
         occ_or_base_opt!(self, priority)
+    }
+
+    fn duration(&self) -> Option<Duration> {
+        let (start, end): (CalDate, Option<CalDate>) = match self.overwrite {
+            Some(overwrite) => match (
+                self.base.start(),
+                self.base.end_or_due(),
+                overwrite.start(),
+                overwrite.end_or_due(),
+            ) {
+                // if both are overwritten, use them for the duration
+                (_, _, Some(ostart), Some(oend)) => (ostart.clone(), Some(oend.clone())),
+                // if just one or none is overwritten, it's the duration of the base component
+                (Some(_), Some(_), _, _) => return self.base.duration(),
+                // otherwise, we simply don't know the duration
+                _ => return None,
+            },
+            None => (self.base.start()?.clone(), self.base.end_or_due().cloned()),
+        };
+
+        // ensure that we start day-aligned if either start or end is all-day
+        let start = if self.is_all_day() && !matches!(start, CalDate::Date(..)) {
+            CalDate::Date(start.as_naive_date(), self.ctype().into())
+        } else {
+            start.clone()
+        };
+
+        let tz = Tz::UTC;
+        end.map(|end| end.as_end_with_tz(&tz) - start.as_start_with_tz(&tz))
     }
 }
 
