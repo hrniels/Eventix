@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
 use ical::objects::EventLike;
@@ -15,7 +15,11 @@ pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<N
                 .parse()
                 .context(format!("Invalid week: {}", &s[1..]))?;
             let date = NaiveDate::from_ymd_opt(now.year(), 1, 1).unwrap();
-            Ok(date + Duration::weeks(week))
+            Ok(if date.iso_week().week() != 1 {
+                date + Duration::weeks(week)
+            } else {
+                date + Duration::weeks(week - 1)
+            })
         }
         Some(s) if s.starts_with('m') => {
             let month = s[1..]

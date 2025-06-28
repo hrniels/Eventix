@@ -42,7 +42,7 @@
     {% if idx % 7 == 0 %}
     <tr>
         <td class="ev_month_td" align="center" style="vertical-align: middle">
-            <a href="/weekly?date={{ date.format("%Y-%m-%d") }}">{{ date.format("%W") }}</a>
+            <a href="/weekly?date={{ date.format("%Y-%m-%d") }}">{{ date.format("%V") }}</a>
         </td>
     {% endif %}
         <td width="14%" class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}">
