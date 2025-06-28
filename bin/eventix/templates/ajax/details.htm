@@ -38,10 +38,10 @@
             </td>
         </tr>
         {% endif %}
-        {% if let Some(loc) = occ.location() %}
+        {% if let Some(loc) = html::text_to_html(occ.location()) %}
         <tr>
             <td width="30%">{{ "Location"|t(locale) }}:</td>
-            <td width="70%">{{ loc }}</td>
+            <td width="70%">{{ loc|safe }}</td>
         </tr>
         {% endif %}
         {% if let Some(status) = occ.event_status() %}
