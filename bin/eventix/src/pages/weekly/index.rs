@@ -34,6 +34,7 @@ struct WeeklyTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     days: Vec<Day<'a>>,
     today: NaiveDate,
+    week_number: String,
     week_start: String,
     week_end: String,
     prev_week: String,
@@ -232,6 +233,7 @@ pub async fn content(
     let html = WeeklyTemplate {
         page,
         locale: locale.clone(),
+        week_number: week_start.format("%V").to_string(),
         week_start: locale.fmt_weekdate(&week_start, DateFlags::NoToday),
         week_end: locale.fmt_weekdate(&week_end.pred_opt().unwrap(), DateFlags::NoToday),
         prev_week: prev_week.format("%Y-%m-%d").to_string(),
