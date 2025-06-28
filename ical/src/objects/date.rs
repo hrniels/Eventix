@@ -54,7 +54,7 @@ impl Serialize for CalDate {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&format!("{}", self))
+        serializer.serialize_str(&format!("{self}"))
     }
 }
 
@@ -328,7 +328,7 @@ impl FromStr for CalDate {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let prop = format!("X:{}", s).parse::<Property>()?;
+        let prop = format!("X:{s}").parse::<Property>()?;
         prop.try_into()
     }
 }

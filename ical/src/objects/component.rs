@@ -234,10 +234,10 @@ impl PropertyProducer for EventLikeComponent {
             props.push(exdate.to_prop("EXDATE"));
         }
         if let Some(prio) = self.priority {
-            props.push(Property::new("PRIORITY", vec![], format!("{}", prio)));
+            props.push(Property::new("PRIORITY", vec![], format!("{prio}")));
         }
         if let Some(rrule) = &self.rrule {
-            props.push(Property::new_escaped("RRULE", vec![], format!("{}", rrule)));
+            props.push(Property::new_escaped("RRULE", vec![], format!("{rrule}")));
         }
         if let Some(ref rid) = self.rid {
             props.push(rid.to_prop("RECURRENCE-ID"));
@@ -396,7 +396,7 @@ pub enum CalCompType {
 
 impl Display for CalCompType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

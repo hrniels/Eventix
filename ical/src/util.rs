@@ -196,7 +196,7 @@ pub fn next_month(year: i32, month: u32) -> (i32, u32) {
 /// ```
 pub fn nth(n: u64) -> String {
     let mut res = String::new();
-    res.write_fmt(format_args!("{}", n)).unwrap();
+    res.write_fmt(format_args!("{n}")).unwrap();
     match n % 10 {
         1 if n != 11 => res.push_str("st"),
         2 if n != 12 => res.push_str("nd"),

@@ -88,7 +88,7 @@ impl fmt::Display for Property {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)?;
         for p in &self.params {
-            write!(f, ";{}", p)?;
+            write!(f, ";{p}")?;
         }
 
         f.write_char(':')?;

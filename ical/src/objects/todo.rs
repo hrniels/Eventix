@@ -133,7 +133,7 @@ impl PropertyProducer for CalTodo {
             props.push(due.to_prop("DUE"));
         }
         if let Some(status) = self.status {
-            props.push(Property::new("STATUS", vec![], format!("{}", status)));
+            props.push(Property::new("STATUS", vec![], format!("{status}")));
         }
         if let Some(ref completed) = self.completed {
             props.push(completed.to_prop("COMPLETED"));
@@ -142,7 +142,7 @@ impl PropertyProducer for CalTodo {
             props.push(Property::new(
                 "PERCENT-COMPLETE",
                 vec![],
-                format!("{}", percent),
+                format!("{percent}"),
             ));
         }
         props.extend(self.inner.to_props());

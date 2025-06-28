@@ -30,7 +30,7 @@ impl Serialize for CalTodoStatus {
     where
         S: Serializer,
     {
-        serializer.serialize_some(&format!("{}", self))
+        serializer.serialize_some(&format!("{self}"))
     }
 }
 
@@ -66,7 +66,7 @@ impl fmt::Display for CalTodoStatus {
             CalTodoStatus::InProcess => "IN-PROCESS",
             CalTodoStatus::Cancelled => "CANCELLED",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -108,6 +108,6 @@ impl fmt::Display for CalEventStatus {
             CalEventStatus::Confirmed => "CONFIRMED",
             CalEventStatus::Cancelled => "CANCELLED",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }

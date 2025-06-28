@@ -165,7 +165,7 @@ impl CalAttendee {
     pub fn pretty_name(&self) -> String {
         let address = self.address();
         if let Some(name) = &self.common_name {
-            format!("{} <{}>", name, address)
+            format!("{name} <{address}>")
         } else {
             address.to_string()
         }
@@ -175,10 +175,10 @@ impl CalAttendee {
     pub fn to_prop(&self) -> Property {
         let mut params = Vec::new();
         if let Some(role) = &self.role {
-            params.push(Parameter::new("ROLE", format!("{}", role)));
+            params.push(Parameter::new("ROLE", format!("{role}")));
         }
         if let Some(partstat) = &self.part_stat {
-            params.push(Parameter::new("PARTSTAT", format!("{}", partstat)));
+            params.push(Parameter::new("PARTSTAT", format!("{partstat}")));
         }
         if let Some(cn) = &self.common_name {
             params.push(Parameter::new("CN", cn.clone()));

@@ -53,7 +53,7 @@ impl fmt::Display for CalRRuleFreq {
             Self::Monthly => "MONTHLY",
             Self::Yearly => "YEARLY",
         };
-        write!(f, "{}", name)
+        write!(f, "{name}")
     }
 }
 
@@ -248,7 +248,7 @@ impl fmt::Display for CalWDayDesc {
                 CalRRuleSide::Start => write!(f, "+")?,
                 CalRRuleSide::End => write!(f, "-")?,
             }
-            write!(f, "{}", num)?;
+            write!(f, "{num}")?;
         }
 
         write!(f, "{}", Self::to_weekday_str(self.day))
@@ -803,13 +803,13 @@ impl fmt::Display for RRuleHuman<'_> {
             Some(interval) if interval > 1 => {
                 write!(f, "every ")?;
                 match self.0.freq {
-                    CalRRuleFreq::Yearly => write!(f, "{} years", interval)?,
-                    CalRRuleFreq::Monthly => write!(f, "{} months", interval)?,
-                    CalRRuleFreq::Weekly => write!(f, "{} weeks", interval)?,
-                    CalRRuleFreq::Daily => write!(f, "{} days", interval)?,
-                    CalRRuleFreq::Hourly => write!(f, "{} hours", interval)?,
-                    CalRRuleFreq::Minutely => write!(f, "{} minutes", interval)?,
-                    CalRRuleFreq::Secondly => write!(f, "{} seconds", interval)?,
+                    CalRRuleFreq::Yearly => write!(f, "{interval} years")?,
+                    CalRRuleFreq::Monthly => write!(f, "{interval} months")?,
+                    CalRRuleFreq::Weekly => write!(f, "{interval} weeks")?,
+                    CalRRuleFreq::Daily => write!(f, "{interval} days")?,
+                    CalRRuleFreq::Hourly => write!(f, "{interval} hours")?,
+                    CalRRuleFreq::Minutely => write!(f, "{interval} minutes")?,
+                    CalRRuleFreq::Secondly => write!(f, "{interval} seconds")?,
                 }
             }
             _ => {
@@ -837,7 +837,7 @@ impl fmt::Display for RRuleHuman<'_> {
         if let Some(by_mon_day) = &self.0.by_mon_day {
             let days = by_mon_day
                 .iter()
-                .map(|d| format!("{}", d))
+                .map(|d| format!("{d}"))
                 .collect::<Vec<_>>();
             write!(f, ", on the {} day of the month", util::human_list(&days))?;
         }
@@ -845,20 +845,20 @@ impl fmt::Display for RRuleHuman<'_> {
         if let Some(by_year_day) = &self.0.by_year_day {
             let days = by_year_day
                 .iter()
-                .map(|d| format!("{}", d))
+                .map(|d| format!("{d}"))
                 .collect::<Vec<_>>();
             write!(f, ", on the {} day of the year", util::human_list(&days))?;
         }
 
         if let Some(by_hour) = &self.0.by_hour {
-            let hours = by_hour.iter().map(|d| format!("{}", d)).collect::<Vec<_>>();
+            let hours = by_hour.iter().map(|d| format!("{d}")).collect::<Vec<_>>();
             write!(f, ", at hour(s) {}", util::human_list(&hours))?;
         }
 
         if let Some(by_minute) = &self.0.by_minute {
             let mins = by_minute
                 .iter()
-                .map(|d| format!("{}", d))
+                .map(|d| format!("{d}"))
                 .collect::<Vec<_>>();
             write!(f, ", at minute(s) {}", util::human_list(&mins))?;
         }
@@ -866,7 +866,7 @@ impl fmt::Display for RRuleHuman<'_> {
         if let Some(by_second) = &self.0.by_second {
             let secs = by_second
                 .iter()
-                .map(|d| format!("{}", d))
+                .map(|d| format!("{d}"))
                 .collect::<Vec<_>>();
             write!(f, ", at second(s) {}", util::human_list(&secs))?;
         }
@@ -878,7 +878,7 @@ impl fmt::Display for RRuleHuman<'_> {
                 until.as_naive_date().format("%B %d, %Y")
             )?;
         } else if let Some(count) = self.0.count {
-            write!(f, "\nRepeats {} times", count)?;
+            write!(f, "\nRepeats {count} times")?;
         }
         Ok(())
     }
@@ -894,7 +894,7 @@ fn write_list<T: fmt::Display>(
             f,
             ";{}={}",
             name,
-            l.iter().map(|v| format!("{}", v)).join(",")
+            l.iter().map(|v| format!("{v}")).join(",")
         )
     } else {
         Ok(())
@@ -905,10 +905,10 @@ impl fmt::Display for CalRRule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "FREQ={}", self.freq)?;
         if let Some(count) = self.count {
-            write!(f, ";COUNT={}", count)?;
+            write!(f, ";COUNT={count}")?;
         }
         if let Some(interval) = self.interval {
-            write!(f, ";INTERVAL={}", interval)?;
+            write!(f, ";INTERVAL={interval}")?;
         }
         write_list(self.by_second.as_ref(), "BYSECOND", f)?;
         write_list(self.by_minute.as_ref(), "BYMINUTE", f)?;
@@ -956,7 +956,7 @@ impl FromStr for CalRRule {
                     rrule.freq = value.parse()?;
                 }
                 "UNTIL" => {
-                    let prop: Property = format!("UNTIL:{}", value).parse()?;
+                    let prop: Property = format!("UNTIL:{value}").parse()?;
                     rrule.until = Some(prop.try_into()?);
                 }
                 "COUNT" => {

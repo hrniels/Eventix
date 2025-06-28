@@ -98,7 +98,7 @@ impl CalTrigger {
         let mut params = Vec::new();
         let value = match self {
             Self::Relative { related, duration } => {
-                params.push(Parameter::new("RELATED", format!("{}", related)));
+                params.push(Parameter::new("RELATED", format!("{related}")));
                 duration_tostr(*duration)
             }
             Self::Absolute(date) => date.to_string(),
@@ -400,7 +400,7 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
 impl Display for CalAlarm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for prop in self.to_props() {
-            writeln!(f, "{}", prop)?;
+            writeln!(f, "{prop}")?;
         }
         Ok(())
     }
@@ -421,7 +421,7 @@ impl Serialize for CalAlarm {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&format!("{}", self))
+        serializer.serialize_str(&format!("{self}"))
     }
 }
 
@@ -448,7 +448,7 @@ impl PropertyProducer for CalAlarm {
             props.push(Property::new("DURATION", vec![], duration_tostr(*duration)));
         }
         if let Some(repeat) = &self.repeat {
-            props.push(Property::new("REPEAT", vec![], format!("{}", repeat)));
+            props.push(Property::new("REPEAT", vec![], format!("{repeat}")));
         }
         props.extend(self.other.iter().cloned());
         props.push(Property::new("END", vec![], "VALARM"));
