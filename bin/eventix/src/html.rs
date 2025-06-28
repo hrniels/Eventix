@@ -24,7 +24,7 @@ pub mod filters {
 
     pub fn newlines<T: Display>(text: T) -> ::askama::Result<String> {
         let text = MarkupDisplay::new_unsafe(text, Html);
-        let text = format!("{}", text);
+        let text = format!("{text}");
         Ok(text.replace('\n', "<br>"))
     }
 
@@ -114,7 +114,7 @@ pub fn text_to_html(text: Option<&String>) -> Option<String> {
 
             // now replace HTML entities etc.
             let text = MarkupDisplay::new_unsafe(desc, Html);
-            let text = format!("{}", text);
+            let text = format!("{text}");
             let text = text.replace('\n', "<br>");
 
             // finally replace URLs with proper links
@@ -202,19 +202,19 @@ pub fn attendee_icon(att: &CalAttendee) -> String {
         _ => "",
     };
 
-    format!("bi bi-person{}{}", role, status)
+    format!("bi bi-person{role}{status}")
 }
 
 pub fn attendee_title(att: &CalAttendee) -> String {
     let mut res = String::new();
     if let Some(role) = att.role() {
-        res.push_str(&format!("{:?}", role));
+        res.push_str(&format!("{role:?}"));
     }
     if let Some(status) = att.part_stat() {
         if att.role().is_some() {
             res.push_str(", ");
         }
-        res.push_str(&format!("{:?}", status));
+        res.push_str(&format!("{status:?}"));
     }
     res
 }

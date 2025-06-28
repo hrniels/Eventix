@@ -73,7 +73,7 @@ impl PersonalAlarms {
     pub fn get_or_create(&mut self, id: &str) -> &mut PersonalCalendarAlarms {
         self.calendars.entry(id.to_string()).or_insert_with(|| {
             let mut path = self.path.clone();
-            path.push(format!("{}.toml", id));
+            path.push(format!("{id}.toml"));
             PersonalCalendarAlarms::new_empty(path)
         })
     }

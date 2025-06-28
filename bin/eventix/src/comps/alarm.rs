@@ -85,7 +85,7 @@ impl<'a> AlarmTemplate<'a> {
             id: name.replace("[", "_").replace("]", "_"),
             calendar: AlarmConfigTemplate::new(
                 locale.clone(),
-                format!("{}[calendar]", name),
+                format!("{name}[calendar]"),
                 Some(value.calendar),
             ),
             personal: if personal {
@@ -94,7 +94,7 @@ impl<'a> AlarmTemplate<'a> {
                     overwrite: value.personal.is_some(),
                     config: AlarmConfigTemplate::new(
                         locale.clone(),
-                        format!("{}[personal]", name),
+                        format!("{name}[personal]"),
                         value.personal,
                     ),
                 })

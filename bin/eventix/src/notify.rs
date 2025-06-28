@@ -31,7 +31,7 @@ impl Notification {
             body = format!("Start: {}", locale.fmt_datetime(&start, DateFlags::None));
         }
         if let Some(loc) = occ.occurrence().location() {
-            body.push_str(&format!("\nWhere: {}", loc));
+            body.push_str(&format!("\nWhere: {loc}"));
         }
         body.push_str(&format!(
             "\nReminder for: {}",

@@ -127,11 +127,11 @@ pub fn load_from_file<D: DeserializeOwned>(filename: &PathBuf) -> anyhow::Result
     let mut file = File::options()
         .read(true)
         .open(filename)
-        .context(format!("open {:?}", filename))?;
+        .context(format!("open {filename:?}"))?;
     let mut data = String::new();
     file.read_to_string(&mut data)
-        .context(format!("read {:?}", filename))?;
-    toml::from_str(&data).context(format!("parse {:?}", filename))
+        .context(format!("read {filename:?}"))?;
+    toml::from_str(&data).context(format!("parse {filename:?}"))
 }
 
 pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Result<()> {
@@ -140,12 +140,12 @@ pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Resul
         .create(true)
         .truncate(true)
         .open(filename)
-        .context(format!("open {:?}", filename))?;
+        .context(format!("open {filename:?}"))?;
     file.write_all(
         toml::to_string(&data)
-            .context(format!("serialize {:?}", filename))?
+            .context(format!("serialize {filename:?}"))?
             .as_bytes(),
     )
-    .context(format!("write {:?}", filename))?;
+    .context(format!("write {filename:?}"))?;
     Ok(())
 }

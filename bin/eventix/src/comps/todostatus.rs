@@ -78,7 +78,7 @@ impl TodoStatusTemplate {
             id: name.replace("[", "_").replace("]", "_"),
             status: ComboboxTemplate::new_with_options(
                 locale.clone(),
-                format!("{}[status]", name),
+                format!("{name}[status]"),
                 Some(value.status),
                 vec![
                     ComboOption::new(locale.translate("Needs action"), CalTodoStatus::NeedsAction),
@@ -88,7 +88,7 @@ impl TodoStatusTemplate {
                 ],
             ),
             percent: value.percent,
-            completed: DateTemplate::new(format!("{}[completed]", name), value.completed),
+            completed: DateTemplate::new(format!("{name}[completed]"), value.completed),
             name,
         }
     }

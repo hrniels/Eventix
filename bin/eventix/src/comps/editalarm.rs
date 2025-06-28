@@ -36,7 +36,7 @@ impl<'a> EditAlarmTemplate<'a> {
         let rid_date = if let Some(rid) = &rid {
             Some(
                 rid.parse::<CalDate>()
-                    .context(format!("Invalid rid date: {}", rid))?,
+                    .context(format!("Invalid rid date: {rid}"))?,
             )
         } else {
             None

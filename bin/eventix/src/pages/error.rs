@@ -27,7 +27,7 @@ pub struct HTMLError {
 
 impl fmt::Display for HTMLError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

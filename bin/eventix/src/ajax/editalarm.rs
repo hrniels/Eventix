@@ -67,7 +67,7 @@ pub async fn post_handler(
     let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {}", rid))?,
+                .context(format!("Invalid rid date: {rid}"))?,
         )
     } else {
         None
@@ -99,7 +99,7 @@ pub async fn post_handler(
     if changed {
         pers_cal
             .save()
-            .context(format!("Save personal alarms for calendar {}", calendar))?;
+            .context(format!("Save personal alarms for calendar {calendar}"))?;
     }
 
     Ok(Redirect::to(&req.target_url))

@@ -105,11 +105,11 @@ impl<'a> DateTimeRangeTemplate<'a> {
             from_date: value.as_ref().and_then(|v| v.from.date()),
             to_date: value.as_ref().and_then(|v| v.to.date()),
             from_time: TimeTemplate::new(
-                format!("{}[from][time]", name),
+                format!("{name}[from][time]"),
                 value.as_ref().and_then(|v| v.from.time()),
             ),
             to_time: TimeTemplate::new(
-                format!("{}[to][time]", name),
+                format!("{name}[to][time]"),
                 value.as_ref().and_then(|v| v.to.time()),
             ),
             all_day: value.as_ref().map(|v| v.is_all_day()).unwrap_or(false),

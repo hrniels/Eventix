@@ -118,13 +118,13 @@ impl From<Weekday> for IterWeekday {
 
 impl Named for IterWeekday {
     fn name(&self) -> String {
-        format!("{:?}", self)
+        format!("{self:?}")
     }
 }
 
 impl fmt::Display for IterWeekday {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -138,13 +138,13 @@ enum Nth {
 
 impl Named for Nth {
     fn name(&self) -> String {
-        format!("{:?}", self)
+        format!("{self:?}")
     }
 }
 
 impl fmt::Display for Nth {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -188,7 +188,7 @@ pub enum RecurEnd {
 
 impl Display for RecurEnd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -201,7 +201,7 @@ pub enum MonthlyType {
 
 impl Display for MonthlyType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -350,23 +350,23 @@ impl<'a> RecurTemplate<'a> {
             name,
             id: name.replace("[", "_").replace("]", "_"),
             freq: match value.freq {
-                Some(f) => format!("{}", f),
+                Some(f) => format!("{f}"),
                 None => String::from("NONE"),
             },
             count: value.count,
             interval: value.interval,
             end: value.end,
-            until: DateTemplate::new(format!("{}[until]", name), value.until),
+            until: DateTemplate::new(format!("{name}[until]"), value.until),
             weekly_days: value.weekly_days,
             monthly_nth: ComboboxTemplate::new(
                 locale.clone(),
-                format!("{}[monthly_nth]", name),
+                format!("{name}[monthly_nth]"),
                 value.monthly_nth,
             ),
             monthly_type: value.monthly_type,
             monthly_wday: ComboboxTemplate::new(
                 locale.clone(),
-                format!("{}[monthly_wday]", name),
+                format!("{name}[monthly_wday]"),
                 value.monthly_wday,
             ),
             locale,

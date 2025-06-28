@@ -9,5 +9,5 @@ fn main() {
         .expect("Invalid UTF-8 in git output")
         .trim()
         .to_string();
-    println!("cargo:rustc-env=GIT_HASH={}", git_hash);
+    println!("cargo:rustc-env=GIT_HASH={git_hash}");
 }

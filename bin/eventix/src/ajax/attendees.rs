@@ -41,7 +41,7 @@ async fn handler(
                     Some(addr) => addr,
                     None => address,
                 };
-                format!("{} <{}>", name, address)
+                format!("{name} <{address}>")
             }
         })
         .collect::<Vec<_>>();

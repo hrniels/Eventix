@@ -48,7 +48,7 @@ fn action_update(
     let rid = if let Some(ref rid) = req.rid {
         Some(
             rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {}", rid))?,
+                .context(format!("Invalid rid date: {rid}"))?,
         )
     } else {
         None

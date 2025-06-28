@@ -63,13 +63,13 @@ pub enum DurUnit {
 
 impl Named for DurUnit {
     fn name(&self) -> String {
-        format!("{:?}", self)
+        format!("{self:?}")
     }
 }
 
 impl Display for DurUnit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -84,7 +84,7 @@ pub enum DurType {
 
 impl Display for DurType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -257,7 +257,7 @@ impl AlarmConfigTemplate {
         let value = value.unwrap_or_default();
         Self {
             trigger: match value.trigger {
-                Some(f) => format!("{}", f),
+                Some(f) => format!("{f}"),
                 None => String::from("NONE"),
             },
             duration: value.duration,
@@ -271,7 +271,7 @@ impl AlarmConfigTemplate {
                 format!("{}[durtype]", &name),
                 Some(value.durtype),
             ),
-            datetime: DateTimeTemplate::new(format!("{}[datetime]", name), value.datetime),
+            datetime: DateTimeTemplate::new(format!("{name}[datetime]"), value.datetime),
             id: name.replace("[", "_").replace("]", "_"),
             name,
             locale,

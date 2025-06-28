@@ -62,10 +62,10 @@ impl DateTimeTemplate {
         let name = name.to_string();
         Self {
             time: TimeTemplate::new(
-                format!("{}[time]", name),
+                format!("{name}[time]"),
                 date.as_ref().and_then(|d| d.time()),
             ),
-            date: DateTemplate::new(format!("{}[date]", name), date.map(|d| d.date)),
+            date: DateTemplate::new(format!("{name}[date]"), date.map(|d| d.date)),
         }
     }
 }

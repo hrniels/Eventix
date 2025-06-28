@@ -64,7 +64,7 @@ async fn action_update(
         .ok_or_else(|| anyhow!("Unable to find directory with id {}", form.calendar))?;
 
     let mut path = dir.path().clone();
-    path.push(format!("{}.ics", uid));
+    path.push(format!("{uid}.ics"));
 
     let mut cal = Calendar::default();
     // add a VTIMEZONE entry to the calendar with just the name of the timezone to work around a

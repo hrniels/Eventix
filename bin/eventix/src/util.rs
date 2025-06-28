@@ -32,8 +32,8 @@ pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<N
             if let Ok(res) = NaiveDate::from_str(&s) {
                 return Ok(res);
             }
-            Ok(NaiveDate::from_str(&format!("{}-01", s))
-                .context(format!("Invalid month: {}", s))?)
+            Ok(NaiveDate::from_str(&format!("{s}-01"))
+                .context(format!("Invalid month: {s}"))?)
         }
         _ => Ok(now),
     }

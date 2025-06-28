@@ -16,7 +16,7 @@ pub enum AttendeeRole {
 
 impl fmt::Display for AttendeeRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -78,11 +78,11 @@ impl Attendees {
             let mut att = if let Some(matches) = addr_name_regex.captures(name) {
                 let addr = matches.get(2).unwrap().as_str();
                 let name = matches.get(1).unwrap().as_str();
-                let mut att = CalAttendee::new(format!("mailto:{}", addr));
+                let mut att = CalAttendee::new(format!("mailto:{addr}"));
                 att.set_common_name(name.to_string());
                 att
             } else {
-                CalAttendee::new(format!("mailto:{}", name))
+                CalAttendee::new(format!("mailto:{name}"))
             };
             att.set_role((*role).into());
             atts.push(att);

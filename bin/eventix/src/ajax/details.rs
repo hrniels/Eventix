@@ -69,7 +69,7 @@ async fn handler(
     let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {}", rid))?,
+                .context(format!("Invalid rid date: {rid}"))?,
         )
     } else {
         None
