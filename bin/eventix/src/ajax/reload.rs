@@ -39,6 +39,7 @@ async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse,
         calendars: sync_res.calendars,
         date: html::filters::time(
             &CalDate::now().as_start_with_tz(locale.timezone()),
+            &(),
             &locale,
             TimeFlags::None,
         )

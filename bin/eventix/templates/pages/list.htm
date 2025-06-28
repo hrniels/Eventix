@@ -257,9 +257,9 @@
                             <td width="20%"><b>{{ "Start date"|t(locale) }}:</b></td>
                             <td width="80%">
                                 {% if c.comp.is_all_day() %}
-                                {{ start.as_start_with_tz(locale.timezone())|as_ref|date(locale, DateFlags::None) }}
+                                {{ &start.as_start_with_tz(locale.timezone())|date(locale, DateFlags::None) }}
                                 {% else %}
-                                {{ start.as_start_with_tz(locale.timezone())|as_ref|datetime(locale, DateFlags::None) }}
+                                {{ &start.as_start_with_tz(locale.timezone())|datetime(locale, DateFlags::None) }}
                                 {% endif %}
                             </td>
                         </tr>
@@ -275,9 +275,9 @@
                             </td>
                             <td width="80%">
                                 {% if c.comp.is_all_day() %}
-                                {{ end.as_end_with_tz(locale.timezone())|as_ref|date(locale, DateFlags::None) }}
+                                {{ &end.as_end_with_tz(locale.timezone())|date(locale, DateFlags::None) }}
                                 {% else %}
-                                {{ end.as_end_with_tz(locale.timezone())|as_ref|datetime(locale, DateFlags::None) }}
+                                {{ &end.as_end_with_tz(locale.timezone())|datetime(locale, DateFlags::None) }}
                                 {% endif %}
                             </td>
                         </tr>

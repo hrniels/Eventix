@@ -107,13 +107,13 @@
                         {% if occ.occurrence_starts_on(day.date.unwrap()) &&
                               !occ.occurrence_ends_on(day.date.unwrap()) %}
                         <i class="bi bi-arrow-bar-right"></i>
-                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
                         {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
                                    occ.occurrence_ends_on(day.date.unwrap()) %}
                         <i class="bi bi-arrow-bar-left"></i>
-                        {{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
                         {% else %}
-                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
                         {% endif %}
                         {% endif %}
                         {{ occ.summary().unwrap() }}

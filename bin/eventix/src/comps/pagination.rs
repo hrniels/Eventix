@@ -1,8 +1,6 @@
 use askama::Template;
 use std::ops::Range;
 
-use crate::html::filters;
-
 #[derive(Template)]
 #[template(path = "comps/pagination.htm")]
 pub struct PaginationTemplate<F: Fn(&usize) -> String> {

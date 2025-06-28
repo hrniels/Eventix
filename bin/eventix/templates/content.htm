@@ -68,7 +68,7 @@
         <div class="ev_scrollbox">
             {% for day in events.days %}
             <div class="ev_next_day_header">
-                {{ day.date.unwrap()|as_ref|weekdate(locale, DateFlags::empty()) }}
+                {{ &day.date.unwrap()|weekdate(locale, DateFlags::empty()) }}
             </div>
             {% for occ in day.occurrences %}
             <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
@@ -136,13 +136,13 @@
                         {% if occ.occurrence_starts_on(day.date.unwrap()) &&
                               !occ.occurrence_ends_on(day.date.unwrap()) %}
                         <i class="bi bi-arrow-bar-right"></i>
-                        <span><b>{{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
+                        <span><b>{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
                         {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
                                    occ.occurrence_ends_on(day.date.unwrap()) %}
                         <i class="bi bi-arrow-bar-left"></i>
-                        <span><b>{{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
+                        <span><b>{{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
                         {% else if occ.occurrence_starts_on(day.date.unwrap()) %}
-                        <span><b>{{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}</b></span>
+                        <span><b>{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
                         {% endif %}
                         <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                     </div>
@@ -223,7 +223,7 @@
                         {% if let Some(due) = occ.occurrence_enddate() %}
                         {% match due %}
                         {% when CalDate::DateTime with (due_date) %}
-                        <span><b>{{ due_date.with_tz(locale.timezone())|as_ref|time(locale, TimeFlags::Short) }}</b></span>
+                        <span><b>{{ &due_date.with_tz(locale.timezone())|time(locale, TimeFlags::Short) }}</b></span>
                         {% when _ %}
                         {% endmatch %}
                         {% endif %}

@@ -1,4 +1,3 @@
-use askama::{Html, MarkupDisplay};
 use ical::objects::{CalAttendee, CalDate, CalPartStat, CalRole};
 use regex::{Captures, Regex};
 use std::{sync::Arc, time::Duration};
@@ -6,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use crate::locale::{DateFlags, Locale, TimeFlags};
 
 pub mod filters {
-    use askama::{Html, MarkupDisplay};
+    use askama::filters::Safe;
     use chrono::{DateTime, NaiveDate, NaiveTime};
     use chrono_tz::Tz;
     use ical::objects::CalDate;
@@ -14,35 +13,43 @@ pub mod filters {
 
     use crate::locale::{DateFlags, DateLike, Locale, TimeFlags};
 
-    pub fn deref<T: Clone>(value: &T) -> ::askama::Result<T> {
-        Ok(value.clone())
-    }
-
-    pub fn as_time(time: super::Duration) -> ::askama::Result<String> {
+    pub fn as_time(
+        time: super::Duration,
+        _values: &dyn ::askama::Values,
+    ) -> ::askama::Result<String> {
         Ok(format!("{} µs", time.as_micros()))
     }
 
-    pub fn newlines<T: Display>(text: T) -> ::askama::Result<String> {
-        let text = MarkupDisplay::new_unsafe(text, Html);
+    pub fn newlines<T: Display>(
+        text: T,
+        _values: &dyn ::askama::Values,
+    ) -> ::askama::Result<Safe<String>> {
         let text = format!("{text}");
-        Ok(text.replace('\n', "<br>"))
+        Ok(Safe(text.replace('\n', "<br>")))
     }
 
     pub fn t<T: AsRef<str>>(
         text: T,
+        _values: &dyn ::askama::Values,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> ::askama::Result<String> {
         Ok(locale.translate(text.as_ref()).to_string())
     }
 
-    pub fn naive_date(date: &Option<NaiveDate>) -> ::askama::Result<String> {
+    pub fn naive_date(
+        date: &Option<NaiveDate>,
+        _values: &dyn ::askama::Values,
+    ) -> ::askama::Result<String> {
         Ok(match date {
             Some(d) => format!("{}", d.format("%Y-%m-%d")),
             None => String::new(),
         })
     }
 
-    pub fn naive_time(date: &Option<NaiveTime>) -> ::askama::Result<String> {
+    pub fn naive_time(
+        date: &Option<NaiveTime>,
+        _values: &dyn ::askama::Values,
+    ) -> ::askama::Result<String> {
         Ok(match date {
             Some(d) => format!("{}", d.format("%H:%M")),
             None => String::new(),
@@ -51,6 +58,7 @@ pub mod filters {
 
     pub fn time(
         date: &DateTime<Tz>,
+        _values: &dyn ::askama::Values,
         locale: &Arc<dyn Locale + Send + Sync>,
         flags: TimeFlags,
     ) -> ::askama::Result<String> {
@@ -59,6 +67,7 @@ pub mod filters {
 
     pub fn weekdate(
         date: &dyn DateLike,
+        _values: &dyn ::askama::Values,
         locale: &Arc<dyn Locale + Send + Sync>,
         flags: DateFlags,
     ) -> ::askama::Result<String> {
@@ -68,6 +77,7 @@ pub mod filters {
     #[allow(dead_code)]
     pub fn caldate(
         date: &CalDate,
+        _values: &dyn ::askama::Values,
         locale: &Arc<dyn Locale + Send + Sync>,
         flags: DateFlags,
         end: bool,
@@ -85,6 +95,7 @@ pub mod filters {
 
     pub fn date(
         date: &dyn DateLike,
+        _values: &dyn ::askama::Values,
         locale: &Arc<dyn Locale + Send + Sync>,
         flags: DateFlags,
     ) -> ::askama::Result<String> {
@@ -93,6 +104,7 @@ pub mod filters {
 
     pub fn datetime(
         date: &dyn DateLike,
+        _values: &dyn ::askama::Values,
         locale: &Arc<dyn Locale + Send + Sync>,
         flags: DateFlags,
     ) -> ::askama::Result<String> {
@@ -113,8 +125,7 @@ pub fn text_to_html(text: Option<&String>) -> Option<String> {
             let desc = re.replace_all(text, "\0$0\0");
 
             // now replace HTML entities etc.
-            let text = MarkupDisplay::new_unsafe(desc, Html);
-            let text = format!("{text}");
+            let text = format!("{desc}");
             let text = text.replace('\n', "<br>");
 
             // finally replace URLs with proper links

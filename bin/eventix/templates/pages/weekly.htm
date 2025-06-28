@@ -41,7 +41,7 @@
                style="float: left" class="ev_add_icon">
                 <i class="bi bi-plus-square"></i>
             </a>
-            <b>{{ day.date|weekdate(locale, DateFlags::NoToday | DateFlags::Short) }}</b>
+            <b>{{ day.date|weekdate(locale, DateFlags::NoToday bitor DateFlags::Short) }}</b>
         </td>
         {% endfor %}
     </tr>
@@ -184,15 +184,15 @@
                         {% if occ.occurrence_starts_on(day.date.clone()) &&
                               !occ.occurrence_ends_on(day.date.clone()) %}
                         <i class="bi bi-arrow-bar-right"></i>
-                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
                         {% else if !occ.occurrence_starts_on(day.date.clone()) &&
                                    occ.occurrence_ends_on(day.date.clone()) %}
                         <i class="bi bi-arrow-bar-left"></i>
-                        {{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
                         {% else %}
-                        {{ occ.occurrence_start().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
                         -
-                        {{ occ.occurrence_end().unwrap()|as_ref|time(locale, TimeFlags::Short) }}
+                        {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
                         {% endif %}
                     </div>
                 </div>

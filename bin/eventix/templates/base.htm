@@ -104,7 +104,7 @@
                                      href="javascript:reloadDB('last-update', 'sync-spinner', 'out-of-sync', true)">
                     <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
                     <span id="last-update">
-                        {{ page.last_reload(locale)|as_ref|time(locale, TimeFlags::None) }}
+                        {{ &page.last_reload(locale)|time(locale, TimeFlags::None) }}
                     </span>
                     <i id="out-of-sync" style="color: transparent" class="bi bi-exclamation-circle-fill"></i>
                 </a>
