@@ -26,7 +26,7 @@ struct MyTray {
 impl MyTray {
     fn load_page(&self, uri: &str) {
         if let Err(e) = self.sender.try_send(TrayMessage::LoadPage(uri.into())) {
-            eprintln!("Failed to send message: {:?}", e);
+            eprintln!("Failed to send message: {e:?}");
         }
     }
 }
@@ -110,7 +110,7 @@ impl ksni::Tray for MyTray {
 
     fn activate(&mut self, _x: i32, _y: i32) {
         if let Err(e) = self.sender.try_send(TrayMessage::ToggleWindow) {
-            eprintln!("Failed to send message: {:?}", e);
+            eprintln!("Failed to send message: {e:?}");
         }
     }
 }
@@ -210,7 +210,7 @@ fn main() {
                             if !window.is_visible() {
                                 window.show_all();
                             }
-                            webview.load_uri(&format!("{}{}", base_url, uri));
+                            webview.load_uri(&format!("{base_url}{uri}"));
                         }
                         TrayMessage::ToggleWindow => {
                             if window.is_visible() {
