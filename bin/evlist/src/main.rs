@@ -15,7 +15,7 @@ fn main() -> Result<(), anyhow::Error> {
             dir.clone().into(),
             "".to_string(),
         )
-        .context(format!("Unable to parse calendar {:?}", dir))?,
+        .context(format!("Unable to parse calendar {dir:?}"))?,
     );
 
     println!("TODOs:");
@@ -34,7 +34,7 @@ fn main() -> Result<(), anyhow::Error> {
         .collect::<Vec<_>>();
     occurrences.sort_by_key(|a| a.occurrence_start());
 
-    println!("Events between {} and {}:", start, end);
+    println!("Events between {start} and {end}:");
     for occ in occurrences {
         println!(
             "  {:?} ({:?} for {})",
@@ -57,9 +57,9 @@ fn main() -> Result<(), anyhow::Error> {
     );
 
     if store != store2 {
-        println!("{:#?}", store);
+        println!("{store:#?}");
         println!("-----");
-        println!("{:#?}", store2);
+        println!("{store2:#?}");
     }
 
     Ok(())
