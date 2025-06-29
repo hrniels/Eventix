@@ -40,7 +40,7 @@ fn main() -> Result<(), anyhow::Error> {
             "  {:?} ({:?} for {})",
             occ.summary(),
             occ.occurrence_start(),
-            if let Some(dur) = occ.duration() {
+            if let Some(dur) = occ.time_duration() {
                 format!("{} min", dur.num_minutes())
             } else {
                 "??".to_string()

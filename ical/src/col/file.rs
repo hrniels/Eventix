@@ -326,7 +326,7 @@ impl CalFile {
             for (rid, rid_alarms) in alarm_overwrites {
                 // construct a new occurrence
                 let rid_tz = rid.as_start_with_tz(&start.timezone());
-                let fend = first.duration().map(|d| rid_tz + d);
+                let fend = first.time_duration().map(|d| rid_tz + d);
                 let mut rid_occ =
                     Occurrence::new(self.dir.clone(), first, Some(rid_tz), fend, false);
                 if let Some(overwrite) =

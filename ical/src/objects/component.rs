@@ -7,8 +7,8 @@ use std::io::BufRead;
 use tracing::warn;
 
 use crate::objects::{
-    CalAlarm, CalAttendee, CalDate, CalEvent, CalOrganizer, CalRRule, CalTodo, EventLike,
-    UpdatableEventLike,
+    CalAlarm, CalAttendee, CalDate, CalDuration, CalEvent, CalOrganizer, CalRRule, CalTodo,
+    EventLike, UpdatableEventLike,
 };
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
@@ -33,6 +33,7 @@ pub struct EventLikeComponent {
     created: Option<CalDate>,
     last_mod: Option<CalDate>,
     start: Option<CalDate>,
+    duration: Option<CalDuration>,
     summary: Option<String>,
     desc: Option<String>,
     location: Option<String>,
@@ -57,6 +58,7 @@ impl EventLikeComponent {
             created: None,
             last_mod: None,
             start: None,
+            duration: None,
             summary: None,
             desc: None,
             location: None,
@@ -110,6 +112,9 @@ impl EventLikeComponent {
             }
             "DTSTART" => {
                 self.start = Some(prop.try_into()?);
+            }
+            "DURATION" => {
+                self.duration = Some(prop.take_value().parse()?);
             }
             "SUMMARY" => {
                 self.summary = Some(prop.take_value());
@@ -279,6 +284,10 @@ impl EventLike for EventLikeComponent {
 
     fn end_or_due(&self) -> Option<&CalDate> {
         None
+    }
+
+    fn duration(&self) -> Option<&CalDuration> {
+        self.duration.as_ref()
     }
 
     fn summary(&self) -> Option<&String> {
@@ -521,7 +530,7 @@ impl CalComponent {
             };
 
             let dtstart = dtstart.as_datetime(&start.timezone());
-            let dates = rrule.dates_between(dtstart, self.duration(), start, end);
+            let dates = rrule.dates_between(dtstart, self.time_duration(), start, end);
             let exdates = self.exdates_as_datetime(&start.timezone());
             return CompDateIterator::new_recur(dates, exdates);
         }
@@ -614,6 +623,10 @@ impl EventLike for CalComponent {
             Self::Event(ev) => ev.end(),
             Self::Todo(td) => td.due(),
         }
+    }
+
+    fn duration(&self) -> Option<&CalDuration> {
+        get_with_ev_or_todo!(self, duration)
     }
 
     fn summary(&self) -> Option<&String> {

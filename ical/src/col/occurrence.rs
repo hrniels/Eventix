@@ -4,8 +4,8 @@ use chrono::{DateTime, Duration, NaiveDate};
 use chrono_tz::Tz;
 
 use crate::objects::{
-    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalEventStatus, CalOrganizer,
-    CalRRule, CalTodoStatus, CompDateType, EventLike,
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalDuration, CalEventStatus,
+    CalOrganizer, CalRRule, CalTodoStatus, CompDateType, EventLike,
 };
 use crate::parser::{Property, PropertyProducer};
 use crate::util;
@@ -205,7 +205,7 @@ impl<'c> Occurrence<'c> {
     pub fn occurrence_end(&self) -> Option<DateTime<Tz>> {
         match self.end {
             Some(end) => Some(end),
-            None => self.duration().map(|d| self.start.unwrap() + d),
+            None => self.time_duration().map(|d| self.start.unwrap() + d),
         }
     }
 
@@ -317,6 +317,10 @@ impl EventLike for Occurrence<'_> {
         occ_or_base_opt!(self, end_or_due)
     }
 
+    fn duration(&self) -> Option<&CalDuration> {
+        occ_or_base_opt!(self, duration)
+    }
+
     fn summary(&self) -> Option<&String> {
         occ_or_base_opt!(self, summary)
     }
@@ -361,7 +365,11 @@ impl EventLike for Occurrence<'_> {
         occ_or_base_opt!(self, priority)
     }
 
-    fn duration(&self) -> Option<Duration> {
+    fn time_duration(&self) -> Option<Duration> {
+        if let Some(duration) = self.duration() {
+            return Some(**duration);
+        }
+
         let (start, end): (CalDate, Option<CalDate>) = match self.overwrite {
             Some(overwrite) => match (
                 self.base.start(),
@@ -372,7 +380,7 @@ impl EventLike for Occurrence<'_> {
                 // if both are overwritten, use them for the duration
                 (_, _, Some(ostart), Some(oend)) => (ostart.clone(), Some(oend.clone())),
                 // if just one or none is overwritten, it's the duration of the base component
-                (Some(_), Some(_), _, _) => return self.base.duration(),
+                (Some(_), Some(_), _, _) => return self.base.time_duration(),
                 // otherwise, we simply don't know the duration
                 _ => return None,
             },

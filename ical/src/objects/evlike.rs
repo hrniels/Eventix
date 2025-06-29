@@ -2,7 +2,7 @@ use chrono::Duration;
 use chrono_tz::Tz;
 
 use crate::{
-    objects::{CalAlarm, CalAttendee, CalDate, CalOrganizer, CalPartStat, CalRRule},
+    objects::{CalAlarm, CalAttendee, CalDate, CalDuration, CalOrganizer, CalPartStat, CalRRule},
     parser::PropertyProducer,
 };
 
@@ -68,11 +68,20 @@ pub trait EventLike: PropertyProducer {
             || matches!(self.end_or_due(), Some(CalDate::Date(..)))
     }
 
+    /// Returns the duration of this calendar object (DURATION).
+    ///
+    /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.5>.
+    fn duration(&self) -> Option<&CalDuration>;
+
     /// Calculates the duration of this calendar object.
     ///
-    /// The calculation is based on [`Self::start`] and [`Self::end_or_due`] and yields `None` if
-    /// either is `None`.
-    fn duration(&self) -> Option<Duration> {
+    /// The calculation is based on either [`Self::duration`], if present, or [`Self::start`] and
+    /// [`Self::end_or_due`]. In the latter case, it yields `None` if either is `None`.
+    fn time_duration(&self) -> Option<Duration> {
+        if let Some(dur) = self.duration() {
+            return Some(**dur);
+        }
+
         let start = self.start()?;
 
         // ensure that we start day-aligned if either start or end is all-day
