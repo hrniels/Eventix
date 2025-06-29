@@ -31,6 +31,8 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::ajax::help;
+
 async fn error_handler() -> impl IntoResponse {
     HTMLError::from(anyhow::Error::msg("no such route"))
 }
@@ -79,6 +81,7 @@ async fn main() {
         .merge(attendees::router(state.clone()))
         .merge(reload::router(state.clone()))
         .merge(editalarm::router(state.clone()))
+        .merge(help::router(state.clone()))
         .fallback(error_handler)
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,

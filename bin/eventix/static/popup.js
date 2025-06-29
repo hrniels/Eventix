@@ -28,6 +28,12 @@ class LargeState extends State {
     }
 }
 
+class HelpState extends State {
+    constructor() {
+        super("help");
+    }
+}
+
 class Event {
     constructor(name) {
         this.name = name;
@@ -71,6 +77,7 @@ class DeselectEvent extends Event {
                 await _deselect(state.ids);
                 return new InitState();
 
+            case "help":
             case "large":
                 if(state.popup_pos != null) {
                     await _shrinkPopup(state.popup_pos);
@@ -112,6 +119,9 @@ class EditEvent extends Event {
                 await _animateOpenPopup();
                 return new LargeState(state.ids, popup_pos);
 
+            case "help":
+                console.assert(false, "This should not happen");
+
             default:
                 return state;
         }
@@ -125,6 +135,7 @@ class CancelEvent extends Event {
 
     async trigger(state) {
         switch(state.name) {
+            case "help":
             case "large":
                 let new_state;
                 if(state.popup_pos != null) {
@@ -137,6 +148,29 @@ class CancelEvent extends Event {
                 }
                 _animateBlur(0);
                 return new_state;
+
+            default:
+                return state;
+        }
+    }
+}
+
+class HelpEvent extends Event {
+    constructor() {
+        super("help");
+    }
+
+    async trigger(state) {
+        switch(state.name) {
+            case "init":
+                await _openHelpPopup();
+                return new HelpState();
+
+            case "small":
+            case "large":
+                await _loadHelp();
+                await _animateOpenPopup();
+                return new HelpState();
 
             default:
                 return state;
@@ -240,6 +274,23 @@ async function _openLargePopup(el) {
     });
 }
 
+async function _openHelpPopup(el) {
+    await new Promise(async function(resolve) {
+        let button = $('#link-help');
+        $('#popup').animate({
+            left: button.offset().left + 'px',
+            top: button.offset().top + 'px',
+            width: button.width() + 'px',
+        }, 10);
+
+        await _loadHelp();
+        setTimeout(async () => {
+            await _animateOpenPopup();
+            resolve();
+        }, 10);
+    });
+}
+
 async function _shrinkPopup(pos) {
     await new Promise(function(resolve) {
         $('#popup').animate({
@@ -306,6 +357,14 @@ async function _loadOccurrence(uid, rid, edit) {
     let url = '/details?uid=' + uid + '&edit=' + (edit ? 'true' : 'false');
     if(rid)
         url += '&rid=' + rid;
+    await _loadPage(url);
+}
+
+async function _loadHelp() {
+    await _loadPage('/help');
+}
+
+async function _loadPage(url) {
     await new Promise(function(resolve) {
         getRequest(
             url,

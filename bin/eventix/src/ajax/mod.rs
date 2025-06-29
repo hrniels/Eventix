@@ -3,6 +3,7 @@ pub mod complete;
 pub mod delete;
 pub mod details;
 pub mod editalarm;
+pub mod help;
 pub mod occlist;
 pub mod reload;
 pub mod setpartstat;

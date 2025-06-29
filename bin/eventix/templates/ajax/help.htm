@@ -1,0 +1,201 @@
+<div>
+    <style>
+    h1.title {
+        font-size: 1.4rem;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+
+    .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        display: grid;
+    }
+
+    .container_2cols {
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+
+    .shortcut-row {
+        display: flex;
+        align-items: center;
+        padding: 0.3rem 0;
+    }
+
+    .shortcut-keys {
+        min-width: 180px;
+        display: flex;
+        justify-content: flex-end;
+        padding-right: 1rem;
+    }
+
+    .key {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 28px;
+        text-align: center;
+        background: #eeeeec;
+        border: 1px solid #d3d7cf;
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        box-shadow: inset 0 -1px 0 #babdb6;
+    }
+
+    .code {
+        font-family: monospace;
+    }
+    </style>
+    <h1 class="title">{{ "Help"|t(locale) }}</h1>
+
+    <div class="container container_2cols">
+        <div>
+            <div class="ev_box ev_padbottom">
+                <h1 class="ev_header">{{ "General"|t(locale) }}</h1>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">W</span>
+                    </div>
+                    <div>{{ "Open weekly view"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">M</span>
+                    </div>
+                    <div>{{ "Open monthly view"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">L</span>
+                    </div>
+                    <div>{{ "Open list view"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">E</span>
+                    </div>
+                    <div>{{ "Open event creation"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">T</span>
+                    </div>
+                    <div>{{ "Open task creation"|t(locale) }}</div>
+                </div>
+            </div>
+
+            <div class="ev_box ev_padbottom">
+                <h1 class="ev_header">{{ "Weekly View"|t(locale) }}</h1>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key"><i class="bi bi-caret-left-fill"></i></span>
+                    </div>
+                    <div>{{ "Go to previous week"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key"><i class="bi bi-caret-right-fill"></i></span>
+                    </div>
+                    <div>{{ "Go to next week"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">.</span>
+                    </div>
+                    <div>{{ "Go to current week"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">J</span>
+                    </div>
+                    <div>{{ "Go to jump-to-date field"|t(locale) }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="ev_box ev_padbottom">
+                <h1 class="ev_header">{{ "Monthly View"|t(locale) }}</h1>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key"><i class="bi bi-caret-left-fill"></i></span>
+                    </div>
+                    <div>{{ "Go to previous month"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key"><i class="bi bi-caret-right-fill"></i></span>
+                    </div>
+                    <div>{{ "Go to next month"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">.</span>
+                    </div>
+                    <div>{{ "Go to current month"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">J</span>
+                    </div>
+                    <div>{{ "Go to jump-to-date field"|t(locale) }}</div>
+                </div>
+            </div>
+
+            <div class="ev_box ev_padbottom">
+                <h1 class="ev_header">{{ "List View"|t(locale) }}</h1>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key"><i class="bi bi-caret-left-fill"></i></span>
+                    </div>
+                    <div>{{ "Go to previous page"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key"><i class="bi bi-caret-right-fill"></i></span>
+                    </div>
+                    <div>{{ "Go to next page"|t(locale) }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="ev_box ev_padbottom">
+            <h1 class="ev_header">{{ "Jump-To-Date Syntax"|t(locale) }}</h1>
+            <div class="shortcut-row">
+                <div class="shortcut-keys">
+                    <span class="code">y&lt;year&gt;</span>
+                </div>
+                <div>{{ "Jump to the start of <year>"|t(locale) }}</div>
+            </div>
+            <div class="shortcut-row">
+                <div class="shortcut-keys">
+                    <span class="code">[&lt;year&gt;]w&lt;week&gt;</span>
+                </div>
+                <div>{{ "Jump to <week> of <year>, if given, or the current year"|t(locale) }}</div>
+            </div>
+            <div class="shortcut-row">
+                <div class="shortcut-keys">
+                    <span class="code">m&lt;month&gt;</span>
+                </div>
+                <div>{{ "Jump to the start of <month> in the current year"|t(locale) }}</div>
+            </div>
+            <div class="shortcut-row">
+                <div class="shortcut-keys">
+                    <span class="code">&lt;year&gt;-&lt;month&gt;</span>
+                </div>
+                <div>{{ "Jump to the start of <month> in <year> (e.g., 2025-8)"|t(locale) }}</div>
+            </div>
+            <div class="shortcut-row">
+                <div class="shortcut-keys">
+                    <span class="code">&lt;year&gt;-&lt;month&gt;-&lt;day&gt;</span>
+                </div>
+                <div>{{ "Jump to <month> and <day> of <year> (e.g., 2019-02-14)"|t(locale) }}</div>
+            </div>
+        </div>
+    </div>
+</div>
