@@ -10,11 +10,27 @@ use crate::state::State;
 pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<NaiveDate> {
     let now = Utc::now().with_timezone(timezone).naive_local().date();
     match date {
-        Some(s) if s.starts_with('w') => {
-            let week = s[1..]
+        Some(s) if s.starts_with('y') => {
+            let year = s[1..]
                 .parse()
-                .context(format!("Invalid week: {}", &s[1..]))?;
-            let date = NaiveDate::from_ymd_opt(now.year(), 1, 1).unwrap();
+                .context(format!("Parse year failed: {}", &s[1..]))?;
+            NaiveDate::from_ymd_opt(year, 1, 1).context(format!("Invalid year {}", &s[1..]))
+        }
+        Some(s) if s.contains('w') => {
+            let (s, year) = if s.starts_with('w') {
+                (&s[1..], now.year())
+            } else {
+                let mut parts = s.split('w');
+                let year_str = parts.next().unwrap();
+                let year = year_str
+                    .parse()
+                    .context(format!("Parse year failed: {}", year_str))?;
+                (parts.next().unwrap(), year)
+            };
+
+            let week = s.parse().context(format!("Parse week failed: {}", s))?;
+            let date =
+                NaiveDate::from_ymd_opt(year, 1, 1).context(format!("Invalid year {}", year))?;
             Ok(if date.iso_week().week() != 1 {
                 date + Duration::weeks(week)
             } else {
@@ -32,8 +48,7 @@ pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<N
             if let Ok(res) = NaiveDate::from_str(&s) {
                 return Ok(res);
             }
-            Ok(NaiveDate::from_str(&format!("{s}-01"))
-                .context(format!("Invalid month: {s}"))?)
+            Ok(NaiveDate::from_str(&format!("{s}-01")).context(format!("Invalid month: {s}"))?)
         }
         _ => Ok(now),
     }
