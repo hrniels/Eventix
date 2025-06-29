@@ -6,6 +6,7 @@ use serde::ser::{Serialize, Serializer};
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 
+use crate::objects::CalDuration;
 use crate::{
     objects::{CalComponent, CalDate, EventLike},
     parser::{LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer},
@@ -77,7 +78,7 @@ pub enum CalTrigger {
     /// Fires at a time relative to the start/end of the event.
     Relative {
         related: CalRelated,
-        duration: Duration,
+        duration: CalDuration,
     },
     /// Fires at an absolute time.
     Absolute(CalDate),
@@ -87,7 +88,7 @@ impl Default for CalTrigger {
     fn default() -> Self {
         Self::Relative {
             related: CalRelated::Start,
-            duration: Duration::zero(),
+            duration: Duration::zero().into(),
         }
     }
 }
@@ -99,172 +100,12 @@ impl CalTrigger {
         let value = match self {
             Self::Relative { related, duration } => {
                 params.push(Parameter::new("RELATED", format!("{related}")));
-                duration_tostr(*duration)
+                duration.to_string()
             }
             Self::Absolute(date) => date.to_string(),
         };
         Property::new("TRIGGER", params, value)
     }
-}
-
-fn duration_tostr(mut duration: Duration) -> String {
-    let mut s = String::new();
-    if duration < Duration::zero() {
-        s.push('-');
-        duration = -duration;
-    }
-    s.push('P');
-    if duration >= Duration::days(1) {
-        s.push_str(&format!("{}D", duration.num_days()));
-        duration -= Duration::days(duration.num_days());
-    }
-    if duration != Duration::zero() {
-        s.push('T');
-    }
-    if duration >= Duration::hours(1) {
-        s.push_str(&format!("{}H", duration.num_hours()));
-        duration -= Duration::hours(duration.num_hours());
-    }
-    if duration >= Duration::minutes(1) {
-        s.push_str(&format!("{}M", duration.num_minutes()));
-        duration -= Duration::minutes(duration.num_minutes());
-    }
-    if duration >= Duration::seconds(1) {
-        s.push_str(&format!("{}S", duration.num_seconds()));
-        duration -= Duration::seconds(duration.num_seconds());
-    }
-    s
-}
-
-fn display_duration(mut duration: Duration) -> String {
-    let add = |s: &mut String, add: String| {
-        if !s.is_empty() {
-            s.push_str(", ");
-        }
-        s.push_str(&add);
-    };
-
-    let mut s = String::new();
-    if duration >= Duration::weeks(1) {
-        add(&mut s, format!("{} weeks", duration.num_weeks()));
-        duration -= Duration::weeks(duration.num_weeks());
-    }
-    if duration >= Duration::days(1) {
-        add(&mut s, format!("{} days", duration.num_days()));
-        duration -= Duration::days(duration.num_days());
-    }
-    if duration >= Duration::hours(1) {
-        add(&mut s, format!("{} hours", duration.num_hours()));
-        duration -= Duration::hours(duration.num_hours());
-    }
-    if duration >= Duration::minutes(1) {
-        add(&mut s, format!("{} minutes", duration.num_minutes()));
-        duration -= Duration::minutes(duration.num_minutes());
-    }
-    if duration >= Duration::seconds(1) {
-        add(&mut s, format!("{} seconds", duration.num_seconds()));
-        duration -= Duration::seconds(duration.num_seconds());
-    }
-    s
-}
-
-fn parse_num<'a>(org: &'_ str, d: &'a str) -> Result<(&'a str, i64, char), ParseError> {
-    let Some(digits) = d.chars().position(|c| !c.is_ascii_digit()) else {
-        return Err(ParseError::InvalidDuration(org.to_string()));
-    };
-
-    let num = d[0..digits]
-        .parse::<u64>()
-        .map_err(ParseError::InvalidNumber)?;
-    Ok((&d[digits + 1..], num as i64, d.chars().nth(digits).unwrap()))
-}
-
-fn parse_duration(d: &str) -> Result<Duration, ParseError> {
-    let org = d;
-
-    // negative or positive duration? the default is positive
-    let (d, neg) = if d.starts_with('-') || d.starts_with('+') {
-        (&d[1..], d.starts_with('-'))
-    } else {
-        (d, false)
-    };
-    if !d.starts_with('P') {
-        return Err(ParseError::InvalidDuration(org.to_string()));
-    }
-
-    let finish = |d: &str, org: &str, mut duration: Duration| {
-        if !d.is_empty() {
-            return Err(ParseError::InvalidDuration(org.to_string()));
-        }
-        if neg {
-            duration = -duration;
-        }
-        Ok(duration)
-    };
-
-    let mut duration = Duration::zero();
-
-    let d = &d[1..];
-    // note that this is_empty check is not required according to the RFC, but apparently some
-    // implementations think that a duration of 'P' is legal. so we support it as well.
-    let d = if !d.is_empty() && !d.starts_with('T') {
-        let (d, num, t) = parse_num(org, d)?;
-        match t {
-            'D' => duration += Duration::days(num),
-            'W' => {
-                duration += Duration::weeks(num);
-                return finish(d, org, duration);
-            }
-            _ => return Err(ParseError::InvalidDuration(org.to_string())),
-        }
-        d
-    } else {
-        d
-    };
-
-    let d = if !d.is_empty() && d.starts_with('T') {
-        let d = &d[1..];
-
-        let (d, num, t) = parse_num(org, d)?;
-        match t {
-            'H' => duration += Duration::hours(num),
-            'M' => duration += Duration::minutes(num),
-            'S' => {
-                duration += Duration::seconds(num);
-                return finish(d, org, duration);
-            }
-            _ => return Err(ParseError::InvalidDuration(org.to_string())),
-        }
-
-        if !d.is_empty() {
-            let (d, num, t) = parse_num(org, d)?;
-            match t {
-                'M' => duration += Duration::minutes(num),
-                'S' => {
-                    duration += Duration::seconds(num);
-                    return finish(d, org, duration);
-                }
-                _ => return Err(ParseError::InvalidDuration(org.to_string())),
-            }
-
-            if !d.is_empty() {
-                let (d, num, t) = parse_num(org, d)?;
-                match t {
-                    'S' => duration += Duration::seconds(num),
-                    _ => return Err(ParseError::InvalidDuration(org.to_string())),
-                }
-                d
-            } else {
-                d
-            }
-        } else {
-            d
-        }
-    } else {
-        d
-    };
-
-    finish(d, org, duration)
 }
 
 impl TryFrom<Property> for CalTrigger {
@@ -282,7 +123,7 @@ impl TryFrom<Property> for CalTrigger {
             };
             Ok(Self::Relative {
                 related,
-                duration: parse_duration(prop.value())?,
+                duration: prop.value().parse()?,
             })
         } else {
             Ok(Self::Absolute(prop.try_into()?))
@@ -305,7 +146,7 @@ pub struct CalAlarm {
     action: CalAction,
     trigger: CalTrigger,
     description: Option<String>,
-    duration: Option<Duration>,
+    duration: Option<CalDuration>,
     repeat: Option<u8>,
     other: Vec<Property>,
 }
@@ -333,7 +174,7 @@ impl CalAlarm {
     /// Returns the duration.
     ///
     /// The duration specifies the delay between repeating alarms.
-    pub fn duration(&self) -> Option<Duration> {
+    pub fn duration(&self) -> Option<CalDuration> {
         self.duration
     }
 
@@ -350,8 +191,8 @@ impl CalAlarm {
     ) -> Option<DateTime<Tz>> {
         match &self.trigger {
             CalTrigger::Relative { related, duration } => match related {
-                CalRelated::Start => start.map(|s| s + *duration),
-                CalRelated::End => end.map(|e| e + *duration),
+                CalRelated::Start => start.map(|s| s + **duration),
+                CalRelated::End => end.map(|e| e + **duration),
             },
             CalTrigger::Absolute(date) => start.map(|s| date.as_start_with_tz(&s.timezone())),
         }
@@ -376,15 +217,15 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.alarm.trigger {
             CalTrigger::Relative { related, duration } => {
-                let (prefix, duration) = if *duration < Duration::zero() {
-                    ("before", -*duration)
+                let (prefix, duration) = if **duration < Duration::zero() {
+                    ("before", CalDuration::from(-**duration))
                 } else {
-                    ("after", *duration)
+                    ("after", CalDuration::from(**duration))
                 };
                 write!(
                     f,
                     "{} {} {}",
-                    display_duration(duration),
+                    duration.human(),
                     prefix,
                     match related {
                         CalRelated::Start => "start",
@@ -445,7 +286,7 @@ impl PropertyProducer for CalAlarm {
             props.push(Property::new("DESCRIPTION", vec![], desc.to_string()));
         }
         if let Some(duration) = &self.duration {
-            props.push(Property::new("DURATION", vec![], duration_tostr(*duration)));
+            props.push(Property::new("DURATION", vec![], duration.to_string()));
         }
         if let Some(repeat) = &self.repeat {
             props.push(Property::new("REPEAT", vec![], format!("{repeat}")));
@@ -488,7 +329,7 @@ impl PropertyConsumer for CalAlarm {
                     comp.description = Some(prop.take_value());
                 }
                 "DURATION" => {
-                    comp.duration = Some(parse_duration(prop.value())?);
+                    comp.duration = Some(prop.value().parse()?);
                 }
                 "REPEAT" => {
                     comp.repeat = Some(prop.value().parse()?);
@@ -557,7 +398,7 @@ impl AlarmOverlay for DefaultAlarmOverlay {
 mod tests {
     use std::io::BufWriter;
 
-    use chrono::{TimeZone, Utc};
+    use chrono::{Duration, TimeZone, Utc};
 
     use crate::{objects::CalDateTime, parser::LineWriter};
 
@@ -565,37 +406,37 @@ mod tests {
 
     #[test]
     fn duration() {
-        let dur = parse_duration("P15DT5H0M20S").unwrap();
+        let dur = CalDuration::from_str("P15DT5H0M20S").unwrap();
         assert_eq!(dur.num_seconds(), 15 * 86400 + 5 * 3600 + 20);
 
-        let dur = parse_duration("P1DT2H15M").unwrap();
+        let dur = CalDuration::from_str("P1DT2H15M").unwrap();
         assert_eq!(dur.num_seconds(), 1 * 86400 + 2 * 3600 + 15 * 60);
 
-        let dur = parse_duration("P1DT2H").unwrap();
+        let dur = CalDuration::from_str("P1DT2H").unwrap();
         assert_eq!(dur.num_seconds(), 1 * 86400 + 2 * 3600);
 
-        let dur = parse_duration("+P2W").unwrap();
+        let dur = CalDuration::from_str("+P2W").unwrap();
         assert_eq!(dur.num_seconds(), 14 * 86400);
 
-        let dur = parse_duration("-PT2H4M10S").unwrap();
+        let dur = CalDuration::from_str("-PT2H4M10S").unwrap();
         assert_eq!(dur.num_seconds(), -(2 * 3600 + 4 * 60 + 10));
 
-        let dur = parse_duration("P10D").unwrap();
+        let dur = CalDuration::from_str("P10D").unwrap();
         assert_eq!(dur.num_seconds(), 10 * 86400);
 
-        let dur = parse_duration("-P10DT4H").unwrap();
+        let dur = CalDuration::from_str("-P10DT4H").unwrap();
         assert_eq!(dur.num_seconds(), -(10 * 86400 + 4 * 3600));
     }
 
     #[test]
     fn duration_errors() {
-        let dur = parse_duration("");
+        let dur = CalDuration::from_str("");
         assert!(matches!(dur, Err(ParseError::InvalidDuration(_))));
 
-        let dur = parse_duration("P2");
+        let dur = CalDuration::from_str("P2");
         assert!(matches!(dur, Err(ParseError::InvalidDuration(_))));
 
-        let dur = parse_duration("P2W1D");
+        let dur = CalDuration::from_str("P2W1D");
         assert!(matches!(dur, Err(ParseError::InvalidDuration(_))));
     }
 
@@ -606,7 +447,7 @@ mod tests {
         match trigger {
             CalTrigger::Relative { related, duration } => {
                 assert_eq!(related, CalRelated::Start);
-                assert_eq!(duration, -Duration::minutes(15));
+                assert_eq!(duration, (-Duration::minutes(15)).into());
             }
             _ => panic!("expected CalTrigger::Relative"),
         }
@@ -616,7 +457,7 @@ mod tests {
         match trigger {
             CalTrigger::Relative { related, duration } => {
                 assert_eq!(related, CalRelated::End);
-                assert_eq!(duration, Duration::minutes(5));
+                assert_eq!(duration, Duration::minutes(5).into());
             }
             _ => panic!("expected CalTrigger::Relative"),
         }
@@ -643,7 +484,7 @@ END:VALARM";
             )))
         );
         assert_eq!(alarm.repeat, Some(4));
-        assert_eq!(alarm.duration, Some(Duration::minutes(15)));
+        assert_eq!(alarm.duration, Some(Duration::minutes(15).into()));
         assert_eq!(alarm.action, CalAction::Display);
         assert_eq!(
             alarm.description,

@@ -14,6 +14,7 @@ mod attendee;
 mod calendar;
 mod component;
 mod date;
+mod duration;
 mod event;
 mod evlike;
 mod organizer;
@@ -29,6 +30,7 @@ pub use component::{
     PRIORITY_LOW, PRIORITY_MEDIUM,
 };
 pub use date::{CalDate, CalDateTime, CalDateType};
+pub use duration::CalDuration;
 pub use event::CalEvent;
 pub use evlike::{EventLike, UpdatableEventLike};
 pub use organizer::CalOrganizer;

@@ -312,7 +312,7 @@ mod tests {
             CalAction::Display,
             CalTrigger::Relative {
                 related: CalRelated::Start,
-                duration: TimeDelta::minutes(5),
+                duration: TimeDelta::minutes(5).into(),
             },
         );
         let mut alarms = PersonalCalendarAlarms::new_empty("".into());

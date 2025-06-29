@@ -268,16 +268,18 @@ impl CalFile {
                         duration,
                     } => {
                         alarms.extend(
-                            self.occurrences_between(start - *duration, end - *duration, |_| true)
-                                .filter_map(|occ| {
-                                    let aocc = AlarmOccurrence::new(occ, alarm.clone());
-                                    match (aocc.occurrence().is_excluded(), aocc.alarm_date()) {
-                                        (false, Some(adate)) if adate >= start && adate < end => {
-                                            Some(aocc)
-                                        }
-                                        _ => None,
+                            self.occurrences_between(start - **duration, end - **duration, |_| {
+                                true
+                            })
+                            .filter_map(|occ| {
+                                let aocc = AlarmOccurrence::new(occ, alarm.clone());
+                                match (aocc.occurrence().is_excluded(), aocc.alarm_date()) {
+                                    (false, Some(adate)) if adate >= start && adate < end => {
+                                        Some(aocc)
                                     }
-                                }),
+                                    _ => None,
+                                }
+                            }),
                         );
                     }
                     CalTrigger::Absolute(date) => {
@@ -912,7 +914,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::Start,
-                        duration: -Duration::days(2),
+                        duration: (-Duration::days(2)).into(),
                     },
                 ))
                 .done(),
@@ -934,7 +936,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::End,
-                        duration: Duration::days(1),
+                        duration: Duration::days(1).into(),
                     },
                 ))
                 .done(),
@@ -971,7 +973,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::Start,
-                        duration: Duration::minutes(-10),
+                        duration: Duration::minutes(-10).into(),
                     },
                 ))
                 .done(),
@@ -983,7 +985,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::End,
-                        duration: -Duration::days(1),
+                        duration: (-Duration::days(1)).into(),
                     },
                 ))
                 .done(),
@@ -1066,7 +1068,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::Start,
-                        duration: Duration::minutes(-10),
+                        duration: Duration::minutes(-10).into(),
                     },
                 ))
                 .done(),
@@ -1081,7 +1083,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::Start,
-                        duration: Duration::hours(1),
+                        duration: Duration::hours(1).into(),
                     },
                 ))
                 .done(),
@@ -1096,7 +1098,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::End,
-                        duration: Duration::days(1),
+                        duration: Duration::days(1).into(),
                     },
                 ))
                 .done(),
@@ -1134,7 +1136,7 @@ mod tests {
                     CalAction::Display,
                     CalTrigger::Relative {
                         related: CalRelated::Start,
-                        duration: TimeDelta::hours(1),
+                        duration: TimeDelta::hours(1).into(),
                     },
                 )])
             }
@@ -1158,7 +1160,7 @@ mod tests {
                                 CalAction::Display,
                                 CalTrigger::Relative {
                                     related: CalRelated::Start,
-                                    duration: -TimeDelta::days(1),
+                                    duration: (-TimeDelta::days(1)).into(),
                                 },
                             )],
                         );

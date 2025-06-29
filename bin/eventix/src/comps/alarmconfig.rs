@@ -213,9 +213,9 @@ impl AlarmConfig {
                         _ => CalRelated::End,
                     },
                     duration: match self.durunit {
-                        DurUnit::Days => Duration::days(duration),
-                        DurUnit::Hours => Duration::hours(duration),
-                        DurUnit::Minutes => Duration::minutes(duration),
+                        DurUnit::Days => Duration::days(duration).into(),
+                        DurUnit::Hours => Duration::hours(duration).into(),
+                        DurUnit::Minutes => Duration::minutes(duration).into(),
                     },
                 },
                 Trigger::Absolute => CalTrigger::Absolute(
