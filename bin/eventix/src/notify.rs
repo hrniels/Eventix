@@ -21,7 +21,6 @@ struct Notification {
     pub icon: String,
     pub summary: String,
     pub body: String,
-    pub timeout: i32,
 }
 
 impl Notification {
@@ -49,7 +48,6 @@ impl Notification {
                 .cloned()
                 .unwrap_or(String::from("?")),
             body,
-            timeout: 24 * 3600 * 1000,
         }
     }
 
@@ -57,7 +55,7 @@ impl Notification {
         let mut args = vec![];
         args.push(format!("--app-name={}", self.appname));
         args.push(format!("--icon={}", self.icon));
-        args.push(format!("--expire-time={}", self.timeout));
+        args.push("--urgency=critical".to_string());
         args.push(self.summary.clone());
         args.push(self.body.clone());
         Command::new("/usr/bin/notify-send")
