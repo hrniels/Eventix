@@ -213,6 +213,9 @@ impl PropertyProducer for EventLikeComponent {
         if let Some(ref dtstart) = self.start {
             props.push(dtstart.to_prop("DTSTART"));
         }
+        if let Some(ref dur) = self.duration {
+            props.push(Property::new("DURATION", vec![], dur.to_string()));
+        }
         if let Some(ref summary) = self.summary {
             props.push(Property::new("SUMMARY", vec![], summary.clone()));
         }
