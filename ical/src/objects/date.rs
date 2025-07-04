@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt, str::FromStr};
 
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
-use chrono_tz::Tz;
+use chrono_tz::{Europe, Tz};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::parser::{Parameter, ParseError, Property};
@@ -282,8 +282,9 @@ impl CalDateTime {
         let date_tz = if let Ok(date_tz) = tzid.parse::<Tz>() {
             date_tz
         } else {
-            // we fall back to UTC for all weird values that we see
-            Tz::UTC
+            // we fall back to Europe/Berlin for all weird values that we see
+            // TODO this is temporary
+            Europe::Berlin
         };
         date_tz.from_local_datetime(&dt).unwrap()
     }
