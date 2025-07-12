@@ -105,7 +105,7 @@ impl Display for HumanDuration {
             add(&mut s, format!("{} seconds", duration.num_seconds()));
             duration -= Duration::seconds(duration.num_seconds());
         }
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

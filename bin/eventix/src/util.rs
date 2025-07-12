@@ -17,20 +17,20 @@ pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<N
             NaiveDate::from_ymd_opt(year, 1, 1).context(format!("Invalid year {}", &s[1..]))
         }
         Some(s) if s.contains('w') => {
-            let (s, year) = if s.starts_with('w') {
-                (&s[1..], now.year())
+            let (s, year) = if let Some(week) = s.strip_prefix('w') {
+                (week, now.year())
             } else {
                 let mut parts = s.split('w');
                 let year_str = parts.next().unwrap();
                 let year = year_str
                     .parse()
-                    .context(format!("Parse year failed: {}", year_str))?;
+                    .context(format!("Parse year failed: {year_str}"))?;
                 (parts.next().unwrap(), year)
             };
 
-            let week = s.parse().context(format!("Parse week failed: {}", s))?;
+            let week = s.parse().context(format!("Parse week failed: {s}"))?;
             let date =
-                NaiveDate::from_ymd_opt(year, 1, 1).context(format!("Invalid year {}", year))?;
+                NaiveDate::from_ymd_opt(year, 1, 1).context(format!("Invalid year {year}"))?;
             Ok(if date.iso_week().week() != 1 {
                 date + Duration::weeks(week)
             } else {
