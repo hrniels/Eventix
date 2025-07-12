@@ -347,6 +347,13 @@ a.ev_button_critical:hover {
     color: #ffffff !important;
 }
 
+.ev_button_uid {
+    background-image: linear-gradient(#3F5E88, #3F5E88) !important;
+    padding-left: .4em !important;
+    padding-right: .4em !important;
+    color: #ffffff;
+}
+
 /* ------------ RESPONSE MENU ------------ */
 
 .ev_response_dropdown {

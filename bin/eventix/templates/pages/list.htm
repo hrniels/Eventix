@@ -237,6 +237,10 @@
             </a>
             {% endif %}
             {% endif %}
+            <a class="ev_button ev_button_uid"
+               href="javascript:copyToClipboard('{{ c.comp.uid() }}')">
+                <i class="ev_tag bi bi-tag" title="{{ c.comp.uid() }}"></i>
+            </a>
         </td>
     </tr>
     <tr id="row_{{ id }}" style="display: none">
