@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
@@ -56,6 +57,23 @@ impl Calendar {
     /// Deletes the components with given uid from the calendar.
     pub fn delete_components<N: AsRef<str>>(&mut self, uid: N) {
         self.comps.retain(|c| c.uid() != uid.as_ref());
+    }
+
+    /// Splits this calendar into multiple calendars, one per UID
+    pub fn split_by_uid(self) -> Vec<Self> {
+        let mut uids = HashMap::<String, Vec<CalComponent>>::new();
+        for c in self.comps {
+            let entry = uids.entry(c.uid().clone()).or_default();
+            entry.push(c);
+        }
+        uids.into_values()
+            .map(|comps| Self {
+                comps,
+                timezones: self.timezones.clone(),
+                props: self.props.clone(),
+                unknown: self.unknown.clone(),
+            })
+            .collect()
     }
 
     /// Writes this calendar in iCalendar format into the given writer.
@@ -176,7 +194,7 @@ impl FromStr for Calendar {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CalTimeZone {
     tzid: String,
     props: Vec<Property>,
@@ -226,7 +244,7 @@ impl PropertyConsumer for CalTimeZone {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct Unknown {
     name: String,
     props: Vec<Property>,

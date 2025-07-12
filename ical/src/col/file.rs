@@ -195,9 +195,36 @@ impl CalFile {
     }
 
     /// Creates a new [`CalFile`] for given directory by reading it from given path.
+    ///
+    /// Note that this method assumes that all calendar components in this file have the same UID.
     pub fn new_from_file(dir: Arc<String>, path: PathBuf) -> Result<Self, ColError> {
         let cal = Self::read_calendar(&path)?;
         Ok(Self::new(dir, path, cal))
+    }
+
+    /// Creates multiple [`CalFile`]s from given external file.
+    ///
+    /// for given directory, one for each UID.
+    ///
+    /// In contrast to [`Self::new_from_file`], the given `path` is assumed to be outside of the
+    /// directory and may contain components with different UIDs in the same file. For that reason,
+    /// potentially multiple [`CalFile`] instances are created and one file per UID is created in
+    /// the given directory path `dir_path`.
+    pub fn new_from_external_file(
+        dir: Arc<String>,
+        dir_path: PathBuf,
+        path: PathBuf,
+    ) -> Result<Vec<CalFile>, ColError> {
+        let cal = Self::read_calendar(&path)?;
+        let cals = cal.split_by_uid();
+        Ok(cals
+            .into_iter()
+            .map(|cal| {
+                let mut new_path = dir_path.clone();
+                new_path.push(format!("{}.ics", cal.components().first().unwrap().uid()));
+                Self::new(dir.clone(), new_path, cal)
+            })
+            .collect())
     }
 
     /// Returns the id of the directory this file belongs to.
