@@ -1,4 +1,5 @@
 mod ajax;
+mod cmds;
 mod comps;
 mod extract;
 mod html;
@@ -21,8 +22,9 @@ use axum::{
 };
 use clap::Parser;
 use pages::{edit, error::HTMLError, list, monthly, new, weekly};
-use std::{env, sync::Arc};
-use tokio::sync::Mutex;
+use serde::{Deserialize, Serialize};
+use std::{env, io::ErrorKind, panic, sync::Arc};
+use tokio::{net::TcpListener, sync::Mutex};
 use tower_http::{
     LatencyUnit,
     services::{ServeDir, ServeFile},
@@ -48,19 +50,30 @@ struct Args {
     /// the port number for the webserver
     #[arg(long, default_value_t = 8081)]
     port: u16,
+
+    #[command(subcommand)]
+    command: Option<Command>,
 }
 
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            env::var("RUST_LOG").unwrap_or_default(),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+#[derive(Parser, Debug, Serialize, Deserialize)]
+enum Command {
+    /// Imports an ICS file into a specified calendar
+    #[command(name = "import")]
+    Import(ImportOptions),
+}
 
-    let args = Args::parse();
+#[derive(Clone, Parser, Debug, Serialize, Deserialize)]
+struct ImportOptions {
+    /// The path to the ICS file
+    #[arg()]
+    file: String,
 
+    /// The name of the calendar
+    #[arg()]
+    calendar: String,
+}
+
+async fn run_server(args: Args, listener: TcpListener) {
     let state = Arc::new(Mutex::new(state::State::new().expect("loading state")));
 
     let app = Router::new()
@@ -106,10 +119,46 @@ async fn main() {
                 .on_response(DefaultOnResponse::new().latency_unit(LatencyUnit::Micros)),
         );
 
+    // start helper tasks
     tokio::spawn(notify::watch_alarms(state.clone(), locale::default()));
+    let nstate = state.clone();
+    tokio::spawn(async move { cmds::handle_commands(nstate).await.expect("cmds failed") });
 
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.address, args.port))
-        .await
-        .unwrap();
+    // handle command, if any
+    if let Some(cmd) = args.command {
+        cmds::handle_command(state, cmd)
+            .await
+            .expect("command failed");
+    }
+
     axum::serve(listener, app).await.unwrap();
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            env::var("RUST_LOG").unwrap_or_default(),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let args = Args::parse();
+
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.address, args.port)).await;
+    match listener {
+        Ok(listener) => run_server(args, listener).await,
+
+        Err(e) => {
+            // if the server exists, it will listen to our commands, so request the command
+            if e.kind() == ErrorKind::AddrInUse {
+                if let Some(cmd) = args.command {
+                    cmds::send_command(cmd).await.expect("command failed");
+                    return;
+                }
+            }
+
+            panic!("bind to {}:{} failed: {:?}", args.address, args.port, e);
+        }
+    }
 }
