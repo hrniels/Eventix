@@ -37,6 +37,15 @@
             <i class="bi bi-pencil"></i>
             <span>{{ "Edit"|t(locale) }}</span>
         </a>
+        {% if occ.organizer().is_some() %}
+        {% if occ.status_class() != Some(String::from("Cancelled")) %}
+        <a style="float: right; width: 70px" class="ev_button ev_button_critical"
+           href="javascript:cancelAndRefresh('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+            <i class="bi bi-dash-circle"></i>
+            <span>{{ "Cancel"|t(locale) }}</span>
+        </a>
+        {% endif %}
+        {% else %}
         <a style="float: right; width: 70px"
            class="ev_button ev_button_normal"
            href="javascript:toggleExclAndRefresh('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
@@ -48,6 +57,7 @@
             <span>{{ "Include"|t(locale) }}</span>
             {% endif %}
         </a>
+        {% endif %}
         {% else %}
         {% if personal_alarms %}
         <a id="alarm-button-{{ occ.uid() }}-{{ occ.rid_html() }}"

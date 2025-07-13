@@ -157,11 +157,21 @@
                 </a>
                 {% endif %}
                 {% if occ.is_recurrent() %}
+                {% if owner && occ.organizer().is_some() %}
+                {% if occ.status_class() != Some(String::from("Cancelled")) %}
+                <a style="float: left" class="ev_button ev_button_critical"
+                                       href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">
+                    <i class="bi bi-dash-circle"></i>
+                    <span>{{ "Cancel occ."|t(locale) }}</span>
+                </a>
+                {% endif %}
+                {% else %}
                 <a style="float: left" class="ev_button ev_button_normal"
                                        href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">
                     <i class="bi bi-dash-circle"></i>
-                    <span>{{ "Exclude"|t(locale) }}</span>
+                    <span>{{ "Exclude occ."|t(locale) }}</span>
                 </a>
+                {% endif %}
                 {% endif %}
                 {% else %}
                 {% if let Some(series_partstat) = series_partstat %}

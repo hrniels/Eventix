@@ -43,6 +43,11 @@ impl CalEvent {
         self.status
     }
 
+    /// Sets the status to given value.
+    pub fn set_status(&mut self, status: Option<CalEventStatus>) {
+        self.status = status;
+    }
+
     /// Returns the end of the event.
     pub fn end(&self) -> Option<&CalDate> {
         self.end.as_ref()

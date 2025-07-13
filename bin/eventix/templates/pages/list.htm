@@ -69,7 +69,7 @@
         Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
     }
 
-    function refreshRow(uid, rid, data) {
+    function refreshRow(uid, rid) {
         loadOccs(uid, rid, 'Forward', 1, function(data) {
             let row = document.getElementById('occrow_' + rid);
             let prev = row.previousSibling;
@@ -80,13 +80,19 @@
 
     function toggleExclAndRefresh(uid, rid) {
         toggleExcl(uid, rid, function(data) {
-            refreshRow(uid, rid, data);
+            refreshRow(uid, rid);
+        });
+    }
+
+    function cancelAndRefresh(uid, rid) {
+        cancelOcc(uid, rid, function(data) {
+            refreshRow(uid, rid);
         });
     }
 
     function completeTodoAndRefresh(uid, rid) {
         completeTodo(uid, rid, function(data) {
-            refreshRow(uid, rid, data);
+            refreshRow(uid, rid);
         });
     }
 

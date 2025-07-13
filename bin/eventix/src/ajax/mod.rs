@@ -1,4 +1,5 @@
 pub mod attendees;
+pub mod cancel;
 pub mod complete;
 pub mod delete;
 pub mod details;

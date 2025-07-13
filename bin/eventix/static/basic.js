@@ -121,6 +121,10 @@ function moveEvent(uid, rid, date, hour, onsuccess) {
     });
 }
 
+function cancelOcc(uid, rid, onsuccess) {
+    postRequest('/cancel?uid=' + uid + '&rid=' + rid, onsuccess);
+}
+
 function changePartStat(uid, rid, stat, onsuccess) {
     let url = '/setpartstat?stat=' + stat + '&uid=' + uid;
     if(rid)
