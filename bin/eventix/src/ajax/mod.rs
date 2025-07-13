@@ -4,6 +4,7 @@ pub mod delete;
 pub mod details;
 pub mod editalarm;
 pub mod help;
+pub mod moveevent;
 pub mod occlist;
 pub mod reload;
 pub mod setpartstat;

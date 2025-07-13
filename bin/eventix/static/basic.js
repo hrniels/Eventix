@@ -112,6 +112,15 @@ function toggleExcl(uid, rid, onsuccess) {
     });
 }
 
+function moveEvent(uid, rid, date, hour, onsuccess) {
+    let url = '/moveevent?uid=' + uid+ '&date=' + date + '&hour=' + hour;
+    if(rid)
+        url += '&rid=' + rid;
+    postRequest(url, function(data) {
+        onsuccess(data);
+    });
+}
+
 function changePartStat(uid, rid, stat, onsuccess) {
     let url = '/setpartstat?stat=' + stat + '&uid=' + uid;
     if(rid)

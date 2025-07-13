@@ -550,10 +550,15 @@ span.ev_msg_error span.ev_msg_info {
     flex-direction: column;
     justify-content: flex-start;
 }
-.ev_week_cell div {
+.ev_week_event div {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.ev_drag_event {
+    border: 1px solid #000 !important;
+    font-weight: bold;
 }
 
 /* ------------ ADD ICON -------------- */
@@ -570,6 +575,10 @@ span.ev_msg_error span.ev_msg_info {
 }
 .ev_hour_cell:hover > .ev_add_icon {
     visibility: visible;
+}
+.ev_hour_cell_hover {
+    outline: 1px solid #000000;
+    outline-offset: -1px;
 }
 
 .ev_right_icon {

@@ -33,7 +33,7 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::ajax::help;
+use crate::ajax::{help, moveevent};
 
 async fn error_handler() -> impl IntoResponse {
     HTMLError::from(anyhow::Error::msg("no such route"))
@@ -89,6 +89,7 @@ async fn run_server(args: Args, listener: TcpListener) {
         .merge(delete::router(state.clone()))
         .merge(toggleexcl::router(state.clone()))
         .merge(togglecal::router(state.clone()))
+        .merge(moveevent::router(state.clone()))
         .merge(setpartstat::router(state.clone()))
         .merge(occlist::router(state.clone()))
         .merge(attendees::router(state.clone()))

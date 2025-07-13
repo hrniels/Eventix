@@ -60,6 +60,7 @@
                      style="text-align: center" id="{{ occ.id() }}"
                      class="
                         ev_event_occurrence
+                        ev_week_event
                         ev_cal_src ev_cal_src_{{ occ.directory() }}
                         ev_id_{{ occ.uid_html() }}
                         {% match occ.status_class() %}
@@ -129,6 +130,8 @@
                             {% if hour > 0 %}
                             border-top: .05em dashed #000000;
                             {% endif %}"
+                     data-date="{{ day.date.format("%Y-%m-%d") }}"
+                     data-hour="{{ hour }}"
                      class="ev_hour_cell">
                     <a href="javascript:gotoWithPrev(
                              '/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}')"
@@ -139,17 +142,21 @@
                 {% endfor %}
                 {% for occ in day.occurrences %}
                 <div style="position: absolute;
-                            top: {{ occ.minute_off(day.date.clone()) }}px;
-                            height: {{ occ.minute_duration(day.date.clone()) }}px;
-                            width: {{ 100 / occ.overlap_count() }}%;
-                            left: {{ occ.overlap_off() * (100 / occ.overlap_count()) }}%;
+                            top: {{ occ.minute_off(day.date.clone()) + 1 }}px;
+                            height: calc({{ occ.minute_duration(day.date.clone()) }}px - 4px);
+                            width: calc({{ 100 / occ.overlap_count() }}% - 4px);
+                            left: calc({{ occ.overlap_off() * (100 / occ.overlap_count()) }}% + 1px);
                             padding: 0px"
                      onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
                                                         'ev_id_{{ occ.uid_html() }}',
                                                         '{{ occ.rid_html() }}',
                                                         '{{ occ.id() }}'))"
-                     id="{{ occ.id() }}" class="
+                     id="{{ occ.id() }}"
+                     data-uid="{{ occ.uid() }}"
+                     data-rid="{{ occ.rid_html() }}"
+                     class="
                     ev_event_occurrence
+                    ev_week_event
                     ev_cal_src ev_cal_src_{{ occ.directory() }}
                     ev_id_{{ occ.uid_html() }}
                     {% match occ.status_class() %}
@@ -196,6 +203,11 @@
                         {% endif %}
                     </div>
                 </div>
+                <script type="text/javascript">
+                    $(function() {
+                        $("#{{ occ.id() }}").draggable(dragSettings({{ occ.is_owner() }}));
+                    });
+                </script>
                 {% endfor %}
                 {% if day.date == today %}
                 <div id="now_line"
@@ -222,6 +234,108 @@
         let area = document.getElementById("week_scroll_area");
         area.scrollTop = 60 * 8;
     });
+
+    function getElementAtWith(x, y, prop) {
+        const elems = document.elementsFromPoint(x, y);
+        for(el in elems) {
+            if(prop(elems[el]))
+                return elems[el];
+        }
+        return null;
+    }
+
+    let lastHover = null;
+    let dragging = null;
+
+    function dragSettings(owner) {
+        let settings = {
+            opacity: 0.7,
+            zIndex: 100,
+            addClasses: false,
+            helper: 'clone',
+            start: function(e, ui) {
+                if(!owner)
+                    return dragForeign($(this));
+                return dragOwned(e);
+            },
+        };
+
+        if(owner) {
+            settings.revert = function(dropped) {
+                const pos = $(this).data('lastMousePos');
+                const el = getElementAtWith(pos.clientX, pos.clientY, function(e) {
+                    return $(e).hasClass('ev_hour_cell');
+                });
+                return el == null;
+            };
+            settings.drag = function(e, ui) {
+                ui.helper.prevObject.data('lastMousePos', {
+                    clientX: e.clientX,
+                    clientY: e.clientY
+                });
+            };
+            settings.stop = function() {
+                const pos = $(this).data('lastMousePos');
+                const el = getElementAtWith(pos.clientX, pos.clientY, function(e) {
+                    return $(e).hasClass('ev_hour_cell');
+                });
+                if(el) {
+                    const uid = dragging[0].dataset.uid;
+                    const rid = dragging[0].dataset.rid;
+                    const $date = el.dataset.date;
+                    const hour = el.dataset.hour;
+                    moveEvent(uid, rid, $date, hour, reloadPage);
+                }
+
+                clearDrag();
+                dragging.removeClass('ev_drag_event');
+                $(document).off('mousemove', dragMouseMoveHandler);
+            };
+        }
+        return settings;
+    }
+
+    function dragForeign(el) {
+        dragging = el;
+        dragging.css("cursor", "not-allowed");
+        $("body").css("cursor", "not-allowed");
+        $(document).one("mouseup", function() {
+            dragging.css("cursor", "");
+            $("body").css("cursor", "");
+        });
+        return false;
+    }
+
+    function dragOwned(e) {
+        let el = getElementAtWith(e.clientX, e.clientY, function(el) {
+            return $(el).hasClass("ev_week_event") &&
+                !$(el).hasClass('ui-draggable-dragging');
+        });
+        if(el) {
+            dragging = $(el);
+            $(el).addClass('ev_drag_event');
+        }
+        $(document).on('mousemove', dragMouseMoveHandler);
+        return true;
+    }
+
+    function clearDrag() {
+        if(lastHover) {
+            lastHover.removeClass('ev_hour_cell_hover');
+            lastHover = null;
+        }
+    }
+
+    function dragMouseMoveHandler(e) {
+        clearDrag();
+        let el = getElementAtWith(e.clientX, e.clientY, function(el) {
+            return $(el).hasClass('ev_hour_cell');
+        });
+        if(el) {
+            $(el).addClass('ev_hour_cell_hover');
+            lastHover = $(el);
+        }
+    }
 
     $(document).keydown(function(e) {
         if(document.activeElement.nodeName == 'BODY') {
