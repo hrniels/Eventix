@@ -194,7 +194,15 @@ impl<'a> DayOccurrence<'a> {
     pub fn minute_duration(&self, date: NaiveDate) -> u64 {
         if self.inner.occurrence_starts_on(date) {
             match self.inner.time_duration() {
-                Some(d) => d.num_minutes() as u64,
+                Some(d) => {
+                    let start = self.inner.occurrence_start().unwrap();
+                    let left = if start.minute() == 0 {
+                        (24 - start.hour()) * 60
+                    } else {
+                        (23 - start.hour()) * 60 + (60 - start.minute())
+                    };
+                    (left as i64).min(d.num_minutes()) as u64
+                }
                 None => 0,
             }
         } else {
