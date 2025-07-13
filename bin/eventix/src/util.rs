@@ -5,7 +5,7 @@ use ical::objects::EventLike;
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 use tokio::sync::MutexGuard;
 
-use crate::state::State;
+use crate::state::{EmailAccount, State};
 
 pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<NaiveDate> {
     let now = Utc::now().with_timezone(timezone).naive_local().date();
@@ -57,6 +57,23 @@ pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<N
 pub fn system_time_stamp(systime: SystemTime) -> u128 {
     let duration_since_epoch = systime.duration_since(SystemTime::UNIX_EPOCH).unwrap();
     duration_since_epoch.as_nanos()
+}
+
+pub fn user_for_uid(
+    state: &MutexGuard<'_, State>,
+    uid: &String,
+) -> anyhow::Result<Option<EmailAccount>> {
+    let file = state
+        .store()
+        .file_by_id(uid)
+        .ok_or_else(|| anyhow!("Unable to find file with uid {}", uid))?;
+
+    Ok(state
+        .settings()
+        .calendar(file.directory())
+        .unwrap()
+        .email()
+        .cloned())
 }
 
 pub fn user_is_event_owner<E: EventLike>(

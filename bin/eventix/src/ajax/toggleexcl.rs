@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::pages::error::HTMLError;
 use crate::state::EventixState;
+use crate::util;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -30,20 +31,7 @@ pub async fn handler(
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let mut state = state.lock().await;
 
-    let user_mail = {
-        let file = state
-            .store()
-            .file_by_id(&form.uid)
-            .ok_or_else(|| anyhow!("Unable to find file with uid {}", form.uid))?;
-
-        state
-            .settings()
-            .calendar(file.directory())
-            .unwrap()
-            .email()
-            .map(|e| e.address())
-            .cloned()
-    };
+    let user_mail = util::user_for_uid(&state, &form.uid)?.map(|a| a.address().clone());
 
     let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 

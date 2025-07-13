@@ -8,9 +8,9 @@ use ical::objects::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::locale;
 use crate::pages::error::HTMLError;
 use crate::state::EventixState;
+use crate::{locale, util};
 
 fn deserialize_partstat<'de, D>(deserializer: D) -> Result<CalPartStat, D::Error>
 where
@@ -49,27 +49,8 @@ pub async fn handler(
     let locale = locale::default();
     let mut state = state.lock().await;
 
-    let user = {
-        let file = state
-            .store()
-            .file_by_id(&req.uid)
-            .ok_or_else(|| anyhow!("Unable to find file with uid {}", req.uid))?;
-
-        let user = state
-            .settings()
-            .calendar(file.directory())
-            .unwrap()
-            .email()
-            .cloned();
-        if user.is_none() {
-            return Err(anyhow!(
-                "Email account not specified for calendar {}",
-                file.directory()
-            )
-            .into());
-        }
-        user.unwrap()
-    };
+    let user = util::user_for_uid(&state, &req.uid)?
+        .ok_or_else(|| anyhow!("Email account not specified"))?;
 
     let rid = if let Some(rid) = &req.rid {
         Some(
