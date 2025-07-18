@@ -151,11 +151,19 @@ impl CalAttendee {
     }
 
     /// Returns the address with the "mailto:" prefix removed.
-    pub fn address(&self) -> &str {
+    ///
+    /// Note that this method keeps the capitalization as it is. See [`Self::address`] if you need
+    /// the address for comparisons.
+    pub fn org_address(&self) -> &str {
         match self.address.strip_prefix("mailto:") {
             Some(addr) => addr,
             None => &self.address,
         }
+    }
+
+    /// Returns the address with the "mailto:" prefix removed and in lower case.
+    pub fn address(&self) -> String {
+        self.org_address().to_lowercase()
     }
 
     /// Returns a pretty name for this attendee.
@@ -163,7 +171,7 @@ impl CalAttendee {
     /// If the name is known, the pretty name is returned '$name <$address>'. Otherwise, only the
     /// address is returned.
     pub fn pretty_name(&self) -> String {
-        let address = self.address();
+        let address = self.org_address();
         if let Some(name) = &self.common_name {
             format!("{name} <{address}>")
         } else {

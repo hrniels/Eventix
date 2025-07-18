@@ -49,8 +49,12 @@ impl EmailAccount {
         &self.name
     }
 
-    pub fn address(&self) -> &String {
+    pub fn org_address(&self) -> &String {
         &self.address
+    }
+
+    pub fn address(&self) -> String {
+        self.org_address().to_lowercase()
     }
 }
 
@@ -96,7 +100,7 @@ impl CalendarSettings {
 
     pub fn build_organizer(&self) -> Option<CalOrganizer> {
         self.email()
-            .map(|em| CalOrganizer::new_named(em.name().to_string(), em.address().to_string()))
+            .map(|em| CalOrganizer::new_named(em.name().to_string(), em.address()))
     }
 
     pub fn types(&self) -> &[CalCompType] {

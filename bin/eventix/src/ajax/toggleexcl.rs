@@ -31,7 +31,7 @@ pub async fn handler(
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let mut state = state.lock().await;
 
-    let user_mail = util::user_for_uid(&state, &form.uid)?.map(|a| a.address().clone());
+    let user_mail = util::user_for_uid(&state, &form.uid)?.map(|a| a.address());
 
     let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 

@@ -145,10 +145,7 @@ impl EventLikeComponent {
                 // since some implementations store multiple ATTENDEE properties for the same
                 // participant and also with different properties, we merge additional occurrences
                 // for the same address with the previous one.
-                if let Some(ex_att) = attendees
-                    .iter_mut()
-                    .find(|a| a.address().to_lowercase() == att.address().to_lowercase())
-                {
+                if let Some(ex_att) = attendees.iter_mut().find(|a| a.address() == att.address()) {
                     ex_att.merge_with(att);
                 } else {
                     attendees.push(att);

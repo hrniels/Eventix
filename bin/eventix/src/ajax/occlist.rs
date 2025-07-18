@@ -171,12 +171,28 @@ pub async fn handler(
         Direction::Forward => occs
             .iter()
             .take(req.count)
-            .map(|o| ListOccurrence::new(o, locale.clone(), alarm_type, pers_alarms, user_mail))
+            .map(|o| {
+                ListOccurrence::new(
+                    o,
+                    locale.clone(),
+                    alarm_type,
+                    pers_alarms,
+                    user_mail.as_ref(),
+                )
+            })
             .collect(),
         Direction::Backwards => occs
             .iter()
             .skip(if more { 1 } else { 0 })
-            .map(|o| ListOccurrence::new(o, locale.clone(), alarm_type, pers_alarms, user_mail))
+            .map(|o| {
+                ListOccurrence::new(
+                    o,
+                    locale.clone(),
+                    alarm_type,
+                    pers_alarms,
+                    user_mail.as_ref(),
+                )
+            })
             .collect(),
     };
 

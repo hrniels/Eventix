@@ -91,10 +91,10 @@ async fn handler(
     let has_alarms = state.personal_alarms().has_alarms(&occ, alarm_type);
     let dir = state.store().directory(occ.directory()).unwrap();
 
-    let owner = occ.is_owned_by(user_mail);
-    let series_stat = attendee_status(occ.base(), user_mail, owner);
+    let owner = occ.is_owned_by(user_mail.as_ref());
+    let series_stat = attendee_status(occ.base(), user_mail.as_ref(), owner);
     let occ_stat = if occ.is_recurrent() {
-        attendee_status(&occ, user_mail, owner)
+        attendee_status(&occ, user_mail.as_ref(), owner)
     } else {
         None
     };

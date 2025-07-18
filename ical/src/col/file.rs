@@ -515,13 +515,14 @@ impl CalFile {
         for c in self.components() {
             if let Some(attendees) = c.attendees() {
                 for a in attendees {
-                    let cur_name = contacts.get_mut(a.address());
+                    let addr = a.address();
+                    let cur_name = contacts.get_mut(&addr);
                     match cur_name {
-                        Some(cur_name) if a.address() == cur_name && a.common_name().is_some() => {
+                        Some(cur_name) if &addr == cur_name && a.common_name().is_some() => {
                             *cur_name = a.common_name().unwrap().clone();
                         }
                         None => {
-                            let name = a.common_name().cloned().unwrap_or(a.address().to_string());
+                            let name = a.common_name().cloned().unwrap_or(addr);
                             contacts.insert(a.address().to_string(), name);
                         }
                         _ => {}

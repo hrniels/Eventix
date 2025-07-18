@@ -36,7 +36,7 @@ pub async fn handler(
     let locale = locale::default();
     let mut state = state.lock().await;
 
-    let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address().clone());
+    let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address());
 
     let rid = if let Some(rid) = &req.rid {
         Some(

@@ -159,7 +159,7 @@ pub trait EventLike: PropertyProducer {
         self.attendees().map(|atts| {
             if let Some(att) = atts
                 .iter()
-                .find(|a| a.address().to_lowercase() == user_mail.as_ref().to_lowercase())
+                .find(|a| a.address() == user_mail.as_ref().to_lowercase())
             {
                 att.part_stat().unwrap_or(CalPartStat::NeedsAction)
             } else {

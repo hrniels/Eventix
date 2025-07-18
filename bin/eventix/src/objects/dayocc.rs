@@ -26,8 +26,10 @@ impl<'a> DayOccurrence<'a> {
         let cal_settings = settings.calendar(inner.directory()).unwrap();
         let alarm_type = cal_settings.alarms();
         let user_mail = cal_settings.email().map(|e| e.address());
-        let partstat = user_mail.and_then(|addr| inner.attendee_status(addr));
-        let owner = inner.is_owned_by(user_mail);
+        let partstat = user_mail
+            .as_ref()
+            .and_then(|addr| inner.attendee_status(addr));
+        let owner = inner.is_owned_by(user_mail.as_ref());
         Self::new(
             inner,
             partstat,

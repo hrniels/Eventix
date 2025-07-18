@@ -74,7 +74,7 @@ pub async fn handler(
         if let Some(att) = atts.iter_mut().find(|a| a.address() == user.address()) {
             att.set_part_stat(Some(req.stat));
         } else {
-            let mut att = CalAttendee::new(user.address().clone());
+            let mut att = CalAttendee::new(user.address());
             att.set_common_name(user.name().clone());
             att.set_part_stat(Some(req.stat));
             atts.push(att);

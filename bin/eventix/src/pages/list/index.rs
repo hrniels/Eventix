@@ -86,7 +86,7 @@ impl<'a> ListComponent<'a> {
 
         let cal_settings = settings.calendar(file.directory()).unwrap();
         let user_mail = cal_settings.email().map(|e| e.address());
-        let owner = c.is_owned_by(user_mail);
+        let owner = c.is_owned_by(user_mail.as_ref());
         let part_stat = match (user_mail, owner) {
             (Some(user_mail), false) => occ.base().attendee_status(user_mail),
             _ => None,
