@@ -61,22 +61,28 @@ pub async fn handler(
         let duration = c.time_duration().unwrap();
         let old_start = c.start().unwrap().as_start_with_tz(tz);
         let new_date = req.date.date().ok_or_else(|| anyhow!("Invalid date"))?;
-        if let Some(hour) = req.hour {
-            let new_time = NaiveTime::from_hms_opt(hour, old_start.minute(), old_start.second())
-                .ok_or_else(|| anyhow!("Invalid hour"))?;
-            let start = NaiveDateTime::new(new_date, new_time);
-            let end = NaiveDateTime::new(new_date, new_time + duration);
-            Ok((
-                CalDate::DateTime(CalDateTime::Timezone(start, tz.name().to_string())),
-                CalDate::DateTime(CalDateTime::Timezone(end, tz.name().to_string())),
-            ))
-        } else {
+
+        if c.is_all_day() {
             // add one second here as the duration for all-day events is one second less to stay on
             // the same day.
             let end = new_date + (duration + TimeDelta::seconds(1));
             Ok((
                 CalDate::Date(new_date, c.ctype().into()),
                 CalDate::Date(end, c.ctype().into()),
+            ))
+        } else {
+            let new_time = if let Some(hour) = req.hour {
+                NaiveTime::from_hms_opt(hour, old_start.minute(), old_start.second())
+                    .ok_or_else(|| anyhow!("Invalid hour"))?
+            } else {
+                old_start.time()
+            };
+
+            let start = NaiveDateTime::new(new_date, new_time);
+            let end = NaiveDateTime::new(new_date, new_time + duration);
+            Ok((
+                CalDate::DateTime(CalDateTime::Timezone(start, tz.name().to_string())),
+                CalDate::DateTime(CalDateTime::Timezone(end, tz.name().to_string())),
             ))
         }
     };

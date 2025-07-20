@@ -16,6 +16,7 @@
     <br clear="both"/>
 </h1>
 
+<script type="text/javascript" src="/static/drag.js"></script>
 <script type="text/javascript">
     function executeJump() {
         document.location.href = '?date=' + $('#jump_location').val();
@@ -45,7 +46,8 @@
             <a href="/weekly?date={{ date.format("%Y-%m-%d") }}">{{ date.format("%V") }}</a>
         </td>
     {% endif %}
-        <td width="14%" class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}">
+        <td width="14%" data-date="{{ date.format("%Y-%m-%d") }}"
+            class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}">
             <div class="
                 ev_month_day_header
                 {% if date == today %}ev_today{% endif %}
@@ -70,6 +72,8 @@
                      {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
                      style="text-align: center"
                      {% endif %}
+                     data-uid="{{ occ.uid() }}"
+                     data-rid="{{ occ.rid_html() }}"
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
                     ev_id_{{ occ.uid_html() }}
@@ -119,6 +123,13 @@
                         {{ occ.summary().unwrap() }}
                     </div>
                 </div>
+                <script type="text/javascript">
+                    $(function() {
+                        const op = new DragOperation({{ occ.is_owner() }},
+                            'ev_event_occurrence', 'ev_month_td');
+                        $("#{{ occ.id() }}").data('drag', op).draggable(op.settings());
+                    });
+                </script>
                 {% endfor %}
             </div>
         </td>
