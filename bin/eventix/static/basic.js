@@ -29,6 +29,15 @@ function copyToClipboard(text) {
     $temp.remove();
 }
 
+function getElementAtWith(x, y, prop) {
+    const elems = document.elementsFromPoint(x, y);
+    for(el in elems) {
+        if(prop(elems[el]))
+            return elems[el];
+    }
+    return null;
+}
+
 function invertSelection(prefix) {
     for(let i = 1;;i++)
     {
