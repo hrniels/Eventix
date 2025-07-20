@@ -3,7 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use chrono::{NaiveDateTime, NaiveTime, Timelike};
+use chrono::{NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, UpdatableEventLike};
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +17,7 @@ pub struct Request {
     uid: String,
     rid: Option<String>,
     date: Date,
-    hour: u32,
+    hour: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -52,31 +52,38 @@ pub async fn handler(
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    let get_timespan = |c: &CalComponent| -> anyhow::Result<(NaiveDateTime, NaiveDateTime)> {
+    let get_timespan = |c: &CalComponent| -> anyhow::Result<(CalDate, CalDate)> {
         if !c.is_owned_by(user_mail.as_ref()) {
             return Err(anyhow!("No edit permission"));
         }
 
+        let tz = locale.timezone();
         let duration = c.time_duration().unwrap();
-        let old_start = c.start().unwrap().as_start_with_tz(locale.timezone());
+        let old_start = c.start().unwrap().as_start_with_tz(tz);
         let new_date = req.date.date().ok_or_else(|| anyhow!("Invalid date"))?;
-        let new_time = NaiveTime::from_hms_opt(req.hour, old_start.minute(), old_start.second())
-            .ok_or_else(|| anyhow!("Invalid hour"))?;
-        let start = NaiveDateTime::new(new_date, new_time);
-        let end = NaiveDateTime::new(new_date, new_time + duration);
-        Ok((start, end))
+        if let Some(hour) = req.hour {
+            let new_time = NaiveTime::from_hms_opt(hour, old_start.minute(), old_start.second())
+                .ok_or_else(|| anyhow!("Invalid hour"))?;
+            let start = NaiveDateTime::new(new_date, new_time);
+            let end = NaiveDateTime::new(new_date, new_time + duration);
+            Ok((
+                CalDate::DateTime(CalDateTime::Timezone(start, tz.name().to_string())),
+                CalDate::DateTime(CalDateTime::Timezone(end, tz.name().to_string())),
+            ))
+        } else {
+            // add one second here as the duration for all-day events is one second less to stay on
+            // the same day.
+            let end = new_date + (duration + TimeDelta::seconds(1));
+            Ok((
+                CalDate::Date(new_date, c.ctype().into()),
+                CalDate::Date(end, c.ctype().into()),
+            ))
+        }
     };
 
-    let complete = |start: NaiveDateTime, end: NaiveDateTime, c: &mut CalComponent| {
-        let tz = locale.timezone().name().to_string();
-
-        c.set_start(Some(CalDate::DateTime(CalDateTime::Timezone(
-            start,
-            tz.clone(),
-        ))));
-        c.as_event_mut()
-            .unwrap()
-            .set_end(Some(CalDate::DateTime(CalDateTime::Timezone(end, tz))));
+    let complete = |start: CalDate, end: CalDate, c: &mut CalComponent| {
+        c.set_start(Some(start));
+        c.as_event_mut().unwrap().set_end(Some(end));
 
         c.set_last_modified(CalDate::now());
         c.set_stamp(CalDate::now());

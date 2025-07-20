@@ -122,9 +122,11 @@ function toggleExcl(uid, rid, onsuccess) {
 }
 
 function moveEvent(uid, rid, date, hour, onsuccess) {
-    let url = '/moveevent?uid=' + uid+ '&date=' + date + '&hour=' + hour;
+    let url = '/moveevent?uid=' + uid+ '&date=' + date;
     if(rid)
         url += '&rid=' + rid;
+    if(hour)
+        url += '&hour=' + hour;
     postRequest(url, function(data) {
         onsuccess(data);
     });
