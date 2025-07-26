@@ -1,9 +1,8 @@
 mod index;
 
 use axum::{Router, routing::get};
+use eventix_state::EventixState;
 use index::Filter;
-
-use crate::state::EventixState;
 
 use super::{Breadcrumb, Page};
 

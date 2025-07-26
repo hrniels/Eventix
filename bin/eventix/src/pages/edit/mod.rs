@@ -8,6 +8,7 @@ use axum::{
 use chrono_tz::Tz;
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalAlarm, CalCompType, EventLike};
+use eventix_state::EventixState;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::time::SystemTime;
 
@@ -16,7 +17,6 @@ use crate::comps::{
     todostatus::TodoStatus,
 };
 use crate::objects::CompAction;
-use crate::state::EventixState;
 use crate::util;
 
 use super::Page;

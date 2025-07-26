@@ -8,11 +8,11 @@ use axum::{
 use eventix_ical::objects::{
     CalComponent, CalDate, CalTodoStatus, EventLike, PRIORITY_MEDIUM, UpdatableEventLike,
 };
+use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
 use crate::locale;
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
 
 #[derive(Debug, Deserialize)]
 pub struct Request {

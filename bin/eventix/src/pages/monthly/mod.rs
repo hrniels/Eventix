@@ -1,8 +1,7 @@
 pub mod index;
 
 use axum::{Router, routing::get};
-
-use crate::state::EventixState;
+use eventix_state::EventixState;
 
 use super::Page;
 

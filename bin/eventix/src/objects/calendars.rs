@@ -1,7 +1,6 @@
 use eventix_ical::col::CalDir;
+use eventix_state::{CalendarSettings, State};
 use std::sync::Arc;
-
-use crate::state::{CalendarSettings, State};
 
 pub struct Calendar {
     pub id: Arc<String>,

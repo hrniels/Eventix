@@ -4,11 +4,11 @@ use axum::{
     response::IntoResponse,
     routing::post,
 };
+use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
 
 #[derive(Debug, Deserialize)]
 pub struct Request {

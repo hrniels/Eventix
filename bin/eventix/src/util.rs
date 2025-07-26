@@ -2,10 +2,9 @@ use anyhow::{Context, anyhow};
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
 use eventix_ical::objects::EventLike;
+use eventix_state::{EmailAccount, State};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 use tokio::sync::MutexGuard;
-
-use crate::state::{EmailAccount, State};
 
 pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<NaiveDate> {
     let now = Utc::now().with_timezone(timezone).naive_local().date();

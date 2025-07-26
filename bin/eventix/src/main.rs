@@ -19,7 +19,6 @@ use axum::{
     response::IntoResponse,
 };
 use clap::Parser;
-use eventix_state as state;
 use pages::{edit, error::HTMLError, list, monthly, new, weekly};
 use serde::{Deserialize, Serialize};
 use std::{env, io::ErrorKind, panic, sync::Arc};
@@ -73,7 +72,9 @@ struct ImportOptions {
 }
 
 async fn run_server(args: Args, listener: TcpListener) {
-    let state = Arc::new(Mutex::new(state::State::new().expect("loading state")));
+    let state = Arc::new(Mutex::new(
+        eventix_state::State::new().expect("loading state"),
+    ));
 
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new("static/icon.png"))

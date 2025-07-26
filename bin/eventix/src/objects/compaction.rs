@@ -1,5 +1,6 @@
 use eventix_ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
 use eventix_ical::objects::{CalComponent, CalDate, UpdatableEventLike};
+use eventix_state::{CalendarAlarmType, PersonalAlarms};
 use std::sync::Arc;
 use tracing::warn;
 
@@ -9,7 +10,6 @@ use crate::comps::{
 };
 use crate::locale::Locale;
 use crate::pages::Page;
-use crate::state::{CalendarAlarmType, PersonalAlarms};
 
 pub trait CompAction {
     fn summary(&self) -> &String;

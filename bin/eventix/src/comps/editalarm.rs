@@ -1,6 +1,7 @@
 use anyhow::Context;
 use askama::Template;
 use eventix_ical::objects::{CalAlarm, CalDate, EventLike};
+use eventix_state::CalendarAlarmType;
 use std::sync::Arc;
 use tokio::sync::MutexGuard;
 
@@ -8,7 +9,6 @@ use crate::comps::alarmconfig::{AlarmConfig, AlarmConfigTemplate};
 use crate::html::filters;
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
-use crate::state::CalendarAlarmType;
 
 #[derive(Template)]
 #[template(path = "comps/editalarm.htm")]
@@ -28,7 +28,7 @@ pub struct EditAlarmTemplate<'a> {
 impl<'a> EditAlarmTemplate<'a> {
     pub fn new(
         locale: Arc<dyn Locale + Send + Sync>,
-        state: &'a MutexGuard<'a, crate::state::State>,
+        state: &'a MutexGuard<'a, eventix_state::State>,
         uid: String,
         rid: Option<String>,
         edit: bool,

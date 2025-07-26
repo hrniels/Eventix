@@ -9,6 +9,7 @@ use eventix_ical::{
     objects::{CalCompType, CalDate, CalPartStat, EventLike},
     util,
 };
+use eventix_state::EventixState;
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -16,7 +17,6 @@ use crate::html::filters;
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::DayOccurrence;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
-use crate::state::EventixState;
 use crate::util::parse_human_date;
 
 struct Day<'a> {

@@ -5,11 +5,11 @@ use axum::routing::post;
 use axum::{Json, Router};
 use chrono::{NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use eventix_ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, UpdatableEventLike};
+use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
 use crate::comps::date::Date;
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
 use crate::{locale, util};
 
 #[derive(Clone, Debug, Deserialize)]

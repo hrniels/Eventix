@@ -7,6 +7,7 @@ use eventix_ical::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalPartStat, CalTodoStatus,
     EventLike,
 };
+use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -20,7 +21,6 @@ use crate::extract::MultiQuery;
 use crate::html::{self, filters};
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
-use crate::state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 
 const PER_PAGE: usize = 15;
 

@@ -5,14 +5,13 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json, Redirect};
 use axum::routing::{get, post};
 use eventix_ical::objects::CalDate;
+use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
 use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};
 use crate::extract::MultiForm;
 use crate::locale;
 use crate::pages::error::HTMLError;
-
-use crate::state::EventixState;
 
 #[derive(Debug, Deserialize)]
 pub struct GetRequest {

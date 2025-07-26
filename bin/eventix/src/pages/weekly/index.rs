@@ -6,6 +6,7 @@ use axum::{
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_state::EventixState;
 use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 
@@ -13,7 +14,6 @@ use crate::html::filters;
 use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::DayOccurrence;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
-use crate::state::EventixState;
 use crate::util::parse_human_date;
 
 struct Day<'a> {

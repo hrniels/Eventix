@@ -2,11 +2,10 @@ use chrono::{NaiveDate, TimeZone, Timelike};
 use chrono_tz::Tz;
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalAttendee, CalPartStat, EventLike};
+use eventix_state::{PersonalAlarms, Settings};
 use once_cell::sync::Lazy;
 use std::cmp::Ordering;
 use std::{ops::Deref, sync::Mutex};
-
-use crate::state::{PersonalAlarms, Settings};
 
 pub struct DayOccurrence<'a> {
     id: u64,

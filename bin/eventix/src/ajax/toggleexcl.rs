@@ -4,10 +4,10 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use eventix_ical::objects::{CalDate, EventLike, UpdatableEventLike};
+use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
 use crate::util;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

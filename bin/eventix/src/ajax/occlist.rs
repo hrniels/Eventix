@@ -18,7 +18,7 @@ use crate::html::{self, filters};
 use crate::locale::{self, Locale};
 use crate::objects::DayOccurrence;
 use crate::pages::error::HTMLError;
-use crate::state::{CalendarAlarmType, EventixState, PersonalAlarms};
+use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {

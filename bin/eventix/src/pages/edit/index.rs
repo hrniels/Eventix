@@ -8,6 +8,7 @@ use eventix_ical::{
     col::{CalDir, Occurrence},
     objects::{CalDate, CalPartStat, EventLike},
 };
+use eventix_state::{CalendarAlarmType, EventixState};
 use std::sync::Arc;
 
 use super::{CompEdit, Request};
@@ -20,7 +21,6 @@ use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::Calendars;
 use crate::pages::Breadcrumb;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
-use crate::state::{CalendarAlarmType, EventixState};
 use crate::util;
 
 #[derive(Template)]

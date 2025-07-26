@@ -1,10 +1,10 @@
 use chrono::{Duration, Local, NaiveDate};
 use eventix_ical::objects::{CalCompType, EventLike};
+use eventix_state::State;
 use std::sync::Arc;
 
 use crate::locale::Locale;
 use crate::objects::DayOccurrence;
-use crate::state::State;
 
 pub struct Day<'a> {
     pub date: Option<NaiveDate>,

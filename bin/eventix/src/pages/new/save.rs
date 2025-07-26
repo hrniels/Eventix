@@ -5,6 +5,7 @@ use eventix_ical::col::CalFile;
 use eventix_ical::objects::{
     CalCompType, CalComponent, CalEvent, CalTimeZone, CalTodo, Calendar, UpdatableEventLike,
 };
+use eventix_state::EventixState;
 use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
@@ -13,14 +14,13 @@ use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::objects::CompAction;
 use crate::pages::{Page, error::HTMLError};
-use crate::state::EventixState;
 
 use super::{CompNew, Request};
 
 async fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
-    state: &mut crate::state::State,
+    state: &mut eventix_state::State,
     form: &mut CompNew,
     req: &Request,
 ) -> anyhow::Result<bool> {

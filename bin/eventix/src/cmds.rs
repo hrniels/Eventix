@@ -1,5 +1,6 @@
 use anyhow::{Context, anyhow};
 use eventix_ical::{col::CalFile, objects::EventLike};
+use eventix_state::EventixState;
 use std::{env, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -7,7 +8,7 @@ use tokio::{
 };
 use tracing::{debug, error};
 
-use crate::{Command, ImportOptions, state::EventixState};
+use crate::{Command, ImportOptions};
 
 pub async fn handle_commands(state: EventixState) -> anyhow::Result<()> {
     let socket_path = get_socket_path();

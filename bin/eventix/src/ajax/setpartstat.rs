@@ -6,10 +6,10 @@ use axum::{Json, Router};
 use eventix_ical::objects::{
     CalAttendee, CalComponent, CalDate, CalPartStat, EventLike, UpdatableEventLike,
 };
+use eventix_state::EventixState;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
 use crate::{locale, util};
 
 fn deserialize_partstat<'de, D>(deserializer: D) -> Result<CalPartStat, D::Error>

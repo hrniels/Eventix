@@ -2,12 +2,12 @@ use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use eventix_ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
+use eventix_state::EventixState;
 use std::sync::Arc;
 
 use crate::extract::MultiForm;
 use crate::locale::{self, Locale};
 use crate::pages::{Page, error::HTMLError};
-use crate::state::EventixState;
 use crate::util;
 
 use super::{CompAction, CompEdit, Request};
@@ -15,7 +15,7 @@ use super::{CompAction, CompEdit, Request};
 fn action_update(
     page: &mut Page,
     locale: &Arc<dyn Locale + Send + Sync>,
-    state: &mut crate::state::State,
+    state: &mut eventix_state::State,
     form: &mut CompEdit,
     req: &Request,
 ) -> anyhow::Result<bool> {

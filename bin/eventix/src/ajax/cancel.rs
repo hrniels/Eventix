@@ -6,10 +6,10 @@ use axum::{Json, Router};
 use eventix_ical::objects::{
     CalComponent, CalDate, CalDateTime, CalEventStatus, EventLike, UpdatableEventLike,
 };
+use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
 use crate::{locale, util};
 
 #[derive(Clone, Debug, Deserialize)]

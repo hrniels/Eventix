@@ -2,13 +2,13 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
+use eventix_state::EventixState;
 use serde::Serialize;
 use std::sync::Arc;
 
 use crate::html::filters;
 use crate::locale::{self, Locale};
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
 
 pub fn router(state: EventixState) -> Router {
     Router::new().route("/help", get(handler)).with_state(state)

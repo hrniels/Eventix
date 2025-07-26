@@ -8,6 +8,7 @@ use axum::{
 use chrono::{Duration, NaiveDateTime, NaiveTime, Timelike, Utc};
 use chrono_tz::Tz;
 use eventix_ical::objects::CalCompType;
+use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
 use crate::comps::{
@@ -15,7 +16,6 @@ use crate::comps::{
     datetimerange::DateTimeRange, recur::RecurRequest, time::Time, todostatus::TodoStatus,
 };
 use crate::objects::CompAction;
-use crate::state::EventixState;
 
 use super::{Breadcrumb, Page};
 

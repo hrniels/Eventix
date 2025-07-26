@@ -1,5 +1,6 @@
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use eventix_ical::objects::CalDate;
+use eventix_state::{EventixState, SyncResult};
 use serde::Serialize;
 use std::collections::HashMap;
 use tracing::error;
@@ -7,8 +8,6 @@ use tracing::error;
 use crate::html;
 use crate::locale::{self, TimeFlags};
 use crate::pages::error::HTMLError;
-use crate::state::EventixState;
-use crate::state::SyncResult;
 
 #[derive(Debug, Serialize)]
 struct Response {
@@ -26,7 +25,7 @@ pub fn router(state: EventixState) -> Router {
 async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
     let locale = locale::default();
 
-    let sync_res = match crate::state::State::reload(state).await {
+    let sync_res = match eventix_state::State::reload(state).await {
         Err(e) => {
             error!("Unable to reload state: {}", e);
             SyncResult::default()
