@@ -79,7 +79,7 @@ pub async fn handler(
             };
 
             let start = NaiveDateTime::new(new_date, new_time);
-            let end = NaiveDateTime::new(new_date, new_time + duration);
+            let end = NaiveDateTime::new(new_date, new_time) + duration;
             Ok((
                 CalDate::DateTime(CalDateTime::Timezone(start, tz.name().to_string())),
                 CalDate::DateTime(CalDateTime::Timezone(end, tz.name().to_string())),
