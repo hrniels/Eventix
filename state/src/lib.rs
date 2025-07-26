@@ -1,6 +1,7 @@
 mod misc;
 mod persalarms;
 mod settings;
+mod sync;
 
 use anyhow::Context;
 use chrono::NaiveDateTime;
@@ -14,10 +15,9 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use crate::sync;
-
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
-pub use settings::{CalendarAlarmType, CalendarSettings, EmailAccount, Settings, Syncer};
+pub use settings::{CalendarAlarmType, CalendarSettings, EmailAccount, Settings};
+pub use sync::{SyncResult, Syncer};
 
 pub type EventixState = Arc<Mutex<State>>;
 

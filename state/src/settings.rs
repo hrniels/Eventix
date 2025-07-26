@@ -65,7 +65,7 @@ pub enum CalendarAlarmType {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum Syncer {
+pub enum SyncerType {
     FileSystem,
     VDirSyncer {
         cmd: Vec<String>,
@@ -82,7 +82,7 @@ pub struct CalendarSettings {
     bgcolor: String,
     types: Vec<CalCompType>,
     alarms: CalendarAlarmType,
-    syncer: Syncer,
+    syncer: SyncerType,
 }
 
 impl CalendarSettings {
@@ -119,7 +119,7 @@ impl CalendarSettings {
         &self.alarms
     }
 
-    pub fn syncer(&self) -> &Syncer {
+    pub fn syncer(&self) -> &SyncerType {
         &self.syncer
     }
 }

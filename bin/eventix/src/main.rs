@@ -7,8 +7,6 @@ mod locale;
 mod notify;
 mod objects;
 mod pages;
-mod state;
-mod sync;
 mod util;
 
 use ajax::{
@@ -21,6 +19,7 @@ use axum::{
     response::IntoResponse,
 };
 use clap::Parser;
+use eventix_state as state;
 use pages::{edit, error::HTMLError, list, monthly, new, weekly};
 use serde::{Deserialize, Serialize};
 use std::{env, io::ErrorKind, panic, sync::Arc};

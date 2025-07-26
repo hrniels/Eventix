@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::state::CalendarAlarmType;
+use crate::CalendarAlarmType;
 
 const ALARMS_DIRECTORY: &str = "data/alarms";
 

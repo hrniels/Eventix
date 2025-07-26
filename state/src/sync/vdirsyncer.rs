@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::{process::Output, sync::Arc};
 use tokio::process::Command;
 
-use crate::state::EventixState;
+use crate::EventixState;
 use crate::sync::Syncer;
 
 enum EventType<'a> {

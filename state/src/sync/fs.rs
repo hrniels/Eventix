@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::{state::EventixState, sync::Syncer};
+use crate::{EventixState, sync::Syncer};
 
 pub struct FSSyncer;
 

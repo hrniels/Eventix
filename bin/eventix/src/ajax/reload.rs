@@ -8,7 +8,7 @@ use crate::html;
 use crate::locale::{self, TimeFlags};
 use crate::pages::error::HTMLError;
 use crate::state::EventixState;
-use crate::sync::SyncResult;
+use crate::state::SyncResult;
 
 #[derive(Debug, Serialize)]
 struct Response {

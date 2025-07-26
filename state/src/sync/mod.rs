@@ -5,7 +5,8 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::state::EventixState;
+use crate::EventixState;
+use crate::settings::SyncerType;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
 
 #[async_trait]
@@ -63,10 +64,10 @@ async fn get_syncs(state: EventixState) -> Vec<CalendarSync> {
         .iter()
         .map(|(id, settings)| {
             let syncer: Box<dyn Syncer> = match settings.syncer() {
-                crate::state::Syncer::VDirSyncer { cmd, local_name } => {
+                SyncerType::VDirSyncer { cmd, local_name } => {
                     Box::new(VDirSyncer::new(cmd.clone(), local_name.clone()))
                 }
-                crate::state::Syncer::FileSystem => Box::new(FSSyncer),
+                SyncerType::FileSystem => Box::new(FSSyncer),
             };
             CalendarSync {
                 id: Arc::new(id.to_string()),
