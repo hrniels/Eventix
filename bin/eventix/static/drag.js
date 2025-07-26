@@ -27,6 +27,7 @@ class DragOperation {
             zIndex: 100,
             addClasses: false,
             helper: 'clone',
+            distance: 10,
             start: function(e, ui) {
                 ui.helper.css('width', $(this).css('width'));
                 ui.helper.css('height', $(this).css('height'));
