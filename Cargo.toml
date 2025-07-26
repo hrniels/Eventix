@@ -3,8 +3,8 @@ resolver = "2"
 members = [ "bin/app",
     "bin/eventix",
     "bin/evlist",
-    "ical",
-    "state",
+    "libs/ical",
+    "libs/state",
 ]
 
 [workspace.dependencies]
@@ -13,8 +13,8 @@ async-trait = "0.1.88"
 chrono = { version = "0.4.41", features = ["serde"] }
 chrono-tz = "0.10.4"
 clap = { version = "4.5.41", features = ["derive"] }
-eventix-ical = { path = "ical" }
-eventix-state = { path = "state" }
+eventix-ical = { path = "libs/ical" }
+eventix-state = { path = "libs/state" }
 itertools = "0.14.0"
 once_cell = "1.21.3"
 serde = { version = "1.0.219", features = ["derive"] }
