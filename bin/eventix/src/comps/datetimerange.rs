@@ -1,7 +1,7 @@
 use askama::Template;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
-use ical::objects::{CalCompType, CalDate, CalDateType};
+use eventix_ical::objects::{CalCompType, CalDate, CalDateType};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

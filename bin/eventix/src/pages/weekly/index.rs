@@ -5,7 +5,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
-use ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
 use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 

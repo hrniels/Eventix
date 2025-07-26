@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use ical::objects::CalCompType;
+use eventix_ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;

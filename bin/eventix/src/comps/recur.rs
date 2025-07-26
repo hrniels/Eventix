@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use askama::Template;
 use chrono::Weekday;
-use ical::objects::{CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
+use eventix_ical::objects::{CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
 use std::sync::Arc;

@@ -1,5 +1,5 @@
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
-use ical::objects::CalDate;
+use eventix_ical::objects::CalDate;
 use serde::Serialize;
 use std::collections::HashMap;
 use tracing::error;

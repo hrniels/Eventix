@@ -7,7 +7,7 @@ use axum::{
 };
 use chrono::{Duration, NaiveDateTime, NaiveTime, Timelike, Utc};
 use chrono_tz::Tz;
-use ical::objects::CalCompType;
+use eventix_ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
 
 use crate::comps::{

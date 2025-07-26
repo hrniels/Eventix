@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, TimeZone, Timelike};
 use chrono_tz::Tz;
-use ical::col::Occurrence;
-use ical::objects::{CalAttendee, CalPartStat, EventLike};
+use eventix_ical::col::Occurrence;
+use eventix_ical::objects::{CalAttendee, CalPartStat, EventLike};
 use once_cell::sync::Lazy;
 use std::cmp::Ordering;
 use std::{ops::Deref, sync::Mutex};

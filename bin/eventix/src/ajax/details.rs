@@ -3,8 +3,8 @@ use askama::Template;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
-use ical::col::CalDir;
-use ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_ical::col::CalDir;
+use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

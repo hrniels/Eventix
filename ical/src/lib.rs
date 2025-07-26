@@ -21,8 +21,8 @@
 //! Parsing a calendar from file and inspecting its properties:
 //!
 //! ```
-//! use ical::objects::{CalCompType, Calendar, EventLike};
-//! use ical::parser::Property;
+//! use eventix_ical::objects::{CalCompType, Calendar, EventLike};
+//! use eventix_ical::parser::Property;
 //!
 //! let cal_str = "BEGIN:VCALENDAR
 //! VERSION:2.0
@@ -50,8 +50,8 @@
 //!
 //! ```
 //! use chrono::{NaiveDate, TimeZone};
-//! use ical::col::CalFile;
-//! use ical::objects::{Calendar, EventLike};
+//! use eventix_ical::col::CalFile;
+//! use eventix_ical::objects::{Calendar, EventLike};
 //! use std::sync::Arc;
 //!
 //! let cal_str = "BEGIN:VCALENDAR

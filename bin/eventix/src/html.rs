@@ -1,4 +1,4 @@
-use ical::objects::{CalAttendee, CalDate, CalPartStat, CalRole};
+use eventix_ical::objects::{CalAttendee, CalDate, CalPartStat, CalRole};
 use regex::{Captures, Regex};
 use std::{sync::Arc, time::Duration};
 
@@ -8,7 +8,7 @@ pub mod filters {
     use askama::filters::Safe;
     use chrono::{DateTime, NaiveDate, NaiveTime};
     use chrono_tz::Tz;
-    use ical::objects::CalDate;
+    use eventix_ical::objects::CalDate;
     use std::{fmt::Display, sync::Arc};
 
     use crate::locale::{DateFlags, DateLike, Locale, TimeFlags};

@@ -1,5 +1,5 @@
-use ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
-use ical::objects::{CalComponent, CalDate, UpdatableEventLike};
+use eventix_ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
+use eventix_ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 use std::sync::Arc;
 use tracing::warn;
 

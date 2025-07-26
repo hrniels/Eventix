@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use ical::col::CalFile;
-use ical::objects::{
+use eventix_ical::col::CalFile;
+use eventix_ical::objects::{
     CalCompType, CalComponent, CalEvent, CalTimeZone, CalTodo, Calendar, UpdatableEventLike,
 };
 use std::sync::Arc;

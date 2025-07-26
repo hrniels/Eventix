@@ -1,4 +1,4 @@
-use ical::col::CalDir;
+use eventix_ical::col::CalDir;
 use std::sync::Arc;
 
 use crate::state::{CalendarSettings, State};

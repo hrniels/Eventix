@@ -1,7 +1,7 @@
 use anyhow::Context;
 use askama::Template;
 use axum::{
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use std::fmt;

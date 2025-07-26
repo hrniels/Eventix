@@ -1,6 +1,6 @@
 use anyhow::Context;
 use askama::Template;
-use ical::objects::{CalAlarm, CalDate, EventLike};
+use eventix_ical::objects::{CalAlarm, CalDate, EventLike};
 use std::sync::Arc;
 use tokio::sync::MutexGuard;
 

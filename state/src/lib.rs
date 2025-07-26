@@ -5,7 +5,7 @@ mod sync;
 
 use anyhow::Context;
 use chrono::NaiveDateTime;
-use ical::col::{CalDir, CalStore};
+use eventix_ical::col::{CalDir, CalStore};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs::File,

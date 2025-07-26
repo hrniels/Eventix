@@ -1,5 +1,5 @@
 use chrono::{Duration, Local, NaiveDate};
-use ical::objects::{CalCompType, EventLike};
+use eventix_ical::objects::{CalCompType, EventLike};
 use std::sync::Arc;
 
 use crate::locale::Locale;

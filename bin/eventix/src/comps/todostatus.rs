@@ -1,5 +1,5 @@
 use askama::Template;
-use ical::{
+use eventix_ical::{
     col::Occurrence,
     objects::{CalCompType, CalTodoStatus},
 };

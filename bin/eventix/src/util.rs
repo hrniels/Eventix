@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use chrono::{Datelike, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
-use ical::objects::EventLike;
+use eventix_ical::objects::EventLike;
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 use tokio::sync::MutexGuard;
 

@@ -4,7 +4,7 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
 use std::sync::Arc;
 
 use crate::comps::{

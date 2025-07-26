@@ -1,4 +1,4 @@
-use ical::objects::{CalAlarm, CalCompType, CalOrganizer};
+use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 

@@ -4,7 +4,7 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use ical::{
+use eventix_ical::{
     col::{CalDir, Occurrence},
     objects::{CalDate, CalPartStat, EventLike},
 };

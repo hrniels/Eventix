@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use askama::Template;
 use chrono::Duration;
 use chrono_tz::Tz;
-use ical::objects::{CalAction, CalAlarm, CalDateType, CalRelated, CalTrigger};
+use eventix_ical::objects::{CalAction, CalAlarm, CalDateType, CalRelated, CalTrigger};
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
 use std::sync::Arc;

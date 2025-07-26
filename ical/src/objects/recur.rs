@@ -856,18 +856,12 @@ impl fmt::Display for RRuleHuman<'_> {
         }
 
         if let Some(by_minute) = &self.0.by_minute {
-            let mins = by_minute
-                .iter()
-                .map(|d| format!("{d}"))
-                .collect::<Vec<_>>();
+            let mins = by_minute.iter().map(|d| format!("{d}")).collect::<Vec<_>>();
             write!(f, ", at minute(s) {}", util::human_list(&mins))?;
         }
 
         if let Some(by_second) = &self.0.by_second {
-            let secs = by_second
-                .iter()
-                .map(|d| format!("{d}"))
-                .collect::<Vec<_>>();
+            let secs = by_second.iter().map(|d| format!("{d}")).collect::<Vec<_>>();
             write!(f, ", at second(s) {}", util::human_list(&secs))?;
         }
 

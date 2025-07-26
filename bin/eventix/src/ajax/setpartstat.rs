@@ -3,7 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use ical::objects::{
+use eventix_ical::objects::{
     CalAttendee, CalComponent, CalDate, CalPartStat, EventLike, UpdatableEventLike,
 };
 use serde::{Deserialize, Deserializer, Serialize};

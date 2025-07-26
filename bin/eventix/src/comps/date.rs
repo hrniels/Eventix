@@ -1,6 +1,6 @@
 use askama::Template;
 use chrono::NaiveDate;
-use ical::objects::{CalDate, CalDateType};
+use eventix_ical::objects::{CalDate, CalDateType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::html::filters;

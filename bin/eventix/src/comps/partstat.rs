@@ -1,5 +1,5 @@
 use askama::Template;
-use ical::objects::CalPartStat;
+use eventix_ical::objects::CalPartStat;
 use std::sync::Arc;
 
 use crate::html::filters;

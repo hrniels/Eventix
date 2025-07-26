@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
-use ical::objects::{
+use eventix_ical::objects::{
     CalComponent, CalDate, CalTodoStatus, EventLike, PRIORITY_MEDIUM, UpdatableEventLike,
 };
 use serde::{Deserialize, Serialize};

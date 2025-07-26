@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use chrono::{Duration, Local};
-use ical::col::{CalDir, CalStore};
-use ical::objects::{CalCompType, EventLike};
+use eventix_ical::col::{CalDir, CalStore};
+use eventix_ical::objects::{CalCompType, EventLike};
 
 fn main() -> Result<(), anyhow::Error> {
     let dir = std::env::args().nth(1).unwrap();

@@ -130,8 +130,8 @@ pub fn year_day(date: DateTime<Tz>) -> u32 {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(ical::util::year_days(2025), 365);
-/// assert_eq!(ical::util::year_days(2020), 366);
+/// assert_eq!(eventix_ical::util::year_days(2025), 365);
+/// assert_eq!(eventix_ical::util::year_days(2020), 366);
 /// ```
 pub fn year_days(year: i32) -> u32 {
     NaiveDate::from_ymd_opt(year + 1, 1, 1)
@@ -145,8 +145,8 @@ pub fn year_days(year: i32) -> u32 {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(ical::util::month_days(2025, 4), 30);
-/// assert_eq!(ical::util::month_days(2020, 2), 29);
+/// assert_eq!(eventix_ical::util::month_days(2025, 4), 30);
+/// assert_eq!(eventix_ical::util::month_days(2020, 2), 29);
 /// ```
 pub fn month_days(year: i32, month: u32) -> u32 {
     let (nyear, nmonth) = next_month(year, month);
@@ -161,8 +161,8 @@ pub fn month_days(year: i32, month: u32) -> u32 {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(ical::util::prev_month(2025, 4), (2025, 3));
-/// assert_eq!(ical::util::prev_month(2025, 1), (2024, 12));
+/// assert_eq!(eventix_ical::util::prev_month(2025, 4), (2025, 3));
+/// assert_eq!(eventix_ical::util::prev_month(2025, 1), (2024, 12));
 /// ```
 pub fn prev_month(year: i32, month: u32) -> (i32, u32) {
     match month {
@@ -176,8 +176,8 @@ pub fn prev_month(year: i32, month: u32) -> (i32, u32) {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(ical::util::next_month(2025, 4), (2025, 5));
-/// assert_eq!(ical::util::next_month(2025, 12), (2026, 1));
+/// assert_eq!(eventix_ical::util::next_month(2025, 4), (2025, 5));
+/// assert_eq!(eventix_ical::util::next_month(2025, 12), (2026, 1));
 /// ```
 pub fn next_month(year: i32, month: u32) -> (i32, u32) {
     match month {
@@ -191,8 +191,8 @@ pub fn next_month(year: i32, month: u32) -> (i32, u32) {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(ical::util::nth(2), String::from("2nd"));
-/// assert_eq!(ical::util::nth(10), String::from("10th"));
+/// assert_eq!(eventix_ical::util::nth(2), String::from("2nd"));
+/// assert_eq!(eventix_ical::util::nth(10), String::from("10th"));
 /// ```
 pub fn nth(n: u64) -> String {
     let mut res = String::new();
@@ -214,7 +214,7 @@ pub fn nth(n: u64) -> String {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(ical::util::human_list(&[1, 2, 3]), String::from("1, 2, and 3"));
+/// assert_eq!(eventix_ical::util::human_list(&[1, 2, 3]), String::from("1, 2, and 3"));
 /// ```
 pub fn human_list<T>(objs: &[T]) -> String
 where

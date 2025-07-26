@@ -2,8 +2,8 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse};
-use ical::col::{CalDir, CalFile, Occurrence};
-use ical::objects::{
+use eventix_ical::col::{CalDir, CalFile, Occurrence};
+use eventix_ical::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalPartStat, CalTodoStatus,
     EventLike,
 };

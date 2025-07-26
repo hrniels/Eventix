@@ -1,7 +1,7 @@
 use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
-use ical::col::Occurrence;
-use ical::objects::{CalCompType, CalTodoStatus, EventLike};
+use eventix_ical::col::Occurrence;
+use eventix_ical::objects::{CalCompType, CalTodoStatus, EventLike};
 use std::sync::Arc;
 
 use crate::locale::Locale;

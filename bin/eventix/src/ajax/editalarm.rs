@@ -4,7 +4,7 @@ use axum::Router;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json, Redirect};
 use axum::routing::{get, post};
-use ical::objects::CalDate;
+use eventix_ical::objects::CalDate;
 use serde::{Deserialize, Serialize};
 
 use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};

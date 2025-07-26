@@ -1,6 +1,6 @@
 use askama::Template;
 use chrono_tz::Tz;
-use ical::objects::CalAlarm;
+use eventix_ical::objects::CalAlarm;
 use serde::Deserialize;
 use std::sync::Arc;
 

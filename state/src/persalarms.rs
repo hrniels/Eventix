@@ -1,6 +1,6 @@
 use anyhow::{Context, anyhow};
-use ical::col::Occurrence;
-use ical::objects::{CalAlarm, CalDate, EventLike};
+use eventix_ical::col::Occurrence;
+use eventix_ical::objects::{CalAlarm, CalDate, EventLike};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -258,7 +258,9 @@ impl PersonalCalendarAlarms {
 mod tests {
     use chrono::{NaiveDate, TimeDelta};
     use chrono_tz::Tz;
-    use ical::objects::{CalAction, CalAlarm, CalDate, CalDateType, CalRelated, CalTrigger};
+    use eventix_ical::objects::{
+        CalAction, CalAlarm, CalDate, CalDateType, CalRelated, CalTrigger,
+    };
 
     use super::PersonalCalendarAlarms;
 

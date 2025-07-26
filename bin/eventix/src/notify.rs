@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use chrono::TimeZone;
-use ical::{
+use eventix_ical::{
     col::AlarmOccurrence,
     objects::{AlarmOverlay, CalAlarm, CalComponent, CalDate, DefaultAlarmOverlay, EventLike},
 };

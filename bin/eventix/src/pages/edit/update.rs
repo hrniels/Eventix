@@ -1,7 +1,7 @@
 use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
+use eventix_ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
 use std::sync::Arc;
 
 use crate::extract::MultiForm;

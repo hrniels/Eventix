@@ -1,5 +1,5 @@
 use anyhow::{Context, anyhow};
-use ical::{col::CalFile, objects::EventLike};
+use eventix_ical::{col::CalFile, objects::EventLike};
 use std::{env, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},

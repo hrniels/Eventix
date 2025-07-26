@@ -1,5 +1,5 @@
 use askama::Template;
-use ical::objects::{CalAttendee, CalRole};
+use eventix_ical::objects::{CalAttendee, CalRole};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt, sync::Arc};
