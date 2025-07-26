@@ -71,7 +71,7 @@
                 </div>
                 <div class="ev_submit">
                     <a class="ev_button_big ev_button_normal" style="width: 80px"
-                       href="javascript:$('form').submit()">
+                       href="javascript:submit()">
                         <span>{{ "Save"|t(locale) }}</span>
                     </a>
                     <a class="ev_button_big ev_button_normal" style="width: 80px"
@@ -102,6 +102,13 @@
         }
         else
             $("#alarm-tabs ul li:eq(1)").show();
+    }
+
+    function submit() {
+        if($('#attendees-new-attendee').val() != "")
+            errorDialog("{{ "The 'New attendee' field is not empty. Maybe you forgot to add the last attendee?"|t(locale) }}");
+        else
+            $('form').submit();
     }
 
     $(function() {

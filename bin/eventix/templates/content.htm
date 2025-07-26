@@ -27,6 +27,19 @@
         resizeBoxes();
     });
 
+    function errorDialog(message) {
+        $("#error-dialog").html("<p>" + message + "</p>").dialog({
+            resizable: false,
+            draggable: false,
+            modal: true,
+            buttons: {
+                "{{ "Close"|t(locale) }}": function() {
+                    $(this).dialog("close");
+                }
+            }
+        });
+    }
+
     function confirmDialog(id, btn, onClick) {
         $("#" + id).dialog({
             resizable: false,
@@ -49,6 +62,8 @@
         });
     }
 </script>
+
+<div id="error-dialog" title="{{ "Error"|t(locale) }}" style="display: none"></div>
 
 <div style="float: left; width: 80%">
     {% block inner %}
