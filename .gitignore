@@ -1,2 +1,4 @@
 /target
-/bin/eventix/data
+/data/eventix/alarms
+/data/eventix/misc.toml
+/config/eventix/settings.toml

@@ -4,13 +4,14 @@ use eventix_ical::objects::{CalAlarm, CalDate, EventLike};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
-    fs::{create_dir_all, read_dir},
+    fs::read_dir,
     path::PathBuf,
 };
+use xdg::BaseDirectories;
 
 use crate::CalendarAlarmType;
 
-const ALARMS_DIRECTORY: &str = "data/alarms";
+const ALARMS_DIRECTORY: &str = "alarms";
 
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct PersonalAlarms {
@@ -19,10 +20,10 @@ pub struct PersonalAlarms {
 }
 
 impl PersonalAlarms {
-    pub fn new_from_dir() -> anyhow::Result<Self> {
-        // ensure all directories exist
-        let path: PathBuf = ALARMS_DIRECTORY.into();
-        create_dir_all(&path)?;
+    pub fn new_from_dir(xdg: &BaseDirectories) -> anyhow::Result<Self> {
+        let path = xdg
+            .create_data_directory(ALARMS_DIRECTORY)
+            .context("create alarms directory")?;
 
         let mut calendars = BTreeMap::new();
         let dir_files =

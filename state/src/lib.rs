@@ -14,6 +14,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
+use xdg::BaseDirectories;
 
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
 pub use settings::{CalendarAlarmType, CalendarSettings, EmailAccount, Settings};
@@ -22,6 +23,7 @@ pub use sync::{SyncResult, Syncer};
 pub type EventixState = Arc<Mutex<State>>;
 
 pub struct State {
+    xdg: Arc<BaseDirectories>,
     store: CalStore,
     personal_alarms: PersonalAlarms,
     settings: settings::Settings,
@@ -30,12 +32,12 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> anyhow::Result<Self> {
-        let settings = settings::Settings::load_from_file().context("load settings")?;
+    pub fn new(xdg: Arc<BaseDirectories>) -> anyhow::Result<Self> {
+        let settings = settings::Settings::load_from_file(&xdg).context("load settings")?;
 
-        let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
+        let personal_alarms = PersonalAlarms::new_from_dir(&xdg).context("load personal alarms")?;
 
-        let misc = misc::Misc::load_from_file().context("load misc state")?;
+        let misc = misc::Misc::load_from_file(&xdg).context("load misc state")?;
 
         let mut store = CalStore::default();
         for (id, cal) in settings.calendars() {
@@ -50,6 +52,7 @@ impl State {
         }
 
         Ok(Self {
+            xdg,
             settings,
             personal_alarms,
             store,
@@ -63,9 +66,11 @@ impl State {
         let changed = {
             let mut state = state.lock().await;
 
-            let settings = settings::Settings::load_from_file().context("load settings")?;
-            let personal_alarms = PersonalAlarms::new_from_dir().context("load personal alarms")?;
-            let misc = misc::Misc::load_from_file().context("load misc state")?;
+            let settings =
+                settings::Settings::load_from_file(&state.xdg).context("load settings")?;
+            let personal_alarms =
+                PersonalAlarms::new_from_dir(&state.xdg).context("load personal alarms")?;
+            let misc = misc::Misc::load_from_file(&state.xdg).context("load misc state")?;
 
             let changed = state.personal_alarms != personal_alarms || state.misc != misc;
 

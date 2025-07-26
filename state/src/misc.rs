@@ -1,14 +1,15 @@
 use chrono::NaiveDateTime;
 use eventix_ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
+use xdg::BaseDirectories;
 
-const FILENAME: &str = "data/misc.toml";
+const FILENAME: &str = "misc.toml";
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Misc {
+    #[serde(skip)]
+    path: PathBuf,
     #[serde(default)]
     last_alarm_check: NaiveDateTime,
     #[serde(default)]
@@ -19,18 +20,17 @@ pub struct Misc {
     sync_errors: Vec<String>,
 }
 
-impl Default for Misc {
-    fn default() -> Self {
+impl Misc {
+    fn new(path: PathBuf) -> Self {
         Self {
+            path,
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
             sync_errors: Vec::default(),
         }
     }
-}
 
-impl Misc {
     pub fn last_alarm_check(&self) -> NaiveDateTime {
         self.last_alarm_check
     }
@@ -75,16 +75,22 @@ impl Misc {
         }
     }
 
-    pub fn load_from_file() -> anyhow::Result<Self> {
-        let path: PathBuf = FILENAME.into();
-        if fs::exists(&path)? {
-            super::load_from_file(&path)
-        } else {
-            Ok(Self::default())
+    pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
+        match xdg.find_data_file(FILENAME) {
+            Some(file) => {
+                let path = file.into();
+                let mut misc: Self = super::load_from_file(&path)?;
+                misc.path = path;
+                Ok(misc)
+            }
+            None => {
+                let path = xdg.place_data_file(FILENAME)?;
+                Ok(Self::new(path))
+            }
         }
     }
 
     pub fn write_to_file(&self) -> anyhow::Result<()> {
-        super::write_to_file(&FILENAME.into(), self)
+        super::write_to_file(&self.path, self)
     }
 }

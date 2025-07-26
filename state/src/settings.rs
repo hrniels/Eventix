@@ -1,6 +1,7 @@
 use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use xdg::BaseDirectories;
 
 const FILENAME: &str = "settings.toml";
 
@@ -29,8 +30,11 @@ impl Settings {
         res
     }
 
-    pub fn load_from_file() -> anyhow::Result<Self> {
-        super::load_from_file(&FILENAME.into())
+    pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
+        match xdg.find_config_file(FILENAME) {
+            Some(file) => super::load_from_file(&file.into()),
+            None => Ok(Settings::default()),
+        }
     }
 }
 

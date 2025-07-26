@@ -30,6 +30,7 @@ use tower_http::{
     trace::{DefaultOnResponse, TraceLayer},
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use xdg::BaseDirectories;
 
 use crate::ajax::{cancel, help, moveevent};
 
@@ -72,13 +73,22 @@ struct ImportOptions {
 }
 
 async fn run_server(args: Args, listener: TcpListener) {
+    let xdg = Arc::new(BaseDirectories::with_prefix("eventix"));
+
     let state = Arc::new(Mutex::new(
-        eventix_state::State::new().expect("loading state"),
+        eventix_state::State::new(xdg.clone()).expect("loading state"),
     ));
 
+    let static_path = xdg
+        .find_data_file("static")
+        .expect("Find '$XDG_DATA_HOME/static/'");
+    let icon_path = xdg
+        .find_data_file("static/icon.png")
+        .expect("Find '$XDG_DATA_HOME/static/icon.png'");
+
     let app = Router::new()
-        .nest_service("/favicon.ico", ServeFile::new("static/icon.png"))
-        .nest_service("/static", ServeDir::new("static"))
+        .nest_service("/favicon.ico", ServeFile::new(icon_path))
+        .nest_service("/static", ServeDir::new(static_path))
         .merge(monthly::router(state.clone()))
         .merge(weekly::router(state.clone()))
         .merge(details::router(state.clone()))
