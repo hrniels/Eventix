@@ -3,7 +3,6 @@ mod cmds;
 mod comps;
 mod extract;
 mod html;
-mod locale;
 mod notify;
 mod objects;
 mod pages;
@@ -132,7 +131,10 @@ async fn run_server(args: Args, listener: TcpListener) {
         );
 
     // start helper tasks
-    tokio::spawn(notify::watch_alarms(state.clone(), locale::default()));
+    tokio::spawn(notify::watch_alarms(
+        state.clone(),
+        eventix_locale::default(),
+    ));
     let nstate = state.clone();
     tokio::spawn(async move { cmds::handle_commands(nstate).await.expect("cmds failed") });
 

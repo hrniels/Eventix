@@ -2,10 +2,10 @@ use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
 use chrono_tz::Tz;
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalCompType, CalTodoStatus, EventLike};
+use eventix_locale::Locale;
 use eventix_state::State;
 use std::sync::Arc;
 
-use crate::locale::Locale;
 use crate::objects::DayOccurrence;
 
 pub struct Day<'a> {

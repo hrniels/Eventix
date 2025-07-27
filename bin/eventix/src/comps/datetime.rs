@@ -2,12 +2,12 @@ use askama::Template;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalDate, CalDateTime, CalDateType};
+use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::comps::date::{Date, DateTemplate};
 use crate::comps::time::{Time, TimeTemplate};
-use crate::locale::Locale;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct DateTime {

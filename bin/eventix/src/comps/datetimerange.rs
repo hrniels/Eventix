@@ -2,6 +2,7 @@ use askama::Template;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalCompType, CalDate, CalDateType};
+use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -9,7 +10,6 @@ use crate::comps::date::Date;
 use crate::comps::datetime::DateTime;
 use crate::comps::time::{Time, TimeTemplate};
 use crate::html::filters;
-use crate::locale::Locale;
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct DateTimeRange {

@@ -1,9 +1,9 @@
 use askama::Template;
 use eventix_ical::objects::CalOrganizer;
+use eventix_locale::Locale;
 use std::sync::Arc;
 
 use crate::html::filters;
-use crate::locale::Locale;
 
 #[derive(Template)]
 #[template(path = "comps/organizer.htm")]

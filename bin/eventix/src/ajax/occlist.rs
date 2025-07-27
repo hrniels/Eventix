@@ -9,16 +9,16 @@ use chrono::{DateTime, Duration, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalCompType, CalDate, CalTodoStatus, EventLike};
+use eventix_locale::Locale;
+use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::comps::partstat::PartStatTemplate;
 use crate::html::{self, filters};
-use crate::locale::{self, Locale};
 use crate::objects::DayOccurrence;
 use crate::pages::error::HTMLError;
-use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
@@ -125,7 +125,7 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
 
     let date = req
         .date

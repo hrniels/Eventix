@@ -4,6 +4,7 @@ use eventix_ical::{
     col::AlarmOccurrence,
     objects::{AlarmOverlay, CalAlarm, CalComponent, CalDate, DefaultAlarmOverlay, EventLike},
 };
+use eventix_locale::{DateFlags, Locale};
 use eventix_state::{CalendarAlarmType, EventixState, PersonalCalendarAlarms};
 use std::{
     collections::HashMap,
@@ -13,8 +14,6 @@ use std::{
 };
 use tokio::time;
 use tracing::{info, warn};
-
-use crate::locale::{DateFlags, Locale};
 
 struct Notification {
     pub appname: String,

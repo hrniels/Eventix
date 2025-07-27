@@ -3,6 +3,7 @@ use askama::Template;
 use chrono::Duration;
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalAction, CalAlarm, CalDateType, CalRelated, CalTrigger};
+use eventix_locale::Locale;
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
 use std::sync::Arc;
@@ -10,7 +11,6 @@ use strum::EnumIter;
 
 use crate::comps::{combobox::Named, datetime::DateTime, datetime::DateTimeTemplate};
 use crate::html::filters;
-use crate::locale::Locale;
 use crate::pages::Page;
 
 use super::combobox::ComboboxTemplate;

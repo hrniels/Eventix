@@ -8,6 +8,7 @@ use eventix_ical::{
     col::{CalDir, Occurrence},
     objects::{CalDate, CalPartStat, EventLike},
 };
+use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::{CalendarAlarmType, EventixState};
 use std::sync::Arc;
 
@@ -17,7 +18,6 @@ use crate::comps::{
     datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
 };
 use crate::html::filters;
-use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::Calendars;
 use crate::pages::Breadcrumb;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
@@ -53,7 +53,7 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
         super::new_page(&state).await,
-        locale::default(),
+        eventix_locale::default(),
         State(state),
         Query(req),
         None,

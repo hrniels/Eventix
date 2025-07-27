@@ -1,12 +1,12 @@
 use askama::Template;
 use chrono_tz::Tz;
 use eventix_ical::objects::CalAlarm;
+use eventix_locale::Locale;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::comps::{alarmconfig::AlarmConfig, alarmconfig::AlarmConfigTemplate};
 use crate::html::filters;
-use crate::locale::Locale;
 use crate::pages::Page;
 
 #[derive(Default, Debug, Deserialize)]

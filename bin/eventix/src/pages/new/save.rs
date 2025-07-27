@@ -5,13 +5,13 @@ use eventix_ical::col::CalFile;
 use eventix_ical::objects::{
     CalCompType, CalComponent, CalEvent, CalTimeZone, CalTodo, Calendar, UpdatableEventLike,
 };
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::extract::MultiForm;
-use crate::locale::{self, Locale};
 use crate::objects::CompAction;
 use crate::pages::{Page, error::HTMLError};
 
@@ -95,7 +95,7 @@ pub async fn handler(
     Query(req): Query<Request>,
     MultiForm(mut form): MultiForm<CompNew>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
     let mut page = super::new_page(&state, &req).await;
 
     {

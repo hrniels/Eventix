@@ -2,11 +2,11 @@ use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use eventix_ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::sync::Arc;
 
 use crate::extract::MultiForm;
-use crate::locale::{self, Locale};
 use crate::pages::{Page, error::HTMLError};
 use crate::util;
 
@@ -155,7 +155,7 @@ pub async fn handler(
     Query(req): Query<Request>,
     MultiForm(mut form): MultiForm<CompEdit>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
     let mut page = super::new_page(&state).await;
 
     let form = {

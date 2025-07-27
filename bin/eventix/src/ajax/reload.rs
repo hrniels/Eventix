@@ -1,12 +1,12 @@
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use eventix_ical::objects::CalDate;
+use eventix_locale::TimeFlags;
 use eventix_state::{EventixState, SyncResult};
 use serde::Serialize;
 use std::collections::HashMap;
 use tracing::error;
 
 use crate::html;
-use crate::locale::{self, TimeFlags};
 use crate::pages::error::HTMLError;
 
 #[derive(Debug, Serialize)]
@@ -23,7 +23,7 @@ pub fn router(state: EventixState) -> Router {
 }
 
 async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
 
     let sync_res = match eventix_state::State::reload(state).await {
         Err(e) => {

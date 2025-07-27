@@ -2,7 +2,7 @@ use eventix_ical::objects::{CalAttendee, CalDate, CalPartStat, CalRole};
 use regex::{Captures, Regex};
 use std::{sync::Arc, time::Duration};
 
-use crate::locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::{DateFlags, Locale, TimeFlags};
 
 pub mod filters {
     use askama::filters::Safe;
@@ -11,7 +11,7 @@ pub mod filters {
     use eventix_ical::objects::CalDate;
     use std::{fmt::Display, sync::Arc};
 
-    use crate::locale::{DateFlags, DateLike, Locale, TimeFlags};
+    use eventix_locale::{DateFlags, DateLike, Locale, TimeFlags};
 
     pub fn as_time(
         time: super::Duration,

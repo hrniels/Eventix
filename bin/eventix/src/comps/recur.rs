@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use askama::Template;
 use chrono::Weekday;
 use eventix_ical::objects::{CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
+use eventix_locale::Locale;
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
 use std::sync::Arc;
@@ -9,7 +10,6 @@ use strum::EnumIter;
 
 use crate::comps::{combobox::ComboboxTemplate, combobox::Named, date::Date, date::DateTemplate};
 use crate::html::filters;
-use crate::locale::Locale;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Frequency {

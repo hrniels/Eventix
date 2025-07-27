@@ -4,11 +4,11 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+use eventix_locale::{Locale, TimeFlags};
 use std::fmt;
 use std::sync::Arc;
 
 use crate::html::filters;
-use crate::locale::{self, Locale, TimeFlags};
 use crate::pages::Page;
 
 #[derive(Template)]
@@ -35,7 +35,7 @@ impl IntoResponse for HTMLError {
     fn into_response(self) -> Response {
         let html = ErrorTemplate {
             page: Page::default(),
-            locale: locale::default(),
+            locale: eventix_locale::default(),
             msg: &self.inner.to_string(),
             trace: self.inner.chain().skip(1).map(|e| e.to_string()).collect(),
         }

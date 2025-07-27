@@ -10,7 +10,7 @@ use eventix_state::EventixState;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::pages::error::HTMLError;
-use crate::{locale, util};
+use crate::util;
 
 fn deserialize_partstat<'de, D>(deserializer: D) -> Result<CalPartStat, D::Error>
 where
@@ -46,7 +46,7 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
     let mut state = state.lock().await;
 
     let user = util::user_for_uid(&state, &req.uid)?

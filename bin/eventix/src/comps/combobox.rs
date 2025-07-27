@@ -1,11 +1,11 @@
 use askama::Template;
+use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 use crate::html::filters;
-use crate::locale::Locale;
 
 pub trait Named {
     fn name(&self) -> String;

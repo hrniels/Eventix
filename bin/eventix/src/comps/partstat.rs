@@ -1,9 +1,9 @@
 use askama::Template;
 use eventix_ical::objects::CalPartStat;
+use eventix_locale::Locale;
 use std::sync::Arc;
 
 use crate::html::filters;
-use crate::locale::Locale;
 
 #[derive(Template)]
 #[template(path = "comps/partstat.htm")]

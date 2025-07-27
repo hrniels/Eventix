@@ -1,11 +1,11 @@
 use askama::Template;
 use eventix_ical::objects::{CalAttendee, CalRole};
+use eventix_locale::Locale;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use crate::html::filters;
-use crate::locale::Locale;
 
 #[derive(Default, Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AttendeeRole {

@@ -1,13 +1,13 @@
 use anyhow::Context;
 use askama::Template;
 use eventix_ical::objects::{CalAlarm, CalDate, EventLike};
+use eventix_locale::Locale;
 use eventix_state::CalendarAlarmType;
 use std::sync::Arc;
 use tokio::sync::MutexGuard;
 
 use crate::comps::alarmconfig::{AlarmConfig, AlarmConfigTemplate};
 use crate::html::filters;
-use crate::locale::Locale;
 use crate::objects::DayOccurrence;
 
 #[derive(Template)]

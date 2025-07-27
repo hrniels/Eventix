@@ -5,6 +5,7 @@ use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
 use eventix_ical::col::CalDir;
 use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -13,7 +14,6 @@ use crate::comps::{
     editalarm::EditAlarmTemplate, organizer::OrganizerTemplate, partstat::PartStatTemplate,
 };
 use crate::html::{self, filters};
-use crate::locale::{self, Locale};
 use crate::objects::DayOccurrence;
 use crate::pages::error::HTMLError;
 
@@ -64,7 +64,7 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
 
     let rid = if let Some(rid) = &req.rid {
         Some(

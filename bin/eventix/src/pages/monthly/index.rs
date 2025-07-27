@@ -9,12 +9,12 @@ use eventix_ical::{
     objects::{CalCompType, CalDate, CalPartStat, EventLike},
     util,
 };
+use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::EventixState;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::html::filters;
-use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::DayOccurrence;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use crate::util::parse_human_date;
@@ -52,7 +52,7 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     content(
         super::new_page(&state).await,
-        locale::default(),
+        eventix_locale::default(),
         State(state),
         Query(req),
     )

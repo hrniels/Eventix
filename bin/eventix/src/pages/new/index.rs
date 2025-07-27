@@ -5,6 +5,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::{CalendarAlarmType, EventixState};
 use std::sync::Arc;
 
@@ -13,7 +14,6 @@ use crate::comps::{
     datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
 };
 use crate::html::filters;
-use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::objects::Calendars;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 
@@ -44,7 +44,7 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
     let calendar = state.lock().await.misc().last_calendar(req.ctype).cloned();
     content(
         super::new_page(&state, &req).await,

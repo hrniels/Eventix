@@ -574,6 +574,7 @@ dependencies = [
  "chrono-tz",
  "clap",
  "eventix-ical",
+ "eventix-locale",
  "eventix-state",
  "formatx",
  "itertools",
@@ -617,6 +618,16 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tracing",
+]
+
+[[package]]
+name = "eventix-locale"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.9.1",
+ "chrono",
+ "chrono-tz",
+ "once_cell",
 ]
 
 [[package]]

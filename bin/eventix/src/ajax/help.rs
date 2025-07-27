@@ -2,12 +2,12 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use serde::Serialize;
 use std::sync::Arc;
 
 use crate::html::filters;
-use crate::locale::{self, Locale};
 use crate::pages::error::HTMLError;
 
 pub fn router(state: EventixState) -> Router {
@@ -26,7 +26,7 @@ struct HelpTemplate {
 }
 
 async fn handler() -> Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
 
     let html = HelpTemplate { locale }.render().context("help template")?;
 

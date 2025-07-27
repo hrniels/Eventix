@@ -10,13 +10,13 @@ mod tasks;
 
 use chrono::{DateTime, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use crate::locale::Locale;
 use crate::objects::{Calendar, Calendars};
 
 #[derive(Debug, Clone)]

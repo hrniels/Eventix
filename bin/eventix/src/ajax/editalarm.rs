@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};
 use crate::extract::MultiForm;
-use crate::locale;
 use crate::pages::error::HTMLError;
 
 #[derive(Debug, Deserialize)]
@@ -46,7 +45,7 @@ pub async fn get_handler(
     State(state): State<EventixState>,
     Query(req): Query<GetRequest>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
 
     let state = state.lock().await;
 
@@ -61,7 +60,7 @@ pub async fn post_handler(
     State(state): State<EventixState>,
     MultiForm(req): MultiForm<PostRequest>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = locale::default();
+    let locale = eventix_locale::default();
 
     let rid = if let Some(rid) = &req.rid {
         Some(

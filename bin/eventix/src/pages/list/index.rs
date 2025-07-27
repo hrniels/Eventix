@@ -7,6 +7,7 @@ use eventix_ical::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalPartStat, CalTodoStatus,
     EventLike,
 };
+use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,6 @@ use crate::comps::{
 };
 use crate::extract::MultiQuery;
 use crate::html::{self, filters};
-use crate::locale::{self, DateFlags, Locale, TimeFlags};
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 
 const PER_PAGE: usize = 15;
@@ -145,7 +145,7 @@ pub async fn handler(
     MultiQuery(mut filter): MultiQuery<Filter>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state, &filter).await;
-    let locale = locale::default();
+    let locale = eventix_locale::default();
 
     let state = state.lock().await;
 
