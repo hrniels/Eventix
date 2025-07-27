@@ -16,7 +16,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::comps::partstat::PartStatTemplate;
-use crate::html::{self, filters};
+use crate::html::filters;
 use crate::objects::DayOccurrence;
 use crate::pages::error::HTMLError;
 

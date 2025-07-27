@@ -4,6 +4,7 @@ mod en;
 use bitflags::bitflags;
 use chrono::{DateTime, NaiveDate, Utc};
 use chrono_tz::Tz;
+use eventix_ical::objects::CalDate;
 use std::sync::Arc;
 
 pub use de::LocaleDe;
@@ -136,6 +137,50 @@ pub trait Locale {
             }
         }
         date.fmt(f).to_string()
+    }
+
+    fn date_range(&self, start: Option<&CalDate>, end: Option<&CalDate>) -> String {
+        let tz = self.timezone();
+        let date_flags = DateFlags::Short;
+        let time_flags = TimeFlags::Short;
+        match (start, end) {
+            (Some(CalDate::Date(start, ..)), Some(CalDate::Date(end, ..)))
+                if start.succ_opt() == Some(*end) =>
+            {
+                self.fmt_date(&start, date_flags).to_string()
+            }
+            (Some(CalDate::Date(start, ..)), Some(end @ CalDate::Date(..))) => {
+                format!(
+                    "{} &#x2012; {}",
+                    self.fmt_date(&start, date_flags),
+                    self.fmt_date(&end.as_end_with_tz(tz), date_flags)
+                )
+            }
+            (Some(start), Some(end)) if start.as_naive_date() == end.as_naive_date() => {
+                format!(
+                    "{}, {} &#x2012; {}",
+                    self.fmt_date(&start.as_naive_date(), date_flags),
+                    self.fmt_time(&start.as_start_with_tz(tz), time_flags),
+                    self.fmt_time(&end.as_end_with_tz(tz), time_flags)
+                )
+            }
+            (Some(start), Some(end)) => {
+                format!(
+                    "{} &#x2012; {}",
+                    self.fmt_datetime(&start.as_start_with_tz(tz), date_flags),
+                    self.fmt_datetime(&end.as_end_with_tz(tz), date_flags)
+                )
+            }
+            (Some(CalDate::Date(start, ..)), None) => self.fmt_date(&start, date_flags),
+            (Some(start @ CalDate::DateTime(_)), None) => {
+                self.fmt_datetime(&start.as_start_with_tz(tz), date_flags)
+            }
+            (None, Some(CalDate::Date(end, ..))) => self.fmt_date(&end, date_flags),
+            (None, Some(end @ CalDate::DateTime(_))) => {
+                self.fmt_datetime(&end.as_end_with_tz(tz), date_flags)
+            }
+            (None, None) => String::from("-"),
+        }
     }
 
     fn translate<'a>(&self, key: &'a str) -> &'a str;

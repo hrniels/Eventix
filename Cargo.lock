@@ -627,6 +627,7 @@ dependencies = [
  "bitflags 2.9.1",
  "chrono",
  "chrono-tz",
+ "eventix-ical",
  "once_cell",
 ]
 

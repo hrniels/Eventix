@@ -7,4 +7,5 @@ edition = "2024"
 bitflags.workspace = true
 chrono-tz.workspace = true
 chrono.workspace = true
+eventix-ical.workspace = true
 once_cell.workspace = true
