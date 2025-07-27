@@ -10,6 +10,7 @@ bitflags.workspace = true
 chrono-tz.workspace = true
 chrono.workspace = true
 clap.workspace = true
+eventix-cmd.workspace = true
 eventix-state.workspace = true
 eventix-locale.workspace = true
 eventix-ical.workspace = true

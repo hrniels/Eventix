@@ -1,5 +1,4 @@
 mod ajax;
-mod cmds;
 mod comps;
 mod extract;
 mod html;
@@ -19,8 +18,7 @@ use axum::{
 };
 use clap::Parser;
 use pages::{edit, error::HTMLError, list, monthly, new, weekly};
-use serde::{Deserialize, Serialize};
-use std::{env, io::ErrorKind, panic, sync::Arc};
+use std::{env, panic, sync::Arc};
 use tokio::{net::TcpListener, sync::Mutex};
 use tower_http::{
     LatencyUnit,
@@ -48,30 +46,9 @@ struct Args {
     /// the port number for the webserver
     #[arg(long, default_value_t = 8081)]
     port: u16,
-
-    #[command(subcommand)]
-    command: Option<Command>,
 }
 
-#[derive(Parser, Debug, Serialize, Deserialize)]
-enum Command {
-    /// Imports an ICS file into a specified calendar
-    #[command(name = "import")]
-    Import(ImportOptions),
-}
-
-#[derive(Clone, Parser, Debug, Serialize, Deserialize)]
-struct ImportOptions {
-    /// The path to the ICS file
-    #[arg()]
-    file: String,
-
-    /// The name of the calendar
-    #[arg()]
-    calendar: String,
-}
-
-async fn run_server(args: Args, listener: TcpListener) {
+async fn run_server(listener: TcpListener) {
     let xdg = Arc::new(BaseDirectories::with_prefix("eventix"));
 
     let state = Arc::new(Mutex::new(
@@ -136,14 +113,11 @@ async fn run_server(args: Args, listener: TcpListener) {
         eventix_locale::default(),
     ));
     let nstate = state.clone();
-    tokio::spawn(async move { cmds::handle_commands(nstate).await.expect("cmds failed") });
-
-    // handle command, if any
-    if let Some(cmd) = args.command {
-        cmds::handle_command(state, cmd)
+    tokio::spawn(async move {
+        eventix_cmd::handle_commands(&xdg, nstate)
             .await
-            .expect("command failed");
-    }
+            .expect("cmds failed")
+    });
 
     axum::serve(listener, app).await.unwrap();
 }
@@ -161,17 +135,9 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", args.address, args.port)).await;
     match listener {
-        Ok(listener) => run_server(args, listener).await,
+        Ok(listener) => run_server(listener).await,
 
         Err(e) => {
-            // if the server exists, it will listen to our commands, so request the command
-            if e.kind() == ErrorKind::AddrInUse {
-                if let Some(cmd) = args.command {
-                    cmds::send_command(cmd).await.expect("command failed");
-                    return;
-                }
-            }
-
             panic!("bind to {}:{} failed: {:?}", args.address, args.port, e);
         }
     }

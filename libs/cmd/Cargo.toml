@@ -1,0 +1,14 @@
+[package]
+name = "eventix-cmd"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+eventix-ical.workspace = true
+eventix-state.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+xdg.workspace = true

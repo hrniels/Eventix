@@ -1,17 +1,28 @@
 use anyhow::{Context, anyhow};
 use eventix_ical::{col::CalFile, objects::EventLike};
 use eventix_state::EventixState;
-use std::{env, sync::Arc};
+use serde::{Deserialize, Serialize};
+use std::{path::PathBuf, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{UnixListener, UnixStream},
 };
 use tracing::{debug, error};
+use xdg::BaseDirectories;
 
-use crate::{Command, ImportOptions};
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Command {
+    Import(ImportOptions),
+}
 
-pub async fn handle_commands(state: EventixState) -> anyhow::Result<()> {
-    let socket_path = get_socket_path();
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImportOptions {
+    pub file: String,
+    pub calendar: String,
+}
+
+pub async fn handle_commands(xdg: &BaseDirectories, state: EventixState) -> anyhow::Result<()> {
+    let socket_path = get_socket_path(xdg);
 
     // remove it in case it already exists; that's okay because we only get here if the server
     // wasn't running yet.
@@ -44,15 +55,23 @@ async fn parse_command(state: EventixState, stream: &mut UnixStream) -> anyhow::
     handle_command(state, cmd).await
 }
 
-pub async fn send_command(cmd: Command) -> anyhow::Result<()> {
-    let mut stream = UnixStream::connect(&get_socket_path()).await?;
-    let msg = serde_json::to_string(&cmd)?;
-    stream.write_all(&(msg.len() as u32).to_be_bytes()).await?;
-    stream.write_all(msg.as_bytes()).await?;
-    Ok(())
+pub async fn send_or_execute(
+    xdg: &BaseDirectories,
+    state: EventixState,
+    cmd: Command,
+) -> anyhow::Result<()> {
+    let path = get_socket_path(xdg);
+    if let Ok(mut stream) = UnixStream::connect(&path).await {
+        let msg = serde_json::to_string(&cmd)?;
+        stream.write_all(&(msg.len() as u32).to_be_bytes()).await?;
+        stream.write_all(msg.as_bytes()).await?;
+        Ok(())
+    } else {
+        handle_command(state, cmd).await
+    }
 }
 
-pub async fn handle_command(state: EventixState, cmd: Command) -> anyhow::Result<()> {
+async fn handle_command(state: EventixState, cmd: Command) -> anyhow::Result<()> {
     match cmd {
         Command::Import(cmd) => handle_import(state, cmd).await,
     }
@@ -77,12 +96,11 @@ async fn handle_import(state: EventixState, cmd: ImportOptions) -> anyhow::Resul
         CalFile::new_from_external_file(cal.clone(), dir.path().clone(), cmd.file.clone().into())
             .context(format!("Parsing file '{}' failed", cmd.file))?;
 
-    // first check if any UID already exists
+    // first delete any existing files with those uids
     for f in &files {
         let uid = f.components().first().unwrap().uid();
-        if dir.files().iter().any(|f| f.contains_uid(uid)) {
-            return Err(anyhow!("UID '{}' does already exist", uid));
-        }
+        // TODO note that we cannot undo this step
+        dir.delete_by_uid(uid).ok();
     }
 
     // now try to save all and undo these saves, if an error occurs
@@ -101,8 +119,10 @@ async fn handle_import(state: EventixState, cmd: ImportOptions) -> anyhow::Resul
     Ok(())
 }
 
-fn get_socket_path() -> String {
-    env::var("XDG_RUNTIME_DIR")
-        .map(|dir| format!("{dir}/eventix.sock"))
-        .unwrap_or_else(|_| "/tmp/eventix.sock".to_string())
+fn get_socket_path(xdg: &BaseDirectories) -> PathBuf {
+    let path = xdg
+        .get_runtime_directory()
+        .map(|p| p.clone())
+        .unwrap_or_else(|_| PathBuf::from("/tmp/eventix.sock"));
+    path.join("eventix.sock")
 }
