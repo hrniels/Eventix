@@ -7,12 +7,14 @@ import platformdirs
 import shutil
 import shlex
 import subprocess
-import sys
 
 
 def dev_env():
     env = os.environ.copy()
+    run_dir = Path("data") / "eventix" / "run"
+    os.makedirs(run_dir, 0o700, exist_ok=True)
     env["XDG_DATA_HOME"] = os.path.abspath("data")
+    env["XDG_RUNTIME_DIR"] = run_dir.absolute()
     env["XDG_CONFIG_HOME"] = os.path.abspath("config")
     env["RUST_LOG"] = "trace"
     env["RUST_BACKTRACE"] = "full"

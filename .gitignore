@@ -1,4 +1,5 @@
 /target
 /data/eventix/alarms
 /data/eventix/misc.toml
+/data/eventix/run
 /config/eventix/settings.toml
