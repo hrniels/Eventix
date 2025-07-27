@@ -636,6 +636,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "eventix-import"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "eventix-cmd",
+ "eventix-ical",
+ "eventix-locale",
+ "eventix-state",
+ "gdk-pixbuf",
+ "glib",
+ "gtk",
+ "tokio",
+ "xdg",
+]
+
+[[package]]
 name = "eventix-locale"
 version = "0.1.0"
 dependencies = [

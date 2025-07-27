@@ -49,6 +49,11 @@ def cmd_watch(args):
     run_cmd(cmd_args)
 
 
+def cmd_import(args):
+    cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", args.file]
+    run_cmd(cmd_args)
+
+
 def cmd_install(args):
     dir = Path(platformdirs.user_data_dir()) / "eventix"
     print("Installing data to {}...".format(dir))
@@ -73,8 +78,14 @@ def main():
     run_parser.set_defaults(func=cmd_run)
 
     watch_parser = subparsers.add_parser(
-        "watch", parents=[parent_parser], help="Watch and rerun eventix on changes")
+        "watch", parents=[parent_parser],
+        help="Watch and rerun eventix on changes")
     watch_parser.set_defaults(func=cmd_watch)
+
+    import_parser = subparsers.add_parser(
+        "import", parents=[parent_parser], help="Import an ICS file")
+    import_parser.add_argument("file", help="Path to the ICS file to import")
+    import_parser.set_defaults(func=cmd_import)
 
     install_parser = subparsers.add_parser(
         "install", parents=[parent_parser], help="Install eventix")

@@ -1,0 +1,18 @@
+[package]
+name = "eventix-import"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+eventix-cmd.workspace = true
+eventix-ical.workspace = true
+eventix-locale.workspace = true
+eventix-state.workspace = true
+tokio.workspace = true
+xdg.workspace = true
+
+gtk = "0.18.2"
+glib = "0.18"
+gdk-pixbuf = "0.18.0"
