@@ -122,7 +122,7 @@ async fn handle_import(state: EventixState, cmd: ImportOptions) -> anyhow::Resul
 fn get_socket_path(xdg: &BaseDirectories) -> PathBuf {
     let path = xdg
         .get_runtime_directory()
-        .map(|p| p.clone())
+        .cloned()
         .unwrap_or_else(|_| PathBuf::from("/tmp/eventix.sock"));
     path.join("eventix.sock")
 }

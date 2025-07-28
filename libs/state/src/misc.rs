@@ -77,8 +77,7 @@ impl Misc {
 
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         match xdg.find_data_file(FILENAME) {
-            Some(file) => {
-                let path = file.into();
+            Some(path) => {
                 let mut misc: Self = super::load_from_file(&path)?;
                 misc.path = path;
                 Ok(misc)

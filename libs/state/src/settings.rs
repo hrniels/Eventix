@@ -32,7 +32,7 @@ impl Settings {
 
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         match xdg.find_config_file(FILENAME) {
-            Some(file) => super::load_from_file(&file.into()),
+            Some(file) => super::load_from_file(&file),
             None => Ok(Settings::default()),
         }
     }
