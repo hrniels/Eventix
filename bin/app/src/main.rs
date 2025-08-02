@@ -156,7 +156,7 @@ fn update_icon(
 ) -> Option<eventix_cmd::Response> {
     let rt = Runtime::new().unwrap();
     let Ok(resp) =
-        rt.block_on(async { eventix_cmd::send(&xdg, eventix_cmd::Request::TaskStatus).await })
+        rt.block_on(async { eventix_cmd::send(xdg, eventix_cmd::Request::TaskStatus).await })
     else {
         return None;
     };

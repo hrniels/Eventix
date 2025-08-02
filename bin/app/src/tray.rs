@@ -28,7 +28,7 @@ pub struct EventixTray {
 
 impl EventixTray {
     pub fn new(sender: Sender<TrayMessage>, theme_path: PathBuf, path: PathBuf) -> Self {
-        let icon = Pixbuf::from_file(&path).expect(&format!("load icon '{path:?}'"));
+        let icon = Pixbuf::from_file(&path).unwrap_or_else(|_| panic!("load icon '{path:?}'"));
         EventixTray {
             theme_path,
             sender,
@@ -97,7 +97,7 @@ impl EventixTray {
             let text = if due >= 10 {
                 String::from("+")
             } else {
-                format!("{}", due)
+                format!("{due}")
             };
             let te = cr.text_extents(&text).unwrap();
             cr.move_to(
@@ -181,10 +181,10 @@ impl ksni::Tray for EventixTray {
                 tt.title = "No tasks due today".to_string();
             }
             TaskStatus::DueToday(count) => {
-                tt.title = format!("{} task(s) due today", count);
+                tt.title = format!("{count} task(s) due today");
             }
             TaskStatus::Overdue(count) => {
-                tt.title = format!("{} overdue task(s)!", count);
+                tt.title = format!("{count} overdue task(s)!");
             }
         }
         tt
