@@ -1,5 +1,4 @@
-use chrono::{DateTime, Duration, Local, NaiveDate, Utc};
-use chrono_tz::Tz;
+use chrono::{Duration, Local, NaiveDate, Utc};
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalCompType, CalTodoStatus, EventLike};
 use eventix_locale::Locale;
@@ -34,35 +33,10 @@ impl<'a> Tasks<'a> {
         let start = now.with_timezone(locale.timezone());
         let end = start + Duration::days(days as i64);
 
-        let mut next_td_occs = state
-            .store()
-            .directories()
-            .iter()
-            .filter(|s| !state.misc().calendar_disabled(s.id()))
-            .flat_map(move |s| {
-                s.occurrences_between(start, end, |c| c.ctype() == CalCompType::Todo)
-            })
-            .filter(|o| {
-                !o.is_excluded()
-                    && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction)
-                        != CalTodoStatus::Completed
-            })
-            .collect::<Vec<_>>();
+        let mut next_td_occs =
+            eventix_state::util::due_todos(state, locale.timezone(), days).collect::<Vec<_>>();
 
-        let overdue_tds = state
-            .store()
-            .occurrences_between(
-                DateTime::<Tz>::MIN_UTC.with_timezone(timezone),
-                start,
-                |c| c.ctype() == CalCompType::Todo,
-            )
-            .filter(|o| {
-                // so far, we got all todos that overlap with this period of time. but we are only
-                // interested in the ones that are due before the start and are not complete yet.
-                o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
-                    && o.occurrence_end().unwrap_or(start) < start
-                    && !o.is_excluded()
-            });
+        let overdue_tds = eventix_state::util::overdue_todos(state, locale.timezone());
 
         let settings = state.settings();
         let pers_alarms = state.personal_alarms();

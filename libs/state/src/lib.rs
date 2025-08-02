@@ -2,6 +2,7 @@ mod misc;
 mod persalarms;
 mod settings;
 mod sync;
+pub mod util;
 
 use anyhow::Context;
 use chrono::NaiveDateTime;
