@@ -43,14 +43,16 @@ struct ImportState {
 }
 
 fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
-    let cmd = eventix_cmd::Command::Import(eventix_cmd::ImportOptions {
+    let cmd = eventix_cmd::Request::Import(eventix_cmd::ImportOptions {
         file: state.file,
         calendar: cal,
     });
 
     let rt = Runtime::new().unwrap();
     rt.block_on(async {
-        eventix_cmd::send_or_execute(&state.xdg, Arc::new(Mutex::new(state.state)), cmd).await
+        eventix_cmd::send_or_execute(&state.xdg, Arc::new(Mutex::new(state.state)), cmd)
+            .await
+            .map(|_| ())
     })
 }
 

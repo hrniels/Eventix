@@ -4,7 +4,7 @@ use gdk_pixbuf::{Colorspace, Pixbuf};
 use glib::value::ToValue;
 use gtk::gdk::RGBA;
 use gtk::gio::Icon;
-use gtk::{Align, ButtonsType, DialogFlags, Image, MessageDialog, MessageType, prelude::*};
+use gtk::{prelude::*, Align, ButtonsType, DialogFlags, Image, MessageDialog, MessageType};
 use gtk::{
     Box as GtkBox, Button, CellRendererPixbuf, CellRendererText, ComboBox, Dialog, Label,
     ListStore, Orientation,
