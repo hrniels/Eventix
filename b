@@ -51,6 +51,15 @@ def cmd_watch(args):
     run_cmd(cmd_args)
 
 
+def cmd_app(args):
+    cmd_args = [
+        "cargo", "run", "--bin", "eventix-app", "--",
+        "--address", args.address,
+        "--port", str(args.port)
+    ]
+    run_cmd(cmd_args)
+
+
 def cmd_import(args):
     cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", args.file]
     run_cmd(cmd_args)
@@ -83,6 +92,11 @@ def main():
         "watch", parents=[parent_parser],
         help="Watch and rerun eventix on changes")
     watch_parser.set_defaults(func=cmd_watch)
+
+    app_parser = subparsers.add_parser(
+        "app", parents=[parent_parser],
+        help="Run the eventix app with tray icon")
+    app_parser.set_defaults(func=cmd_app)
 
     import_parser = subparsers.add_parser(
         "import", parents=[parent_parser], help="Import an ICS file")

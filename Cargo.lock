@@ -602,9 +602,13 @@ version = "0.1.0"
 dependencies = [
  "async-channel",
  "clap",
+ "eventix-cmd",
+ "gdk-pixbuf",
  "gtk",
  "ksni",
+ "tokio",
  "webkit2gtk",
+ "xdg",
 ]
 
 [[package]]

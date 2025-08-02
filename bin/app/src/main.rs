@@ -1,119 +1,24 @@
-use std::{path::Path, process::Command};
+use std::{
+    process::Command,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
-use async_channel::{Sender, unbounded};
+use async_channel::unbounded;
 use clap::Parser;
 use gtk::{gio::ApplicationFlags, glib, prelude::*};
-use ksni::blocking::TrayMethods;
+use ksni::blocking::{Handle, TrayMethods};
+use tokio::runtime::Runtime;
 use webkit2gtk::{
     NavigationPolicyDecision, NavigationPolicyDecisionExt, NavigationType, PolicyDecisionExt,
     PolicyDecisionType, SettingsExt, URIRequestExt, WebView, WebViewExt,
 };
+use xdg::BaseDirectories;
 
-fn to_abs_path(path: &str) -> Option<String> {
-    let abs = Path::new(path).canonicalize().ok()?;
-    abs.to_str().map(|s| s.to_string())
-}
+use crate::tray::{EventixTray, TaskStatus, TrayMessage};
 
-enum TrayMessage {
-    LoadPage(String),
-    ToggleWindow,
-}
-
-struct MyTray {
-    sender: Sender<TrayMessage>,
-}
-
-impl MyTray {
-    fn load_page(&self, uri: &str) {
-        if let Err(e) = self.sender.try_send(TrayMessage::LoadPage(uri.into())) {
-            eprintln!("Failed to send message: {e:?}");
-        }
-    }
-}
-
-impl ksni::Tray for MyTray {
-    fn id(&self) -> String {
-        env!("CARGO_PKG_NAME").into()
-    }
-
-    fn icon_theme_path(&self) -> String {
-        to_abs_path("../eventix/static").expect("Cannot turn ../eventix/static into absolute path")
-    }
-
-    fn icon_name(&self) -> String {
-        "icon".into()
-    }
-
-    fn title(&self) -> String {
-        "Eventix".into()
-    }
-
-    fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
-        use ksni::menu::*;
-        vec![
-            StandardItem {
-                label: "Monthly".into(),
-                icon_name: "month".into(),
-                activate: Box::new(|tray: &mut MyTray| {
-                    tray.load_page("/");
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: "Weekly".into(),
-                icon_name: "week".into(),
-                activate: Box::new(|tray: &mut MyTray| {
-                    tray.load_page("/weekly");
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: "List".into(),
-                icon_name: "list".into(),
-                activate: Box::new(|tray: &mut MyTray| {
-                    tray.load_page("/list");
-                }),
-                ..Default::default()
-            }
-            .into(),
-            MenuItem::Separator,
-            StandardItem {
-                label: "New Event".into(),
-                icon_name: "event".into(),
-                activate: Box::new(|tray: &mut MyTray| {
-                    tray.load_page("/new?ctype=Event");
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
-                label: "New Task".into(),
-                icon_name: "todo".into(),
-                activate: Box::new(|tray: &mut MyTray| {
-                    tray.load_page("/new?ctype=Todo");
-                }),
-                ..Default::default()
-            }
-            .into(),
-            MenuItem::Separator,
-            StandardItem {
-                label: "Exit".into(),
-                icon_name: "application-exit".into(),
-                activate: Box::new(|_| std::process::exit(0)),
-                ..Default::default()
-            }
-            .into(),
-        ]
-    }
-
-    fn activate(&mut self, _x: i32, _y: i32) {
-        if let Err(e) = self.sender.try_send(TrayMessage::ToggleWindow) {
-            eprintln!("Failed to send message: {e:?}");
-        }
-    }
-}
+mod tray;
 
 /// GTK frontend for the eventix server
 #[derive(Parser, Debug)]
@@ -135,6 +40,8 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
+    let xdg = BaseDirectories::with_prefix("eventix");
+
     // try to generate a unique id so that we can have multiple instances for different eventix
     // servers (or websites in general).
     let id = format!(
@@ -148,10 +55,9 @@ fn main() {
         // create channel between tray icon and main GTK thread
         let (main_tx, main_rx) = unbounded();
 
-        if !args.no_tray {
-            let tray = MyTray { sender: main_tx };
-            let _handle = tray.spawn().unwrap();
-        }
+        let icon = xdg.find_data_file("static/icon.png").unwrap();
+        let tray = EventixTray::new(main_tx, icon);
+        let tray = Arc::new(Mutex::new(tray.spawn().unwrap()));
 
         let window = gtk::ApplicationWindow::new(app);
         window.set_default_size(1400, 900);
@@ -223,8 +129,54 @@ fn main() {
                 }
             });
         }
+
+        // Background thread to simulate task state changes
+        thread::spawn({
+            let tray = tray.clone();
+            let xdg = xdg.clone();
+            move || {
+                let mut last = None;
+                loop {
+                    last = update_icon(&xdg, &tray, last.as_ref());
+
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        });
     });
 
     // pass no arguments to GTK, because it doesn't support our application arguments above
     app.run_with_args(&[""]);
+}
+
+fn update_icon(
+    xdg: &BaseDirectories,
+    tray: &Arc<Mutex<Handle<EventixTray>>>,
+    last: Option<&eventix_cmd::Response>,
+) -> Option<eventix_cmd::Response> {
+    let rt = Runtime::new().unwrap();
+    let Ok(resp) =
+        rt.block_on(async { eventix_cmd::send(&xdg, eventix_cmd::Request::TaskStatus).await })
+    else {
+        return None;
+    };
+
+    let eventix_cmd::Response::TaskStatus(today, overdue) = resp else {
+        return None;
+    };
+    if last.is_some() && last.unwrap() == &resp {
+        return Some(resp);
+    }
+
+    let tray_lock = tray.lock().unwrap();
+    tray_lock.update(|t| {
+        if overdue > 0 {
+            t.set_status(TaskStatus::Overdue(overdue));
+        } else if today > 0 {
+            t.set_status(TaskStatus::DueToday(today));
+        } else {
+            t.set_status(TaskStatus::None);
+        }
+    });
+    Some(resp)
 }
