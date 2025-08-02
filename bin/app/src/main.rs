@@ -139,7 +139,7 @@ fn main() {
                 loop {
                     last = update_icon(&xdg, &tray, last.as_ref());
 
-                    thread::sleep(Duration::from_secs(1));
+                    thread::sleep(Duration::from_secs(30));
                 }
             }
         });
