@@ -172,13 +172,13 @@ impl ksni::Tray for EventixTray {
         let mut tt = ToolTip::default();
         match self.status {
             TaskStatus::None => {
-                tt.title = "No tasks due".to_string();
+                tt.title = "No tasks due today".to_string();
             }
             TaskStatus::DueToday(count) => {
-                tt.title = format!("{} tasks due today", count);
+                tt.title = format!("{} task(s) due today", count);
             }
             TaskStatus::Overdue(count) => {
-                tt.title = format!("{} overdue tasks!", count);
+                tt.title = format!("{} overdue task(s)!", count);
             }
         }
         tt
