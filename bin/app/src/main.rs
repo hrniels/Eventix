@@ -56,7 +56,7 @@ fn main() {
         let (main_tx, main_rx) = unbounded();
 
         let icon = xdg.find_data_file("static/icon.png").unwrap();
-        let tray = EventixTray::new(main_tx, icon);
+        let tray = EventixTray::new(main_tx, xdg.get_data_home().unwrap(), icon);
         let tray = Arc::new(Mutex::new(tray.spawn().unwrap()));
 
         let window = gtk::ApplicationWindow::new(app);
