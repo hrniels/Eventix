@@ -197,7 +197,7 @@
                  class="ev_event_occurrence
                         ev_id_{{ occ.uid_html() }}
                         {% if let Some(end) = occ.occurrence_end() %}
-                        {% if end.date_naive() < tasks.today %}
+                        {% if end < &page.now %}
                         ev_overdue
                         {% else if end.date_naive() == tasks.today %}
                         ev_duetoday

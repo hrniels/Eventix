@@ -8,7 +8,7 @@ pub mod weekly;
 mod events;
 mod tasks;
 
-use chrono::{DateTime, NaiveDateTime, TimeZone};
+use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
 use eventix_locale::Locale;
 use eventix_state::EventixState;
@@ -37,6 +37,7 @@ impl Breadcrumb {
 
 pub struct Page {
     start: Instant,
+    now: DateTime<Tz>,
     breadcrumbs: Vec<Breadcrumb>,
     errors: Vec<String>,
     infos: Vec<String>,
@@ -49,6 +50,7 @@ impl Default for Page {
     fn default() -> Self {
         Self {
             start: Instant::now(),
+            now: Local::now().with_timezone(&Tz::UTC),
             breadcrumbs: Vec::new(),
             errors: Vec::new(),
             infos: Vec::new(),
@@ -62,8 +64,10 @@ impl Default for Page {
 impl Page {
     pub async fn new(state: &EventixState) -> Self {
         let state = state.lock().await;
+        let locale = state.settings().locale();
         Self {
             start: Instant::now(),
+            now: Local::now().with_timezone(locale.timezone()),
             calendars: Calendars::new(&state, |_dir, _settings| true),
             last_reload: state.last_reload(),
             ..Default::default()
