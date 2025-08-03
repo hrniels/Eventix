@@ -45,9 +45,8 @@ pub async fn get_handler(
     State(state): State<EventixState>,
     Query(req): Query<GetRequest>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
-
     let state = state.lock().await;
+    let locale = state.settings().locale();
 
     let html = EditAlarmTemplate::new(locale, &state, req.uid, req.rid, req.edit)?
         .render()
@@ -60,8 +59,6 @@ pub async fn post_handler(
     State(state): State<EventixState>,
     MultiForm(req): MultiForm<PostRequest>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
-
     let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()
@@ -72,6 +69,7 @@ pub async fn post_handler(
     };
 
     let mut state = state.lock().await;
+    let locale = state.settings().locale();
 
     let occ = state
         .store()

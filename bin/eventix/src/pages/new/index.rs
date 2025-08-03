@@ -44,8 +44,13 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
-    let calendar = state.lock().await.misc().last_calendar(req.ctype).cloned();
+    let (locale, calendar) = {
+        let state = state.lock().await;
+        let locale = state.settings().locale();
+        let calendar = state.misc().last_calendar(req.ctype).cloned();
+        (locale, calendar)
+    };
+
     content(
         super::new_page(&state, &req).await,
         locale.clone(),

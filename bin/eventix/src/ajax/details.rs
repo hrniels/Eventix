@@ -64,8 +64,6 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
-
     let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()
@@ -76,6 +74,7 @@ async fn handler(
     };
 
     let state = state.lock().await;
+    let locale = state.settings().locale();
 
     let occ = state
         .store()

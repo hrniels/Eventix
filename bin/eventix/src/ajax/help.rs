@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use askama::Template;
+use axum::extract::State;
 use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
 use eventix_locale::Locale;
@@ -25,8 +26,8 @@ struct HelpTemplate {
     locale: Arc<dyn Locale + Send + Sync>,
 }
 
-async fn handler() -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
+async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
+    let locale = state.lock().await.settings().locale();
 
     let html = HelpTemplate { locale }.render().context("help template")?;
 

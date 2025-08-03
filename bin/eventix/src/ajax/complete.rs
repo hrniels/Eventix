@@ -32,8 +32,6 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
-
     let rid = if let Some(rid) = req.rid.as_ref() {
         Some(
             rid.parse::<CalDate>()
@@ -44,6 +42,7 @@ async fn handler(
     };
 
     let mut state = state.lock().await;
+    let locale = state.settings().locale();
 
     let file = state
         .store_mut()

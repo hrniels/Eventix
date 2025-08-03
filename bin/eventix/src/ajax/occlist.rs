@@ -125,15 +125,14 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
+    let state = state.lock().await;
+    let locale = state.settings().locale();
 
     let date = req
         .date
         .parse::<CalDate>()
         .context(format!("Invalid date: {}", req.date))?
         .as_start_with_tz(locale.timezone());
-
-    let state = state.lock().await;
 
     let file = state
         .store()

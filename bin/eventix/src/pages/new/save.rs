@@ -95,7 +95,7 @@ pub async fn handler(
     Query(req): Query<Request>,
     MultiForm(mut form): MultiForm<CompNew>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
+    let locale = state.lock().await.settings().locale();
     let mut page = super::new_page(&state, &req).await;
 
     {

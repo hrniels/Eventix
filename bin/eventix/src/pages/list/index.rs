@@ -145,9 +145,9 @@ pub async fn handler(
     MultiQuery(mut filter): MultiQuery<Filter>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state, &filter).await;
-    let locale = eventix_locale::default();
 
     let state = state.lock().await;
+    let locale = state.settings().locale();
 
     let directories = state.store().directories().iter().collect::<Vec<_>>();
     if filter.dirs.is_empty() {

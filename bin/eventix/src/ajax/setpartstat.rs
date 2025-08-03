@@ -46,8 +46,8 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
     let mut state = state.lock().await;
+    let locale = state.settings().locale();
 
     let user = util::user_for_uid(&state, &req.uid)?
         .ok_or_else(|| anyhow!("Email account not specified"))?;

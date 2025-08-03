@@ -51,9 +51,9 @@ struct Args {
 async fn run_server(listener: TcpListener) {
     let xdg = Arc::new(BaseDirectories::with_prefix("eventix"));
 
-    let state = Arc::new(Mutex::new(
-        eventix_state::State::new(xdg.clone()).expect("loading state"),
-    ));
+    let state = eventix_state::State::new(xdg.clone()).expect("loading state");
+    let locale = state.settings().locale();
+    let state = Arc::new(Mutex::new(state));
 
     let static_path = xdg
         .find_data_file("static")
@@ -108,10 +108,7 @@ async fn run_server(listener: TcpListener) {
         );
 
     // start helper tasks
-    tokio::spawn(notify::watch_alarms(
-        state.clone(),
-        eventix_locale::default(),
-    ));
+    tokio::spawn(notify::watch_alarms(state.clone(), locale));
     let nstate = state.clone();
     tokio::spawn(async move {
         eventix_cmd::handle_commands(&xdg, nstate)

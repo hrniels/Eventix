@@ -62,8 +62,8 @@ fn main() {
     ImportView::init();
 
     let xdg = Arc::new(BaseDirectories::with_prefix("eventix"));
-    let locale = eventix_locale::default();
     let state = eventix_state::State::new(xdg.clone()).expect("loading state");
+    let locale = state.settings().locale();
 
     // collect all calendars
     let calendars = state

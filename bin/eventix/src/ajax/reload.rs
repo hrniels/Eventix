@@ -23,7 +23,7 @@ pub fn router(state: EventixState) -> Router {
 }
 
 async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
-    let locale = eventix_locale::default();
+    let locale = state.lock().await.settings().locale();
 
     let sync_res = match eventix_state::State::reload(state).await {
         Err(e) => {

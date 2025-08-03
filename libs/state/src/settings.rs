@@ -1,6 +1,10 @@
 use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
+use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use xdg::BaseDirectories;
 
 const FILENAME: &str = "settings.toml";
@@ -12,6 +16,10 @@ pub struct Settings {
 }
 
 impl Settings {
+    pub fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
+        eventix_locale::default()
+    }
+
     pub fn calendars(&self) -> &BTreeMap<String, CalendarSettings> {
         &self.calendars
     }
