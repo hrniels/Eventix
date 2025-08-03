@@ -3,19 +3,27 @@
 import argparse
 import os
 from pathlib import Path
-import platformdirs
 import shutil
 import shlex
 import subprocess
 
+APP_ID = "com.github.NilsTUD.Eventix"
+
 
 def dev_env():
     env = os.environ.copy()
-    run_dir = Path("data") / "eventix" / "run"
+    run_dir = Path("run")
     os.makedirs(run_dir, 0o700, exist_ok=True)
-    env["XDG_DATA_HOME"] = os.path.abspath("data")
+
+    # update data
+    shutil.rmtree(run_dir / APP_ID / "static", ignore_errors=True)
+    shutil.copytree(Path("data") / "static", run_dir / APP_ID / "static")
+    shutil.rmtree(run_dir / APP_ID / "icons", ignore_errors=True)
+    shutil.copytree(Path("data") / "icons", run_dir / APP_ID / "icons")
+
+    env["XDG_DATA_HOME"] = run_dir.absolute()
     env["XDG_RUNTIME_DIR"] = run_dir.absolute()
-    env["XDG_CONFIG_HOME"] = os.path.abspath("config")
+    env["XDG_CONFIG_HOME"] = run_dir.absolute()
     env["RUST_LOG"] = "trace"
     env["RUST_BACKTRACE"] = "full"
     return env
@@ -65,11 +73,33 @@ def cmd_import(args):
     run_cmd(cmd_args)
 
 
-def cmd_install(args):
-    dir = Path(platformdirs.user_data_dir()) / "eventix"
-    print("Installing data to {}...".format(dir))
-    shutil.rmtree(dir, ignore_errors=True)
-    shutil.copytree(Path("data") / "eventix" / "static", dir / "static")
+def cmd_flatpak(args):
+    build_dir = "flatpak/build"
+    repo_dir = "flatpak/repo"
+
+    # generate archive for flatpak JSON
+    subprocess.run([
+        "tar", "czf", "flatpak/source.tar.gz",
+        # include .git for GIT_HASH
+        ".git", "bin", "data", "libs", "Cargo.toml", "Cargo.lock"
+    ])
+
+    # build flatpak
+    add_args = ["--disable-cache"] if args.rebuild else []
+    subprocess.run(
+        ["flatpak-builder", "--force-clean"] + add_args +
+        [build_dir, "flatpak/{}.json".format(APP_ID)],
+        check=True)
+    subprocess.run([
+        "flatpak", "build-export", repo_dir, build_dir
+    ], check=True)
+    subprocess.run([
+        "flatpak", "build-bundle", repo_dir, "flatpak/Eventix.flatpak", APP_ID
+    ], check=True)
+
+    print()
+    print("Flatpak ready. You can install it via:")
+    print("$ flatpak install --user flatpak/Eventix.flatpak")
 
 
 def main():
@@ -103,9 +133,11 @@ def main():
     import_parser.add_argument("file", help="Path to the ICS file to import")
     import_parser.set_defaults(func=cmd_import)
 
-    install_parser = subparsers.add_parser(
-        "install", parents=[parent_parser], help="Install eventix")
-    install_parser.set_defaults(func=cmd_install)
+    flatpak_parser = subparsers.add_parser(
+        "flatpak", parents=[parent_parser], help="Build flatpak package")
+    flatpak_parser.add_argument("--rebuild", help="Force a complete rebuild",
+                                action="store_true")
+    flatpak_parser.set_defaults(func=cmd_flatpak)
 
     args = parser.parse_args()
     args.func(args)

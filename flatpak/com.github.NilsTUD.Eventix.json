@@ -1,0 +1,85 @@
+{
+    "app-id": "com.github.NilsTUD.Eventix",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "48",
+    "sdk": "org.gnome.Sdk",
+    "sdk-extensions": [
+        "org.freedesktop.Sdk.Extension.rust-stable"
+    ],
+    "command": "eventix-app",
+    "finish-args": [
+        "--share=network",
+        "--share=ipc",
+        "--socket=fallback-x11",
+        "--socket=x11",
+        "--device=dri",
+        "--socket=session-bus",
+        "--filesystem=xdg-run/pipewire-0",
+        "--talk-name=org.kde.StatusNotifierWatcher",
+        "--talk-name=org.freedesktop.Notifications",
+        "--talk-name=org.freedesktop.portal.Desktop"
+    ],
+    "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "env": {
+            "CARGO_HOME": "/run/build/eventix/cargo"
+        },
+        "build-args": [
+            "--share=network"
+        ]
+    },
+    "modules": [
+        {
+            "name": "Eventix-build",
+            "buildsystem": "simple",
+            "build-commands": [
+                "cargo build --release",
+                "mkdir -p /app/build-artifacts",
+                "cp target/release/eventix /app/build-artifacts/",
+                "cp target/release/eventix-app /app/build-artifacts/",
+                "cp target/release/eventix-import /app/build-artifacts/"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "path": "../flatpak/source.tar.gz",
+                    "strip-components": 0
+                }
+            ]
+        },
+        {
+            "name": "Eventix-install",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -Dm755 /app/build-artifacts/eventix -t /app/bin/",
+                "install -Dm755 /app/build-artifacts/eventix-app -t /app/bin/",
+                "install -Dm755 /app/build-artifacts/eventix-import -t /app/bin/",
+                "rm -rf /app/build-artifacts",
+                "install -Dm644 com.github.NilsTUD.Eventix.desktop -t /app/share/applications/",
+                "install -Dm644 com.github.NilsTUD.Eventix-Import.desktop -t /app/share/applications/",
+                "install -Dm644 icons/scalable.svg /app/share/icons/hicolor/scalable/apps/com.github.NilsTUD.Eventix.svg",
+                "install -Dm644 icons/256x256.png /app/share/icons/hicolor/256x256/apps/com.github.NilsTUD.Eventix.png",
+                "install -Dm644 icons/128x128.png /app/share/icons/hicolor/128x128/apps/com.github.NilsTUD.Eventix.png",
+                "install -Dm644 icons/64x64.png /app/share/icons/hicolor/64x64/apps/com.github.NilsTUD.Eventix.png",
+                "install -Dm644 icons/48x48.png /app/share/icons/hicolor/48x48/apps/com.github.NilsTUD.Eventix.png",
+                "install -Dm644 icons/32x32.png /app/share/icons/hicolor/32x32/apps/com.github.NilsTUD.Eventix.png",
+                "install -Dm644 icons/index.theme /app/share/icons/hicolor/index.theme",
+                "mkdir -p /app/share/com.github.NilsTUD.Eventix/static",
+                "mkdir -p /app/share/com.github.NilsTUD.Eventix/icons",
+                "cp -r static /app/share/com.github.NilsTUD.Eventix",
+                "cp -r icons /app/share/com.github.NilsTUD.Eventix",
+                "gtk-update-icon-cache /app/share/icons/hicolor"
+            ],
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": "../data"
+                },
+                {
+                    "type": "dir",
+                    "path": "../flatpak"
+                }
+            ]
+        }
+    ]
+}

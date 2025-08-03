@@ -40,6 +40,7 @@ impl ImportView {
         dialog.set_title(locale.translate("Eventix Importer"));
         dialog.set_modal(true);
         dialog.set_default_size(300, 120);
+        dialog.set_icon_name(Some(crate::APP_ID));
 
         // Main container
         let content_area = dialog.content_area();
@@ -62,17 +63,17 @@ impl ImportView {
         // load icons
         const ICON_SIZE: i32 = 25;
         let event_icon = Pixbuf::from_file_at_size(
-            xdg.find_data_file("static/event.png").unwrap(),
+            xdg.find_data_file("icons/event.png").unwrap(),
             ICON_SIZE,
             ICON_SIZE,
         )
-        .expect("load 'static/event.png'");
+        .expect("load 'icons/event.png'");
         let task_icon = Pixbuf::from_file_at_size(
-            xdg.find_data_file("static/todo.png").unwrap(),
+            xdg.find_data_file("icons/todo.png").unwrap(),
             ICON_SIZE,
             ICON_SIZE,
         )
-        .expect("load 'static/todo.png'");
+        .expect("load 'icons/todo.png'");
 
         let mut cal_filter = vec![];
         let mut type_filter = vec![];

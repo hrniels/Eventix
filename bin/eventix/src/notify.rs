@@ -6,14 +6,10 @@ use eventix_ical::{
 };
 use eventix_locale::{DateFlags, Locale};
 use eventix_state::{CalendarAlarmType, EventixState, PersonalCalendarAlarms};
-use std::{
-    collections::HashMap,
-    path::{self, PathBuf},
-    process::Command,
-    sync::Arc,
-};
+use std::{collections::HashMap, process::Command, sync::Arc};
 use tokio::time;
 use tracing::{info, warn};
+use xdg::BaseDirectories;
 
 struct Notification {
     pub appname: String,
@@ -23,7 +19,11 @@ struct Notification {
 }
 
 impl Notification {
-    fn from_alarm(occ: &AlarmOccurrence<'_>, locale: &Arc<dyn Locale + Send + Sync>) -> Self {
+    fn from_alarm(
+        xdg: &BaseDirectories,
+        occ: &AlarmOccurrence<'_>,
+        locale: &Arc<dyn Locale + Send + Sync>,
+    ) -> Self {
         let mut body = String::new();
         if let Some(start) = occ.occurrence().occurrence_start() {
             body = format!("Start: {}", locale.fmt_datetime(&start, DateFlags::None));
@@ -36,8 +36,9 @@ impl Notification {
             locale.fmt_datetime(&occ.alarm_date().unwrap(), DateFlags::Short)
         ));
 
-        let icon: PathBuf = ["static", "images", "icon.png"].iter().collect();
-        let icon = path::absolute(icon).unwrap();
+        let icon = xdg
+            .find_data_file("static/icon.png")
+            .expect("Find '$XDG_DATA_HOME/static/icon.png'");
         Self {
             appname: String::from("Eventix"),
             icon: icon.into_os_string().into_string().unwrap(),
@@ -108,7 +109,11 @@ impl AlarmOverlay for NotifyAlarmOverlay<'_> {
     }
 }
 
-pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + Sync>) {
+pub async fn watch_alarms(
+    state: EventixState,
+    xdg: Arc<BaseDirectories>,
+    locale: Arc<dyn Locale + Send + Sync>,
+) {
     loop {
         {
             let mut state = state.lock().await;
@@ -141,7 +146,7 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
             alarms.sort_by_key(|o| o.alarm_date().unwrap());
 
             for alarm in alarms {
-                let notification = Notification::from_alarm(&alarm, &locale);
+                let notification = Notification::from_alarm(&xdg, &alarm, &locale);
                 info!(
                     "Sending alarm notification for {} (start={:?}, due={:?})",
                     alarm.occurrence().uid(),

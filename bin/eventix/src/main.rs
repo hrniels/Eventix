@@ -31,6 +31,8 @@ use xdg::BaseDirectories;
 
 use crate::ajax::{cancel, help, moveevent};
 
+include!(concat!(env!("OUT_DIR"), "/icons.rs"));
+
 async fn error_handler() -> impl IntoResponse {
     HTMLError::from(anyhow::Error::msg("no such route"))
 }
@@ -44,23 +46,21 @@ struct Args {
     address: String,
 
     /// the port number for the webserver
-    #[arg(long, default_value_t = 8081)]
+    #[arg(long, default_value_t = 8084)]
     port: u16,
 }
 
 async fn run_server(listener: TcpListener) {
-    let xdg = Arc::new(BaseDirectories::with_prefix("eventix"));
+    let xdg = Arc::new(BaseDirectories::with_prefix(APP_ID));
 
     let state = eventix_state::State::new(xdg.clone()).expect("loading state");
     let locale = state.settings().locale();
     let state = Arc::new(Mutex::new(state));
 
-    let static_path = xdg
-        .find_data_file("static")
-        .expect("Find '$XDG_DATA_HOME/static/'");
     let icon_path = xdg
         .find_data_file("static/icon.png")
         .expect("Find '$XDG_DATA_HOME/static/icon.png'");
+    let static_path = icon_path.parent().unwrap().to_owned();
 
     let app = Router::new()
         .nest_service("/favicon.ico", ServeFile::new(icon_path))
@@ -108,7 +108,7 @@ async fn run_server(listener: TcpListener) {
         );
 
     // start helper tasks
-    tokio::spawn(notify::watch_alarms(state.clone(), locale));
+    tokio::spawn(notify::watch_alarms(state.clone(), xdg.clone(), locale));
     let nstate = state.clone();
     tokio::spawn(async move {
         eventix_cmd::handle_commands(&xdg, nstate)

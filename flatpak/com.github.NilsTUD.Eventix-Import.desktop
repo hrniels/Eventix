@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Eventix Import
+Comment=Event and Task Manager - Import
+Exec=eventix-import %U
+Icon=com.github.NilsTUD.Eventix
+Terminal=false
+StartupNotify=false
+Categories=Office;Calendar;
+MimeType=text/calendar;

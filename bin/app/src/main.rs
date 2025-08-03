@@ -20,6 +20,8 @@ use crate::tray::{EventixTray, TaskStatus, TrayMessage};
 
 mod tray;
 
+include!(concat!(env!("OUT_DIR"), "/icons.rs"));
+
 /// GTK frontend for the eventix server
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -29,7 +31,7 @@ struct Args {
     address: String,
 
     /// the port number for the eventix server
-    #[arg(long, default_value_t = 8081)]
+    #[arg(long, default_value_t = 8084)]
     port: u16,
 
     /// disable system tray icon
@@ -40,29 +42,20 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let xdg = BaseDirectories::with_prefix("eventix");
-
-    // try to generate a unique id so that we can have multiple instances for different eventix
-    // servers (or websites in general).
-    let id = format!(
-        "app.eventix.a{}.p{}",
-        args.address.clone().replace('.', "-"),
-        args.port
-    );
-    let app = gtk::Application::new(Some(&id), ApplicationFlags::empty());
+    let xdg = BaseDirectories::with_prefix(APP_ID);
+    let app = gtk::Application::new(Some(APP_ID), ApplicationFlags::empty());
 
     app.connect_activate(move |app| {
         // create channel between tray icon and main GTK thread
         let (main_tx, main_rx) = unbounded();
 
         let icon = xdg.find_data_file("static/icon.png").unwrap();
-        let tray = EventixTray::new(main_tx, xdg.get_data_home().unwrap(), icon);
+        let tray = EventixTray::new(main_tx, icon.clone());
         let tray = Arc::new(Mutex::new(tray.spawn().unwrap()));
 
         let window = gtk::ApplicationWindow::new(app);
         window.set_default_size(1400, 900);
         window.set_title("Eventix");
-        window.set_icon_name(Some("icon"));
 
         let webview = WebView::new();
         if let Some(settings) = WebViewExt::settings(&webview) {

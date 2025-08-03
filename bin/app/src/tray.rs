@@ -18,7 +18,6 @@ pub enum TaskStatus {
 }
 
 pub struct EventixTray {
-    theme_path: PathBuf,
     sender: Sender<TrayMessage>,
     status: TaskStatus,
     icon: Vec<u8>,
@@ -27,10 +26,9 @@ pub struct EventixTray {
 }
 
 impl EventixTray {
-    pub fn new(sender: Sender<TrayMessage>, theme_path: PathBuf, path: PathBuf) -> Self {
+    pub fn new(sender: Sender<TrayMessage>, path: PathBuf) -> Self {
         let icon = Pixbuf::from_file(&path).unwrap_or_else(|_| panic!("load icon '{path:?}'"));
         EventixTray {
-            theme_path,
             sender,
             icon: icon.pixel_bytes().unwrap().to_vec(),
             width: icon.width(),
@@ -158,10 +156,6 @@ impl ksni::Tray for EventixTray {
         env!("CARGO_PKG_NAME").into()
     }
 
-    fn icon_theme_path(&self) -> String {
-        self.theme_path.to_str().unwrap().to_string()
-    }
-
     fn icon_pixmap(&self) -> Vec<Icon> {
         vec![self.create_icon()]
     }
@@ -199,7 +193,7 @@ impl ksni::Tray for EventixTray {
         vec![
             StandardItem {
                 label: "Monthly".into(),
-                icon_name: "static/month".into(),
+                icon_data: crate::ICON_MONTH.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
                     tray.load_page("/");
                 }),
@@ -208,7 +202,7 @@ impl ksni::Tray for EventixTray {
             .into(),
             StandardItem {
                 label: "Weekly".into(),
-                icon_name: "static/week".into(),
+                icon_data: crate::ICON_WEEK.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
                     tray.load_page("/weekly");
                 }),
@@ -217,7 +211,7 @@ impl ksni::Tray for EventixTray {
             .into(),
             StandardItem {
                 label: "List".into(),
-                icon_name: "static/list".into(),
+                icon_data: crate::ICON_LIST.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
                     tray.load_page("/list");
                 }),
@@ -227,7 +221,7 @@ impl ksni::Tray for EventixTray {
             MenuItem::Separator,
             StandardItem {
                 label: "New Event".into(),
-                icon_name: "static/event".into(),
+                icon_data: crate::ICON_EVENT.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
                     tray.load_page("/new?ctype=Event");
                 }),
@@ -236,7 +230,7 @@ impl ksni::Tray for EventixTray {
             .into(),
             StandardItem {
                 label: "New Task".into(),
-                icon_name: "static/todo".into(),
+                icon_data: crate::ICON_TODO.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
                     tray.load_page("/new?ctype=Todo");
                 }),

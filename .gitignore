@@ -1,5 +1,7 @@
 /target
-/data/eventix/alarms
-/data/eventix/misc.toml
-/data/eventix/run
-/config/eventix/settings.toml
+/run
+/flatpak/build
+/flatpak/repo
+/flatpak/*.flatpak
+/flatpak/source.tar.gz
+/.flatpak-builder

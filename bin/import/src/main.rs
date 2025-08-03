@@ -1,10 +1,9 @@
 use anyhow::Context;
 use clap::Parser;
 use eventix_ical::objects::{Calendar, EventLike};
+use gtk::gio::prelude::*;
+use gtk::gio::{Cancellable, File};
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
@@ -16,6 +15,8 @@ use crate::view::ImportView;
 mod model;
 mod view;
 
+include!(concat!(env!("OUT_DIR"), "/icons.rs"));
+
 /// Simple GTK dialog to import ICS files into eventix
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -24,16 +25,31 @@ struct Args {
     file: String,
 }
 
-fn parse_ics_file(path: PathBuf) -> anyhow::Result<Calendar> {
-    let mut input = String::new();
-    File::open(&path)
-        .context(format!("open {:?}", &path))?
-        .read_to_string(&mut input)
-        .context(format!("read {:?}", &path))?;
+fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
+    let file = File::for_uri(uri);
+    let stream = file
+        .read(None::<&Cancellable>)
+        .context(format!("open {:?}", uri))?;
 
-    input
+    let mut input = Vec::new();
+    let mut buffer = [0u8; 8192];
+
+    loop {
+        // Read some bytes from stream
+        let bytes_read = stream
+            .read(&mut buffer, None::<&Cancellable>)
+            .context(format!("read {:?}", uri))?;
+        if bytes_read == 0 {
+            break;
+        }
+
+        input.extend_from_slice(&buffer[..bytes_read]);
+    }
+
+    let in_str = String::from_utf8(input).context(format!("parse UTF-8 {:?}", uri))?;
+    in_str
         .parse::<Calendar>()
-        .context(format!("parse {:?}", &path))
+        .context(format!("parse {:?}", uri))
 }
 
 struct ImportState {
@@ -61,7 +77,7 @@ fn main() {
 
     ImportView::init();
 
-    let xdg = Arc::new(BaseDirectories::with_prefix("eventix"));
+    let xdg = Arc::new(BaseDirectories::with_prefix(APP_ID));
     let state = eventix_state::State::new(xdg.clone()).expect("loading state");
     let locale = state.settings().locale();
 
@@ -79,7 +95,7 @@ fn main() {
         .collect();
 
     // parse items from ICS file
-    let ics = parse_ics_file(PathBuf::from(&args.file)).unwrap();
+    let ics = parse_ics_file(&args.file).unwrap();
     let items = ics
         .components()
         .iter()
