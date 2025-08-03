@@ -1,4 +1,4 @@
-<a href="{{ org.address() }}">
+<a href="mailto:{{ org.address() }}">
     {% if let Some(cn) = org.common_name() %}
     {{ cn }}
     {% else %}

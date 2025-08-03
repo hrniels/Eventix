@@ -91,7 +91,7 @@
                         <li>
                             <i title="{{ html::attendee_title(att) }}"
                                class="{{ html::attendee_icon(att) }}"></i>
-                            <a href="{{ att.address() }}">
+                            <a href="mailto:{{ att.address() }}">
                             {% if let Some(cn) = att.common_name() %}
                             {{ cn }}
                             {% else %}
