@@ -15,6 +15,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
+use tracing::debug;
 use xdg::BaseDirectories;
 
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
@@ -130,6 +131,7 @@ impl State {
 }
 
 pub fn load_from_file<D: DeserializeOwned>(filename: &PathBuf) -> anyhow::Result<D> {
+    debug!("Reading from {:?}", filename);
     let mut file = File::options()
         .read(true)
         .open(filename)
@@ -141,6 +143,7 @@ pub fn load_from_file<D: DeserializeOwned>(filename: &PathBuf) -> anyhow::Result
 }
 
 pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Result<()> {
+    debug!("Writing to {:?}", filename);
     let mut file = File::options()
         .write(true)
         .create(true)
