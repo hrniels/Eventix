@@ -69,6 +69,7 @@ fn main() {
             settings.set_enable_developer_extras(true);
             // smooth scrolling feels really laggy, so disable it
             settings.set_enable_smooth_scrolling(false);
+            settings.set_enable_write_console_messages_to_stdout(true);
         }
 
         let url = format!("http://{}:{}", args.address, args.port);
