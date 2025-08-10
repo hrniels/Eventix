@@ -29,7 +29,7 @@ fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
     let file = File::for_uri(uri);
     let stream = file
         .read(None::<&Cancellable>)
-        .context(format!("open {:?}", uri))?;
+        .context(format!("open {uri:?}"))?;
 
     let mut input = Vec::new();
     let mut buffer = [0u8; 8192];
@@ -38,7 +38,7 @@ fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
         // Read some bytes from stream
         let bytes_read = stream
             .read(&mut buffer, None::<&Cancellable>)
-            .context(format!("read {:?}", uri))?;
+            .context(format!("read {uri:?}"))?;
         if bytes_read == 0 {
             break;
         }
@@ -46,10 +46,8 @@ fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
         input.extend_from_slice(&buffer[..bytes_read]);
     }
 
-    let in_str = String::from_utf8(input).context(format!("parse UTF-8 {:?}", uri))?;
-    in_str
-        .parse::<Calendar>()
-        .context(format!("parse {:?}", uri))
+    let in_str = String::from_utf8(input).context(format!("parse UTF-8 {uri:?}"))?;
+    in_str.parse::<Calendar>().context(format!("parse {uri:?}"))
 }
 
 struct ImportState {

@@ -30,7 +30,7 @@ fn main() {
         .open(path)
         .unwrap();
 
-    writeln!(f, "pub const APP_ID: &'static str = \"{0}\";\n", app_id).unwrap();
+    writeln!(f, "pub const APP_ID: &str = \"{app_id}\";\n").unwrap();
 
     for icon in icons {
         writeln!(
@@ -42,9 +42,6 @@ fn main() {
         )
         .unwrap();
 
-        println!(
-            "cargo:rerun-if-changed=../../../data/{}/icons/{}.png",
-            app_id, icon
-        );
+        println!("cargo:rerun-if-changed=../../../data/{app_id}/icons/{icon}.png",);
     }
 }
