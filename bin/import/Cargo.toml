@@ -17,3 +17,4 @@ xdg.workspace = true
 gtk = "0.18.2"
 glib = "0.18"
 gdk-pixbuf = "0.18.0"
+tempfile = "3.20.0"

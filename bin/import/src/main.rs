@@ -4,7 +4,9 @@ use eventix_ical::objects::{Calendar, EventLike};
 use gtk::gio::prelude::*;
 use gtk::gio::{Cancellable, File};
 use std::collections::HashSet;
+use std::io::Write;
 use std::sync::Arc;
+use tempfile::NamedTempFile;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use xdg::BaseDirectories;
@@ -25,7 +27,7 @@ struct Args {
     file: String,
 }
 
-fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
+fn read_ics_file(uri: &str) -> anyhow::Result<String> {
     let file = File::for_uri(uri);
     let stream = file
         .read(None::<&Cancellable>)
@@ -46,7 +48,11 @@ fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
         input.extend_from_slice(&buffer[..bytes_read]);
     }
 
-    let in_str = String::from_utf8(input).context(format!("parse UTF-8 {uri:?}"))?;
+    String::from_utf8(input).context(format!("parse UTF-8 {uri:?}"))
+}
+
+fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
+    let in_str = read_ics_file(uri)?;
     in_str.parse::<Calendar>().context(format!("parse {uri:?}"))
 }
 
@@ -57,12 +63,19 @@ struct ImportState {
 }
 
 fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
+    let rt = Runtime::new().unwrap();
+
+    // copy URI to temp file in run directory
+    let mut tmp_file = NamedTempFile::new_in(state.xdg.get_runtime_directory()?)
+        .context("create temp file in runtime directory")?;
+    let ics_file = read_ics_file(&state.file)?;
+    tmp_file.write_all(ics_file.as_bytes())?;
+
     let cmd = eventix_cmd::Request::Import(eventix_cmd::ImportOptions {
-        file: state.file,
+        file: tmp_file.path().to_str().unwrap().to_string(),
         calendar: cal,
     });
 
-    let rt = Runtime::new().unwrap();
     rt.block_on(async {
         eventix_cmd::send_or_execute(&state.xdg, Arc::new(Mutex::new(state.state)), cmd)
             .await
