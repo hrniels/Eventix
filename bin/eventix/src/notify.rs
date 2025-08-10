@@ -31,10 +31,12 @@ impl Notification {
         if let Some(loc) = occ.occurrence().location() {
             body.push_str(&format!("\nWhere: {loc}"));
         }
-        body.push_str(&format!(
-            "\nReminder for: {}",
-            locale.fmt_datetime(&occ.alarm_date().unwrap(), DateFlags::Short)
-        ));
+        if let Some(alarm_date) = occ.alarm_date() {
+            body.push_str(&format!(
+                "\nReminder for: {}",
+                locale.fmt_datetime(&alarm_date, DateFlags::Short)
+            ));
+        }
 
         let icon = xdg
             .find_data_file("static/icon.png")
