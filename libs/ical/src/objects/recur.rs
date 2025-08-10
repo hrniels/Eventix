@@ -501,7 +501,7 @@ impl CalRRule {
         dtdur: Option<Duration>,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-    ) -> RecurIterator {
+    ) -> RecurIterator<'_> {
         let interval = self.interval.unwrap_or(1) as u32;
         // go one interval further to ensure that we do not miss an occurrence. for example, if we
         // want to see all occurrences until December 20th of a monthly event starting at 25th of

@@ -523,7 +523,7 @@ impl CalComponent {
     ///
     /// Note that the iterator returns excluded occurrences as well and requires the caller to
     /// ignore these, if desired.
-    pub fn dates_between(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> CompDateIterator {
+    pub fn dates_between(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> CompDateIterator<'_> {
         if let Some(rrule) = self.rrule() {
             let Some(dtstart) = self.start() else {
                 return CompDateIterator::default();
