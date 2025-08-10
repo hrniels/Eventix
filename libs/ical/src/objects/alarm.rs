@@ -188,13 +188,14 @@ impl CalAlarm {
         &self,
         start: Option<DateTime<Tz>>,
         end: Option<DateTime<Tz>>,
+        tz: Option<Tz>,
     ) -> Option<DateTime<Tz>> {
         match &self.trigger {
             CalTrigger::Relative { related, duration } => match related {
                 CalRelated::Start => start.map(|s| s + **duration),
                 CalRelated::End => end.map(|e| e + **duration),
             },
-            CalTrigger::Absolute(date) => start.map(|s| date.as_start_with_tz(&s.timezone())),
+            CalTrigger::Absolute(date) => tz.map(|tz| date.as_start_with_tz(&tz)),
         }
     }
 

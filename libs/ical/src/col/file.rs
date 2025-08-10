@@ -367,8 +367,11 @@ impl CalFile {
 
                 // add the desired ones (if they are in the specified time frame)
                 for rid_alarm in rid_alarms {
-                    let trigger_date = rid_alarm
-                        .trigger_date(rid_occ.occurrence_start(), rid_occ.occurrence_end());
+                    let trigger_date = rid_alarm.trigger_date(
+                        rid_occ.occurrence_start(),
+                        rid_occ.occurrence_end(),
+                        rid_occ.tz(),
+                    );
                     match trigger_date {
                         Some(alarm) if alarm >= start && alarm < end => {
                             alarms.push(AlarmOccurrence::new(rid_occ.clone(), rid_alarm));

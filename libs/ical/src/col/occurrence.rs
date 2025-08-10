@@ -428,7 +428,10 @@ impl<'o> AlarmOccurrence<'o> {
 
     /// Returns the first alarm date of this occurrence, if it has an alarm.
     pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
-        self.alarm
-            .trigger_date(self.occ.occurrence_start(), self.occ.occurrence_end())
+        self.alarm.trigger_date(
+            self.occ.occurrence_start(),
+            self.occ.occurrence_end(),
+            self.occ.tz(),
+        )
     }
 }
