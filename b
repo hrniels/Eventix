@@ -49,12 +49,12 @@ def cmd_run(args):
 
 def cmd_watch(args):
     cmd = shlex.join([
-        "run", "--bin", "eventix", "--",
+        "run", "--",
         "--address", args.address,
         "--port", str(args.port)
     ])
     cmd_args = [
-        "cargo", "watch", "--ignore", "data", "--ignore", "config", "-x", cmd
+        "cargo", "watch", "-C", "bin/eventix", "-x", cmd
     ]
     run_cmd(cmd_args)
 
