@@ -188,7 +188,7 @@
                         ">
                     </div>
                     {% endif %}
-                    <div style="padding: 2px">
+                    <div style="padding: 2px; height: calc({{ occ.minute_duration(day.date.clone()) }}px - 8px);">
                         {% if occ.rid().is_some() || occ.rrule().is_some() %}
                         <i class="bi bi-arrow-clockwise ev_right_icon"></i>
                         {% endif %}
