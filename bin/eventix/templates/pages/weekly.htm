@@ -155,8 +155,8 @@
                 <div style="position: absolute;
                             top: {{ occ.minute_off(day.date.clone()) + 1 }}px;
                             height: calc({{ occ.minute_duration(day.date.clone()) }}px - 4px);
-                            width: calc({{ 100 / occ.overlap_count() }}% - 4px);
-                            left: calc({{ occ.overlap_off() * (100 / occ.overlap_count()) }}% + 1px);
+                            width: calc({{ occ.overlap().width * (100 / occ.overlap().slots) }}% - 4px);
+                            left: calc({{ occ.overlap().offset * (100 / occ.overlap().slots) }}% + 1px);
                             padding: 0px"
                      onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
                                                         'ev_id_{{ occ.uid_html() }}',

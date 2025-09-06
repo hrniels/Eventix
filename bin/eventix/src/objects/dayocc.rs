@@ -7,10 +7,30 @@ use once_cell::sync::Lazy;
 use std::cmp::Ordering;
 use std::{ops::Deref, sync::Mutex};
 
+#[derive(Copy, Clone, Debug)]
+pub struct OccurrenceOverlap {
+    /// the number of slots next to each other
+    pub slots: usize,
+    /// our offset within these slots
+    pub offset: usize,
+    /// how many slots we occupy (in case some next to us are free)
+    pub width: usize,
+}
+
+impl OccurrenceOverlap {
+    pub fn new(slots: usize, offset: usize, width: usize) -> Self {
+        Self {
+            slots,
+            offset,
+            width,
+        }
+    }
+}
+
 pub struct DayOccurrence<'a> {
     id: u64,
     inner: Occurrence<'a>,
-    overlap: Option<(usize, usize)>,
+    overlap: Option<OccurrenceOverlap>,
     partstat: Option<CalPartStat>,
     owner: bool,
     effective_alarms: bool,
@@ -141,15 +161,11 @@ impl<'a> DayOccurrence<'a> {
         }
     }
 
-    pub fn overlap_count(&self) -> usize {
-        self.overlap.unwrap().0
+    pub fn overlap(&self) -> OccurrenceOverlap {
+        self.overlap.unwrap()
     }
 
-    pub fn overlap_off(&self) -> usize {
-        self.overlap.unwrap().1
-    }
-
-    pub fn set_overlap(&mut self, overlap: (usize, usize)) {
+    pub fn set_overlap(&mut self, overlap: OccurrenceOverlap) {
         self.overlap = Some(overlap);
     }
 

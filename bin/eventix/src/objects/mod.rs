@@ -4,4 +4,4 @@ mod dayocc;
 
 pub use calendars::{Calendar, Calendars};
 pub use compaction::CompAction;
-pub use dayocc::DayOccurrence;
+pub use dayocc::{DayOccurrence, OccurrenceOverlap};

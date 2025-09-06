@@ -9,10 +9,10 @@ use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
 use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::EventixState;
 use serde::Deserialize;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use crate::html::filters;
-use crate::objects::DayOccurrence;
+use crate::objects::{DayOccurrence, OccurrenceOverlap};
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use crate::util::parse_human_date;
 
@@ -57,103 +57,96 @@ pub async fn handler(
     .await
 }
 
-fn overlaps_of(day_occs: &[&DayOccurrence], occ: &DayOccurrence) -> usize {
-    let mut overlaps = vec![];
-    for day in day_occs {
-        if day.id() == occ.id() {
-            continue;
-        }
-        if let Some(dend) = day.occurrence_end() {
-            if let Some(dstart) = day.occurrence_start() {
-                if occ.overlaps(dstart, dend) {
-                    overlaps.push(*day);
-                }
-            }
-        }
-    }
+#[derive(Debug)]
+struct Rows<'d>(Vec<Row<'d>>);
 
-    if overlaps.is_empty() {
-        // it's just us
-        1
-    } else {
-        // otherwise we want to determine the "widest" spot. For example, if there are 3 blocks
-        // like that:
-        // +-+-+-+
-        // | |2|4|
-        // | +-+-+
-        // |1|
-        // | +-+
-        // | |3|
-        // +-+-+
-        // Here block 1 overlaps with 2, 3, and 4, but all not at the same time. For example, 2 and
-        // 3 don't overlap with each other. To calculate that we determine the number of overlaps
-        // the blocks we overlap have and take the maximum. In the example, 2 overlaps with 4 and 1
-        // and, resulting in 3. And 3 overlaps just with 1, resulting in 2. So, we have at most 3
-        // overlaps.
-        1 + overlaps
-            .iter()
-            .map(|o| overlaps_of(&overlaps[..], o))
-            .max()
-            .unwrap()
-    }
-}
+#[derive(Debug)]
+struct Row<'d>(Vec<Slot<'d>>);
 
-fn determine_slot(slots: &[Vec<&DayOccurrence>], day: &DayOccurrence) -> usize {
-    'outer: for slot in 0.. {
-        // if the slot is not present yet, we can take it
-        if slot >= slots.len() {
-            return slot;
-        }
-        for occ in &slots[slot] {
-            if let Some(dend) = day.occurrence_end() {
-                if let Some(dstart) = day.occurrence_start() {
-                    if occ.overlaps(dstart, dend) {
-                        // if one occurrence in that slot overlaps with us, try the next one
-                        continue 'outer;
+struct Slot<'d>(Vec<&'d DayOccurrence<'d>>);
+
+impl<'d> Rows<'d> {
+    fn get_overlap(&self, occ: &DayOccurrence) -> OccurrenceOverlap {
+        for row in &self.0 {
+            for (s, slot) in row.0.iter().enumerate() {
+                for o in &slot.0 {
+                    if o.id() == occ.id() {
+                        // determine how many slots right of this one are free for us
+                        let mut width = 1;
+                        let mut next = s + 1;
+                        while next < row.0.len() && !row.0[next].overlaps_with(occ) {
+                            width += 1;
+                            next += 1;
+                        }
+                        return OccurrenceOverlap::new(row.0.len(), s, width);
                     }
                 }
             }
         }
-        // no overlap -> use this slot
-        return slot;
+        unreachable!();
     }
-    unreachable!();
+
+    fn insert(&mut self, occ: &'d DayOccurrence) {
+        for row in &mut self.0 {
+            // if there is any overlap in this row, the occurrence *has* to be put into this row
+            if row.overlaps_with(occ) {
+                for slot in &mut row.0 {
+                    // use the first slot it does not overlap with
+                    if !slot.overlaps_with(occ) {
+                        slot.0.push(occ);
+                        return;
+                    }
+                }
+                // ok, all non-overlapping slots - add a new one
+                row.0.push(Slot(vec![occ]));
+                return;
+            }
+        }
+
+        // no overlapping row - add a new one
+        self.0.push(Row(vec![Slot(vec![occ])]));
+    }
 }
 
-fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, (usize, usize)> {
-    // first determine the number of overlaps per occurrence
-    let mut counts = HashMap::new();
-    let all: Vec<_> = day_occs.iter().collect();
-    for day in day_occs {
-        let count = overlaps_of(&all, day);
-        counts.insert(day.id(), count);
+impl<'d> Row<'d> {
+    fn overlaps_with(&self, occ: &DayOccurrence) -> bool {
+        self.0.iter().any(|s| s.overlaps_with(occ))
+    }
+}
+
+impl<'d> Slot<'d> {
+    fn overlaps_with(&self, occ: &DayOccurrence) -> bool {
+        self.0.iter().any(|o| {
+            let ostart = o.occurrence_start().unwrap();
+            let oend = o.occurrence_end().unwrap();
+            occ.overlaps(ostart, oend)
+        })
+    }
+}
+
+impl<'d> fmt::Debug for Slot<'d> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let summaries: Vec<String> = self
+            .0
+            .iter()
+            .filter_map(|occ| occ.summary().map(|s| s.clone()))
+            .collect();
+        f.debug_tuple("Slot").field(&summaries).finish()
+    }
+}
+
+fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, OccurrenceOverlap> {
+    // first insert all of them into our rows datastructure that puts occurrences into the same row
+    // if they overlap or in separate rows otherwise.
+    let mut rows = Rows(vec![]);
+    for occ in day_occs {
+        rows.insert(occ);
     }
 
-    // now sort them by the number of overlaps in descending order. with that, we start on the
-    // left with the smallest bar so that all occurrences with less overlaps can be easily placed
-    // next to it.
-    let mut all_sorted = all.clone();
-    all_sorted.sort_by(|a, b| {
-        counts
-            .get(&b.id())
-            .unwrap()
-            .cmp(counts.get(&a.id()).unwrap())
-    });
-
-    // now walk through the slots from left to right and put occurrences in if there is no overlap
-    // yet. for that reason, we keep the occurrences in the slots and test all for an overlap with
-    // a potential new occurrence for a slot.
+    // now determine the overlap for every occurrence
     let mut overlaps = HashMap::new();
-    let mut slots = Vec::new();
-    for day in all_sorted {
-        let slot = determine_slot(&slots, day);
-        if slot >= slots.len() {
-            slots.push(Vec::new());
-        }
-        slots[slot].push(day);
-
-        let count = counts.get(&day.id()).unwrap();
-        overlaps.insert(day.id(), (*count, slot));
+    for occ in day_occs {
+        overlaps.insert(occ.id(), rows.get_overlap(occ));
     }
     overlaps
 }
