@@ -183,16 +183,15 @@ impl AlarmConfig {
     }
 
     pub fn check(&self, page: &mut Page, locale: &Arc<dyn Locale + Send + Sync>) -> bool {
-        if let Some(Trigger::Absolute) = self.trigger {
-            if self
+        if let Some(Trigger::Absolute) = self.trigger
+            && self
                 .datetime
                 .as_ref()
                 .and_then(|dt| dt.to_caldate(locale, CalDateType::Inclusive, false))
                 .is_none()
-            {
-                page.add_error(locale.translate("Please specify a valid date and time"));
-                return false;
-            }
+        {
+            page.add_error(locale.translate("Please specify a valid date and time"));
+            return false;
         }
         true
     }

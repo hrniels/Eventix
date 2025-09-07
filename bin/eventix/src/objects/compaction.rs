@@ -120,13 +120,11 @@ pub trait CompAction {
             } else {
                 pers_cal.unset(comp.uid(), comp.rid())
             };
-            if changed {
-                if let Err(e) = pers_cal.save() {
-                    warn!(
-                        "Unable to save personal alarms for calendar {}: {}",
-                        calendar, e
-                    );
-                }
+            if changed && let Err(e) = pers_cal.save() {
+                warn!(
+                    "Unable to save personal alarms for calendar {}: {}",
+                    calendar, e
+                );
             }
         }
 

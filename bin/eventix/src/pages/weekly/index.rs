@@ -129,7 +129,7 @@ impl<'d> fmt::Debug for Slot<'d> {
         let summaries: Vec<String> = self
             .0
             .iter()
-            .filter_map(|occ| occ.summary().map(|s| s.clone()))
+            .filter_map(|occ| occ.summary().cloned())
             .collect();
         f.debug_tuple("Slot").field(&summaries).finish()
     }

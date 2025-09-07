@@ -384,10 +384,10 @@ impl Iterator for RecurIterator<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         if self.last_pos >= self.last.len() {
             // if we've already reached the limit on the last expand call, stop here
-            if let Some(rcount) = self.rrule.count {
-                if self.count >= rcount as usize {
-                    return None;
-                }
+            if let Some(rcount) = self.rrule.count
+                && self.count >= rcount as usize
+            {
+                return None;
             }
 
             while self.date <= self.until {
@@ -533,68 +533,64 @@ impl CalRRule {
     }
 
     fn limited(&self, date: DateTime<Tz>) -> bool {
-        if let Some(by_month) = &self.by_month {
-            if self.freq <= CalRRuleFreq::Monthly && !by_month.contains(&(date.month() as u8)) {
-                return true;
-            }
+        if let Some(by_month) = &self.by_month
+            && self.freq <= CalRRuleFreq::Monthly
+            && !by_month.contains(&(date.month() as u8))
+        {
+            return true;
         }
 
-        if let Some(by_yday) = &self.by_year_day {
-            if self.freq <= CalRRuleFreq::Hourly
-                && !by_yday.iter().any(|yd| match yd.side {
-                    CalRRuleSide::Start => yd.num as u32 == util::year_day(date),
-                    CalRRuleSide::End => {
-                        let days = util::year_days(date.year());
-                        days - (yd.num - 1) as u32 == util::year_day(date)
-                    }
-                })
-            {
-                return true;
-            }
+        if let Some(by_yday) = &self.by_year_day
+            && self.freq <= CalRRuleFreq::Hourly
+            && !by_yday.iter().any(|yd| match yd.side {
+                CalRRuleSide::Start => yd.num as u32 == util::year_day(date),
+                CalRRuleSide::End => {
+                    let days = util::year_days(date.year());
+                    days - (yd.num - 1) as u32 == util::year_day(date)
+                }
+            })
+        {
+            return true;
         }
-        if let Some(by_mday) = &self.by_mon_day {
-            if self.freq <= CalRRuleFreq::Daily
-                && !by_mday.iter().any(|wd| match wd.side {
-                    CalRRuleSide::Start => wd.num as u32 == date.day(),
-                    CalRRuleSide::End => {
-                        let days = util::month_days(date.year(), date.month());
-                        days - (wd.num - 1) as u32 == date.day()
-                    }
-                })
-            {
-                return true;
-            }
+        if let Some(by_mday) = &self.by_mon_day
+            && self.freq <= CalRRuleFreq::Daily
+            && !by_mday.iter().any(|wd| match wd.side {
+                CalRRuleSide::Start => wd.num as u32 == date.day(),
+                CalRRuleSide::End => {
+                    let days = util::month_days(date.year(), date.month());
+                    days - (wd.num - 1) as u32 == date.day()
+                }
+            })
+        {
+            return true;
         }
 
-        if let Some(by_day) = &self.by_day {
-            // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
-            if self.freq <= CalRRuleFreq::Daily && !by_day.iter().any(|wd| wd.day == date.weekday())
-            {
-                return true;
-            }
+        // num+side is ignored here as this is only applicable for FREQ=MONTHLY|YEARLY
+        if let Some(by_day) = &self.by_day
+            && self.freq <= CalRRuleFreq::Daily
+            && !by_day.iter().any(|wd| wd.day == date.weekday())
+        {
+            return true;
         }
 
         // TODO ignore if event has DTSTART=DATE
-        if let Some(by_hour) = &self.by_hour {
-            if self.freq <= CalRRuleFreq::Hourly
-                && !by_hour.iter().any(|&h| h as u32 == date.hour())
-            {
-                return true;
-            }
+        if let Some(by_hour) = &self.by_hour
+            && self.freq <= CalRRuleFreq::Hourly
+            && !by_hour.iter().any(|&h| h as u32 == date.hour())
+        {
+            return true;
         }
-        if let Some(by_min) = &self.by_minute {
-            if self.freq <= CalRRuleFreq::Minutely
-                && !by_min.iter().any(|&m| m as u32 == date.minute())
-            {
-                return true;
-            }
+        if let Some(by_min) = &self.by_minute
+            && self.freq <= CalRRuleFreq::Minutely
+            && !by_min.iter().any(|&m| m as u32 == date.minute())
+        {
+            return true;
         }
-        if let Some(by_sec) = &self.by_second {
-            if self.freq <= CalRRuleFreq::Secondly
-                && !by_sec.iter().any(|&s| s as u32 == date.second())
-            {
-                return true;
-            }
+        if let Some(by_sec) = &self.by_second
+            && self.freq <= CalRRuleFreq::Secondly
+            && !by_sec.iter().any(|&s| s as u32 == date.second())
+        {
+            return true;
         }
 
         false
@@ -626,38 +622,38 @@ impl CalRRule {
             unimplemented!("BYWEEKNO expansion is not supported");
         }
 
-        if let Some(by_month) = &self.by_month {
-            if self.freq > CalRRuleFreq::Monthly {
-                months = by_month.as_slice();
-            }
+        if let Some(by_month) = &self.by_month
+            && self.freq > CalRRuleFreq::Monthly
+        {
+            months = by_month.as_slice();
         }
-        if let Some(by_mon_day) = &self.by_mon_day {
-            if self.freq >= CalRRuleFreq::Monthly {
-                mon_days = by_mon_day
-                    .iter()
-                    .map(|md| match md.side {
-                        CalRRuleSide::Start => md.num,
-                        CalRRuleSide::End => {
-                            util::month_days(date.year(), date.month()) as u16 - (md.num - 1)
-                        }
-                    })
-                    .collect();
-            }
+        if let Some(by_mon_day) = &self.by_mon_day
+            && self.freq >= CalRRuleFreq::Monthly
+        {
+            mon_days = by_mon_day
+                .iter()
+                .map(|md| match md.side {
+                    CalRRuleSide::Start => md.num,
+                    CalRRuleSide::End => {
+                        util::month_days(date.year(), date.month()) as u16 - (md.num - 1)
+                    }
+                })
+                .collect();
         }
-        if let Some(by_hour) = &self.by_hour {
-            if self.freq > CalRRuleFreq::Hourly {
-                hours = by_hour.as_slice();
-            }
+        if let Some(by_hour) = &self.by_hour
+            && self.freq > CalRRuleFreq::Hourly
+        {
+            hours = by_hour.as_slice();
         }
-        if let Some(by_min) = &self.by_minute {
-            if self.freq > CalRRuleFreq::Minutely {
-                mins = by_min.as_slice();
-            }
+        if let Some(by_min) = &self.by_minute
+            && self.freq > CalRRuleFreq::Minutely
+        {
+            mins = by_min.as_slice();
         }
-        if let Some(by_sec) = &self.by_second {
-            if self.freq > CalRRuleFreq::Secondly {
-                secs = by_sec.as_slice();
-            }
+        if let Some(by_sec) = &self.by_second
+            && self.freq > CalRRuleFreq::Secondly
+        {
+            secs = by_sec.as_slice();
         }
 
         if self.freq >= CalRRuleFreq::Weekly && self.by_day.is_some() {
@@ -699,35 +695,30 @@ impl CalRRule {
                     for h in hours {
                         for m in mins {
                             for s in secs {
-                                if by_day.iter().any(|d| d.matches(vcur, self)) {
-                                    if let Some(ndate) = vcur.with_hour(*h as u32) {
-                                        if let Some(ndate) = ndate.with_minute(*m as u32) {
-                                            if let Some(ndate) = ndate.with_second(*s as u32) {
-                                                if ndate >= dtstart {
-                                                    if util::date_ranges_overlap(
-                                                        ndate,
-                                                        ndate + dtdur.unwrap_or(Duration::zero()),
-                                                        start,
-                                                        end,
-                                                    ) {
-                                                        res.push(
-                                                            ndate.with_timezone(&start.timezone()),
-                                                        );
-                                                    }
-                                                    *count += 1;
-                                                }
-                                            }
-                                        }
+                                if by_day.iter().any(|d| d.matches(vcur, self))
+                                    && let Some(ndate) = vcur.with_hour(*h as u32)
+                                    && let Some(ndate) = ndate.with_minute(*m as u32)
+                                    && let Some(ndate) = ndate.with_second(*s as u32)
+                                    && ndate >= dtstart
+                                {
+                                    if util::date_ranges_overlap(
+                                        ndate,
+                                        ndate + dtdur.unwrap_or(Duration::zero()),
+                                        start,
+                                        end,
+                                    ) {
+                                        res.push(ndate.with_timezone(&start.timezone()));
                                     }
+                                    *count += 1;
                                 }
 
-                                if let Some(rcount) = self.count {
-                                    if *count >= rcount as usize {
-                                        if !res.is_empty() {
-                                            return Some(res);
-                                        }
-                                        return None;
+                                if let Some(rcount) = self.count
+                                    && *count >= rcount as usize
+                                {
+                                    if !res.is_empty() {
+                                        return Some(res);
                                     }
+                                    return None;
                                 }
                             }
                         }
@@ -744,37 +735,31 @@ impl CalRRule {
                 for h in hours {
                     for m in mins {
                         for s in secs {
-                            if let Some(ndate) = date.with_month(*mon as u32) {
-                                if let Some(ndate) = ndate.with_day(*d as u32) {
-                                    if let Some(ndate) = ndate.with_hour(*h as u32) {
-                                        if let Some(ndate) = ndate.with_minute(*m as u32) {
-                                            if let Some(ndate) = ndate.with_second(*s as u32) {
-                                                if ndate >= dtstart {
-                                                    if util::date_ranges_overlap(
-                                                        ndate,
-                                                        ndate + dtdur.unwrap_or(Duration::zero()),
-                                                        start,
-                                                        end,
-                                                    ) {
-                                                        res.push(
-                                                            ndate.with_timezone(&start.timezone()),
-                                                        );
-                                                    }
-                                                    *count += 1;
-                                                }
-                                            }
-                                        }
-                                    }
+                            if let Some(ndate) = date.with_month(*mon as u32)
+                                && let Some(ndate) = ndate.with_day(*d as u32)
+                                && let Some(ndate) = ndate.with_hour(*h as u32)
+                                && let Some(ndate) = ndate.with_minute(*m as u32)
+                                && let Some(ndate) = ndate.with_second(*s as u32)
+                                && ndate >= dtstart
+                            {
+                                if util::date_ranges_overlap(
+                                    ndate,
+                                    ndate + dtdur.unwrap_or(Duration::zero()),
+                                    start,
+                                    end,
+                                ) {
+                                    res.push(ndate.with_timezone(&start.timezone()));
                                 }
+                                *count += 1;
                             }
 
-                            if let Some(rcount) = self.count {
-                                if *count >= rcount as usize {
-                                    if !res.is_empty() {
-                                        return Some(res);
-                                    }
-                                    return None;
+                            if let Some(rcount) = self.count
+                                && *count >= rcount as usize
+                            {
+                                if !res.is_empty() {
+                                    return Some(res);
                                 }
+                                return None;
                             }
                         }
                     }

@@ -80,24 +80,22 @@ fn main() {
 
         // overwrite policy for clicked links
         webview.connect_decide_policy(move |_webview, decision, decision_type| {
-            if decision_type == PolicyDecisionType::NavigationAction {
-                if let Some(nav_decision) = decision.dynamic_cast_ref::<NavigationPolicyDecision>()
+            if decision_type == PolicyDecisionType::NavigationAction
+                && let Some(nav_decision) = decision.dynamic_cast_ref::<NavigationPolicyDecision>()
+            {
+                // TODO method is deprecated, but it's unclear to me what the replacement is
+                #[allow(deprecated)]
+                if let Some(request) = nav_decision.request()
+                    // open external URLs with xdg-open
+                    && let Some(uri) = request.uri()
+                        && !uri.starts_with(&base_url)
                 {
-                    // TODO method is deprecated, but it's unclear to me what the replacement is
-                    #[allow(deprecated)]
-                    if let Some(request) = nav_decision.request() {
-                        // open external URLs with xdg-open
-                        if let Some(uri) = request.uri() {
-                            if !uri.starts_with(&base_url) {
-                                let action = nav_decision.navigation_action().unwrap();
-                                if action.navigation_type() == NavigationType::LinkClicked {
-                                    let _ = Command::new("xdg-open").arg(uri).spawn();
-                                    // tell WebKit not to handle it internally
-                                    decision.ignore();
-                                    return true;
-                                }
-                            }
-                        }
+                    let action = nav_decision.navigation_action().unwrap();
+                    if action.navigation_type() == NavigationType::LinkClicked {
+                        let _ = Command::new("xdg-open").arg(uri).spawn();
+                        // tell WebKit not to handle it internally
+                        decision.ignore();
+                        return true;
                     }
                 }
             }

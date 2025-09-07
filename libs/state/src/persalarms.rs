@@ -188,10 +188,10 @@ impl PersonalCalendarAlarms {
     pub fn all_for_occurrences(&self, uid: &str) -> HashMap<CalDate, Vec<CalAlarm>> {
         let mut res = HashMap::new();
         for a in &self.alarms {
-            if a.uid == uid {
-                if let Some(rid) = &a.rid {
-                    res.insert(rid.clone(), a.alarms().to_vec());
-                }
+            if a.uid == uid
+                && let Some(rid) = &a.rid
+            {
+                res.insert(rid.clone(), a.alarms().to_vec());
             }
         }
         res
@@ -219,11 +219,11 @@ impl PersonalCalendarAlarms {
         // need to store it for the occurrence
         if rid.is_some() {
             let base = self.alarms.iter().find(|a| a.uid == uid && a.rid.is_none());
-            if let Some(base) = base {
-                if base.alarms() == alarms {
-                    // remove the old setting, if there was one
-                    return self.unset(uid, rid);
-                }
+            if let Some(base) = base
+                && base.alarms() == alarms
+            {
+                // remove the old setting, if there was one
+                return self.unset(uid, rid);
             }
         }
 

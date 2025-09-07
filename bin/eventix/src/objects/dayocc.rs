@@ -200,10 +200,10 @@ impl<'a> DayOccurrence<'a> {
     }
 
     pub fn minute_off(&self, date: NaiveDate) -> u64 {
-        if let Some(start) = self.inner.occurrence_start() {
-            if self.inner.occurrence_starts_on(date) {
-                return start.hour() as u64 * 60 + start.minute() as u64;
-            }
+        if let Some(start) = self.inner.occurrence_start()
+            && self.inner.occurrence_starts_on(date)
+        {
+            return start.hour() as u64 * 60 + start.minute() as u64;
         }
         0
     }
