@@ -12,4 +12,4 @@ itertools.workspace = true
 once_cell.workspace = true
 serde_json.workspace = true
 
-thiserror = "2.0.12"
+thiserror = "2.0.16"
