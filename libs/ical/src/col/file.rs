@@ -547,7 +547,7 @@ impl CalFile {
     ///
     /// Note that this does not save to file. Please call [`Self::save`] to do so.
     pub(crate) fn delete_by_uid<N: AsRef<str>>(&mut self, uid: N) {
-        self.cal.delete_components(uid);
+        self.cal.delete_components(|c| c.uid() == uid.as_ref());
     }
 
     /// Creates a new overwrite for the occurrence of the component with given uid at given date.

@@ -1,12 +1,18 @@
 use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
-use eventix_ical::objects::{CalDate, CalTimeZone, EventLike, UpdatableEventLike};
+use eventix_ical::col::CalFile;
+use eventix_ical::objects::{
+    CalCompType, CalComponent, CalDate, CalDateType, CalEvent, CalTimeZone, CalTodo, Calendar,
+    EventLike, UpdatableEventLike,
+};
 use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::extract::MultiForm;
+use crate::pages::edit::EditMode;
 use crate::pages::{Page, error::HTMLError};
 use crate::util;
 
@@ -18,7 +24,7 @@ fn action_update(
     state: &mut eventix_state::State,
     form: &mut CompEdit,
     req: &Request,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<(bool, Option<String>)> {
     let (calendar, alarm_type, organizer) = {
         let file = state
             .store()
@@ -42,7 +48,7 @@ fn action_update(
             "This component has been modified. Please <a href=\"/edit?{}\">restart</a> the editing.",
             serde_qs::to_string(&req).unwrap()
         ));
-        return Ok(false);
+        return Ok((false, None));
     }
 
     let rid = if let Some(ref rid) = req.rid {
@@ -55,7 +61,7 @@ fn action_update(
     };
 
     let base = file
-        .component_with(|c| c.uid() == &req.uid && c.rid().is_none())
+        .component_with_mut(|c| c.uid() == &req.uid && c.rid().is_none())
         .context("Unable to find base component")?;
     let ctype = base.ctype();
 
@@ -64,10 +70,10 @@ fn action_update(
     }
 
     if !form.check(page, locale, ctype) {
-        return Ok(false);
+        return Ok((false, None));
     }
 
-    let rrule = if req.rid.is_some() {
+    let rrule = if req.mode == EditMode::Occurrence {
         // inherit from base if we can
         if Some(&form.summary) == base.summary() {
             form.summary.clear();
@@ -85,12 +91,12 @@ fn action_update(
             Some(Ok(rrule)) => rrule,
             Some(Err(e)) => {
                 page.add_error(e);
-                return Ok(false);
+                return Ok((false, None));
             }
         }
     };
 
-    let new_cal = if req.rid.is_none() {
+    let new_cal = if req.mode != EditMode::Occurrence {
         form.calendar
             .clone()
             .ok_or_else(|| anyhow!("Calendar not specified"))?
@@ -98,61 +104,129 @@ fn action_update(
         calendar
     };
 
-    if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
-    {
+    let new_uid = if req.mode == EditMode::Following {
+        let rid = rid.unwrap();
+
+        // end the series before this occurrence
+        let mut old_rrule = base.rrule().unwrap().clone();
+        let prev_day = rid.as_naive_date().pred_opt().unwrap();
+        let until = CalDate::new_date(prev_day, CalDateType::Inclusive);
+        old_rrule.set_until(until);
+        base.set_rrule(Some(old_rrule));
+
+        // delete all future overwrites
+        file.calendar_mut().delete_components(|c| {
+            if c.uid() != &req.uid {
+                return false;
+            }
+            if let Some(crid) = c.rid() {
+                crid >= &rid
+            } else {
+                false
+            }
+        });
+
+        file.save()?;
+
+        // build new event/TODO
+        let calendar = Arc::new(new_cal);
+        let uid = Uuid::new_v4();
+        let mut comp = if ctype == CalCompType::Event {
+            CalComponent::Event(CalEvent::new(uid))
+        } else {
+            CalComponent::Todo(CalTodo::new(uid))
+        };
+
+        // set properties from forms
+        comp.set_rrule(rrule);
         form.update(
-            &new_cal,
+            &calendar,
             &alarm_type,
-            comp,
+            &mut comp,
             personal_alarms,
             organizer,
             locale,
         );
-        if rid.is_none() {
-            comp.set_rrule(rrule);
-        }
+
+        // save to file
+        let dir = state
+            .store_mut()
+            .directory_mut(&calendar)
+            .ok_or_else(|| anyhow!("Unable to find directory with id {}", calendar))?;
+
+        let mut path = dir.path().clone();
+        path.push(format!("{uid}.ics"));
+
+        let mut cal = Calendar::default();
+        cal.add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
+
+        let mut file = CalFile::new(calendar, path, cal);
+        file.add_component(comp);
+        file.save()?;
+
+        dir.add_file(file);
+
+        Some(uid.to_string())
     } else {
-        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
-        if !comp.is_recurrent() {
-            return Err(anyhow!("Component {} is not recurrent", req.uid));
+        if let Some(comp) =
+            file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
+        {
+            form.update(
+                &new_cal,
+                &alarm_type,
+                comp,
+                personal_alarms,
+                organizer,
+                locale,
+            );
+            if rid.is_none() {
+                comp.set_rrule(rrule);
+            }
+        } else {
+            let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
+            if !comp.is_recurrent() {
+                return Err(anyhow!("Component {} is not recurrent", req.uid));
+            }
+
+            file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), |_, c| {
+                form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
+            })
+            .context("Creating overwrite failed")?;
         }
 
-        file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), |_, c| {
-            form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
-        })
-        .context("Creating overwrite failed")?;
-    }
-
-    // add "empty" timezone information as a workaround for davmail/exchange
-    // see comment in new/save.rs for details.
-    if file.calendar().timezones().is_empty() {
-        file.calendar_mut()
-            .add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
-    }
-
-    // should we move the file to a different directory?
-    if req.rid.is_none() {
-        let cal = form
-            .calendar
-            .as_ref()
-            .ok_or_else(|| anyhow!("Calendar not specified"))?;
-        if *cal != **file.directory() {
-            let path = file.path().clone();
-            let src = file.directory().clone();
-            state
-                .store_mut()
-                .switch_directory(path, &src, &Arc::new(cal.to_string()))?;
-            return Ok(true);
+        // add "empty" timezone information as a workaround for davmail/exchange
+        // see comment in new/save.rs for details.
+        if file.calendar().timezones().is_empty() {
+            file.calendar_mut()
+                .add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
         }
-    }
 
-    file.save()?;
-    Ok(true)
+        // should we move the file to a different directory?
+        if req.rid.is_none() {
+            let cal = form
+                .calendar
+                .as_ref()
+                .ok_or_else(|| anyhow!("Calendar not specified"))?;
+            if *cal != **file.directory() {
+                let path = file.path().clone();
+                let src = file.directory().clone();
+                state
+                    .store_mut()
+                    .switch_directory(path, &src, &Arc::new(cal.to_string()))?;
+                return Ok((true, None));
+            }
+        }
+
+        file.save()?;
+        None
+    };
+
+    Ok((true, new_uid))
 }
 
 pub async fn handler(
     State(state): State<EventixState>,
-    Query(req): Query<Request>,
+    Query(mut req): Query<Request>,
     MultiForm(mut form): MultiForm<CompEdit>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.settings().locale();
@@ -160,10 +234,16 @@ pub async fn handler(
 
     let form = {
         let mut state = state.lock().await;
-        if action_update(&mut page, &locale, &mut state, &mut form, &req)? {
-            None
-        } else {
-            Some(form)
+        match action_update(&mut page, &locale, &mut state, &mut form, &req)? {
+            (true, Some(uid)) => {
+                // present the user an edit form for the created series
+                req.uid = uid;
+                req.mode = EditMode::Series;
+                req.rid = None;
+                None
+            }
+            (true, None) => None,
+            _ => Some(form),
         }
     };
 

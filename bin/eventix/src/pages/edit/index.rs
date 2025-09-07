@@ -13,15 +13,18 @@ use eventix_state::{CalendarAlarmType, EventixState};
 use std::sync::Arc;
 
 use super::{CompEdit, Request};
-use crate::comps::{
-    alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
-    datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
-};
 use crate::html::filters;
 use crate::objects::Calendars;
 use crate::pages::Breadcrumb;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use crate::util;
+use crate::{
+    comps::{
+        alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
+        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
+    },
+    pages::edit::EditMode,
+};
 
 #[derive(Template)]
 #[template(path = "pages/edit.htm")]
@@ -32,6 +35,7 @@ struct EditTemplate<'a> {
     prev: &'a String,
     uid: String,
     rid: Option<String>,
+    mode: EditMode,
     dir: &'a CalDir,
     calendars: Option<CalComboTemplate>,
     summary: &'a String,
@@ -109,13 +113,13 @@ pub async fn content(
 
     page.add_breadcrumb(Breadcrumb::new(
         format!("/edit?{}", serde_qs::to_string(&req).unwrap()),
-        super::build_title(&occ, &req.rid),
+        super::build_title(&occ, &req.rid, req.mode),
     ));
 
     let form = match form {
         Some(f) => f,
         None => {
-            let cal = if req.rid.is_none() {
+            let cal = if req.mode != EditMode::Occurrence {
                 Some((*file.directory()).to_string())
             } else {
                 None
@@ -139,6 +143,7 @@ pub async fn content(
         edit_start: format!("{}", form.edit_start),
         uid: req.uid.clone(),
         rid: req.rid.clone(),
+        mode: req.mode,
         dir,
         calendars: form.calendar.map(|cal| {
             CalComboTemplate::new(

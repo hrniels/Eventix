@@ -10,7 +10,7 @@ use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalAlarm, CalCompType, EventLike};
 use eventix_state::EventixState;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::time::SystemTime;
+use std::{fmt, time::SystemTime};
 
 use crate::comps::{
     alarm::AlarmRequest, attendees::Attendees, datetimerange::DateTimeRange, recur::RecurRequest,
@@ -30,8 +30,22 @@ where
     Ok(num)
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum EditMode {
+    Occurrence,
+    Following,
+    Series,
+}
+
+impl fmt::Display for EditMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
+    mode: EditMode,
     uid: String,
     rid: Option<String>,
     prev: String,
@@ -66,7 +80,7 @@ impl CompEdit {
             summary: occ.summary().cloned().unwrap_or(String::from("")),
             location: occ.location().cloned().unwrap_or(String::from("")),
             description: occ.description().cloned().unwrap_or(String::from("")),
-            rrule: if req.rid.is_none() {
+            rrule: if req.mode != EditMode::Occurrence {
                 Some(RecurRequest::from_rrule(occ.rrule()))
             } else {
                 None
@@ -122,13 +136,18 @@ impl CompAction for CompEdit {
     }
 }
 
-pub fn build_title(occ: &Occurrence, rid: &Option<String>) -> String {
+pub fn build_title(occ: &Occurrence, rid: &Option<String>, mode: EditMode) -> String {
     let mut title = String::from("Edit ");
+    if mode == EditMode::Following {
+        title.push_str("Following ");
+    }
     match occ.ctype() {
         CalCompType::Event => title.push_str("Event"),
         CalCompType::Todo => title.push_str("Task"),
     }
-    if rid.is_some() {
+    if mode == EditMode::Following {
+        title.push_str(" Occurrences");
+    } else if rid.is_some() {
         title.push_str(" Occurrence");
     } else if occ.rrule().is_some() {
         title.push_str(" Series");

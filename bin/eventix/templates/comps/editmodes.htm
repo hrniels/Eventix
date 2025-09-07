@@ -1,0 +1,41 @@
+<div class="ev_response_dropdown" id="{{ id }}-dropdown" style="float: right">
+    <a id="{{ id }}-toggle" class="ev_button ev_button_normal" style="width: 60px">
+        <i class="bi bi-pencil"></i>
+        <span>{{ "Edit"|t(locale) }}</span>
+    </a>
+    <div id="{{ id }}-menu" class="ev_response_menu">
+        <a class="ev_button ev_button_normal" style="width: 170px" data-value="Occurrence">
+            <i class="bi bi-calendar-event"></i>
+            <span>{{ "This occurrence"|t(locale) }}</span>
+        </a>
+        <a class="ev_button ev_button_normal" style="width: 170px" data-value="Following">
+            <i class="bi bi-calendar-range"></i>
+            <span>{{ "This and following occ."|t(locale) }}</span>
+        </a>
+        <a class="ev_button ev_button_normal" style="width: 170px" data-value="Series">
+            <i class="bi bi-arrow-repeat"></i>
+            <span>{{ "Complete series"|t(locale) }}</span>
+        </a>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('#{{ id }}-toggle').on('click', function() {
+            $('#{{ id }}-menu').toggle();
+        });
+
+        $('#{{ id }}-menu a').on('click', function() {
+            if($(this).data('value') == 'Series')
+                gotoWithPrev('/edit?uid={{ uid }}&mode=Series');
+            else
+                gotoWithPrev('/edit?uid={{ uid }}&rid={{ rid }}&mode=' + $(this).data('value'));
+        });
+
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('#{{ id }}-dropdown').length) {
+                $('#{{ id }}-menu').hide();
+            }
+        });
+    });
+</script>

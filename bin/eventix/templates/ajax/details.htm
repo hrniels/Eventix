@@ -117,14 +117,8 @@
         {% endif %}
         <tr>
             <td colspan="2" align="right">
-                {% if owner %}
-                {% if occ.is_recurrent() %}
-                <a style="float: right" class="ev_button ev_button_normal"
-                   href="javascript:gotoWithPrev('/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}')">
-                    <i class="bi bi-pencil"></i>
-                    <span>{{ "Edit occ.:"|t(locale) }}</span>
-                </a>
-                {% endif %}
+                {% if let Some(edit) = edit_modes %}
+                {{ edit|safe }}
                 {% endif %}
                 <a id="delete-series-button" style="float: left" class="ev_button ev_button_critical" href="#">
                     <i class="bi bi-trash"></i>
@@ -137,17 +131,13 @@
                     </span>
                 </a>
                 {% if owner %}
+                {% if !occ.is_recurrent() %}
                 <a style="float: right" class="ev_button ev_button_normal"
                    href="javascript:gotoWithPrev('/edit?uid={{ occ.uid() }}')">
                     <i class="bi bi-pencil"></i>
-                    <span>
-                        {% if occ.is_recurrent() %}
-                        {{ "Edit series"|t(locale) }}
-                        {% else %}
-                        {{ "Edit"|t(locale) }}
-                        {% endif %}
-                    </span>
+                    <span>{{ "Edit"|t(locale) }}</span>
                 </a>
+                {% endif %}
                 {% if occ.ctype() == CalCompType::Todo %}
                 <a style="float: right" class="ev_button ev_button_good"
                    href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">

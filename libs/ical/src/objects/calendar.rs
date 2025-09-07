@@ -54,9 +54,12 @@ impl Calendar {
         self.comps.push(comp);
     }
 
-    /// Deletes the components with given uid from the calendar.
-    pub fn delete_components<N: AsRef<str>>(&mut self, uid: N) {
-        self.comps.retain(|c| c.uid() != uid.as_ref());
+    /// Deletes the components that match the given predicate.
+    pub fn delete_components<P>(&mut self, predicate: P)
+    where
+        P: Fn(&CalComponent) -> bool,
+    {
+        self.comps.retain(|c| !predicate(c));
     }
 
     /// Splits this calendar into multiple calendars, one per UID

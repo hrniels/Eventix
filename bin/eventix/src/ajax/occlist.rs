@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::partstat::PartStatTemplate;
 use crate::html::filters;
 use crate::objects::DayOccurrence;
@@ -48,6 +49,7 @@ pub fn router(state: EventixState) -> Router {
 
 struct ListOccurrence<'a> {
     occ: DayOccurrence<'a>,
+    edit_modes: EditModesTemplate,
     partstat: Option<PartStatTemplate>,
     owner: bool,
 }
@@ -66,7 +68,7 @@ impl<'a> ListOccurrence<'a> {
         let partstat = match (user_mail, owner) {
             (Some(user_mail), false) => occ.attendee_status(user_mail).map(|stat| {
                 PartStatTemplate::new(
-                    locale,
+                    locale.clone(),
                     format!("occ-{}-{}", occ.uid(), occ.rid_html()),
                     stat,
                     occ.uid().clone(),
@@ -78,8 +80,14 @@ impl<'a> ListOccurrence<'a> {
         };
 
         Self {
-            occ,
             partstat,
+            edit_modes: EditModesTemplate::new(
+                locale.clone(),
+                format!("edit-{}-{}", occ.uid(), occ.rid_html()),
+                occ.uid().clone(),
+                occ.rid_html(),
+            ),
+            occ,
             owner,
         }
     }

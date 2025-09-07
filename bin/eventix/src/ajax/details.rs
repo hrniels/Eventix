@@ -10,6 +10,7 @@ use eventix_state::{CalendarAlarmType, EventixState};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::{
     editalarm::EditAlarmTemplate, organizer::OrganizerTemplate, partstat::PartStatTemplate,
 };
@@ -46,6 +47,7 @@ struct DetailsTemplate<'a> {
     alarms: Option<EditAlarmTemplate<'a>>,
     series_partstat: Option<PartStatTemplate>,
     occ_partstat: Option<PartStatTemplate>,
+    edit_modes: Option<EditModesTemplate>,
     owner: bool,
 }
 
@@ -137,6 +139,9 @@ async fn handler(
                 occ.is_recurrent(),
             )
         }),
+        edit_modes: req
+            .rid
+            .map(|rid| EditModesTemplate::new(locale.clone(), "edit", req.uid.clone(), rid)),
         occ: day_occ,
         owner,
         locale,

@@ -75,9 +75,9 @@ impl Default for CalDate {
 }
 
 impl CalDate {
-    /// Returns a new [`CalDate::Date`] instance for the current day.
-    pub fn today() -> Self {
-        CalDate::Date(Utc::now().date_naive(), CalDateType::Inclusive)
+    /// Returns a new [`CalDate::Date`] instance for the given date.
+    pub fn new_date(date: NaiveDate, ty: CalDateType) -> Self {
+        Self::Date(date, ty)
     }
 
     /// Returns a new [`CalDate::DateTime`] instance for the current time in UTC.

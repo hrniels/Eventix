@@ -32,11 +32,7 @@
     </td>
     <td>
         {% if occ.owner %}
-        <a style="float: right" class="ev_button ev_button_normal"
-           href="javascript:gotoWithPrev('/edit?uid={{ occ.uid() }}&rid={{ occ.rid_html() }}')">
-            <i class="bi bi-pencil"></i>
-            <span>{{ "Edit"|t(locale) }}</span>
-        </a>
+        {{ occ.edit_modes|safe }}
         {% if occ.organizer().is_some() %}
         {% if occ.status_class() != Some(String::from("Cancelled")) %}
         <a style="float: right; width: 70px" class="ev_button ev_button_critical"
