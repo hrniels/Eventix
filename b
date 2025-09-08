@@ -22,7 +22,6 @@ def dev_env():
     shutil.copytree(Path("data") / "icons", run_dir / APP_ID / "icons")
 
     env["XDG_DATA_HOME"] = run_dir.absolute()
-    env["XDG_RUNTIME_DIR"] = run_dir.absolute()
     env["XDG_CONFIG_HOME"] = run_dir.absolute()
     env["RUST_LOG"] = "trace"
     env["RUST_BACKTRACE"] = "full"
