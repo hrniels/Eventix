@@ -50,8 +50,12 @@ fn main() {
         let (main_tx, main_rx) = unbounded();
 
         let icon = xdg.find_data_file("static/icon.png").unwrap();
-        let tray = EventixTray::new(main_tx, icon.clone());
-        let tray = Arc::new(Mutex::new(tray.spawn().unwrap()));
+        let tray = if !args.no_tray {
+            let tray = EventixTray::new(main_tx, icon.clone());
+            Some(Arc::new(Mutex::new(tray.spawn().unwrap())))
+        } else {
+            None
+        };
 
         let window = gtk::ApplicationWindow::new(app);
         window.set_default_size(1400, 900);
@@ -101,7 +105,7 @@ fn main() {
         window.show_all();
 
         // handle messages in main GTK thread
-        if !args.no_tray {
+        if let Some(tray) = tray {
             let base_url = url.clone();
             glib::MainContext::default().spawn_local(async move {
                 while let Ok(msg) = main_rx.recv().await {
@@ -122,21 +126,21 @@ fn main() {
                     }
                 }
             });
-        }
 
-        // Background thread to simulate task state changes
-        thread::spawn({
-            let tray = tray.clone();
-            let xdg = xdg.clone();
-            move || {
-                let mut last = None;
-                loop {
-                    last = update_icon(&xdg, &tray, last.as_ref());
+            // Background thread to simulate task state changes
+            thread::spawn({
+                let tray = tray.clone();
+                let xdg = xdg.clone();
+                move || {
+                    let mut last = None;
+                    loop {
+                        last = update_icon(&xdg, &tray, last.as_ref());
 
-                    thread::sleep(Duration::from_secs(30));
+                        thread::sleep(Duration::from_secs(30));
+                    }
                 }
-            }
-        });
+            });
+        }
     });
 
     // pass no arguments to GTK, because it doesn't support our application arguments above
