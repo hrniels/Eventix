@@ -52,7 +52,13 @@ fn main() {
         let icon = xdg.find_data_file("static/icon.png").unwrap();
         let tray = if !args.no_tray {
             let tray = EventixTray::new(main_tx, icon.clone());
-            Some(Arc::new(Mutex::new(tray.spawn().unwrap())))
+            match tray.spawn() {
+                Ok(t) => Some(Arc::new(Mutex::new(t))),
+                Err(e) => {
+                    println!("Spawning tray failed: {:?}", e);
+                    None
+                }
+            }
         } else {
             None
         };
