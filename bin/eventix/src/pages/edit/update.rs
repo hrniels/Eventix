@@ -109,6 +109,7 @@ fn action_update(
 
         // end the series before this occurrence
         let mut old_rrule = base.rrule().unwrap().clone();
+        let old_start = base.start().unwrap().clone();
         let prev_day = rid.as_naive_date().pred_opt().unwrap();
         let until = CalDate::new_date(prev_day, CalDateType::Inclusive);
         old_rrule.set_until(until);
@@ -125,8 +126,6 @@ fn action_update(
                 false
             }
         });
-
-        file.save()?;
 
         // build new event/TODO
         let calendar = Arc::new(new_cal);
@@ -148,6 +147,26 @@ fn action_update(
             locale,
         );
 
+        // update old event/TODO; check if there are no occurrences left
+        let start = old_start.as_start_with_tz(locale.timezone());
+        let end = rid.as_end_with_tz(locale.timezone());
+        if file
+            .occurrences_between(start, end, |_| true)
+            .next()
+            .is_none()
+        {
+            // no occurrences left -> remove UID
+            let old_dir = file.directory().clone();
+            let dir = state
+                .store_mut()
+                .directory_mut(&old_dir)
+                .ok_or_else(|| anyhow!("Unable to find directory with id {}", old_dir))?;
+            dir.delete_by_uid(&req.uid)?;
+        } else {
+            // just update the file
+            file.save()?;
+        }
+
         // save to file
         let dir = state
             .store_mut()
@@ -160,11 +179,11 @@ fn action_update(
         let mut cal = Calendar::default();
         cal.add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
 
-        let mut file = CalFile::new(calendar, path, cal);
-        file.add_component(comp);
-        file.save()?;
+        let mut new_file = CalFile::new(calendar, path, cal);
+        new_file.add_component(comp);
+        new_file.save()?;
 
-        dir.add_file(file);
+        dir.add_file(new_file);
 
         Some(uid.to_string())
     } else {
