@@ -83,6 +83,15 @@ def cmd_flatpak(args):
         ".git", "bin", "data", "libs", "Cargo.toml", "Cargo.lock"
     ])
 
+    # install flatpak dependencies
+    runtimes = [
+        "org.gnome.Platform//48",
+        "org.gnome.Sdk//48",
+        "org.freedesktop.Sdk.Extension.rust-stable//24.08"
+    ]
+    for runtime in runtimes:
+        subprocess.run(["flatpak", "install", "-y", "flathub", runtime], check=True)
+
     # build flatpak
     add_args = ["--disable-cache"] if args.rebuild else []
     subprocess.run(
