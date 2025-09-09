@@ -93,7 +93,7 @@ def cmd_flatpak(args):
         subprocess.run(["flatpak", "install", "-y", "flathub", runtime], check=True)
 
     # build flatpak
-    add_args = ["--disable-cache"] if args.rebuild else []
+    add_args = ["--disable-cache"] if not args.no_rebuild else []
     subprocess.run(
         ["flatpak-builder", "--force-clean"] + add_args +
         [build_dir, "flatpak/{}.json".format(APP_ID)],
@@ -143,7 +143,7 @@ def main():
 
     flatpak_parser = subparsers.add_parser(
         "flatpak", parents=[parent_parser], help="Build flatpak package")
-    flatpak_parser.add_argument("--rebuild", help="Force a complete rebuild",
+    flatpak_parser.add_argument("--no-rebuild", help="Skip build step, just repackage",
                                 action="store_true")
     flatpak_parser.set_defaults(func=cmd_flatpak)
 
