@@ -123,7 +123,7 @@ async fn run_server(listener: TcpListener) {
 async fn main() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            env::var("RUST_LOG").unwrap_or_default(),
+            env::var("RUST_LOG").unwrap_or(String::from("info")),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
