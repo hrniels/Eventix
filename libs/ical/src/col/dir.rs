@@ -185,6 +185,11 @@ impl CalDir {
         &self.files
     }
 
+    /// Returns a mutable slice with all files in this directory.
+    pub fn files_mut(&mut self) -> &mut [CalFile] {
+        &mut self.files
+    }
+
     /// Returns a reference to the file that hosts the component with given uid.
     pub fn file_by_id<S: AsRef<str>>(&self, uid: S) -> Option<&CalFile> {
         let uid_ref = uid.as_ref();

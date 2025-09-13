@@ -6,7 +6,10 @@ pub mod util;
 
 use anyhow::Context;
 use chrono::NaiveDateTime;
-use eventix_ical::col::{CalDir, CalStore};
+use eventix_ical::{
+    col::{CalDir, CalStore},
+    objects::{EventLike, UpdatableEventLike},
+};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs::File,
@@ -43,14 +46,35 @@ impl State {
 
         let mut store = CalStore::default();
         for (id, cal) in settings.calendars() {
-            store.add(
-                CalDir::new_from_dir(
-                    Arc::from(id.clone()),
-                    PathBuf::from(cal.path().clone()),
-                    cal.name().clone(),
-                )
-                .with_context(|| format!("Loading calendar {} from '{}' failed", id, cal.path()))?,
-            );
+            let cal_id: Arc<String> = Arc::from(id.clone());
+            let mut dir = CalDir::new_from_dir(
+                cal_id.clone(),
+                PathBuf::from(cal.path().clone()),
+                cal.name().clone(),
+            )
+            .with_context(|| format!("Loading calendar {} from '{}' failed", id, cal.path()))?;
+
+            // workaround for a bug in Exchange/davmail: apparently, Exchange sends events with
+            // attendees, but without organizer to davmail and davmail does not repair it. As this
+            // seems to *only* happen if we are the organizer, we implicitly add ourself as an
+            // organizer to these events.
+            let cal_settings = settings.calendar(&cal_id).unwrap();
+            let organizer = cal_settings.build_organizer();
+            if let Some(organizer) = organizer {
+                for comp in dir.files_mut().iter_mut().flat_map(|f| {
+                    f.component_with_mut(|c| {
+                        c.rid().is_none() && c.organizer().is_none() && c.attendees().is_some()
+                    })
+                }) {
+                    tracing::warn!(
+                        "Making ourself the organizer of group-scheduled item {}",
+                        comp.uid()
+                    );
+                    comp.set_organizer(Some(organizer.clone()));
+                }
+            }
+
+            store.add(dir);
         }
 
         Ok(Self {
