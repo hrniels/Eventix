@@ -108,7 +108,7 @@ async fn run_server(listener: TcpListener) {
         );
 
     // start helper tasks
-    tokio::spawn(notify::watch_alarms(state.clone(), xdg.clone(), locale));
+    tokio::spawn(notify::watch_alarms(state.clone(), locale));
     let nstate = state.clone();
     tokio::spawn(async move {
         eventix_cmd::handle_commands(&xdg, nstate)

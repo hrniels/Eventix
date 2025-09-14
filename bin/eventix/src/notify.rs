@@ -9,21 +9,14 @@ use eventix_state::{CalendarAlarmType, EventixState, PersonalCalendarAlarms};
 use std::{collections::HashMap, process::Command, sync::Arc};
 use tokio::time;
 use tracing::{info, warn};
-use xdg::BaseDirectories;
 
 struct Notification {
-    pub appname: String,
-    pub icon: String,
     pub summary: String,
     pub body: String,
 }
 
 impl Notification {
-    fn from_alarm(
-        xdg: &BaseDirectories,
-        occ: &AlarmOccurrence<'_>,
-        locale: &Arc<dyn Locale + Send + Sync>,
-    ) -> Self {
+    fn from_alarm(occ: &AlarmOccurrence<'_>, locale: &Arc<dyn Locale + Send + Sync>) -> Self {
         let mut body = String::new();
         if let Some(start) = occ.occurrence().occurrence_start() {
             body = format!("Start: {}", locale.fmt_datetime(&start, DateFlags::None));
@@ -38,12 +31,7 @@ impl Notification {
             ));
         }
 
-        let icon = xdg
-            .find_data_file("static/icon.png")
-            .expect("Find '$XDG_DATA_HOME/static/icon.png'");
         Self {
-            appname: String::from("Eventix"),
-            icon: icon.into_os_string().into_string().unwrap(),
             summary: occ
                 .occurrence()
                 .summary()
@@ -54,12 +42,11 @@ impl Notification {
     }
 
     fn send(&self) -> anyhow::Result<()> {
-        let mut args = vec![];
-        args.push(format!("--app-name={}", self.appname));
-        args.push(format!("--icon={}", self.icon));
-        args.push("--urgency=critical".to_string());
-        args.push(self.summary.clone());
-        args.push(self.body.clone());
+        let args = vec![
+            "--urgency=critical".to_string(),
+            self.summary.clone(),
+            self.body.clone(),
+        ];
         Command::new("/usr/bin/notify-send")
             .args(args)
             .spawn()
@@ -111,11 +98,7 @@ impl AlarmOverlay for NotifyAlarmOverlay<'_> {
     }
 }
 
-pub async fn watch_alarms(
-    state: EventixState,
-    xdg: Arc<BaseDirectories>,
-    locale: Arc<dyn Locale + Send + Sync>,
-) {
+pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + Sync>) {
     loop {
         {
             let mut state = state.lock().await;
@@ -148,7 +131,7 @@ pub async fn watch_alarms(
             alarms.sort_by_key(|o| o.alarm_date().unwrap());
 
             for alarm in alarms {
-                let notification = Notification::from_alarm(&xdg, &alarm, &locale);
+                let notification = Notification::from_alarm(&alarm, &locale);
                 info!(
                     "Sending alarm notification for {} (start={:?}, due={:?})",
                     alarm.occurrence().uid(),
