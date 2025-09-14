@@ -62,7 +62,6 @@
                 "install -Dm644 icons/128x128.png /app/share/icons/hicolor/128x128/apps/com.github.NilsTUD.Eventix.png",
                 "install -Dm644 icons/64x64.png /app/share/icons/hicolor/64x64/apps/com.github.NilsTUD.Eventix.png",
                 "install -Dm644 icons/48x48.png /app/share/icons/hicolor/48x48/apps/com.github.NilsTUD.Eventix.png",
-                "install -Dm644 icons/32x32.png /app/share/icons/hicolor/32x32/apps/com.github.NilsTUD.Eventix.png",
                 "install -Dm644 icons/index.theme /app/share/icons/hicolor/index.theme",
                 "mkdir -p /app/share/com.github.NilsTUD.Eventix/static",
                 "mkdir -p /app/share/com.github.NilsTUD.Eventix/icons",
