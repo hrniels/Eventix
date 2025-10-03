@@ -11,7 +11,6 @@ impl Syncer for FSSyncer {
     async fn sync(&mut self, cal: &Arc<String>, state: EventixState) -> anyhow::Result<bool> {
         let mut state = state.lock().await;
 
-        let last_reload = state.last_reload();
         let dir = state
             .store_mut()
             .directory_mut(cal)
@@ -19,7 +18,7 @@ impl Syncer for FSSyncer {
 
         let mut seen_changes = false;
         seen_changes |= dir.rescan_for_additions()?;
-        seen_changes |= dir.rescan_for_updates(last_reload)?;
+        seen_changes |= dir.rescan_files()?;
         seen_changes |= dir.rescan_for_deletions();
 
         Ok(seen_changes)

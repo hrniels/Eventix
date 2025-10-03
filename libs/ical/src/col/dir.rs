@@ -1,7 +1,7 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::DateTime;
 use chrono_tz::Tz;
 use std::fmt::Display;
-use std::fs::{self, read_dir};
+use std::fs::read_dir;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::info;
@@ -80,33 +80,18 @@ impl CalDir {
         .map(|_| seen_changes)
     }
 
-    /// Rescans the directory for changes.
-    ///
-    /// If a file's last modification time is newer than `last_check` the contained calendar will
-    /// be reloaded from file to update the collection. The method returns `true` if changed files
-    /// were found and `false` otherwise.
-    pub fn rescan_for_updates(&mut self, last_check: NaiveDateTime) -> Result<bool, ColError> {
+    /// Rescans the directory and reloads all files.
+    pub fn rescan_files(&mut self) -> Result<bool, ColError> {
         let mut seen_changes = false;
         Self::with_files(&self.path, |filename| {
-            let metadata =
-                fs::metadata(&filename).map_err(|_| ColError::FileMetadata(filename.clone()))?;
-            let last_mod = metadata
-                .modified()
-                .map_err(|_| ColError::FileModified(filename.clone()))?;
-            let last_mod: DateTime<Utc> = last_mod.into();
-            let last_mod = last_mod.naive_utc();
-            if last_mod > last_check {
-                info!("{}: changed file {:?} during rescan", self.id, filename);
-                let file = self
-                    .files
-                    .iter_mut()
-                    .find(|f| f.path() == &filename)
-                    .ok_or_else(|| ColError::FileNotFound(filename.clone()))?;
-                seen_changes = true;
-                file.reload_calendar()
-            } else {
-                Ok(())
-            }
+            info!("{}: changed file {:?} during rescan", self.id, filename);
+            let file = self
+                .files
+                .iter_mut()
+                .find(|f| f.path() == &filename)
+                .ok_or_else(|| ColError::FileNotFound(filename.clone()))?;
+            seen_changes = true;
+            file.reload_calendar()
         })
         .map(|_| seen_changes)
     }
