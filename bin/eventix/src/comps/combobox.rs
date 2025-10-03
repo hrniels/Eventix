@@ -1,7 +1,6 @@
 use askama::Template;
 use eventix_locale::Locale;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
 
@@ -9,11 +8,6 @@ use crate::html::filters;
 
 pub trait Named {
     fn name(&self) -> String;
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ComboValue<T: Display> {
-    value: T,
 }
 
 pub struct ComboOption<T: Display> {
