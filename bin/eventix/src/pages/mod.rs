@@ -19,26 +19,9 @@ use std::{
 
 use crate::objects::{Calendar, Calendars};
 
-#[derive(Debug, Clone)]
-pub struct Breadcrumb {
-    pub url: String,
-    pub name: String,
-}
-
-impl Breadcrumb {
-    #[allow(dead_code)]
-    pub fn new<U: ToString, N: ToString>(url: U, name: N) -> Self {
-        Self {
-            url: url.to_string(),
-            name: name.to_string(),
-        }
-    }
-}
-
 pub struct Page {
     start: Instant,
     now: DateTime<Tz>,
-    breadcrumbs: Vec<Breadcrumb>,
     errors: Vec<String>,
     infos: Vec<String>,
     calendars: Calendars,
@@ -51,7 +34,6 @@ impl Default for Page {
         Self {
             start: Instant::now(),
             now: Local::now().with_timezone(&Tz::UTC),
-            breadcrumbs: Vec::new(),
             errors: Vec::new(),
             infos: Vec::new(),
             calendars: Calendars::default(),
@@ -88,14 +70,6 @@ impl Page {
 
     pub fn calendars(&self) -> &[Calendar] {
         &self.calendars.0
-    }
-
-    pub fn breadcrumbs(&self) -> &[Breadcrumb] {
-        &self.breadcrumbs
-    }
-
-    pub fn add_breadcrumb(&mut self, breadcrumb: Breadcrumb) {
-        self.breadcrumbs.push(breadcrumb);
     }
 
     pub fn errors(&self) -> &[String] {

@@ -96,7 +96,7 @@ pub async fn handler(
     MultiForm(mut form): MultiForm<CompNew>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.settings().locale();
-    let mut page = super::new_page(&state, &req).await;
+    let mut page = super::new_page(&state).await;
 
     {
         let mut state = state.lock().await;

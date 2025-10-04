@@ -2,14 +2,11 @@ mod index;
 
 use axum::{Router, routing::get};
 use eventix_state::EventixState;
-use index::Filter;
 
-use super::{Breadcrumb, Page};
+use super::Page;
 
-pub async fn new_page(state: &EventixState, req: &Filter) -> Page {
-    let mut page = Page::new(state).await;
-    page.add_breadcrumb(Breadcrumb::new(req.url(), "List"));
-    page
+pub async fn new_page(state: &EventixState) -> Page {
+    Page::new(state).await
 }
 
 pub fn router(state: EventixState) -> Router {

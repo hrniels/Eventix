@@ -15,7 +15,6 @@ use std::sync::Arc;
 use super::{CompEdit, Request};
 use crate::html::filters;
 use crate::objects::Calendars;
-use crate::pages::Breadcrumb;
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use crate::util;
 use crate::{
@@ -67,7 +66,7 @@ pub async fn handler(
 }
 
 pub async fn content(
-    mut page: Page,
+    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
     Query(req): Query<Request>,
@@ -110,11 +109,6 @@ pub async fn content(
         .and_then(|cal_alarms| cal_alarms.get(&req.uid, rid.as_ref()))
         .map(|pers_alarms| pers_alarms.alarms());
     let effective_alarms = state.personal_alarms().effective_alarms(&occ, alarm_type);
-
-    page.add_breadcrumb(Breadcrumb::new(
-        format!("/edit?{}", serde_qs::to_string(&req).unwrap()),
-        super::build_title(&occ, &req.rid, req.mode),
-    ));
 
     let form = match form {
         Some(f) => f,

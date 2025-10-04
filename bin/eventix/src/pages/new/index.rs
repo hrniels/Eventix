@@ -52,7 +52,7 @@ pub async fn handler(
     };
 
     content(
-        super::new_page(&state, &req).await,
+        super::new_page(&state).await,
         locale.clone(),
         State(state),
         CompNew::new(&req, locale.timezone(), calendar),

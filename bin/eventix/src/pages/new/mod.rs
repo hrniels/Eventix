@@ -17,7 +17,7 @@ use crate::comps::{
 };
 use crate::objects::CompAction;
 
-use super::{Breadcrumb, Page};
+use super::Page;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -135,14 +135,8 @@ impl CompAction for CompNew {
     }
 }
 
-pub async fn new_page(state: &EventixState, req: &Request) -> Page {
-    let mut page = Page::new(state).await;
-    let url = format!("/new?{}", serde_qs::to_string(&req).unwrap());
-    match req.ctype {
-        CalCompType::Todo => page.add_breadcrumb(Breadcrumb::new(url, "New task")),
-        CalCompType::Event => page.add_breadcrumb(Breadcrumb::new(url, "New event")),
-    }
-    page
+pub async fn new_page(state: &EventixState) -> Page {
+    Page::new(state).await
 }
 
 pub fn router(state: EventixState) -> Router {

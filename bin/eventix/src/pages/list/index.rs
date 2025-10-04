@@ -163,7 +163,7 @@ pub async fn handler(
     State(state): State<EventixState>,
     MultiQuery(mut filter): MultiQuery<Filter>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state, &filter).await;
+    let page = super::new_page(&state).await;
 
     let state = state.lock().await;
     let locale = state.settings().locale();

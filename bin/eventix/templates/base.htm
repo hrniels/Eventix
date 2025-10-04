@@ -44,18 +44,17 @@
     </head>
     <body>
         <div id="outer">
-            <div style="float: left;">
-                <b>{{ "Position"|t(locale) }}:</b>
-                <a href="/">{{ "Eventix"|t(locale) }}</a>
-                {% for bc in page.breadcrumbs() %}
-                &raquo;
-                <a href="{{ bc.url }}">{{ bc.name }}</a>
-                {% endfor %}
+            <form id="form" method="get" action="/list">
+            <div style="float: left; padding-bottom: .5em" class="ev_button_medium ev_button_normal">
+                <span>{{ "Search"|t(locale) }}:</span>
+                <input type="text" id="quick-search" name="keywords"
+                       style="font-size: .8em; padding: 2px; width: 200px" />
             </div>
+            </form>
 
             <div style="float: right;" class="ev_padbottom">
                 <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
-                    <span>Calendars:</span>
+                    <span>{{ "Calendars"|t(locale) }}:</span>
                     {% for cal in page.calendars() %}
                     <a style="vertical-align: middle" title="{{ cal.name }}"
                                                       href="javascript:toggleCalendar('{{ cal.id }}')">
