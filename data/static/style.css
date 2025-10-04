@@ -2,112 +2,112 @@
 
 body {
     font-family: "Linux Biolinum", "Verdana";
-	font-size: 1em;
+    font-size: 1em;
 }
 
 input,select,textarea {
-	font-size: 1em;
-	padding: 2px;
+    font-size: 1em;
+    padding: 2px;
 }
 
 img {
-	border: 0;
+    border: 0;
 }
 
 /* links */
 a {
-	text-decoration: none;
-	color: #3F5E88;
+    text-decoration: none;
+    color: #3F5E88;
 }
 a:hover {
-	text-decoration: underline;
+    text-decoration: underline;
 }
 
 /* ------------ PADDING ------------ */
 
 .ev_padtop {
-	margin-top: 0.9em !important;
+    margin-top: 0.9em !important;
 }
 
 .ev_padbottom {
-	margin-bottom: 0.9em !important;
+    margin-bottom: 0.9em !important;
 }
 
 .ev_padbottom_big {
-	margin-bottom: 1.5em !important;
+    margin-bottom: 1.5em !important;
 }
 
 /* ------------ FORMULARS ------------ */
 
 fieldset.ev_form {
-	padding: 0;
-	margin: 0;
-	border: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
 }
 
 fieldset.ev_form dl {
-	padding: 0;
-	margin: 0;
-	margin-top: 1px;
-	background-color: #dbdbdb;
+    padding: 0;
+    margin: 0;
+    margin-top: 1px;
+    background-color: #dbdbdb;
 }
 
 fieldset.ev_form dt {
-	display: block;
-	margin: 0;
-	float: left;
-	padding: 0.5em;
-	width: 21%;
-	font-weight: bold;
-	text-align: left;
-	vertical-align: middle;
+    display: block;
+    margin: 0;
+    float: left;
+    padding: 0.5em;
+    width: 21%;
+    font-weight: bold;
+    text-align: left;
+    vertical-align: middle;
 }
 
 fieldset.ev_form dd {
-	display: block;
-	margin: 0;
-	padding: 0.5em;
-	margin-left: 23%;
-	background-color: #ebebeb;
-	vertical-align: middle;
+    display: block;
+    margin: 0;
+    padding: 0.5em;
+    margin-left: 23%;
+    background-color: #ebebeb;
+    vertical-align: middle;
 }
 
 fieldset.ev_form div.ev_submit {
-	font-size: 1.1em;
-	font-weight: bold;
-	padding: 0.8em;
-	background-color: #dbdbdb;
-	text-align: center;
+    font-size: 1.1em;
+    font-weight: bold;
+    padding: 0.8em;
+    background-color: #dbdbdb;
+    text-align: center;
 }
 
 /* ------------ PAGINATION ------------ */
 
 .ev_pageno {
-	background-color: #f0f0f0;
-	border: 1px solid #ccc;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
     margin: .1em;
 }
 
 .ev_pagecurrent {
-	padding: 0px 4px;
-	font-weight: bold;
+    padding: 0px 4px;
+    font-weight: bold;
 }
 
 .ev_pageno a {
-	padding: 1px 4px;
+    padding: 1px 4px;
 }
 
 .ev_pageno a:hover {
-	background-color: #3F5E88;
-	color: #fff;
-	text-decoration: none;
+    background-color: #3F5E88;
+    color: #fff;
+    text-decoration: none;
 }
 
 /* ------------ CONTENT ------------ */
 
 .ev_main {
-	padding: 0.3em;
-	background-color: #f6f6f6;
+    padding: 0.3em;
+    background-color: #f6f6f6;
 }
 
 .ev_tabheader {
@@ -119,12 +119,12 @@ fieldset.ev_form div.ev_submit {
 }
 
 .ev_header {
-	background-color: #637591;
-	border: 1px solid #bbb;
-	color: #fff;
+    background-color: #637591;
+    border: 1px solid #bbb;
+    color: #fff;
     padding: .5em !important;
     margin: 0;
-	font-size: 1.3em;
+    font-size: 1.3em;
     font-weight: bold;
     text-align: center;
 }
@@ -134,8 +134,8 @@ fieldset.ev_form div.ev_submit {
 
 .ev_next_day_header {
     background-color: #f0f0f0;
-	border-top: 1px solid #bbb !important;
-	border-bottom: 1px solid #bbb !important;
+    border-top: 1px solid #bbb !important;
+    border-bottom: 1px solid #bbb !important;
     padding: .3em;
     font-weight: bold;
 }
@@ -155,45 +155,45 @@ table.ev_noborder > tbody > tr > td, td.ev_noborder {
     padding: 0em;
 }
 table.ev_table {
-	border-collapse: collapse;
-	border-spacing: 2px;
+    border-collapse: collapse;
+    border-spacing: 2px;
 }
 table.ev_table > tbody > tr > td {
-	border: 1px solid #bbb;
-	padding: 0.5em;
+    border: 1px solid #bbb;
+    padding: 0.5em;
 }
 table.ev_table > tbody > tr > th {
-	background-color: #637591;
-	border: 1px solid #bbb;
-	color: #fff;
-	padding: 0.5em;
-	font-size: 1.3em;
+    background-color: #637591;
+    border: 1px solid #bbb;
+    color: #fff;
+    padding: 0.5em;
+    font-size: 1.3em;
 }
 table.ev_table > tbody > tr > th > a {
-	color: #fff;
-	text-decoration: underline;
+    color: #fff;
+    text-decoration: underline;
 }
 table.ev_table > tbody > tr > th > a:hover {
-	color: #fff;
-	text-decoration: none;
+    color: #fff;
+    text-decoration: none;
 }
 
 table.ev_date {
-	border-collapse: collapse;
-	border-spacing: 2px;
+    border-collapse: collapse;
+    border-spacing: 2px;
 }
 table.ev_date td {
     border: none !important;
-	padding: 0.2em;
+    padding: 0.2em;
 }
 
 .ev_border {
-	border-radius: 2px;
-	-moz-border-radius: 2px;
-	-khtml-border-radius: 2px;
-	-webkit-border-radius: 2px;
-	padding: 1px;
-	border: 1px solid #7F90AE;
+    border-radius: 2px;
+    -moz-border-radius: 2px;
+    -khtml-border-radius: 2px;
+    -webkit-border-radius: 2px;
+    padding: 1px;
+    border: 1px solid #7F90AE;
 }
 
 td.ev_table_sep {
@@ -224,33 +224,33 @@ ul.ev_iconlist {
 /* ------------ STATUS ------------ */
 
 td.ev_status_open {
-	padding: 4px 4px 4px 4px;
-	background-color: #F8B4B4;
+    padding: 4px 4px 4px 4px;
+    background-color: #F8B4B4;
 }
 
 td.ev_status_running {
-	padding: 4px 4px 4px 4px;
-	background-color: #fff366;
+    padding: 4px 4px 4px 4px;
+    background-color: #fff366;
 }
 
 td.ev_status_not_tested {
-	padding: 4px 4px 4px 4px;
-	background-color: #a8d742;
+    padding: 4px 4px 4px 4px;
+    background-color: #a8d742;
 }
 
 td.ev_status_fixed {
-	padding: 4px 4px 4px 4px;
-	background-color: #cceedd;
+    padding: 4px 4px 4px 4px;
+    background-color: #cceedd;
 }
 
 td.ev_status_not_reproducable {
-	padding: 4px 4px 4px 4px;
-	background-color: #CC99CC;
+    padding: 4px 4px 4px 4px;
+    background-color: #CC99CC;
 }
 
 td.ev_status_need_info {
-	padding: 4px 4px 4px 4px;
-	background-color: #FF6633;
+    padding: 4px 4px 4px 4px;
+    background-color: #FF6633;
 }
 
 /* ------------ BUTTONS ------------ */
@@ -260,12 +260,12 @@ td.ev_status_need_info {
     border-radius: 5px;
     display: inline-block;
     width: auto;
-	padding-top: 2px;
+    padding-top: 2px;
     padding-left: .6em;
     padding-right: .6em;
     margin: 2px;
-	text-align: left;
-	font-weight: bold;
+    text-align: left;
+    font-weight: bold;
     cursor: pointer;
 }
 .ev_button *, .ev_button_medium *, .ev_button_big * {
@@ -274,18 +274,18 @@ td.ev_status_need_info {
 
 .ev_button {
     height: 16px;
-	font-size: .8em;
+    font-size: .8em;
     padding-bottom: 4px;
 }
 .ev_button_medium {
     height: 20px;
-	font-size: 1em;
+    font-size: 1em;
     padding-bottom: 6px;
 }
 .ev_button_big {
     text-align: center;
     height: 30px;
-	font-size: 1.1em;
+    font-size: 1.1em;
     padding-bottom: 7px;
 }
 
@@ -410,7 +410,7 @@ i.ev_spin {
 }
 
 span.ev_msg_error span.ev_msg_info {
-	font-weight: bold;
+    font-weight: bold;
 }
 
 /* ------------ BOXES ------------ */
@@ -423,7 +423,7 @@ span.ev_msg_error span.ev_msg_info {
     text-overflow: ellipsis;
 }
 .ev_box {
-	border: 1px solid #bbb;
+    border: 1px solid #bbb;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -433,7 +433,7 @@ span.ev_msg_error span.ev_msg_info {
     overflow-y: scroll;
 }
 .ev_box > .ev_scrollbox > div {
-	border: 1px solid #fff;
+    border: 1px solid #fff;
     white-space: nowrap;
 }
 .ev_box .ev_summary {
@@ -589,22 +589,22 @@ span.ev_msg_error span.ev_msg_info {
 /* ------------ EVENT/TODO POPUP ------------ */
 
 div.ev_current {
-  font-weight: bold !important;
+    font-weight: bold !important;
 }
 
 div.ev_selected {
-  border: 1px solid #555 !important;
+    border: 1px solid #555 !important;
 }
 
 .ev_popup {
-  background-color: #ffffff;
-  border: 1px solid #555;
-  box-shadow: 2px 2px 3px #555;
-  position: absolute;
-  cursor: default;
-  display: none;
-  width: 600px;
-  z-index: 50;
+    background-color: #ffffff;
+    border: 1px solid #555;
+    box-shadow: 2px 2px 3px #555;
+    position: absolute;
+    cursor: default;
+    display: none;
+    width: 600px;
+    z-index: 50;
 }
 
 /* ------------ TAG ------------ */
