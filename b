@@ -8,6 +8,7 @@ import shlex
 import subprocess
 
 APP_ID = "com.github.NilsTUD.Eventix"
+APP_ID_DEBUG = APP_ID + "-debug"
 
 
 def dev_env():
@@ -16,10 +17,10 @@ def dev_env():
     os.makedirs(run_dir, 0o700, exist_ok=True)
 
     # update data
-    shutil.rmtree(run_dir / APP_ID / "static", ignore_errors=True)
-    shutil.copytree(Path("data") / "static", run_dir / APP_ID / "static")
-    shutil.rmtree(run_dir / APP_ID / "icons", ignore_errors=True)
-    shutil.copytree(Path("data") / "icons", run_dir / APP_ID / "icons")
+    shutil.rmtree(run_dir / APP_ID_DEBUG / "static", ignore_errors=True)
+    shutil.copytree(Path("data") / "static", run_dir / APP_ID_DEBUG / "static")
+    shutil.rmtree(run_dir / APP_ID_DEBUG / "icons", ignore_errors=True)
+    shutil.copytree(Path("data") / "icons", run_dir / APP_ID_DEBUG / "icons")
 
     env["XDG_DATA_HOME"] = run_dir.absolute()
     env["XDG_CONFIG_HOME"] = run_dir.absolute()
