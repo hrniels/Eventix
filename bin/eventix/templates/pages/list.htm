@@ -13,7 +13,12 @@
             <div id="filter_box">
                 <dl>
                     <dt>{{ "Keywords"|t(locale) }}:</dt>
-                    <dd><input type="text" size="50" name="keywords" value="{{ filter.keywords }}" /></dd>
+                    <dd>
+                        <input type="text" size="50" name="keywords" value="{{ filter.keywords }}" />
+                        <div style="margin-top: .5em">
+                            {{ conjunction|safe }}
+                        </div>
+                    </dd>
                 </dl>
                 <dl>
                     <dt>{{ "Calendars"|t(locale) }}:</dt>

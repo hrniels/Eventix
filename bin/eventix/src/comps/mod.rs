@@ -11,6 +11,7 @@ pub mod editmodes;
 pub mod organizer;
 pub mod pagination;
 pub mod partstat;
+pub mod radiogroup;
 pub mod recur;
 pub mod time;
 pub mod todostatus;

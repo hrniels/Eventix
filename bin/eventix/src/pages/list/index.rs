@@ -12,9 +12,11 @@ use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::fmt::Display;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::comps::radiogroup::RadioGroupTemplate;
 use crate::comps::{
     organizer::OrganizerTemplate, pagination::PaginationTemplate, partstat::PartStatTemplate,
 };
@@ -24,12 +26,26 @@ use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 
 const PER_PAGE: usize = 15;
 
+#[derive(Clone, Copy, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
+enum Conjunction {
+    #[default]
+    And,
+    Or,
+}
+
+impl Display for Conjunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Filter {
     keywords: String,
     page: usize,
     dirs: Vec<String>,
+    conjunction: Conjunction,
 }
 
 impl Default for Filter {
@@ -38,6 +54,7 @@ impl Default for Filter {
             keywords: String::from(""),
             page: 1,
             dirs: Vec::new(),
+            conjunction: Conjunction::default(),
         }
     }
 }
@@ -52,6 +69,7 @@ impl Filter {
             keywords: self.keywords.clone(),
             page,
             dirs: self.dirs.clone(),
+            conjunction: self.conjunction,
         }
     }
 }
@@ -122,6 +140,7 @@ struct ListTemplate<'a, F: Fn(&usize) -> String> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     filter: Filter,
+    conjunction: RadioGroupTemplate<Conjunction>,
     directories: Vec<&'a CalDir>,
     comps: Vec<ListComponent<'a>>,
     pagination: PaginationTemplate<F>,
@@ -159,12 +178,17 @@ pub async fn handler(
         if let Some(field) = field {
             let field = field.to_lowercase();
             for kw in kws.split_whitespace() {
-                if field.contains(kw) {
+                if filter.conjunction == Conjunction::Or && field.contains(kw) {
                     return true;
                 }
+                if filter.conjunction == Conjunction::And && !field.contains(kw) {
+                    return false;
+                }
             }
+            filter.conjunction == Conjunction::And
+        } else {
+            false
         }
-        false
     };
 
     let settings = state.settings();
@@ -222,10 +246,26 @@ pub async fn handler(
         filter.page,
     );
 
+    let conjunction = RadioGroupTemplate::new(
+        String::from("conjunction"),
+        filter.conjunction,
+        vec![
+            (
+                Conjunction::And,
+                locale.translate("All keywords need to match").to_string(),
+            ),
+            (
+                Conjunction::Or,
+                locale.translate("Any keyword needs to match").to_string(),
+            ),
+        ],
+    );
+
     let html = ListTemplate {
         page,
         locale,
         filter,
+        conjunction,
         directories,
         comps,
         pagination,
