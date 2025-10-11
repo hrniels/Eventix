@@ -2,13 +2,20 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use crate::{EventixState, sync::Syncer};
+use crate::{
+    EventixState,
+    sync::{SyncCalResult, Syncer},
+};
 
 pub struct FSSyncer;
 
 #[async_trait]
 impl Syncer for FSSyncer {
-    async fn sync(&mut self, cal: &Arc<String>, state: EventixState) -> anyhow::Result<bool> {
+    async fn sync(
+        &mut self,
+        cal: &Arc<String>,
+        state: EventixState,
+    ) -> anyhow::Result<SyncCalResult> {
         let mut state = state.lock().await;
 
         let dir = state
@@ -21,6 +28,6 @@ impl Syncer for FSSyncer {
         seen_changes |= dir.rescan_files()?;
         seen_changes |= dir.rescan_for_deletions();
 
-        Ok(seen_changes)
+        Ok(SyncCalResult::Success(seen_changes))
     }
 }

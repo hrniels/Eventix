@@ -35,6 +35,16 @@ impl PartialEq for CalDir {
 impl Eq for CalDir {}
 
 impl CalDir {
+    /// Creates a new empty directory with the given path.
+    pub fn new_empty(id: Arc<String>, path: PathBuf, name: String) -> Self {
+        Self {
+            id,
+            path,
+            name,
+            files: vec![],
+        }
+    }
+
     /// Creates a new directory from the given path.
     ///
     /// This method reads all files in the given directory and tries to parse them into a

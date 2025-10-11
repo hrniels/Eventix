@@ -17,7 +17,9 @@ pub struct Misc {
     #[serde(default)]
     disabled_calendars: Vec<String>,
     #[serde(default)]
-    sync_errors: Vec<String>,
+    sync_errors: HashMap<String, String>,
+    #[serde(default)]
+    calendar_tokens: HashMap<String, String>,
 }
 
 impl Misc {
@@ -27,7 +29,8 @@ impl Misc {
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
-            sync_errors: Vec::default(),
+            sync_errors: HashMap::default(),
+            calendar_tokens: HashMap::default(),
         }
     }
 
@@ -63,16 +66,24 @@ impl Misc {
         }
     }
 
-    pub fn has_sync_error(&self, id: &String) -> bool {
-        self.sync_errors.contains(id)
+    pub fn get_sync_error(&self, id: &String) -> Option<&String> {
+        self.sync_errors.get(id)
     }
 
-    pub fn set_sync_error(&mut self, id: &String, error: bool) {
-        match (self.sync_errors.contains(id), error) {
-            (true, false) => self.sync_errors.retain(|c| c != id),
-            (false, true) => self.sync_errors.push(id.to_string()),
-            _ => {}
+    pub fn set_sync_error(&mut self, id: &String, error: Option<String>) {
+        if let Some(error) = error {
+            *self.sync_errors.entry(id.to_string()).or_default() = error;
+        } else {
+            self.sync_errors.remove(id);
         }
+    }
+
+    pub fn calendar_token(&self, id: &String) -> Option<&String> {
+        self.calendar_tokens.get(id)
+    }
+
+    pub fn set_calendar_token(&mut self, id: &String, token: String) {
+        *self.calendar_tokens.entry(id.to_string()).or_default() = token;
     }
 
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {

@@ -1,10 +1,11 @@
 {
     "app-id": "com.github.NilsTUD.Eventix",
     "runtime": "org.gnome.Platform",
-    "runtime-version": "48",
+    "runtime-version": "49",
     "sdk": "org.gnome.Sdk",
     "sdk-extensions": [
-        "org.freedesktop.Sdk.Extension.rust-stable"
+        "org.freedesktop.Sdk.Extension.rust-stable",
+        "org.freedesktop.Sdk.Extension.openjdk"
     ],
     "command": "eventix-app",
     "finish-args": [
@@ -79,6 +80,56 @@
                     "path": "../flatpak"
                 }
             ]
+        },
+        {
+            "name": "vdirsyncer",
+            "buildsystem": "simple",
+            "build-commands": [
+                "pip3 install --prefix=/app ."
+            ],
+            "sources": [
+                {
+                    "type": "git",
+                    "url": "https://github.com/pimutils/vdirsyncer.git",
+                    "tag": "v0.20.0"
+                }
+            ]
+        },
+        {
+            "name": "davmail",
+            "buildsystem": "simple",
+            "build-options": {
+                "env": {
+                    "JAVA_HOME": "/usr/lib/sdk/openjdk",
+                    "PATH": "/usr/lib/sdk/openjdk/bin:/app/bin:/usr/bin"
+                }
+            },
+            "build-commands": [
+                "export PATH=/usr/lib/sdk/openjdk/bin:$PATH",
+                "cd contrib/davmail && mvn install -Dmaven.repo.local=$PWD/.m2",
+                "cd contrib/davmail && ant dist",
+                "install -Dm755 contrib/davmail/dist/davmail /app/bin/davmail",
+                "install -D contrib/davmail/dist/davmail.jar /app/bin/davmail.jar",
+                "mkdir -p /app/bin/lib",
+                "cp contrib/davmail/dist/lib/* /app/bin/lib"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "path": "../flatpak/source.tar.gz",
+                    "strip-components": 0
+                }
+            ]
+        },
+        {
+            "name": "java-runtime",
+            "buildsystem": "simple",
+            "build-commands": [
+                "mkdir -p /app/openjdk",
+                "curl -L https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9+9/OpenJDK17U-jre_x64_linux_hotspot_17.0.9_9.tar.gz | tar xz -C /app/openjdk --strip-components=1",
+                "ln -s /app/openjdk/bin/java /app/bin/java"
+            ],
+            "sources": []
         }
     ]
 }

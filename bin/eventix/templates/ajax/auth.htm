@@ -1,0 +1,36 @@
+<div>
+    <style>
+    h1.title {
+        font-size: 1.4rem;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .container {
+        margin: 1em;
+        text-align: center;
+    }
+    </style>
+    <script type="text/javascript">
+        function submitAndClose() {
+            reloadDB('last-update', 'sync-spinner', 'out-of-sync', true, $('#result_url').val());
+            fireEvent(new DeselectEvent());
+        }
+    </script>
+
+    <h1 class="title">{{ "Authentication Failed"|t(locale) }}</h1>
+
+    <div class="container">
+        <p>
+        {{ "The authentication for calendar '{}' failed. Please re-authenticate yourself by
+            following the instruction here:"|format(calendar) }}
+        </p>
+        <p>
+            <a href="{{ url }}">{{ "Authenticate"|t(locale) }}</a>
+        </p>
+
+        {{ "Please paste the resulting URL here and retry:"|t(locale) }}
+        <br />
+        <input type="text" id="result_url" name="result_url" size="50" />
+        <input type="submit" value="{{ "Retry"|t(locale) }}" onclick="submitAndClose()" />
+    </div>
+</div>

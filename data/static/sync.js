@@ -8,7 +8,7 @@ function reloadDBEvery(period, lastReloadId, spinnerId, iconId) {
     }, period);
 }
 
-function reloadDB(lastReloadId, spinnerId, iconId, force) {
+function reloadDB(lastReloadId, spinnerId, iconId, force, auth_url) {
     // if it's already out of sync, and the user clicks the refresh button, directly reload
     if(outOfSync && force) {
         reloadPage();
@@ -26,18 +26,37 @@ function reloadDB(lastReloadId, spinnerId, iconId, force) {
     syncForce = force;
     $('#' + spinnerId).addClass('ev_spin');
 
-    postRequest('/reload', function(data) {
+    let url = '/reload';
+    if(auth_url)
+        url += '?auth_url=' + encodeURIComponent(auth_url);
+
+    postRequest(url, function(data) {
         $('#' + spinnerId).removeClass('ev_spin');
         $('#' + lastReloadId).html(data.date);
-        if(data.changed)
-            requestReload(iconId, syncForce);
+        let auth = false;
         for(var cal in data.calendars) {
+            // auth problem? Then show auth popup
+            if(!auth && data.calendars[cal].AuthFailed) {
+                fireEvent(new AuthEvent(cal, data.calendars[cal].AuthFailed));
+                auth = true;
+            }
+
             let btn = $('#ev_cal_src_button_' + cal);
-            if(data.calendars[cal])
-                btn.hide();
-            else
+            let error = $('#calendar_enabled' + cal);
+            let calname = error.attr('data-name');
+
+            // update calendar buttons
+            if(data.calendars[cal].Error) {
+                error.attr('title', calname + ": " + data.calendars[cal].Error);
                 btn.show();
+            }
+            else {
+                error.attr('title', calname);
+                btn.hide();
+            }
         }
+        if(!auth && data.changed)
+            requestReload(iconId, syncForce);
         syncing = false;
     });
 }

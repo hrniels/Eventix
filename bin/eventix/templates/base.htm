@@ -56,9 +56,15 @@
                 <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
                     <span>{{ "Calendars"|t(locale) }}:</span>
                     {% for cal in page.calendars() %}
-                    <a style="vertical-align: middle" title="{{ cal.name }}"
-                                                      href="javascript:toggleCalendar('{{ cal.id }}')">
+                    <a style="vertical-align: middle"
+                       href="javascript:toggleCalendar('{{ cal.id }}')">
                         <span id="calendar_enabled_{{ cal.id }}"
+                              data-name="{{ cal.name }}"
+                              {% if let Some(msg) = cal.sync_error %}
+                              title="{{ cal.name }}: {{ msg }}"
+                              {% else %}
+                              title="{{ cal.name }}"
+                              {% endif %}
                               class="ev_cal_src ev_cal_src_button
                                      {% if cal.enabled %}
                                      ev_cal_src_{{ cal.id }}
@@ -67,7 +73,11 @@
                                      {% endif %}
                                     ">
                             <i id="ev_cal_src_button_{{ cal.id }}"
-                               style="display: {% if cal.sync_error %}inline{% else %}none{% endif %}"
+                               {% if cal.sync_error.is_some() %}
+                               style="display: inline"
+                               {% else %}
+                               style="display: none"
+                               {% endif %}
                                class="bi bi-exclamation-triangle-fill"></i>
                         </span>
                     </a>

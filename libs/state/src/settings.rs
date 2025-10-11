@@ -80,8 +80,13 @@ pub enum CalendarAlarmType {
 pub enum SyncerType {
     FileSystem,
     VDirSyncer {
-        cmd: Vec<String>,
+        name: String,
         local_name: String,
+    },
+    O365 {
+        name: String,
+        local_name: String,
+        port: u16,
     },
 }
 

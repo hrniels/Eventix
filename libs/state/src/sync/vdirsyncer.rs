@@ -2,10 +2,17 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use std::process::Stdio;
 use std::{process::Output, sync::Arc};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
 use crate::EventixState;
-use crate::sync::Syncer;
+use crate::sync::{SyncCalResult, Syncer};
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum SyncResult {
+    Success(bool),
+    NeedsDiscover,
+}
 
 enum EventType<'a> {
     Add(&'a str),
@@ -15,30 +22,67 @@ enum EventType<'a> {
 
 pub struct VDirSyncer {
     cmd: Command,
+    name: String,
     local_name: String,
 }
 
 impl VDirSyncer {
-    pub fn new(args: Vec<String>, local_name: String) -> Self {
-        assert!(!args.is_empty());
-        let mut cmd = Command::new(args[0].clone());
+    pub fn new(name: String, local_name: String) -> Self {
+        let mut cmd = Command::new("vdirsyncer");
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        cmd.args(&args[1..]);
-        Self { cmd, local_name }
+        cmd.args(&["sync", &name]);
+        Self {
+            cmd,
+            name,
+            local_name,
+        }
+    }
+
+    async fn discover(&self, cal: &Arc<String>) -> anyhow::Result<()> {
+        let mut cmd = Command::new("vdirsyncer");
+        cmd.stdin(Stdio::piped());
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        cmd.args(&["discover", &self.name]);
+
+        let mut child = cmd.spawn()?;
+
+        let mut stdin = child.stdin.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+        let mut stderr_reader = BufReader::new(stderr).lines();
+
+        while let Some(line) = stderr_reader.next_line().await? {
+            tracing::debug!("{}: {}", *cal, line);
+            // in case it asks us whether to create the calendar, say "yes"
+            stdin.write(b"y\n").await.unwrap();
+        }
+
+        let output = child.wait_with_output().await?;
+        let status = output.status;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(anyhow!("discover failed: error code {:?}", status.code()))
+        }
     }
 
     async fn post_process(
         &self,
         cal: &Arc<String>,
-        state: EventixState,
+        state: &EventixState,
         output: Output,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<SyncResult> {
         let mut added = false;
         let mut changed = Vec::new();
         let mut deleted = Vec::new();
         for line in String::from_utf8(output.stderr)?.lines() {
             tracing::debug!("{}: {}", *cal, line);
+
+            // vdirsyncer will complain if a collection changes and request a re-discover
+            if line.contains("Please run `vdirsyncer discover") {
+                return Ok(SyncResult::NeedsDiscover);
+            }
 
             let w = line.split_whitespace().collect::<Vec<_>>();
             if w.len() < 5 {
@@ -93,21 +137,41 @@ impl VDirSyncer {
             dir.remove_by_uid(uid)?;
         }
 
-        Ok(seen_changes)
+        Ok(SyncResult::Success(seen_changes))
     }
 }
 
 #[async_trait]
 impl Syncer for VDirSyncer {
-    async fn sync(&mut self, cal: &Arc<String>, state: EventixState) -> anyhow::Result<bool> {
-        let child = self.cmd.spawn()?;
-        let output = child.wait_with_output().await?;
-        let status = output.status;
-        let res = self.post_process(cal, state, output).await?;
-        if status.success() {
-            Ok(res)
-        } else {
-            Err(anyhow!("exited with {}", status))
+    async fn sync(
+        &mut self,
+        cal: &Arc<String>,
+        state: EventixState,
+    ) -> anyhow::Result<SyncCalResult> {
+        let mut tried_discover = false;
+        loop {
+            let child = self.cmd.spawn()?;
+            let output = child.wait_with_output().await?;
+            let status = output.status;
+            let res = self.post_process(cal, &state, output).await?;
+
+            match res {
+                SyncResult::NeedsDiscover => {
+                    if tried_discover {
+                        return Err(anyhow!("discover did not resolve sync error"));
+                    }
+                    self.discover(cal).await?;
+                    tried_discover = true;
+                    continue;
+                }
+                SyncResult::Success(res) => {
+                    if status.success() {
+                        return Ok(SyncCalResult::Success(res));
+                    } else {
+                        return Err(anyhow!("exited with {}", status));
+                    }
+                }
+            }
         }
     }
 }

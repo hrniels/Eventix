@@ -23,7 +23,7 @@ use xdg::BaseDirectories;
 
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
 pub use settings::{CalendarAlarmType, CalendarSettings, EmailAccount, Settings};
-pub use sync::{SyncResult, Syncer};
+pub use sync::{SyncCalResult, SyncResult, Syncer};
 
 pub type EventixState = Arc<Mutex<State>>;
 
@@ -47,12 +47,19 @@ impl State {
         let mut store = CalStore::default();
         for (id, cal) in settings.calendars() {
             let cal_id: Arc<String> = Arc::from(id.clone());
-            let mut dir = CalDir::new_from_dir(
-                cal_id.clone(),
-                PathBuf::from(cal.path().clone()),
-                cal.name().clone(),
-            )
-            .with_context(|| format!("Loading calendar {} from '{}' failed", id, cal.path()))?;
+            let path = PathBuf::from(cal.path().clone());
+            let mut dir = if path.exists() {
+                CalDir::new_from_dir(cal_id.clone(), path, cal.name().clone()).with_context(
+                    || format!("Loading calendar {} from '{}' failed", id, cal.path()),
+                )?
+            } else {
+                tracing::warn!(
+                    "Creating empty calendar '{}' from non-existing directory {}",
+                    id,
+                    cal.path()
+                );
+                CalDir::new_empty(cal_id.clone(), path, cal.name().clone())
+            };
 
             // workaround for a bug in Exchange/davmail: apparently, Exchange sends events with
             // attendees, but without organizer to davmail and davmail does not repair it. As this
@@ -87,7 +94,10 @@ impl State {
         })
     }
 
-    pub async fn reload(state: EventixState) -> anyhow::Result<sync::SyncResult> {
+    pub async fn reload(
+        state: EventixState,
+        auth_url: Option<&String>,
+    ) -> anyhow::Result<sync::SyncResult> {
         // first reload the settings and personal alarms
         let changed = {
             let mut state = state.lock().await;
@@ -108,7 +118,7 @@ impl State {
         };
 
         // now synchronize and update the store
-        let mut sync_res = sync::sync_all(state.clone()).await;
+        let mut sync_res = sync::sync_all(state.clone(), auth_url).await;
         sync_res.changed |= changed;
 
         // remember last reload

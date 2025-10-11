@@ -1,0 +1,3 @@
+[submodule "contrib/davmail"]
+	path = contrib/davmail
+	url = https://github.com/Nils-TUD/davmail

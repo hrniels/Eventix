@@ -22,6 +22,8 @@ def dev_env():
     shutil.rmtree(run_dir / APP_ID_DEBUG / "icons", ignore_errors=True)
     shutil.copytree(Path("data") / "icons", run_dir / APP_ID_DEBUG / "icons")
 
+    davmail_bin = os.path.abspath("contrib/davmail/dist")
+    env["PATH"] = f"{davmail_bin}:{env["PATH"]}"
     env["XDG_DATA_HOME"] = run_dir.absolute()
     env["XDG_CONFIG_HOME"] = run_dir.absolute()
     env["RUST_LOG"] = "trace"
@@ -73,6 +75,11 @@ def cmd_import(args):
     run_cmd(cmd_args)
 
 
+def cmd_davmail(args):
+    subprocess.run(["mvn", "install"], cwd='contrib/davmail', check=True)
+    subprocess.run(["ant", "dist"], cwd='contrib/davmail', check=True)
+
+
 def cmd_flatpak(args):
     build_dir = "flatpak/build"
     repo_dir = "flatpak/repo"
@@ -80,15 +87,18 @@ def cmd_flatpak(args):
     # generate archive for flatpak JSON
     subprocess.run([
         "tar", "czf", "flatpak/source.tar.gz",
+        "--exclude=contrib/davmail/dist",
+        "--exclude=.git/modules",
         # include .git for GIT_HASH
-        ".git", "bin", "data", "libs", "Cargo.toml", "Cargo.lock"
+        ".git", "bin", "contrib", "data", "libs", "Cargo.toml", "Cargo.lock"
     ])
 
     # install flatpak dependencies
     runtimes = [
-        "org.gnome.Platform//48",
-        "org.gnome.Sdk//48",
-        "org.freedesktop.Sdk.Extension.rust-stable//24.08"
+        "org.gnome.Platform//49",
+        "org.gnome.Sdk//49",
+        "org.freedesktop.Sdk.Extension.rust-stable//25.08",
+        "org.freedesktop.Sdk.Extension.openjdk//25.08"
     ]
     for runtime in runtimes:
         subprocess.run(["flatpak", "install", "-y", "flathub", runtime], check=True)
@@ -141,6 +151,10 @@ def main():
         "import", parents=[parent_parser], help="Import an ICS file")
     import_parser.add_argument("file", help="Path to the ICS file to import")
     import_parser.set_defaults(func=cmd_import)
+
+    davmail_parser = subparsers.add_parser(
+        "davmail", parents=[parent_parser], help="Build davmail")
+    davmail_parser.set_defaults(func=cmd_davmail)
 
     flatpak_parser = subparsers.add_parser(
         "flatpak", parents=[parent_parser], help="Build flatpak package")

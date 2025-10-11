@@ -11,10 +11,10 @@ eventix-cmd.workspace = true
 eventix-ical.workspace = true
 eventix-locale.workspace = true
 eventix-state.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 xdg.workspace = true
 
 gtk = "0.18.2"
 glib = "0.18"
 gdk-pixbuf = "0.18.0"
-tempfile = "3.21.0"

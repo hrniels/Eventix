@@ -29,7 +29,7 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
-use crate::ajax::{cancel, help, moveevent};
+use crate::ajax::{auth, cancel, help, moveevent};
 
 include!(concat!(env!("OUT_DIR"), "/icons.rs"));
 
@@ -83,6 +83,7 @@ async fn run_server(listener: TcpListener) {
         .merge(reload::router(state.clone()))
         .merge(editalarm::router(state.clone()))
         .merge(help::router(state.clone()))
+        .merge(auth::router(state.clone()))
         .fallback(error_handler)
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,

@@ -1,4 +1,5 @@
 pub mod attendees;
+pub mod auth;
 pub mod cancel;
 pub mod complete;
 pub mod delete;

@@ -34,6 +34,14 @@ class HelpState extends State {
     }
 }
 
+class AuthState extends State {
+    constructor(cal, url) {
+        super("auth");
+        this.cal = cal;
+        this.url = url;
+    }
+}
+
 class Event {
     constructor(name) {
         this.name = name;
@@ -78,6 +86,7 @@ class DeselectEvent extends Event {
                 return new InitState();
 
             case "help":
+            case "auth":
             case "large":
                 if(state.popup_pos != null) {
                     await _shrinkPopup(state.popup_pos);
@@ -120,6 +129,7 @@ class EditEvent extends Event {
                 return new LargeState(state.ids, popup_pos);
 
             case "help":
+            case "auth":
                 console.assert(false, "This should not happen");
 
             default:
@@ -136,6 +146,7 @@ class CancelEvent extends Event {
     async trigger(state) {
         switch(state.name) {
             case "help":
+            case "auth":
             case "large":
                 let new_state;
                 if(state.popup_pos != null) {
@@ -171,6 +182,33 @@ class HelpEvent extends Event {
                 await _loadHelp();
                 await _animateOpenPopup();
                 return new HelpState();
+
+            default:
+                return state;
+        }
+    }
+}
+
+class AuthEvent extends Event {
+    constructor(cal, url) {
+        super("auth");
+        this.data = {
+            'cal': cal,
+            'url': url,
+        };
+    }
+
+    async trigger(state) {
+        switch(state.name) {
+            case "init":
+                await _openAuthPopup(this.data['cal'], this.data['url']);
+                return new AuthState(this.data['cal'], this.data['url']);
+
+            case "small":
+            case "large":
+                await _loadAuth(this.data['cal'], this.data['url']);
+                await _animateOpenPopup();
+                return new AuthState(this.data['cal'], this.data['url']);
 
             default:
                 return state;
@@ -258,32 +296,31 @@ async function _animateOpenPopup() {
 }
 
 async function _openLargePopup(el) {
-    await new Promise(async function(resolve) {
-        let button = $('#' + el.id);
-        $('#popup').animate({
-            left: button.offset().left + 'px',
-            top: button.offset().top + 'px',
-            width: button.width() + 'px',
-        }, 10);
-
+    await _openFromElement('#' + el.id, async function() {
         await _loadOccurrence(el.uid, el.rid, true);
-        setTimeout(async () => {
-            await _animateOpenPopup();
-            resolve();
-        }, 10);
     });
 }
 
 async function _openHelpPopup(el) {
+    await _openFromElement('#link-help', _loadHelp);
+}
+
+async function _openAuthPopup(cal, url) {
+    await _openFromElement('#link-refresh', async function() {
+        _loadAuth(cal, url)
+    });
+}
+
+async function _openFromElement(id, func) {
     await new Promise(async function(resolve) {
-        let button = $('#link-help');
+        let button = $(id);
         $('#popup').animate({
             left: button.offset().left + 'px',
             top: button.offset().top + 'px',
             width: button.width() + 'px',
         }, 10);
 
-        await _loadHelp();
+        await func();
         setTimeout(async () => {
             await _animateOpenPopup();
             resolve();
@@ -362,6 +399,10 @@ async function _loadOccurrence(uid, rid, edit) {
 
 async function _loadHelp() {
     await _loadPage('/help');
+}
+
+async function _loadAuth(cal, url) {
+    await _loadPage('/auth?calendar=' + cal + '&url=' + encodeURIComponent(url));
 }
 
 async function _loadPage(url) {
