@@ -25,10 +25,10 @@ tracing.workspace = true
 xdg.workspace = true
 
 askama = "0.14.0"
-axum = { version = "0.8.4", features = ["macros", "multipart"] }
+axum = { version = "0.8.6", features = ["macros", "multipart"] }
 formatx = "0.2.4"
 numfmt = "1.2.0"
-regex = "1.11.2"
+regex = "1.12.1"
 serde_qs = "0.15.0"
 strum = { version = "0.27.2", features = ["derive"] }
 tower = "0.5.2"
