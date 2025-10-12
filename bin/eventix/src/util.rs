@@ -71,6 +71,7 @@ pub fn user_for_uid(
         .settings()
         .calendar(file.directory())
         .unwrap()
+        .0
         .email()
         .cloned())
 }
@@ -84,6 +85,7 @@ pub fn user_is_event_owner<E: EventLike>(
         .settings()
         .calendar(dir)
         .unwrap()
+        .0
         .email()
         .map(|e| e.address());
     ev.is_owned_by(user_mail)

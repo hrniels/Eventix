@@ -1,88 +1,121 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
-use std::io::Write;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
-use tempfile::NamedTempFile;
-use tokio::fs::File;
+use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use xdg::BaseDirectories;
 
 use crate::EventixState;
 use crate::sync::vdirsyncer::VDirSyncer;
 use crate::sync::{SyncCalResult, Syncer};
 
+const PORT_BASE: u16 = 25000;
+
 pub struct O365 {
     vdirsyncer: VDirSyncer,
     davmail_cmd: Command,
     auth_url: Option<String>,
-    props_file: NamedTempFile,
+    props_path: PathBuf,
 }
 
 impl O365 {
-    pub fn new(
+    pub async fn new(
+        xdg: &BaseDirectories,
+        idx: usize,
         name: String,
-        local_name: String,
-        port: u16,
-        user: String,
+        folder_id: HashMap<String, String>,
+        read_only: bool,
+        user: &String,
+        pw_cmd: Vec<String>,
         auth_url: Option<&String>,
         token: Option<String>,
     ) -> anyhow::Result<Self> {
-        let vdirsyncer = VDirSyncer::new(name, local_name);
+        let port = PORT_BASE + idx as u16;
+
+        // generate properties file
+        let props_path = Self::generate_props(xdg, &name, port, user, token).await?;
+
+        // create vdirsyncer instance
+        let url = format!("http://localhost:{}/users/{}/{}/", port, user, name);
+        let vdirsyncer =
+            VDirSyncer::new(xdg, name, folder_id, url, read_only, user, pw_cmd).await?;
 
         // create davmail command
         let mut davmail_cmd = Command::new("davmail");
         davmail_cmd.stdin(Stdio::piped());
         davmail_cmd.stdout(Stdio::piped());
         davmail_cmd.stderr(Stdio::piped());
-
-        // generate properties file
-        let props_file = Self::generate_props(port, user, token)?;
-        let props_path = props_file.path().as_os_str().to_str().unwrap();
-
-        davmail_cmd.args(&[props_path]);
+        davmail_cmd.args(&[props_path.to_str().unwrap()]);
 
         Ok(Self {
             vdirsyncer,
             davmail_cmd,
             auth_url: auth_url.cloned(),
-            props_file,
+            props_path,
         })
     }
 
-    fn generate_props(
+    async fn generate_props(
+        xdg: &BaseDirectories,
+        name: &String,
         port: u16,
-        user: String,
+        user: &String,
         token: Option<String>,
-    ) -> anyhow::Result<NamedTempFile> {
-        let mut temp = NamedTempFile::new()?;
-        writeln!(temp, "davmail.server=true")?;
-        writeln!(temp, "davmail.mode=O365Manual")?;
-        writeln!(temp, "davmail.enableOidc=true")?;
-        writeln!(temp, "davmail.oauth.persistToken=true")?;
-        writeln!(temp, "davmail.caldavPort={}", port)?;
-        writeln!(temp, "davmail.allowRemote=false")?;
-        writeln!(temp, "davmail.disableUpdateCheck=true")?;
-        writeln!(temp, "davmail.enableKeepAlive=true")?;
-        writeln!(temp, "davmail.folderSizeLimit=0")?;
-        writeln!(temp, "davmail.defaultDomain=")?;
-        writeln!(temp, "davmail.logFilePath=/dev/null")?;
-        writeln!(temp, "log4j.logger.davmail=DEBUG")?;
-        writeln!(temp, "davmail.disableGuiNotifications=true")?;
-        writeln!(temp, "davmail.disableTrayActivitySwitch=true")?;
-        writeln!(temp, "davmail.showStartupBanner=false")?;
-        if let Some(token) = token {
-            writeln!(temp, "davmail.oauth.{}.refreshToken={}", user, token)?;
+    ) -> anyhow::Result<PathBuf> {
+        let dir = xdg.get_data_file("vdirsyncer").unwrap();
+        if !dir.exists() {
+            fs::create_dir(&dir).await?;
         }
-        temp.flush()?;
-        Ok(temp)
+
+        let props_path = dir.join(format!("{}-davmail.properties", name));
+        let mut props = File::options()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&props_path)
+            .await?;
+
+        props.write_all(b"davmail.server=true\n").await?;
+        props.write_all(b"davmail.mode=O365Manual\n").await?;
+        props.write_all(b"davmail.enableOidc=true\n").await?;
+        props
+            .write_all(b"davmail.oauth.persistToken=true\n")
+            .await?;
+        props
+            .write_all(format!("davmail.caldavPort={}\n", port).as_bytes())
+            .await?;
+        props.write_all(b"davmail.allowRemote=false\n").await?;
+        props
+            .write_all(b"davmail.disableUpdateCheck=true\n")
+            .await?;
+        props.write_all(b"davmail.enableKeepAlive=true\n").await?;
+        props.write_all(b"davmail.folderSizeLimit=0\n").await?;
+        props.write_all(b"davmail.defaultDomain=\n").await?;
+        props.write_all(b"davmail.logFilePath=/dev/null\n").await?;
+        props.write_all(b"log4j.logger.davmail=DEBUG\n").await?;
+        props
+            .write_all(b"davmail.disableGuiNotifications=true\n")
+            .await?;
+        props
+            .write_all(b"davmail.disableTrayActivitySwitch=true\n")
+            .await?;
+        props
+            .write_all(b"davmail.showStartupBanner=false\n")
+            .await?;
+        if let Some(token) = token {
+            props
+                .write_all(format!("davmail.oauth.{}.refreshToken={}\n", user, token).as_bytes())
+                .await?;
+        }
+        Ok(props_path)
     }
 
     async fn remember_token(&self, cal: &Arc<String>, state: &EventixState) -> anyhow::Result<()> {
-        let file = File::options()
-            .read(true)
-            .open(self.props_file.path())
-            .await?;
+        let file = File::options().read(true).open(&self.props_path).await?;
         let reader = BufReader::new(file);
         let mut lines = reader.lines();
         while let Some(line) = lines.next_line().await? {
@@ -109,7 +142,7 @@ impl O365 {
 impl Syncer for O365 {
     async fn sync(
         &mut self,
-        cal: &Arc<String>,
+        col: &Arc<String>,
         state: EventixState,
     ) -> anyhow::Result<SyncCalResult> {
         let mut child = self.davmail_cmd.spawn()?;
@@ -119,7 +152,7 @@ impl Syncer for O365 {
 
         // ensure that the server is started before we let vdirsyncer connect to it
         while let Ok(Some(line)) = reader.next_line().await {
-            tracing::debug!("{}: {}", *cal, line);
+            tracing::debug!("{}: {}", *col, line);
             if line.contains("Start DavMail in server mode") {
                 break;
             }
@@ -128,7 +161,7 @@ impl Syncer for O365 {
         // read lines and watch for auth requests
         let mut read_output = async || {
             while let Ok(Some(line)) = reader.next_line().await {
-                tracing::debug!("{}: {}", *cal, line);
+                tracing::debug!("{}: {}", *col, line);
 
                 // do we need to (re-)authenticate?
                 if line.starts_with("https://login.microsoftonline.com/") {
@@ -147,9 +180,9 @@ impl Syncer for O365 {
 
         let res = tokio::select! {
             // wait until sync finished
-            res = self.vdirsyncer.sync(cal, state.clone()) => {
+            res = self.vdirsyncer.sync(col, state.clone()) => {
                 if let Ok(SyncCalResult::Success(_)) = res && self.auth_url.is_some() {
-                    self.remember_token(cal, &state).await.ok();
+                    self.remember_token(col, &state).await.ok();
                 }
                 res
             }

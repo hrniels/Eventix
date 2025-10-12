@@ -37,8 +37,8 @@ async fn action_update(
     };
 
     let calendar = Arc::from(form.calendar.clone());
-    let cal_settings = state.settings().calendar(&calendar).unwrap();
-    let organizer = cal_settings.build_organizer();
+    let (col_settings, cal_settings) = state.settings().calendar(&calendar).unwrap();
+    let organizer = col_settings.build_organizer();
     let alarm_type = cal_settings.alarms().clone();
 
     let uid = Uuid::new_v4();

@@ -77,7 +77,6 @@ pub async fn content(
     let cal_personal = state
         .settings()
         .calendars()
-        .iter()
         .map(|(id, settings)| {
             (
                 id,

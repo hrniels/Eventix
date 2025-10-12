@@ -3,6 +3,7 @@ use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
+    path::PathBuf,
     sync::Arc,
 };
 use xdg::BaseDirectories;
@@ -11,8 +12,8 @@ const FILENAME: &str = "settings.toml";
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Settings {
-    #[serde(rename = "calendar")]
-    calendars: BTreeMap<String, CalendarSettings>,
+    #[serde(rename = "collection")]
+    collections: BTreeMap<String, CollectionSettings>,
 }
 
 impl Settings {
@@ -20,19 +21,32 @@ impl Settings {
         eventix_locale::default()
     }
 
-    pub fn calendars(&self) -> &BTreeMap<String, CalendarSettings> {
-        &self.calendars
+    pub fn collections(&self) -> &BTreeMap<String, CollectionSettings> {
+        &self.collections
     }
 
-    pub fn calendar(&self, id: &String) -> Option<&CalendarSettings> {
-        self.calendars.get(id)
+    pub fn calendars(&self) -> impl Iterator<Item = (&String, &CalendarSettings)> {
+        self.collections
+            .values()
+            .flat_map(|col| col.calendars.iter())
+    }
+
+    pub fn calendar(&self, id: &String) -> Option<(&CollectionSettings, &CalendarSettings)> {
+        for col in self.collections.values() {
+            if let Some(settings) = col.calendars.get(id) {
+                return Some((col, settings));
+            }
+        }
+        None
     }
 
     pub fn emails(&self) -> HashMap<String, String> {
         let mut res = HashMap::new();
-        for (id, settings) in &self.calendars {
-            if let Some(email) = settings.email() {
-                res.insert(id.clone(), email.pretty_name());
+        for col in self.collections.values() {
+            if let Some(email) = col.email() {
+                for id in col.calendars.keys() {
+                    res.insert(id.clone(), email.pretty_name());
+                }
             }
         }
         res
@@ -78,37 +92,43 @@ pub enum CalendarAlarmType {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SyncerType {
-    FileSystem,
+    FileSystem {
+        path: String,
+    },
     VDirSyncer {
-        name: String,
-        local_name: String,
+        url: String,
+        read_only: bool,
+        password_cmd: Vec<String>,
     },
     O365 {
-        name: String,
-        local_name: String,
-        port: u16,
+        read_only: bool,
+        password_cmd: Vec<String>,
     },
+}
+
+impl SyncerType {
+    pub fn path(&self, xdg: &BaseDirectories, name: &String) -> PathBuf {
+        match self {
+            Self::FileSystem { path } => PathBuf::from(path),
+            Self::VDirSyncer { .. } | Self::O365 { .. } => xdg
+                .get_data_file("vdirsyncer")
+                .unwrap()
+                .join(format!("{}-data", name)),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CalendarSettings {
-    path: String,
-    name: String,
+pub struct CollectionSettings {
     email: Option<EmailAccount>,
-    fgcolor: String,
-    bgcolor: String,
-    types: Vec<CalCompType>,
-    alarms: CalendarAlarmType,
     syncer: SyncerType,
+    #[serde(rename = "calendar")]
+    calendars: BTreeMap<String, CalendarSettings>,
 }
 
-impl CalendarSettings {
-    pub fn path(&self) -> &String {
-        &self.path
-    }
-
-    pub fn name(&self) -> &String {
-        &self.name
+impl CollectionSettings {
+    pub fn path(&self, xdg: &BaseDirectories, name: &String) -> PathBuf {
+        self.syncer.path(xdg, name)
     }
 
     pub fn email(&self) -> Option<&EmailAccount> {
@@ -118,6 +138,34 @@ impl CalendarSettings {
     pub fn build_organizer(&self) -> Option<CalOrganizer> {
         self.email()
             .map(|em| CalOrganizer::new_named(em.name().to_string(), em.address()))
+    }
+
+    pub fn syncer(&self) -> &SyncerType {
+        &self.syncer
+    }
+
+    pub fn calendars(&self) -> impl Iterator<Item = (&String, &CalendarSettings)> {
+        self.calendars.iter()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CalendarSettings {
+    folder: String,
+    name: String,
+    fgcolor: String,
+    bgcolor: String,
+    types: Vec<CalCompType>,
+    alarms: CalendarAlarmType,
+}
+
+impl CalendarSettings {
+    pub fn folder(&self) -> &String {
+        &self.folder
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
     }
 
     pub fn types(&self) -> &[CalCompType] {
@@ -134,9 +182,5 @@ impl CalendarSettings {
 
     pub fn alarms(&self) -> &CalendarAlarmType {
         &self.alarms
-    }
-
-    pub fn syncer(&self) -> &SyncerType {
-        &self.syncer
     }
 }

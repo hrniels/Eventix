@@ -86,9 +86,9 @@ async fn handler(
             &req.uid, rid
         ))?;
 
-    let calendar = state.settings().calendar(occ.directory()).unwrap();
+    let (collection, calendar) = state.settings().calendar(occ.directory()).unwrap();
     let alarm_type = calendar.alarms();
-    let user_mail = calendar.email().map(|e| e.address());
+    let user_mail = collection.email().map(|e| e.address());
     let has_alarms = state.personal_alarms().has_alarms(&occ, alarm_type);
     let dir = state.store().directory(occ.directory()).unwrap();
 

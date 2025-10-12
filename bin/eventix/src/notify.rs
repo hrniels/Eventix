@@ -114,7 +114,7 @@ pub async fn watch_alarms(state: EventixState, locale: Arc<dyn Locale + Send + S
                 .iter()
                 .flat_map(|dir| {
                     let overlay: Box<dyn AlarmOverlay> =
-                        match state.settings().calendar(dir.id()).unwrap().alarms() {
+                        match state.settings().calendar(dir.id()).unwrap().1.alarms() {
                             CalendarAlarmType::Personal { default } => {
                                 Box::new(NotifyAlarmOverlay::new(
                                     state.personal_alarms().get(dir.id()),

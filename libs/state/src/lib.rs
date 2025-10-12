@@ -45,43 +45,50 @@ impl State {
         let misc = misc::Misc::load_from_file(&xdg).context("load misc state")?;
 
         let mut store = CalStore::default();
-        for (id, cal) in settings.calendars() {
-            let cal_id: Arc<String> = Arc::from(id.clone());
-            let path = PathBuf::from(cal.path().clone());
-            let mut dir = if path.exists() {
-                CalDir::new_from_dir(cal_id.clone(), path, cal.name().clone()).with_context(
-                    || format!("Loading calendar {} from '{}' failed", id, cal.path()),
-                )?
-            } else {
-                tracing::warn!(
-                    "Creating empty calendar '{}' from non-existing directory {}",
-                    id,
-                    cal.path()
-                );
-                CalDir::new_empty(cal_id.clone(), path, cal.name().clone())
-            };
-
-            // workaround for a bug in Exchange/davmail: apparently, Exchange sends events with
-            // attendees, but without organizer to davmail and davmail does not repair it. As this
-            // seems to *only* happen if we are the organizer, we implicitly add ourself as an
-            // organizer to these events.
-            let cal_settings = settings.calendar(&cal_id).unwrap();
-            let organizer = cal_settings.build_organizer();
-            if let Some(organizer) = organizer {
-                for comp in dir.files_mut().iter_mut().flat_map(|f| {
-                    f.component_with_mut(|c| {
-                        c.rid().is_none() && c.organizer().is_none() && c.attendees().is_some()
-                    })
-                }) {
+        for (col_id, col) in settings.collections().iter() {
+            for (cal_id, cal) in col.calendars() {
+                let cal_id: Arc<String> = Arc::from(cal_id.clone());
+                let col_path = col.path(&xdg, col_id);
+                let path = col_path.join(cal.folder());
+                let mut dir = if path.exists() {
+                    CalDir::new_from_dir(cal_id.clone(), path.clone(), cal.name().clone())
+                        .with_context(|| {
+                            format!(
+                                "Loading calendar {} from '{}' failed",
+                                cal_id,
+                                path.to_str().unwrap()
+                            )
+                        })?
+                } else {
                     tracing::warn!(
-                        "Making ourself the organizer of group-scheduled item {}",
-                        comp.uid()
+                        "Creating empty calendar '{}' from non-existing directory {}",
+                        cal_id,
+                        path.to_str().unwrap()
                     );
-                    comp.set_organizer(Some(organizer.clone()));
-                }
-            }
+                    CalDir::new_empty(cal_id.clone(), path, cal.name().clone())
+                };
 
-            store.add(dir);
+                // workaround for a bug in Exchange/davmail: apparently, Exchange sends events with
+                // attendees, but without organizer to davmail and davmail does not repair it. As this
+                // seems to *only* happen if we are the organizer, we implicitly add ourself as an
+                // organizer to these events.
+                let organizer = col.build_organizer();
+                if let Some(organizer) = organizer {
+                    for comp in dir.files_mut().iter_mut().flat_map(|f| {
+                        f.component_with_mut(|c| {
+                            c.rid().is_none() && c.organizer().is_none() && c.attendees().is_some()
+                        })
+                    }) {
+                        tracing::warn!(
+                            "Making ourself the organizer of group-scheduled item {}",
+                            comp.uid()
+                        );
+                        comp.set_organizer(Some(organizer.clone()));
+                    }
+                }
+
+                store.add(dir);
+            }
         }
 
         Ok(Self {
@@ -118,13 +125,17 @@ impl State {
         };
 
         // now synchronize and update the store
-        let mut sync_res = sync::sync_all(state.clone(), auth_url).await;
+        let mut sync_res = sync::sync_all(state.clone(), auth_url).await?;
         sync_res.changed |= changed;
 
         // remember last reload
         state.lock().await.last_reload = chrono::Utc::now().naive_utc();
 
         Ok(sync_res)
+    }
+
+    pub fn xdg(&self) -> &BaseDirectories {
+        &self.xdg
     }
 
     pub fn store(&self) -> &CalStore {

@@ -50,7 +50,12 @@ impl<'a> EditAlarmTemplate<'a> {
                 &uid, rid_date
             ))?;
 
-        let alarm_type = state.settings().calendar(occ.directory()).unwrap().alarms();
+        let alarm_type = state
+            .settings()
+            .calendar(occ.directory())
+            .unwrap()
+            .1
+            .alarms();
         let personal = if let Some(pers_cal) = state.personal_alarms().get(occ.directory()) {
             pers_cal.get(&uid, rid_date.as_ref())
         } else {

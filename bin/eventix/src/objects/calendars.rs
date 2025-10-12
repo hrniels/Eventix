@@ -24,7 +24,7 @@ impl Calendars {
             .directories()
             .iter()
             .filter_map(|dir| {
-                let settings = state.settings().calendar(dir.id()).unwrap();
+                let settings = state.settings().calendar(dir.id()).unwrap().1;
                 if filter(dir, settings) {
                     Some(Calendar {
                         id: dir.id().clone(),

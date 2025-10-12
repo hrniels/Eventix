@@ -1,9 +1,13 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::{process::Output, sync::Arc};
+use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use xdg::BaseDirectories;
 
 use crate::EventixState;
 use crate::sync::{SyncCalResult, Syncer};
@@ -20,23 +24,137 @@ enum EventType<'a> {
     Delete(&'a str, &'a str),
 }
 
+#[derive(Default)]
+struct Changes {
+    added: bool,
+    changed: Vec<String>,
+    deleted: Vec<String>,
+}
+
+#[derive(Default)]
+struct CalendarChanges {
+    calendars: HashMap<String, Changes>,
+}
+
+impl CalendarChanges {
+    fn handle_event<'a>(&mut self, ev: EventType<'a>, folder_id: &HashMap<String, String>) {
+        let entry = match ev {
+            EventType::Add(cal) | EventType::Update(_, cal) | EventType::Delete(_, cal) => {
+                // all calendars are named "<id>_local/<folder>"
+                let Some(sep) = cal.find("/") else {
+                    return;
+                };
+                let Some(id) = folder_id.get(&cal[sep + 1..]) else {
+                    return;
+                };
+                self.calendars
+                    .entry(id.clone())
+                    .or_insert(Changes::default())
+            }
+        };
+        match ev {
+            EventType::Add(_) => entry.added = true,
+            EventType::Update(uid, _) => entry.changed.push(uid.to_string()),
+            EventType::Delete(uid, _) => entry.deleted.push(uid.to_string()),
+        }
+    }
+}
+
 pub struct VDirSyncer {
     cmd: Command,
     name: String,
-    local_name: String,
+    folder_id: HashMap<String, String>,
+    cfg: PathBuf,
 }
 
 impl VDirSyncer {
-    pub fn new(name: String, local_name: String) -> Self {
+    pub async fn new(
+        xdg: &BaseDirectories,
+        name: String,
+        folder_id: HashMap<String, String>,
+        url: String,
+        read_only: bool,
+        user: &String,
+        pw_cmd: Vec<String>,
+    ) -> anyhow::Result<Self> {
+        let cfg = Self::generate_config(xdg, &name, url, read_only, user, pw_cmd).await?;
         let mut cmd = Command::new("vdirsyncer");
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        cmd.args(&["sync", &name]);
-        Self {
+        cmd.args(&["--config", cfg.to_str().unwrap(), "sync", &name]);
+        Ok(Self {
             cmd,
             name,
-            local_name,
+            folder_id,
+            cfg,
+        })
+    }
+
+    async fn generate_config(
+        xdg: &BaseDirectories,
+        name: &String,
+        url: String,
+        read_only: bool,
+        user: &String,
+        pw_cmd: Vec<String>,
+    ) -> anyhow::Result<PathBuf> {
+        let dir = xdg.get_data_file("vdirsyncer").unwrap();
+        if !dir.exists() {
+            fs::create_dir(&dir).await?;
         }
+
+        let status_path = dir.join(format!("{}-status", name));
+        let sync_path = dir.join(format!("{}-data", name));
+        let cfg_path = dir.join(format!("{}.cfg", name));
+
+        let mut cfg = File::options()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&cfg_path)
+            .await?;
+        cfg.write_all(b"[general]\n").await?;
+        cfg.write_all(format!("status_path = \"{}\"\n", status_path.to_str().unwrap()).as_bytes())
+            .await?;
+
+        // create the pair
+        cfg.write_all(format!("[pair {}]\n", name).as_bytes())
+            .await?;
+        cfg.write_all(format!("a = \"{}_local\"\n", name).as_bytes())
+            .await?;
+        cfg.write_all(format!("b = \"{}_remote\"\n", name).as_bytes())
+            .await?;
+        cfg.write_all(b"collections = [\"from a\", \"from b\"]\n")
+            .await?;
+        cfg.write_all(b"metadata = [\"displayname\", \"color\"]\n")
+            .await?;
+        cfg.write_all(b"conflict_resolution = \"b wins\"\n").await?;
+
+        // local storage
+        cfg.write_all(format!("[storage {}_local]\n", name).as_bytes())
+            .await?;
+        cfg.write_all(b"type = \"filesystem\"\n").await?;
+        cfg.write_all(b"fileext = \".ics\"\n").await?;
+        cfg.write_all(format!("path = \"{}\"\n", sync_path.to_str().unwrap()).as_bytes())
+            .await?;
+
+        // remote storage
+        cfg.write_all(format!("[storage {}_remote]\n", name).as_bytes())
+            .await?;
+        cfg.write_all(b"type = \"caldav\"\n").await?;
+        cfg.write_all(format!("url = \"{}\"\n", url).as_bytes())
+            .await?;
+        cfg.write_all(format!("read_only = {}\n", read_only).as_bytes())
+            .await?;
+        cfg.write_all(format!("username = \"{}\"\n", user).as_bytes())
+            .await?;
+        cfg.write_all(b"password.fetch = [\"command\"").await?;
+        for comp in &pw_cmd {
+            cfg.write_all(format!(", \"{}\"", comp).as_bytes()).await?;
+        }
+        cfg.write_all(b"]\n").await?;
+
+        Ok(cfg_path)
     }
 
     async fn discover(&self, cal: &Arc<String>) -> anyhow::Result<()> {
@@ -44,7 +162,12 @@ impl VDirSyncer {
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        cmd.args(&["discover", &self.name]);
+        cmd.args(&[
+            "--config",
+            self.cfg.to_str().unwrap(),
+            "discover",
+            &self.name,
+        ]);
 
         let mut child = cmd.spawn()?;
 
@@ -73,14 +196,13 @@ impl VDirSyncer {
         state: &EventixState,
         output: Output,
     ) -> anyhow::Result<SyncResult> {
-        let mut added = false;
-        let mut changed = Vec::new();
-        let mut deleted = Vec::new();
+        let mut changes = CalendarChanges::default();
+
         for line in String::from_utf8(output.stderr)?.lines() {
             tracing::debug!("{}: {}", *cal, line);
 
             // vdirsyncer will complain if a collection changes and request a re-discover
-            if line.contains("Please run `vdirsyncer discover") {
+            if line.contains("run `vdirsyncer discover") {
                 return Ok(SyncResult::NeedsDiscover);
             }
 
@@ -99,42 +221,34 @@ impl VDirSyncer {
                 ("Deleting", "item", uid, "from", cal, _) => Some(EventType::Delete(uid, cal)),
                 _ => None,
             } {
-                match ev {
-                    // as the filename is not necessarily the UID and we only know the UID here, we
-                    // do not collect them, but just remember that we found a new item.
-                    EventType::Add(cal) if cal == self.local_name => added = true,
-                    EventType::Update(uid, cal) if cal == self.local_name => {
-                        changed.push(uid.to_string())
-                    }
-                    EventType::Delete(uid, cal) if cal == self.local_name => {
-                        deleted.push(uid.to_string())
-                    }
-                    _ => {}
-                }
+                changes.handle_event(ev, &self.folder_id);
             }
         }
 
-        let seen_changes = added || !changed.is_empty() || !deleted.is_empty();
+        let seen_changes = changes
+            .calendars
+            .values()
+            .any(|c| c.added || !c.changed.is_empty() || !c.deleted.is_empty());
 
         let mut state = state.lock().await;
-        let dir = state
-            .store_mut()
-            .directory_mut(cal)
-            .ok_or_else(|| anyhow!("directory '{}' does not exist", cal))?;
-        if added {
-            // rescan the whole directory for new files as we only know the new UIDs, but not
-            // necessarily their filenames (as these can be different).
-            dir.rescan_for_additions()?;
-        }
-        for uid in changed {
-            if let Some(file) = dir.file_by_id_mut(&uid) {
-                file.reload_calendar()?;
-            } else {
-                tracing::warn!("file for uid {} does not exist", uid);
+        for (id, changes) in changes.calendars.iter() {
+            if let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.clone())) {
+                if changes.added {
+                    // rescan the whole directory for new files as we only know the new UIDs, but not
+                    // necessarily their filenames (as these can be different).
+                    dir.rescan_for_additions()?;
+                }
+                for uid in &changes.changed {
+                    if let Some(file) = dir.file_by_id_mut(&uid) {
+                        file.reload_calendar()?;
+                    } else {
+                        tracing::warn!("file for uid {} does not exist", uid);
+                    }
+                }
+                for uid in &changes.deleted {
+                    dir.remove_by_uid(uid)?;
+                }
             }
-        }
-        for uid in deleted {
-            dir.remove_by_uid(uid)?;
         }
 
         Ok(SyncResult::Success(seen_changes))
@@ -145,7 +259,7 @@ impl VDirSyncer {
 impl Syncer for VDirSyncer {
     async fn sync(
         &mut self,
-        cal: &Arc<String>,
+        col: &Arc<String>,
         state: EventixState,
     ) -> anyhow::Result<SyncCalResult> {
         let mut tried_discover = false;
@@ -153,14 +267,14 @@ impl Syncer for VDirSyncer {
             let child = self.cmd.spawn()?;
             let output = child.wait_with_output().await?;
             let status = output.status;
-            let res = self.post_process(cal, &state, output).await?;
+            let res = self.post_process(col, &state, output).await?;
 
             match res {
                 SyncResult::NeedsDiscover => {
                     if tried_discover {
                         return Err(anyhow!("discover did not resolve sync error"));
                     }
-                    self.discover(cal).await?;
+                    self.discover(col).await?;
                     tried_discover = true;
                     continue;
                 }

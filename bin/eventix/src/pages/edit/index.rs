@@ -103,6 +103,7 @@ pub async fn content(
         .settings()
         .calendar(file.directory())
         .unwrap()
+        .1
         .alarms();
     let pers_calendar = state.personal_alarms().get(file.directory());
     let pers_alarms = pers_calendar
@@ -124,7 +125,7 @@ pub async fn content(
 
     let dir = state.store().directory(file.directory()).unwrap();
     let have_personal = matches!(
-        state.settings().calendar(dir.id()).unwrap().alarms(),
+        state.settings().calendar(dir.id()).unwrap().1.alarms(),
         CalendarAlarmType::Personal { .. }
     );
 

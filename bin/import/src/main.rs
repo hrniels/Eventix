@@ -96,7 +96,6 @@ fn main() {
     let calendars = state
         .settings()
         .calendars()
-        .iter()
         .map(|(id, cal)| ImportCalendar {
             id: id.clone(),
             name: cal.name().clone(),
@@ -117,6 +116,7 @@ fn main() {
                     .settings()
                     .calendar(c_file.directory())
                     .unwrap()
+                    .1
                     .name();
                 ((**c_file.directory()).clone(), name.clone())
             });

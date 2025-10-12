@@ -168,10 +168,10 @@ pub async fn handler(
         }
     };
 
-    let cal_settings = state.settings().calendar(file.directory()).unwrap();
+    let (col_settings, cal_settings) = state.settings().calendar(file.directory()).unwrap();
     let alarm_type = cal_settings.alarms();
     let pers_alarms = state.personal_alarms();
-    let user_mail = cal_settings.email().map(|e| e.address());
+    let user_mail = col_settings.email().map(|e| e.address());
 
     let more = occs.len() > req.count;
     let occs: Vec<_> = match req.dir {

@@ -31,8 +31,8 @@ fn action_update(
             .file_by_id(&req.uid)
             .context(format!("Unable to find component with uid '{}'", req.uid))?;
         let calendar = form.calendar.as_ref().unwrap_or(file.directory());
-        let cal_settings = state.settings().calendar(calendar).unwrap();
-        let organizer = cal_settings.build_organizer();
+        let (col_settings, cal_settings) = state.settings().calendar(calendar).unwrap();
+        let organizer = col_settings.build_organizer();
         (calendar.clone(), cal_settings.alarms().clone(), organizer)
     };
 
