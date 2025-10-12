@@ -11,7 +11,7 @@ use xdg::BaseDirectories;
 
 use crate::EventixState;
 use crate::sync::vdirsyncer::VDirSyncer;
-use crate::sync::{SyncCalResult, Syncer};
+use crate::sync::{SyncCalResult, Syncer, SyncerAuth};
 
 const PORT_BASE: u16 = 25000;
 
@@ -30,20 +30,18 @@ impl O365 {
         name: String,
         folder_id: HashMap<String, String>,
         read_only: bool,
-        user: &String,
-        pw_cmd: Vec<String>,
+        auth: SyncerAuth,
         auth_url: Option<&String>,
         token: Option<String>,
     ) -> anyhow::Result<Self> {
         let port = PORT_BASE + idx as u16;
 
         // generate properties file
-        let props_path = Self::generate_props(xdg, &name, port, user, token).await?;
+        let props_path = Self::generate_props(xdg, &name, port, &auth.user, token).await?;
 
         // create vdirsyncer instance
-        let url = format!("http://localhost:{}/users/{}/{}/", port, user, name);
-        let vdirsyncer =
-            VDirSyncer::new(xdg, name, folder_id, url, read_only, user, pw_cmd).await?;
+        let url = format!("http://localhost:{}/users/{}/{}/", port, auth.user, name);
+        let vdirsyncer = VDirSyncer::new(xdg, name, folder_id, url, read_only, Some(auth)).await?;
 
         // create davmail command
         let mut davmail_cmd = Command::new("davmail");

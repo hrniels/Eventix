@@ -21,6 +21,11 @@ pub trait Syncer: Send {
     ) -> anyhow::Result<SyncCalResult>;
 }
 
+pub struct SyncerAuth {
+    user: String,
+    pw_cmd: Vec<String>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub enum SyncCalResult {
     Success(bool),
@@ -103,41 +108,46 @@ async fn get_syncs(
     let state = state.lock().await;
     let mut res = vec![];
     for (idx, (id, col)) in state.settings().collections().iter().enumerate() {
-        let user = col.email().map(|e| e.address().clone());
+        let auth = match col.syncer() {
+            SyncerType::VDirSyncer {
+                password_cmd: Some(password_cmd),
+                ..
+            }
+            | SyncerType::O365 { password_cmd, .. } => {
+                let user = col.email().map(|e| e.address().clone());
+                Some(SyncerAuth {
+                    user: user.unwrap(),
+                    pw_cmd: password_cmd.clone(),
+                })
+            }
+            _ => None,
+        };
+
         let folder_id = col
             .calendars()
             .map(|(id, settings)| (settings.folder().clone(), id.clone()))
             .collect::<HashMap<_, _>>();
 
         let syncer: Box<dyn Syncer> = match col.syncer() {
-            SyncerType::VDirSyncer {
-                url,
-                read_only,
-                password_cmd,
-            } => Box::new(
+            SyncerType::VDirSyncer { url, read_only, .. } => Box::new(
                 VDirSyncer::new(
                     state.xdg(),
                     id.clone(),
                     folder_id,
                     url.clone(),
                     *read_only,
-                    user.as_ref().unwrap(),
-                    password_cmd.clone(),
+                    auth,
                 )
                 .await?,
             ),
-            SyncerType::O365 {
-                read_only,
-                password_cmd,
-            } => Box::new(
+            SyncerType::O365 { read_only, .. } => Box::new(
                 O365::new(
                     state.xdg(),
                     idx,
                     id.clone(),
                     folder_id,
                     *read_only,
-                    user.as_ref().unwrap(),
-                    password_cmd.clone(),
+                    auth.unwrap(),
                     auth_url,
                     state.misc().calendar_token(id).cloned(),
                 )
@@ -145,6 +155,7 @@ async fn get_syncs(
             ),
             SyncerType::FileSystem { path: _ } => Box::new(FSSyncer::new(folder_id)),
         };
+
         res.push(CalendarSync {
             id: Arc::new(id.to_string()),
             syncer,

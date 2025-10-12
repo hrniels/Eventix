@@ -10,7 +10,7 @@ use tokio::process::Command;
 use xdg::BaseDirectories;
 
 use crate::EventixState;
-use crate::sync::{SyncCalResult, Syncer};
+use crate::sync::{SyncCalResult, Syncer, SyncerAuth};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum SyncResult {
@@ -72,10 +72,9 @@ impl VDirSyncer {
         folder_id: HashMap<String, String>,
         url: String,
         read_only: bool,
-        user: &String,
-        pw_cmd: Vec<String>,
+        auth: Option<SyncerAuth>,
     ) -> anyhow::Result<Self> {
-        let cfg = Self::generate_config(xdg, &name, url, read_only, user, pw_cmd).await?;
+        let cfg = Self::generate_config(xdg, &name, url, read_only, auth).await?;
         let mut cmd = Command::new("vdirsyncer");
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
@@ -93,8 +92,7 @@ impl VDirSyncer {
         name: &String,
         url: String,
         read_only: bool,
-        user: &String,
-        pw_cmd: Vec<String>,
+        auth: Option<SyncerAuth>,
     ) -> anyhow::Result<PathBuf> {
         let dir = xdg.get_data_file("vdirsyncer").unwrap();
         if !dir.exists() {
@@ -144,13 +142,18 @@ impl VDirSyncer {
             .await?;
         cfg.write_all(format!("read_only = {}\n", read_only).as_bytes())
             .await?;
-        cfg.write_all(format!("username = \"{}\"\n", user).as_bytes())
-            .await?;
-        cfg.write_all(b"password.fetch = [\"command\"").await?;
-        for comp in &pw_cmd {
-            cfg.write_all(format!(", \"{}\"", comp).as_bytes()).await?;
+        if let Some(auth) = auth {
+            cfg.write_all(format!("username = \"{}\"\n", auth.user).as_bytes())
+                .await?;
+            cfg.write_all(b"password.fetch = [\"command\"").await?;
+            for comp in &auth.pw_cmd {
+                cfg.write_all(format!(", \"{}\"", comp).as_bytes()).await?;
+            }
+            cfg.write_all(b"]\n").await?;
+        } else {
+            cfg.write_all(b"username = \"\"\n").await?;
+            cfg.write_all(b"password = \"\"\n").await?;
         }
-        cfg.write_all(b"]\n").await?;
 
         Ok(cfg_path)
     }
