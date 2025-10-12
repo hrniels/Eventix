@@ -47,9 +47,7 @@ impl CalendarChanges {
                 let Some(id) = folder_id.get(&cal[sep + 1..]) else {
                     return;
                 };
-                self.calendars
-                    .entry(id.clone())
-                    .or_insert(Changes::default())
+                self.calendars.entry(id.clone()).or_default()
             }
         };
         match ev {
@@ -81,7 +79,7 @@ impl VDirSyncer {
         let mut cmd = Command::new("vdirsyncer");
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        cmd.args(&["--config", cfg.to_str().unwrap(), "sync", &name]);
+        cmd.args(["--config", cfg.to_str().unwrap(), "sync", &name]);
         Ok(Self {
             cmd,
             name,
@@ -162,7 +160,7 @@ impl VDirSyncer {
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        cmd.args(&[
+        cmd.args([
             "--config",
             self.cfg.to_str().unwrap(),
             "discover",
@@ -178,7 +176,7 @@ impl VDirSyncer {
         while let Some(line) = stderr_reader.next_line().await? {
             tracing::debug!("{}: {}", *cal, line);
             // in case it asks us whether to create the calendar, say "yes"
-            stdin.write(b"y\n").await.unwrap();
+            stdin.write_all(b"y\n").await.unwrap();
         }
 
         let output = child.wait_with_output().await?;
@@ -239,7 +237,7 @@ impl VDirSyncer {
                     dir.rescan_for_additions()?;
                 }
                 for uid in &changes.changed {
-                    if let Some(file) = dir.file_by_id_mut(&uid) {
+                    if let Some(file) = dir.file_by_id_mut(uid) {
                         file.reload_calendar()?;
                     } else {
                         tracing::warn!("file for uid {} does not exist", uid);

@@ -23,6 +23,7 @@ pub struct O365 {
 }
 
 impl O365 {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         xdg: &BaseDirectories,
         idx: usize,
@@ -49,7 +50,7 @@ impl O365 {
         davmail_cmd.stdin(Stdio::piped());
         davmail_cmd.stdout(Stdio::piped());
         davmail_cmd.stderr(Stdio::piped());
-        davmail_cmd.args(&[props_path.to_str().unwrap()]);
+        davmail_cmd.args([props_path.to_str().unwrap()]);
 
         Ok(Self {
             vdirsyncer,
@@ -120,18 +121,18 @@ impl O365 {
         let mut lines = reader.lines();
         while let Some(line) = lines.next_line().await? {
             // extract the token from the changed properties file
-            if line.contains("refreshToken=") {
-                if let Some(split) = line.find('=') {
-                    let token = &line[split + 1..];
-                    // permanently remember the token
-                    let mut state = state.lock().await;
-                    let misc = state.misc_mut();
-                    misc.set_calendar_token(cal, token.to_string());
-                    if let Err(e) = misc.write_to_file() {
-                        tracing::warn!("Unable to save misc state: {}", e);
-                    }
-                    break;
+            if line.contains("refreshToken=")
+                && let Some(split) = line.find('=')
+            {
+                let token = &line[split + 1..];
+                // permanently remember the token
+                let mut state = state.lock().await;
+                let misc = state.misc_mut();
+                misc.set_calendar_token(cal, token.to_string());
+                if let Err(e) = misc.write_to_file() {
+                    tracing::warn!("Unable to save misc state: {}", e);
                 }
+                break;
             }
         }
         Ok(())
@@ -167,8 +168,8 @@ impl Syncer for O365 {
                 if line.starts_with("https://login.microsoftonline.com/") {
                     // if we already have the URL from the user, tell DavMail about it
                     if let Some(ref auth_url) = self.auth_url {
-                        stdin.write(auth_url.as_bytes()).await?;
-                        stdin.write(b"\n").await?;
+                        stdin.write_all(auth_url.as_bytes()).await?;
+                        stdin.write_all(b"\n").await?;
                     } else {
                         // otherwise we fail and ask the user to authenticate
                         return Ok(SyncCalResult::AuthFailed(line));
