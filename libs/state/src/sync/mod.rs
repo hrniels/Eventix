@@ -118,7 +118,7 @@ async fn get_syncs(
                 pw_cmd: password_cmd.clone(),
             }),
             SyncerType::O365 { password_cmd, .. } => {
-                let user = col.email().map(|e| e.address().clone());
+                let user = col.email().map(|e| e.address());
                 Some(SyncerAuth {
                     user: user.unwrap(),
                     pw_cmd: password_cmd.clone(),
