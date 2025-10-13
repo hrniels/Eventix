@@ -98,6 +98,7 @@ pub enum SyncerType {
     VDirSyncer {
         url: String,
         read_only: bool,
+        username: Option<String>,
         password_cmd: Option<Vec<String>>,
     },
     O365 {

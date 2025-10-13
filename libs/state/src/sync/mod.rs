@@ -110,10 +110,14 @@ async fn get_syncs(
     for (idx, (id, col)) in state.settings().collections().iter().enumerate() {
         let auth = match col.syncer() {
             SyncerType::VDirSyncer {
+                username: Some(username),
                 password_cmd: Some(password_cmd),
                 ..
-            }
-            | SyncerType::O365 { password_cmd, .. } => {
+            } => Some(SyncerAuth {
+                user: username.clone(),
+                pw_cmd: password_cmd.clone(),
+            }),
+            SyncerType::O365 { password_cmd, .. } => {
                 let user = col.email().map(|e| e.address().clone());
                 Some(SyncerAuth {
                     user: user.unwrap(),
