@@ -120,7 +120,6 @@ fieldset.ev_form div.ev_submit {
 
 .ev_header {
     background-color: #637591;
-    border: 1px solid #bbb;
     color: #fff;
     padding: .5em !important;
     margin: 0;
@@ -178,6 +177,19 @@ table.ev_table > tbody > tr > th > a:hover {
     text-decoration: none;
 }
 
+table.ev_table tr:first-child td {
+    border-top: none;
+}
+table.ev_table tr:last-child td {
+    border-bottom: none;
+}
+table.ev_table tr td:first-child {
+    border-left: none;
+}
+table.ev_table tr td:last-child {
+    border-right: none;
+}
+
 table.ev_date {
     border-collapse: collapse;
     border-spacing: 2px;
@@ -194,6 +206,9 @@ table.ev_date td {
     -webkit-border-radius: 2px;
     padding: 1px;
     border: 1px solid #7F90AE;
+}
+.ev_border_bottom {
+    border-bottom: 1px solid #7F90AE;
 }
 
 td.ev_table_sep {
@@ -270,6 +285,14 @@ td.ev_status_need_info {
 }
 .ev_button *, .ev_button_medium *, .ev_button_big * {
     vertical-align: sub;
+}
+.ev_button_link {
+    text-decoration: none;
+    color: #000;
+}
+.ev_button_link:hover {
+    text-decoration: none;
+    color: #3F5E88;
 }
 
 .ev_button {
@@ -423,7 +446,6 @@ span.ev_msg_error span.ev_msg_info {
     text-overflow: ellipsis;
 }
 .ev_box {
-    border: 1px solid #bbb;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;

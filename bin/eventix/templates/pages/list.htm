@@ -155,7 +155,8 @@
     }
 </script>
 
-<h1 class="ev_padtop ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
+<div class="ev_border ev_padtop">
+<h1 class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
 <table width="100%" class="ev_table">
     {% if comps.is_empty() %}
     <tr>
@@ -388,6 +389,7 @@
     </tr>
     {% endfor %}
 </table>
+</div>
 
 {% for (id, _) in comps.iter().enumerate() %}
 <div style="display: none" id="delete-confirm-{{ id }}" title="{{ "Are you sure?"|t(locale) }}">

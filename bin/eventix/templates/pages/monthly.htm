@@ -2,6 +2,7 @@
 
 {% block inner %}
 
+<div class="ev_border">
 <h1 class="ev_header" style="position: relative">
     <div style="z-index: 1; position: absolute; float: left" class="ev_jump">
         <input type="text" id="jump_location" size="10" />
@@ -138,6 +139,7 @@
     {% endif %}
     {% endfor %}
 </table>
+</div>
 
 <script type="text/javascript">
     $(document).keydown(function(e) {
