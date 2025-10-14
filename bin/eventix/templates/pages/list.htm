@@ -29,17 +29,15 @@
                             <tr>
                             {% endif %}
                                 <td>
-                                    <input type="checkbox" id="dir_{{ idx + 1 }}"
-                                           name="dirs[]" value="{{ src.id() }}"
-                                           {% if filter.dirs.contains(src.id()) %}
-                                           checked="checked"
-                                           {% endif %}/>
-                                    <label for="dir_{{ idx + 1 }}">
-                                        <div style="display: inline"
-                                             class="ev_cal_src ev_cal_src_{{ src.id() }}">
-                                            {{ src.name() }}
-                                        </div>
-                                    </label>
+                                    <div style="display: inline; padding: 2px"
+                                         class="ev_cal_src ev_cal_src_{{ src.id() }}">
+                                        <input type="checkbox" id="dir_{{ idx + 1 }}"
+                                               name="dirs[]" value="{{ src.id() }}"
+                                               {% if filter.dirs.contains(src.id()) %}
+                                               checked="checked"
+                                               {% endif %}/>
+                                        <label for="dir_{{ idx + 1 }}">{{ src.name() }}</label>
+                                    </div>
                                 </td>
                             {% if idx % 6 == 5 %}
                             </tr>
