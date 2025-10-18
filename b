@@ -16,11 +16,19 @@ def dev_env():
     run_dir = Path("run")
     os.makedirs(run_dir, 0o700, exist_ok=True)
 
-    # update data
-    shutil.rmtree(run_dir / APP_ID_DEBUG / "static", ignore_errors=True)
-    shutil.copytree(Path("data") / "static", run_dir / APP_ID_DEBUG / "static")
-    shutil.rmtree(run_dir / APP_ID_DEBUG / "icons", ignore_errors=True)
-    shutil.copytree(Path("data") / "icons", run_dir / APP_ID_DEBUG / "icons")
+    # (re-)create symlinks to data/static and data/icons
+    # we use symlinks here so that `./b watch` sees changes to these files
+    dirs = ["static", "icons"]
+    for dirname in dirs:
+        dir_in_run = run_dir / APP_ID_DEBUG / dirname
+        if dir_in_run.exists():
+            if dir_in_run.is_file() or dir_in_run.is_symlink():
+                os.unlink(dir_in_run)
+            else:
+                shutil.rmtree(dir_in_run, ignore_errors=True)
+        os.symlink((Path("data") / dirname).absolute(),
+                   dir_in_run,
+                   target_is_directory=True)
 
     davmail_bin = os.path.abspath("contrib/davmail/dist")
     env["PATH"] = f"{davmail_bin}:{env["PATH"]}"
