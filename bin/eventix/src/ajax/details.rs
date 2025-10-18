@@ -139,9 +139,12 @@ async fn handler(
                 occ.is_recurrent(),
             )
         }),
-        edit_modes: req
-            .rid
-            .map(|rid| EditModesTemplate::new(locale.clone(), "edit", req.uid.clone(), rid)),
+        edit_modes: if owner {
+            req.rid
+                .map(|rid| EditModesTemplate::new(locale.clone(), "edit", req.uid.clone(), rid))
+        } else {
+            None
+        },
         occ: day_occ,
         owner,
         locale,
