@@ -651,12 +651,12 @@ div.ev_selected {
 /* ------------ CALENDAR SOURCES ------------ */
 
 div.ev_cal_src {
-    border: 1px solid #fff;
+    border: 1px solid #ffffff;
 }
 span.ev_cal_src {
     height: 18px;
     width: 18px;
-    border: 1px solid #fff;
+    border: 1px solid #bbbbbb;
     border-radius: 50%;
     display: inline-block;
     flex: 0 0 18px; /* minimum width */
