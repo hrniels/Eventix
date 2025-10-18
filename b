@@ -56,7 +56,13 @@ def cmd_watch(args):
         "--port", str(args.port)
     ])
     cmd_args = [
-        "cargo", "watch", "-C", "bin/eventix", "-x", cmd
+        "cargo", "watch", "-C", "bin/eventix",
+        "-w", "../../bin/eventix",
+        "-w", "../../bin/build.rs",
+        "-w", "../../libs",
+        "-w", "../../data",
+        "-w", "../../Cargo.toml",
+        "-x", cmd
     ]
     run_cmd(cmd_args)
 
