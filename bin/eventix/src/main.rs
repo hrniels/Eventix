@@ -1,5 +1,6 @@
 mod ajax;
 mod comps;
+mod debug;
 mod extract;
 mod html;
 mod notify;
@@ -13,6 +14,7 @@ use ajax::{
 };
 use axum::{
     Router,
+    body::Body,
     http::{HeaderValue, Request, header},
     response::IntoResponse,
 };
@@ -26,7 +28,8 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
     trace::{DefaultOnResponse, TraceLayer},
 };
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing::Level;
+use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
 use crate::ajax::{auth, cancel, help, moveevent};
@@ -89,6 +92,7 @@ async fn run_server(listener: TcpListener) {
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-cache"),
         ))
+        .layer(debug::TraceReqDetailsLayer)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &Request<_>| {
@@ -105,7 +109,14 @@ async fn run_server(listener: TcpListener) {
                         id = id,
                     )
                 })
-                .on_response(DefaultOnResponse::new().latency_unit(LatencyUnit::Micros)),
+                .on_request(|_req: &Request<Body>, _span: &tracing::Span| {
+                    tracing::debug!("enter");
+                })
+                .on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::DEBUG)
+                        .latency_unit(LatencyUnit::Micros),
+                ),
         );
 
     // start helper tasks
@@ -126,7 +137,14 @@ async fn main() {
         .with(tracing_subscriber::EnvFilter::new(
             env::var("RUST_LOG").unwrap_or(String::from("info")),
         ))
-        .with(tracing_subscriber::fmt::layer())
+        // Configure the formatting layer to include span fields
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_target(true)
+                .with_level(true)
+                .with_span_events(FmtSpan::CLOSE)
+                .compact(),
+        )
         .init();
 
     let args = Args::parse();
