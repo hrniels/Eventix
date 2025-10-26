@@ -3,7 +3,7 @@ use axum::{
     Json, Router,
     extract::{Query, State},
     response::IntoResponse,
-    routing::get,
+    routing::post,
 };
 use eventix_ical::objects::{
     CalComponent, CalDate, CalTodoStatus, EventLike, PRIORITY_MEDIUM, UpdatableEventLike,
@@ -24,7 +24,7 @@ struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/complete", get(handler))
+        .route("/complete", post(handler))
         .with_state(state)
 }
 

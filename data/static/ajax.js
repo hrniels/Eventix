@@ -20,7 +20,7 @@ function completeTodo(uid, rid, onsuccess) {
     let url = '/complete?uid=' + uid;
     if(rid)
         url += '&rid=' + rid;
-    getRequest(url, onsuccess);
+    postRequest(url, onsuccess);
 }
 
 function toggleExcl(uid, rid, onsuccess) {
