@@ -7,7 +7,7 @@ use eventix_ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 use crate::util;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -28,7 +28,7 @@ pub fn router(state: EventixState) -> Router {
 pub async fn handler(
     State(state): State<EventixState>,
     Query(form): Query<Request>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
+) -> anyhow::Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
 
     let user_mail = util::user_for_uid(&state, &form.uid)?.map(|a| a.address());

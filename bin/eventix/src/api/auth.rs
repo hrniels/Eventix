@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::html::filters;
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 pub fn router(state: EventixState) -> Router {
     Router::new().route("/auth", get(handler)).with_state(state)
@@ -37,7 +37,7 @@ struct AuthTemplate {
 async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let locale = state.lock().await.settings().locale();
 
     let html = AuthTemplate {

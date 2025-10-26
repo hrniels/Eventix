@@ -6,7 +6,7 @@ use axum::{Json, Router};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -25,7 +25,7 @@ pub fn router(state: EventixState) -> Router {
 pub async fn handler(
     State(state): State<EventixState>,
     Query(form): Query<Request>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
+) -> anyhow::Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
     let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 

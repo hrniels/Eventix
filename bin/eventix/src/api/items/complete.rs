@@ -11,7 +11,7 @@ use eventix_ical::objects::{
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -31,7 +31,7 @@ pub fn router(state: EventixState) -> Router {
 async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let rid = if let Some(rid) = req.rid.as_ref() {
         Some(
             rid.parse::<CalDate>()

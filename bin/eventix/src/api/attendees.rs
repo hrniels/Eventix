@@ -7,7 +7,7 @@ use axum::{
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -26,7 +26,7 @@ pub fn router(state: EventixState) -> Router {
 async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
     let mut contacts = state
         .store()

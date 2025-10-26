@@ -1,9 +1,16 @@
+function handleAJAXError(jqXHR, textStatus, errorThrown) {
+    const msg = jqXHR.responseJSON.error || "Unknown error";
+    console.log(msg);
+}
+
+
 function getRequest(url, success) {
     $.ajax({
         type: 'GET',
         url: url,
         dataType: 'json',
         success: success,
+        error: handleAJAXError,
     });
 }
 
@@ -13,24 +20,25 @@ function postRequest(url, success) {
         url: url,
         dataType: 'json',
         success: success,
+        error: handleAJAXError,
     });
 }
 
 function completeTodo(uid, rid, onsuccess) {
-    let url = '/complete?uid=' + uid;
+    let url = '/api/items/complete?uid=' + uid;
     if(rid)
         url += '&rid=' + rid;
     postRequest(url, onsuccess);
 }
 
 function toggleExcl(uid, rid, onsuccess) {
-    postRequest('/toggleexcl?uid=' + uid + '&rid=' + rid, function(data) {
+    postRequest('/api/items/toggle?uid=' + uid + '&rid=' + rid, function(data) {
         onsuccess(data);
     });
 }
 
 function moveEvent(uid, rid, date, hour, onsuccess) {
-    let url = '/moveevent?uid=' + uid+ '&date=' + date;
+    let url = '/api/items/shift?uid=' + uid+ '&date=' + date;
     if(rid)
         url += '&rid=' + rid;
     if(hour)

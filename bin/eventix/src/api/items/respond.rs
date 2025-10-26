@@ -9,7 +9,7 @@ use eventix_ical::objects::{
 use eventix_state::EventixState;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 use crate::util;
 
 fn deserialize_partstat<'de, D>(deserializer: D) -> Result<CalPartStat, D::Error>
@@ -45,7 +45,7 @@ pub fn router(state: EventixState) -> Router {
 pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
+) -> anyhow::Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
     let locale = state.settings().locale();
 

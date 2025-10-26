@@ -19,7 +19,7 @@ use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::partstat::PartStatTemplate;
 use crate::html::filters;
 use crate::objects::DayOccurrence;
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
@@ -132,7 +132,7 @@ fn max_datetime(timezone: Tz) -> DateTime<Tz> {
 pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
     let locale = state.settings().locale();
 

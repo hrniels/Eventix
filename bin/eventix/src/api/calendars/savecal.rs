@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::comps::alarmconfig::AlarmConfig;
 use crate::comps::calbox::AlarmType;
 use crate::extract::MultiForm;
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 #[derive(Debug, Deserialize)]
 pub struct Params {
@@ -39,7 +39,7 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
     MultiForm(form): MultiForm<PostData>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
+) -> anyhow::Result<impl IntoResponse, JsonError> {
     {
         let mut state = state.lock().await;
         let locale = state.settings().locale();

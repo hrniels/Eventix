@@ -6,7 +6,7 @@ use axum::{Json, Router};
 use eventix_state::EventixState;
 use serde::Deserialize;
 
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 #[derive(Debug, Deserialize)]
 pub enum Operation {
@@ -30,7 +30,7 @@ pub fn router(state: EventixState) -> Router {
 pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
+) -> anyhow::Result<impl IntoResponse, JsonError> {
     match req.op {
         Operation::Delete => {
             eventix_state::State::delete_calendar(state.clone(), &req.col_id, &req.cal_id)

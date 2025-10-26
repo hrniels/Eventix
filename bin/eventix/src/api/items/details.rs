@@ -16,7 +16,7 @@ use crate::comps::{
 };
 use crate::html::{self, filters};
 use crate::objects::DayOccurrence;
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -65,7 +65,7 @@ fn attendee_status<E: EventLike>(
 async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()

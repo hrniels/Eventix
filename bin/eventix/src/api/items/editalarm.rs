@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};
 use crate::extract::MultiForm;
-use crate::pages::error::HTMLError;
+use crate::api::JsonError;
 
 #[derive(Debug, Deserialize)]
 pub struct GetRequest {
@@ -44,7 +44,7 @@ pub fn router(state: EventixState) -> Router {
 pub async fn get_handler(
     State(state): State<EventixState>,
     Query(req): Query<GetRequest>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
     let locale = state.settings().locale();
 
@@ -58,7 +58,7 @@ pub async fn get_handler(
 pub async fn post_handler(
     State(state): State<EventixState>,
     MultiForm(req): MultiForm<PostRequest>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let rid = if let Some(rid) = &req.rid {
         Some(
             rid.parse::<CalDate>()

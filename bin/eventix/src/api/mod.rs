@@ -5,8 +5,72 @@ pub mod help;
 pub mod items;
 pub mod togglecal;
 
-use axum::Router;
+use axum::{
+    Json, Router,
+    body::{Body, to_bytes},
+    http::{Request, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
+};
 use eventix_state::EventixState;
+use serde_json::json;
+
+#[derive(Debug)]
+pub struct JsonError {
+    inner: anyhow::Error,
+}
+
+impl From<anyhow::Error> for JsonError {
+    fn from(err: anyhow::Error) -> Self {
+        Self { inner: err }
+    }
+}
+
+impl IntoResponse for JsonError {
+    fn into_response(self) -> Response {
+        let body = Json(json!({
+            "error": format!("{:?}", self.inner),
+        }));
+
+        (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+    }
+}
+
+async fn json_error_middleware(req: Request<Body>, next: Next) -> Response {
+    let res = next.run(req).await;
+
+    if !res.status().is_success() {
+        // extract the body bytes (consumes it)
+        let status = res.status();
+        let bytes = to_bytes(res.into_body(), 1024 * 16).await;
+
+        // build a new JSON body
+        let msg = match bytes {
+            Ok(b) => match String::from_utf8(b.to_vec()) {
+                Ok(s) if !s.is_empty() => s,
+                _ => status
+                    .canonical_reason()
+                    .unwrap_or("Unknown error")
+                    .to_string(),
+            },
+            Err(_) => status
+                .canonical_reason()
+                .unwrap_or("Unknown error")
+                .to_string(),
+        };
+
+        let json_body = Json(json!({ "error": msg }));
+        return (status, json_body).into_response();
+    } else {
+        tracing::debug!("got status {}", res.status());
+    }
+
+    res
+}
+
+async fn error_handler() -> impl IntoResponse {
+    JsonError::from(anyhow::Error::msg("no such route"))
+}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -17,4 +81,6 @@ pub fn router(state: EventixState) -> Router {
         .merge(auth::router(state.clone()))
         .merge(help::router(state.clone()))
         .merge(togglecal::router(state.clone()))
+        .fallback(error_handler)
+        .layer(axum::middleware::from_fn(json_error_middleware))
 }
