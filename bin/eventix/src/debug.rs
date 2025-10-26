@@ -73,9 +73,7 @@ where
 
             // call handler for this request
             let req = Request::from_parts(parts, Body::from(bytes));
-
-            let resp = inner.call(req).await;
-            resp
+            inner.call(req).await
         })
     }
 }

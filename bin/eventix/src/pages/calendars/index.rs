@@ -8,7 +8,7 @@ use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
 use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::{CollectionSettings, EventixState, SyncerType};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 use tokio::{fs, io::AsyncReadExt};
 use xdg::BaseDirectories;
 
@@ -35,7 +35,7 @@ struct CalendarsTemplate<'a> {
     tasks: Tasks<'a>,
 }
 
-async fn metadata_or_default(dir: &PathBuf, folder: &str, filename: &str, def: &str) -> String {
+async fn metadata_or_default(dir: &Path, folder: &str, filename: &str, def: &str) -> String {
     let path = dir.join(folder).join(filename);
     let Ok(mut file) = fs::File::open(path).await else {
         return def.to_string();
@@ -65,17 +65,13 @@ async fn add_unknown_calendars<'a>(
     while let Some(f) = reader.next_entry().await? {
         let folder = f.file_name();
         let folder = folder.to_str().unwrap();
-        if known
-            .iter()
-            .find(|cal| {
-                if let CalendarBox::Known { settings, .. } = cal.cal() {
-                    settings.folder() == folder
-                } else {
-                    false
-                }
-            })
-            .is_none()
-        {
+        if !known.iter().any(|cal| {
+            if let CalendarBox::Known { settings, .. } = cal.cal() {
+                settings.folder() == folder
+            } else {
+                false
+            }
+        }) {
             let id = uuid::Uuid::new_v4().simple().to_string();
             known.push(CalendarBoxTemplate::new(
                 xdg,

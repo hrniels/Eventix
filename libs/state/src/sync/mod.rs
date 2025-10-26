@@ -18,13 +18,19 @@ use crate::{CollectionSettings, EventixState};
 #[async_trait]
 pub trait Syncer: Send {
     async fn discover(&self, state: EventixState) -> anyhow::Result<SyncCalResult>;
+
+    #[allow(clippy::ptr_arg)]
     async fn sync_cal(
         &mut self,
         state: EventixState,
         cal_id: &String,
     ) -> anyhow::Result<SyncCalResult>;
+
     async fn sync(&mut self, state: EventixState) -> anyhow::Result<SyncCalResult>;
+
+    #[allow(clippy::ptr_arg)]
     async fn delete_cal(&mut self, state: EventixState, cal_id: &String) -> anyhow::Result<()>;
+
     async fn delete(&mut self, state: EventixState) -> anyhow::Result<()>;
 }
 
@@ -145,7 +151,7 @@ pub(crate) async fn sync_all(
 
     for (id, handle) in tasks {
         let res = handle.await?;
-        handle_sync_result(&state, &*id, res, &mut sync_res).await;
+        handle_sync_result(&state, &id, res, &mut sync_res).await;
     }
 
     Ok(sync_res)

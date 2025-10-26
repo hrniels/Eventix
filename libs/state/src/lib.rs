@@ -103,19 +103,19 @@ impl State {
         }
 
         // detect removed calendars
-        store.retain(|dir| settings.calendar(&*dir.id()).is_some());
+        store.retain(|dir| settings.calendar(dir.id()).is_some());
 
         Ok(())
     }
 
     fn load_calendar(
         xdg: &BaseDirectories,
-        col_id: &String,
+        col_id: &str,
         col: &CollectionSettings,
-        cal_id: &String,
+        cal_id: &str,
         cal: &CalendarSettings,
     ) -> anyhow::Result<CalDir> {
-        let cal_id: Arc<String> = Arc::from(cal_id.clone());
+        let cal_id: Arc<String> = Arc::from(cal_id.to_owned());
         let col_path = col.path(xdg, col_id);
         let path = col_path.join(cal.folder());
         let mut dir = if path.exists() {

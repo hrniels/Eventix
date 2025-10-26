@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -136,7 +136,7 @@ impl O365 {
     }
 
     async fn with_davmail<F, Fut>(
-        props_path: &PathBuf,
+        props_path: &Path,
         id: &String,
         auth_url: Option<&String>,
         func: F,

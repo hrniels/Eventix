@@ -137,20 +137,14 @@ pub enum SyncerType {
 
 impl SyncerType {
     pub fn supports_discover(&self) -> bool {
-        match self {
-            Self::VDirSyncer { .. } | Self::O365 { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::VDirSyncer { .. } | Self::O365 { .. })
     }
 
     pub fn supports_reload(&self) -> bool {
-        match self {
-            Self::VDirSyncer { .. } | Self::O365 { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::VDirSyncer { .. } | Self::O365 { .. })
     }
 
-    pub fn path(&self, xdg: &BaseDirectories, name: &String) -> PathBuf {
+    pub fn path(&self, xdg: &BaseDirectories, name: &str) -> PathBuf {
         match self {
             Self::FileSystem { path } => PathBuf::from(path),
             Self::VDirSyncer { .. } | Self::O365 { .. } => xdg
@@ -170,7 +164,7 @@ pub struct CollectionSettings {
 }
 
 impl CollectionSettings {
-    pub fn path(&self, xdg: &BaseDirectories, name: &String) -> PathBuf {
+    pub fn path(&self, xdg: &BaseDirectories, name: &str) -> PathBuf {
         self.syncer.path(xdg, name)
     }
 

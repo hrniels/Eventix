@@ -3,7 +3,7 @@ use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, CalendarSettings, CollectionSettings, SyncerType};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{slice, sync::Arc};
 use xdg::BaseDirectories;
 
 use crate::{
@@ -41,14 +41,14 @@ impl<'a> CalendarBox<'a> {
     pub fn name(&self) -> &String {
         match self {
             CalendarBox::Known { settings, .. } => settings.name(),
-            CalendarBox::Unknown { name, .. } => &name,
+            CalendarBox::Unknown { name, .. } => name,
         }
     }
 
     pub fn bgcolor(&self) -> &String {
         match self {
             CalendarBox::Known { settings, .. } => settings.bgcolor(),
-            CalendarBox::Unknown { color, .. } => &color,
+            CalendarBox::Unknown { color, .. } => color,
         }
     }
 
@@ -62,7 +62,7 @@ impl<'a> CalendarBox<'a> {
     pub fn folder(&self) -> &String {
         match self {
             CalendarBox::Known { settings, .. } => settings.folder(),
-            CalendarBox::Unknown { folder, .. } => &folder,
+            CalendarBox::Unknown { folder, .. } => folder,
         }
     }
 
@@ -114,8 +114,8 @@ impl<'a> CalendarBoxTemplate<'a> {
         let (alarm_type, personal) = match cal {
             CalendarBox::Known { settings, .. } => {
                 let personal = if let CalendarAlarmType::Personal { default } = settings.alarms() {
-                    default.as_ref().and_then(|def| {
-                        Some(AlarmConfig::from_alarms(&[def.clone()], locale.timezone()))
+                    default.as_ref().map(|def| {
+                        AlarmConfig::from_alarms(slice::from_ref(def), locale.timezone())
                     })
                 } else {
                     None
