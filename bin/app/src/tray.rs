@@ -195,7 +195,7 @@ impl ksni::Tray for EventixTray {
                 label: "Monthly".into(),
                 icon_data: crate::ICON_MONTH.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
-                    tray.load_page("/");
+                    tray.load_page("/pages/monthly");
                 }),
                 ..Default::default()
             }
@@ -204,7 +204,7 @@ impl ksni::Tray for EventixTray {
                 label: "Weekly".into(),
                 icon_data: crate::ICON_WEEK.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
-                    tray.load_page("/weekly");
+                    tray.load_page("/pages/weekly");
                 }),
                 ..Default::default()
             }
@@ -213,7 +213,7 @@ impl ksni::Tray for EventixTray {
                 label: "List".into(),
                 icon_data: crate::ICON_LIST.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
-                    tray.load_page("/list");
+                    tray.load_page("/pages/list");
                 }),
                 ..Default::default()
             }
@@ -223,7 +223,7 @@ impl ksni::Tray for EventixTray {
                 label: "New Event".into(),
                 icon_data: crate::ICON_EVENT.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
-                    tray.load_page("/new?ctype=Event");
+                    tray.load_page("/pages/new?ctype=Event");
                 }),
                 ..Default::default()
             }
@@ -232,7 +232,7 @@ impl ksni::Tray for EventixTray {
                 label: "New Task".into(),
                 icon_data: crate::ICON_TODO.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
-                    tray.load_page("/new?ctype=Todo");
+                    tray.load_page("/pages/new?ctype=Todo");
                 }),
                 ..Default::default()
             }

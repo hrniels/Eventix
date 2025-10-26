@@ -391,18 +391,18 @@ async function _deselect(oldid) {
 }
 
 async function _loadOccurrence(uid, rid, edit) {
-    let url = '/details?uid=' + uid + '&edit=' + (edit ? 'true' : 'false');
+    let url = '/api/items/details?uid=' + uid + '&edit=' + (edit ? 'true' : 'false');
     if(rid)
         url += '&rid=' + rid;
     await _loadPage(url);
 }
 
 async function _loadHelp() {
-    await _loadPage('/help');
+    await _loadPage('/api/help');
 }
 
 async function _loadAuth(cal, url) {
-    await _loadPage('/auth?calendar=' + cal + '&url=' + encodeURIComponent(url));
+    await _loadPage('/api/auth?calendar=' + cal + '&url=' + encodeURIComponent(url));
 }
 
 async function _loadPage(url) {

@@ -96,7 +96,7 @@ New attendee: <input id="{{ id }}-new-attendee" size="50" />
 
     $(function() {
         $("#{{ id }}-new-attendee").autocomplete({
-            source: "/attendees",
+            source: "/api/attendees",
             minLength: 2,
         });
         $('#{{ id }}-new-attendee').keyup(function(e) {

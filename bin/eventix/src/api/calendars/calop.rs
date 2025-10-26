@@ -23,7 +23,7 @@ pub struct Params {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/calendars/calop", post(handler))
+        .route("/calop", post(handler))
         .with_state(state)
 }
 
@@ -31,8 +31,6 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    if let Operation::Delete = req.op {}
-
     match req.op {
         Operation::Delete => {
             eventix_state::State::delete_calendar(state.clone(), &req.col_id, &req.cal_id)

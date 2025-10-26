@@ -8,10 +8,10 @@
 
 {% if let Some(rid) = rid %}
 <form id="form" method="post"
-                action="/edit?uid={{ uid }}&rid={{ rid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
+                action="/pages/edit?uid={{ uid }}&rid={{ rid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
 {% else %}
 <form id="form" method="post"
-                action="/edit?uid={{ uid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
+                action="/pages/edit?uid={{ uid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
 {% endif %}
     <input type="hidden" name="edit_start" value="{{ edit_start }}" />
     <div class="ev_border">

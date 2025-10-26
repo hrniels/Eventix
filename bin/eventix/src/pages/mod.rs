@@ -9,6 +9,7 @@ pub mod weekly;
 mod events;
 mod tasks;
 
+use axum::Router;
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
 use eventix_locale::Locale;
@@ -19,6 +20,16 @@ use std::{
 };
 
 use crate::objects::{Calendar, Calendars};
+
+pub fn router(state: EventixState) -> Router {
+    Router::new()
+        .merge(monthly::router(state.clone()))
+        .merge(weekly::router(state.clone()))
+        .merge(edit::router(state.clone()))
+        .merge(new::router(state.clone()))
+        .merge(list::router(state.clone()))
+        .merge(calendars::router(state.clone()))
+}
 
 pub struct Page {
     start: Instant,

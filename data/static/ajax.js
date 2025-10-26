@@ -41,11 +41,11 @@ function moveEvent(uid, rid, date, hour, onsuccess) {
 }
 
 function cancelOcc(uid, rid, onsuccess) {
-    postRequest('/cancel?uid=' + uid + '&rid=' + rid, onsuccess);
+    postRequest('/api/items/cancel?uid=' + uid + '&rid=' + rid, onsuccess);
 }
 
-function changePartStat(uid, rid, stat, onsuccess) {
-    let url = '/setpartstat?stat=' + stat + '&uid=' + uid;
+function respond(uid, rid, stat, onsuccess) {
+    let url = '/api/items/respond?stat=' + stat + '&uid=' + uid;
     if(rid)
         url += '&rid=' + rid;
     postRequest(url, function(data) {
@@ -54,17 +54,17 @@ function changePartStat(uid, rid, stat, onsuccess) {
 }
 
 function deleteItem(uid, rid, onDeleted) {
-    let url = '/delete?uid=' + uid;
+    let url = '/api/items/delete?uid=' + uid;
     if(rid != null)
         url += '&rid=' + rid;
     postRequest(url, onDeleted);
 }
 
 function toggleCalendar(id) {
-    postRequest('/toggle-calendar?id=' + id, reloadPage);
+    postRequest('/api/togglecal?id=' + id, reloadPage);
 }
 
 function calendarOperation(col_id, cal_id, op) {
-    const url =  '/calendars/calop?col_id=' + col_id + '&cal_id=' + cal_id + '&op=' + op;
+    const url =  '/api/calendars/calop?col_id=' + col_id + '&cal_id=' + cal_id + '&op=' + op;
     postRequest(url, reloadPage);
 }

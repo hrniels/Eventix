@@ -31,7 +31,7 @@ pub struct PostData {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/calendars/savecal", post(handler))
+        .route("/savecal", post(handler))
         .with_state(state)
 }
 

@@ -20,7 +20,7 @@ struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/toggle-calendar", post(handler))
+        .route("/togglecal", post(handler))
         .with_state(state)
 }
 

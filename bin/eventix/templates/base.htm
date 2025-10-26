@@ -54,7 +54,7 @@
 
             <div style="float: right;" class="ev_padbottom">
                 <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
-                    <a class="ev_button_link" href="/calendars">{{ "Calendars"|t(locale) }}:</a>
+                    <a class="ev_button_link" href="/pages/calendars">{{ "Calendars"|t(locale) }}:</a>
                     {% for cal in page.calendars() %}
                     <a style="vertical-align: middle"
                        href="javascript:toggleCalendar('{{ cal.id }}')">
@@ -97,16 +97,16 @@
                     {% endfor %}
                 </div>
                 &nbsp;
-                <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/">
+                <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/pages/monthly">
                     <i class="bi bi-calendar2-month"></i>
                     <span>{{ "Monthly"|t(locale) }}</span>
                 </a>
-                <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/weekly">
+                <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/pages/weekly">
                     <i class="bi bi-calendar2-week"></i>
                     <span>{{ "Weekly"|t(locale) }}</span>
                 </a>
                 <a id="link-list" class="ev_button_medium ev_button_normal"
-                                  style="padding-left: 1em; padding-right: 1em" href="/list">
+                                  style="padding-left: 1em; padding-right: 1em" href="/pages/list">
                     <i class="bi bi-card-list"></i>
                     <span>{{ "List"|t(locale) }}</span>
                 </a>

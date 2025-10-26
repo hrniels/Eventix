@@ -27,7 +27,7 @@ struct Response {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/calendars/calbox", get(handler))
+        .route("/calbox", get(handler))
         .with_state(state)
 }
 

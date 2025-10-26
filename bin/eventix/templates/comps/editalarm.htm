@@ -1,6 +1,6 @@
 {% if edit %}
 
-<form id="alarm-form" method="post" action="/editalarm">
+<form id="alarm-form" method="post" action="/api/items/editalarm">
     <input id="target_url" type="hidden" name="target_url" value="" />
     <input type="hidden" name="uid" value="{{ uid }}" />
     {% if let Some(rid) = rid %}

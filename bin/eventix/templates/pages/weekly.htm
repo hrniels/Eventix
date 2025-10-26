@@ -10,9 +10,9 @@
     </div>
 
     <div style="z-index: 0; position: absolute; width: calc(100% - 70px); left: 70px; text-align: center">
-        <a style="margin-right: .5em" id="link-prev" href="/weekly?date={{ prev_week }}">&laquo;</a>
+        <a style="margin-right: .5em" id="link-prev" href="/pages/weekly?date={{ prev_week }}">&laquo;</a>
         <div style="display: inline-block; width: 24em">W{{ week_number }}: {{ week_start }} - {{ week_end }}</div>
-        <a style="margin-left: .5em" id="link-next" href="/weekly?date={{ next_week }}">&raquo;</a>
+        <a style="margin-left: .5em" id="link-next" href="/pages/weekly?date={{ next_week }}">&raquo;</a>
     </div>
     <br clear="both"/>
 </h1>
@@ -39,7 +39,7 @@
         <td width="14%" align="center"
             class="ev_week_day_header{% if day.date == today %} ev_today{% endif %}">
             <a href="javascript:gotoWithPrev(
-                     '/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
+                     '/pages/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
                style="float: left" class="ev_add_icon">
                 <i class="bi bi-plus-square"></i>
             </a>
@@ -146,7 +146,7 @@
                      data-hour="{{ hour }}"
                      class="ev_hour_cell">
                     <a href="javascript:gotoWithPrev(
-                             '/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}')"
+                             '/pages/new?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}')"
                        style="float: left" class="ev_add_icon">
                         <i class="bi bi-plus-square"></i>
                     </a>
@@ -260,7 +260,7 @@
                     $('#jump_location').focus();
                     return false;
                 case "Period":
-                    document.location.href = '/weekly';
+                    document.location.href = '/pages/weekly';
                     break;
                 case "ArrowLeft":
                     document.getElementById('link-prev').click();

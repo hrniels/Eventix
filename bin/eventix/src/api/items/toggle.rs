@@ -21,7 +21,7 @@ struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/toggleexcl", post(handler))
+        .route("/toggle", post(handler))
         .with_state(state)
 }
 

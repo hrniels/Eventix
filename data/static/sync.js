@@ -4,23 +4,23 @@ let outOfSync = false;
 
 function discoverCollection(col_id, spinnerId) {
     $('#' + spinnerId).addClass('ev_spin');
-    postRequest('/syncop?op[type]=DiscoverCollection&op[data][col_id]=' + col_id, reloadPage);
+    postRequest('/api/calendars/syncop?op[type]=DiscoverCollection&op[data][col_id]=' + col_id, reloadPage);
 }
 
 function syncCollection(col_id, spinnerId) {
     $('#' + spinnerId).addClass('ev_spin');
-    postRequest('/syncop?op[type]=SyncCollection&op[data][col_id]=' + col_id, reloadPage);
+    postRequest('/api/calendars/syncop?op[type]=SyncCollection&op[data][col_id]=' + col_id, reloadPage);
 }
 
 function reloadCollection(col_id, spinnerId) {
     $('#' + spinnerId).addClass('ev_spin');
-    postRequest('/syncop?op[type]=ReloadCollection&op[data][col_id]=' + col_id, reloadPage);
+    postRequest('/api/calendars/syncop?op[type]=ReloadCollection&op[data][col_id]=' + col_id, reloadPage);
 }
 
 function reloadCalendar(col_id, cal_id, spinnerId) {
     $('#' + spinnerId).addClass('ev_spin');
-    let url = '/syncop?op[type]=ReloadCalendar';
-    url += '&op[data][col_id]=' + col_id;
+    let url = '/api/calendars/syncop?op[type]=ReloadCalendar';
+    url += '&op[data][col_d]=' + col_id;
     url += '&op[data][cal_id]=' + cal_id;
     postRequest(url, reloadPage);
 }
@@ -49,7 +49,7 @@ function reloadDB(lastReloadId, spinnerId, iconId, force, auth_url) {
     syncForce = force;
     $('#' + spinnerId).addClass('ev_spin');
 
-    let url = '/syncop?op[type]=ReloadAll';
+    let url = '/api/calendars/syncop?op[type]=ReloadAll';
     if(auth_url)
         url += '&auth_url=' + encodeURIComponent(auth_url);
 

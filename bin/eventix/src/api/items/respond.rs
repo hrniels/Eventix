@@ -38,7 +38,7 @@ struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/setpartstat", post(handler))
+        .route("/respond", post(handler))
         .with_state(state)
 }
 

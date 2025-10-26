@@ -61,7 +61,7 @@ impl Default for Filter {
 
 impl Filter {
     pub fn url(&self) -> String {
-        format!("/list?{}", serde_qs::to_string(self).unwrap())
+        format!("/pages/list?{}", serde_qs::to_string(self).unwrap())
     }
 
     pub fn with_page(&self, page: usize) -> Self {

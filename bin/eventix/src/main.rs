@@ -1,4 +1,4 @@
-mod ajax;
+mod api;
 mod comps;
 mod debug;
 mod extract;
@@ -8,10 +8,6 @@ mod objects;
 mod pages;
 mod util;
 
-use ajax::{
-    attendees, complete, delete, details, editalarm, occlist, setpartstat, syncop, togglecal,
-    toggleexcl,
-};
 use axum::{
     Router,
     body::Body,
@@ -19,7 +15,7 @@ use axum::{
     response::IntoResponse,
 };
 use clap::Parser;
-use pages::{edit, error::HTMLError, list, monthly, new, weekly};
+use pages::error::HTMLError;
 use std::{env, panic, sync::Arc};
 use tokio::{net::TcpListener, sync::Mutex};
 use tower_http::{
@@ -31,11 +27,6 @@ use tower_http::{
 use tracing::Level;
 use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
-
-use crate::{
-    ajax::{auth, calbox, calop, cancel, help, moveevent, savecal},
-    pages::calendars,
-};
 
 include!(concat!(env!("OUT_DIR"), "/icons.rs"));
 
@@ -69,31 +60,11 @@ async fn run_server(listener: TcpListener) {
     let static_path = icon_path.parent().unwrap().to_owned();
 
     let app = Router::new()
-        .nest_service("/favicon.ico", ServeFile::new(icon_path))
+        .route_service("/favicon.ico", ServeFile::new(icon_path))
         .nest_service("/static", ServeDir::new(static_path))
-        .merge(monthly::router(state.clone()))
-        .merge(weekly::router(state.clone()))
-        .merge(details::router(state.clone()))
-        .merge(edit::router(state.clone()))
-        .merge(new::router(state.clone()))
-        .merge(list::router(state.clone()))
-        .merge(complete::router(state.clone()))
-        .merge(delete::router(state.clone()))
-        .merge(toggleexcl::router(state.clone()))
-        .merge(togglecal::router(state.clone()))
-        .merge(moveevent::router(state.clone()))
-        .merge(cancel::router(state.clone()))
-        .merge(setpartstat::router(state.clone()))
-        .merge(occlist::router(state.clone()))
-        .merge(attendees::router(state.clone()))
-        .merge(syncop::router(state.clone()))
-        .merge(editalarm::router(state.clone()))
-        .merge(help::router(state.clone()))
-        .merge(auth::router(state.clone()))
-        .merge(calendars::router(state.clone()))
-        .merge(calbox::router(state.clone()))
-        .merge(savecal::router(state.clone()))
-        .merge(calop::router(state.clone()))
+        .merge(pages::monthly::router(state.clone()))
+        .nest("/api", api::router(state.clone()))
+        .nest("/pages", pages::router(state.clone()))
         .fallback(error_handler)
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,

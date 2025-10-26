@@ -27,9 +27,9 @@
 
         $('#{{ id }}-menu a').on('click', function() {
             if($(this).data('value') == 'Series')
-                gotoWithPrev('/edit?uid={{ uid }}&mode=Series');
+                gotoWithPrev('/pages/edit?uid={{ uid }}&mode=Series');
             else
-                gotoWithPrev('/edit?uid={{ uid }}&rid={{ rid }}&mode=' + $(this).data('value'));
+                gotoWithPrev('/pages/edit?uid={{ uid }}&rid={{ rid }}&mode=' + $(this).data('value'));
         });
 
         $(document).on('click', function(e) {

@@ -18,7 +18,7 @@
 
 <div class="ev_cal_box ev_border">
     <form id="savecal_{{ cal.id() }}" method="post"
-          action="/calendars/savecal?col_id={{ col_id }}&cal_id={{ cal.id() }}">
+          action="/api/calendars/savecal?col_id={{ col_id }}&cal_id={{ cal.id() }}">
     <div class="ev_cal_box_header">
         <div class="ev_cal_box_left">
             <input id="ev_toggle_{{ cal.id() }}"

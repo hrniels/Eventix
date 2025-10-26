@@ -2,7 +2,7 @@
 
 {% block inner %}
 
-<form id="form" method="get" action="/list">
+<form id="form" method="get" action="/pages/list">
     <div class="ev_border">
         <fieldset class="ev_form">
             <h1 class="ev_header" onmouseover="this.style.cursor='pointer';"
@@ -56,7 +56,7 @@
                         <span>{{ "Apply"|t(locale) }}</span>
                     </a>
                     <a class="ev_button_big ev_button_normal" style="width: 80px"
-                       href="javascript:document.location.href = '/list'">
+                       href="javascript:document.location.href = '/pages/list'">
                         <span>{{ "Reset"|t(locale) }}</span>
                     </a>
                 </div>
@@ -106,7 +106,7 @@
 
     function loadOccs(uid, ndate, dir, count, onsuccess) {
         getRequest(
-            '/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir + '&count=' + count,
+            '/api/items/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir + '&count=' + count,
             onsuccess
         );
     }
@@ -231,7 +231,7 @@
                 <span>{{ "Delete"|t(locale) }}</span>
             </a>
             <a class="ev_button ev_button_normal" style="width: 60px"
-               href="javascript:gotoWithPrev('/edit?uid={{ c.comp.uid() }}&mode=Series')">
+               href="javascript:gotoWithPrev('/pages/edit?uid={{ c.comp.uid() }}&mode=Series')">
                 <i class="bi bi-pencil"></i>
                 <span>{{ "Edit"|t(locale) }}</span>
             </a>

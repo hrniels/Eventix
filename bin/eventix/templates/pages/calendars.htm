@@ -71,7 +71,7 @@
 
 <script type="text/javascript">
 function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {
-    let url = '/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + mode;
+    let url = '/api/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + mode;
     if(folder && name && color) {
         url += '&folder=' + encodeURIComponent(folder);
         url += '&name=' + encodeURIComponent(name);

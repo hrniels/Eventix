@@ -25,7 +25,7 @@ struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/moveevent", post(handler))
+        .route("/shift", post(handler))
         .with_state(state)
 }
 
