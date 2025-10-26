@@ -2,6 +2,29 @@ let syncForce = false;
 let syncing = false;
 let outOfSync = false;
 
+function discoverCollection(col_id, spinnerId) {
+    $('#' + spinnerId).addClass('ev_spin');
+    postRequest('/syncop?op[type]=DiscoverCollection&op[data][col_id]=' + col_id, reloadPage);
+}
+
+function syncCollection(col_id, spinnerId) {
+    $('#' + spinnerId).addClass('ev_spin');
+    postRequest('/syncop?op[type]=SyncCollection&op[data][col_id]=' + col_id, reloadPage);
+}
+
+function reloadCollection(col_id, spinnerId) {
+    $('#' + spinnerId).addClass('ev_spin');
+    postRequest('/syncop?op[type]=ReloadCollection&op[data][col_id]=' + col_id, reloadPage);
+}
+
+function reloadCalendar(col_id, cal_id, spinnerId) {
+    $('#' + spinnerId).addClass('ev_spin');
+    let url = '/syncop?op[type]=ReloadCalendar';
+    url += '&op[data][col_id]=' + col_id;
+    url += '&op[data][cal_id]=' + cal_id;
+    postRequest(url, reloadPage);
+}
+
 function reloadDBEvery(period, lastReloadId, spinnerId, iconId) {
     setInterval(function() {
         reloadDB(lastReloadId, spinnerId, iconId, false);
@@ -26,9 +49,9 @@ function reloadDB(lastReloadId, spinnerId, iconId, force, auth_url) {
     syncForce = force;
     $('#' + spinnerId).addClass('ev_spin');
 
-    let url = '/reload';
+    let url = '/syncop?op[type]=ReloadAll';
     if(auth_url)
-        url += '?auth_url=' + encodeURIComponent(auth_url);
+        url += '&auth_url=' + encodeURIComponent(auth_url);
 
     postRequest(url, function(data) {
         $('#' + spinnerId).removeClass('ev_spin');

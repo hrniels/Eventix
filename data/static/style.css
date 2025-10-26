@@ -9,6 +9,10 @@ input,select,textarea {
     font-size: 1em;
     padding: 2px;
 }
+input[type=color] {
+    height: 1.5em;
+    width: 2.5em;
+}
 
 img {
     border: 0;
@@ -38,6 +42,19 @@ a:hover {
 }
 
 /* ------------ FORMULARS ------------ */
+
+input.ev_toggle_button {
+    appearance: none;
+    padding: 12px 25px;
+    border-radius: 12px;
+    background: radial-gradient(circle 10px, white 100%, transparent calc(100% + 1px)) #ccc -12px;
+    transition: 0.3s ease-in-out;
+}
+
+input.ev_toggle_button:checked {
+    background-color: dodgerBlue;
+    background-position: 12px;
+}
 
 fieldset.ev_form {
     padding: 0;
@@ -108,6 +125,11 @@ fieldset.ev_form div.ev_submit {
 .ev_main {
     padding: 0.3em;
     background-color: #f6f6f6;
+}
+
+.ev_desc {
+    padding: 0.3em;
+    background-color: #dbdbdb;
 }
 
 .ev_tabheader {
@@ -629,16 +651,26 @@ div.ev_selected {
     z-index: 50;
 }
 
-/* ------------ TAG ------------ */
+/* ------------ TAG & FOLDER ------------ */
 
-.ev_tag {
+.ev_tag, .ev_folder {
     color: white;
 }
-.ev_tag:hover {
+.ev_tag:hover, .ev_folder:hover {
     cursor: pointer;
 }
 .ev_tag:hover::before {
     content: "\f5af";
+}
+
+.ev_folder i.bi-folder-fill {
+    display: none;
+}
+.ev_folder:hover i.bi-folder {
+    display: none;
+}
+.ev_folder:hover i.bi-folder-fill {
+    display: inline-block;
 }
 
 /* ------------ JUMP TO DATE ------------ */
@@ -685,6 +717,48 @@ span.ev_cal_src_highlight {
 
 span.ev_cal_src_disabled {
     background-color: #a0a0a0;
+}
+
+/* ------------ CALENDARS ------------ */
+
+.ev_cal_box {
+    background-color: #ffffff;
+    border-radius: 8px;
+    -moz-border-radius: 8px;
+    -khtml-border-radius: 8px;
+    -webkit-border-radius: 8px;
+}
+
+.ev_cal_box_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    padding: .3em;
+}
+
+.ev_cal_box_body {
+    margin: .3em;
+}
+
+.ev_cal_box_left, .ev_cal_box_right {
+    display: flex;
+}
+
+.ev_cal_box_left_item, .ev_cal_box_right_item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ev_cal_box_color_grid {
+    display: grid;
+    grid-template-columns: auto 5em auto 1fr;
+    grid-template-rows: auto auto;
+    gap: .3em;
+}
+
+.ev_cal_box_color_grid div * {
+    vertical-align: middle;
 }
 
 /* ------------ JQUERY ------------ */

@@ -10,6 +10,7 @@ chrono-tz.workspace = true
 chrono.workspace = true
 eventix-ical.workspace = true
 eventix-locale.workspace = true
+once_cell.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 tokio.workspace = true

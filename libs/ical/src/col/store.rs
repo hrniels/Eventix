@@ -21,6 +21,14 @@ impl CalStore {
         self.dirs.push(dir);
     }
 
+    /// Only retains the directories that return true for given function
+    pub fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&CalDir) -> bool,
+    {
+        self.dirs.retain(f);
+    }
+
     /// Returns a reference to the directory with given id.
     pub fn directory(&self, id: &Arc<String>) -> Option<&CalDir> {
         self.dirs.iter().find(|s| s.id() == id)

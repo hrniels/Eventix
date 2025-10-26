@@ -1,0 +1,154 @@
+use anyhow::{Context, Result};
+use askama::Template;
+use axum::{
+    extract::{Query, State},
+    response::{Html, IntoResponse},
+};
+use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
+use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_state::{CollectionSettings, EventixState, SyncerType};
+use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use tokio::{fs, io::AsyncReadExt};
+use xdg::BaseDirectories;
+
+use crate::{
+    comps::calbox::CalendarBoxTemplate,
+    pages::{Page, error::HTMLError, events::Events, tasks::Tasks},
+};
+use crate::{
+    comps::calbox::{CalendarBox, CalendarBoxMode},
+    html::filters,
+};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Request {}
+
+#[derive(Template)]
+#[template(path = "pages/calendars.htm")]
+struct CalendarsTemplate<'a> {
+    page: Page,
+    locale: Arc<dyn Locale + Send + Sync>,
+    collections: &'a BTreeMap<String, CollectionSettings>,
+    calendars: BTreeMap<&'a String, Vec<CalendarBoxTemplate<'a>>>,
+    events: Events<'a>,
+    tasks: Tasks<'a>,
+}
+
+async fn metadata_or_default(dir: &PathBuf, folder: &str, filename: &str, def: &str) -> String {
+    let path = dir.join(folder).join(filename);
+    let Ok(mut file) = fs::File::open(path).await else {
+        return def.to_string();
+    };
+    let mut content = String::new();
+    let Ok(_) = file.read_to_string(&mut content).await else {
+        return def.to_string();
+    };
+    content
+}
+
+async fn add_unknown_calendars<'a>(
+    xdg: &BaseDirectories,
+    locale: &Arc<dyn Locale + Send + Sync>,
+    col_id: &'a String,
+    col: &'a CollectionSettings,
+    known: &mut Vec<CalendarBoxTemplate<'a>>,
+) -> anyhow::Result<()> {
+    if let SyncerType::FileSystem { .. } = col.syncer() {
+        return Ok(());
+    }
+
+    let col_path = col.path(xdg, col_id);
+    let mut reader = fs::read_dir(&col_path)
+        .await
+        .context(format!("Reading directory '{:?}'", col_path))?;
+    while let Some(f) = reader.next_entry().await? {
+        let folder = f.file_name();
+        let folder = folder.to_str().unwrap();
+        if known
+            .iter()
+            .find(|cal| {
+                if let CalendarBox::Known { settings, .. } = cal.cal() {
+                    settings.folder() == folder
+                } else {
+                    false
+                }
+            })
+            .is_none()
+        {
+            let id = uuid::Uuid::new_v4().simple().to_string();
+            known.push(CalendarBoxTemplate::new(
+                xdg,
+                locale.clone(),
+                col_id,
+                col,
+                CalendarBox::Unknown {
+                    id,
+                    folder: folder.to_string(),
+                    name: metadata_or_default(&col_path, folder, "displayname", folder).await,
+                    color: metadata_or_default(&col_path, folder, "color", "gray").await,
+                },
+                CalendarBoxMode::View,
+            ));
+        }
+    }
+
+    known.sort_by(|a, b| a.cal().name().cmp(b.cal().name()));
+    Ok(())
+}
+
+pub async fn handler(
+    State(state): State<EventixState>,
+    Query(_req): Query<Request>,
+) -> Result<impl IntoResponse, HTMLError> {
+    let page = super::new_page(&state).await;
+
+    let state = state.lock().await;
+    let xdg = state.xdg();
+    let locale = state.settings().locale();
+
+    let mut calendars = BTreeMap::new();
+    for (col_id, col) in state.settings().collections() {
+        let mut cals = col
+            .all_calendars()
+            .iter()
+            .map(|(cal_id, cal)| {
+                CalendarBoxTemplate::new(
+                    xdg,
+                    locale.clone(),
+                    col_id,
+                    col,
+                    CalendarBox::Known {
+                        id: cal_id,
+                        settings: cal,
+                    },
+                    CalendarBoxMode::View,
+                )
+            })
+            .collect::<Vec<_>>();
+        if let Err(e) = add_unknown_calendars(xdg, &locale, col_id, col, &mut cals).await {
+            tracing::error!(
+                "Unable to determine calendars in collection {}: {}",
+                col_id,
+                e,
+            );
+        }
+        calendars.insert(col_id, cals);
+    }
+
+    let events = Events::new(&state, &locale);
+    let tasks = Tasks::new(&state, &locale);
+
+    let html = CalendarsTemplate {
+        page,
+        locale,
+        collections: state.settings().collections(),
+        calendars,
+        events,
+        tasks,
+    }
+    .render()
+    .context("edit template")?;
+
+    Ok(Html(html))
+}

@@ -10,13 +10,22 @@ use xdg::BaseDirectories;
 
 const FILENAME: &str = "settings.toml";
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Settings {
+    #[serde(skip)]
+    path: PathBuf,
     #[serde(rename = "collection")]
     collections: BTreeMap<String, CollectionSettings>,
 }
 
 impl Settings {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            collections: BTreeMap::default(),
+        }
+    }
+
     pub fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
         eventix_locale::default()
     }
@@ -25,16 +34,24 @@ impl Settings {
         &self.collections
     }
 
+    pub fn collections_mut(&mut self) -> &mut BTreeMap<String, CollectionSettings> {
+        &mut self.collections
+    }
+
     pub fn calendars(&self) -> impl Iterator<Item = (&String, &CalendarSettings)> {
         self.collections
             .values()
-            .flat_map(|col| col.calendars.iter())
+            .flat_map(|col| col.calendars.iter().filter(|(_, c)| c.enabled()))
     }
 
     pub fn calendar(&self, id: &String) -> Option<(&CollectionSettings, &CalendarSettings)> {
         for col in self.collections.values() {
             if let Some(settings) = col.calendars.get(id) {
-                return Some((col, settings));
+                if settings.enabled() {
+                    return Some((col, settings));
+                } else {
+                    return None;
+                }
             }
         }
         None
@@ -54,9 +71,17 @@ impl Settings {
 
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         match xdg.find_config_file(FILENAME) {
-            Some(file) => super::load_from_file(&file),
-            None => Ok(Settings::default()),
+            Some(file) => {
+                let mut settings: Self = super::load_from_file(&file)?;
+                settings.path = file;
+                Ok(settings)
+            }
+            None => Ok(Settings::new(PathBuf::from(FILENAME))),
         }
+    }
+
+    pub fn write_to_file(&self) -> anyhow::Result<()> {
+        super::write_to_file(&self.path, self)
     }
 }
 
@@ -84,10 +109,13 @@ impl EmailAccount {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub enum CalendarAlarmType {
+    #[default]
     Calendar,
-    Personal { default: Option<CalAlarm> },
+    Personal {
+        default: Option<CalAlarm>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -108,6 +136,20 @@ pub enum SyncerType {
 }
 
 impl SyncerType {
+    pub fn supports_discover(&self) -> bool {
+        match self {
+            Self::VDirSyncer { .. } | Self::O365 { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn supports_reload(&self) -> bool {
+        match self {
+            Self::VDirSyncer { .. } | Self::O365 { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn path(&self, xdg: &BaseDirectories, name: &String) -> PathBuf {
         match self {
             Self::FileSystem { path } => PathBuf::from(path),
@@ -146,12 +188,21 @@ impl CollectionSettings {
     }
 
     pub fn calendars(&self) -> impl Iterator<Item = (&String, &CalendarSettings)> {
-        self.calendars.iter()
+        self.calendars.iter().filter(|(_, c)| c.enabled())
+    }
+
+    pub fn all_calendars(&self) -> &BTreeMap<String, CalendarSettings> {
+        &self.calendars
+    }
+
+    pub fn all_calendars_mut(&mut self) -> &mut BTreeMap<String, CalendarSettings> {
+        &mut self.calendars
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct CalendarSettings {
+    enabled: bool,
     folder: String,
     name: String,
     fgcolor: String,
@@ -161,27 +212,59 @@ pub struct CalendarSettings {
 }
 
 impl CalendarSettings {
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
     pub fn folder(&self) -> &String {
         &self.folder
+    }
+
+    pub fn set_folder(&mut self, folder: String) {
+        self.folder = folder;
     }
 
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
     pub fn types(&self) -> &[CalCompType] {
         &self.types
+    }
+
+    pub fn set_types(&mut self, types: Vec<CalCompType>) {
+        self.types = types;
     }
 
     pub fn fgcolor(&self) -> &String {
         &self.fgcolor
     }
 
+    pub fn set_fgcolor(&mut self, color: String) {
+        self.fgcolor = color;
+    }
+
     pub fn bgcolor(&self) -> &String {
         &self.bgcolor
     }
 
+    pub fn set_bgcolor(&mut self, color: String) {
+        self.bgcolor = color;
+    }
+
     pub fn alarms(&self) -> &CalendarAlarmType {
         &self.alarms
+    }
+
+    pub fn set_alarms(&mut self, alarms: CalendarAlarmType) {
+        self.alarms = alarms;
     }
 }

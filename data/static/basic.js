@@ -100,3 +100,39 @@ function setPersonalOverwrite(id_prefix, overwrite) {
     $("#" + id_prefix + "_duration").spinner(overwrite ? "enable" : "disable");
     $("#" + id_prefix + "_datetime__date_").datepicker("option", "disabled", !overwrite);
 }
+
+function replaceSmoothly(id, newHtml, delay) {
+    let el = $('#' + id);
+
+    // Replace content but hide overflow to avoid jumps
+    const oldHeight = el.outerHeight();
+    el.css({ height: oldHeight, overflow: "hidden" });
+
+    // Create a hidden clone to measure target size
+    const clone = el.clone()
+        .css({
+            visibility: "hidden",
+            position: "absolute",
+            height: "auto",
+            width: el.width(),
+        })
+        .html(newHtml)
+        .appendTo("body");
+
+    // measure and remove again
+    const newHeight = clone.outerHeight();
+    clone.remove();
+
+    if(newHeight > oldHeight) {
+        // Growing: show new content immediately, then expand
+        el.html(newHtml);
+        el.animate({ height: newHeight }, delay, () => el.css({ height: "", overflow: "" }));
+    }
+    else {
+        // Shrinking: animate first, then swap content
+        el.animate({ height: newHeight }, delay, () => {
+            el.html(newHtml);
+            el.css({ height: "", overflow: "" });
+        });
+    }
+}

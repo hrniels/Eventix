@@ -54,7 +54,7 @@
 
             <div style="float: right;" class="ev_padbottom">
                 <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
-                    <span>{{ "Calendars"|t(locale) }}:</span>
+                    <a class="ev_button_link" href="/calendars">{{ "Calendars"|t(locale) }}:</a>
                     {% for cal in page.calendars() %}
                     <a style="vertical-align: middle"
                        href="javascript:toggleCalendar('{{ cal.id }}')">

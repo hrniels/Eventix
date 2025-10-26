@@ -175,6 +175,11 @@ impl CalDir {
         &self.name
     }
 
+    /// Sets the human-readable name to given one.
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
     /// Returns a slice with all files in this directory.
     pub fn files(&self) -> &[CalFile] {
         &self.files

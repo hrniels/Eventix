@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::Arc;
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
@@ -16,8 +15,8 @@ use crate::sync::{SyncCalResult, Syncer, SyncerAuth};
 const PORT_BASE: u16 = 25000;
 
 pub struct O365 {
+    col_id: String,
     vdirsyncer: VDirSyncer,
-    davmail_cmd: Command,
     auth_url: Option<String>,
     props_path: PathBuf,
 }
@@ -27,7 +26,7 @@ impl O365 {
     pub async fn new(
         xdg: &BaseDirectories,
         idx: usize,
-        name: String,
+        col_id: String,
         folder_id: HashMap<String, String>,
         read_only: bool,
         auth: SyncerAuth,
@@ -37,22 +36,16 @@ impl O365 {
         let port = PORT_BASE + idx as u16;
 
         // generate properties file
-        let props_path = Self::generate_props(xdg, &name, port, &auth.user, token).await?;
+        let props_path = Self::generate_props(xdg, &col_id, port, &auth.user, token).await?;
 
         // create vdirsyncer instance
-        let url = format!("http://localhost:{}/users/{}/{}/", port, auth.user, name);
-        let vdirsyncer = VDirSyncer::new(xdg, name, folder_id, url, read_only, Some(auth)).await?;
-
-        // create davmail command
-        let mut davmail_cmd = Command::new("davmail");
-        davmail_cmd.stdin(Stdio::piped());
-        davmail_cmd.stdout(Stdio::piped());
-        davmail_cmd.stderr(Stdio::piped());
-        davmail_cmd.args([props_path.to_str().unwrap()]);
+        let url = format!("http://localhost:{}/users/{}/{}/", port, auth.user, col_id);
+        let vdirsyncer =
+            VDirSyncer::new(xdg, col_id.clone(), folder_id, url, read_only, Some(auth)).await?;
 
         Ok(Self {
+            col_id,
             vdirsyncer,
-            davmail_cmd,
             auth_url: auth_url.cloned(),
             props_path,
         })
@@ -113,45 +106,59 @@ impl O365 {
         Ok(props_path)
     }
 
-    async fn remember_token(&self, cal: &Arc<String>, state: &EventixState) -> anyhow::Result<()> {
-        let file = File::options().read(true).open(&self.props_path).await?;
-        let reader = BufReader::new(file);
-        let mut lines = reader.lines();
-        while let Some(line) = lines.next_line().await? {
-            // extract the token from the changed properties file
-            if line.contains("refreshToken=")
-                && let Some(split) = line.find('=')
-            {
-                let token = &line[split + 1..];
-                // permanently remember the token
-                let mut state = state.lock().await;
-                let misc = state.misc_mut();
-                misc.set_calendar_token(cal, token.to_string());
-                if let Err(e) = misc.write_to_file() {
-                    tracing::warn!("Unable to save misc state: {}", e);
+    async fn remember_token(
+        &self,
+        state: &EventixState,
+        res: anyhow::Result<SyncCalResult>,
+    ) -> anyhow::Result<SyncCalResult> {
+        if let Ok(SyncCalResult::Success(_)) = res
+            && self.auth_url.is_some()
+        {
+            let file = File::options().read(true).open(&self.props_path).await?;
+            let reader = BufReader::new(file);
+            let mut lines = reader.lines();
+            while let Some(line) = lines.next_line().await? {
+                // extract the token from the changed properties file
+                if line.contains("refreshToken=")
+                    && let Some(split) = line.find('=')
+                {
+                    let token = &line[split + 1..];
+                    // permanently remember the token
+                    let mut state = state.lock().await;
+                    let misc = state.misc_mut();
+                    misc.set_calendar_token(&self.col_id, token.to_string());
+                    misc.write_to_file()?;
+                    break;
                 }
-                break;
             }
         }
-        Ok(())
+        res
     }
-}
 
-#[async_trait]
-impl Syncer for O365 {
-    async fn sync(
-        &mut self,
-        col: &Arc<String>,
-        state: EventixState,
-    ) -> anyhow::Result<SyncCalResult> {
-        let mut child = self.davmail_cmd.spawn()?;
+    async fn with_davmail<F, Fut>(
+        props_path: &PathBuf,
+        id: &String,
+        auth_url: Option<&String>,
+        func: F,
+    ) -> anyhow::Result<SyncCalResult>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = anyhow::Result<SyncCalResult>>,
+    {
+        let mut cmd = Command::new("davmail");
+        cmd.stdin(Stdio::piped());
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        cmd.args([props_path.to_str().unwrap()]);
+
+        let mut child = cmd.spawn()?;
         let mut stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
         let mut reader = BufReader::new(stdout).lines();
 
         // ensure that the server is started before we let vdirsyncer connect to it
         while let Ok(Some(line)) = reader.next_line().await {
-            tracing::debug!("{}: {}", *col, line);
+            tracing::debug!("{}: {}", id, line);
             if line.contains("Start DavMail in server mode") {
                 break;
             }
@@ -160,12 +167,12 @@ impl Syncer for O365 {
         // read lines and watch for auth requests
         let mut read_output = async || {
             while let Ok(Some(line)) = reader.next_line().await {
-                tracing::debug!("{}: {}", *col, line);
+                tracing::debug!("{}: {}", id, line);
 
                 // do we need to (re-)authenticate?
                 if line.starts_with("https://login.microsoftonline.com/") {
                     // if we already have the URL from the user, tell DavMail about it
-                    if let Some(ref auth_url) = self.auth_url {
+                    if let Some(auth_url) = auth_url {
                         stdin.write_all(auth_url.as_bytes()).await?;
                         stdin.write_all(b"\n").await?;
                     } else {
@@ -178,11 +185,8 @@ impl Syncer for O365 {
         };
 
         let res = tokio::select! {
-            // wait until sync finished
-            res = self.vdirsyncer.sync(col, state.clone()) => {
-                if let Ok(SyncCalResult::Success(_)) = res && self.auth_url.is_some() {
-                    self.remember_token(col, &state).await.ok();
-                }
+            // wait until the function finished
+            res = func() => {
                 res
             }
             // in the meantime, read all printed lines from davmail
@@ -192,5 +196,56 @@ impl Syncer for O365 {
         };
         child.kill().await.ok();
         res
+    }
+}
+
+#[async_trait]
+impl Syncer for O365 {
+    async fn discover(&self, state: EventixState) -> anyhow::Result<SyncCalResult> {
+        let id = self.col_id.clone();
+        let auth_url = self.auth_url.clone();
+        let props_path = self.props_path.clone();
+
+        Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
+            let res = self.vdirsyncer.discover(state.clone()).await;
+            self.remember_token(&state, res).await
+        })
+        .await
+    }
+
+    async fn sync_cal(
+        &mut self,
+        state: EventixState,
+        cal_id: &String,
+    ) -> anyhow::Result<SyncCalResult> {
+        let id = self.col_id.clone();
+        let auth_url = self.auth_url.clone();
+        let props_path = self.props_path.clone();
+
+        Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
+            let res = self.vdirsyncer.sync_cal(state.clone(), cal_id).await;
+            self.remember_token(&state, res).await
+        })
+        .await
+    }
+
+    async fn sync(&mut self, state: EventixState) -> anyhow::Result<SyncCalResult> {
+        let id = self.col_id.clone();
+        let auth_url = self.auth_url.clone();
+        let props_path = self.props_path.clone();
+
+        Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
+            let res = self.vdirsyncer.sync(state.clone()).await;
+            self.remember_token(&state, res).await
+        })
+        .await
+    }
+
+    async fn delete_cal(&mut self, state: EventixState, cal_id: &String) -> anyhow::Result<()> {
+        self.vdirsyncer.delete_cal(state, cal_id).await
+    }
+
+    async fn delete(&mut self, state: EventixState) -> anyhow::Result<()> {
+        self.vdirsyncer.delete(state).await
     }
 }

@@ -687,6 +687,7 @@ dependencies = [
  "chrono-tz",
  "eventix-ical",
  "eventix-locale",
+ "once_cell",
  "serde",
  "tempfile",
  "tokio",

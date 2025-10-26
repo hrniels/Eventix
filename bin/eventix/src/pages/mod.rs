@@ -1,3 +1,4 @@
+pub mod calendars;
 pub mod edit;
 pub mod error;
 pub mod list;
@@ -50,7 +51,7 @@ impl Page {
         Self {
             start: Instant::now(),
             now: Local::now().with_timezone(locale.timezone()),
-            calendars: Calendars::new(&state, |_dir, _settings| true),
+            calendars: Calendars::new(&state, |_settings| true),
             last_reload: state.last_reload(),
             ..Default::default()
         }

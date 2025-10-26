@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -59,7 +59,6 @@ impl CalendarChanges {
 }
 
 pub struct VDirSyncer {
-    cmd: Command,
     name: String,
     folder_id: HashMap<String, String>,
     cfg: PathBuf,
@@ -75,12 +74,7 @@ impl VDirSyncer {
         auth: Option<SyncerAuth>,
     ) -> anyhow::Result<Self> {
         let cfg = Self::generate_config(xdg, &name, url, read_only, auth).await?;
-        let mut cmd = Command::new("vdirsyncer");
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-        cmd.args(["--config", cfg.to_str().unwrap(), "sync", &name]);
         Ok(Self {
-            cmd,
             name,
             folder_id,
             cfg,
@@ -158,10 +152,10 @@ impl VDirSyncer {
         Ok(cfg_path)
     }
 
-    async fn discover(&self, cal: &Arc<String>) -> anyhow::Result<()> {
+    async fn run_discover(&self) -> anyhow::Result<()> {
         let mut cmd = Command::new("vdirsyncer");
         cmd.stdin(Stdio::piped());
-        cmd.stdout(Stdio::piped());
+        cmd.stdout(Stdio::null());
         cmd.stderr(Stdio::piped());
         cmd.args([
             "--config",
@@ -177,7 +171,7 @@ impl VDirSyncer {
         let mut stderr_reader = BufReader::new(stderr).lines();
 
         while let Some(line) = stderr_reader.next_line().await? {
-            tracing::debug!("{}: {}", *cal, line);
+            tracing::debug!("{}: {}", self.name, line);
             // in case it asks us whether to create the calendar, say "yes"
             stdin.write_all(b"y\n").await.unwrap();
         }
@@ -191,16 +185,53 @@ impl VDirSyncer {
         }
     }
 
+    async fn run_sync(
+        &mut self,
+        state: EventixState,
+        names: Vec<String>,
+    ) -> anyhow::Result<SyncCalResult> {
+        let mut tried_discover = false;
+        loop {
+            let mut cmd = Command::new("vdirsyncer");
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
+            cmd.args(["--config", self.cfg.to_str().unwrap(), "sync"]);
+            cmd.args(&names);
+
+            let child = cmd.spawn()?;
+            let output = child.wait_with_output().await?;
+            let status = output.status;
+            let res = self.post_process(&state, output).await?;
+
+            match res {
+                SyncResult::NeedsDiscover => {
+                    if tried_discover {
+                        return Err(anyhow!("discover did not resolve sync error"));
+                    }
+                    self.run_discover().await?;
+                    tried_discover = true;
+                    continue;
+                }
+                SyncResult::Success(res) => {
+                    if status.success() {
+                        return Ok(SyncCalResult::Success(res));
+                    } else {
+                        return Err(anyhow!("exited with {}", status));
+                    }
+                }
+            }
+        }
+    }
+
     async fn post_process(
         &self,
-        cal: &Arc<String>,
         state: &EventixState,
         output: Output,
     ) -> anyhow::Result<SyncResult> {
         let mut changes = CalendarChanges::default();
 
         for line in String::from_utf8(output.stderr)?.lines() {
-            tracing::debug!("{}: {}", *cal, line);
+            tracing::debug!("{}: {}", self.name, line);
 
             // vdirsyncer will complain if a collection changes and request a re-discover
             if line.contains("run `vdirsyncer discover") {
@@ -258,35 +289,117 @@ impl VDirSyncer {
 
 #[async_trait]
 impl Syncer for VDirSyncer {
-    async fn sync(
-        &mut self,
-        col: &Arc<String>,
-        state: EventixState,
-    ) -> anyhow::Result<SyncCalResult> {
-        let mut tried_discover = false;
-        loop {
-            let child = self.cmd.spawn()?;
-            let output = child.wait_with_output().await?;
-            let status = output.status;
-            let res = self.post_process(col, &state, output).await?;
+    async fn discover(&self, _state: EventixState) -> anyhow::Result<SyncCalResult> {
+        self.run_discover().await?;
 
-            match res {
-                SyncResult::NeedsDiscover => {
-                    if tried_discover {
-                        return Err(anyhow!("discover did not resolve sync error"));
-                    }
-                    self.discover(col).await?;
-                    tried_discover = true;
-                    continue;
-                }
-                SyncResult::Success(res) => {
-                    if status.success() {
-                        return Ok(SyncCalResult::Success(res));
-                    } else {
-                        return Err(anyhow!("exited with {}", status));
-                    }
-                }
+        let mut cmd = Command::new("vdirsyncer");
+        cmd.stdout(Stdio::null());
+        cmd.stderr(Stdio::piped());
+        cmd.args([
+            "--config",
+            self.cfg.to_str().unwrap(),
+            "metasync",
+            &self.name,
+        ]);
+
+        let child = cmd.spawn()?;
+        let output = child.wait_with_output().await?;
+        for line in String::from_utf8(output.stderr)?.lines() {
+            tracing::debug!("{}: {}", self.name, line);
+        }
+
+        if !output.status.success() {
+            return Err(anyhow!("exited with {}", output.status));
+        }
+        Ok(SyncCalResult::Success(false))
+    }
+
+    async fn sync_cal(
+        &mut self,
+        state: EventixState,
+        cal_id: &String,
+    ) -> anyhow::Result<SyncCalResult> {
+        let names = {
+            let state = state.lock().await;
+            let col = state.settings().collections().get(&self.name).unwrap();
+            let (_, cal) = col
+                .calendars()
+                .find(|(id, _settings)| *id == cal_id)
+                .ok_or_else(|| anyhow!("No calendar with id {}", cal_id))?;
+            vec![format!("{}/{}", self.name, cal.folder())]
+        };
+
+        self.run_sync(state, names).await
+    }
+
+    async fn sync(&mut self, state: EventixState) -> anyhow::Result<SyncCalResult> {
+        // determine collection and pair names to sync
+        let names = {
+            let state = state.lock().await;
+            let col = state.settings().collections().get(&self.name).unwrap();
+            col.calendars()
+                .map(|(_id, settings)| format!("{}/{}", &self.name, settings.folder()))
+                .collect::<Vec<_>>()
+        };
+        if names.is_empty() {
+            return Ok(SyncCalResult::Success(false));
+        }
+
+        self.run_sync(state, names).await
+    }
+
+    async fn delete_cal(&mut self, state: EventixState, cal_id: &String) -> anyhow::Result<()> {
+        let dir = self.cfg.parent().unwrap();
+
+        let state = state.lock().await;
+        let folder = state
+            .settings()
+            .collections()
+            .get(&self.name)
+            .unwrap()
+            .all_calendars()
+            .get(cal_id)
+            .unwrap()
+            .folder();
+
+        // remove item in status directory
+        let status_path = dir.join(format!("{}-status", self.name)).join(&self.name);
+        for ext in [".items", ".metadata"] {
+            let path = status_path.join(format!("{}{}", folder, ext));
+            if path.exists() {
+                fs::remove_file(&path)
+                    .await
+                    .context(format!("Removing {} failed", path.to_str().unwrap()))?;
             }
         }
+
+        // remove all non-meta files in data directory
+        let data_path = dir.join(format!("{}-data", self.name)).join(folder);
+        let mut dir = fs::read_dir(data_path).await?;
+        while let Some(entry) = dir.next_entry().await? {
+            if entry.file_name() != "color" && entry.file_name() != "displayname" {
+                fs::remove_file(entry.path()).await.context(format!(
+                    "Removing {} failed",
+                    entry.path().to_str().unwrap()
+                ))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&mut self, _state: EventixState) -> anyhow::Result<()> {
+        let dir = self.cfg.parent().unwrap();
+
+        // remove complete status and directory
+        for suffix in ["status", "data"] {
+            let path = dir.join(format!("{}-{}", self.name, suffix));
+            if path.exists() {
+                fs::remove_dir_all(&path)
+                    .await
+                    .context(format!("Removing {} failed", path.to_str().unwrap()))?;
+            }
+        }
+        Ok(())
     }
 }

@@ -1,5 +1,7 @@
 pub mod attendees;
 pub mod auth;
+pub mod calbox;
+pub mod calop;
 pub mod cancel;
 pub mod complete;
 pub mod delete;
@@ -8,7 +10,8 @@ pub mod editalarm;
 pub mod help;
 pub mod moveevent;
 pub mod occlist;
-pub mod reload;
+pub mod savecal;
 pub mod setpartstat;
+pub mod syncop;
 pub mod togglecal;
 pub mod toggleexcl;

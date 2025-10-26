@@ -1,0 +1,87 @@
+{% extends "content.htm" %}
+
+{% block inner %}
+
+<div class="ev_border">
+    <h1 id="title" class="ev_header">{{ "Calendars"|t(locale) }}</h1>
+    <table width="100%" class="ev_table">
+        {% for (col_id, col) in collections.iter() %}
+        <tr>
+            <td class="ev_desc" width="40%" style="vertical-align: top">
+                <div>
+                    <b>{{ col_id }}</b>
+                </div>
+
+                <div style="padding-top: .3em">
+                    {% if let Some(email) = col.email() %}
+                    {{ email.name() }} &lt;{{ email.org_address() }}&gt;
+                    {% endif %}
+                </div>
+                <div style="padding-top: .3em">
+                    <a id="delete-button-{{ col_id }}" class="ev_button ev_button_critical">
+                        <i class="bi bi-trash"></i>
+                        <span>{{ "Delete"|t(locale) }}</span>
+                    </a>
+                    {% if col.syncer().supports_reload() %}
+                    <a class="ev_button ev_button_critical"
+                       title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}"
+                       href="javascript:reloadCollection('{{ col_id }}',
+                                                         'reload_spinner_{{ col_id }}')">
+                        <i id="reload_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
+                        <span>{{ "Reload"|t(locale) }}</span>
+                    </a>
+                    {% endif %}
+                    <a class="ev_button ev_button_normal"
+                       href="javascript:syncCollection('{{ col_id }}',
+                                                       'sync_spinner_{{ col_id }}')">
+                        <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
+                        <span>{{ "Sync"|t(locale) }}</span>
+                    </a>
+                    <a class="ev_button ev_button_normal"
+                       href="javascript:gotoWithPrev('/edit-col?id={{ col_id }}')">
+                        <i class="bi bi-pencil"></i>
+                        <span>{{ "Edit"|t(locale) }}</span>
+                    </a>
+                    {% if col.syncer().supports_discover() %}
+                    <a class="ev_button ev_button_normal"
+                       title="{{ "Loads all calendars with their meta data from the server."|t(locale) }}"
+                       href="javascript:discoverCollection('{{ col_id }}',
+                                                           'discover_spinner_{{ col_id }}')">
+                        <i id="discover_spinner_{{ col_id }}" class="bi bi-compass"></i>
+                        <span>{{ "Discover"|t(locale) }}</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </td>
+            <td class="ev_main" width="60%" style="vertical-align: top">
+                <div style="display: flex; flex-direction: column; gap: .3em">
+                    {% for cal in calendars.get(col_id).unwrap() %}
+                    <div id="ev_cal_box_{{ cal.cal().id() }}">
+                        {{ cal|safe }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <fieldset class="ev_form">
+    </fieldset>
+</div>
+
+<script type="text/javascript">
+function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {
+    let url = '/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + mode;
+    if(folder && name && color) {
+        url += '&folder=' + encodeURIComponent(folder);
+        url += '&name=' + encodeURIComponent(name);
+        url += '&color=' + encodeURIComponent(color);
+    }
+    getRequest(url, function(data) {
+        replaceSmoothly('ev_cal_box_' + cal_id, data.html, 150);
+        // TODO reload
+    });
+}
+</script>
+
+{% endblock inner %}

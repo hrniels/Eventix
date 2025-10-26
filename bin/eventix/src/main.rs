@@ -9,7 +9,7 @@ mod pages;
 mod util;
 
 use ajax::{
-    attendees, complete, delete, details, editalarm, occlist, reload, setpartstat, togglecal,
+    attendees, complete, delete, details, editalarm, occlist, setpartstat, syncop, togglecal,
     toggleexcl,
 };
 use axum::{
@@ -32,7 +32,10 @@ use tracing::Level;
 use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt};
 use xdg::BaseDirectories;
 
-use crate::ajax::{auth, cancel, help, moveevent};
+use crate::{
+    ajax::{auth, calbox, calop, cancel, help, moveevent, savecal},
+    pages::calendars,
+};
 
 include!(concat!(env!("OUT_DIR"), "/icons.rs"));
 
@@ -83,10 +86,14 @@ async fn run_server(listener: TcpListener) {
         .merge(setpartstat::router(state.clone()))
         .merge(occlist::router(state.clone()))
         .merge(attendees::router(state.clone()))
-        .merge(reload::router(state.clone()))
+        .merge(syncop::router(state.clone()))
         .merge(editalarm::router(state.clone()))
         .merge(help::router(state.clone()))
         .merge(auth::router(state.clone()))
+        .merge(calendars::router(state.clone()))
+        .merge(calbox::router(state.clone()))
+        .merge(savecal::router(state.clone()))
+        .merge(calop::router(state.clone()))
         .fallback(error_handler)
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,

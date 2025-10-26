@@ -1,9 +1,7 @@
-use eventix_ical::col::CalDir;
 use eventix_state::{CalendarSettings, State};
-use std::sync::Arc;
 
 pub struct Calendar {
-    pub id: Arc<String>,
+    pub id: String,
     pub name: String,
     pub enabled: bool,
     pub sync_error: Option<String>,
@@ -17,20 +15,18 @@ pub struct Calendars(pub Vec<Calendar>);
 impl Calendars {
     pub fn new<F>(state: &State, filter: F) -> Self
     where
-        F: Fn(&CalDir, &CalendarSettings) -> bool,
+        F: Fn(&CalendarSettings) -> bool,
     {
         let mut calendars = state
-            .store()
-            .directories()
-            .iter()
-            .filter_map(|dir| {
-                let settings = state.settings().calendar(dir.id()).unwrap().1;
-                if filter(dir, settings) {
+            .settings()
+            .calendars()
+            .filter_map(|(id, settings)| {
+                if filter(settings) {
                     Some(Calendar {
-                        id: dir.id().clone(),
-                        name: dir.name().clone(),
-                        enabled: !state.misc().calendar_disabled(dir.id()),
-                        sync_error: state.misc().get_sync_error(dir.id()).cloned(),
+                        id: id.clone(),
+                        name: settings.name().clone(),
+                        enabled: !state.misc().calendar_disabled(id),
+                        sync_error: state.misc().get_sync_error(id).cloned(),
                         fgcolor: settings.fgcolor().clone(),
                         bgcolor: settings.bgcolor().clone(),
                     })
