@@ -34,7 +34,7 @@
             {% if let CalendarBox::Known { .. } = cal %}
             <script type="text/javascript">
                 $(function() {
-                    $("#ev_toggle_{{ cal.id() }}").on("click", function() {
+                    $("#ev_toggle_{{ cal.id() }}").off("click").on("click", function() {
                         $(this).one("transitionend", function() {
                             calendarOperation('{{ col_id }}', '{{ cal.id() }}', 'Toggle',
                                               reloadPageIfPossible);
