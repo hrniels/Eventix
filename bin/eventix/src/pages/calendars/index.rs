@@ -1,13 +1,12 @@
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::{
-    extract::{Query, State},
+    extract::State,
     response::{Html, IntoResponse},
 };
 use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
 use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::{CollectionSettings, EventixState, SyncerType};
-use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use tokio::{fs, io::AsyncReadExt};
 use xdg::BaseDirectories;
@@ -20,9 +19,6 @@ use crate::{
     comps::calbox::{CalendarBox, CalendarBoxMode},
     html::filters,
 };
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Request {}
 
 #[derive(Template)]
 #[template(path = "pages/calendars.htm")]
@@ -93,10 +89,7 @@ async fn add_unknown_calendars<'a>(
     Ok(())
 }
 
-pub async fn handler(
-    State(state): State<EventixState>,
-    Query(_req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+pub async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state).await;
 
     let state = state.lock().await;
