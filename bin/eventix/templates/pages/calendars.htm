@@ -26,14 +26,16 @@
                     <a class="ev_button ev_button_critical"
                        title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}"
                        href="javascript:reloadCollection('{{ col_id }}',
-                                                         'reload_spinner_{{ col_id }}')">
+                                                         'reload_spinner_{{ col_id }}',
+                                                         reloadPageIfPossible)">
                         <i id="reload_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Reload"|t(locale) }}</span>
                     </a>
                     {% endif %}
                     <a class="ev_button ev_button_normal"
                        href="javascript:syncCollection('{{ col_id }}',
-                                                       'sync_spinner_{{ col_id }}')">
+                                                       'sync_spinner_{{ col_id }}',
+                                                       reloadPageIfPossible)">
                         <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Sync"|t(locale) }}</span>
                     </a>
@@ -46,7 +48,8 @@
                     <a class="ev_button ev_button_normal"
                        title="{{ "Loads all calendars with their meta data from the server."|t(locale) }}"
                        href="javascript:discoverCollection('{{ col_id }}',
-                                                           'discover_spinner_{{ col_id }}')">
+                                                           'discover_spinner_{{ col_id }}',
+                                                           reloadPageIfPossible)">
                         <i id="discover_spinner_{{ col_id }}" class="bi bi-compass"></i>
                         <span>{{ "Discover"|t(locale) }}</span>
                     </a>
@@ -80,16 +83,13 @@
 </div>
 
 <script type="text/javascript">
-    function addCalendar(col_id) {
-        const folder = $('#folder_' + col_id);
-        const url = '/api/calendars/addcal?col_id=' + col_id + '&folder=' + folder.val();
-        postRequest(url, function(data) {
-            // TODO reload
-        });
+    function reloadPageIfPossible() {
+        requestReload('out-of-sync', !userIsBusy());
     }
 
     function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {
-        let url = '/api/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + mode;
+        const rmode = mode == 'Cancel' ? 'View' : mode;
+        let url = '/api/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + rmode;
         if(folder && name && color) {
             url += '&folder=' + encodeURIComponent(folder);
             url += '&name=' + encodeURIComponent(name);
@@ -97,8 +97,19 @@
         }
         getRequest(url, function(data) {
             replaceSmoothly('ev_cal_box_' + cal_id, data.html, 150);
-            // TODO reload
+            if(mode == 'Edit')
+                openForm();
+            else
+                closeForm();
+            if(outOfSync || mode == 'View')
+                reloadPageIfPossible();
         });
+    }
+
+    function addCalendar(col_id) {
+        const folder = $('#folder_' + col_id);
+        const url = '/api/calendars/addcal?col_id=' + col_id + '&folder=' + folder.val();
+        postRequest(url, reloadPageIfPossible);
     }
 </script>
 

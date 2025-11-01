@@ -1,9 +1,14 @@
 let popupOpen = false;
 let formPage = false;
 let keyMouse = false;
+let openForms = 0;
+
+function userIsBusy() {
+    return popupOpen || formPage || openForms > 0;
+}
 
 function userIsActive() {
-    return popupOpen || formPage || keyMouse;
+    return userIsBusy() || openForms > 0;
 }
 
 function setFormPage(val) {
@@ -12,6 +17,14 @@ function setFormPage(val) {
 
 function setPopupOpen(val) {
     popupOpen = val;
+}
+
+function openForm() {
+    openForms += 1;
+}
+
+function closeForm() {
+    openForms -= 1;
 }
 
 function trackActivity() {

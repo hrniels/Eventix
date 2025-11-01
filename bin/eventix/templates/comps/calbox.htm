@@ -36,7 +36,8 @@
                 $(function() {
                     $("#ev_toggle_{{ cal.id() }}").on("click", function() {
                         $(this).one("transitionend", function() {
-                            calendarOperation('{{ col_id }}', '{{ cal.id() }}', 'Toggle');
+                            calendarOperation('{{ col_id }}', '{{ cal.id() }}', 'Toggle',
+                                              reloadPageIfPossible);
                         });
                     });
                 });
@@ -60,18 +61,30 @@
             {% if mode == CalendarBoxMode::View %}
             {% if let CalendarBox::Known { id: cal_id, .. } = cal %}
             <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_critical"
-                   href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}', 'Delete')"
-                   title="{{ "Warning: removes all local items and forgets the calendar settings. Local changes will be lost."|t(locale) }}">
+                <a href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}', 'Delete',
+                                                      reloadPageIfPossible)"
+                   {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                   class="ev_button ev_button_normal"
+                   {% else %}
+                   class="ev_button ev_button_critical"
+                   title="{{ "Warning: removes all local items and forgets the calendar settings. Local changes will be lost."|t(locale) }}"
+                   {% endif %}
+                   >
                     <i class="bi bi-trash"></i>
                     <span>{{ "Delete"|t(locale) }}</span>
                 </a>
             </div>
             <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_critical"
-                   href="javascript:reloadCalendar('{{ col_id }}', '{{ cal_id }}',
-                                                   'reload_calendar_{{ cal_id }}')"
-                   title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}">
+                <a href="javascript:reloadCalendar('{{ col_id }}', '{{ cal_id }}',
+                                                   'reload_calendar_{{ cal_id }}',
+                                                    reloadPageIfPossible)"
+                   {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                   class="ev_button ev_button_normal"
+                   {% else %}
+                   class="ev_button ev_button_critical"
+                   title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}"
+                   {% endif %}
+                   >
                     <i id="reload_calendar_{{ cal_id }}" class="bi bi-arrow-clockwise"></i>
                     <span>{{ "Reload"|t(locale) }}</span>
                 </a>
@@ -94,7 +107,7 @@
             {% else %}
             <div class="ev_cal_box_right_item">
                 <a class="ev_button ev_button_normal"
-                   href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'View',
+                   href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'Cancel',
                                                  '{{ cal.folder() }}', '{{ cal.name() }}',
                                                  '{{ cal.bgcolor() }}')">
                     <i class="bi bi-x-circle"></i>

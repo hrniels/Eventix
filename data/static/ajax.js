@@ -72,7 +72,7 @@ function toggleCalendar(id) {
     postRequest('/api/togglecal?id=' + id, reloadPage);
 }
 
-function calendarOperation(col_id, cal_id, op) {
+function calendarOperation(col_id, cal_id, op, onsuccess) {
     const url =  '/api/calendars/calop?col_id=' + col_id + '&cal_id=' + cal_id + '&op=' + op;
-    postRequest(url, reloadPage);
+    postRequest(url, onsuccess);
 }

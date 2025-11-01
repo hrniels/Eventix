@@ -2,27 +2,34 @@ let syncForce = false;
 let syncing = false;
 let outOfSync = false;
 
-function discoverCollection(col_id, spinnerId) {
+function postWithSpinner(spinnerId, url, onsuccess) {
     $('#' + spinnerId).addClass('ev_spin');
-    postRequest('/api/calendars/syncop?op[type]=DiscoverCollection&op[data][col_id]=' + col_id, reloadPage);
+    postRequest(url, function(data) {
+        $('#' + spinnerId).removeClass('ev_spin');
+        onsuccess(data);
+    });
 }
 
-function syncCollection(col_id, spinnerId) {
-    $('#' + spinnerId).addClass('ev_spin');
-    postRequest('/api/calendars/syncop?op[type]=SyncCollection&op[data][col_id]=' + col_id, reloadPage);
+function discoverCollection(col_id, spinnerId, onsuccess) {
+    const url = '/api/calendars/syncop?op[type]=DiscoverCollection&op[data][col_id]=' + col_id;
+    postWithSpinner(spinnerId, url, onsuccess);
 }
 
-function reloadCollection(col_id, spinnerId) {
-    $('#' + spinnerId).addClass('ev_spin');
-    postRequest('/api/calendars/syncop?op[type]=ReloadCollection&op[data][col_id]=' + col_id, reloadPage);
+function syncCollection(col_id, spinnerId, onsuccess) {
+    const url = '/api/calendars/syncop?op[type]=SyncCollection&op[data][col_id]=' + col_id;
+    postWithSpinner(spinnerId, url, onsuccess);
 }
 
-function reloadCalendar(col_id, cal_id, spinnerId) {
-    $('#' + spinnerId).addClass('ev_spin');
+function reloadCollection(col_id, spinnerId, onsuccess) {
+    const url = '/api/calendars/syncop?op[type]=ReloadCollection&op[data][col_id]=' + col_id;
+    postWithSpinner(spinnerId, url, onsuccess);
+}
+
+function reloadCalendar(col_id, cal_id, spinnerId, onsuccess) {
     let url = '/api/calendars/syncop?op[type]=ReloadCalendar';
     url += '&op[data][col_id]=' + col_id;
     url += '&op[data][cal_id]=' + cal_id;
-    postRequest(url, reloadPage);
+    postWithSpinner(spinnerId, url, onsuccess);
 }
 
 function reloadDBEvery(period, lastReloadId, spinnerId, iconId) {
@@ -47,14 +54,12 @@ function reloadDB(lastReloadId, spinnerId, iconId, force, auth_url) {
 
     syncing = true;
     syncForce = force;
-    $('#' + spinnerId).addClass('ev_spin');
 
     let url = '/api/calendars/syncop?op[type]=ReloadAll';
     if(auth_url)
         url += '&auth_url=' + encodeURIComponent(auth_url);
 
-    postRequest(url, function(data) {
-        $('#' + spinnerId).removeClass('ev_spin');
+    postWithSpinner(spinnerId, url, function(data) {
         $('#' + lastReloadId).html(data.date);
         let auth = false;
         for(var cal in data.calendars) {
