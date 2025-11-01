@@ -17,3 +17,5 @@ tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true
 xdg.workspace = true
+
+percent-encoding = "2.3.2"

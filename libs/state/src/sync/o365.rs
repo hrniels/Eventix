@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -38,8 +39,12 @@ impl O365 {
         // generate properties file
         let props_path = Self::generate_props(xdg, &col_id, port, &auth.user, token).await?;
 
+        // build URL
+        let user_enc = utf8_percent_encode(&auth.user, NON_ALPHANUMERIC).to_string();
+        let col_enc = utf8_percent_encode(&col_id, NON_ALPHANUMERIC).to_string();
+        let url = format!("http://localhost:{}/users/{}/{}/", port, user_enc, col_enc);
+
         // create vdirsyncer instance
-        let url = format!("http://localhost:{}/users/{}/{}/", port, auth.user, col_id);
         let vdirsyncer =
             VDirSyncer::new(xdg, col_id.clone(), folder_id, url, read_only, Some(auth)).await?;
 

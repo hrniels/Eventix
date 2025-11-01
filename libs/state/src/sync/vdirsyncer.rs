@@ -81,6 +81,10 @@ impl VDirSyncer {
         })
     }
 
+    fn escape_value(val: &str) -> String {
+        val.replace('"', "\\\"")
+    }
+
     async fn generate_config(
         xdg: &BaseDirectories,
         name: &String,
@@ -96,6 +100,9 @@ impl VDirSyncer {
         let status_path = dir.join(format!("{}-status", name));
         let sync_path = dir.join(format!("{}-data", name));
         let cfg_path = dir.join(format!("{}.cfg", name));
+
+        let name = Self::escape_value(name);
+        let url = Self::escape_value(&url);
 
         let mut cfg = File::options()
             .create(true)
@@ -137,11 +144,14 @@ impl VDirSyncer {
         cfg.write_all(format!("read_only = {}\n", read_only).as_bytes())
             .await?;
         if let Some(auth) = auth {
-            cfg.write_all(format!("username = \"{}\"\n", auth.user).as_bytes())
-                .await?;
+            cfg.write_all(
+                format!("username = \"{}\"\n", Self::escape_value(&auth.user)).as_bytes(),
+            )
+            .await?;
             cfg.write_all(b"password.fetch = [\"command\"").await?;
             for comp in &auth.pw_cmd {
-                cfg.write_all(format!(", \"{}\"", comp).as_bytes()).await?;
+                cfg.write_all(format!(", \"{}\"", Self::escape_value(comp)).as_bytes())
+                    .await?;
             }
             cfg.write_all(b"]\n").await?;
         } else {

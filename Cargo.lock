@@ -688,6 +688,7 @@ dependencies = [
  "eventix-ical",
  "eventix-locale",
  "once_cell",
+ "percent-encoding",
  "serde",
  "tempfile",
  "tokio",
