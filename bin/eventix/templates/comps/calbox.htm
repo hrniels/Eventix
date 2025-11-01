@@ -1,17 +1,7 @@
 <script type="text/javascript">
     function submitForm() {
-        const form = $('#savecal_{{ cal.id() }}');
-
-        $.ajax({
-            url: form.attr('action'),
-            type: form.attr('method'),
-            data: form.serialize(),
-            success: function(response) {
-                reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'View');
-            },
-            error: function(xhr, status, error) {
-                console.log(error);
-            }
+        formRequest('savecal_{{ cal.id() }}', function() {
+            reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'View');
         });
     }
 </script>

@@ -3,7 +3,6 @@ function handleAJAXError(jqXHR, textStatus, errorThrown) {
     console.log(msg);
 }
 
-
 function getRequest(url, success) {
     $.ajax({
         type: 'GET',
@@ -19,6 +18,17 @@ function postRequest(url, success) {
         type: 'POST',
         url: url,
         dataType: 'json',
+        success: success,
+        error: handleAJAXError,
+    });
+}
+
+function formRequest(id, success) {
+    const form = $('#' + id);
+    $.ajax({
+        url: form.attr('action'),
+        type: form.attr('method'),
+        data: form.serialize(),
         success: success,
         error: handleAJAXError,
     });
