@@ -74,6 +74,15 @@
                         <i class="bi bi-plus-square"></i>
                         <span>{{ "Add"|t(locale) }}</span>
                     </a>
+                    <script type="text/javascript">
+                        $('#folder_{{ col_id }}').keypress(function(e) {
+                            if(e.which == 13) {
+                                addCalendar('{{ col_id }}');
+                                // stop propagation
+                                return false;
+                            }
+                        });
+                    </script>
                 </div>
                 {% endif %}
             </td>
