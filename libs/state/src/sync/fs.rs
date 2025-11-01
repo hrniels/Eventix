@@ -59,10 +59,11 @@ impl Syncer for FSSyncer {
     }
 
     async fn delete_cal(&mut self, _state: EventixState, _cal_id: &String) -> anyhow::Result<()> {
-        Err(anyhow!("Delete is not supported"))
+        // in this case we keep the data as there is no server side we could get it back from
+        Ok(())
     }
 
     async fn delete(&mut self, _state: EventixState) -> anyhow::Result<()> {
-        Err(anyhow!("Delete is not supported"))
+        Ok(())
     }
 }

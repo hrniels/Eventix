@@ -761,6 +761,13 @@ span.ev_cal_src_disabled {
     vertical-align: middle;
 }
 
+.ev_add_cal {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: .3em;
+}
+
 /* ------------ JQUERY ------------ */
 
 .bi-check-circle {

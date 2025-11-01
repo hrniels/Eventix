@@ -61,27 +61,45 @@
                     </div>
                     {% endfor %}
                 </div>
+
+                {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                <div class="ev_padtop ev_add_cal">
+                    <span>{{ "Folder"|t(locale) }}:</span>
+                    <input id="folder_{{ col_id }}" type="text" name="folder" size="20" />
+                    <a class="ev_button ev_button_normal"
+                       href="javascript:addCalendar('{{ col_id }}')">
+                        <i class="bi bi-plus-square"></i>
+                        <span>{{ "Add"|t(locale) }}</span>
+                    </a>
+                </div>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
     </table>
-    <fieldset class="ev_form">
-    </fieldset>
 </div>
 
 <script type="text/javascript">
-function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {
-    let url = '/api/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + mode;
-    if(folder && name && color) {
-        url += '&folder=' + encodeURIComponent(folder);
-        url += '&name=' + encodeURIComponent(name);
-        url += '&color=' + encodeURIComponent(color);
+    function addCalendar(col_id) {
+        const folder = $('#folder_' + col_id);
+        const url = '/api/calendars/addcal?col_id=' + col_id + '&folder=' + folder.val();
+        postRequest(url, function(data) {
+            // TODO reload
+        });
     }
-    getRequest(url, function(data) {
-        replaceSmoothly('ev_cal_box_' + cal_id, data.html, 150);
-        // TODO reload
-    });
-}
+
+    function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {
+        let url = '/api/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + mode;
+        if(folder && name && color) {
+            url += '&folder=' + encodeURIComponent(folder);
+            url += '&name=' + encodeURIComponent(name);
+            url += '&color=' + encodeURIComponent(color);
+        }
+        getRequest(url, function(data) {
+            replaceSmoothly('ev_cal_box_' + cal_id, data.html, 150);
+            // TODO reload
+        });
+    }
 </script>
 
 {% endblock inner %}
