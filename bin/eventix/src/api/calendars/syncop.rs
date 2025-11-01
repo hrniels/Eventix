@@ -6,9 +6,9 @@ use eventix_state::{EventixState, SyncCalResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::api::JsonError;
 use crate::extract::MultiQuery;
 use crate::html;
-use crate::pages::error::HTMLError;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -42,7 +42,7 @@ pub fn router(state: EventixState) -> Router {
 async fn handler(
     State(state): State<EventixState>,
     MultiQuery(req): MultiQuery<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let locale = state.lock().await.settings().locale();
 
     let sync_res = match req.op {
