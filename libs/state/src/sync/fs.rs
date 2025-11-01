@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::MutexGuard;
@@ -18,10 +17,10 @@ impl FSSyncer {
     }
 
     fn sync_folder(state: &mut MutexGuard<'_, State>, id: &String) -> anyhow::Result<bool> {
-        let dir = state
-            .store_mut()
-            .directory_mut(&Arc::new(id.clone()))
-            .ok_or_else(|| anyhow!("directory '{}' does not exist", id))?;
+        let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.clone())) else {
+            // if we don't know this directory, the calendar is disabled - so, do nothing
+            return Ok(false);
+        };
 
         let mut seen_changes = false;
         seen_changes |= dir.rescan_for_additions()?;

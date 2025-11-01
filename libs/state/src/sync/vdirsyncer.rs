@@ -323,9 +323,13 @@ impl Syncer for VDirSyncer {
             let state = state.lock().await;
             let col = state.settings().collections().get(&self.name).unwrap();
             let (_, cal) = col
-                .calendars()
+                .all_calendars()
+                .iter()
                 .find(|(id, _settings)| *id == cal_id)
                 .ok_or_else(|| anyhow!("No calendar with id {}", cal_id))?;
+            if !cal.enabled() {
+                return Ok(SyncCalResult::Success(false));
+            }
             vec![format!("{}/{}", self.name, cal.folder())]
         };
 
