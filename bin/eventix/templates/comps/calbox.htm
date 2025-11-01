@@ -82,10 +82,11 @@
                    href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'Edit',
                                                  '{{ cal.folder() }}', '{{ cal.name() }}',
                                                  '{{ cal.bgcolor() }}')">
-                    <i class="bi bi-pencil"></i>
                     {% if let CalendarBox::Known { .. } = cal %}
+                    <i class="bi bi-pencil"></i>
                     <span>{{ "Edit"|t(locale) }}</span>
                     {% else %}
+                    <i class="bi bi-plus-square"></i>
                     <span>{{ "Add"|t(locale) }}</span>
                     {% endif %}
                 </a>
