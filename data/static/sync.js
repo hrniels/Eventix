@@ -20,7 +20,7 @@ function reloadCollection(col_id, spinnerId) {
 function reloadCalendar(col_id, cal_id, spinnerId) {
     $('#' + spinnerId).addClass('ev_spin');
     let url = '/api/calendars/syncop?op[type]=ReloadCalendar';
-    url += '&op[data][col_d]=' + col_id;
+    url += '&op[data][col_id]=' + col_id;
     url += '&op[data][cal_id]=' + cal_id;
     postRequest(url, reloadPage);
 }
