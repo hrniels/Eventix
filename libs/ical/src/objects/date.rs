@@ -37,7 +37,7 @@ impl From<CalCompType> for CalDateType {
 ///
 /// Dates in iCalendar objects come in two forms: date and datetime. The former specifies a day,
 /// whereas the latter specifies a day and a time.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub enum CalDate {
     /// Specifies a date.
     ///
@@ -202,6 +202,16 @@ impl From<DateTime<Tz>> for CalDate {
         ))
     }
 }
+
+impl PartialEq for CalDate {
+    fn eq(&self, other: &Self) -> bool {
+        let a = self.as_start_with_tz(&chrono_tz::UTC);
+        let b = other.as_start_with_tz(&chrono_tz::UTC);
+        a == b
+    }
+}
+
+impl Eq for CalDate {}
 
 impl PartialOrd for CalDate {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
