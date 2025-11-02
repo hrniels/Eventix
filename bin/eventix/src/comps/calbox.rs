@@ -133,7 +133,12 @@ impl<'a> CalendarBoxTemplate<'a> {
             cal,
             mode,
             alarm_type,
-            personal: AlarmConfigTemplate::new(locale.clone(), String::from("alarms"), personal),
+            personal: AlarmConfigTemplate::new(
+                locale.clone(),
+                String::from("alarms"),
+                personal,
+                false,
+            ),
             locale,
         }
     }

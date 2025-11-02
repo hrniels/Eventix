@@ -26,6 +26,7 @@
             </script>
         </td>
     </tr>
+    {% if let Some(datetime) = datetime %}
     <tr>
         <td>
             <input type="radio" id="{{ id }}_absolute" name="{{ name }}[trigger]" value="ABSOLUTE"
@@ -34,4 +35,5 @@
         </td>
         <td>{{ datetime|safe }}</td>
     </tr>
+    {% endif %}
 </table>

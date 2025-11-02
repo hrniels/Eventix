@@ -87,6 +87,7 @@ impl<'a> AlarmTemplate<'a> {
                 locale.clone(),
                 format!("{name}[calendar]"),
                 Some(value.calendar),
+                true,
             ),
             personal: if personal {
                 Some(PersonalAlarms {
@@ -96,6 +97,7 @@ impl<'a> AlarmTemplate<'a> {
                         locale.clone(),
                         format!("{name}[personal]"),
                         value.personal,
+                        true,
                     ),
                 })
             } else {

@@ -244,7 +244,7 @@ pub struct AlarmConfigTemplate {
     duration: u64,
     durunit: ComboboxTemplate<DurUnit>,
     durtype: ComboboxTemplate<DurType>,
-    datetime: DateTimeTemplate,
+    datetime: Option<DateTimeTemplate>,
 }
 
 impl AlarmConfigTemplate {
@@ -252,6 +252,7 @@ impl AlarmConfigTemplate {
         locale: Arc<dyn Locale + Send + Sync>,
         name: String,
         value: Option<AlarmConfig>,
+        absolute: bool,
     ) -> Self {
         let value = value.unwrap_or_default();
         Self {
@@ -270,7 +271,14 @@ impl AlarmConfigTemplate {
                 format!("{}[durtype]", &name),
                 Some(value.durtype),
             ),
-            datetime: DateTimeTemplate::new(format!("{name}[datetime]"), value.datetime),
+            datetime: if absolute {
+                Some(DateTimeTemplate::new(
+                    format!("{name}[datetime]"),
+                    value.datetime,
+                ))
+            } else {
+                None
+            },
             id: name.replace("[", "_").replace("]", "_"),
             name,
             locale,

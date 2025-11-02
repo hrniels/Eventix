@@ -80,7 +80,12 @@ impl<'a> EditAlarmTemplate<'a> {
             rid: rid.clone(),
             rid_str: rid.unwrap_or_default(),
             overwrite: personal.is_some(),
-            config: AlarmConfigTemplate::new(locale.clone(), String::from("personal"), config),
+            config: AlarmConfigTemplate::new(
+                locale.clone(),
+                String::from("personal"),
+                config,
+                true,
+            ),
             personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
             locale,
             occ: day_occ,
