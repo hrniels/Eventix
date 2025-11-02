@@ -15,11 +15,11 @@ use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::api::JsonError;
 use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::partstat::PartStatTemplate;
 use crate::html::filters;
 use crate::objects::DayOccurrence;
-use crate::api::JsonError;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
@@ -30,7 +30,7 @@ enum Direction {
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    date: String,
+    date: CalDate,
     dir: Direction,
     count: usize,
 }
@@ -38,7 +38,7 @@ pub struct Request {
 #[derive(Debug, Serialize)]
 struct Response {
     html: String,
-    date: Option<String>,
+    date: Option<CalDate>,
 }
 
 pub fn router(state: EventixState) -> Router {
@@ -83,7 +83,7 @@ impl<'a> ListOccurrence<'a> {
             partstat,
             edit_modes: EditModesTemplate::new(
                 locale.clone(),
-                format!("edit-{}-{}", occ.uid(), occ.rid_html()),
+                format!("edit-{}-{}", occ.uid(), occ.rid_js()),
                 occ.uid().clone(),
                 occ.rid_html(),
             ),
@@ -136,11 +136,7 @@ pub async fn handler(
     let state = state.lock().await;
     let locale = state.settings().locale();
 
-    let date = req
-        .date
-        .parse::<CalDate>()
-        .context(format!("Invalid date: {}", req.date))?
-        .as_start_with_tz(locale.timezone());
+    let date = req.date.as_start_with_tz(locale.timezone());
 
     let file = state
         .store()
@@ -205,10 +201,9 @@ pub async fn handler(
 
     let date = if more {
         match req.dir {
-            Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_end()),
-            Direction::Backwards => occs.first().and_then(|l| l.occurrence_start()),
+            Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_enddate()),
+            Direction::Backwards => occs.first().and_then(|l| l.occurrence_startdate()),
         }
-        .map(|d| d.to_utc().format("%Y%m%dT%H%M%SZ").to_string())
     } else {
         None
     };
@@ -223,3 +218,4 @@ pub async fn handler(
 
     Ok(Json(Response { html, date }))
 }
+

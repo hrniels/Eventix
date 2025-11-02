@@ -179,16 +179,26 @@ impl<'a> DayOccurrence<'a> {
 
     pub fn rid_html(&self) -> String {
         match self.inner.rid() {
-            Some(rid) => rid.clone().to_utc().to_string(),
+            Some(rid) => rid.to_string(),
             None if self.inner.is_recurrent() => {
-                if let Some(start) = self.inner.occurrence_start() {
-                    start.to_utc().format("%Y%m%dT%H%M%SZ").to_string()
+                if let Some(start) = self.inner.occurrence_startdate() {
+                    start.to_string()
                 } else {
                     String::new()
                 }
             }
             None => String::new(),
         }
+    }
+
+    pub fn rid_js(&self) -> String {
+        self.rid_html()
+            .chars()
+            .map(|c| match c {
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => c,
+                _ => '_',
+            })
+            .collect()
     }
 
     pub fn status_class(&self) -> Option<String> {

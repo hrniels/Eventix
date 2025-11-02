@@ -1,7 +1,6 @@
 {% if edit %}
 
 <form id="alarm-form" method="post" action="/api/items/editalarm">
-    <input id="target_url" type="hidden" name="target_url" value="" />
     <input type="hidden" name="uid" value="{{ uid }}" />
     {% if let Some(rid) = rid %}
     <input type="hidden" name="rid" value="{{ rid }}" />
@@ -16,7 +15,7 @@
         {{ config|safe }}
     </div>
     <a class="ev_button ev_button_normal"
-       href="javascript:$('#alarm-form').submit()">
+       href="javascript:formRequest('alarm-form', reloadPage)">
         <span>{{ "Save"|t(locale) }}</span>
     </a>
     <a class="ev_button ev_button_normal"
@@ -26,8 +25,6 @@
 </form>
 
 <script type="text/javascript">
-    $('#target_url').val(document.location.href);
-
     $("#personal_overwrite").click(function() {
         setPersonalOverwrite('personal', this.checked)
     });

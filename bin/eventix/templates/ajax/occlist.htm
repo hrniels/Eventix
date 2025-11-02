@@ -1,5 +1,5 @@
 {% for occ in occs %}
-<tr id="occrow_{{ occ.rid_html() }}">
+<tr id="occrow_{{ occ.rid_js() }}">
     <td style="height: 2em">
         &bull;&nbsp;
         <span class="ev_summary
@@ -36,7 +36,9 @@
         {% if occ.organizer().is_some() %}
         {% if occ.status_class() != Some(String::from("Cancelled")) %}
         <a style="float: right; width: 70px" class="ev_button ev_button_critical"
-           href="javascript:cancelAndRefresh('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+           href="javascript:cancelAndRefresh('{{ occ.uid() }}',
+                                             '{{ occ.rid_html() }}',
+                                             '{{ occ.rid_js() }}')">
             <i class="bi bi-dash-circle"></i>
             <span>{{ "Cancel"|t(locale) }}</span>
         </a>
@@ -44,7 +46,9 @@
         {% else %}
         <a style="float: right; width: 70px"
            class="ev_button ev_button_normal"
-           href="javascript:toggleExclAndRefresh('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+           href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
+                                                 '{{ occ.rid_html() }}',
+                                                 '{{ occ.rid_js() }}')">
             {% if !occ.is_excluded() %}
             <i class="bi bi-dash-circle"></i>
             <span>{{ "Exclude"|t(locale) }}</span>
@@ -56,9 +60,9 @@
         {% endif %}
         {% else %}
         {% if personal_alarms %}
-        <a id="alarm-button-{{ occ.uid() }}-{{ occ.rid_html() }}"
+        <a id="alarm-button-{{ occ.uid() }}-{{ occ.rid_js() }}"
            style="float: right; width: 60px" class="ev_button ev_button_normal"
-           href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_html() }}',
+           href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_js() }}',
                                        '{{ occ.uid() }}', '{{ occ.rid_html() }}')">
             <i class="bi bi-pencil"></i>
             <span>{{ "Alarms"|t(locale) }}</span>
@@ -74,7 +78,9 @@
         {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
         <a style="float: right"
            class="ev_button ev_button_good"
-           href="javascript:completeTodoAndRefresh('{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+           href="javascript:completeTodoAndRefresh('{{ occ.uid() }}',
+                                                   '{{ occ.rid_html() }}',
+                                                   '{{ occ.rid_js() }}')">
             <i class="bi bi-check-lg"></i>
             <span>{{ "Complete"|t(locale) }}</span>
         </a>

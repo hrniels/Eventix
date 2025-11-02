@@ -16,12 +16,30 @@ use super::CalCompType;
 /// 2025-02-23) and ends at the start of 2025-02-24. For TODOs however, the due date is
 /// "inclusive". For example, if the due date is 2025-02-23, the TODO is due until the *end* of
 /// that day.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum CalDateType {
     /// The date is inclusive, meaning that the event ends *after* that date.
     Inclusive,
     /// The date is exclusive, meaning that the event ends *before* that date.
     Exclusive,
+}
+
+impl fmt::Display for CalDateType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl FromStr for CalDateType {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Inclusive" => Ok(Self::Inclusive),
+            "Exclusive" => Ok(Self::Exclusive),
+            _ => Err(ParseError::InvalidDate(s.to_string())),
+        }
+    }
 }
 
 impl From<CalCompType> for CalDateType {
@@ -203,6 +221,44 @@ impl From<DateTime<Tz>> for CalDate {
     }
 }
 
+impl FromStr for CalDate {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.chars().next() {
+            Some('D') => {
+                let mut parts = s[1..].splitn(2, ';');
+                let d = parts
+                    .next()
+                    .unwrap()
+                    .parse::<NaiveDate>()
+                    .map_err(|_| ParseError::MalformedDate(s.to_string()))?;
+                let ty = parts
+                    .next()
+                    .unwrap()
+                    .parse::<CalDateType>()
+                    .map_err(|_| ParseError::MalformedDate(s.to_string()))?;
+                Ok(CalDate::Date(d, ty))
+            }
+            Some('T') => Ok(CalDate::DateTime(
+                s[1..]
+                    .parse()
+                    .map_err(|_| ParseError::MalformedDate(s.to_string()))?,
+            )),
+            _ => Err(ParseError::MalformedDate(s.to_string())),
+        }
+    }
+}
+
+impl fmt::Display for CalDate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Date(date, ty) => write!(f, "D{};{}", date, ty),
+            Self::DateTime(dt) => write!(f, "T{}", dt),
+        }
+    }
+}
+
 impl PartialEq for CalDate {
     fn eq(&self, other: &Self) -> bool {
         let a = self.as_start_with_tz(&chrono_tz::UTC);
@@ -227,14 +283,8 @@ impl Ord for CalDate {
     }
 }
 
-impl fmt::Display for CalDate {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_prop("D").value())
-    }
-}
-
 /// An iCalendar date in datetime format.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum CalDateTime {
     /// The datetime is floating in the sense that the date/time is always the same, independent of
     /// the timezone of the user. For example, if it was created for 8 AM by a user in UTC, it will
@@ -318,29 +368,47 @@ impl CalDateTime {
     }
 }
 
-impl fmt::Display for CalDateTime {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Floating(date) => write!(f, "{}", date.format("%Y%m%dT%H%M%S")),
-            Self::Utc(datetime) => write!(f, "{}", datetime.format("%Y%m%dT%H%M%SZ")),
-            Self::Timezone(datetime, tz) => {
-                write!(
-                    f,
-                    "TZID={}:{}",
-                    tz,
-                    datetime.format("TZID={}:%Y%m%dT%H%M%S")
-                )
+impl FromStr for CalDateTime {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.chars().next() {
+            Some('F') => {
+                let date = s[1..]
+                    .parse::<NaiveDateTime>()
+                    .map_err(|_| ParseError::MalformedDate("foo".to_owned() + &s.to_string()))?;
+                Ok(CalDateTime::Floating(date))
             }
+            Some('U') => {
+                let date = s[1..]
+                    .parse::<NaiveDateTime>()
+                    .map_err(|_| ParseError::MalformedDate(s.to_string()))?;
+                Ok(CalDateTime::Utc(date.and_utc()))
+            }
+            Some('T') => {
+                let mut parts = s[1..].splitn(2, ';');
+                let tz = parts.next().unwrap().to_string();
+                let dt = parts
+                    .next()
+                    .unwrap()
+                    .parse::<NaiveDateTime>()
+                    .map_err(|_| ParseError::MalformedDate(s.to_string()))?;
+                Ok(CalDateTime::Timezone(dt, tz))
+            }
+            _ => Err(ParseError::MalformedDate(s.to_string())),
         }
     }
 }
 
-impl FromStr for CalDate {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let prop = format!("X:{s}").parse::<Property>()?;
-        prop.try_into()
+impl fmt::Display for CalDateTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Floating(date) => write!(f, "F{}", date.format("%Y-%m-%dT%H:%M:%S")),
+            Self::Utc(datetime) => write!(f, "U{}", datetime.format("%Y-%m-%dT%H:%M:%S")),
+            Self::Timezone(datetime, tz) => {
+                write!(f, "T{};{}", tz, datetime.format("%Y-%m-%dT%H:%M:%S"))
+            }
+        }
     }
 }
 
@@ -460,5 +528,54 @@ mod tests {
             .and_then(|d| d.and_hms_opt(0, 23, 10))
             .unwrap();
         assert_eq!(date, CalDate::DateTime(CalDateTime::Floating(expected)));
+    }
+
+    #[test]
+    fn ser_date() {
+        let date = CalDate::Date(
+            NaiveDate::from_ymd_opt(1967, 10, 22).unwrap(),
+            CalDateType::Inclusive,
+        );
+        let date_str = date.to_string();
+        let str_date = date_str.parse().unwrap();
+        assert_eq!(date, str_date);
+    }
+
+    #[test]
+    fn ser_datetime_floating() {
+        let date = CalDate::DateTime(CalDateTime::Floating(
+            NaiveDate::from_ymd_opt(1967, 10, 22)
+                .and_then(|d| d.and_hms_opt(10, 16, 22))
+                .unwrap(),
+        ));
+        let date_str = date.to_string();
+        let str_date = date_str.parse().unwrap();
+        assert_eq!(date, str_date);
+    }
+
+    #[test]
+    fn ser_datetime_tz() {
+        let date = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(1967, 10, 22)
+                .and_then(|d| d.and_hms_opt(10, 16, 22))
+                .unwrap(),
+            "Europe/Berlin".to_string(),
+        ));
+        let date_str = date.to_string();
+        let str_date = date_str.parse().unwrap();
+        assert_eq!(date, str_date);
+    }
+
+    #[test]
+    fn ser_datetime_utc() {
+        let date = CalDate::DateTime(CalDateTime::Utc(
+            NaiveDate::from_ymd_opt(1967, 10, 22)
+                .and_then(|d| d.and_hms_opt(10, 16, 22))
+                .unwrap()
+                .and_utc(),
+        ));
+        let date_str = date.to_string();
+        let str_date = date_str.parse().unwrap();
+        assert_eq!(date, str_date);
     }
 }

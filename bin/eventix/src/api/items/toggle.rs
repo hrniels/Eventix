@@ -13,7 +13,7 @@ use crate::util;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: String,
+    rid: CalDate,
 }
 
 #[derive(Debug, Serialize)]
@@ -35,11 +35,6 @@ pub async fn handler(
 
     let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 
-    let date = form
-        .rid
-        .parse::<CalDate>()
-        .context(format!("Invalid rid date: {}", form.rid))?;
-
     let base = file
         .component_with_mut(|c| c.rid().is_none() && c.uid() == &form.uid)
         .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
@@ -48,7 +43,7 @@ pub async fn handler(
         return Err(anyhow!("No edit permission").into());
     }
 
-    base.toggle_exclude(date);
+    base.toggle_exclude(form.rid);
     base.set_last_modified(CalDate::now());
     base.set_stamp(CalDate::now());
     file.save()
@@ -56,3 +51,4 @@ pub async fn handler(
 
     Ok(Json(Response {}))
 }
+

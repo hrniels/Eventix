@@ -72,30 +72,30 @@
         Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
     }
 
-    function refreshRow(uid, rid) {
+    function refreshRow(uid, rid, rid_js) {
         loadOccs(uid, rid, 'Forward', 1, function(data) {
-            let row = document.getElementById('occrow_' + rid);
+            let row = document.getElementById('occrow_' + rid_js);
             let prev = row.previousSibling;
             row.remove();
             $(prev).after(data.html);
         });
     }
 
-    function toggleExclAndRefresh(uid, rid) {
+    function toggleExclAndRefresh(uid, rid, rid_js) {
         toggleExcl(uid, rid, function(data) {
-            refreshRow(uid, rid);
+            refreshRow(uid, rid, rid_js);
         });
     }
 
-    function cancelAndRefresh(uid, rid) {
+    function cancelAndRefresh(uid, rid, rid_js) {
         cancelOcc(uid, rid, function(data) {
-            refreshRow(uid, rid);
+            refreshRow(uid, rid, rid_js);
         });
     }
 
-    function completeTodoAndRefresh(uid, rid) {
+    function completeTodoAndRefresh(uid, rid, rid_js) {
         completeTodo(uid, rid, function(data) {
-            refreshRow(uid, rid);
+            refreshRow(uid, rid, rid_js);
         });
     }
 
@@ -140,8 +140,8 @@
 
         if(!occs_state[uid]) {
             occs_state[uid] = {
-                'prev': curISODate(),
-                'next': curISODate(),
+                'prev': curCalDate(),
+                'next': curCalDate(),
             };
             loadPrev(id, uid);
             loadNext(id, uid);

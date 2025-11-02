@@ -10,13 +10,13 @@ use eventix_state::{CalendarAlarmType, EventixState};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::api::JsonError;
 use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::{
     editalarm::EditAlarmTemplate, organizer::OrganizerTemplate, partstat::PartStatTemplate,
 };
 use crate::html::{self, filters};
 use crate::objects::DayOccurrence;
-use crate::api::JsonError;
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -27,7 +27,7 @@ pub fn router(state: EventixState) -> Router {
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: Option<String>,
+    rid: Option<CalDate>,
     edit: bool,
 }
 
@@ -66,24 +66,15 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let rid = if let Some(rid) = &req.rid {
-        Some(
-            rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {rid}"))?,
-        )
-    } else {
-        None
-    };
-
     let state = state.lock().await;
     let locale = state.settings().locale();
 
     let occ = state
         .store()
-        .occurrence_by_id(&req.uid, rid.as_ref(), locale.timezone())
+        .occurrence_by_id(&req.uid, req.rid.as_ref(), locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
-            &req.uid, rid
+            &req.uid, req.rid
         ))?;
 
     let (collection, calendar) = state.settings().calendar(occ.directory()).unwrap();
@@ -140,8 +131,9 @@ async fn handler(
             )
         }),
         edit_modes: if owner {
-            req.rid
-                .map(|rid| EditModesTemplate::new(locale.clone(), "edit", req.uid.clone(), rid))
+            req.rid.map(|rid| {
+                EditModesTemplate::new(locale.clone(), "edit", req.uid.clone(), rid.to_string())
+            })
         } else {
             None
         },
@@ -154,3 +146,4 @@ async fn handler(
 
     Ok(Json(Response { html }))
 }
+

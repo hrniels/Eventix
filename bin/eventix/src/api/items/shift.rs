@@ -8,14 +8,14 @@ use eventix_ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, Updat
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::comps::date::Date;
 use crate::api::JsonError;
+use crate::comps::date::Date;
 use crate::util;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: Option<String>,
+    rid: Option<CalDate>,
     date: Date,
     hour: Option<u32>,
 }
@@ -37,15 +37,6 @@ pub async fn handler(
     let locale = state.settings().locale();
 
     let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address());
-
-    let rid = if let Some(rid) = &req.rid {
-        Some(
-            rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {rid}"))?,
-        )
-    } else {
-        None
-    };
 
     let file = state
         .store_mut()
@@ -95,7 +86,8 @@ pub async fn handler(
         c.set_stamp(CalDate::now());
     };
 
-    if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
+    if let Some(comp) =
+        file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
     {
         let (start, end) = get_timespan(comp)?;
         complete(start, end, comp);
@@ -106,9 +98,12 @@ pub async fn handler(
         }
 
         let (start, end) = get_timespan(comp)?;
-        file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), |_base, comp| {
-            complete(start, end, comp)
-        })
+        file.create_overwrite(
+            &req.uid,
+            req.rid.clone().unwrap(),
+            locale.timezone(),
+            |_base, comp| complete(start, end, comp),
+        )
         .context("Creating overwrite failed")?;
     }
     file.save()
@@ -116,3 +111,4 @@ pub async fn handler(
 
     Ok(Json(Response {}))
 }
+

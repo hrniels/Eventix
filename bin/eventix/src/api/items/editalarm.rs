@@ -2,20 +2,20 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::Router;
 use axum::extract::{Query, State};
-use axum::response::{IntoResponse, Json, Redirect};
+use axum::response::{IntoResponse, Json};
 use axum::routing::{get, post};
 use eventix_ical::objects::CalDate;
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
+use crate::api::JsonError;
 use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};
 use crate::extract::MultiForm;
-use crate::api::JsonError;
 
 #[derive(Debug, Deserialize)]
 pub struct GetRequest {
     uid: String,
-    rid: Option<String>,
+    rid: Option<CalDate>,
     edit: bool,
 }
 
@@ -27,8 +27,7 @@ struct GetResponse {
 #[derive(Debug, Deserialize)]
 pub struct PostRequest {
     uid: String,
-    rid: Option<String>,
-    target_url: String,
+    rid: Option<CalDate>,
     #[serde(default)]
     personal: AlarmConfig,
     personal_overwrite: Option<String>,
@@ -59,21 +58,12 @@ pub async fn post_handler(
     State(state): State<EventixState>,
     MultiForm(req): MultiForm<PostRequest>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let rid = if let Some(rid) = &req.rid {
-        Some(
-            rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {rid}"))?,
-        )
-    } else {
-        None
-    };
-
     let mut state = state.lock().await;
     let locale = state.settings().locale();
 
     let occ = state
         .store()
-        .occurrence_by_id(&req.uid, rid.as_ref(), locale.timezone())
+        .occurrence_by_id(&req.uid, req.rid.as_ref(), locale.timezone())
         .context(format!(
             "No occurrence with uid={}, rid={:?}",
             req.uid, req.rid
@@ -85,11 +75,11 @@ pub async fn post_handler(
     let changed = if req.personal_overwrite.is_some() {
         pers_cal.set(
             &req.uid,
-            rid.as_ref(),
+            req.rid.as_ref(),
             req.personal.to_alarms(&locale)?.unwrap_or_default(),
         )
     } else {
-        pers_cal.unset(&req.uid, rid.as_ref())
+        pers_cal.unset(&req.uid, req.rid.as_ref())
     };
 
     if changed {
@@ -98,5 +88,6 @@ pub async fn post_handler(
             .context(format!("Save personal alarms for calendar {calendar}"))?;
     }
 
-    Ok(Redirect::to(&req.target_url))
+    Ok(Json(()))
 }
+

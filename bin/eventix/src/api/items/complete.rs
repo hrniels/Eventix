@@ -16,7 +16,7 @@ use crate::api::JsonError;
 #[derive(Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: Option<String>,
+    rid: Option<CalDate>,
 }
 
 #[derive(Debug, Serialize)]
@@ -32,15 +32,6 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let rid = if let Some(rid) = req.rid.as_ref() {
-        Some(
-            rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {rid}"))?,
-        )
-    } else {
-        None
-    };
-
     let mut state = state.lock().await;
     let locale = state.settings().locale();
 
@@ -61,7 +52,8 @@ async fn handler(
         td.set_stamp(CalDate::now());
     };
 
-    if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
+    if let Some(comp) =
+        file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
     {
         complete(comp);
     } else {
@@ -70,9 +62,12 @@ async fn handler(
             return Err(anyhow!("Component {} is not recurrent", req.uid).into());
         }
 
-        file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), |_base, comp| {
-            complete(comp)
-        })
+        file.create_overwrite(
+            &req.uid,
+            req.rid.clone().unwrap(),
+            locale.timezone(),
+            |_base, comp| complete(comp),
+        )
         .context("Creating overwrite failed")?;
     }
     file.save()
@@ -80,3 +75,4 @@ async fn handler(
 
     Ok(Json(Response {}))
 }
+

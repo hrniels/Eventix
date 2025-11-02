@@ -28,7 +28,7 @@ where
 #[derive(Clone, Debug, Deserialize)]
 pub struct Request {
     uid: String,
-    rid: Option<String>,
+    rid: Option<CalDate>,
     #[serde(deserialize_with = "deserialize_partstat")]
     stat: CalPartStat,
 }
@@ -51,15 +51,6 @@ pub async fn handler(
 
     let user = util::user_for_uid(&state, &req.uid)?
         .ok_or_else(|| anyhow!("Email account not specified"))?;
-
-    let rid = if let Some(rid) = &req.rid {
-        Some(
-            rid.parse::<CalDate>()
-                .context(format!("Invalid rid date: {rid}"))?,
-        )
-    } else {
-        None
-    };
 
     let file = state
         .store_mut()
@@ -84,7 +75,8 @@ pub async fn handler(
         c.set_stamp(CalDate::now());
     };
 
-    if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
+    if let Some(comp) =
+        file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
     {
         complete(None, comp);
     } else {
@@ -93,9 +85,12 @@ pub async fn handler(
             return Err(anyhow!("Component {} is not recurrent", req.uid).into());
         }
 
-        file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), |base, comp| {
-            complete(Some(base), comp)
-        })
+        file.create_overwrite(
+            &req.uid,
+            req.rid.clone().unwrap(),
+            locale.timezone(),
+            |base, comp| complete(Some(base), comp),
+        )
         .context("Creating overwrite failed")?;
     }
     file.save()
@@ -103,3 +98,4 @@ pub async fn handler(
 
     Ok(Json(Response {}))
 }
+

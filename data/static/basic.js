@@ -10,7 +10,7 @@ function curUTCDay() {
     return `${y}${m}${d}`;
 }
 
-function curISODate() {
+function curCalDate() {
     const date = new Date();
     const y = date.getUTCFullYear();
     const m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -18,7 +18,7 @@ function curISODate() {
     const H = date.getUTCHours().toString().padStart(2, '0');
     const M = date.getUTCMinutes().toString().padStart(2, '0');
     const S = date.getUTCSeconds().toString().padStart(2, '0');
-    return `${y}${m}${d}T${H}${M}${S}Z`;
+    return `TU${y}-${m}-${d}T${H}:${M}:${S}`;
 }
 
 function copyToClipboard(text) {

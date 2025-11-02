@@ -16,7 +16,7 @@ pub struct EditAlarmTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     config: AlarmConfigTemplate,
     uid: String,
-    rid: Option<String>,
+    rid: Option<CalDate>,
     rid_str: String,
     edit: bool,
     overwrite: bool,
@@ -30,24 +30,15 @@ impl<'a> EditAlarmTemplate<'a> {
         locale: Arc<dyn Locale + Send + Sync>,
         state: &'a MutexGuard<'a, eventix_state::State>,
         uid: String,
-        rid: Option<String>,
+        rid: Option<CalDate>,
         edit: bool,
     ) -> anyhow::Result<Self> {
-        let rid_date = if let Some(rid) = &rid {
-            Some(
-                rid.parse::<CalDate>()
-                    .context(format!("Invalid rid date: {rid}"))?,
-            )
-        } else {
-            None
-        };
-
         let occ = state
             .store()
-            .occurrence_by_id(&uid, rid_date.as_ref(), locale.timezone())
+            .occurrence_by_id(&uid, rid.as_ref(), locale.timezone())
             .context(format!(
                 "Unable to find occurrence with uid '{}' and rid '{:?}'",
-                &uid, rid_date
+                &uid, rid
             ))?;
 
         let alarm_type = state
@@ -57,7 +48,7 @@ impl<'a> EditAlarmTemplate<'a> {
             .1
             .alarms();
         let personal = if let Some(pers_cal) = state.personal_alarms().get(occ.directory()) {
-            pers_cal.get(&uid, rid_date.as_ref())
+            pers_cal.get(&uid, rid.as_ref())
         } else {
             None
         };
@@ -78,7 +69,7 @@ impl<'a> EditAlarmTemplate<'a> {
             effective,
             uid,
             rid: rid.clone(),
-            rid_str: rid.unwrap_or_default(),
+            rid_str: rid.map(|rid| rid.to_string()).unwrap_or_default(),
             overwrite: personal.is_some(),
             config: AlarmConfigTemplate::new(
                 locale.clone(),

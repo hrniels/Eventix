@@ -102,7 +102,11 @@ impl CalTrigger {
                 params.push(Parameter::new("RELATED", format!("{related}")));
                 duration.to_string()
             }
-            Self::Absolute(date) => date.to_string(),
+            Self::Absolute(date) => {
+                let prop = date.to_prop("DUMMY");
+                params.extend_from_slice(prop.params());
+                prop.value().to_string()
+            }
         };
         Property::new("TRIGGER", params, value)
     }
