@@ -120,7 +120,7 @@ def cmd_flatpak(args):
     # build flatpak
     add_args = ["--disable-cache"] if not args.no_rebuild else []
     subprocess.run(
-        ["flatpak-builder", "--force-clean"] + add_args +
+        ["flatpak-builder", "--disable-rofiles-fuse", "--force-clean"] + add_args +
         [build_dir, "flatpak/{}.json".format(APP_ID)],
         check=True)
     subprocess.run([
