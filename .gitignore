@@ -5,3 +5,5 @@
 /flatpak/*.flatpak
 /flatpak/source.tar.gz
 /.flatpak-builder
+.cargo
+.rustup
