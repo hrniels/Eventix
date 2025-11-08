@@ -199,6 +199,6 @@ fn get_socket_path(xdg: &BaseDirectories) -> PathBuf {
     let path = xdg
         .get_runtime_directory()
         .cloned()
-        .unwrap_or_else(|_| PathBuf::from("/tmp/eventix.sock"));
+        .unwrap_or_else(|_| PathBuf::from("/tmp"));
     path.join("eventix.sock")
 }
