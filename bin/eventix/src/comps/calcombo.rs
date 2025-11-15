@@ -10,10 +10,11 @@ pub struct CalComboTemplate {
     id: String,
     calendars: Calendars,
     calendar: Arc<String>,
+    compact: bool,
 }
 
 impl CalComboTemplate {
-    pub fn new<N>(name: N, calendars: Calendars, calendar: Arc<String>) -> Self
+    pub fn new<N>(name: N, calendars: Calendars, calendar: Arc<String>, compact: bool) -> Self
     where
         N: ToString,
     {
@@ -23,6 +24,7 @@ impl CalComboTemplate {
             name,
             calendars,
             calendar,
+            compact,
         }
     }
 }

@@ -102,6 +102,7 @@ pub async fn content(
             "calendar",
             Calendars::new(&state, |settings| settings.types().contains(&req.ctype)),
             calendar.clone(),
+            false,
         ),
         cal_personal,
         attendees: AttendeesTemplate::new(

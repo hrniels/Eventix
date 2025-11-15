@@ -829,3 +829,22 @@ span.ev_cal_src_disabled {
 .text-primary {
     color: #fff !important;
 }
+
+.iconselectmenu-compact {
+    min-width: auto !important;
+    width: auto !important;
+    padding: 0.2em !important;
+}
+.iconselectmenu-compact .ui-selectmenu-icon {
+    display: none;
+}
+.iconselectmenu-compact .ev_cal_src {
+    margin-right: 0 !important;
+}
+.iconselectmenu-compact .ui-selectmenu-text {
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

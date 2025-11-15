@@ -14,7 +14,11 @@
             },
 
             _renderButtonItem: function(item) {
+                {% if !compact %}
                 let buttonItem = this._super(item);
+                {% else %}
+                let buttonItem = $("<span>");
+                {% endif %}
 
                 let icon = $("<span>", {
                     style: item.element.attr("data-style"),
@@ -43,15 +47,27 @@
         });
 
         $("#{{ id }}")
-            .iconselectmenu()
-            .iconselectmenu("menuWidget")
+            .iconselectmenu({
+                position: {
+                    my: "left top",      // my top-left corner
+                    at: "left bottom",   // aligns to bottom of button
+                    collision: "flipfit" // try flipping if not enough space
+                }
+            })
+        {% if compact %}
+            .iconselectmenu("widget")              // the button element
+            .addClass("iconselectmenu-compact");
+        {% endif %}
+
+        $("#{{ id }}")
+            .iconselectmenu("menuWidget")          // the dropdown
             .addClass("ui-menu-icons customicons");
     });
 </script>
 
 <style>
     .ui-selectmenu-menu .ui-menu.customicons .ui-menu-item-wrapper {
-        padding: .5em 0 .5em .5em;
+        padding: .5em;
     }
     .ui-selectmenu-menu .ui-menu.customicons .ui-menu-item .ui-icon {
         height: 24px;

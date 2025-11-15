@@ -145,6 +145,7 @@ pub async fn content(
                 "calendar",
                 Calendars::new(&state, |settings| settings.types().contains(&occ.ctype())),
                 Arc::new(cal.to_string()),
+                false,
             )
         }),
         summary: &form.summary,
