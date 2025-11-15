@@ -108,7 +108,7 @@
         if($('#attendees-new-attendee').val() != "")
             errorDialog("{{ "The 'New attendee' field is not empty. Maybe you forgot to add the last attendee?"|t(locale) }}");
         else
-            $('form').submit();
+            $('#form').submit();
     }
 
     $(function() {
