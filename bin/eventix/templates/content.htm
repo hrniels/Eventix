@@ -301,6 +301,9 @@
                 return true;
 
             switch(e.code) {
+                case "KeyA":
+                    $('#quick_summary').focus();
+                    return false;
                 case "KeyE":
                     document.getElementById('link-event').click();
                     break;
