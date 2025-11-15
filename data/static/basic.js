@@ -2,6 +2,13 @@ function reloadPage() {
     window.location.reload();
 }
 
+function resetPage() {
+    let url = window.location.href;
+    const pound = url.indexOf('#');
+    url = pound !== -1 ? url.slice(0, pound) : url;
+    window.location.href = url;
+}
+
 function curUTCDay() {
     const date = new Date();
     const y = date.getUTCFullYear();

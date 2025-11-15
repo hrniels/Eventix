@@ -1,3 +1,4 @@
+pub mod add;
 pub mod cancel;
 pub mod complete;
 pub mod delete;
@@ -14,6 +15,7 @@ use eventix_state::EventixState;
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .with_state(state.clone())
+        .merge(add::router(state.clone()))
         .merge(cancel::router(state.clone()))
         .merge(complete::router(state.clone()))
         .merge(delete::router(state.clone()))

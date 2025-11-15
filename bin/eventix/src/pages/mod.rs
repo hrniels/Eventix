@@ -12,6 +12,7 @@ mod tasks;
 use axum::Router;
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
+use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::{
@@ -19,7 +20,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::objects::{Calendar, Calendars};
+use crate::{
+    comps::calcombo::CalComboTemplate,
+    objects::{Calendar, Calendars},
+};
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -37,6 +41,7 @@ pub struct Page {
     errors: Vec<String>,
     infos: Vec<String>,
     calendars: Calendars,
+    quickcals: Option<CalComboTemplate>,
     last_reload: NaiveDateTime,
     debug: bool,
 }
@@ -49,6 +54,7 @@ impl Default for Page {
             errors: Vec::new(),
             infos: Vec::new(),
             calendars: Calendars::default(),
+            quickcals: None,
             last_reload: NaiveDateTime::default(),
             debug: cfg!(debug_assertions),
         }
@@ -59,10 +65,29 @@ impl Page {
     pub async fn new(state: &EventixState) -> Self {
         let state = state.lock().await;
         let locale = state.settings().locale();
+
+        let calendar = Arc::new(match state.misc().last_calendar(CalCompType::Todo) {
+            Some(cal) => cal.clone(),
+            None => String::new(),
+        });
+        let calendars = Calendars::new(&state, |settings| {
+            settings.types().contains(&CalCompType::Todo)
+        });
+
         Self {
             start: Instant::now(),
             now: Local::now().with_timezone(locale.timezone()),
             calendars: Calendars::new(&state, |_settings| true),
+            quickcals: if !calendars.0.is_empty() {
+                Some(CalComboTemplate::new(
+                    "quicktodo_calendar",
+                    calendars,
+                    calendar,
+                    true,
+                ))
+            } else {
+                None
+            },
             last_reload: state.last_reload(),
             ..Default::default()
         }
