@@ -66,7 +66,7 @@ $(function() {
         <td>
             {% if ctype == CalCompType::Todo %}
             <input type="checkbox" id="{{ id }}from_enabled" name="{{ name }}[from_enabled]"
-                                   value="true"{% if from_enabled %}checked="checked"{% endif %}/>
+                                   value="true"{% if from_enabled %} checked="checked"{% endif %}/>
             {% else %}
             <input type="hidden" name="{{ name}}[from_enabled]" value="true"/>
             {% endif %}
@@ -86,7 +86,7 @@ $(function() {
         <td>
             {% if ctype == CalCompType::Todo %}
             <input type="checkbox" id="{{ id }}to_enabled" name="{{ name }}[to_enabled]"
-                                   value="true"{% if to_enabled %}checked="checked"{% endif %}/>
+                                   value="true"{% if to_enabled %} checked="checked"{% endif %}/>
             {% else %}
             <input type="hidden" name="{{ name}}[to_enabled]" value="true"/>
             {% endif %}
