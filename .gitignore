@@ -7,3 +7,4 @@
 /.flatpak-builder
 .cargo
 .rustup
+.zsh_history
