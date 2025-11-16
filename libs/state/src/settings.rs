@@ -124,18 +124,28 @@ pub enum SyncerType {
         path: String,
     },
     VDirSyncer {
+        email: EmailAccount,
         url: String,
         read_only: bool,
         username: Option<String>,
         password_cmd: Option<Vec<String>>,
     },
     O365 {
+        email: EmailAccount,
         read_only: bool,
         password_cmd: Vec<String>,
     },
 }
 
 impl SyncerType {
+    pub fn email(&self) -> Option<&EmailAccount> {
+        match self {
+            Self::VDirSyncer { email, .. } => Some(email),
+            Self::O365 { email, .. } => Some(email),
+            _ => None,
+        }
+    }
+
     pub fn supports_discover(&self) -> bool {
         matches!(self, Self::VDirSyncer { .. } | Self::O365 { .. })
     }
@@ -157,7 +167,6 @@ impl SyncerType {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CollectionSettings {
-    email: Option<EmailAccount>,
     syncer: SyncerType,
     #[serde(rename = "calendar")]
     calendars: BTreeMap<String, CalendarSettings>,
@@ -169,7 +178,7 @@ impl CollectionSettings {
     }
 
     pub fn email(&self) -> Option<&EmailAccount> {
-        self.email.as_ref()
+        self.syncer.email()
     }
 
     pub fn build_organizer(&self) -> Option<CalOrganizer> {
