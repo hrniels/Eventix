@@ -180,6 +180,7 @@ fieldset.ev_form div.ev_submit {
 }
 .ev_quicktask #quick_summary {
     flex: 1;
+    width: 10px;
 }
 .ev_quicktask a {
     height: auto !important;
@@ -189,8 +190,8 @@ fieldset.ev_form div.ev_submit {
     vertical-align: -moz-middle-with-baseline !important;
 }
 .ev_quicktask i {
-  margin-top: auto;
-  margin-bottom: auto;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 /* ------------ TABLES ------------ */
@@ -810,6 +811,10 @@ span.ev_cal_src_disabled {
 }
 .ui-button {
     padding: .4em .5em !important;
+}
+
+.ui-state-active {
+    margin: 0px !important;
 }
 
 .popup {
