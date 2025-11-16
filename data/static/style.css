@@ -6,6 +6,7 @@ body {
 }
 
 input,select,textarea {
+    font-size: 11pt;
     padding: 2px;
 }
 input[type=color] {
