@@ -250,6 +250,24 @@
         area.scrollTop = 60 * 8;
     });
 
+    $(document).on('mousedown', function(e) {
+        if(e.which !== 2)
+            return;
+
+        // find ANY element under the pointer that has .ev_hour_cell
+        const all = document.elementsFromPoint(e.clientX, e.clientY);
+        const target = all.find(el => el.classList.contains("ev_hour_cell"));
+
+        // create event in this slot
+        if(target) {
+            e.preventDefault();
+            const date = target.dataset.date;
+            const hour = target.dataset.hour;
+            const url = '/pages/new?ctype=Event&date=' + date + '&hour=' + hour;
+            gotoWithPrev(url);
+        }
+    });
+
     $(document).keydown(function(e) {
         if(document.activeElement.nodeName == 'BODY') {
             if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)

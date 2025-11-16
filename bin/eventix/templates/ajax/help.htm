@@ -30,13 +30,16 @@
         padding-right: 1rem;
     }
 
-    .key {
+    .key, .mousebtn {
         display: flex;
         align-items: center;
         justify-content: center;
         width: 32px;
         height: 28px;
         text-align: center;
+    }
+
+    .key {
         background: #eeeeec;
         border: 1px solid #d3d7cf;
         border-radius: 6px;
@@ -100,30 +103,18 @@
             </div>
 
             <div class="ev_box ev_padbottom">
-                <h1 class="ev_header">{{ "Weekly View"|t(locale) }}</h1>
+                <h1 class="ev_header">{{ "List View"|t(locale) }}</h1>
                 <div class="shortcut-row">
                     <div class="shortcut-keys">
                         <span class="key"><i class="bi bi-caret-left-fill"></i></span>
                     </div>
-                    <div>{{ "Go to previous week"|t(locale) }}</div>
+                    <div>{{ "Go to previous page"|t(locale) }}</div>
                 </div>
                 <div class="shortcut-row">
                     <div class="shortcut-keys">
                         <span class="key"><i class="bi bi-caret-right-fill"></i></span>
                     </div>
-                    <div>{{ "Go to next week"|t(locale) }}</div>
-                </div>
-                <div class="shortcut-row">
-                    <div class="shortcut-keys">
-                        <span class="key">.</span>
-                    </div>
-                    <div>{{ "Go to current week"|t(locale) }}</div>
-                </div>
-                <div class="shortcut-row">
-                    <div class="shortcut-keys">
-                        <span class="key">J</span>
-                    </div>
-                    <div>{{ "Go to jump-to-date field"|t(locale) }}</div>
+                    <div>{{ "Go to next page"|t(locale) }}</div>
                 </div>
             </div>
         </div>
@@ -158,18 +149,36 @@
             </div>
 
             <div class="ev_box ev_padbottom">
-                <h1 class="ev_header">{{ "List View"|t(locale) }}</h1>
+                <h1 class="ev_header">{{ "Weekly View"|t(locale) }}</h1>
                 <div class="shortcut-row">
                     <div class="shortcut-keys">
                         <span class="key"><i class="bi bi-caret-left-fill"></i></span>
                     </div>
-                    <div>{{ "Go to previous page"|t(locale) }}</div>
+                    <div>{{ "Go to previous week"|t(locale) }}</div>
                 </div>
                 <div class="shortcut-row">
                     <div class="shortcut-keys">
                         <span class="key"><i class="bi bi-caret-right-fill"></i></span>
                     </div>
-                    <div>{{ "Go to next page"|t(locale) }}</div>
+                    <div>{{ "Go to next week"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">.</span>
+                    </div>
+                    <div>{{ "Go to current week"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <span class="key">J</span>
+                    </div>
+                    <div>{{ "Go to jump-to-date field"|t(locale) }}</div>
+                </div>
+                <div class="shortcut-row">
+                    <div class="shortcut-keys">
+                        <i class="bi bi-mouse mousebtn"></i>
+                    </div>
+                    <div>{{ "Create new event in hour slot"|t(locale) }}</div>
                 </div>
             </div>
         </div>
