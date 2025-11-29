@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt, str::FromStr};
+use std::{cmp::Ordering, fmt, hash::Hash, str::FromStr};
 
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::{Europe, Tz};
@@ -55,7 +55,7 @@ impl From<CalCompType> for CalDateType {
 ///
 /// Dates in iCalendar objects come in two forms: date and datetime. The former specifies a day,
 /// whereas the latter specifies a day and a time.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum CalDate {
     /// Specifies a date.
     ///
@@ -259,6 +259,12 @@ impl fmt::Display for CalDate {
     }
 }
 
+impl Hash for CalDate {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_start_with_tz(&chrono_tz::UTC).hash(state);
+    }
+}
+
 impl PartialEq for CalDate {
     fn eq(&self, other: &Self) -> bool {
         let a = self.as_start_with_tz(&chrono_tz::UTC);
@@ -376,7 +382,7 @@ impl FromStr for CalDateTime {
             Some('F') => {
                 let date = s[1..]
                     .parse::<NaiveDateTime>()
-                    .map_err(|_| ParseError::MalformedDate("foo".to_owned() + &s.to_string()))?;
+                    .map_err(|_| ParseError::MalformedDate("foo".to_owned() + s))?;
                 Ok(CalDateTime::Floating(date))
             }
             Some('U') => {

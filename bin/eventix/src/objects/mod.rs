@@ -20,7 +20,7 @@ pub use dayocc::{DayOccurrence, OccurrenceOverlap};
 pub fn create_component<F>(
     state: &mut eventix_state::State,
     locale: &Arc<dyn Locale + Send + Sync>,
-    calendar: &String,
+    calendar: &str,
     ctype: CalCompType,
     populate: F,
 ) -> anyhow::Result<()>
@@ -34,7 +34,7 @@ where
         &Arc<dyn Locale + Send + Sync>,
     ),
 {
-    let calendar = Arc::from(calendar.clone());
+    let calendar = Arc::from(calendar.to_string());
     let (col_settings, cal_settings) = state.settings().calendar(&calendar).unwrap();
     let organizer = col_settings.build_organizer();
     let alarm_type = cal_settings.alarms().clone();

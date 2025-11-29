@@ -16,8 +16,8 @@ impl FSSyncer {
         Self { folder_id }
     }
 
-    fn sync_folder(state: &mut MutexGuard<'_, State>, id: &String) -> anyhow::Result<bool> {
-        let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.clone())) else {
+    fn sync_folder(state: &mut MutexGuard<'_, State>, id: &str) -> anyhow::Result<bool> {
+        let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.to_string())) else {
             // if we don't know this directory, the calendar is disabled - so, do nothing
             return Ok(false);
         };
