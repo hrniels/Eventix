@@ -39,11 +39,6 @@
                         <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Sync"|t(locale) }}</span>
                     </a>
-                    <a class="ev_button ev_button_normal"
-                       href="javascript:gotoWithPrev('/edit-col?id={{ col_id }}')">
-                        <i class="bi bi-pencil"></i>
-                        <span>{{ "Edit"|t(locale) }}</span>
-                    </a>
                     {% if col.syncer().supports_discover() %}
                     <a class="ev_button ev_button_normal"
                        title="{{ "Loads all calendars with their meta data from the server."|t(locale) }}"
@@ -54,6 +49,11 @@
                         <span>{{ "Discover"|t(locale) }}</span>
                     </a>
                     {% endif %}
+                    <a class="ev_button ev_button_normal"
+                       href="javascript:gotoWithPrev('/edit-col?id={{ col_id }}')">
+                        <i class="bi bi-pencil"></i>
+                        <span>{{ "Edit"|t(locale) }}</span>
+                    </a>
                 </div>
             </td>
             <td class="ev_main" width="60%" style="vertical-align: top">
