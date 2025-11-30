@@ -218,4 +218,3 @@ pub async fn handler(
 
     Ok(Json(Response { html, date }))
 }
-

@@ -7,10 +7,10 @@ use eventix_ical::objects::CalCompType;
 use eventix_state::{CalendarAlarmType, CalendarSettings, EventixState};
 use serde::Deserialize;
 
+use crate::api::JsonError;
 use crate::comps::alarmconfig::AlarmConfig;
 use crate::comps::calbox::AlarmType;
 use crate::extract::MultiForm;
-use crate::api::JsonError;
 
 #[derive(Debug, Deserialize)]
 pub struct Params {

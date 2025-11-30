@@ -8,8 +8,8 @@ use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::html::filters;
 use crate::api::JsonError;
+use crate::html::filters;
 
 pub fn router(state: EventixState) -> Router {
     Router::new().route("/auth", get(handler)).with_state(state)
