@@ -7,9 +7,9 @@
 </script>
 
 {% if let Some(prev) = prev %}
-<form id="form" method="post" action="/pages/new?ctype={{ ctype }}&prev={{ prev|urlencode_strict }}">
+<form id="form" method="post" action="/pages/items/add?ctype={{ ctype }}&prev={{ prev|urlencode_strict }}">
 {% else %}
-<form id="form" method="post" action="/pages/new?ctype={{ ctype }}">
+<form id="form" method="post" action="/pages/items/add?ctype={{ ctype }}">
 {% endif %}
     <div class="ev_border">
         <fieldset class="ev_form">

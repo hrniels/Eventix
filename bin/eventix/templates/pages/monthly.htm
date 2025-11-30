@@ -54,7 +54,7 @@
                 {% if date == today %}ev_today{% endif %}
                 {% if day.cur_month %}ev_cur_month{% endif %}
                 ">
-                <a href="javascript:gotoWithPrev('/pages/new?ctype=Event&date={{ date.format("%Y-%m-%d") }}')"
+                <a href="javascript:gotoWithPrev('/pages/items/add?ctype=Event&date={{ date.format("%Y-%m-%d") }}')"
                    style="float: left" class="ev_add_icon">
                     <i class="bi bi-plus-square"></i>
                 </a>

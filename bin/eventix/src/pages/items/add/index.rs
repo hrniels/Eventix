@@ -20,7 +20,7 @@ use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 use super::{CompNew, Request};
 
 #[derive(Template)]
-#[template(path = "pages/new.htm")]
+#[template(path = "pages/items/add.htm")]
 struct NewTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,

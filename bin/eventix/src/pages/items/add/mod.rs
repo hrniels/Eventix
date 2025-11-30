@@ -16,8 +16,7 @@ use crate::comps::{
     datetimerange::DateTimeRange, recur::RecurRequest, time::Time, todostatus::TodoStatus,
 };
 use crate::objects::CompAction;
-
-use super::Page;
+use crate::pages::Page;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -141,7 +140,7 @@ pub async fn new_page(state: &EventixState) -> Page {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/new", get(self::index::handler))
-        .route("/new", post(self::save::handler))
+        .route("/", get(self::index::handler))
+        .route("/", post(self::save::handler))
         .with_state(state)
 }

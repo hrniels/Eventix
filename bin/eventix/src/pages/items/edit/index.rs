@@ -22,11 +22,11 @@ use crate::{
         alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
         datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
     },
-    pages::edit::EditMode,
+    pages::items::edit::EditMode,
 };
 
 #[derive(Template)]
-#[template(path = "pages/edit.htm")]
+#[template(path = "pages/items/edit.htm")]
 struct EditTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,

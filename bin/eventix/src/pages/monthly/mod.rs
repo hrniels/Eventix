@@ -12,6 +12,5 @@ pub async fn new_page(state: &EventixState) -> Page {
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/", get(self::index::handler))
-        .route("/monthly", get(self::index::handler))
         .with_state(state)
 }

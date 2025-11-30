@@ -17,9 +17,8 @@ use crate::comps::{
     todostatus::TodoStatus,
 };
 use crate::objects::CompAction;
+use crate::pages::Page;
 use crate::util;
-
-use super::Page;
 
 pub fn deserialize_u128<'de, D>(deserializer: D) -> Result<u128, D::Error>
 where
@@ -161,7 +160,7 @@ pub async fn new_page(state: &EventixState) -> Page {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/edit", get(self::index::handler))
-        .route("/edit", post(self::update::handler))
+        .route("/", get(self::index::handler))
+        .route("/", post(self::update::handler))
         .with_state(state)
 }

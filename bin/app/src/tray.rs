@@ -223,7 +223,7 @@ impl ksni::Tray for EventixTray {
                 label: "New Event".into(),
                 icon_data: crate::ICON_EVENT.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
-                    tray.load_page("/pages/new?ctype=Event");
+                    tray.load_page("/pages/items/add?ctype=Event");
                 }),
                 ..Default::default()
             }
@@ -232,7 +232,7 @@ impl ksni::Tray for EventixTray {
                 label: "New Task".into(),
                 icon_data: crate::ICON_TODO.to_vec(),
                 activate: Box::new(|tray: &mut EventixTray| {
-                    tray.load_page("/pages/new?ctype=Todo");
+                    tray.load_page("/pages/items/add?ctype=Todo");
                 }),
                 ..Default::default()
             }
