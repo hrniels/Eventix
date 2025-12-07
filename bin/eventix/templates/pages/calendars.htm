@@ -8,7 +8,15 @@
         {% for (col_id, col) in collections.iter() %}
         <tr>
             <td class="ev_desc" width="40%" style="vertical-align: top">
-                <div>
+                <div class="ev_cal_title">
+                    {% match col.syncer() %}
+                    {% when SyncerType::VDirSyncer { .. } %}
+                    <img src="/static/caldav.png" />
+                    {% when SyncerType::O365 { .. } %}
+                    <img src="/static/o365.png" />
+                    {% when _ %}
+                    <img src="/static/fs.png" />
+                    {% endmatch %}
                     <b>{{ col_id }}</b>
                 </div>
 
@@ -33,13 +41,6 @@
                         <span>{{ "Reload"|t(locale) }}</span>
                     </a>
                     {% endif %}
-                    <a class="ev_button ev_button_normal"
-                       href="javascript:syncCollection('{{ col_id }}',
-                                                       'sync_spinner_{{ col_id }}',
-                                                       reloadPageIfPossible)">
-                        <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
-                        <span>{{ "Sync"|t(locale) }}</span>
-                    </a>
                     {% if col.syncer().supports_discover() %}
                     <a class="ev_button ev_button_normal"
                        title="{{ "Loads all calendars with their meta data from the server."|t(locale) }}"
@@ -51,7 +52,14 @@
                     </a>
                     {% endif %}
                     <a class="ev_button ev_button_normal"
-                       href="javascript:gotoWithPrev('/edit-col?id={{ col_id }}')">
+                       href="javascript:syncCollection('{{ col_id }}',
+                                                       'sync_spinner_{{ col_id }}',
+                                                       reloadPageIfPossible)">
+                        <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
+                        <span>{{ "Sync"|t(locale) }}</span>
+                    </a>
+                    <a class="ev_button ev_button_normal"
+                       href="javascript:gotoWithPrev('/pages/collections/edit?col_id={{ col_id }}')">
                         <i class="bi bi-pencil"></i>
                         <span>{{ "Edit"|t(locale) }}</span>
                     </a>
@@ -92,10 +100,27 @@
     </table>
 </div>
 
+<a style="float: left" class="ev_padtop ev_button ev_button_normal"
+    href="javascript:gotoWithPrev('/pages/collections/add')">
+    <i class="bi bi-plus-square"></i>
+    <span>{{ "Add Collection"|t(locale) }}</span>
+</a>
+<br style="clear: both"/>
+
 <div id="delete-collection-confirm" title="{{ "Are you sure?"|t(locale) }}" style="display: none">
     {{ "This will permanently delete this collection including all calendars."|t(locale) }}
 </div>
 
+<style type="text/css">
+.ev_cal_title {
+    display: flex;
+    gap: .3em;
+}
+.ev_cal_title img {
+    width: 20px;
+    height: 20px;
+}
+</style>
 <script type="text/javascript">
     function reloadPageIfPossible() {
         requestReload('out-of-sync', !userIsBusy());

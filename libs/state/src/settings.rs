@@ -92,6 +92,10 @@ pub struct EmailAccount {
 }
 
 impl EmailAccount {
+    pub fn new(name: String, address: String) -> Self {
+        Self { name, address }
+    }
+
     pub fn pretty_name(&self) -> String {
         format!("{} <{}>", self.name, self.address)
     }
@@ -173,6 +177,13 @@ pub struct CollectionSettings {
 }
 
 impl CollectionSettings {
+    pub fn new(syncer: SyncerType) -> Self {
+        Self {
+            syncer,
+            calendars: BTreeMap::default(),
+        }
+    }
+
     pub fn path(&self, xdg: &BaseDirectories, name: &str) -> PathBuf {
         self.syncer.path(xdg, name)
     }
@@ -188,6 +199,10 @@ impl CollectionSettings {
 
     pub fn syncer(&self) -> &SyncerType {
         &self.syncer
+    }
+
+    pub fn set_syncer(&mut self, syncer: SyncerType) {
+        self.syncer = syncer;
     }
 
     pub fn calendars(&self) -> impl Iterator<Item = (&String, &CalendarSettings)> {

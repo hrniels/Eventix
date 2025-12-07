@@ -14,5 +14,6 @@ pub mod pagination;
 pub mod partstat;
 pub mod radiogroup;
 pub mod recur;
+pub mod syncer;
 pub mod time;
 pub mod todostatus;

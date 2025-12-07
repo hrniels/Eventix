@@ -1,4 +1,5 @@
 pub mod calendars;
+pub mod collections;
 pub mod error;
 pub mod items;
 pub mod list;
@@ -27,6 +28,7 @@ use crate::{
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .nest("/calendars", calendars::router(state.clone()))
+        .nest("/collections", collections::router(state.clone()))
         .nest("/items", items::router(state.clone()))
         .nest("/list", list::router(state.clone()))
         .nest("/monthly", monthly::router(state.clone()))

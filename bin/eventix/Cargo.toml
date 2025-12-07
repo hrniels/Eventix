@@ -26,6 +26,7 @@ xdg.workspace = true
 
 askama = "0.14.0"
 axum = { version = "0.8.7", features = ["macros", "multipart"] }
+email_address = "0.2.9"
 formatx = "0.2.4"
 futures = "0.3.31"
 numfmt = "1.2.0"
