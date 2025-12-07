@@ -2,6 +2,7 @@ mod api;
 mod comps;
 mod debug;
 mod extract;
+mod generated;
 mod html;
 mod notify;
 mod objects;
@@ -61,9 +62,10 @@ async fn run_server(listener: TcpListener) {
 
     let app = Router::new()
         .route_service("/favicon.ico", ServeFile::new(icon_path))
-        .nest_service("/static", ServeDir::new(static_path))
+        .nest_service("/static", ServeDir::new(static_path.clone()))
         .merge(pages::monthly::router(state.clone()))
         .nest("/api", api::router(state.clone()))
+        .nest("/generated", generated::router(static_path))
         .nest("/pages", pages::router(state.clone()))
         .fallback(error_handler)
         .layer(SetResponseHeaderLayer::if_not_present(
