@@ -36,9 +36,13 @@ pub async fn handler(
             eventix_state::State::delete_calendar(state.clone(), &req.col_id, &req.cal_id)
                 .await
                 .context(format!(
-                    "Unable to reload calendar {}:{}",
+                    "Unable to delete calendar {}:{}",
                     req.col_id, req.cal_id
                 ))?;
+
+            if let Err(e) = state.lock().await.settings().write_to_file() {
+                tracing::warn!("Unable to save settings: {}", e);
+            }
         }
         Operation::Toggle => {
             let mut state = state.lock().await;
