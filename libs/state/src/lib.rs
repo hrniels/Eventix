@@ -186,6 +186,16 @@ impl State {
         sync::reload_collection(state, col_id, auth_url).await
     }
 
+    pub async fn delete_collection(state: EventixState, col_id: &String) -> anyhow::Result<()> {
+        let _lock = GLOBAL_LOCK.lock().await;
+
+        sync::delete_collection(state.clone(), col_id).await?;
+
+        let mut state = state.lock().await;
+        state.settings_mut().collections_mut().remove(col_id);
+        Ok(())
+    }
+
     pub async fn delete_calendar(
         state: EventixState,
         col_id: &String,

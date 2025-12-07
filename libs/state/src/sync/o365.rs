@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
@@ -250,7 +250,17 @@ impl Syncer for O365 {
         self.vdirsyncer.delete_cal(state, cal_id).await
     }
 
-    async fn delete(&mut self, state: EventixState) -> anyhow::Result<()> {
-        self.vdirsyncer.delete(state).await
+    async fn delete(&mut self, state: EventixState, config: bool) -> anyhow::Result<()> {
+        self.vdirsyncer.delete(state, config).await?;
+
+        if config {
+            // remove generated property file
+            fs::remove_file(&self.props_path).await.context(format!(
+                "Deleting {} failed",
+                self.props_path.to_str().unwrap()
+            ))
+        } else {
+            Ok(())
+        }
     }
 }

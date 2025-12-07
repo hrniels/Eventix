@@ -62,7 +62,7 @@ impl Syncer for FSSyncer {
         Ok(())
     }
 
-    async fn delete(&mut self, _state: EventixState) -> anyhow::Result<()> {
+    async fn delete(&mut self, _state: EventixState, _config: bool) -> anyhow::Result<()> {
         Ok(())
     }
 }

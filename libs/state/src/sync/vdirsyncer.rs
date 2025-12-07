@@ -402,7 +402,7 @@ impl Syncer for VDirSyncer {
         Ok(())
     }
 
-    async fn delete(&mut self, _state: EventixState) -> anyhow::Result<()> {
+    async fn delete(&mut self, _state: EventixState, config: bool) -> anyhow::Result<()> {
         let dir = self.cfg.parent().unwrap();
 
         // remove complete status and directory
@@ -414,6 +414,14 @@ impl Syncer for VDirSyncer {
                     .context(format!("Removing {} failed", path.to_str().unwrap()))?;
             }
         }
-        Ok(())
+
+        if config {
+            // remove generated config file
+            fs::remove_file(&self.cfg)
+                .await
+                .context(format!("Removing {} failed", self.cfg.to_str().unwrap()))
+        } else {
+            Ok(())
+        }
     }
 }

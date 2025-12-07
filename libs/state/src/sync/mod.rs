@@ -31,7 +31,7 @@ pub trait Syncer: Send {
     #[allow(clippy::ptr_arg)]
     async fn delete_cal(&mut self, state: EventixState, cal_id: &String) -> anyhow::Result<()>;
 
-    async fn delete(&mut self, state: EventixState) -> anyhow::Result<()>;
+    async fn delete(&mut self, state: EventixState, config: bool) -> anyhow::Result<()>;
 }
 
 pub struct SyncerAuth {
@@ -100,7 +100,7 @@ pub(crate) async fn reload_collection(
 ) -> anyhow::Result<SyncResult> {
     let mut cal_sync = syncer_for_collection(&state, col_id, auth_url).await?;
 
-    cal_sync.syncer.delete(state.clone()).await?;
+    cal_sync.syncer.delete(state.clone(), false).await?;
     cal_sync.syncer.discover(state.clone()).await?;
 
     let mut sync_res = SyncResult::default();
@@ -108,6 +108,11 @@ pub(crate) async fn reload_collection(
     handle_sync_result(&state, col_id, res, &mut sync_res).await;
 
     Ok(sync_res)
+}
+
+pub(crate) async fn delete_collection(state: EventixState, col_id: &String) -> anyhow::Result<()> {
+    let mut cal_sync = syncer_for_collection(&state, col_id, None).await?;
+    cal_sync.syncer.delete(state.clone(), true).await
 }
 
 pub(crate) async fn reload_calendar(

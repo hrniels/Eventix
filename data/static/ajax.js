@@ -86,3 +86,7 @@ function calendarOperation(col_id, cal_id, op, onsuccess) {
     const url =  '/api/calendars/calop?col_id=' + col_id + '&cal_id=' + cal_id + '&op=' + op;
     postRequest(url, onsuccess);
 }
+
+function deleteCollection(col_id, onDeleted) {
+    postRequest('/api/collections/delete?col_id=' + col_id, onDeleted);
+}

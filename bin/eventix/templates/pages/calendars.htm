@@ -18,7 +18,8 @@
                     {% endif %}
                 </div>
                 <div style="padding-top: .3em">
-                    <a id="delete-button-{{ col_id }}" class="ev_button ev_button_critical">
+                    <a href="javascript:askDeleteCollection('{{ col_id }}')"
+                       class="ev_button ev_button_critical">
                         <i class="bi bi-trash"></i>
                         <span>{{ "Delete"|t(locale) }}</span>
                     </a>
@@ -91,9 +92,19 @@
     </table>
 </div>
 
+<div id="delete-collection-confirm" title="{{ "Are you sure?"|t(locale) }}" style="display: none">
+    {{ "This will permanently delete this collection including all calendars."|t(locale) }}
+</div>
+
 <script type="text/javascript">
     function reloadPageIfPossible() {
         requestReload('out-of-sync', !userIsBusy());
+    }
+
+    function askDeleteCollection(col_id) {
+        showConfirmDialog('delete-collection-confirm', function() {
+            deleteCollection(col_id, reloadPageIfPossible)
+        })
     }
 
     function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {
