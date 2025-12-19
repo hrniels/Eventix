@@ -40,52 +40,49 @@ pub async fn handler(
     Query(req): Query<Params>,
     MultiForm(form): MultiForm<PostData>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    {
-        let mut state = state.lock().await;
-        let locale = state.settings().locale();
+    let mut state = state.lock().await;
 
-        {
-            let col = state
-                .settings_mut()
-                .collections_mut()
-                .get_mut(&req.col_id)
-                .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
+    let locale = state.settings().locale();
 
-            let update_cal = |settings: &mut CalendarSettings| -> anyhow::Result<()> {
-                settings.set_name(form.name);
-                settings.set_fgcolor(form.fgcolor);
-                settings.set_bgcolor(form.bgcolor);
-                settings.set_folder(form.folder);
-                settings.set_types(form.ev_types.unwrap_or_default());
-                let alarms = match form.alarm_type {
-                    AlarmType::Calendar => CalendarAlarmType::Calendar,
-                    AlarmType::Personal => CalendarAlarmType::Personal {
-                        default: if let Some(alarms) = form.alarms.to_alarms(&locale)? {
-                            alarms.into_iter().next()
-                        } else {
-                            None
-                        },
-                    },
-                };
-                settings.set_alarms(alarms);
-                Ok(())
-            };
+    let col = state
+        .settings_mut()
+        .collections_mut()
+        .get_mut(&req.col_id)
+        .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
 
-            if let Some(cal) = col.all_calendars_mut().get_mut(&req.cal_id) {
-                update_cal(cal)?;
-            } else {
-                let mut cal = CalendarSettings::default();
-                update_cal(&mut cal)?;
-                col.all_calendars_mut().insert(req.cal_id, cal);
-            }
-        }
+    let update_cal = |settings: &mut CalendarSettings| -> anyhow::Result<()> {
+        settings.set_name(form.name);
+        settings.set_fgcolor(form.fgcolor);
+        settings.set_bgcolor(form.bgcolor);
+        settings.set_folder(form.folder);
+        settings.set_types(form.ev_types.unwrap_or_default());
+        let alarms = match form.alarm_type {
+            AlarmType::Calendar => CalendarAlarmType::Calendar,
+            AlarmType::Personal => CalendarAlarmType::Personal {
+                default: if let Some(alarms) = form.alarms.to_alarms(&locale)? {
+                    alarms.into_iter().next()
+                } else {
+                    None
+                },
+            },
+        };
+        settings.set_alarms(alarms);
+        Ok(())
+    };
 
-        if let Err(e) = state.settings().write_to_file() {
-            tracing::warn!("Unable to save settings: {}", e);
-        }
+    if let Some(cal) = col.all_calendars_mut().get_mut(&req.cal_id) {
+        update_cal(cal)?;
+    } else {
+        let mut cal = CalendarSettings::default();
+        update_cal(&mut cal)?;
+        col.all_calendars_mut().insert(req.cal_id, cal);
     }
 
-    eventix_state::State::refresh_store(state).await?;
+    if let Err(e) = state.settings().write_to_file() {
+        tracing::warn!("Unable to save settings: {}", e);
+    }
+
+    eventix_state::State::refresh_store(&mut state).await?;
 
     Ok(Json(()))
 }

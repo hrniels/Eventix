@@ -13,25 +13,25 @@ use crate::misc::Misc;
 use crate::settings::SyncerType;
 use crate::sync::o365::O365;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
-use crate::{CollectionSettings, EventixState};
+use crate::{CollectionSettings, State};
 
 #[async_trait]
 pub trait Syncer: Send {
-    async fn discover(&self, state: EventixState) -> anyhow::Result<SyncCalResult>;
+    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncCalResult>;
 
     #[allow(clippy::ptr_arg)]
     async fn sync_cal(
         &mut self,
-        state: EventixState,
+        state: &mut State,
         cal_id: &String,
     ) -> anyhow::Result<SyncCalResult>;
 
-    async fn sync(&mut self, state: EventixState) -> anyhow::Result<SyncCalResult>;
+    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncCalResult>;
 
     #[allow(clippy::ptr_arg)]
-    async fn delete_cal(&mut self, state: EventixState, cal_id: &String) -> anyhow::Result<()>;
+    async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()>;
 
-    async fn delete(&mut self, state: EventixState, config: bool) -> anyhow::Result<()>;
+    async fn delete(&mut self, state: &mut State, config: bool) -> anyhow::Result<()>;
 }
 
 pub struct SyncerAuth {
@@ -67,103 +67,94 @@ struct CalendarSync {
 }
 
 pub(crate) async fn discover_collection(
-    state: EventixState,
+    state: &mut State,
     col_id: &String,
     auth_url: Option<&String>,
 ) -> anyhow::Result<SyncResult> {
-    let cal_sync = syncer_for_collection(&state, col_id, auth_url).await?;
+    let cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
 
     let mut sync_res = SyncResult::default();
-    let res = cal_sync.syncer.discover(state.clone()).await;
-    handle_sync_result(&state, col_id, res, &mut sync_res).await;
+    let res = cal_sync.syncer.discover(state).await;
+    handle_sync_result(state, col_id, res, &mut sync_res).await;
     Ok(sync_res)
 }
 
 pub(crate) async fn sync_collection(
-    state: EventixState,
+    state: &mut State,
     col_id: &String,
     auth_url: Option<&String>,
 ) -> anyhow::Result<SyncResult> {
-    let mut cal_sync = syncer_for_collection(&state, col_id, auth_url).await?;
+    let mut cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
 
     let mut sync_res = SyncResult::default();
-    let res = cal_sync.syncer.sync(state.clone()).await;
-    handle_sync_result(&state, col_id, res, &mut sync_res).await;
+    let res = cal_sync.syncer.sync(state).await;
+    handle_sync_result(state, col_id, res, &mut sync_res).await;
 
     Ok(sync_res)
 }
 
 pub(crate) async fn reload_collection(
-    state: EventixState,
+    state: &mut State,
     col_id: &String,
     auth_url: Option<&String>,
 ) -> anyhow::Result<SyncResult> {
-    let mut cal_sync = syncer_for_collection(&state, col_id, auth_url).await?;
+    let mut cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
 
-    cal_sync.syncer.delete(state.clone(), false).await?;
-    cal_sync.syncer.discover(state.clone()).await?;
+    cal_sync.syncer.delete(state, false).await?;
+    cal_sync.syncer.discover(state).await?;
 
     let mut sync_res = SyncResult::default();
-    let res = cal_sync.syncer.sync(state.clone()).await;
-    handle_sync_result(&state, col_id, res, &mut sync_res).await;
+    let res = cal_sync.syncer.sync(state).await;
+    handle_sync_result(state, col_id, res, &mut sync_res).await;
 
     Ok(sync_res)
 }
 
-pub(crate) async fn delete_collection(state: EventixState, col_id: &String) -> anyhow::Result<()> {
-    let mut cal_sync = syncer_for_collection(&state, col_id, None).await?;
-    cal_sync.syncer.delete(state.clone(), true).await
+pub(crate) async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
+    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
+    cal_sync.syncer.delete(state, true).await
 }
 
 pub(crate) async fn reload_calendar(
-    state: EventixState,
+    state: &mut State,
     col_id: &String,
     cal_id: &String,
     auth_url: Option<&String>,
 ) -> anyhow::Result<SyncResult> {
-    let mut cal_sync = syncer_for_collection(&state, col_id, auth_url).await?;
+    let mut cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
 
-    cal_sync.syncer.delete_cal(state.clone(), cal_id).await?;
-    cal_sync.syncer.discover(state.clone()).await?;
+    cal_sync.syncer.delete_cal(state, cal_id).await?;
+    cal_sync.syncer.discover(state).await?;
     let res = cal_sync.syncer.sync_cal(state, cal_id).await?;
 
     Ok(SyncResult::new_from_single(cal_id.to_string(), res))
 }
 
 pub(crate) async fn delete_calendar(
-    state: EventixState,
+    state: &mut State,
     col_id: &String,
     cal_id: &String,
 ) -> anyhow::Result<()> {
-    let mut cal_sync = syncer_for_collection(&state, col_id, None).await?;
-    cal_sync.syncer.delete_cal(state.clone(), cal_id).await
+    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
+    cal_sync.syncer.delete_cal(state, cal_id).await
 }
 
 pub(crate) async fn sync_all(
-    state: EventixState,
+    state: &mut State,
     auth_url: Option<&String>,
 ) -> anyhow::Result<SyncResult> {
-    let mut tasks = Vec::new();
-    for mut cmd in get_syncs(state.clone(), auth_url).await? {
-        let state_clone = state.clone();
-        tasks.push((
-            cmd.id.clone(),
-            tokio::spawn(async move { cmd.syncer.sync(state_clone).await }),
-        ));
-    }
-
     let mut sync_res = SyncResult::default();
 
-    for (id, handle) in tasks {
-        let res = handle.await?;
-        handle_sync_result(&state, &id, res, &mut sync_res).await;
+    for mut cmd in get_syncs(state, auth_url).await? {
+        let res = cmd.syncer.sync(state).await;
+        handle_sync_result(state, &cmd.id, res, &mut sync_res).await;
     }
 
     Ok(sync_res)
 }
 
 async fn handle_sync_result(
-    state: &EventixState,
+    state: &mut State,
     col_id: &String,
     res: anyhow::Result<SyncCalResult>,
     sync_res: &mut SyncResult,
@@ -186,7 +177,6 @@ async fn handle_sync_result(
     };
 
     // set the error for all calendars within this collection
-    let mut state = state.lock().await;
     let ids = state
         .settings()
         .collections()
@@ -202,10 +192,9 @@ async fn handle_sync_result(
 }
 
 async fn get_syncs(
-    state: EventixState,
+    state: &mut State,
     auth_url: Option<&String>,
 ) -> anyhow::Result<Vec<CalendarSync>> {
-    let state = state.lock().await;
     let mut res = vec![];
     for (idx, (id, col)) in state.settings().collections().iter().enumerate() {
         let cal_sync = get_sync(state.xdg(), idx, id, col, state.misc(), auth_url).await?;
@@ -215,19 +204,16 @@ async fn get_syncs(
 }
 
 async fn syncer_for_collection(
-    state: &EventixState,
+    state: &State,
     col_id: &String,
     auth_url: Option<&String>,
 ) -> anyhow::Result<CalendarSync> {
-    let state = state.lock().await;
-
     let col = state
         .settings()
         .collections()
         .get(col_id)
         .ok_or_else(|| anyhow!("No collection with id {}", col_id))?;
 
-    // TODO we need to think about parallelism here (what if sync and discover run in parallel?)
     get_sync(state.xdg(), 0, col_id, col, state.misc(), auth_url).await
 }
 

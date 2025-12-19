@@ -10,7 +10,6 @@ use eventix_ical::{
     col::{CalDir, CalStore},
     objects::{EventLike, UpdatableEventLike},
 };
-use once_cell::sync::Lazy;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs::File,
@@ -27,19 +26,6 @@ pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings, SyncerType,
 };
 pub use sync::{SyncCalResult, SyncResult, Syncer};
-
-/// Global lock for all sync/discover/delete/... operations on collections and calendars.
-///
-/// Although we have another lock for the state, we need a global lock in addition to include
-/// changes to file system state, used network ports, and the like. For example, we cannot allow
-/// multiple sync operations to happen in parallel or a discover and delete operation in parallel
-/// and so on.
-///
-/// Therefore, the global lock is taken first for all of these operations ensuring that only one of
-/// them can be done at a time and within these operations we take the state lock when required to
-/// ensure mutual exclusion with other state accessess (e.g., when reading the state or adding a
-/// new event).
-static GLOBAL_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 pub type EventixState = Arc<Mutex<State>>;
 
@@ -78,10 +64,7 @@ impl State {
         })
     }
 
-    pub async fn refresh_store(state: EventixState) -> anyhow::Result<()> {
-        let _lock = GLOBAL_LOCK.lock().await;
-        let mut state = state.lock().await;
-
+    pub async fn refresh_store(state: &mut State) -> anyhow::Result<()> {
         let State {
             store,
             settings,
@@ -160,52 +143,43 @@ impl State {
     }
 
     pub async fn discover_collection(
-        state: EventixState,
+        state: &mut State,
         col_id: &String,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let _lock = GLOBAL_LOCK.lock().await;
         sync::discover_collection(state, col_id, auth_url).await
     }
 
     pub async fn sync_collection(
-        state: EventixState,
+        state: &mut State,
         col_id: &String,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let _lock = GLOBAL_LOCK.lock().await;
         sync::sync_collection(state, col_id, auth_url).await
     }
 
     pub async fn reload_collection(
-        state: EventixState,
+        state: &mut State,
         col_id: &String,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let _lock = GLOBAL_LOCK.lock().await;
         sync::reload_collection(state, col_id, auth_url).await
     }
 
-    pub async fn delete_collection(state: EventixState, col_id: &String) -> anyhow::Result<()> {
-        let _lock = GLOBAL_LOCK.lock().await;
+    pub async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
+        sync::delete_collection(state, col_id).await?;
 
-        sync::delete_collection(state.clone(), col_id).await?;
-
-        let mut state = state.lock().await;
         state.settings_mut().collections_mut().remove(col_id);
         Ok(())
     }
 
     pub async fn delete_calendar(
-        state: EventixState,
+        state: &mut State,
         col_id: &String,
         cal_id: &String,
     ) -> anyhow::Result<()> {
-        let _lock = GLOBAL_LOCK.lock().await;
+        sync::delete_calendar(state, col_id, cal_id).await?;
 
-        sync::delete_calendar(state.clone(), col_id, cal_id).await?;
-
-        let mut state = state.lock().await;
         let col = state
             .settings_mut()
             .collections_mut()
@@ -216,25 +190,20 @@ impl State {
     }
 
     pub async fn reload_calendar(
-        state: EventixState,
+        state: &mut State,
         col_id: &String,
         cal_id: &String,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let _lock = GLOBAL_LOCK.lock().await;
         sync::reload_calendar(state, col_id, cal_id, auth_url).await
     }
 
     pub async fn reload(
-        state: EventixState,
+        state: &mut State,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let _lock = GLOBAL_LOCK.lock().await;
-
         // first reload the settings and personal alarms
         let changed = {
-            let mut state = state.lock().await;
-
             let settings =
                 settings::Settings::load_from_file(&state.xdg).context("load settings")?;
             let personal_alarms =
@@ -251,11 +220,11 @@ impl State {
         };
 
         // now synchronize and update the store
-        let mut sync_res = sync::sync_all(state.clone(), auth_url).await?;
+        let mut sync_res = sync::sync_all(state, auth_url).await?;
         sync_res.changed |= changed;
 
         // remember last reload
-        state.lock().await.last_reload = chrono::Utc::now().naive_utc();
+        state.last_reload = chrono::Utc::now().naive_utc();
 
         Ok(sync_res)
     }

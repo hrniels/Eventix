@@ -9,7 +9,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use xdg::BaseDirectories;
 
-use crate::EventixState;
+use crate::State;
 use crate::sync::{SyncCalResult, Syncer, SyncerAuth};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -197,7 +197,7 @@ impl VDirSyncer {
 
     async fn run_sync(
         &mut self,
-        state: EventixState,
+        state: &mut State,
         names: Vec<String>,
     ) -> anyhow::Result<SyncCalResult> {
         let mut tried_discover = false;
@@ -211,7 +211,7 @@ impl VDirSyncer {
             let child = cmd.spawn()?;
             let output = child.wait_with_output().await?;
             let status = output.status;
-            let res = self.post_process(&state, output).await?;
+            let res = self.post_process(state, output).await?;
 
             match res {
                 SyncResult::NeedsDiscover => {
@@ -233,11 +233,7 @@ impl VDirSyncer {
         }
     }
 
-    async fn post_process(
-        &self,
-        state: &EventixState,
-        output: Output,
-    ) -> anyhow::Result<SyncResult> {
+    async fn post_process(&self, state: &mut State, output: Output) -> anyhow::Result<SyncResult> {
         let mut changes = CalendarChanges::default();
 
         for line in String::from_utf8(output.stderr)?.lines() {
@@ -272,7 +268,6 @@ impl VDirSyncer {
             .values()
             .any(|c| c.added || !c.changed.is_empty() || !c.deleted.is_empty());
 
-        let mut state = state.lock().await;
         for (id, changes) in changes.calendars.iter() {
             if let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.clone())) {
                 if changes.added {
@@ -299,7 +294,7 @@ impl VDirSyncer {
 
 #[async_trait]
 impl Syncer for VDirSyncer {
-    async fn discover(&self, _state: EventixState) -> anyhow::Result<SyncCalResult> {
+    async fn discover(&self, _state: &mut State) -> anyhow::Result<SyncCalResult> {
         self.run_discover().await?;
 
         let mut cmd = Command::new("vdirsyncer");
@@ -326,11 +321,10 @@ impl Syncer for VDirSyncer {
 
     async fn sync_cal(
         &mut self,
-        state: EventixState,
+        state: &mut State,
         cal_id: &String,
     ) -> anyhow::Result<SyncCalResult> {
         let names = {
-            let state = state.lock().await;
             let col = state.settings().collections().get(&self.name).unwrap();
             let (_, cal) = col
                 .all_calendars()
@@ -346,10 +340,9 @@ impl Syncer for VDirSyncer {
         self.run_sync(state, names).await
     }
 
-    async fn sync(&mut self, state: EventixState) -> anyhow::Result<SyncCalResult> {
+    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncCalResult> {
         // determine collection and pair names to sync
         let names = {
-            let state = state.lock().await;
             let col = state.settings().collections().get(&self.name).unwrap();
             col.calendars()
                 .map(|(_id, settings)| format!("{}/{}", &self.name, settings.folder()))
@@ -362,10 +355,9 @@ impl Syncer for VDirSyncer {
         self.run_sync(state, names).await
     }
 
-    async fn delete_cal(&mut self, state: EventixState, cal_id: &String) -> anyhow::Result<()> {
+    async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()> {
         let dir = self.cfg.parent().unwrap();
 
-        let state = state.lock().await;
         let folder = state
             .settings()
             .collections()
@@ -402,7 +394,7 @@ impl Syncer for VDirSyncer {
         Ok(())
     }
 
-    async fn delete(&mut self, _state: EventixState, config: bool) -> anyhow::Result<()> {
+    async fn delete(&mut self, _state: &mut State, config: bool) -> anyhow::Result<()> {
         let dir = self.cfg.parent().unwrap();
 
         // remove complete status and directory

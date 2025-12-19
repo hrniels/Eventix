@@ -43,29 +43,34 @@ async fn handler(
     State(state): State<EventixState>,
     MultiQuery(req): MultiQuery<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let locale = state.lock().await.settings().locale();
+    let mut state = state.lock().await;
+
+    let locale = state.settings().locale();
 
     let sync_res = match req.op {
-        Operation::ReloadAll => eventix_state::State::reload(state, req.auth_url.as_ref())
+        Operation::ReloadAll => eventix_state::State::reload(&mut state, req.auth_url.as_ref())
             .await
             .context("Unable to reload state")?,
         Operation::ReloadCollection { col_id } => {
-            eventix_state::State::reload_collection(state, &col_id, req.auth_url.as_ref())
+            eventix_state::State::reload_collection(&mut state, &col_id, req.auth_url.as_ref())
                 .await
                 .context(format!("Unable to reload collection {}", col_id))?
         }
-        Operation::ReloadCalendar { col_id, cal_id } => {
-            eventix_state::State::reload_calendar(state, &col_id, &cal_id, req.auth_url.as_ref())
-                .await
-                .context(format!("Unable to reload calendar {}:{}", col_id, cal_id))?
-        }
+        Operation::ReloadCalendar { col_id, cal_id } => eventix_state::State::reload_calendar(
+            &mut state,
+            &col_id,
+            &cal_id,
+            req.auth_url.as_ref(),
+        )
+        .await
+        .context(format!("Unable to reload calendar {}:{}", col_id, cal_id))?,
         Operation::SyncCollection { col_id } => {
-            eventix_state::State::sync_collection(state, &col_id, req.auth_url.as_ref())
+            eventix_state::State::sync_collection(&mut state, &col_id, req.auth_url.as_ref())
                 .await
                 .context(format!("Unable to sync collection {}", col_id))?
         }
         Operation::DiscoverCollection { col_id } => {
-            eventix_state::State::discover_collection(state, &col_id, req.auth_url.as_ref())
+            eventix_state::State::discover_collection(&mut state, &col_id, req.auth_url.as_ref())
                 .await
                 .context(format!("Unable to discover collection {}", col_id))?
         }

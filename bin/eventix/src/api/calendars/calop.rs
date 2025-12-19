@@ -31,22 +31,22 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
+    let mut state = state.lock().await;
+
     match req.op {
         Operation::Delete => {
-            eventix_state::State::delete_calendar(state.clone(), &req.col_id, &req.cal_id)
+            eventix_state::State::delete_calendar(&mut state, &req.col_id, &req.cal_id)
                 .await
                 .context(format!(
                     "Unable to delete calendar {}:{}",
                     req.col_id, req.cal_id
                 ))?;
 
-            if let Err(e) = state.lock().await.settings().write_to_file() {
+            if let Err(e) = state.settings().write_to_file() {
                 tracing::warn!("Unable to save settings: {}", e);
             }
         }
         Operation::Toggle => {
-            let mut state = state.lock().await;
-
             let col = state
                 .settings_mut()
                 .collections_mut()
@@ -65,7 +65,7 @@ pub async fn handler(
         }
     }
 
-    eventix_state::State::refresh_store(state).await?;
+    eventix_state::State::refresh_store(&mut state).await?;
 
     Ok(Json(()))
 }

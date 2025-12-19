@@ -23,15 +23,17 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    eventix_state::State::delete_collection(state.clone(), &req.col_id)
+    let mut state = state.lock().await;
+
+    eventix_state::State::delete_collection(&mut state, &req.col_id)
         .await
         .context(format!("Unable to delete collection {}", req.col_id))?;
 
-    if let Err(e) = state.lock().await.settings().write_to_file() {
+    if let Err(e) = state.settings().write_to_file() {
         tracing::warn!("Unable to save settings: {}", e);
     }
 
-    eventix_state::State::refresh_store(state).await?;
+    eventix_state::State::refresh_store(&mut state).await?;
 
     Ok(Json(()))
 }

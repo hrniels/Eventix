@@ -9,7 +9,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use xdg::BaseDirectories;
 
-use crate::EventixState;
+use crate::State;
 use crate::sync::vdirsyncer::VDirSyncer;
 use crate::sync::{SyncCalResult, Syncer, SyncerAuth};
 
@@ -113,7 +113,7 @@ impl O365 {
 
     async fn remember_token(
         &self,
-        state: &EventixState,
+        state: &mut State,
         res: anyhow::Result<SyncCalResult>,
     ) -> anyhow::Result<SyncCalResult> {
         if let Ok(SyncCalResult::Success(_)) = res
@@ -129,7 +129,6 @@ impl O365 {
                 {
                     let token = &line[split + 1..];
                     // permanently remember the token
-                    let mut state = state.lock().await;
                     let misc = state.misc_mut();
                     misc.set_calendar_token(&self.col_id, token.to_string());
                     misc.write_to_file()?;
@@ -206,21 +205,21 @@ impl O365 {
 
 #[async_trait]
 impl Syncer for O365 {
-    async fn discover(&self, state: EventixState) -> anyhow::Result<SyncCalResult> {
+    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncCalResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
 
         Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
-            let res = self.vdirsyncer.discover(state.clone()).await;
-            self.remember_token(&state, res).await
+            let res = self.vdirsyncer.discover(state).await;
+            self.remember_token(state, res).await
         })
         .await
     }
 
     async fn sync_cal(
         &mut self,
-        state: EventixState,
+        state: &mut State,
         cal_id: &String,
     ) -> anyhow::Result<SyncCalResult> {
         let id = self.col_id.clone();
@@ -228,29 +227,29 @@ impl Syncer for O365 {
         let props_path = self.props_path.clone();
 
         Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
-            let res = self.vdirsyncer.sync_cal(state.clone(), cal_id).await;
-            self.remember_token(&state, res).await
+            let res = self.vdirsyncer.sync_cal(state, cal_id).await;
+            self.remember_token(state, res).await
         })
         .await
     }
 
-    async fn sync(&mut self, state: EventixState) -> anyhow::Result<SyncCalResult> {
+    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncCalResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
 
         Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
-            let res = self.vdirsyncer.sync(state.clone()).await;
-            self.remember_token(&state, res).await
+            let res = self.vdirsyncer.sync(state).await;
+            self.remember_token(state, res).await
         })
         .await
     }
 
-    async fn delete_cal(&mut self, state: EventixState, cal_id: &String) -> anyhow::Result<()> {
+    async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()> {
         self.vdirsyncer.delete_cal(state, cal_id).await
     }
 
-    async fn delete(&mut self, state: EventixState, config: bool) -> anyhow::Result<()> {
+    async fn delete(&mut self, state: &mut State, config: bool) -> anyhow::Result<()> {
         self.vdirsyncer.delete(state, config).await?;
 
         if config {
