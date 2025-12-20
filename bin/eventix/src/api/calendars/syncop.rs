@@ -2,7 +2,7 @@ use anyhow::Context;
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use eventix_ical::objects::CalDate;
 use eventix_locale::TimeFlags;
-use eventix_state::{EventixState, SyncCalResult};
+use eventix_state::{EventixState, SyncColResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -29,7 +29,8 @@ struct Request {
 #[derive(Debug, Serialize)]
 struct Response {
     changed: bool,
-    calendars: HashMap<String, SyncCalResult>,
+    collections: HashMap<String, SyncColResult>,
+    calendars: HashMap<String, Option<String>>,
     date: String,
 }
 
@@ -78,6 +79,7 @@ async fn handler(
 
     Ok(Json(Response {
         changed: sync_res.changed,
+        collections: sync_res.collections,
         calendars: sync_res.calendars,
         date: html::filters::time(
             &CalDate::now().as_start_with_tz(locale.timezone()),

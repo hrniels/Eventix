@@ -25,7 +25,7 @@ pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
 pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings, SyncerType,
 };
-pub use sync::{SyncCalResult, SyncResult, Syncer};
+pub use sync::{SyncColResult, SyncResult, Syncer};
 
 pub type EventixState = Arc<Mutex<State>>;
 

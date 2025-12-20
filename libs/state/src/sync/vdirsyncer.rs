@@ -10,7 +10,7 @@ use tokio::process::Command;
 use xdg::BaseDirectories;
 
 use crate::State;
-use crate::sync::{SyncCalResult, Syncer, SyncerAuth};
+use crate::sync::{SyncColResult, Syncer, SyncerAuth};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum SyncResult {
@@ -199,7 +199,7 @@ impl VDirSyncer {
         &mut self,
         state: &mut State,
         names: Vec<String>,
-    ) -> anyhow::Result<SyncCalResult> {
+    ) -> anyhow::Result<SyncColResult> {
         let mut tried_discover = false;
         loop {
             let mut cmd = Command::new("vdirsyncer");
@@ -224,7 +224,7 @@ impl VDirSyncer {
                 }
                 SyncResult::Success(res) => {
                     if status.success() {
-                        return Ok(SyncCalResult::Success(res));
+                        return Ok(SyncColResult::Success(res));
                     } else {
                         return Err(anyhow!("exited with {}", status));
                     }
@@ -294,7 +294,7 @@ impl VDirSyncer {
 
 #[async_trait]
 impl Syncer for VDirSyncer {
-    async fn discover(&self, _state: &mut State) -> anyhow::Result<SyncCalResult> {
+    async fn discover(&self, _state: &mut State) -> anyhow::Result<SyncColResult> {
         self.run_discover().await?;
 
         let mut cmd = Command::new("vdirsyncer");
@@ -316,14 +316,14 @@ impl Syncer for VDirSyncer {
         if !output.status.success() {
             return Err(anyhow!("exited with {}", output.status));
         }
-        Ok(SyncCalResult::Success(false))
+        Ok(SyncColResult::Success(false))
     }
 
     async fn sync_cal(
         &mut self,
         state: &mut State,
         cal_id: &String,
-    ) -> anyhow::Result<SyncCalResult> {
+    ) -> anyhow::Result<SyncColResult> {
         let names = {
             let col = state.settings().collections().get(&self.name).unwrap();
             let (_, cal) = col
@@ -332,7 +332,7 @@ impl Syncer for VDirSyncer {
                 .find(|(id, _settings)| *id == cal_id)
                 .ok_or_else(|| anyhow!("No calendar with id {}", cal_id))?;
             if !cal.enabled() {
-                return Ok(SyncCalResult::Success(false));
+                return Ok(SyncColResult::Success(false));
             }
             vec![format!("{}/{}", self.name, cal.folder())]
         };
@@ -340,7 +340,7 @@ impl Syncer for VDirSyncer {
         self.run_sync(state, names).await
     }
 
-    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncCalResult> {
+    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncColResult> {
         // determine collection and pair names to sync
         let names = {
             let col = state.settings().collections().get(&self.name).unwrap();
@@ -349,7 +349,7 @@ impl Syncer for VDirSyncer {
                 .collect::<Vec<_>>()
         };
         if names.is_empty() {
-            return Ok(SyncCalResult::Success(false));
+            return Ok(SyncColResult::Success(false));
         }
 
         self.run_sync(state, names).await

@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     State,
-    sync::{SyncCalResult, Syncer},
+    sync::{SyncColResult, Syncer},
 };
 
 pub struct FSSyncer {
@@ -31,26 +31,26 @@ impl FSSyncer {
 
 #[async_trait]
 impl Syncer for FSSyncer {
-    async fn discover(&self, _state: &mut State) -> anyhow::Result<SyncCalResult> {
-        Ok(SyncCalResult::Success(false))
+    async fn discover(&self, _state: &mut State) -> anyhow::Result<SyncColResult> {
+        Ok(SyncColResult::Success(false))
     }
 
     async fn sync_cal(
         &mut self,
         state: &mut State,
         cal_id: &String,
-    ) -> anyhow::Result<SyncCalResult> {
+    ) -> anyhow::Result<SyncColResult> {
         let seen_changes = Self::sync_folder(state, cal_id)?;
-        Ok(SyncCalResult::Success(seen_changes))
+        Ok(SyncColResult::Success(seen_changes))
     }
 
-    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncCalResult> {
+    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncColResult> {
         let mut seen_changes = false;
         for id in self.folder_id.values() {
             seen_changes |= Self::sync_folder(state, id)?;
         }
 
-        Ok(SyncCalResult::Success(seen_changes))
+        Ok(SyncColResult::Success(seen_changes))
     }
 
     async fn delete_cal(&mut self, _state: &mut State, _cal_id: &String) -> anyhow::Result<()> {

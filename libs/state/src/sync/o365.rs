@@ -11,7 +11,7 @@ use xdg::BaseDirectories;
 
 use crate::State;
 use crate::sync::vdirsyncer::VDirSyncer;
-use crate::sync::{SyncCalResult, Syncer, SyncerAuth};
+use crate::sync::{SyncColResult, Syncer, SyncerAuth};
 
 const PORT_BASE: u16 = 25000;
 
@@ -114,9 +114,9 @@ impl O365 {
     async fn remember_token(
         &self,
         state: &mut State,
-        res: anyhow::Result<SyncCalResult>,
-    ) -> anyhow::Result<SyncCalResult> {
-        if let Ok(SyncCalResult::Success(_)) = res
+        res: anyhow::Result<SyncColResult>,
+    ) -> anyhow::Result<SyncColResult> {
+        if let Ok(SyncColResult::Success(_)) = res
             && self.auth_url.is_some()
         {
             let file = File::options().read(true).open(&self.props_path).await?;
@@ -144,10 +144,10 @@ impl O365 {
         id: &String,
         auth_url: Option<&String>,
         func: F,
-    ) -> anyhow::Result<SyncCalResult>
+    ) -> anyhow::Result<SyncColResult>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = anyhow::Result<SyncCalResult>>,
+        Fut: Future<Output = anyhow::Result<SyncColResult>>,
     {
         let mut cmd = Command::new("davmail");
         cmd.stdin(Stdio::piped());
@@ -181,7 +181,7 @@ impl O365 {
                         stdin.write_all(b"\n").await?;
                     } else {
                         // otherwise we fail and ask the user to authenticate
-                        return Ok(SyncCalResult::AuthFailed(line));
+                        return Ok(SyncColResult::AuthFailed(line));
                     }
                 }
             }
@@ -205,7 +205,7 @@ impl O365 {
 
 #[async_trait]
 impl Syncer for O365 {
-    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncCalResult> {
+    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncColResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
@@ -221,7 +221,7 @@ impl Syncer for O365 {
         &mut self,
         state: &mut State,
         cal_id: &String,
-    ) -> anyhow::Result<SyncCalResult> {
+    ) -> anyhow::Result<SyncColResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
@@ -233,7 +233,7 @@ impl Syncer for O365 {
         .await
     }
 
-    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncCalResult> {
+    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncColResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();

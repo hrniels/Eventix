@@ -17,16 +17,16 @@ use crate::{CollectionSettings, State};
 
 #[async_trait]
 pub trait Syncer: Send {
-    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncCalResult>;
+    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncColResult>;
 
     #[allow(clippy::ptr_arg)]
     async fn sync_cal(
         &mut self,
         state: &mut State,
         cal_id: &String,
-    ) -> anyhow::Result<SyncCalResult>;
+    ) -> anyhow::Result<SyncColResult>;
 
-    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncCalResult>;
+    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncColResult>;
 
     #[allow(clippy::ptr_arg)]
     async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()>;
@@ -40,7 +40,7 @@ pub struct SyncerAuth {
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub enum SyncCalResult {
+pub enum SyncColResult {
     Success(bool),
     Error(String),
     AuthFailed(String),
@@ -49,15 +49,27 @@ pub enum SyncCalResult {
 #[derive(Default)]
 pub struct SyncResult {
     pub changed: bool,
-    pub calendars: HashMap<String, SyncCalResult>,
+    pub collections: HashMap<String, SyncColResult>,
+    pub calendars: HashMap<String, Option<String>>,
 }
 
 impl SyncResult {
-    fn new_from_single(cal_id: String, res: SyncCalResult) -> Self {
-        let changed = matches!(res, SyncCalResult::Success(changed) if changed);
+    fn new_from_single(col_id: String, cal_id: String, res: SyncColResult) -> Self {
+        let changed = matches!(res, SyncColResult::Success(changed) if changed);
+        let error = if let SyncColResult::Error(msg) = &res {
+            Some(msg.clone())
+        } else {
+            None
+        };
+        let mut collections = HashMap::new();
+        collections.insert(col_id, res);
         let mut calendars = HashMap::new();
-        calendars.insert(cal_id, res);
-        Self { changed, calendars }
+        calendars.insert(cal_id, error);
+        Self {
+            changed,
+            collections,
+            calendars,
+        }
     }
 }
 
@@ -127,7 +139,11 @@ pub(crate) async fn reload_calendar(
     cal_sync.syncer.discover(state).await?;
     let res = cal_sync.syncer.sync_cal(state, cal_id).await?;
 
-    Ok(SyncResult::new_from_single(cal_id.to_string(), res))
+    Ok(SyncResult::new_from_single(
+        col_id.to_string(),
+        cal_id.to_string(),
+        res,
+    ))
 }
 
 pub(crate) async fn delete_calendar(
@@ -156,25 +172,27 @@ pub(crate) async fn sync_all(
 async fn handle_sync_result(
     state: &mut State,
     col_id: &String,
-    res: anyhow::Result<SyncCalResult>,
+    res: anyhow::Result<SyncColResult>,
     sync_res: &mut SyncResult,
 ) {
     let res = match res {
         Ok(res) => res,
-        Err(e) => SyncCalResult::Error(e.to_string()),
+        Err(e) => SyncColResult::Error(e.to_string()),
     };
 
     match &res {
-        SyncCalResult::Success(cal_changed) => sync_res.changed = *cal_changed,
-        SyncCalResult::Error(msg) => tracing::error!("{}: failed with {}", col_id, msg),
-        SyncCalResult::AuthFailed(_) => tracing::error!("{}: auth failed", col_id),
+        SyncColResult::Success(cal_changed) => sync_res.changed = *cal_changed,
+        SyncColResult::Error(msg) => tracing::error!("{}: failed with {}", col_id, msg),
+        SyncColResult::AuthFailed(_) => tracing::error!("{}: auth failed", col_id),
     }
 
     // extract error message
     let sync_error = match &res {
-        SyncCalResult::Error(msg) => Some(msg.clone()),
+        SyncColResult::Error(msg) => Some(msg.clone()),
         _ => None,
     };
+
+    sync_res.collections.insert(col_id.clone(), res.clone());
 
     // set the error for all calendars within this collection
     let ids = state
@@ -187,7 +205,7 @@ async fn handle_sync_result(
         .collect::<Vec<_>>();
     for cal_id in ids {
         state.misc_mut().set_sync_error(&cal_id, sync_error.clone());
-        sync_res.calendars.insert(cal_id, res.clone());
+        sync_res.calendars.insert(cal_id, sync_error.clone());
     }
 }
 
