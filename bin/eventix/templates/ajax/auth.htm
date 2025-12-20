@@ -32,5 +32,7 @@
         <br />
         <input type="text" id="result_url" name="result_url" size="50" />
         <input type="submit" value="{{ "Retry"|t(locale) }}" onclick="submitAndClose()" />
+        <input type="button" value="{{ "Cancel"|t(locale) }}"
+               onclick="fireEvent(new DeselectEvent())" />
     </div>
 </div>
