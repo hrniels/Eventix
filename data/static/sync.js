@@ -19,7 +19,7 @@ function handleAuthErrors(data) {
     for(var cal in data.collections) {
         // auth problem? Then show auth popup
         if(data.collections[cal].AuthFailed) {
-            fireEvent(new AuthEvent(cal, data.collections[cal].AuthFailed));
+            fireEvent(createAuthEvent(cal, data.collections[cal].AuthFailed));
             return true;
         }
     }

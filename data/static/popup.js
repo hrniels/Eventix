@@ -28,16 +28,9 @@ class LargeState extends State {
     }
 }
 
-class HelpState extends State {
-    constructor() {
-        super("help");
-    }
-}
-
-class AuthState extends State {
-    constructor(cal, url) {
-        super("auth");
-        this.cal = cal;
+class PageState extends State {
+    constructor(url) {
+        super("page");
         this.url = url;
     }
 }
@@ -85,8 +78,7 @@ class DeselectEvent extends Event {
                 await _deselect(state.ids);
                 return new InitState();
 
-            case "help":
-            case "auth":
+            case "page":
             case "large":
                 if(state.popup_pos != null) {
                     await _shrinkPopup(state.popup_pos);
@@ -128,8 +120,7 @@ class EditEvent extends Event {
                 await _animateOpenPopup();
                 return new LargeState(state.ids, popup_pos);
 
-            case "help":
-            case "auth":
+            case "page":
                 console.assert(false, "This should not happen");
 
             default:
@@ -145,8 +136,7 @@ class CancelEvent extends Event {
 
     async trigger(state) {
         switch(state.name) {
-            case "help":
-            case "auth":
+            case "page":
             case "large":
                 let new_state;
                 if(state.popup_pos != null) {
@@ -166,34 +156,10 @@ class CancelEvent extends Event {
     }
 }
 
-class HelpEvent extends Event {
-    constructor() {
-        super("help");
-    }
-
-    async trigger(state) {
-        switch(state.name) {
-            case "init":
-                await _openHelpPopup();
-                return new HelpState();
-
-            case "small":
-            case "large":
-                await _loadHelp();
-                await _animateOpenPopup();
-                return new HelpState();
-
-            default:
-                return state;
-        }
-    }
-}
-
-class AuthEvent extends Event {
-    constructor(cal, url) {
-        super("auth");
+class PageEvent extends Event {
+    constructor(url) {
+        super("page");
         this.data = {
-            'cal': cal,
             'url': url,
         };
     }
@@ -201,19 +167,27 @@ class AuthEvent extends Event {
     async trigger(state) {
         switch(state.name) {
             case "init":
-                await _openAuthPopup(this.data['cal'], this.data['url']);
-                return new AuthState(this.data['cal'], this.data['url']);
+                await _openPagePopup(this.data['url']);
+                return new PageState(this.data['url']);
 
             case "small":
             case "large":
-                await _loadAuth(this.data['cal'], this.data['url']);
+                await _loadPage(this.data['url']);
                 await _animateOpenPopup();
-                return new AuthState(this.data['cal'], this.data['url']);
+                return new PageState(this.data['url']);
 
             default:
                 return state;
         }
     }
+}
+
+function createHelpEvent() {
+    return new PageEvent('/api/help');
+}
+
+function createAuthEvent(cal, url) {
+    return new PageEvent('/api/auth?calendar=' + cal + '&url=' + encodeURIComponent(url));
 }
 
 let state = new InitState();
@@ -301,13 +275,9 @@ async function _openLargePopup(el) {
     });
 }
 
-async function _openHelpPopup(el) {
-    await _openFromElement('#link-help', _loadHelp);
-}
-
-async function _openAuthPopup(cal, url) {
+async function _openPagePopup(url) {
     await _openFromElement('#link-refresh', async function() {
-        _loadAuth(cal, url)
+        _loadPage(url);
     });
 }
 
@@ -395,14 +365,6 @@ async function _loadOccurrence(uid, rid, edit) {
     if(rid)
         url += '&rid=' + rid;
     await _loadPage(url);
-}
-
-async function _loadHelp() {
-    await _loadPage('/api/help');
-}
-
-async function _loadAuth(cal, url) {
-    await _loadPage('/api/auth?calendar=' + cal + '&url=' + encodeURIComponent(url));
 }
 
 async function _loadPage(url) {
