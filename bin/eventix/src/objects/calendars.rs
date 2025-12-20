@@ -4,7 +4,7 @@ pub struct Calendar {
     pub id: String,
     pub name: String,
     pub enabled: bool,
-    pub sync_error: Option<String>,
+    pub sync_error: bool,
     pub fgcolor: String,
     pub bgcolor: String,
 }
@@ -26,7 +26,7 @@ impl Calendars {
                         id: id.clone(),
                         name: settings.name().clone(),
                         enabled: !state.misc().calendar_disabled(id),
-                        sync_error: state.misc().get_sync_error(id).cloned(),
+                        sync_error: state.misc().has_sync_error(id),
                         fgcolor: settings.fgcolor().clone(),
                         bgcolor: settings.bgcolor().clone(),
                     })

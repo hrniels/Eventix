@@ -52,11 +52,7 @@
                        href="javascript:toggleCalendar('{{ cal.id }}')">
                         <span id="calendar_enabled_{{ cal.id }}"
                               data-name="{{ cal.name }}"
-                              {% if let Some(msg) = cal.sync_error %}
-                              title="{{ cal.name }}: {{ msg }}"
-                              {% else %}
                               title="{{ cal.name }}"
-                              {% endif %}
                               class="ev_cal_src ev_cal_src_button
                                      {% if cal.enabled %}
                                      ev_cal_src_{{ cal.id }}
@@ -65,7 +61,7 @@
                                      {% endif %}
                                     ">
                             <i id="ev_cal_src_button_{{ cal.id }}"
-                               {% if cal.sync_error.is_some() %}
+                               {% if cal.sync_error %}
                                style="display: inline"
                                {% else %}
                                style="display: none"

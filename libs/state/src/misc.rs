@@ -1,7 +1,10 @@
 use chrono::NaiveDateTime;
 use eventix_ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 use xdg::BaseDirectories;
 
 const FILENAME: &str = "misc.toml";
@@ -17,7 +20,7 @@ pub struct Misc {
     #[serde(default)]
     disabled_calendars: Vec<String>,
     #[serde(default)]
-    sync_errors: HashMap<String, String>,
+    sync_errors: HashSet<String>,
     #[serde(default)]
     calendar_tokens: HashMap<String, String>,
 }
@@ -29,7 +32,7 @@ impl Misc {
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
-            sync_errors: HashMap::default(),
+            sync_errors: HashSet::default(),
             calendar_tokens: HashMap::default(),
         }
     }
@@ -66,15 +69,15 @@ impl Misc {
         }
     }
 
-    pub fn get_sync_error(&self, id: &String) -> Option<&String> {
-        self.sync_errors.get(id)
+    pub fn has_sync_error(&self, id: &String) -> bool {
+        self.sync_errors.contains(id)
     }
 
-    pub fn set_sync_error(&mut self, id: &String, error: Option<String>) {
-        if let Some(error) = error {
-            *self.sync_errors.entry(id.to_string()).or_default() = error;
-        } else {
+    pub fn set_sync_error(&mut self, id: &String, error: bool) {
+        if self.has_sync_error(id) && !error {
             self.sync_errors.remove(id);
+        } else if error {
+            self.sync_errors.insert(id.clone());
         }
     }
 

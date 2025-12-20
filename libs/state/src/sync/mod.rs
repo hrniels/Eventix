@@ -50,17 +50,13 @@ pub enum SyncColResult {
 pub struct SyncResult {
     pub changed: bool,
     pub collections: HashMap<String, SyncColResult>,
-    pub calendars: HashMap<String, Option<String>>,
+    pub calendars: HashMap<String, bool>,
 }
 
 impl SyncResult {
     fn new_from_single(col_id: String, cal_id: String, res: SyncColResult) -> Self {
         let changed = matches!(res, SyncColResult::Success(changed) if changed);
-        let error = if let SyncColResult::Error(msg) = &res {
-            Some(msg.clone())
-        } else {
-            None
-        };
+        let error = matches!(res, SyncColResult::Error(_));
         let mut collections = HashMap::new();
         collections.insert(col_id, res);
         let mut calendars = HashMap::new();
@@ -204,8 +200,10 @@ async fn handle_sync_result(
         .map(|(cal_id, _)| cal_id.clone())
         .collect::<Vec<_>>();
     for cal_id in ids {
-        state.misc_mut().set_sync_error(&cal_id, sync_error.clone());
-        sync_res.calendars.insert(cal_id, sync_error.clone());
+        state
+            .misc_mut()
+            .set_sync_error(&cal_id, sync_error.is_some());
+        sync_res.calendars.insert(cal_id, sync_error.is_some());
     }
 }
 

@@ -30,7 +30,7 @@ struct Request {
 struct Response {
     changed: bool,
     collections: HashMap<String, SyncColResult>,
-    calendars: HashMap<String, Option<String>>,
+    calendars: HashMap<String, bool>,
     date: String,
 }
 

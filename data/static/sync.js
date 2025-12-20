@@ -29,18 +29,10 @@ function handleAuthErrors(data) {
 function handleCalErrors(data) {
     for(var cal in data.calendars) {
         let btn = $('#ev_cal_src_button_' + cal);
-        let error = $('#calendar_enabled_' + cal);
-        let calname = error.attr('data-name');
-
-        // update calendar buttons
-        if(data.calendars[cal]) {
-            error.attr('title', calname + ": " + data.calendars[cal]);
+        if(data.calendars[cal])
             btn.show();
-        }
-        else {
-            error.attr('title', calname);
+        else
             btn.hide();
-        }
     }
 }
 
