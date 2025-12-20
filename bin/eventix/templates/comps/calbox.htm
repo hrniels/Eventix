@@ -56,7 +56,7 @@
                    {% if let SyncerType::FileSystem { .. } = col.syncer() %}
                    class="ev_button ev_button_normal"
                    {% else %}
-                   class="ev_button ev_button_critical"
+                   class="ev_button ev_button_warn"
                    title="{{ "Warning: removes all local items and forgets the calendar settings. Local changes will be lost."|t(locale) }}"
                    {% endif %}
                    >
@@ -71,7 +71,7 @@
                    {% if let SyncerType::FileSystem { .. } = col.syncer() %}
                    class="ev_button ev_button_normal"
                    {% else %}
-                   class="ev_button ev_button_critical"
+                   class="ev_button ev_button_warn"
                    title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}"
                    {% endif %}
                    >

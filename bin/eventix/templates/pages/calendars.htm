@@ -32,7 +32,7 @@
                         <span>{{ "Delete"|t(locale) }}</span>
                     </a>
                     {% if col.syncer().supports_reload() %}
-                    <a class="ev_button ev_button_critical"
+                    <a class="ev_button ev_button_warn"
                        title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}"
                        href="javascript:reloadCollection('{{ col_id }}',
                                                          'reload_spinner_{{ col_id }}',
