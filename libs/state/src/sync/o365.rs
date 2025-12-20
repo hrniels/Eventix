@@ -4,14 +4,16 @@ use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::State;
 use crate::sync::vdirsyncer::VDirSyncer;
-use crate::sync::{SyncColResult, Syncer, SyncerAuth};
+use crate::sync::{SyncColResult, Syncer, SyncerAuth, log_line};
 
 const PORT_BASE: u16 = 25000;
 
@@ -20,6 +22,7 @@ pub struct O365 {
     vdirsyncer: VDirSyncer,
     auth_url: Option<String>,
     props_path: PathBuf,
+    log: Arc<Mutex<File>>,
 }
 
 impl O365 {
@@ -33,6 +36,7 @@ impl O365 {
         auth: SyncerAuth,
         auth_url: Option<&String>,
         token: Option<String>,
+        log: Arc<Mutex<File>>,
     ) -> anyhow::Result<Self> {
         let port = PORT_BASE + idx as u16;
 
@@ -45,14 +49,23 @@ impl O365 {
         let url = format!("http://localhost:{}/users/{}/{}/", port, user_enc, col_enc);
 
         // create vdirsyncer instance
-        let vdirsyncer =
-            VDirSyncer::new(xdg, col_id.clone(), folder_id, url, read_only, Some(auth)).await?;
+        let vdirsyncer = VDirSyncer::new(
+            xdg,
+            col_id.clone(),
+            folder_id,
+            url,
+            read_only,
+            Some(auth),
+            log.clone(),
+        )
+        .await?;
 
         Ok(Self {
             col_id,
             vdirsyncer,
             auth_url: auth_url.cloned(),
             props_path,
+            log,
         })
     }
 
@@ -64,9 +77,6 @@ impl O365 {
         token: Option<String>,
     ) -> anyhow::Result<PathBuf> {
         let dir = xdg.get_data_file("vdirsyncer").unwrap();
-        if !dir.exists() {
-            fs::create_dir(&dir).await?;
-        }
 
         let props_path = dir.join(format!("{}-davmail.properties", name));
         let mut props = File::options()
@@ -143,6 +153,7 @@ impl O365 {
         props_path: &Path,
         id: &String,
         auth_url: Option<&String>,
+        log: Arc<Mutex<File>>,
         func: F,
     ) -> anyhow::Result<SyncColResult>
     where
@@ -162,7 +173,7 @@ impl O365 {
 
         // ensure that the server is started before we let vdirsyncer connect to it
         while let Ok(Some(line)) = reader.next_line().await {
-            tracing::debug!("{}: {}", id, line);
+            log_line(&log, id, &line).await?;
             if line.contains("Start DavMail in server mode") {
                 break;
             }
@@ -171,7 +182,7 @@ impl O365 {
         // read lines and watch for auth requests
         let mut read_output = async || {
             while let Ok(Some(line)) = reader.next_line().await {
-                tracing::debug!("{}: {}", id, line);
+                log_line(&log, id, &line).await?;
 
                 // do we need to (re-)authenticate?
                 if line.starts_with("https://login.microsoftonline.com/") {
@@ -209,8 +220,9 @@ impl Syncer for O365 {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
+        let log = self.log.clone();
 
-        Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
+        Self::with_davmail(&props_path, &id, auth_url.as_ref(), log, async || {
             let res = self.vdirsyncer.discover(state).await;
             self.remember_token(state, res).await
         })
@@ -225,8 +237,9 @@ impl Syncer for O365 {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
+        let log = self.log.clone();
 
-        Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
+        Self::with_davmail(&props_path, &id, auth_url.as_ref(), log, async || {
             let res = self.vdirsyncer.sync_cal(state, cal_id).await;
             self.remember_token(state, res).await
         })
@@ -237,8 +250,9 @@ impl Syncer for O365 {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
+        let log = self.log.clone();
 
-        Self::with_davmail(&props_path, &id, auth_url.as_ref(), async || {
+        Self::with_davmail(&props_path, &id, auth_url.as_ref(), log, async || {
             let res = self.vdirsyncer.sync(state).await;
             self.remember_token(state, res).await
         })

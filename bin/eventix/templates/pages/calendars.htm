@@ -63,6 +63,13 @@
                         <i class="bi bi-pencil"></i>
                         <span>{{ "Edit"|t(locale) }}</span>
                     </a>
+                    {% if matches!(col.syncer(), SyncerType::VDirSyncer { .. } | SyncerType::O365 { .. }) %}
+                    <a class="ev_button ev_button_normal"
+                       href="javascript:fireEvent(new PageEvent('/api/collections/log?col_id={{ col_id }}'))">
+                        <i class="bi bi-list-ul"></i>
+                        <span>{{ "Log"|t(locale) }}</span>
+                    </a>
+                    {% endif %}
                 </div>
             </td>
             <td class="ev_main" width="60%" style="vertical-align: top">

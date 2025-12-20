@@ -7,10 +7,11 @@ use std::{process::Output, sync::Arc};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::State;
-use crate::sync::{SyncColResult, Syncer, SyncerAuth};
+use crate::sync::{SyncColResult, Syncer, SyncerAuth, log_line};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum SyncResult {
@@ -62,6 +63,7 @@ pub struct VDirSyncer {
     name: String,
     folder_id: HashMap<String, String>,
     cfg: PathBuf,
+    log: Arc<Mutex<File>>,
 }
 
 impl VDirSyncer {
@@ -72,12 +74,14 @@ impl VDirSyncer {
         url: String,
         read_only: bool,
         auth: Option<SyncerAuth>,
+        log: Arc<Mutex<File>>,
     ) -> anyhow::Result<Self> {
         let cfg = Self::generate_config(xdg, &name, url, read_only, auth).await?;
         Ok(Self {
             name,
             folder_id,
             cfg,
+            log,
         })
     }
 
@@ -93,10 +97,6 @@ impl VDirSyncer {
         auth: Option<SyncerAuth>,
     ) -> anyhow::Result<PathBuf> {
         let dir = xdg.get_data_file("vdirsyncer").unwrap();
-        if !dir.exists() {
-            fs::create_dir(&dir).await?;
-        }
-
         let status_path = dir.join(format!("{}-status", name));
         let sync_path = dir.join(format!("{}-data", name));
         let cfg_path = dir.join(format!("{}.cfg", name));
@@ -181,7 +181,7 @@ impl VDirSyncer {
         let mut stderr_reader = BufReader::new(stderr).lines();
 
         while let Some(line) = stderr_reader.next_line().await? {
-            tracing::debug!("{}: {}", self.name, line);
+            log_line(&self.log, &self.name, &line).await?;
             // in case it asks us whether to create the calendar, say "yes"
             stdin.write_all(b"y\n").await.unwrap();
         }
@@ -237,7 +237,7 @@ impl VDirSyncer {
         let mut changes = CalendarChanges::default();
 
         for line in String::from_utf8(output.stderr)?.lines() {
-            tracing::debug!("{}: {}", self.name, line);
+            log_line(&self.log, &self.name, &line).await?;
 
             // vdirsyncer will complain if a collection changes and request a re-discover
             if line.contains("run `vdirsyncer discover") {
@@ -310,7 +310,7 @@ impl Syncer for VDirSyncer {
         let child = cmd.spawn()?;
         let output = child.wait_with_output().await?;
         for line in String::from_utf8(output.stderr)?.lines() {
-            tracing::debug!("{}: {}", self.name, line);
+            log_line(&self.log, &self.name, line).await?;
         }
 
         if !output.status.success() {

@@ -188,6 +188,11 @@ impl CollectionSettings {
         self.syncer.path(xdg, name)
     }
 
+    pub fn log_file(&self, xdg: &BaseDirectories, name: &str) -> PathBuf {
+        let dir = xdg.get_data_file("vdirsyncer").unwrap();
+        dir.join(format!("{}.log", name))
+    }
+
     pub fn email(&self) -> Option<&EmailAccount> {
         self.syncer.email()
     }

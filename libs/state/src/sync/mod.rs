@@ -2,11 +2,15 @@ mod fs;
 mod o365;
 mod vdirsyncer;
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::fs::{File, OpenOptions};
+use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::misc::Misc;
@@ -69,9 +73,19 @@ impl SyncResult {
     }
 }
 
-struct CalendarSync {
+struct CollectionSync {
     id: Arc<String>,
     syncer: Box<dyn Syncer + 'static>,
+}
+
+pub(crate) async fn log_line(log: &Arc<Mutex<File>>, name: &str, line: &str) -> anyhow::Result<()> {
+    let buf = format!("{}: {}\n", name, line);
+    tracing::debug!("{}", &buf[..buf.len() - 1]);
+    log.lock()
+        .await
+        .write_all(buf[name.len() + 2..].as_bytes())
+        .await
+        .context("log failed")
 }
 
 pub(crate) async fn discover_collection(
@@ -165,6 +179,11 @@ pub(crate) async fn sync_all(
     Ok(sync_res)
 }
 
+pub fn log_file(xdg: &BaseDirectories, col_id: &String) -> PathBuf {
+    let dir = xdg.get_data_file("vdirsyncer").unwrap();
+    dir.join(format!("{}.log", col_id))
+}
+
 async fn handle_sync_result(
     state: &mut State,
     col_id: &String,
@@ -210,7 +229,7 @@ async fn handle_sync_result(
 async fn get_syncs(
     state: &mut State,
     auth_url: Option<&String>,
-) -> anyhow::Result<Vec<CalendarSync>> {
+) -> anyhow::Result<Vec<CollectionSync>> {
     let mut res = vec![];
     for (idx, (id, col)) in state.settings().collections().iter().enumerate() {
         let cal_sync = get_sync(state.xdg(), idx, id, col, state.misc(), auth_url).await?;
@@ -223,7 +242,7 @@ async fn syncer_for_collection(
     state: &State,
     col_id: &String,
     auth_url: Option<&String>,
-) -> anyhow::Result<CalendarSync> {
+) -> anyhow::Result<CollectionSync> {
     let col = state
         .settings()
         .collections()
@@ -240,7 +259,7 @@ async fn get_sync(
     col: &CollectionSettings,
     misc: &Misc,
     auth_url: Option<&String>,
-) -> anyhow::Result<CalendarSync> {
+) -> anyhow::Result<CollectionSync> {
     let auth = match col.syncer() {
         SyncerType::VDirSyncer {
             username: Some(username),
@@ -265,9 +284,33 @@ async fn get_sync(
         .map(|(id, settings)| (settings.folder().clone(), id.clone()))
         .collect::<HashMap<_, _>>();
 
+    let log_path = log_file(xdg, id);
+    let log_dir = log_path.parent().unwrap();
+    if !log_dir.exists() {
+        tokio::fs::create_dir(log_dir).await?;
+    }
+    if log_path.exists() {
+        tokio::fs::remove_file(&log_path).await.ok();
+    }
+    let log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)
+        .await?;
+    let log = Arc::new(Mutex::new(log));
+
     let syncer: Box<dyn Syncer> = match col.syncer() {
         SyncerType::VDirSyncer { url, read_only, .. } => Box::new(
-            VDirSyncer::new(xdg, id.clone(), folder_id, url.clone(), *read_only, auth).await?,
+            VDirSyncer::new(
+                xdg,
+                id.clone(),
+                folder_id,
+                url.clone(),
+                *read_only,
+                auth,
+                log,
+            )
+            .await?,
         ),
         SyncerType::O365 { read_only, .. } => Box::new(
             O365::new(
@@ -279,13 +322,14 @@ async fn get_sync(
                 auth.unwrap(),
                 auth_url,
                 misc.calendar_token(id).cloned(),
+                log,
             )
             .await?,
         ),
         SyncerType::FileSystem { path: _ } => Box::new(FSSyncer::new(folder_id)),
     };
 
-    Ok(CalendarSync {
+    Ok(CollectionSync {
         id: Arc::new(id.to_string()),
         syncer,
     })
