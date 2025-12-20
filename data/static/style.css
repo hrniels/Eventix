@@ -384,15 +384,17 @@ a.ev_button_good:hover {
 }
 
 .ev_warn_color {
-    color: #d56c05;
+    color: #f57c00;
 }
 .ev_button_warn {
-    border: 1px solid #d56c05;
-    border-left: 5px solid #d56c05;
-    color: #d56c05;
+    border: 1px solid #f57c00;
+    border-left: 5px solid #f57c00;
+    -webkit-text-stroke: 0.4px rgba(0,0,0,.3);
+    color: #f57c00;
 }
 a.ev_button_warn:hover {
-    background-image: linear-gradient(#d56c05, #b48d12) !important;
+    background-image: linear-gradient(#f57c00, #c66400) !important;
+    -webkit-text-stroke: 0;
     color: white;
     text-decoration: none;
 }
