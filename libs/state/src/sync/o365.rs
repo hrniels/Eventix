@@ -151,7 +151,7 @@ impl O365 {
 
     async fn with_davmail<F, Fut>(
         props_path: &Path,
-        id: &String,
+        id: &str,
         auth_url: Option<&String>,
         log: Arc<Mutex<File>>,
         func: F,

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use anyhow::Context;
 use askama::Template;
 use axum::extract::{Query, State};
@@ -11,6 +9,7 @@ use chrono_tz::Tz;
 use eventix_locale::DateFlags;
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, BufReader};
 

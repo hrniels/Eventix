@@ -83,7 +83,7 @@ pub(crate) async fn log_line(log: &Arc<Mutex<File>>, name: &str, line: &str) -> 
     tracing::debug!("{}", &buf[..buf.len() - 1]);
     log.lock()
         .await
-        .write_all(buf[name.len() + 2..].as_bytes())
+        .write_all(&buf.as_bytes()[name.len() + 2..])
         .await
         .context("log failed")
 }

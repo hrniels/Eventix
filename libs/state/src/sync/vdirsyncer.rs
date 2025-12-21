@@ -237,7 +237,7 @@ impl VDirSyncer {
         let mut changes = CalendarChanges::default();
 
         for line in String::from_utf8(output.stderr)?.lines() {
-            log_line(&self.log, &self.name, &line).await?;
+            log_line(&self.log, &self.name, line).await?;
 
             // vdirsyncer will complain if a collection changes and request a re-discover
             if line.contains("run `vdirsyncer discover") {
