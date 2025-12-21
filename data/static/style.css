@@ -492,6 +492,7 @@ span.ev_msg_error span.ev_msg_info {
     max-height: 100px;
     overflow-x: hidden;
     overflow-y: scroll;
+    overscroll-behavior-y: contain;
     text-overflow: ellipsis;
 }
 .ev_box {
@@ -502,6 +503,7 @@ span.ev_msg_error span.ev_msg_info {
 .ev_box .ev_scrollbox {
     height: 100%;
     overflow-y: scroll;
+    overscroll-behavior-y: contain;
 }
 .ev_box > .ev_scrollbox > div {
     border: 1px solid #fff;
@@ -596,6 +598,7 @@ span.ev_msg_error span.ev_msg_info {
 .ev_month_cell {
     height: 110px;
     overflow-y: scroll;
+    overscroll-behavior-y: contain;
 }
 .ev_month_cell div {
     white-space: nowrap;
@@ -804,6 +807,7 @@ span.ev_cal_src_disabled {
 .ui-autocomplete {
     max-height: 200px;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
     /* prevent horizontal scrollbar */
     overflow-x: hidden;
 }
