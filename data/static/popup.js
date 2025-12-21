@@ -282,6 +282,9 @@ async function _openPagePopup(url) {
 }
 
 async function _openFromElement(id, func) {
+    // remove old content
+    $('#popup').html('<div style="height: 300px"></div>');
+
     await new Promise(async function(resolve) {
         let button = $(id);
         $('#popup').animate({
