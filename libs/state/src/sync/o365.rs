@@ -92,6 +92,7 @@ impl O365 {
         props
             .write_all(b"davmail.oauth.persistToken=true\n")
             .await?;
+        props.write_all(b"davmail.bindAddress=127.0.0.1\n").await?;
         props
             .write_all(format!("davmail.caldavPort={}\n", port).as_bytes())
             .await?;
