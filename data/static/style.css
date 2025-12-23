@@ -751,6 +751,11 @@ span.ev_cal_src_disabled {
 
 /* ------------ CALENDARS ------------ */
 
+.ev_col_buttons {
+    display: flex;
+    align-items: start;
+}
+
 .ev_cal_box {
     background-color: #ffffff;
     border-radius: 8px;
