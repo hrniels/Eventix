@@ -58,7 +58,7 @@
         {% if let Some(rrule) = occ.rrule() %}
         <tr>
             <td width="30%">{{ "Repeats"|t(locale) }}:</td>
-            <td width="70%">{{ rrule.human()|newlines()|safe }}</td>
+            <td width="70%">{{ rrule.human(&**locale)|newlines()|safe }}</td>
         </tr>
         {% endif %}
         {% if let Some(alarms) = alarms %}

@@ -87,7 +87,7 @@ impl ImportView {
             }
             label.push_str(&locale.date_range(c.start.as_ref(), c.end.as_ref()));
             if let Some(rrule) = c.rrule.as_ref() {
-                label.push_str(&format!("\n{}", rrule.human()));
+                label.push_str(&format!("\n{}", rrule.human(locale)));
             }
             if let Some((cal_id, cal_name)) = c.exists_in.as_ref() {
                 label.push_str(&format!(

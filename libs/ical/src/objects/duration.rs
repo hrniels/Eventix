@@ -1,8 +1,10 @@
 use std::{fmt::Display, ops::Deref, str::FromStr};
 
+use formatx::formatx;
+
 use chrono::Duration;
 
-use crate::parser::ParseError;
+use crate::{objects::CalLocale, parser::ParseError};
 
 /// A duration for calendar objects.
 ///
@@ -19,8 +21,11 @@ pub struct CalDuration {
 
 impl CalDuration {
     /// Returns a human-readable representation of the duration
-    pub fn human(&self) -> HumanDuration {
-        HumanDuration { delta: self.delta }
+    pub fn human<'l>(&self, locale: &'l dyn CalLocale) -> HumanDuration<'l> {
+        HumanDuration {
+            delta: self.delta,
+            locale,
+        }
     }
 }
 
@@ -70,11 +75,13 @@ impl Display for CalDuration {
 }
 
 /// A human readable representation of a duration.
-pub struct HumanDuration {
+#[derive(Debug)]
+pub struct HumanDuration<'l> {
     delta: Duration,
+    locale: &'l dyn CalLocale,
 }
 
-impl Display for HumanDuration {
+impl Display for HumanDuration<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut duration = self.delta;
         let add = |s: &mut String, add: String| {
@@ -86,23 +93,38 @@ impl Display for HumanDuration {
 
         let mut s = String::new();
         if duration >= Duration::weeks(1) {
-            add(&mut s, format!("{} weeks", duration.num_weeks()));
+            add(
+                &mut s,
+                formatx!(self.locale.translate("{} weeks"), duration.num_weeks()).unwrap(),
+            );
             duration -= Duration::weeks(duration.num_weeks());
         }
         if duration >= Duration::days(1) {
-            add(&mut s, format!("{} days", duration.num_days()));
+            add(
+                &mut s,
+                formatx!(self.locale.translate("{} days"), duration.num_days()).unwrap(),
+            );
             duration -= Duration::days(duration.num_days());
         }
         if duration >= Duration::hours(1) {
-            add(&mut s, format!("{} hours", duration.num_hours()));
+            add(
+                &mut s,
+                formatx!(self.locale.translate("{} hours"), duration.num_hours()).unwrap(),
+            );
             duration -= Duration::hours(duration.num_hours());
         }
         if duration >= Duration::minutes(1) {
-            add(&mut s, format!("{} minutes", duration.num_minutes()));
+            add(
+                &mut s,
+                formatx!(self.locale.translate("{} minutes"), duration.num_minutes()).unwrap(),
+            );
             duration -= Duration::minutes(duration.num_minutes());
         }
         if duration >= Duration::seconds(1) {
-            add(&mut s, format!("{} seconds", duration.num_seconds()));
+            add(
+                &mut s,
+                formatx!(self.locale.translate("{} seconds"), duration.num_seconds()).unwrap(),
+            );
             duration -= Duration::seconds(duration.num_seconds());
         }
         write!(f, "{s}")

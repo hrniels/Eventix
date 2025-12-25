@@ -258,9 +258,8 @@ impl PersonalCalendarAlarms {
 #[cfg(test)]
 mod tests {
     use chrono::{NaiveDate, TimeDelta};
-    use chrono_tz::Tz;
     use eventix_ical::objects::{
-        CalAction, CalAlarm, CalDate, CalDateType, CalRelated, CalTrigger,
+        CalAction, CalAlarm, CalDate, CalDateType, CalLocaleEn, CalRelated, CalTrigger,
     };
 
     use super::PersonalCalendarAlarms;
@@ -336,7 +335,7 @@ mod tests {
         assert_eq!(alarm.uid, "test");
         assert_eq!(alarm.rid, None);
         assert_eq!(
-            format!("{}", alarm.alarms[0].human(&Tz::UTC)),
+            format!("{}", alarm.alarms[0].human(&CalLocaleEn)),
             "5 minutes after start"
         );
 

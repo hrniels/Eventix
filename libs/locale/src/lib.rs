@@ -4,7 +4,7 @@ mod en;
 use bitflags::bitflags;
 use chrono::{DateTime, NaiveDate, Utc};
 use chrono_tz::Tz;
-use eventix_ical::objects::CalDate;
+use eventix_ical::objects::{CalDate, CalLocale};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -112,14 +112,10 @@ impl From<DateFlags> for TimeFlags {
     }
 }
 
-pub trait Locale: Debug {
+pub trait Locale: CalLocale + Debug {
     fn ty(&self) -> LocaleType;
 
     fn translations(&self) -> &Translations;
-
-    fn timezone(&self) -> &Tz {
-        &chrono_tz::Europe::Berlin
-    }
 
     fn fmt_time(&self, date: &dyn DateLike, flags: TimeFlags) -> String {
         let fmt = if flags.contains(TimeFlags::Short) {
@@ -219,10 +215,6 @@ pub trait Locale: Debug {
             }
             (None, None) => String::from("-"),
         }
-    }
-
-    fn translate<'a>(&'a self, key: &'a str) -> &'a str {
-        self.translations().table.get(key).map_or(key, |v| v)
     }
 }
 

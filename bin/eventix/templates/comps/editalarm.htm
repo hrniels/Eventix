@@ -38,7 +38,7 @@
 {% else %}
 
 {% if let Some(effective) = effective %}
-{{ effective[0].human(locale.timezone()) }}
+{{ effective[0].human(&**locale) }}
 {% else %}
 -
 {% endif %}

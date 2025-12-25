@@ -263,7 +263,7 @@
                         {% if let Some(rrule) = c.comp.rrule() %}
                         <tr>
                             <td width="20%" style="vertical-align: top"><b>{{ "Repeats"|t(locale) }}:</b></td>
-                            <td width="80%">{{ rrule.human()|newlines()|safe }}</td>
+                            <td width="80%">{{ rrule.human(&**locale)|newlines()|safe }}</td>
                         </tr>
                         {% else %}
                         {% if let Some(start) = c.comp.start() %}
@@ -311,7 +311,7 @@
                         <tr>
                             <td width="20%"><b>{{ "Reminder"|t(locale) }}:</b></td>
                             <td width="80%">
-                                {{ alarms.first().unwrap().human(locale.timezone())|safe }}
+                                {{ alarms.first().unwrap().human(&**locale)|safe }}
                             </td>
                         </tr>
                         {% endif %}

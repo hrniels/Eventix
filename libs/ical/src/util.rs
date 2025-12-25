@@ -1,9 +1,13 @@
 //! Utility functions.
 
-use std::fmt::{Display, Write};
+use std::fmt::{Debug, Display};
+
+use formatx::formatx;
 
 use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Weekday};
 use chrono_tz::Tz;
+
+use crate::objects::CalLocale;
 
 /// Returns true if the given date ranges overlap.
 pub fn date_ranges_overlap(
@@ -186,26 +190,6 @@ pub fn next_month(year: i32, month: u32) -> (i32, u32) {
     }
 }
 
-/// Returns the ordinal number for `n`.
-///
-/// # Examples
-///
-/// ```
-/// assert_eq!(eventix_ical::util::nth(2), String::from("2nd"));
-/// assert_eq!(eventix_ical::util::nth(10), String::from("10th"));
-/// ```
-pub fn nth(n: u64) -> String {
-    let mut res = String::new();
-    res.write_fmt(format_args!("{n}")).unwrap();
-    match n % 10 {
-        1 if n != 11 => res.push_str("st"),
-        2 if n != 12 => res.push_str("nd"),
-        3 if n != 13 => res.push_str("rd"),
-        _ => res.push_str("th"),
-    }
-    res
-}
-
 /// Returns a human representation of the given list.
 ///
 /// The method will insert "," and "and" between the items as necessary. Each item needs to
@@ -214,18 +198,19 @@ pub fn nth(n: u64) -> String {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(eventix_ical::util::human_list(&[1, 2, 3]), String::from("1, 2, and 3"));
+/// let locale = eventix_ical::objects::CalLocaleEn;
+/// assert_eq!(eventix_ical::util::human_list(&[1, 2, 3], &locale), String::from("1, 2, and 3"));
 /// ```
-pub fn human_list<T>(objs: &[T]) -> String
+pub fn human_list<T>(objs: &[T], locale: &dyn CalLocale) -> String
 where
-    T: Display,
+    T: Display + Debug,
 {
     if objs.len() > 1 {
         let start = itertools::join(objs.iter().take(objs.len() - 1), ", ");
         if objs.len() > 2 {
-            format!("{}, and {}", start, objs.last().unwrap())
+            formatx!(locale.translate("{}, and {}"), start, objs.last().unwrap()).unwrap()
         } else {
-            format!("{} and {}", start, objs.last().unwrap())
+            formatx!(locale.translate("{} and {}"), start, objs.last().unwrap()).unwrap()
         }
     } else {
         itertools::join(objs.iter(), ", ")

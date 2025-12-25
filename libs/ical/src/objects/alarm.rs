@@ -6,7 +6,10 @@ use serde::ser::{Serialize, Serializer};
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
 
+use formatx::formatx;
+
 use crate::objects::CalDuration;
+use crate::objects::locale::CalLocale;
 use crate::{
     objects::{CalComponent, CalDate, EventLike},
     parser::{LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer},
@@ -204,8 +207,11 @@ impl CalAlarm {
     }
 
     /// Returns a human-readable representation of this description.
-    pub fn human<'a, 't>(&'a self, tz: &'t Tz) -> AlarmHuman<'a, 't> {
-        AlarmHuman { alarm: self, tz }
+    pub fn human<'a, 'l>(&'a self, locale: &'l dyn CalLocale) -> AlarmHuman<'a, 'l> {
+        AlarmHuman {
+            alarm: self,
+            locale,
+        }
     }
 }
 
@@ -213,9 +219,9 @@ impl CalAlarm {
 /// [`CalAlarm`].
 ///
 /// For example, it could say "3rd to last Wednesday".
-pub struct AlarmHuman<'a, 't> {
+pub struct AlarmHuman<'a, 'l> {
     alarm: &'a CalAlarm,
-    tz: &'t Tz,
+    locale: &'l dyn CalLocale,
 }
 
 impl std::fmt::Display for AlarmHuman<'_, '_> {
@@ -227,18 +233,25 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
                 } else {
                     ("after", CalDuration::from(**duration))
                 };
+                let suffix = match related {
+                    CalRelated::Start => "start",
+                    CalRelated::End => "end",
+                };
+                let key = format!("{{}} {} {}", prefix, suffix);
                 write!(
                     f,
-                    "{} {} {}",
-                    duration.human(),
-                    prefix,
-                    match related {
-                        CalRelated::Start => "start",
-                        CalRelated::End => "end",
-                    }
+                    "{}",
+                    formatx!(self.locale.translate(&key), duration.human(self.locale)).unwrap()
                 )
             }
-            CalTrigger::Absolute(dt) => write!(f, "On {}", dt.fmt_start_with_tz(self.tz)),
+            CalTrigger::Absolute(dt) => {
+                let buf = formatx!(
+                    self.locale.translate("On {}"),
+                    dt.fmt_start_with_tz(self.locale.timezone())
+                )
+                .unwrap();
+                write!(f, "{}", buf)
+            }
         }
     }
 }

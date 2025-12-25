@@ -74,7 +74,7 @@
                             {{ rrule|safe }}
                             {% when _ %}
                             {% if let Some(rrule) = occ.rrule() %}
-                            {{ rrule.human()|newlines()|safe }}
+                            {{ rrule.human(&**locale)|newlines()|safe }}
                             {% else %}
                             -
                             {% endif %}

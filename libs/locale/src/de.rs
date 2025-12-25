@@ -1,5 +1,8 @@
 use std::{io, path::Path};
 
+use chrono::NaiveDate;
+use eventix_ical::objects::CalLocale;
+
 use crate::{DateFlags, DateLike, LocaleType, Translations};
 
 use super::Locale;
@@ -75,5 +78,34 @@ impl Locale for LocaleDe {
 
         let day_year = date.fmt("%d, %Y");
         format!("{}{} {}", wday, mon, day_year)
+    }
+}
+
+impl CalLocale for LocaleDe {
+    fn translate<'a>(&'a self, key: &'a str) -> &'a str {
+        self.translations().table.get(key).map_or(key, |v| v)
+    }
+
+    fn timezone(&self) -> &chrono_tz::Tz {
+        &chrono_tz::Europe::Berlin
+    }
+
+    fn nth_day(&self, nth: u64, start: bool) -> String {
+        match start {
+            true => {
+                format!("{nth}er")
+            }
+            false => {
+                if nth == 1 {
+                    format!("Letzter")
+                } else {
+                    format!("{nth}t letzter")
+                }
+            }
+        }
+    }
+
+    fn fmt_naive_date(&self, date: &NaiveDate) -> String {
+        self.fmt_date(date, DateFlags::Short)
     }
 }
