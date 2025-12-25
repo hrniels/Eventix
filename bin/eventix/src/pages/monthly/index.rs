@@ -36,7 +36,7 @@ pub struct Request {
 struct MonthlyTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    weekdays: Vec<&'a str>,
+    weekdays: Vec<String>,
     days: Vec<Day<'a>>,
     today: NaiveDate,
     month: String,
@@ -69,13 +69,13 @@ pub async fn content(
     let timezone = *locale.timezone();
 
     let weekdays = vec![
-        locale.translate("Monday"),
-        locale.translate("Tuesday"),
-        locale.translate("Wednesday"),
-        locale.translate("Thursday"),
-        locale.translate("Friday"),
-        locale.translate("Saturday"),
-        locale.translate("Sunday"),
+        locale.translate("Monday").to_string(),
+        locale.translate("Tuesday").to_string(),
+        locale.translate("Wednesday").to_string(),
+        locale.translate("Thursday").to_string(),
+        locale.translate("Friday").to_string(),
+        locale.translate("Saturday").to_string(),
+        locale.translate("Sunday").to_string(),
     ];
 
     let date = parse_human_date(req.date, &timezone)?;
@@ -131,13 +131,17 @@ pub async fn content(
 
     let html = MonthlyTemplate {
         page,
-        locale,
         weekdays,
-        month: month_start.format("%B %Y").to_string(),
+        month: format!(
+            "{} {}",
+            locale.translate(&month_start.format("%B").to_string()),
+            month_start.format("%Y")
+        ),
         prev_month: format!("{pyear}-{pmonth}"),
         next_month: format!("{nyear}-{nmonth}"),
         today: Utc::now().with_timezone(&timezone).date_naive(),
         days,
+        locale,
         events,
         tasks,
     }

@@ -117,8 +117,8 @@ impl From<Weekday> for IterWeekday {
 }
 
 impl Named for IterWeekday {
-    fn name(&self) -> String {
-        format!("{self:?}")
+    fn name(&self, locale: &dyn Locale) -> String {
+        locale.translate(&format!("{self:?}")).to_string()
     }
 }
 
@@ -137,8 +137,8 @@ enum Nth {
 }
 
 impl Named for Nth {
-    fn name(&self) -> String {
-        format!("{self:?}")
+    fn name(&self, locale: &dyn Locale) -> String {
+        locale.translate(&format!("{self:?}")).to_string()
     }
 }
 

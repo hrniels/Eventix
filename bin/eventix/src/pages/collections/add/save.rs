@@ -46,7 +46,7 @@ pub async fn handler(
     {
         let mut state = state.lock().await;
         if action_update(&mut page, &locale, &mut state, &mut form).await? {
-            page.add_info(locale.translate("New collection was added successfully"));
+            page.add_info(locale.translate("info.collection_added"));
 
             form = Form::new();
         }

@@ -1,0 +1,46 @@
+function calLocale() {
+    return {
+        monthNamesShort: [
+            "{{ "Jan"|t(locale) }}",
+            "{{ "Feb"|t(locale) }}",
+            "{{ "Mar"|t(locale) }}",
+            "{{ "Apr"|t(locale) }}",
+            "{{ "May"|t(locale) }}",
+            "{{ "Jun"|t(locale) }}",
+            "{{ "Jul"|t(locale) }}",
+            "{{ "Aug"|t(locale) }}",
+            "{{ "Sep"|t(locale) }}",
+            "{{ "Oct"|t(locale) }}",
+            "{{ "Nov"|t(locale) }}",
+            "{{ "Dec"|t(locale) }}",
+        ],
+        dayNames: [
+            "{{ "Sunday"|t(locale) }}",
+            "{{ "Monday"|t(locale) }}",
+            "{{ "Tuesday"|t(locale) }}",
+            "{{ "Wednesday"|t(locale) }}",
+            "{{ "Thursday"|t(locale) }}",
+            "{{ "Friday"|t(locale) }}",
+            "{{ "Saturday"|t(locale) }}",
+        ],
+        dayNamesShort: [
+            "{{ "Sun"|t(locale) }}",
+            "{{ "Mon"|t(locale) }}",
+            "{{ "Tue"|t(locale) }}",
+            "{{ "Wed"|t(locale) }}",
+            "{{ "Thu"|t(locale) }}",
+            "{{ "Fri"|t(locale) }}",
+            "{{ "Sat"|t(locale) }}",
+        ],
+        dayNamesMin: [
+            "{{ "Sun"|t(locale) }}",
+            "{{ "Mon"|t(locale) }}",
+            "{{ "Tue"|t(locale) }}",
+            "{{ "Wed"|t(locale) }}",
+            "{{ "Thu"|t(locale) }}",
+            "{{ "Fri"|t(locale) }}",
+            "{{ "Sat"|t(locale) }}",
+        ],
+        firstDay: 1, // Monday
+    };
+}

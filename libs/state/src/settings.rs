@@ -1,5 +1,5 @@
 use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
-use eventix_locale::Locale;
+use eventix_locale::{Locale, LocaleType};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -10,24 +10,32 @@ use xdg::BaseDirectories;
 
 const FILENAME: &str = "settings.toml";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Settings {
-    #[serde(skip)]
+    locale: Arc<dyn Locale + Send + Sync>,
     path: PathBuf,
+    collections: BTreeMap<String, CollectionSettings>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SettingsFile {
+    language: LocaleType,
     #[serde(rename = "collection")]
     collections: BTreeMap<String, CollectionSettings>,
 }
 
 impl Settings {
-    fn new(path: PathBuf) -> Self {
-        Self {
+    pub fn new(xdg: &BaseDirectories, path: PathBuf) -> anyhow::Result<Self> {
+        let locale = eventix_locale::new(xdg, LocaleType::English)?;
+        Ok(Self {
+            locale,
             path,
-            collections: BTreeMap::default(),
-        }
+            collections: BTreeMap::new(),
+        })
     }
 
     pub fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
-        eventix_locale::default()
+        self.locale.clone()
     }
 
     pub fn collections(&self) -> &BTreeMap<String, CollectionSettings> {
@@ -72,16 +80,25 @@ impl Settings {
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         match xdg.find_config_file(FILENAME) {
             Some(file) => {
-                let mut settings: Self = super::load_from_file(&file)?;
-                settings.path = file;
-                Ok(settings)
+                let settings: SettingsFile = super::load_from_file(&file)?;
+                let locale = eventix_locale::new(xdg, settings.language)?;
+                let res = Settings {
+                    locale,
+                    path: file,
+                    collections: settings.collections,
+                };
+                Ok(res)
             }
-            None => Ok(Settings::new(PathBuf::from(FILENAME))),
+            None => Settings::new(xdg, PathBuf::from(FILENAME)),
         }
     }
 
     pub fn write_to_file(&self) -> anyhow::Result<()> {
-        super::write_to_file(&self.path, self)
+        let settings = SettingsFile {
+            language: self.locale.ty(),
+            collections: self.collections.clone(),
+        };
+        super::write_to_file(&self.path, settings)
     }
 }
 
@@ -122,7 +139,7 @@ pub enum CalendarAlarmType {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SyncerType {
     FileSystem {
         path: String,
@@ -169,7 +186,7 @@ impl SyncerType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CollectionSettings {
     syncer: SyncerType,
     #[serde(rename = "calendar")]
@@ -223,7 +240,7 @@ impl CollectionSettings {
     }
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct CalendarSettings {
     enabled: bool,
     folder: String,

@@ -98,11 +98,10 @@
                             {% endif %}
                         </td>
                         <td width="50%" align="center">
-                            <a class="ev_button_big ev_button_normal" style="width: 80px"
-                                                                      href="javascript:submit()">
+                            <a class="ev_button_big ev_button_normal" href="javascript:submit()">
                                 <span>{{ "Save"|t(locale) }}</span>
                             </a>
-                            <a class="ev_button_big ev_button_normal" style="width: 80px"
+                            <a class="ev_button_big ev_button_normal"
                                href="javascript:document.location.href = '{{ prev }}'">
                                 <span>{{ "Back"|t(locale) }}</span>
                             </a>
@@ -143,7 +142,7 @@
 
     function submit() {
         if($('#attendees-new-attendee').val() != "")
-            errorDialog("{{ "The 'New attendee' field is not empty. Maybe you forgot to add the last attendee?"|t(locale) }}");
+            errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
         else
             $('#form').submit();
     }
@@ -158,7 +157,7 @@
 </script>
 {% if rid.is_none() %}
 <div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "This will permanently delete this series."|t(locale) }}
+    {{ "warning.delete_series"|t(locale) }}
 </div>
 {% endif %}
 

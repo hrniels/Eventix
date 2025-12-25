@@ -62,8 +62,8 @@ pub enum DurUnit {
 }
 
 impl Named for DurUnit {
-    fn name(&self) -> String {
-        format!("{self:?}")
+    fn name(&self, locale: &dyn Locale) -> String {
+        locale.translate(&format!("{self:?}")).to_string()
     }
 }
 
@@ -89,13 +89,8 @@ impl Display for DurType {
 }
 
 impl Named for DurType {
-    fn name(&self) -> String {
-        match self {
-            Self::BeforeStart => "Before start".to_string(),
-            Self::AfterStart => "After start".to_string(),
-            Self::BeforeEnd => "Before end".to_string(),
-            Self::AfterEnd => "After end".to_string(),
-        }
+    fn name(&self, locale: &dyn Locale) -> String {
+        locale.translate(&format!("{self:?}")).to_string()
     }
 }
 
@@ -190,7 +185,7 @@ impl AlarmConfig {
                 .and_then(|dt| dt.to_caldate(locale, CalDateType::Inclusive, false))
                 .is_none()
         {
-            page.add_error(locale.translate("Please specify a valid date and time"));
+            page.add_error(locale.translate("error.valid_date_time"));
             return false;
         }
         true

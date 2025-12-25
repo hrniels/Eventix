@@ -1,23 +1,27 @@
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::{io, path::Path};
+
+use crate::{LocaleType, Translations};
 
 use super::Locale;
 
-#[derive(Default)]
-pub struct LocaleEn {}
+#[derive(Default, Debug)]
+pub struct LocaleEn {
+    trans: Translations,
+}
+
+impl LocaleEn {
+    pub fn new(path: &Path) -> io::Result<Self> {
+        let trans = Translations::new_from_file(path)?;
+        Ok(Self { trans })
+    }
+}
 
 impl Locale for LocaleEn {
-    fn translate<'a>(&self, key: &'a str) -> &'a str {
-        static XLATE_TABLE: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
-            HashMap::from([
-                ("NEEDS-ACTION", "Needs action"),
-                ("COMPLETED", "Completed"),
-                ("IN-PROCESS", "In process"),
-                ("CANCELLED", "Canceled"),
-                ("TENTATIVE", "Tentative"),
-                ("CONFIRMED", "Confirmed"),
-            ])
-        });
-        XLATE_TABLE.get(key).unwrap_or(&key)
+    fn ty(&self) -> LocaleType {
+        LocaleType::English
+    }
+
+    fn translations(&self) -> &Translations {
+        &self.trans
     }
 }

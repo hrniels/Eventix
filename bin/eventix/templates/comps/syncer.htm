@@ -40,7 +40,7 @@
                 <dd>
                     <input type="text" name="{{ name }}[vdir_email]" size="50"
                            value="{{ value.vdir_email }}" />
-                    <div>{{ "Your name and email address is used for shared calendar events (when you are the organizer or an attendee)."|t(locale) }}</div>
+                    <div>{{ "info.name_and_email"|t(locale) }}</div>
                 </dd>
             </dl>
             <dl>
@@ -63,7 +63,7 @@
                 <dd>
                     <input type="text" name="{{ name }}[vdir_pw_cmd]" size="60"
                            value="{{ value.vdir_pw_cmd }}" />
-                    <div>{{ "Username and password are used for authentification. The password command is executed to retrieve the password. Example: 'secret-tool lookup your-attribute your-value'"|t(locale) }}</div>
+                    <div>{{ "info.user_pw_cmd"|t(locale) }}</div>
                 </dd>
             </dl>
         </fieldset>
@@ -82,7 +82,7 @@
                 <dd>
                     <input type="text" name="{{ name }}[o365_email]" size="50"
                            value="{{ value.o365_email }}" />
-                    <div>{{ "Your name and email address is used for shared calendar events (when you are the organizer or an attendee)."|t(locale) }}</div>
+                    <div>{{ "info.name_and_email"|t(locale) }}</div>
                 </dd>
             </dl>
             <dl>
@@ -95,7 +95,7 @@
                 <dd>
                     <input type="text" name="{{ name }}[o365_pw_cmd]" size="60"
                            value="{{ value.o365_pw_cmd }}" />
-                    <div>{{ "Username and password are used for authentification. The password command is executed to retrieve the password. Example: 'secret-tool lookup your-attribute your-value'"|t(locale) }}</div>
+                    <div>{{ "info.user_pw_cmd"|t(locale) }}</div>
                 </dd>
             </dl>
         </fieldset>
@@ -109,14 +109,14 @@
                 <dd>
                     <input type="text" name="{{ name }}[fs_path]" size="50"
                            value="{{ value.fs_path }}" />
-                    <div>{{ "The parent folder of the folders containing the calendars."|t(locale) }}</div>
+                    <div>{{ "info.collection_folder_path"|t(locale) }}</div>
                 </dd>
             </dl>
         </fieldset>
     </div>
 </div>
 
-<div class="ev_padtop">{{ "The fields marked with * are required."|t(locale) }}</div>
+<div class="ev_padtop">{{ "info.required_fields"|t(locale) }}</div>
 
 <style type="text/css">
 #{{ id }}-tabs > div {

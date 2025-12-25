@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use eventix_locale::DateFlags;
 use eventix_state::EventixState;
+use formatx::formatx;
 use serde::{Deserialize, Serialize};
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, BufReader};
@@ -50,11 +51,12 @@ async fn handler(
         .context("Get log modification time")?;
     let date_utc: DateTime<Utc> = date.into();
     let date_local: DateTime<Tz> = date_utc.with_timezone(locale.timezone());
-    let title = format!(
-        "Log of collection '{}' from {}",
+    let title = formatx!(
+        locale.translate("Log of collection '{}' from {}"),
         req.col_id,
         locale.fmt_datetime(&date_local, DateFlags::None)
-    );
+    )
+    .unwrap();
 
     let file = OpenOptions::new()
         .read(true)

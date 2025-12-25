@@ -18,7 +18,7 @@ def dev_env():
 
     # (re-)create symlinks to data/static and data/icons
     # we use symlinks here so that `./b watch` sees changes to these files
-    dirs = ["static", "icons"]
+    dirs = ["static", "icons", "locale"]
     for dirname in dirs:
         dir_in_run = run_dir / APP_ID_DEBUG / dirname
         if dir_in_run.exists():

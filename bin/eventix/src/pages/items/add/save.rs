@@ -55,7 +55,7 @@ pub async fn handler(
     {
         let mut state = state.lock().await;
         if action_update(&mut page, &locale, &mut state, &mut form, &req).await? {
-            page.add_info(locale.translate("New event was added successfully"));
+            page.add_info(locale.translate("info.event_added"));
 
             form = CompNew::new(&req, locale.timezone(), Some(form.calendar));
         }

@@ -24,7 +24,7 @@
 {% if let Some(personal) = personal %}
 {% if edit %}
 <div style="padding-top: .6em; padding-left: .4em">
-    <b>{{ "Effective:"|t(locale) }}</b>
+    <b>{{ "Effective"|t(locale) }}:</b>
     {% if let Some(effective) = personal.effective %}
     {{ effective[0].human(locale.timezone()) }}
     {% else %}

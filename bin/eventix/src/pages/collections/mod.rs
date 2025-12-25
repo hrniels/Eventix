@@ -49,14 +49,12 @@ impl Form {
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
             {
-                page.add_error(locale.translate(
-                    "Please specify a non-empty name that only contains the characters A-Z, a-z, 0-9, _, and -",
-                ));
+                page.add_error(locale.translate("error.collection_name_chars"));
                 return false;
             }
 
             if state.settings().collections().contains_key(&name) {
-                page.add_error(locale.translate("A collection with that name does already exist"));
+                page.add_error(locale.translate("error.collection_exists"));
                 return false;
             }
         }

@@ -30,7 +30,7 @@ async fn action_update(
 
     let syncer = form.syncer.to_syncer().unwrap();
     if discriminant(&syncer) != discriminant(col.syncer()) {
-        page.add_error(locale.translate("You cannot change the syncer type"));
+        page.add_error(locale.translate("error.syncer_change"));
         return Ok(false);
     }
 
@@ -55,7 +55,7 @@ pub async fn handler(
         let mut state = state.lock().await;
         let locale = state.settings().locale();
         let form = if action_update(&mut page, &locale, &mut state, &mut form, &req).await? {
-            page.add_info(locale.translate("New collection was updated successfully"));
+            page.add_info(locale.translate("info.collection_updated"));
             None
         } else {
             Some(form)

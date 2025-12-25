@@ -5,11 +5,40 @@ use bitflags::bitflags;
 use chrono::{DateTime, NaiveDate, Utc};
 use chrono_tz::Tz;
 use eventix_ical::objects::CalDate;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    fs::OpenOptions,
+    io::{self, Read},
+    path::Path,
+    sync::Arc,
+};
+use xdg::BaseDirectories;
 
 pub use de::LocaleDe;
 #[allow(unused_imports)]
 pub use en::LocaleEn;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum LocaleType {
+    German,
+    English,
+}
+
+#[derive(Default, Debug, Deserialize)]
+pub struct Translations {
+    pub table: HashMap<String, String>,
+}
+
+impl Translations {
+    pub fn new_from_file(path: &Path) -> io::Result<Self> {
+        let mut file = OpenOptions::new().read(true).open(path)?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        Ok(toml::from_str(&content).unwrap())
+    }
+}
 
 pub trait DateLike {
     fn naive(&self) -> NaiveDate;
@@ -83,7 +112,11 @@ impl From<DateFlags> for TimeFlags {
     }
 }
 
-pub trait Locale {
+pub trait Locale: Debug {
+    fn ty(&self) -> LocaleType;
+
+    fn translations(&self) -> &Translations;
+
     fn timezone(&self) -> &Tz {
         &chrono_tz::Europe::Berlin
     }
@@ -116,27 +149,32 @@ pub trait Locale {
     }
 
     fn fmt_datetime(&self, date: &dyn DateLike, flags: DateFlags) -> String {
-        let fmt = if flags.contains(DateFlags::Short) {
-            "%b %d, %Y"
-        } else {
-            "%A, %B %d, %Y"
-        };
-        let prefix = self.fmt_date_with(date, fmt, flags);
-        format!("{}, {}", prefix, self.fmt_time(date, flags.into()))
+        format!(
+            "{}, {}",
+            self.fmt_date(date, flags),
+            self.fmt_time(date, flags.into())
+        )
     }
 
     fn fmt_date_with(&self, date: &dyn DateLike, f: &str, flags: DateFlags) -> String {
-        if !flags.contains(DateFlags::NoToday) {
-            let today = Utc::now().date_naive();
-            if date.naive() == today {
-                return String::from("Today");
-            } else if Some(date.naive()) == today.succ_opt() {
-                return String::from("Tomorrow");
-            } else if Some(date.naive()) == today.pred_opt() {
-                return String::from("Yesterday");
-            }
+        if !flags.contains(DateFlags::NoToday)
+            && let Some(rel) = self.has_relative(date)
+        {
+            return rel.to_string();
         }
         date.fmt(f).to_string()
+    }
+
+    fn has_relative(&self, date: &dyn DateLike) -> Option<&str> {
+        let today = Utc::now().date_naive();
+        if date.naive() == today {
+            return Some(self.translate("Today"));
+        } else if Some(date.naive()) == today.succ_opt() {
+            return Some(self.translate("Tomorrow"));
+        } else if Some(date.naive()) == today.pred_opt() {
+            return Some(self.translate("Yesterday"));
+        }
+        None
     }
 
     fn date_range(&self, start: Option<&CalDate>, end: Option<&CalDate>) -> String {
@@ -183,9 +221,23 @@ pub trait Locale {
         }
     }
 
-    fn translate<'a>(&self, key: &'a str) -> &'a str;
+    fn translate<'a>(&'a self, key: &'a str) -> &'a str {
+        self.translations().table.get(key).map_or(key, |v| v)
+    }
 }
 
 pub fn default() -> Arc<dyn Locale + Send + Sync> {
-    Arc::new(LocaleDe::default())
+    Arc::new(LocaleEn::default())
+}
+
+pub fn new(xdg: &BaseDirectories, lang: LocaleType) -> io::Result<Arc<dyn Locale + Send + Sync>> {
+    let trans_file = format!("locale/{:?}.toml", lang);
+    let translations = xdg
+        .find_data_file(&trans_file)
+        .expect(&format!("Find '$XDG_DATA_HOME/{}", trans_file));
+
+    Ok(match lang {
+        LocaleType::German => Arc::new(LocaleDe::new(&translations)?),
+        LocaleType::English => Arc::new(LocaleEn::new(&translations)?),
+    })
 }

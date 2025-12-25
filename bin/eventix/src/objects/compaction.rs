@@ -28,7 +28,7 @@ pub trait CompAction {
         ctype: CalCompType,
     ) -> bool {
         if self.summary().is_empty() {
-            page.add_error(locale.translate("Summary cannot be empty."));
+            page.add_error(locale.translate("error.summary_empty"));
             return false;
         }
 
@@ -36,11 +36,11 @@ pub trait CompAction {
 
         if ctype == CalCompType::Event {
             if start.is_none() {
-                page.add_error(locale.translate("Please specify the start date/time."));
+                page.add_error(locale.translate("error.start_datetime"));
                 return false;
             }
             if end.is_none() {
-                page.add_error(locale.translate("Please specify the end date/time."));
+                page.add_error(locale.translate("error.end_datetime"));
                 return false;
             }
         }
@@ -50,14 +50,12 @@ pub trait CompAction {
             && matches!(start.as_ref().unwrap(), CalDate::Date(..))
                 != matches!(end.as_ref().unwrap(), CalDate::Date(..))
         {
-            page.add_error(
-                locale.translate("Please specify the time for both start and end or for none."),
-            );
+            page.add_error(locale.translate("error.time_for_both_or_none"));
             return false;
         }
 
         if start.is_some() && end.is_some() && start.as_ref().unwrap() > end.as_ref().unwrap() {
-            page.add_error(locale.translate("The end cannot be before the start."));
+            page.add_error(locale.translate("error.end_before_start"));
             return false;
         }
 
@@ -67,9 +65,7 @@ pub trait CompAction {
             .is_some()
             && start.is_none()
         {
-            page.add_error(
-                locale.translate("Please specify the start for repeating events/tasks."),
-            );
+            page.add_error(locale.translate("error.repeating_event_start"));
             return false;
         }
 

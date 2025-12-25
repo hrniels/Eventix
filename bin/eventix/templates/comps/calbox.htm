@@ -51,20 +51,6 @@
             {% if mode == CalendarBoxMode::View %}
             {% if let CalendarBox::Known { id: cal_id, .. } = cal %}
             <div class="ev_cal_box_right_item">
-                <a href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}', 'Delete',
-                                                      reloadPageIfPossible)"
-                   {% if let SyncerType::FileSystem { .. } = col.syncer() %}
-                   class="ev_button ev_button_normal"
-                   {% else %}
-                   class="ev_button ev_button_warn"
-                   title="{{ "Warning: removes all local items and forgets the calendar settings. Local changes will be lost."|t(locale) }}"
-                   {% endif %}
-                   >
-                    <i class="bi bi-trash"></i>
-                    <span>{{ "Delete"|t(locale) }}</span>
-                </a>
-            </div>
-            <div class="ev_cal_box_right_item">
                 <a href="javascript:reloadCalendar('{{ col_id }}', '{{ cal_id }}',
                                                    'reload_calendar_{{ cal_id }}',
                                                     reloadPageIfPossible)"
@@ -72,25 +58,41 @@
                    class="ev_button ev_button_normal"
                    {% else %}
                    class="ev_button ev_button_warn"
-                   title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}"
+                   title="{{ "warning.reload_calendar"|t(locale) }}"
                    {% endif %}
                    >
                     <i id="reload_calendar_{{ cal_id }}" class="bi bi-arrow-clockwise"></i>
                     <span>{{ "Reload"|t(locale) }}</span>
                 </a>
             </div>
+            <div class="ev_cal_box_right_item">
+                <a href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}', 'Delete',
+                                                      reloadPageIfPossible)"
+                   {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                   class="ev_button ev_button_normal"
+                   {% else %}
+                   class="ev_button ev_button_warn"
+                   title="{{ "warning.delete_calendar"|t(locale) }}"
+                   {% endif %}
+                   >
+                    <i class="bi bi-trash"></i>
+                </a>
+            </div>
             {% endif %}
             <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_normal" style="width: 45px"
+                <a class="ev_button ev_button_normal"
+                   {% if let CalendarBox::Known { .. } = cal %}
+                   title="{{ "Edit"|t(locale) }}"
+                   {% else %}
+                   title="{{ "Add"|t(locale) }}"
+                   {% endif %}
                    href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'Edit',
                                                  '{{ cal.folder() }}', '{{ cal.name() }}',
                                                  '{{ cal.bgcolor() }}')">
                     {% if let CalendarBox::Known { .. } = cal %}
                     <i class="bi bi-pencil"></i>
-                    <span>{{ "Edit"|t(locale) }}</span>
                     {% else %}
                     <i class="bi bi-plus-square"></i>
-                    <span>{{ "Add"|t(locale) }}</span>
                     {% endif %}
                 </a>
             </div>
@@ -105,10 +107,9 @@
                 </a>
             </div>
             <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_normal" style="width: 45px"
+                <a class="ev_button ev_button_normal"
                    href="javascript:submitForm()">
                     <i class="bi bi-floppy2-fill"></i>
-                    <span>{{ "Save"|t(locale) }}</span>
                 </a>
             </div>
             {% endif %}
@@ -204,7 +205,7 @@
                 <td>
                     <b>{{ "Creation"|t(locale) }}:</b>
                     <i class="bi bi-question-circle"
-                       title="{{ "Defines which kinds of items can be created in this calendar."|t(locale) }}">
+                       title="{{ "info.calendar_item_types"|t(locale) }}">
                     </i>
                 </td>
                 <td>
@@ -222,7 +223,7 @@
                 <td>
                     <b>{{ "Alarms"|t(locale) }}:</b>
                     <i class="bi bi-question-circle"
-                       title="{{ "Choosing calendar alarms means that only the alarms set in the calendar items are used. If personal alarms are chosen, calendar alarms are ignored. Personal alarms can be set for individual calendar items, but the default is defined here."|t(locale) }}">
+                       title="{{ "info.calendar_alarms"|t(locale) }}">
                     </i>
                 </td>
                 <td>

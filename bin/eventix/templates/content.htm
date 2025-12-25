@@ -271,8 +271,8 @@
                         changeMonth: true,
                         changeYear: true,
                         numberOfMonths: 1,
-                        firstDay: 1, // Monday
                     });
+                    $("#due_date").datepicker("option", calLocale());
                     $("#due_date_icon").on('click', function() {
                         $("#due_date").datepicker("show");
                     });
@@ -290,7 +290,6 @@
             <a id="due_date_btn" class="ev_button ev_button_normal"
                href="javascript:formRequest('quick_todo_form', resetPage)">
                 <i class="bi bi-plus-square"></i>
-                <span>{{ "Add"|t(locale) }}</span>
             </a>
         </div>
         </form>

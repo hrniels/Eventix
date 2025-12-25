@@ -70,11 +70,11 @@
                     </dl>
                 </div>
                 <div class="ev_submit">
-                    <a class="ev_button_big ev_button_normal" style="width: 80px"
+                    <a class="ev_button_big ev_button_normal"
                        href="javascript:submit()">
                         <span>{{ "Save"|t(locale) }}</span>
                     </a>
-                    <a class="ev_button_big ev_button_normal" style="width: 80px"
+                    <a class="ev_button_big ev_button_normal"
                        {% if let Some(prev) = prev %}
                        href="javascript:document.location.href = '{{ prev }}'"
                        {% else %}
@@ -106,7 +106,7 @@
 
     function submit() {
         if($('#attendees-new-attendee').val() != "")
-            errorDialog("{{ "The 'New attendee' field is not empty. Maybe you forgot to add the last attendee?"|t(locale) }}");
+            errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
         else
             $('#form').submit();
     }

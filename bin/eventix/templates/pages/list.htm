@@ -51,11 +51,11 @@
                     </dd>
                 </dl>
                 <div class="ev_submit">
-                    <a class="ev_button_big ev_button_normal" style="width: 80px"
+                    <a class="ev_button_big ev_button_normal"
                        href="javascript:$('#form').submit()">
                         <span>{{ "Apply"|t(locale) }}</span>
                     </a>
-                    <a class="ev_button_big ev_button_normal" style="width: 80px"
+                    <a class="ev_button_big ev_button_normal"
                        href="javascript:document.location.href = '/pages/list'">
                         <span>{{ "Reset"|t(locale) }}</span>
                     </a>
@@ -233,7 +233,7 @@
             <a class="ev_button ev_button_normal" style="width: 60px"
                href="javascript:gotoWithPrev('/pages/items/edit?uid={{ c.comp.uid() }}&mode=Series')">
                 <i class="bi bi-pencil"></i>
-                <span>{{ "Edit"|t(locale) }}</span>
+                <span>{{ "Edit_short"|t(locale) }}</span>
             </a>
             {% else %}
             {% if let Some(part_stat_btns) = c.part_stat_btns %}
@@ -243,7 +243,7 @@
             <a id="alarm-button-{{ id }}" style="width: 60px" class="ev_button ev_button_normal"
                href="javascript:editAlarms('alarm-button-{{ id }}', '{{ c.comp.uid() }}', null)">
                 <i class="bi bi-pencil"></i>
-                <span>{{ "Alarms"|t(locale) }}</span>
+                <span>{{ "Alarms_short"|t(locale) }}</span>
             </a>
             {% endif %}
             {% endif %}
@@ -302,7 +302,7 @@
                         {% if let Some(st) = td.status() %}
                         <tr>
                             <td width="20%"><b>{{ "Status"|t(locale) }}:</b></td>
-                            <td width="80%">{{ "{:?}"|format(st)|t(locale) }}</td>
+                            <td width="80%">{{ "{}"|format(st)|t(locale) }}</td>
                         </tr>
                         {% endif %}
                         {% endif %}
@@ -391,7 +391,7 @@
 
 {% for (id, _) in comps.iter().enumerate() %}
 <div style="display: none" id="delete-confirm-{{ id }}" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "This will permanently delete this item."|t(locale) }}
+    {{ "warning.delete_item"|t(locale) }}
 </div>
 {% endfor %}
 

@@ -35,7 +35,7 @@
         {{ occ.edit_modes|safe }}
         {% if occ.organizer().is_some() %}
         {% if occ.status_class() != Some(String::from("Cancelled")) %}
-        <a style="float: right; width: 70px" class="ev_button ev_button_critical"
+        <a style="float: right" class="ev_button ev_button_critical"
            href="javascript:cancelAndRefresh('{{ occ.uid() }}',
                                              '{{ occ.rid_html() }}',
                                              '{{ occ.rid_js() }}')">
@@ -44,7 +44,7 @@
         </a>
         {% endif %}
         {% else %}
-        <a style="float: right; width: 70px"
+        <a style="float: right"
            class="ev_button ev_button_normal"
            href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
                                                  '{{ occ.rid_html() }}',
@@ -65,7 +65,7 @@
            href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_js() }}',
                                        '{{ occ.uid() }}', '{{ occ.rid_html() }}')">
             <i class="bi bi-pencil"></i>
-            <span>{{ "Alarms"|t(locale) }}</span>
+            <span>{{ "Alarms_short"|t(locale) }}</span>
         </a>
         {% endif %}
         {% if let Some(partstat) = occ.partstat %}

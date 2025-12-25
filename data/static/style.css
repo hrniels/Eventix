@@ -433,7 +433,7 @@ a.ev_button_critical:hover {
     display: inline-block;
 }
 .ev_response_dropdown a {
-    width: 80px;
+    width: 100px;
 }
 .ev_response_dropdown a i {
     margin-right: 8px;
@@ -451,7 +451,7 @@ a.ev_button_critical:hover {
     z-index: 1000;
 }
 .ev_response_menu a {
-    width: 80px;
+    width: 100px;
     margin: 0;
     margin-bottom: 2px;
     float: left;

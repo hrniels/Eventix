@@ -139,17 +139,16 @@ impl SyncerRequest {
         match syncer {
             Syncer::VDirSyncer => {
                 if self.vdir_name.is_empty() {
-                    page.add_error(locale.translate("Please specify your name!"));
+                    page.add_error(locale.translate("error.collection_your_name"));
                     return false;
                 }
                 if !EmailAddress::is_valid(&self.vdir_email) {
-                    page.add_error(locale.translate("Please specify a valid email address!"));
+                    page.add_error(locale.translate("error.collection_your_email"));
                     return false;
                 }
                 if let Err(e) = self.vdir_url.parse::<Uri>() {
                     page.add_error(
-                        formatx!(locale.translate("Please specify a valid location ({})"), e,)
-                            .unwrap(),
+                        formatx!(locale.translate("error.collection_location"), e).unwrap(),
                     );
                     return false;
                 }
@@ -157,23 +156,23 @@ impl SyncerRequest {
             }
             Syncer::O365 => {
                 if self.o365_name.is_empty() {
-                    page.add_error(locale.translate("Please specify your name!"));
+                    page.add_error(locale.translate("error.collection_your_name"));
                     return false;
                 }
                 if !EmailAddress::is_valid(&self.o365_email) {
-                    page.add_error(locale.translate("Please specify a valid email address!"));
+                    page.add_error(locale.translate("error.collection_your_email"));
                     return false;
                 }
                 true
             }
             Syncer::FileSystem => {
                 if self.fs_path.is_empty() {
-                    page.add_error(locale.translate("Please specify the path!"));
+                    page.add_error(locale.translate("error.collection_path"));
                     return false;
                 }
 
                 if !Path::new(&self.fs_path).is_dir() {
-                    page.add_error(locale.translate("Please specify an existing directory!"));
+                    page.add_error(locale.translate("error.collection_existing_dir"));
                     return false;
                 }
 

@@ -6,7 +6,6 @@ function calSettings() {
         changeMonth: true,
         changeYear: true,
         numberOfMonths: 1,
-        firstDay: 1, // Monday
     };
 }
 
@@ -38,6 +37,8 @@ $(function() {
     to.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
     from.datepicker("option", "showAnim", "");
     to.datepicker("option", "showAnim", "");
+    from.datepicker("option", calLocale());
+    to.datepicker("option", calLocale());
 
     function getDate(element) {
         let date;

@@ -1,3 +1,4 @@
+use askama::Template;
 use axum::{
     Router,
     extract::{Path, State},
@@ -6,8 +7,17 @@ use axum::{
     routing::get,
 };
 use chrono::Utc;
+use eventix_locale::Locale;
+use eventix_state::EventixState;
 use once_cell::sync::Lazy;
-use std::{collections::HashMap, fs, path::PathBuf, sync::OnceLock};
+use std::{
+    collections::HashMap,
+    fs,
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+};
+
+use crate::html::filters;
 
 struct CachedBundle {
     mime_type: String,
@@ -17,6 +27,12 @@ struct CachedBundle {
 struct CachedBundles {
     last_mod: String,
     bundles: HashMap<String, CachedBundle>,
+}
+
+#[derive(Template)]
+#[template(path = "locale.none")]
+struct LocaleTemplate {
+    locale: Arc<dyn Locale + Send + Sync>,
 }
 
 static NOCACHE: Lazy<String> = Lazy::new(|| String::from("no-cache"));
@@ -60,7 +76,16 @@ fn build_bundle(path: &PathBuf, suffix: &str, without: &str) -> CachedBundle {
     }
 }
 
-fn build_all_bundles(static_path: PathBuf) -> CachedBundles {
+fn build_js_locale(locale: Arc<dyn Locale + Send + Sync>) -> CachedBundle {
+    let html = LocaleTemplate { locale }.render().unwrap();
+
+    CachedBundle {
+        mime_type: "application/javascript".to_string(),
+        data: html.into_bytes(),
+    }
+}
+
+fn build_all_bundles(locale: Arc<dyn Locale + Send + Sync>, static_path: PathBuf) -> CachedBundles {
     let mut res = CachedBundles {
         last_mod: Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string(),
         bundles: HashMap::new(),
@@ -87,16 +112,19 @@ fn build_all_bundles(static_path: PathBuf) -> CachedBundles {
         "contrib.min.css".into(),
         build_bundle(&contrib_path, ".min.css", ""),
     );
+    res.bundles
+        .insert("locale.js".into(), build_js_locale(locale));
 
     res
 }
 
 async fn bundle(
-    State(static_path): State<PathBuf>,
+    State((state, static_path)): State<(EventixState, PathBuf)>,
     Path(name): Path<String>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let cached = BUNDLES.get_or_init(|| build_all_bundles(static_path));
+    let locale = state.lock().await.settings().locale();
+    let cached = BUNDLES.get_or_init(|| build_all_bundles(locale, static_path));
 
     // if the browser has the file already, reply 304
     if let Some(if_modified_since) = headers.get("if-modified-since")
@@ -123,8 +151,8 @@ async fn bundle(
     (StatusCode::OK, headers, bundle.data.clone())
 }
 
-pub fn router(static_path: PathBuf) -> Router {
+pub fn router(state: EventixState, static_path: PathBuf) -> Router {
     Router::new()
         .route("/{name}", get(bundle))
-        .with_state(static_path)
+        .with_state((state, static_path))
 }

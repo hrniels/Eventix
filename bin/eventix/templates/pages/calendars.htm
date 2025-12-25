@@ -27,13 +27,18 @@
                 </div>
                 <div class="ev_col_buttons" style="padding-top: .3em">
                     <a href="javascript:askDeleteCollection('{{ col_id }}')"
-                       class="ev_button ev_button_critical">
+                       class="ev_button ev_button_critical"
+                       title="{{ "Delete"|t(locale) }}">
                         <i class="bi bi-trash"></i>
-                        <span>{{ "Delete"|t(locale) }}</span>
+                    </a>
+                    <a class="ev_button ev_button_normal"
+                       href="javascript:gotoWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
+                       title="{{ "Edit"|t(locale) }}">
+                        <i class="bi bi-pencil"></i>
                     </a>
                     {% if col.syncer().supports_reload() %}
                     <a class="ev_button ev_button_warn"
-                       title="{{ "Warning: removes all local items and reloads them from the server side. Local changes will be lost."|t(locale) }}"
+                       title="{{ "warning.reload_collection"|t(locale) }}"
                        href="javascript:reloadCollection('{{ col_id }}',
                                                          'reload_spinner_{{ col_id }}',
                                                          reloadPageIfPossible)">
@@ -43,7 +48,7 @@
                     {% endif %}
                     {% if col.syncer().supports_discover() %}
                     <a class="ev_button ev_button_normal"
-                       title="{{ "Loads all calendars with their meta data from the server."|t(locale) }}"
+                       title="{{ "info.discover_collection"|t(locale) }}"
                        href="javascript:discoverCollection('{{ col_id }}',
                                                            'discover_spinner_{{ col_id }}',
                                                            reloadPageIfPossible)">
@@ -57,11 +62,6 @@
                                                        reloadPageIfPossible)">
                         <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Sync"|t(locale) }}</span>
-                    </a>
-                    <a class="ev_button ev_button_normal"
-                       href="javascript:gotoWithPrev('/pages/collections/edit?col_id={{ col_id }}')">
-                        <i class="bi bi-pencil"></i>
-                        <span>{{ "Edit"|t(locale) }}</span>
                     </a>
                     {% if matches!(col.syncer(), SyncerType::VDirSyncer { .. } | SyncerType::O365 { .. }) %}
                     <a class="ev_button ev_button_normal"
@@ -115,7 +115,7 @@
 <br style="clear: both"/>
 
 <div id="delete-collection-confirm" title="{{ "Are you sure?"|t(locale) }}" style="display: none">
-    {{ "This will permanently delete this collection including all calendars."|t(locale) }}
+    {{ "warning.delete_collection"|t(locale) }}
 </div>
 
 <style type="text/css">

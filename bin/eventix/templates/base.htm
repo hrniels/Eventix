@@ -23,6 +23,7 @@
             }
             {% endfor %}
         </style>
+        <script type="text/javascript" src="/generated/locale.js"></script>
         <script type="text/javascript" src="/generated/contrib{{ js_suffix }}.js"></script>
         <script type="text/javascript" src="/generated/bundle.js"></script>
         <script type="text/javascript">
@@ -89,11 +90,11 @@
                 &nbsp;
                 <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/pages/monthly">
                     <i class="bi bi-calendar2-month"></i>
-                    <span>{{ "Monthly"|t(locale) }}</span>
+                    <span>{{ "Month"|t(locale) }}</span>
                 </a>
                 <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/pages/weekly">
                     <i class="bi bi-calendar2-week"></i>
-                    <span>{{ "Weekly"|t(locale) }}</span>
+                    <span>{{ "Week"|t(locale) }}</span>
                 </a>
                 <a id="link-list" class="ev_button_medium ev_button_normal"
                                   style="padding-left: 1em; padding-right: 1em" href="/pages/list">

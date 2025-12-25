@@ -20,7 +20,7 @@
     {% endfor %}
     {% endif %}
 </div>
-New attendee: <input id="{{ id }}-new-attendee" size="50" />
+{{ "New attendee"|t(locale) }}: <input id="{{ id }}-new-attendee" size="50" />
 <input type="button" onclick="addAttendee()" value="{{ "Add"|t(locale) }}" />
 
 <script>
