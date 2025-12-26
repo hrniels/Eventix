@@ -226,7 +226,7 @@ pub fn new(xdg: &BaseDirectories, lang: LocaleType) -> io::Result<Arc<dyn Locale
     let trans_file = format!("locale/{:?}.toml", lang);
     let translations = xdg
         .find_data_file(&trans_file)
-        .expect(&format!("Find '$XDG_DATA_HOME/{}", trans_file));
+        .unwrap_or_else(|| panic!("Find '$XDG_DATA_HOME/{}", trans_file));
 
     Ok(match lang {
         LocaleType::German => Arc::new(LocaleDe::new(&translations)?),

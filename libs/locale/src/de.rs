@@ -97,7 +97,7 @@ impl CalLocale for LocaleDe {
             }
             false => {
                 if nth == 1 {
-                    format!("Letzter")
+                    String::from("Letzter")
                 } else {
                     format!("{nth}t letzter")
                 }
