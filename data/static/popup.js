@@ -277,7 +277,7 @@ async function _openLargePopup(el) {
 
 async function _openPagePopup(url) {
     await _openFromElement('#link-refresh', async function() {
-        _loadPage(url);
+        await _loadPage(url);
     });
 }
 
