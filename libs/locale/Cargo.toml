@@ -10,5 +10,8 @@ chrono.workspace = true
 eventix-ical.workspace = true
 once_cell.workspace = true
 serde.workspace = true
+thiserror.workspace = true
 toml.workspace = true
 xdg.workspace = true
+
+iana-time-zone = "0.1.64"

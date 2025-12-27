@@ -17,14 +17,35 @@ function curUTCDay() {
     return `${y}${m}${d}`;
 }
 
-function curCalDate() {
-    const date = new Date();
-    const y = date.getUTCFullYear();
-    const m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-    const d = date.getUTCDate().toString().padStart(2, '0');
-    const H = date.getUTCHours().toString().padStart(2, '0');
-    const M = date.getUTCMinutes().toString().padStart(2, '0');
-    const S = date.getUTCSeconds().toString().padStart(2, '0');
+function curDate(timezone) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    })
+    .formatToParts(new Date());
+
+    return Object.fromEntries(
+        // remove separators like "/", ":", " "
+        parts
+        .filter(p => p.type !== "literal")
+        .map(p => [p.type, Number(p.value)])
+    );
+}
+
+function curDateStr(timezone) {
+    const date = curDate(timezone);
+    const y = date.year;
+    const m = date.month.toString().padStart(2, '0');
+    const d = date.day.toString().padStart(2, '0');
+    const H = date.hour.toString().padStart(2, '0');
+    const M = date.minute.toString().padStart(2, '0');
+    const S = date.second.toString().padStart(2, '0');
     return `TU${y}-${m}-${d}T${H}:${M}:${S}`;
 }
 

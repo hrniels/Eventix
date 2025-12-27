@@ -139,9 +139,10 @@
         $('#row_' + id).toggle(100);
 
         if(!occs_state[uid]) {
+            const date = curDateStr("{{ locale.timezone().name() }}");
             occs_state[uid] = {
-                'prev': curCalDate(),
-                'next': curCalDate(),
+                'prev': date,
+                'next': date,
             };
             loadPrev(id, uid);
             loadNext(id, uid);

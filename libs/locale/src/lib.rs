@@ -14,11 +14,25 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use thiserror::Error;
 use xdg::BaseDirectories;
 
 pub use de::LocaleDe;
 #[allow(unused_imports)]
 pub use en::LocaleEn;
+
+/// Locale errors
+#[derive(Debug, Error)]
+pub enum LocaleError {
+    #[error("Locale file '$XDG_DATA_HOME/{0}' not found: {0}")]
+    LocaleFile(String),
+    #[error("System timezone not found")]
+    SysTimezone,
+    #[error("Parsing system timezone '{0}' failed")]
+    ParseTimezone(String),
+    #[error("Reading locale file failed: {0}")]
+    ReadLocale(io::Error),
+}
 
 #[derive(Copy, Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LocaleType {
@@ -223,14 +237,26 @@ pub fn default() -> Arc<dyn Locale + Send + Sync> {
     Arc::new(LocaleEn::default())
 }
 
-pub fn new(xdg: &BaseDirectories, lang: LocaleType) -> io::Result<Arc<dyn Locale + Send + Sync>> {
+pub fn new(
+    xdg: &BaseDirectories,
+    lang: LocaleType,
+) -> Result<Arc<dyn Locale + Send + Sync>, LocaleError> {
     let trans_file = format!("locale/{:?}.toml", lang);
     let translations = xdg
         .find_data_file(&trans_file)
-        .unwrap_or_else(|| panic!("Find '$XDG_DATA_HOME/{}", trans_file));
+        .ok_or_else(|| LocaleError::LocaleFile(trans_file))?;
+
+    let tz_str = iana_time_zone::get_timezone().map_err(|_| LocaleError::SysTimezone)?;
+    let tz: chrono_tz::Tz = tz_str
+        .parse()
+        .map_err(|_| LocaleError::ParseTimezone(tz_str))?;
 
     Ok(match lang {
-        LocaleType::German => Arc::new(LocaleDe::new(&translations)?),
-        LocaleType::English => Arc::new(LocaleEn::new(&translations)?),
+        LocaleType::German => {
+            Arc::new(LocaleDe::new(tz, &translations).map_err(|e| LocaleError::ReadLocale(e))?)
+        }
+        LocaleType::English => {
+            Arc::new(LocaleEn::new(tz, &translations).map_err(|e| LocaleError::ReadLocale(e))?)
+        }
     })
 }

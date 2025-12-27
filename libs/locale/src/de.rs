@@ -1,6 +1,7 @@
 use std::{io, path::Path};
 
 use chrono::NaiveDate;
+use chrono_tz::Tz;
 use eventix_ical::objects::CalLocale;
 
 use crate::{DateFlags, DateLike, LocaleType, Translations};
@@ -9,13 +10,14 @@ use super::Locale;
 
 #[derive(Default, Debug)]
 pub struct LocaleDe {
+    tz: Tz,
     trans: Translations,
 }
 
 impl LocaleDe {
-    pub fn new(path: &Path) -> io::Result<Self> {
+    pub fn new(tz: Tz, path: &Path) -> io::Result<Self> {
         let trans = Translations::new_from_file(path)?;
-        Ok(Self { trans })
+        Ok(Self { tz, trans })
     }
 }
 
@@ -86,8 +88,8 @@ impl CalLocale for LocaleDe {
         self.translations().table.get(key).map_or(key, |v| v)
     }
 
-    fn timezone(&self) -> &chrono_tz::Tz {
-        &chrono_tz::Europe::Berlin
+    fn timezone(&self) -> &Tz {
+        &self.tz
     }
 
     fn nth_day(&self, nth: u64, start: bool) -> String {
