@@ -100,7 +100,9 @@ pub async fn content(
         alarm: AlarmTemplate::new(locale.clone(), "alarm", false, true, None, form.alarm),
         calendars: CalComboTemplate::new(
             "calendar",
-            Calendars::new(&state, |settings| settings.types().contains(&req.ctype)),
+            Calendars::new(&state, |_id, settings| {
+                settings.types().contains(&req.ctype)
+            }),
             calendar.clone(),
             false,
         ),

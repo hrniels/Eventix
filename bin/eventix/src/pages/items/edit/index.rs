@@ -143,7 +143,9 @@ pub async fn content(
         calendars: form.calendar.map(|cal| {
             CalComboTemplate::new(
                 "calendar",
-                Calendars::new(&state, |settings| settings.types().contains(&occ.ctype())),
+                Calendars::new(&state, |id, settings| {
+                    id == &cal || settings.types().contains(&occ.ctype())
+                }),
                 Arc::new(cal.to_string()),
                 false,
             )

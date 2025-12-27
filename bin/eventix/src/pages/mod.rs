@@ -70,14 +70,14 @@ impl Page {
             Some(cal) => cal.clone(),
             None => String::new(),
         });
-        let calendars = Calendars::new(&state, |settings| {
+        let calendars = Calendars::new(&state, |_id, settings| {
             settings.types().contains(&CalCompType::Todo)
         });
 
         Self {
             start: Instant::now(),
             now: Local::now().with_timezone(locale.timezone()),
-            calendars: Calendars::new(&state, |_settings| true),
+            calendars: Calendars::new(&state, |_id, _settings| true),
             quickcals: if !calendars.0.is_empty() {
                 Some(CalComboTemplate::new(
                     "quicktodo_calendar",

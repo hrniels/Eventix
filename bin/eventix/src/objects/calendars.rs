@@ -15,13 +15,13 @@ pub struct Calendars(pub Vec<Calendar>);
 impl Calendars {
     pub fn new<F>(state: &State, filter: F) -> Self
     where
-        F: Fn(&CalendarSettings) -> bool,
+        F: Fn(&String, &CalendarSettings) -> bool,
     {
         let mut calendars = state
             .settings()
             .calendars()
             .filter_map(|(id, settings)| {
-                if filter(settings) {
+                if filter(id, settings) {
                     Some(Calendar {
                         id: id.clone(),
                         name: settings.name().clone(),
