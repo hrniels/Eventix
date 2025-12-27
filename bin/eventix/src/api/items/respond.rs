@@ -47,7 +47,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let user = util::user_for_uid(&state, &req.uid)?
         .ok_or_else(|| anyhow!("Email account not specified"))?;

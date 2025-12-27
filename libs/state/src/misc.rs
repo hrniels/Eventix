@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use eventix_ical::objects::CalCompType;
+use eventix_locale::LocaleType;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -13,6 +14,8 @@ const FILENAME: &str = "misc.toml";
 pub struct Misc {
     #[serde(skip)]
     path: PathBuf,
+    #[serde(default)]
+    locale_type: LocaleType,
     #[serde(default)]
     last_alarm_check: NaiveDateTime,
     #[serde(default)]
@@ -29,12 +32,17 @@ impl Misc {
     fn new(path: PathBuf) -> Self {
         Self {
             path,
+            locale_type: LocaleType::default(),
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
             sync_errors: HashSet::default(),
             calendar_tokens: HashMap::default(),
         }
+    }
+
+    pub fn locale_type(&self) -> LocaleType {
+        self.locale_type
     }
 
     pub fn last_alarm_check(&self) -> NaiveDateTime {

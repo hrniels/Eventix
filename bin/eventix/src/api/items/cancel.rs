@@ -32,7 +32,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address());
 

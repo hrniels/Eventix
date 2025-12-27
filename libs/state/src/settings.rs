@@ -1,41 +1,27 @@
 use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
-use eventix_locale::{Locale, LocaleType};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     path::PathBuf,
-    sync::Arc,
 };
 use xdg::BaseDirectories;
 
 const FILENAME: &str = "settings.toml";
 
-#[derive(Debug)]
-pub struct Settings {
-    locale: Arc<dyn Locale + Send + Sync>,
-    path: PathBuf,
-    collections: BTreeMap<String, CollectionSettings>,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
-struct SettingsFile {
-    language: LocaleType,
+pub struct Settings {
+    #[serde(skip)]
+    path: PathBuf,
     #[serde(rename = "collection")]
     collections: BTreeMap<String, CollectionSettings>,
 }
 
 impl Settings {
-    pub fn new(xdg: &BaseDirectories, path: PathBuf) -> anyhow::Result<Self> {
-        let locale = eventix_locale::new(xdg, LocaleType::English)?;
-        Ok(Self {
-            locale,
+    pub fn new(path: PathBuf) -> Self {
+        Self {
             path,
             collections: BTreeMap::new(),
-        })
-    }
-
-    pub fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
-        self.locale.clone()
+        }
     }
 
     pub fn collections(&self) -> &BTreeMap<String, CollectionSettings> {
@@ -80,25 +66,16 @@ impl Settings {
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         match xdg.find_config_file(FILENAME) {
             Some(file) => {
-                let settings: SettingsFile = super::load_from_file(&file)?;
-                let locale = eventix_locale::new(xdg, settings.language)?;
-                let res = Settings {
-                    locale,
-                    path: file,
-                    collections: settings.collections,
-                };
-                Ok(res)
+                let mut settings: Settings = super::load_from_file(&file)?;
+                settings.path = file;
+                Ok(settings)
             }
-            None => Settings::new(xdg, PathBuf::from(FILENAME)),
+            None => Ok(Settings::new(PathBuf::from(FILENAME))),
         }
     }
 
     pub fn write_to_file(&self) -> anyhow::Result<()> {
-        let settings = SettingsFile {
-            language: self.locale.ty(),
-            collections: self.collections.clone(),
-        };
-        super::write_to_file(&self.path, settings)
+        super::write_to_file(&self.path, self)
     }
 }
 

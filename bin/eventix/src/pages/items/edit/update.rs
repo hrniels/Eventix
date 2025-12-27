@@ -248,7 +248,7 @@ pub async fn handler(
     Query(mut req): Query<Request>,
     MultiForm(mut form): MultiForm<CompEdit>,
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
-    let locale = state.lock().await.settings().locale();
+    let locale = state.lock().await.locale();
     let mut page = super::new_page(&state).await;
 
     let form = {

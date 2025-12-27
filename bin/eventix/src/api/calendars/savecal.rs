@@ -42,7 +42,7 @@ pub async fn handler(
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
 
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let col = state
         .settings_mut()

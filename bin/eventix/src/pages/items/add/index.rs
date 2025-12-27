@@ -46,7 +46,7 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let (locale, calendar) = {
         let state = state.lock().await;
-        let locale = state.settings().locale();
+        let locale = state.locale();
         let calendar = state.misc().last_calendar(req.ctype).cloned();
         (locale, calendar)
     };

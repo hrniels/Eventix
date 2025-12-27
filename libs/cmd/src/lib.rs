@@ -183,7 +183,7 @@ async fn handle_import(state: EventixState, req: ImportOptions) -> anyhow::Resul
 
 async fn handle_task_status(state: EventixState) -> anyhow::Result<Response> {
     let state = state.lock().await;
-    let tz = *state.settings().locale().timezone();
+    let tz = *state.locale().timezone();
     let today = Local::now().date_naive();
 
     let due_today = eventix_state::util::due_todos(&state, &tz, 1)

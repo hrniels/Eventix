@@ -20,9 +20,10 @@ pub use de::LocaleDe;
 #[allow(unused_imports)]
 pub use en::LocaleEn;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LocaleType {
     German,
+    #[default]
     English,
 }
 

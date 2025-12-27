@@ -38,7 +38,7 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let locale = state.lock().await.settings().locale();
+    let locale = state.lock().await.locale();
 
     let html = AuthTemplate {
         locale,

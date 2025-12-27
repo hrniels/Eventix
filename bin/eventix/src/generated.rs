@@ -123,7 +123,7 @@ async fn bundle(
     Path(name): Path<String>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let locale = state.lock().await.settings().locale();
+    let locale = state.lock().await.locale();
     let cached = BUNDLES.get_or_init(|| build_all_bundles(locale, static_path));
 
     // if the browser has the file already, reply 304

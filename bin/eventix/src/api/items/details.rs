@@ -67,7 +67,7 @@ async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let occ = state
         .store()

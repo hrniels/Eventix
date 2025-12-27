@@ -10,6 +10,7 @@ use eventix_ical::{
     col::{CalDir, CalStore},
     objects::{EventLike, UpdatableEventLike},
 };
+use eventix_locale::Locale;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs::File,
@@ -35,6 +36,7 @@ pub struct State {
     personal_alarms: PersonalAlarms,
     settings: settings::Settings,
     misc: misc::Misc,
+    locale: Arc<dyn Locale + Send + Sync>,
     last_reload: NaiveDateTime,
 }
 
@@ -45,6 +47,7 @@ impl State {
         let personal_alarms = PersonalAlarms::new_from_dir(&xdg).context("load personal alarms")?;
 
         let misc = misc::Misc::load_from_file(&xdg).context("load misc state")?;
+        let locale = eventix_locale::new(&xdg, misc.locale_type())?;
 
         let mut store = CalStore::default();
         for (col_id, col) in settings.collections().iter() {
@@ -56,6 +59,7 @@ impl State {
 
         Ok(Self {
             xdg,
+            locale,
             settings,
             personal_alarms,
             store,
@@ -231,6 +235,10 @@ impl State {
 
     pub fn xdg(&self) -> &BaseDirectories {
         &self.xdg
+    }
+
+    pub fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
+        self.locale.clone()
     }
 
     pub fn store(&self) -> &CalStore {

@@ -53,7 +53,7 @@ pub async fn handler(
 
     let (locale, form) = {
         let mut state = state.lock().await;
-        let locale = state.settings().locale();
+        let locale = state.locale();
         let form = if action_update(&mut page, &locale, &mut state, &mut form, &req).await? {
             page.add_info(locale.translate("info.collection_updated"));
             None

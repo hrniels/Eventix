@@ -27,7 +27,7 @@ struct HelpTemplate {
 }
 
 async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, JsonError> {
-    let locale = state.lock().await.settings().locale();
+    let locale = state.lock().await.locale();
 
     let html = HelpTemplate { locale }.render().context("help template")?;
 

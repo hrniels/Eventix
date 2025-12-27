@@ -134,7 +134,7 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let date = req.date.as_start_with_tz(locale.timezone());
 

@@ -46,7 +46,7 @@ async fn handler(
 ) -> Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
 
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let sync_res = match req.op {
         Operation::ReloadAll => eventix_state::State::reload(&mut state, req.auth_url.as_ref())

@@ -90,7 +90,7 @@ fn main() {
 
     let xdg = Arc::new(BaseDirectories::with_prefix(APP_ID));
     let state = eventix_state::State::new(xdg.clone()).expect("loading state");
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     // collect all calendars
     let calendars = state

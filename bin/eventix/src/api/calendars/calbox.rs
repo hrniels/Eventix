@@ -37,7 +37,7 @@ async fn handler(
 ) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
 
-    let locale = state.settings().locale();
+    let locale = state.locale();
     let col = state
         .settings()
         .collections()

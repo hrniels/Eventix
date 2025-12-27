@@ -41,7 +41,7 @@ async fn handler(
     Query(req): Query<Params>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let log_path = eventix_state::log_file(state.xdg(), &req.col_id);
     let date = log_path

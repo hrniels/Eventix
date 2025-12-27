@@ -94,7 +94,7 @@ pub async fn handler(State(state): State<EventixState>) -> Result<impl IntoRespo
 
     let state = state.lock().await;
     let xdg = state.xdg();
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let mut calendars = BTreeMap::new();
     for (col_id, col) in state.settings().collections() {

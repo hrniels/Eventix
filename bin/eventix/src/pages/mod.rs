@@ -64,7 +64,7 @@ impl Default for Page {
 impl Page {
     pub async fn new(state: &EventixState) -> Self {
         let state = state.lock().await;
-        let locale = state.settings().locale();
+        let locale = state.locale();
 
         let calendar = Arc::new(match state.misc().last_calendar(CalCompType::Todo) {
             Some(cal) => cal.clone(),

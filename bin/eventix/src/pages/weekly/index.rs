@@ -47,7 +47,7 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = state.lock().await.settings().locale();
+    let locale = state.lock().await.locale();
     content(
         super::new_page(&state).await,
         locale,

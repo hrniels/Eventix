@@ -27,7 +27,7 @@ pub async fn handler(
     Form(req): Form<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     create_component(
         &mut state,

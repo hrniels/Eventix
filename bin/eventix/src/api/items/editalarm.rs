@@ -45,7 +45,7 @@ pub async fn get_handler(
     Query(req): Query<GetRequest>,
 ) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let html = EditAlarmTemplate::new(locale, &state, req.uid, req.rid, req.edit)?
         .render()
@@ -59,7 +59,7 @@ pub async fn post_handler(
     MultiForm(req): MultiForm<PostRequest>,
 ) -> Result<impl IntoResponse, JsonError> {
     let mut state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let occ = state
         .store()

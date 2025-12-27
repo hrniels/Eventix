@@ -166,7 +166,7 @@ pub async fn handler(
     let page = super::new_page(&state).await;
 
     let state = state.lock().await;
-    let locale = state.settings().locale();
+    let locale = state.locale();
 
     let directories = state.store().directories().iter().collect::<Vec<_>>();
     if filter.dirs.is_empty() {
