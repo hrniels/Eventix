@@ -45,6 +45,10 @@ impl Misc {
         self.locale_type
     }
 
+    pub fn set_locale_type(&mut self, ty: LocaleType) {
+        self.locale_type = ty;
+    }
+
     pub fn last_alarm_check(&self) -> NaiveDateTime {
         self.last_alarm_check
     }

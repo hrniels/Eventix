@@ -159,6 +159,12 @@
                     </div>
                     <div style="float: right;">
                         Eventix #{{ page.git_hash() }}
+                        &nbsp;&mdash;&nbsp;
+                        {% if locale.ty() == eventix_locale::LocaleType::German %}
+                        <a href="javascript:setLang('English')"> 🇬🇧</a>
+                        {% else %}
+                        <a href="javascript:setLang('German')"> 🇩🇪</a>
+                        {% endif %}
                     </div>
                     <br style="clear: both" />
                 </div>

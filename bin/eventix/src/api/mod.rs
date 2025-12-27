@@ -4,6 +4,7 @@ pub mod calendars;
 pub mod collections;
 pub mod help;
 pub mod items;
+pub mod setlang;
 pub mod togglecal;
 
 use anyhow::Chain;
@@ -117,6 +118,7 @@ pub fn router(state: EventixState) -> Router {
         .merge(auth::router(state.clone()))
         .merge(help::router(state.clone()))
         .merge(togglecal::router(state.clone()))
+        .merge(setlang::router(state.clone()))
         .fallback(error_handler)
         .layer(axum::middleware::from_fn(json_error_middleware))
 }

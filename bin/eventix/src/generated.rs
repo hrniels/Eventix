@@ -10,12 +10,8 @@ use chrono::Utc;
 use eventix_locale::Locale;
 use eventix_state::EventixState;
 use once_cell::sync::Lazy;
-use std::{
-    collections::HashMap,
-    fs,
-    path::PathBuf,
-    sync::{Arc, OnceLock},
-};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+use tokio::sync::Mutex;
 
 use crate::html::filters;
 
@@ -36,7 +32,7 @@ struct LocaleTemplate {
 }
 
 static NOCACHE: Lazy<String> = Lazy::new(|| String::from("no-cache"));
-static BUNDLES: OnceLock<CachedBundles> = OnceLock::new();
+static BUNDLES: Lazy<Mutex<Option<CachedBundles>>> = Lazy::new(|| Mutex::new(None));
 
 fn build_bundle(path: &PathBuf, suffix: &str, without: &str) -> CachedBundle {
     let mut files: Vec<PathBuf> = fs::read_dir(path)
@@ -124,16 +120,20 @@ async fn bundle(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let locale = state.lock().await.locale();
-    let cached = BUNDLES.get_or_init(|| build_all_bundles(locale, static_path));
+    let mut cached = BUNDLES.lock().await;
+    if cached.is_none() {
+        *cached = Some(build_all_bundles(locale, static_path));
+    }
 
     // if the browser has the file already, reply 304
+    let last_mod = &cached.as_ref().unwrap().last_mod;
     if let Some(if_modified_since) = headers.get("if-modified-since")
-        && if_modified_since == &cached.last_mod
+        && if_modified_since == last_mod
     {
         return (StatusCode::NOT_MODIFIED, headers, Vec::<u8>::new());
     }
 
-    let bundle = cached.bundles.get(&name).unwrap();
+    let bundle = cached.as_ref().unwrap().bundles.get(&name).unwrap();
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
@@ -146,9 +146,13 @@ async fn bundle(
     // tell the browser when we generated it so that it sends us if-modified-since next time
     headers.insert(
         header::LAST_MODIFIED,
-        HeaderValue::from_str(&cached.last_mod).unwrap(),
+        HeaderValue::from_str(last_mod).unwrap(),
     );
     (StatusCode::OK, headers, bundle.data.clone())
+}
+
+pub async fn invalidate() {
+    BUNDLES.lock().await.take();
 }
 
 pub fn router(state: EventixState, static_path: PathBuf) -> Router {

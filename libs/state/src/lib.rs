@@ -68,6 +68,11 @@ impl State {
         })
     }
 
+    pub fn reload_locale(&mut self) -> anyhow::Result<()> {
+        self.locale = eventix_locale::new(&self.xdg, self.misc.locale_type())?;
+        Ok(())
+    }
+
     pub async fn refresh_store(state: &mut State) -> anyhow::Result<()> {
         let State {
             store,

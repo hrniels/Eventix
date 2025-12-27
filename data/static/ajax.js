@@ -90,3 +90,7 @@ function calendarOperation(col_id, cal_id, op, onsuccess) {
 function deleteCollection(col_id, onDeleted) {
     postRequest('/api/collections/delete?col_id=' + col_id, onDeleted);
 }
+
+function setLang(lang) {
+    postRequest('/api/setlang?lang=' + lang, reloadPage);
+}
