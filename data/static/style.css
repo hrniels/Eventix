@@ -254,6 +254,9 @@ table.ev_date td {
     padding: 1px;
     border: 1px solid #7F90AE;
 }
+.ev_border_top {
+    border-top: 1px solid #7F90AE;
+}
 .ev_border_bottom {
     border-bottom: 1px solid #7F90AE;
 }
