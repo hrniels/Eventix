@@ -74,6 +74,7 @@ pub async fn handler(
         update_cal(cal)?;
     } else {
         let mut cal = CalendarSettings::default();
+        cal.set_enabled(true);
         update_cal(&mut cal)?;
         col.all_calendars_mut().insert(req.cal_id, cal);
     }
