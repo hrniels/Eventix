@@ -5,6 +5,11 @@
 <div class="ev_border">
     <h1 id="title" class="ev_header">{{ "Calendars"|t(locale) }}</h1>
     <table width="100%" class="ev_table">
+        {% if collections.is_empty() %}
+        <tr>
+            <td colspan="2" align="center">{{ "No calendars found"|t(locale) }}</td>
+        </tr>
+        {% endif %}
         {% for (col_id, col) in collections.iter() %}
         <tr>
             <td class="ev_desc" width="40%" style="vertical-align: top">
