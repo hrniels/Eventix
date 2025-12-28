@@ -316,7 +316,7 @@ impl Syncer for VDirSyncer {
         if !output.status.success() {
             return Err(anyhow!("exited with {}", output.status));
         }
-        Ok(SyncColResult::Success(false))
+        Ok(SyncColResult::Success(true))
     }
 
     async fn sync_cal(
