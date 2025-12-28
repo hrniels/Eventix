@@ -14,7 +14,7 @@ APP_ID_DEBUG = APP_ID + "-debug"
 def dev_env():
     env = os.environ.copy()
     run_dir = Path("run")
-    os.makedirs(run_dir, 0o700, exist_ok=True)
+    os.makedirs(run_dir / APP_ID_DEBUG, 0o700, exist_ok=True)
 
     # (re-)create symlinks to data/static and data/icons
     # we use symlinks here so that `./b watch` sees changes to these files
