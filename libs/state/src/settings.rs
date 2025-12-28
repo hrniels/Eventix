@@ -70,7 +70,10 @@ impl Settings {
                 settings.path = file;
                 Ok(settings)
             }
-            None => Ok(Settings::new(PathBuf::from(FILENAME))),
+            None => {
+                let path = xdg.get_config_home().unwrap().join(FILENAME);
+                Ok(Settings::new(path))
+            }
         }
     }
 
