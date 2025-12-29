@@ -151,6 +151,32 @@ impl State {
         Ok(dir)
     }
 
+    fn reload_from_file(
+        state: &mut State,
+        col_id: &String,
+        cal_ids: Vec<String>,
+    ) -> anyhow::Result<()> {
+        // delete all calendars of that collection
+        state
+            .store_mut()
+            .retain(|dir| !cal_ids.contains(&**dir.id()));
+
+        // load calendars again from file
+        let col = state.settings().collections().get(col_id).unwrap();
+        let mut dirs = vec![];
+        for cal_id in cal_ids {
+            let cal = col.all_calendars().get(&cal_id).unwrap();
+            let dir = Self::load_calendar(state.xdg(), col_id, col, &cal_id, cal)?;
+            dirs.push(dir);
+        }
+
+        // add them to store
+        for dir in dirs {
+            state.store_mut().add(dir);
+        }
+        Ok(())
+    }
+
     pub async fn discover_collection(
         state: &mut State,
         col_id: &String,
@@ -172,7 +198,17 @@ impl State {
         col_id: &String,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        sync::reload_collection(state, col_id, auth_url).await
+        let res = sync::reload_collection(state, col_id, auth_url).await?;
+
+        let col = state.settings().collections().get(col_id).unwrap();
+        let cal_ids = col
+            .all_calendars()
+            .iter()
+            .map(|(id, _settings)| id.to_string())
+            .collect::<Vec<_>>();
+        Self::reload_from_file(state, col_id, cal_ids)?;
+
+        Ok(res)
     }
 
     pub async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
@@ -204,7 +240,9 @@ impl State {
         cal_id: &String,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        sync::reload_calendar(state, col_id, cal_id, auth_url).await
+        let res = sync::reload_calendar(state, col_id, cal_id, auth_url).await?;
+        Self::reload_from_file(state, col_id, vec![cal_id.to_string()])?;
+        Ok(res)
     }
 
     pub async fn reload(
