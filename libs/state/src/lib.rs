@@ -203,8 +203,8 @@ impl State {
         let col = state.settings().collections().get(col_id).unwrap();
         let cal_ids = col
             .all_calendars()
-            .iter()
-            .map(|(id, _settings)| id.to_string())
+            .keys()
+            .map(|id| id.to_string())
             .collect::<Vec<_>>();
         Self::reload_from_file(state, col_id, cal_ids)?;
 

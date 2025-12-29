@@ -244,7 +244,7 @@ pub fn new(
     let trans_file = format!("locale/{:?}.toml", lang);
     let translations = xdg
         .find_data_file(&trans_file)
-        .ok_or_else(|| LocaleError::LocaleFile(trans_file))?;
+        .ok_or(LocaleError::LocaleFile(trans_file))?;
 
     let tz_str = iana_time_zone::get_timezone().map_err(|_| LocaleError::SysTimezone)?;
     let tz: chrono_tz::Tz = tz_str
@@ -253,10 +253,10 @@ pub fn new(
 
     Ok(match lang {
         LocaleType::German => {
-            Arc::new(LocaleDe::new(tz, &translations).map_err(|e| LocaleError::ReadLocale(e))?)
+            Arc::new(LocaleDe::new(tz, &translations).map_err(LocaleError::ReadLocale)?)
         }
         LocaleType::English => {
-            Arc::new(LocaleEn::new(tz, &translations).map_err(|e| LocaleError::ReadLocale(e))?)
+            Arc::new(LocaleEn::new(tz, &translations).map_err(LocaleError::ReadLocale)?)
         }
     })
 }
