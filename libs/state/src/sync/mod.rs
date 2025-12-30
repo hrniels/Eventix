@@ -221,7 +221,7 @@ async fn handle_sync_result(
     for cal_id in ids {
         state
             .misc_mut()
-            .set_sync_error(&cal_id, sync_error.is_some());
+            .set_calendar_error(&cal_id, sync_error.is_some());
         sync_res.calendars.insert(cal_id, sync_error.is_some());
     }
 }
@@ -321,7 +321,7 @@ async fn get_sync(
                 *read_only,
                 auth.unwrap(),
                 auth_url,
-                misc.calendar_token(id).cloned(),
+                misc.collection_token(id).cloned(),
                 log,
             )
             .await?,

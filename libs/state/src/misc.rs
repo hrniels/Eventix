@@ -23,9 +23,9 @@ pub struct Misc {
     #[serde(default)]
     disabled_calendars: Vec<String>,
     #[serde(default)]
-    sync_errors: HashSet<String>,
+    calendar_errors: HashSet<String>,
     #[serde(default)]
-    calendar_tokens: HashMap<String, String>,
+    collection_tokens: HashMap<String, String>,
 }
 
 impl Misc {
@@ -36,8 +36,8 @@ impl Misc {
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
-            sync_errors: HashSet::default(),
-            calendar_tokens: HashMap::default(),
+            calendar_errors: HashSet::default(),
+            collection_tokens: HashMap::default(),
         }
     }
 
@@ -81,24 +81,24 @@ impl Misc {
         }
     }
 
-    pub fn has_sync_error(&self, id: &String) -> bool {
-        self.sync_errors.contains(id)
+    pub fn has_calendar_error(&self, id: &String) -> bool {
+        self.calendar_errors.contains(id)
     }
 
-    pub fn set_sync_error(&mut self, id: &String, error: bool) {
-        if self.has_sync_error(id) && !error {
-            self.sync_errors.remove(id);
+    pub fn set_calendar_error(&mut self, id: &String, error: bool) {
+        if self.has_calendar_error(id) && !error {
+            self.calendar_errors.remove(id);
         } else if error {
-            self.sync_errors.insert(id.clone());
+            self.calendar_errors.insert(id.clone());
         }
     }
 
-    pub fn calendar_token(&self, id: &String) -> Option<&String> {
-        self.calendar_tokens.get(id)
+    pub fn collection_token(&self, id: &String) -> Option<&String> {
+        self.collection_tokens.get(id)
     }
 
-    pub fn set_calendar_token(&mut self, id: &String, token: String) {
-        *self.calendar_tokens.entry(id.to_string()).or_default() = token;
+    pub fn set_collection_token(&mut self, id: &String, token: String) {
+        *self.collection_tokens.entry(id.to_string()).or_default() = token;
     }
 
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {

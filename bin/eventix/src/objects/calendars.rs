@@ -26,7 +26,7 @@ impl Calendars {
                         id: id.clone(),
                         name: settings.name().clone(),
                         enabled: !state.misc().calendar_disabled(id),
-                        sync_error: state.misc().has_sync_error(id),
+                        sync_error: state.misc().has_calendar_error(id),
                         fgcolor: settings.fgcolor().clone(),
                         bgcolor: settings.bgcolor().clone(),
                     })

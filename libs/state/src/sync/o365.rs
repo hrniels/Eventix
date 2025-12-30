@@ -141,7 +141,7 @@ impl O365 {
                     let token = &line[split + 1..];
                     // permanently remember the token
                     let misc = state.misc_mut();
-                    misc.set_calendar_token(&self.col_id, token.to_string());
+                    misc.set_collection_token(&self.col_id, token.to_string());
                     misc.write_to_file()?;
                     break;
                 }
