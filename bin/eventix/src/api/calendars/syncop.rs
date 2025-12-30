@@ -13,7 +13,7 @@ use crate::html;
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum Operation {
-    ReloadAll,
+    SyncAll,
     ReloadCollection { col_id: String },
     ReloadCalendar { col_id: String, cal_id: String },
     SyncCollection { col_id: String },
@@ -49,7 +49,7 @@ async fn handler(
     let locale = state.locale();
 
     let sync_res = match req.op {
-        Operation::ReloadAll => eventix_state::State::reload(&mut state, req.auth_url.as_ref())
+        Operation::SyncAll => eventix_state::State::sync_all(&mut state, req.auth_url.as_ref())
             .await
             .context("Unable to reload state")?,
         Operation::ReloadCollection { col_id } => {

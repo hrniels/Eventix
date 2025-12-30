@@ -28,7 +28,7 @@
         <script type="text/javascript" src="/generated/bundle.js"></script>
         <script type="text/javascript">
             trackActivity();
-            reloadDBEvery(1000 * 5 * 60, 'last-update', 'sync-spinner', 'out-of-sync');
+            syncAllEvery(1000 * 5 * 60, 'last-update', 'sync-spinner', 'out-of-sync');
 
             const startDay = curUTCDay();
             setInterval(function() {
@@ -108,7 +108,7 @@
                     <span>{{ "Help"|t(locale) }}</span>
                 </a>
                 <a id="link-refresh" class="ev_button_medium ev_button_normal"
-                                     href="javascript:reloadDB('last-update', 'sync-spinner', 'out-of-sync', true)">
+                                     href="javascript:syncAll('last-update', 'sync-spinner', 'out-of-sync', true)">
                     <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
                     <span id="last-update">
                         {{ &page.last_reload(locale)|time(locale, TimeFlags::None) }}

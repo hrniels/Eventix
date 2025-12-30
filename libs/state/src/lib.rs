@@ -245,30 +245,11 @@ impl State {
         Ok(res)
     }
 
-    pub async fn reload(
+    pub async fn sync_all(
         state: &mut State,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        // first reload the settings and personal alarms
-        let changed = {
-            let settings =
-                settings::Settings::load_from_file(&state.xdg).context("load settings")?;
-            let personal_alarms =
-                PersonalAlarms::new_from_dir(&state.xdg).context("load personal alarms")?;
-            let misc = misc::Misc::load_from_file(&state.xdg).context("load misc state")?;
-
-            let changed = state.personal_alarms != personal_alarms || state.misc != misc;
-
-            state.personal_alarms = personal_alarms;
-            state.settings = settings;
-            state.misc = misc;
-
-            changed
-        };
-
-        // now synchronize and update the store
-        let mut sync_res = sync::sync_all(state, auth_url).await?;
-        sync_res.changed |= changed;
+        let sync_res = sync::sync_all(state, auth_url).await?;
 
         // remember last reload
         state.last_reload = chrono::Utc::now().naive_utc();

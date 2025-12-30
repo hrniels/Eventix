@@ -58,13 +58,13 @@ function reloadCalendar(col_id, cal_id, spinnerId, onsuccess) {
     postWithSpinner(spinnerId, url, onsuccess);
 }
 
-function reloadDBEvery(period, lastReloadId, spinnerId, iconId) {
+function syncAllEvery(period, lastReloadId, spinnerId, iconId) {
     setInterval(function() {
-        reloadDB(lastReloadId, spinnerId, iconId, false);
+        syncAll(lastReloadId, spinnerId, iconId, false);
     }, period);
 }
 
-function reloadDB(lastReloadId, spinnerId, iconId, force, auth_url) {
+function syncAll(lastReloadId, spinnerId, iconId, force, auth_url) {
     // if it's already out of sync, and the user clicks the refresh button, directly reload
     if(outOfSync && force) {
         reloadPage();
@@ -81,7 +81,7 @@ function reloadDB(lastReloadId, spinnerId, iconId, force, auth_url) {
     syncing = true;
     syncForce = force;
 
-    let url = '/api/calendars/syncop?op[type]=ReloadAll';
+    let url = '/api/calendars/syncop?op[type]=SyncAll';
     if(auth_url)
         url += '&auth_url=' + encodeURIComponent(auth_url);
 

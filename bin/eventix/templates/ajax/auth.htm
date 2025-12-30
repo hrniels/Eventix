@@ -12,7 +12,7 @@
     </style>
     <script type="text/javascript">
         function submitAndClose() {
-            reloadDB('last-update', 'sync-spinner', 'out-of-sync', true, $('#result_url').val());
+            syncAll('last-update', 'sync-spinner', 'out-of-sync', true, $('#result_url').val());
             fireEvent(new DeselectEvent());
         }
     </script>
