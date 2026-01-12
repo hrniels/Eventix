@@ -6,10 +6,12 @@ use axum::routing::get;
 use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use eventix_locale::DateFlags;
+use eventix_locale::{DateFlags, Locale};
 use eventix_state::EventixState;
 use formatx::formatx;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, BufReader};
 
@@ -44,6 +46,28 @@ async fn handler(
     let locale = state.locale();
 
     let log_path = eventix_state::log_file(state.xdg(), &req.col_id);
+
+    let (title, content) = if log_path.exists() {
+        log_info(&locale, &req.col_id, &log_path).await?
+    } else {
+        (
+            formatx!(locale.translate("Log of collection '{}'"), req.col_id).unwrap(),
+            format!("- {} -", locale.translate("No entries")),
+        )
+    };
+
+    let html = LogTemplate { title, content }
+        .render()
+        .context("log template")?;
+
+    Ok(Json(Response { html }))
+}
+
+async fn log_info(
+    locale: &Arc<dyn Locale + Send + Sync>,
+    col_id: &String,
+    log_path: &PathBuf,
+) -> anyhow::Result<(String, String)> {
     let date = log_path
         .metadata()
         .context("Get log metadata")?
@@ -53,7 +77,7 @@ async fn handler(
     let date_local: DateTime<Tz> = date_utc.with_timezone(locale.timezone());
     let title = formatx!(
         locale.translate("Log of collection '{}' from {}"),
-        req.col_id,
+        col_id,
         locale.fmt_datetime(&date_local, DateFlags::None)
     )
     .unwrap();
@@ -70,9 +94,5 @@ async fn handler(
         .await
         .context("Reading log file")?;
 
-    let html = LogTemplate { title, content }
-        .render()
-        .context("log template")?;
-
-    Ok(Json(Response { html }))
+    Ok((title, content))
 }
