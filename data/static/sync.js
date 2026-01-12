@@ -2,16 +2,13 @@ let syncForce = false;
 let syncing = false;
 let outOfSync = false;
 
-function postWithSpinner(spinnerId, url, onsuccess, always = null) {
+function postWithSpinner(spinnerId, url, onresponse) {
     $('#' + spinnerId).addClass('ev_spin');
     postRequest(url, function(data) {
         $('#' + spinnerId).removeClass('ev_spin');
         handleCalErrors(data);
         const auth = handleAuthErrors(data);
-        if(!auth && data.changed)
-            onsuccess();
-        if(always)
-            always();
+        onresponse(data, !auth);
     });
 }
 
@@ -36,26 +33,33 @@ function handleCalErrors(data) {
     }
 }
 
+function defaultSyncFinish(onsuccess) {
+    return function(data, auth_success) {
+        if(auth_success && data.changed)
+            onsuccess();
+    }
+}
+
 function discoverCollection(col_id, spinnerId, onsuccess) {
     const url = '/api/calendars/syncop?op[type]=DiscoverCollection&op[data][col_id]=' + col_id;
-    postWithSpinner(spinnerId, url, onsuccess);
+    postWithSpinner(spinnerId, url, defaultSyncFinish(onsuccess));
 }
 
 function syncCollection(col_id, spinnerId, onsuccess) {
     const url = '/api/calendars/syncop?op[type]=SyncCollection&op[data][col_id]=' + col_id;
-    postWithSpinner(spinnerId, url, onsuccess);
+    postWithSpinner(spinnerId, url, defaultSyncFinish(onsuccess));
 }
 
 function reloadCollection(col_id, spinnerId, onsuccess) {
     const url = '/api/calendars/syncop?op[type]=ReloadCollection&op[data][col_id]=' + col_id;
-    postWithSpinner(spinnerId, url, onsuccess);
+    postWithSpinner(spinnerId, url, defaultSyncFinish(onsuccess));
 }
 
 function reloadCalendar(col_id, cal_id, spinnerId, onsuccess) {
     let url = '/api/calendars/syncop?op[type]=ReloadCalendar';
     url += '&op[data][col_id]=' + col_id;
     url += '&op[data][cal_id]=' + cal_id;
-    postWithSpinner(spinnerId, url, onsuccess);
+    postWithSpinner(spinnerId, url, defaultSyncFinish(onsuccess));
 }
 
 function syncAllEvery(period, lastReloadId, spinnerId, iconId) {
@@ -85,11 +89,11 @@ function syncAll(lastReloadId, spinnerId, iconId, force, auth_url) {
     if(auth_url)
         url += '&auth_url=' + encodeURIComponent(auth_url);
 
-    postWithSpinner(spinnerId, url, function() {
+    postWithSpinner(spinnerId, url, function(data, auth_success) {
         $('#' + lastReloadId).html(data.date);
         syncing = false;
-    }, function() {
-        requestReload(iconId, syncForce);
+        if(auth_success && data.changed)
+            requestReload(iconId, syncForce);
     });
 }
 
