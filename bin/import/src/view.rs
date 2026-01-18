@@ -4,7 +4,7 @@ use gdk_pixbuf::{Colorspace, Pixbuf};
 use glib::value::ToValue;
 use gtk::gdk::RGBA;
 use gtk::gio::Icon;
-use gtk::{prelude::*, Align, ButtonsType, DialogFlags, Image, MessageDialog, MessageType};
+use gtk::{Align, ButtonsType, DialogFlags, Image, MessageDialog, MessageType, prelude::*};
 use gtk::{
     Box as GtkBox, Button, CellRendererPixbuf, CellRendererText, ComboBox, Dialog, Label,
     ListStore, Orientation,
@@ -85,7 +85,7 @@ impl ImportView {
             if let Some(sum) = c.summary.as_ref() {
                 label.push_str(&format!("{sum}\n"));
             }
-            label.push_str(&locale.date_range(c.start.as_ref(), c.end.as_ref()));
+            label.push_str(&locale.date_range(c.start.clone(), c.end.clone()));
             if let Some(rrule) = c.rrule.as_ref() {
                 label.push_str(&format!("\n{}", rrule.human(locale)));
             }

@@ -32,8 +32,8 @@
                 {% endif %}
             </td>
             <td width="70%">
-                {{ locale.date_range(occ.occurrence_startdate().as_ref(),
-                                     occ.occurrence_enddate().as_ref())|safe }}
+                {{ locale.date_range(occ.occurrence_startdate(),
+                                     occ.occurrence_enddate())|safe }}
             </td>
         </tr>
         {% endif %}

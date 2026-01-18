@@ -11,6 +11,7 @@ pub mod filters {
 
     use eventix_locale::{DateFlags, DateLike, Locale, TimeFlags};
 
+    #[askama::filter_fn]
     pub fn as_time(
         time: super::Duration,
         _values: &dyn ::askama::Values,
@@ -18,6 +19,7 @@ pub mod filters {
         Ok(format!("{} µs", time.as_micros()))
     }
 
+    #[askama::filter_fn]
     pub fn newlines<T: Display>(
         text: T,
         _values: &dyn ::askama::Values,
@@ -26,6 +28,7 @@ pub mod filters {
         Ok(Safe(text.replace('\n', "<br>")))
     }
 
+    #[askama::filter_fn]
     pub fn t<T: AsRef<str>>(
         text: T,
         _values: &dyn ::askama::Values,
@@ -34,6 +37,7 @@ pub mod filters {
         Ok(locale.translate(text.as_ref()).to_string())
     }
 
+    #[askama::filter_fn]
     pub fn naive_date(
         date: &Option<NaiveDate>,
         _values: &dyn ::askama::Values,
@@ -44,6 +48,7 @@ pub mod filters {
         })
     }
 
+    #[askama::filter_fn]
     pub fn naive_time(
         date: &Option<NaiveTime>,
         _values: &dyn ::askama::Values,
@@ -54,6 +59,7 @@ pub mod filters {
         })
     }
 
+    #[askama::filter_fn]
     pub fn time(
         date: &DateTime<Tz>,
         _values: &dyn ::askama::Values,
@@ -63,6 +69,7 @@ pub mod filters {
         Ok(locale.fmt_time(date, flags))
     }
 
+    #[askama::filter_fn]
     pub fn weekdate(
         date: &dyn DateLike,
         _values: &dyn ::askama::Values,
@@ -73,6 +80,7 @@ pub mod filters {
     }
 
     #[allow(dead_code)]
+    #[askama::filter_fn]
     pub fn caldate(
         date: &CalDate,
         _values: &dyn ::askama::Values,
@@ -91,6 +99,7 @@ pub mod filters {
         }
     }
 
+    #[askama::filter_fn]
     pub fn date(
         date: &dyn DateLike,
         _values: &dyn ::askama::Values,
@@ -100,6 +109,7 @@ pub mod filters {
         Ok(locale.fmt_date(date, flags))
     }
 
+    #[askama::filter_fn]
     pub fn datetime(
         date: &dyn DateLike,
         _values: &dyn ::askama::Values,

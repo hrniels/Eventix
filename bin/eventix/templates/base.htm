@@ -4,7 +4,7 @@
         <title>{{ "Eventix"|t(locale) }}</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         <meta http-equiv="Content-Style-Type" content="text/css" />
-        {% let js_suffix %}
+        {% decl js_suffix %}
         {% if page.debug() %}
         {% let js_suffix = "" %}
         {% else %}

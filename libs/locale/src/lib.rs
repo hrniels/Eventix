@@ -188,13 +188,13 @@ pub trait Locale: CalLocale + Debug {
         None
     }
 
-    fn date_range(&self, start: Option<&CalDate>, end: Option<&CalDate>) -> String {
+    fn date_range(&self, start: Option<CalDate>, end: Option<CalDate>) -> String {
         let tz = self.timezone();
         let date_flags = DateFlags::Short;
         let time_flags = TimeFlags::Short;
         match (start, end) {
             (Some(CalDate::Date(start, ..)), Some(CalDate::Date(end, ..)))
-                if start.succ_opt() == Some(*end) =>
+                if start.succ_opt() == Some(end) =>
             {
                 self.fmt_date(&start, date_flags).to_string()
             }

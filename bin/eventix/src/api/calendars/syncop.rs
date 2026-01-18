@@ -8,7 +8,6 @@ use std::collections::HashMap;
 
 use crate::api::JsonError;
 use crate::extract::MultiQuery;
-use crate::html;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -81,12 +80,9 @@ async fn handler(
         changed: sync_res.changed,
         collections: sync_res.collections,
         calendars: sync_res.calendars,
-        date: html::filters::time(
+        date: locale.fmt_time(
             &CalDate::now().as_start_with_tz(locale.timezone()),
-            &(),
-            &locale,
             TimeFlags::None,
-        )
-        .unwrap(),
+        ),
     }))
 }
