@@ -164,6 +164,7 @@ impl VDirSyncer {
 
     async fn run_discover(&self) -> anyhow::Result<()> {
         let mut cmd = Command::new("vdirsyncer");
+        cmd.kill_on_drop(true);
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::null());
         cmd.stderr(Stdio::piped());
@@ -203,6 +204,7 @@ impl VDirSyncer {
         let mut tried_discover = false;
         loop {
             let mut cmd = Command::new("vdirsyncer");
+            cmd.kill_on_drop(true);
             cmd.stdout(Stdio::piped());
             cmd.stderr(Stdio::piped());
             cmd.args(["--config", self.cfg.to_str().unwrap(), "sync"]);
@@ -298,6 +300,7 @@ impl Syncer for VDirSyncer {
         self.run_discover().await?;
 
         let mut cmd = Command::new("vdirsyncer");
+        cmd.kill_on_drop(true);
         cmd.stdout(Stdio::null());
         cmd.stderr(Stdio::piped());
         cmd.args([

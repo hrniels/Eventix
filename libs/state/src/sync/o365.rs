@@ -166,6 +166,7 @@ impl O365 {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
         cmd.args([props_path.to_str().unwrap()]);
+        cmd.kill_on_drop(true);
 
         let mut child = cmd.spawn()?;
         let mut stdin = child.stdin.take().unwrap();
