@@ -36,7 +36,8 @@ pub fn overdue_todos<'a>(state: &'a State, tz: &Tz) -> impl Iterator<Item = Occu
         .filter(move |o| {
             // so far, we got all todos that overlap with this period of time. but we are only
             // interested in the ones that are due before the start and are not complete yet.
-            o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
+            !state.misc().calendar_disabled(o.directory())
+                && o.todo_status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed
                 && o.occurrence_end().unwrap_or(start) < start
                 && !o.is_excluded()
         })
