@@ -21,8 +21,7 @@
 
     <div class="container">
         <p>
-        {{ "The authentication for calendar '{}' failed. Please re-authenticate yourself by
-            following the instruction here:"|format(calendar) }}
+        {{ error }}
         </p>
         <p>
             <a href="{{ url }}">{{ "Authenticate"|t(locale) }}</a>

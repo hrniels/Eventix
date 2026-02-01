@@ -5,6 +5,7 @@ use axum::response::{IntoResponse, Json};
 use axum::{Router, routing::get};
 use eventix_locale::Locale;
 use eventix_state::EventixState;
+use formatx::formatx;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -30,7 +31,7 @@ struct Response {
 #[template(path = "ajax/auth.htm")]
 struct AuthTemplate {
     locale: Arc<dyn Locale + Send + Sync>,
-    calendar: String,
+    error: String,
     url: String,
 }
 
@@ -40,9 +41,10 @@ async fn handler(
 ) -> Result<impl IntoResponse, JsonError> {
     let locale = state.lock().await.locale();
 
+    let error = formatx!(locale.translate("error.reauth_required"), &req.calendar).unwrap();
     let html = AuthTemplate {
         locale,
-        calendar: req.calendar,
+        error,
         url: req.url,
     }
     .render()

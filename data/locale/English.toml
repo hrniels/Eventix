@@ -35,6 +35,7 @@
 "error.syncer_change" = "You cannot change the syncer type."
 "error.new_attendee_not_empty" = "The 'New attendee' field is not empty. Maybe you forgot to add the last attendee?"
 "error.end_before_start" = "The end cannot be before the start."
+"error.reauth_required" = "The authentication for calendar '{}' failed. Please re-authenticate yourself by following the instruction here:"
 
 "help.jump_ymd" = "Jump to <month> and <day> of <year> (e.g., 2019-02-14)"
 "help.jump_w" = "Jump to <week> of <year>, if given, or the current year"
