@@ -662,7 +662,9 @@ impl CalRRule {
             secs = by_sec.as_slice();
         }
 
-        if self.freq >= CalRRuleFreq::Weekly && self.by_day.is_some() {
+        if self.freq >= CalRRuleFreq::Weekly
+            && let Some(by_day) = self.by_day.as_ref()
+        {
             let (vcur, vend) = match self.freq {
                 CalRRuleFreq::Weekly => {
                     // start at beginning of week. note that this is required in case the interval
@@ -694,7 +696,6 @@ impl CalRRule {
             let vend = vend?;
 
             let mut res = vec![];
-            let by_day = self.by_day.as_ref().unwrap();
             while vcur < vend {
                 // limit by month if BYMONTH is present
                 if self.by_month.is_none() || months.contains(&(vcur.month() as u8)) {
