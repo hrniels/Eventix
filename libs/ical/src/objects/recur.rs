@@ -1115,6 +1115,12 @@ impl FromStr for CalRRule {
         if !seen_freq {
             return Err(ParseError::UnexpectedRRule("Missing FREQ".to_string()));
         }
+
+        if rrule.count.is_some() && rrule.until.is_some() {
+            return Err(ParseError::UnexpectedRRule(
+                "COUNT and UNTIL must not both be present".to_string(),
+            ));
+        }
         Ok(rrule)
     }
 }
@@ -1196,6 +1202,16 @@ mod tests {
         // RFC 5545 §3.3.10: FREQ is required
         let result = "COUNT=10".parse::<CalRRule>();
         assert!(result.is_err(), "RRULE without FREQ must be rejected");
+    }
+
+    #[test]
+    fn rrule_with_count_and_until_is_rejected() {
+        // RFC 5545 §3.3.10: COUNT and UNTIL MUST NOT both occur
+        let result = "FREQ=DAILY;COUNT=10;UNTIL=20250101T000000Z".parse::<CalRRule>();
+        assert!(
+            result.is_err(),
+            "RRULE with both COUNT and UNTIL must be rejected"
+        );
     }
 
     #[test]
