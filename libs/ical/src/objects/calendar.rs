@@ -147,20 +147,31 @@ impl PropertyConsumer for Calendar {
             match prop.name().as_str() {
                 "BEGIN" if prop.value() == "VTODO" => match CalTodo::from_lines(lines, prop) {
                     Ok(todo) => cal.checked_add(CalComponent::Todo(todo)),
+                    Err(e @ ParseError::UnexpectedEOF) | Err(e @ ParseError::UnexpectedEnd(_)) => {
+                        return Err(e);
+                    }
                     Err(e) => warn!("ignoring malformed todo: {}", e),
                 },
                 "BEGIN" if prop.value() == "VEVENT" => match CalEvent::from_lines(lines, prop) {
                     Ok(ev) => cal.checked_add(CalComponent::Event(ev)),
+                    Err(e @ ParseError::UnexpectedEOF) | Err(e @ ParseError::UnexpectedEnd(_)) => {
+                        return Err(e);
+                    }
                     Err(e) => warn!("ignoring malformed event: {}", e),
                 },
                 "BEGIN" if prop.value() == "VTIMEZONE" => {
                     match CalTimeZone::from_lines(lines, prop) {
                         Ok(tz) => cal.timezones.push(tz),
+                        Err(e @ ParseError::UnexpectedEOF)
+                        | Err(e @ ParseError::UnexpectedEnd(_)) => return Err(e),
                         Err(e) => warn!("ignoring malformed timezone: {}", e),
                     }
                 }
                 "BEGIN" => match Unknown::from_lines(lines, prop) {
                     Ok(other) => cal.unknown.push(other),
+                    Err(e @ ParseError::UnexpectedEOF) | Err(e @ ParseError::UnexpectedEnd(_)) => {
+                        return Err(e);
+                    }
                     Err(e) => warn!("ignoring unknown component: {}", e),
                 },
                 "END" => {
@@ -431,6 +442,157 @@ END:VCALENDAR\n";
         assert!(
             !serialized.contains("END:VALARM"),
             "END:VALARM leaked into parent component"
+        );
+    }
+
+    #[test]
+    fn malformed_valarm_eof_returns_error() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:test-uid\n\
+DTSTART:20250101T120000Z\n\
+BEGIN:VALARM\n\
+ACTION:NONE\n\
+END:VEVENT\n\
+END:VCALENDAR\n"; // missing END:VALARM
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEnd(val)) if val == "VEVENT"),
+            "Expected UnexpectedEnd(\"VEVENT\") when END:VALARM is missing"
+        );
+    }
+
+    #[test]
+    fn malformed_valarm_propagates_parse_errors_while_draining() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:test-uid\n\
+DTSTART:20250101T120000Z\n\
+BEGIN:VALARM\n\
+ACTION:NONE\n\
+BAD\x01LINE\n\
+END:VALARM\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEnd(val)) if val == "VALARM"),
+            "Expected UnexpectedEnd(\"VALARM\") to propagate"
+        );
+    }
+
+    #[test]
+    fn vevent_unexpected_eof_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEOF)),
+            "Expected UnexpectedEOF for incomplete VEVENT"
+        );
+    }
+
+    #[test]
+    fn vevent_wrong_end_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+END:VTODO\n\
+END:VCALENDAR\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEOF)),
+            "Expected UnexpectedEOF for wrong VEVENT end"
+        );
+    }
+
+    #[test]
+    fn vtodo_unexpected_eof_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTODO\n\
+UID:test\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEOF)),
+            "Expected UnexpectedEOF for incomplete VTODO"
+        );
+    }
+
+    #[test]
+    fn vtodo_wrong_end_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTODO\n\
+UID:test\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEnd(val)) if val == "VEVENT"),
+            "Expected UnexpectedEnd(\"VEVENT\") for wrong VTODO end"
+        );
+    }
+
+    #[test]
+    fn vtimezone_unexpected_eof_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEOF)),
+            "Expected UnexpectedEOF for incomplete VTIMEZONE"
+        );
+    }
+
+    #[test]
+    fn vtimezone_wrong_end_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEOF)),
+            "Expected UnexpectedEOF for wrong VTIMEZONE end"
+        );
+    }
+
+    #[test]
+    fn unknown_component_unexpected_eof_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:XFOO\n\
+BAR:1\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEOF)),
+            "Expected UnexpectedEOF for incomplete unknown component"
+        );
+    }
+
+    #[test]
+    fn unknown_component_wrong_end_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:XFOO\n\
+END:XBAR\n\
+END:VCALENDAR\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedEOF)),
+            "Expected UnexpectedEOF for wrong unknown component end"
         );
     }
 }
