@@ -1059,6 +1059,7 @@ impl FromStr for CalRRule {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut rrule = CalRRule::default();
+        let mut seen_freq = false;
         for part in s.split(';') {
             let mut name_value = part.splitn(2, '=');
             let name = name_value.next().unwrap();
@@ -1066,6 +1067,7 @@ impl FromStr for CalRRule {
             match name {
                 "FREQ" => {
                     rrule.freq = value.parse()?;
+                    seen_freq = true;
                 }
                 "UNTIL" => {
                     let prop: Property = format!("UNTIL:{value}").parse()?;
@@ -1109,6 +1111,9 @@ impl FromStr for CalRRule {
                 }
                 _ => return Err(ParseError::UnexpectedRRule(name.to_string())),
             }
+        }
+        if !seen_freq {
+            return Err(ParseError::UnexpectedRRule("Missing FREQ".to_string()));
         }
         Ok(rrule)
     }
@@ -1184,6 +1189,13 @@ mod tests {
             format!("{}", rule.human(&CalLocaleEn)),
             "Every 2 months".to_string()
         );
+    }
+
+    #[test]
+    fn rrule_without_freq_is_rejected() {
+        // RFC 5545 §3.3.10: FREQ is required
+        let result = "COUNT=10".parse::<CalRRule>();
+        assert!(result.is_err(), "RRULE without FREQ must be rejected");
     }
 
     #[test]
