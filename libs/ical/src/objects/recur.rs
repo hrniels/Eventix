@@ -340,7 +340,7 @@ impl fmt::Display for DayDescHuman<'_, '_> {
 pub struct CalRRule {
     freq: CalRRuleFreq,
     until: Option<CalDate>,
-    count: Option<u8>,
+    count: Option<u64>,
     interval: Option<u8>,
     by_second: Option<Vec<u8>>,
     by_minute: Option<Vec<u8>>,
@@ -451,13 +451,13 @@ impl CalRRule {
     /// Returns the number of recurrences (COUNT).
     ///
     /// If it is `None`, the recurrence occurs indefinitely.
-    pub fn count(&self) -> Option<u8> {
+    pub fn count(&self) -> Option<u64> {
         self.count
     }
     /// Sets the number of recurrences (COUNT).
     ///
     /// If set to `None`, the recurrence occurs indefinitely.
-    pub fn set_count(&mut self, count: u8) {
+    pub fn set_count(&mut self, count: u64) {
         self.count = Some(count);
     }
 
@@ -1212,6 +1212,15 @@ mod tests {
             result.is_err(),
             "RRULE with both COUNT and UNTIL must be rejected"
         );
+    }
+
+    #[test]
+    fn rrule_count_above_255_is_supported() {
+        // RFC allows arbitrary positive integers for COUNT
+        let result = "FREQ=DAILY;COUNT=300".parse::<CalRRule>();
+        assert!(result.is_ok(), "RRULE with COUNT > 255 should be supported");
+        let rule = result.unwrap();
+        assert_eq!(rule.count, Some(300));
     }
 
     #[test]
