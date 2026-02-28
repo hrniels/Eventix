@@ -595,4 +595,26 @@ END:VCALENDAR\n";
             "Expected UnexpectedEOF for wrong unknown component end"
         );
     }
+
+    #[test]
+    fn missing_begin_vcalendar_is_fatal() {
+        let input = "BEGIN:VEVENT\nUID:test\nEND:VEVENT\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedProp(val)) if val == "BEGIN"),
+            "Expected UnexpectedProp(\"BEGIN\") when VCALENDAR is missing"
+        );
+    }
+
+    #[test]
+    fn unexpected_end_before_vcalendar_is_fatal() {
+        let input = "END:VEVENT\n";
+
+        let res = input.parse::<Calendar>();
+        assert!(
+            matches!(res, Err(ParseError::UnexpectedProp(val)) if val == "END"),
+            "Expected UnexpectedProp(\"END\") before VCALENDAR"
+        );
+    }
 }
