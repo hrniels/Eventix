@@ -128,6 +128,9 @@ impl FromStr for Property {
             name.push(c);
         };
 
+        // Normalize property name to uppercase (RFC 5545: case-insensitive names)
+        name = name.to_ascii_uppercase();
+
         let (params, val_start) = if has_params {
             let mut in_quote = false;
             let mut param = String::new();
@@ -246,7 +249,7 @@ impl FromStr for Parameter {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.splitn(2, '=');
-        let name = parts.next().unwrap().to_string();
+        let name = parts.next().unwrap().to_ascii_uppercase();
         let value = parts.next().ok_or(ParseError::MissingParamValue)?;
 
         // strip quotes
@@ -334,5 +337,22 @@ mod tests {
             format!("{}", prop),
             "SUMMARY:foo bartest with\\n multiple\\;\\, lines"
         );
+    }
+
+    #[test]
+    fn lowercase_property_and_parameter_names() {
+        let prop_str = "dtstart;tzid=Europe/Berlin:20250101T120000";
+        let prop = prop_str.parse::<Property>().unwrap();
+
+        // Names should be normalized to uppercase internally
+        assert_eq!(prop.name(), "DTSTART");
+        assert_eq!(
+            prop.params(),
+            [Parameter::new(
+                "TZID".to_string(),
+                "Europe/Berlin".to_string()
+            )]
+        );
+        assert_eq!(prop.value(), "20250101T120000");
     }
 }
