@@ -307,7 +307,7 @@ mod tests {
 
     use crate::{
         objects::{CalComponent, CalDate, CalDateTime, Calendar, EventLike},
-        parser::Property,
+        parser::{ParseError, Property},
     };
 
     #[test]
@@ -389,6 +389,48 @@ TEST;FOO=bar;A=B:\"value\"\r
 END:VTODO\r
 END:VCALENDAR\r
 "
+        );
+    }
+
+    #[test]
+    fn malformed_valarm_does_not_leak_end_marker() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:test-uid\n\
+DTSTART:20250101T120000Z\n\
+BEGIN:VALARM\n\
+TRIGGER;VALUE=DATE-TIME:19760401T005545Z\n\
+ACTION:NONE\n\
+END:VALARM\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        // Parsing must succeed
+        let cal: Calendar = input.parse().expect("calendar parse failed");
+
+        // Exactly one component, no alarms stored
+        assert_eq!(cal.comps.len(), 1, "expected exactly one component");
+        match &cal.comps[0] {
+            CalComponent::Event(ev) => {
+                assert!(ev.alarms().is_none(), "malformed alarm should be ignored");
+            }
+            _ => panic!("expected VEVENT component"),
+        }
+
+        // Serialize
+        let mut buf = Vec::new();
+        cal.write(&mut buf).expect("serialization failed");
+        let serialized = String::from_utf8(buf).expect("invalid utf8 after serialization");
+
+        // Malformed VALARM must not leak into serialized output
+        assert!(
+            !serialized.contains("BEGIN:VALARM"),
+            "Malformed BEGIN:VALARM leaked into output"
+        );
+        assert!(
+            !serialized.contains("END:VALARM"),
+            "END:VALARM leaked into parent component"
         );
     }
 }
