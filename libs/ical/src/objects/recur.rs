@@ -665,35 +665,38 @@ impl CalRRule {
         if self.freq >= CalRRuleFreq::Weekly
             && let Some(by_day) = self.by_day.as_ref()
         {
-            let (vcur, vend) = match self.freq {
-                CalRRuleFreq::Weekly => {
-                    // start at beginning of week. note that this is required in case the interval
-                    // is not 1, in which case we might otherwise accidentally consider dates in
-                    // the next week. starting too early is not an issue, because we drop the dates
-                    // before start anyway.
-                    let vcur = util::week_start(date, self.week_start);
-                    let vend = util::week_end(date, self.week_start);
-                    (Some(vcur), Some(vend))
-                }
-                CalRRuleFreq::Monthly => {
-                    // start at beginning of month (same as above)
-                    let vcur = date.with_day(1).unwrap();
-                    let vend = if vcur.month() == 12 {
-                        vcur.with_year(vcur.year() + 1)
-                            .and_then(|d| d.with_month(1))
-                    } else {
-                        vcur.with_month(vcur.month() + 1)
-                    };
-                    (Some(vcur), vend)
-                }
+            // Define a unified period window: [period_start, next_period_start)
+            let period_start = match self.freq {
+                CalRRuleFreq::Weekly => util::week_start(date, self.week_start),
+                CalRRuleFreq::Monthly => date.with_day(1)?,
                 _ => {
-                    // start at beginning of year (same as above)
-                    let cur = date.with_month(1).unwrap().with_day(1).unwrap();
-                    (Some(cur), cur.with_year(cur.year() + 1))
+                    // Yearly
+                    date.with_month(1)?.with_day(1)?
                 }
             };
-            let mut vcur = vcur?;
-            let vend = vend?;
+
+            let period_end = match self.freq {
+                CalRRuleFreq::Weekly => {
+                    // Advance exactly one week using recurrence-aware logic (DST-safe)
+                    next_date(period_start, CalRRuleFreq::Weekly, 1)?
+                }
+                CalRRuleFreq::Monthly => {
+                    if period_start.month() == 12 {
+                        period_start
+                            .with_year(period_start.year() + 1)?
+                            .with_month(1)?
+                    } else {
+                        period_start.with_month(period_start.month() + 1)?
+                    }
+                }
+                _ => {
+                    // Yearly
+                    period_start.with_year(period_start.year() + 1)?
+                }
+            };
+
+            let mut vcur = period_start;
+            let vend = period_end;
 
             let mut res = vec![];
             while vcur < vend {
@@ -1473,6 +1476,30 @@ mod tests {
         assert_eq!(iter.next().unwrap(), ny_datetime(2024, 2, 4, 12, 0, 0));
         assert_eq!(iter.next().unwrap(), ny_datetime(2024, 12, 22, 12, 0, 0));
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn weekly_byday_date_value_mismatch_regression() {
+        // Simulates:
+        // DTSTART;VALUE=DATE:20260117 (Saturday)
+        // RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=SU
+        // Europe/Berlin timezone
+
+        let dtstart = berlin_datetime(2026, 1, 17, 0, 0, 0); // Saturday
+
+        let rrule = "FREQ=WEEKLY;INTERVAL=1;BYDAY=SU"
+            .parse::<CalRRule>()
+            .unwrap();
+
+        let mut iter = rrule.dates_between(
+            dtstart,
+            None, // date-only semantics -> no duration
+            dtstart,
+            dtstart + Duration::weeks(4),
+        );
+
+        // First expected occurrence is Sunday 2026-01-18
+        assert_eq!(iter.next(), Some(berlin_datetime(2026, 1, 18, 0, 0, 0)));
     }
 
     #[test]
