@@ -201,7 +201,11 @@ impl PropertyConsumer for CalTodo {
 mod tests {
     use chrono::{NaiveDate, TimeZone, Utc};
 
-    use crate::objects::{CalDate, CalDateTime, CalDateType, CalTodoStatus, Calendar, EventLike};
+    use crate::objects::evlike::UpdatableEventLike;
+    use crate::objects::{
+        CalDate, CalDateTime, CalDateType, CalTodo, CalTodoStatus, Calendar, EventLike,
+    };
+    use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 
     #[test]
     fn basics() {
@@ -240,12 +244,82 @@ END:VCALENDAR";
             ))
         );
 
-        assert_eq!(todo.status, Some(CalTodoStatus::NeedsAction));
+        assert_eq!(todo.status(), Some(CalTodoStatus::NeedsAction));
         assert_eq!(
             todo.categories(),
             Some(vec!["FAMILY".to_string(), "FINANCE".to_string()].as_ref())
         );
 
-        assert_eq!(todo.percent, Some(10));
+        assert_eq!(todo.percent(), Some(10));
+    }
+
+    #[test]
+    fn to_props_contains_expected_order_and_values() {
+        // Build a deterministic TODO via the internal constructor to avoid non-deterministic
+        // created/last-modified timestamps that `CalTodo::new` would set.
+        let mut todo = CalTodo::new_empty();
+
+        // set uid via parsing a UID property
+        let mut lr = LineReader::new("".as_bytes());
+        todo.inner
+            .parse_prop(&mut lr, "UID:todo-123".parse::<Property>().unwrap())
+            .unwrap();
+
+        // deterministic stamp
+        let stamp = CalDate::DateTime(CalDateTime::Utc(
+            Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap(),
+        ));
+        todo.set_stamp(stamp.clone());
+
+        // due date as plain DATE (inclusive for TODO)
+        let due = CalDate::new_date(
+            NaiveDate::from_ymd_opt(2025, 5, 1).unwrap(),
+            CalDateType::Inclusive,
+        );
+        todo.set_due(Some(due));
+
+        // completed as a datetime
+        let completed = CalDate::DateTime(CalDateTime::Utc(
+            Utc.with_ymd_and_hms(2025, 1, 10, 0, 0, 0).unwrap(),
+        ));
+        todo.set_completed(Some(completed));
+        assert!(todo.completed().is_some());
+
+        todo.set_status(Some(CalTodoStatus::NeedsAction));
+        todo.set_percent(Some(50));
+
+        let prop_strings = todo
+            .to_props()
+            .into_iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>();
+
+        let expected = vec![
+            String::from("BEGIN:VTODO"),
+            String::from("DUE;VALUE=DATE:20250501"),
+            String::from("STATUS:NEEDS-ACTION"),
+            String::from("COMPLETED:20250110T000000Z"),
+            String::from("PERCENT-COMPLETE:50"),
+            String::from("UID:todo-123"),
+            String::from("DTSTAMP:20250102T030405Z"),
+            String::from("END:VTODO"),
+        ];
+
+        assert_eq!(prop_strings, expected);
+    }
+
+    #[test]
+    fn from_lines_rejects_invalid_percent_and_unexpected_end() {
+        // invalid percent (>100)
+        let mut lines = LineReader::new("PERCENT-COMPLETE:101\nEND:VTODO\n".as_bytes());
+        let begin = "BEGIN:VTODO".parse::<Property>().unwrap();
+        let err = CalTodo::from_lines(&mut lines, begin).unwrap_err();
+        assert_eq!(err, ParseError::InvalidPercent(101));
+
+        // unexpected END value
+        let mut lines2 = LineReader::new("END:VEVENT\n".as_bytes());
+        let begin2 = "BEGIN:VTODO".parse::<Property>().unwrap();
+        let err2 = CalTodo::from_lines(&mut lines2, begin2).unwrap_err();
+        assert_eq!(err2, ParseError::UnexpectedEnd(String::from("VEVENT")));
     }
 }
