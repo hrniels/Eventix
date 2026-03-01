@@ -468,6 +468,7 @@ impl TryFrom<Property> for CalDate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::{from_str as from_json_str, to_string as to_json_string};
 
     #[test]
     fn simple_date() {
@@ -583,5 +584,199 @@ mod tests {
         let date_str = date.to_string();
         let str_date = date_str.parse().unwrap();
         assert_eq!(date, str_date);
+    }
+
+    #[test]
+    fn date_type_parsing_and_component_mapping() {
+        assert_eq!(
+            "Exclusive".parse::<CalDateType>().unwrap(),
+            CalDateType::Exclusive
+        );
+        assert_eq!(CalDateType::from(CalCompType::Todo), CalDateType::Inclusive);
+        assert_eq!(CalDateType::Inclusive.to_string(), "Inclusive");
+
+        let err = "NotADateType".parse::<CalDateType>().unwrap_err();
+        assert_eq!(err, ParseError::InvalidDate("NotADateType".to_string()));
+    }
+
+    #[test]
+    fn date_serde_and_inclusive_end_formatting() {
+        let date = CalDate::new_date(
+            NaiveDate::from_ymd_opt(2024, 2, 3).unwrap(),
+            CalDateType::Inclusive,
+        );
+
+        assert_eq!(date.fmt_start_with_tz(&Tz::UTC), "February 03, 2024");
+        assert_eq!(date.fmt_end_with_tz(&Tz::UTC), "February 03, 2024");
+        assert_eq!(
+            date.as_end_with_tz(&Tz::UTC).to_rfc3339(),
+            "2024-02-03T23:59:59+00:00"
+        );
+
+        let json = to_json_string(&date).unwrap();
+        assert_eq!(json, "\"D2024-02-03;Inclusive\"");
+        let from_json: CalDate = from_json_str(&json).unwrap();
+        assert_eq!(from_json, date);
+    }
+
+    #[test]
+    fn caldate_conversions_to_and_from_utc() {
+        let berlin = Tz::Europe__Berlin
+            .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
+            .single()
+            .unwrap();
+        let from_datetime = CalDate::from(berlin);
+        assert_eq!(
+            from_datetime.to_string(),
+            "TTEurope/Berlin;2024-01-02T03:04:05"
+        );
+        assert_eq!(
+            from_datetime.clone().to_utc().to_string(),
+            "TU2024-01-02T02:04:05"
+        );
+
+        let plain_date = CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
+            CalDateType::Exclusive,
+        );
+        assert_eq!(plain_date.clone().to_utc(), plain_date);
+    }
+
+    #[test]
+    fn caldate_from_str_errors_are_specific() {
+        assert_eq!(
+            "X2024-01-02".parse::<CalDate>().unwrap_err(),
+            ParseError::MalformedDate("X2024-01-02".to_string())
+        );
+        assert_eq!(
+            "Dnot-a-date;Inclusive".parse::<CalDate>().unwrap_err(),
+            ParseError::MalformedDate("Dnot-a-date;Inclusive".to_string())
+        );
+        assert_eq!(
+            "D2024-01-02;Unknown".parse::<CalDate>().unwrap_err(),
+            ParseError::MalformedDate("D2024-01-02;Unknown".to_string())
+        );
+        assert_eq!(
+            "Tnot-a-datetime".parse::<CalDate>().unwrap_err(),
+            ParseError::MalformedDate("Tnot-a-datetime".to_string())
+        );
+    }
+
+    #[test]
+    fn caldatetime_helpers_cover_each_variant() {
+        let naive = NaiveDate::from_ymd_opt(2024, 1, 15)
+            .and_then(|d| d.and_hms_opt(8, 9, 10))
+            .unwrap();
+
+        let utc = CalDateTime::Utc(naive.and_utc());
+        let floating = CalDateTime::Floating(naive);
+        let timezone = CalDateTime::Timezone(naive, "Europe/Berlin".to_string());
+
+        assert_eq!(timezone.as_naive_date().to_string(), "2024-01-15");
+        assert_eq!(floating.as_naive_date().to_string(), "2024-01-15");
+
+        assert_eq!(utc.as_naive_time().to_string(), "08:09:10");
+        assert_eq!(timezone.as_naive_time().to_string(), "08:09:10");
+        assert_eq!(floating.as_naive_time().to_string(), "08:09:10");
+
+        assert_eq!(
+            utc.as_datetime(&Tz::Europe__Berlin).to_rfc3339(),
+            "2024-01-15T08:09:10+00:00"
+        );
+
+        let fallback_timezone = CalDateTime::Timezone(naive, "Mars/Phobos".to_string());
+        assert_eq!(
+            fallback_timezone.with_tz(&Tz::UTC).to_rfc3339(),
+            "2024-01-15T07:09:10+00:00"
+        );
+    }
+
+    #[test]
+    fn caldatetime_to_prop_to_utc_and_parse_errors() {
+        let floating = CalDateTime::Floating(
+            NaiveDate::from_ymd_opt(2024, 2, 3)
+                .and_then(|d| d.and_hms_opt(4, 5, 6))
+                .unwrap(),
+        );
+
+        assert_eq!(
+            floating.to_prop("DTSTART"),
+            Property::new("DTSTART", vec![], "20240203T040506")
+        );
+        assert_eq!(floating.to_utc().to_string(), "U2024-02-03T04:05:06");
+
+        assert_eq!(
+            "X2024-02-03T04:05:06".parse::<CalDateTime>().unwrap_err(),
+            ParseError::MalformedDate("X2024-02-03T04:05:06".to_string())
+        );
+        assert_eq!(
+            "Fbad".parse::<CalDateTime>().unwrap_err(),
+            ParseError::MalformedDate("fooFbad".to_string())
+        );
+        assert_eq!(
+            "Ubad".parse::<CalDateTime>().unwrap_err(),
+            ParseError::MalformedDate("Ubad".to_string())
+        );
+        assert_eq!(
+            "TEurope/Berlin;bad".parse::<CalDateTime>().unwrap_err(),
+            ParseError::MalformedDate("TEurope/Berlin;bad".to_string())
+        );
+    }
+
+    #[test]
+    fn caldate_try_from_property_covers_exclusive_and_errors() {
+        let no_time: CalDate = "DTSTART:20240203"
+            .parse::<Property>()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            no_time,
+            CalDate::Date(
+                NaiveDate::from_ymd_opt(2024, 2, 3).unwrap(),
+                CalDateType::Exclusive
+            )
+        );
+
+        let value_date: CalDate = "DTSTART;VALUE=DATE:20240204"
+            .parse::<Property>()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            value_date,
+            CalDate::Date(
+                NaiveDate::from_ymd_opt(2024, 2, 4).unwrap(),
+                CalDateType::Exclusive
+            )
+        );
+
+        let short_err = CalDate::try_from(Property::new("DTSTART", vec![], "2024")).unwrap_err();
+        assert_eq!(short_err, ParseError::MalformedDate("2024".to_string()));
+
+        let malformed_err =
+            CalDate::try_from("DTSTART:20240203X040506".parse::<Property>().unwrap()).unwrap_err();
+        assert_eq!(
+            malformed_err,
+            ParseError::MalformedDate("20240203X040506".to_string())
+        );
+
+        let invalid_date_err =
+            CalDate::try_from("DTSTART:20240230T040506".parse::<Property>().unwrap()).unwrap_err();
+        assert_eq!(
+            invalid_date_err,
+            ParseError::InvalidDate("20240230T040506".to_string())
+        );
+
+        let invalid_due_date_err =
+            CalDate::try_from("DUE;VALUE=DATE:20240230".parse::<Property>().unwrap()).unwrap_err();
+        assert_eq!(
+            invalid_due_date_err,
+            ParseError::InvalidDate("20240230".to_string())
+        );
+
+        let invalid_number_err =
+            CalDate::try_from("DTSTART:abcd0203T040506".parse::<Property>().unwrap()).unwrap_err();
+        assert!(matches!(invalid_number_err, ParseError::InvalidNumber(_)));
     }
 }
