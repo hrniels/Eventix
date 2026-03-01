@@ -521,8 +521,6 @@ impl CalRRule {
             beyond_end
         };
 
-        assert!(self.by_set_pos.is_none(), "BYSETPOS is not supported");
-
         RecurIterator {
             rrule: self,
             dtstart,
@@ -698,7 +696,7 @@ impl CalRRule {
             let mut vcur = period_start;
             let vend = period_end;
 
-            let mut res = vec![];
+            let mut candidates = vec![];
             while vcur < vend {
                 // limit by month if BYMONTH is present
                 if self.by_month.is_none() || months.contains(&(vcur.month() as u8)) {
@@ -709,26 +707,8 @@ impl CalRRule {
                                     && let Some(ndate) = vcur.with_hour(*h as u32)
                                     && let Some(ndate) = ndate.with_minute(*m as u32)
                                     && let Some(ndate) = ndate.with_second(*s as u32)
-                                    && ndate >= dtstart
                                 {
-                                    if util::date_ranges_overlap(
-                                        ndate,
-                                        ndate + dtdur.unwrap_or(Duration::zero()),
-                                        start,
-                                        end,
-                                    ) {
-                                        res.push(ndate.with_timezone(&start.timezone()));
-                                    }
-                                    *count += 1;
-                                }
-
-                                if let Some(rcount) = self.count
-                                    && *count >= rcount as usize
-                                {
-                                    if !res.is_empty() {
-                                        return Some(res);
-                                    }
-                                    return None;
+                                    candidates.push(ndate.with_timezone(&start.timezone()));
                                 }
                             }
                         }
@@ -736,10 +716,10 @@ impl CalRRule {
                 }
                 vcur = next_date(vcur, CalRRuleFreq::Daily, 1).unwrap();
             }
-            return Some(res);
+            return self.finalize_candidates(candidates, dtstart, dtdur, start, end, count);
         }
 
-        let mut res = vec![];
+        let mut candidates = vec![];
         for mon in months {
             for d in &mon_days {
                 for h in hours {
@@ -750,33 +730,91 @@ impl CalRRule {
                                 && let Some(ndate) = ndate.with_hour(*h as u32)
                                 && let Some(ndate) = ndate.with_minute(*m as u32)
                                 && let Some(ndate) = ndate.with_second(*s as u32)
-                                && ndate >= dtstart
                             {
-                                if util::date_ranges_overlap(
-                                    ndate,
-                                    ndate + dtdur.unwrap_or(Duration::zero()),
-                                    start,
-                                    end,
-                                ) {
-                                    res.push(ndate.with_timezone(&start.timezone()));
-                                }
-                                *count += 1;
-                            }
-
-                            if let Some(rcount) = self.count
-                                && *count >= rcount as usize
-                            {
-                                if !res.is_empty() {
-                                    return Some(res);
-                                }
-                                return None;
+                                candidates.push(ndate.with_timezone(&start.timezone()));
                             }
                         }
                     }
                 }
             }
         }
+        self.finalize_candidates(candidates, dtstart, dtdur, start, end, count)
+    }
+
+    fn finalize_candidates(
+        &self,
+        candidates: Vec<DateTime<Tz>>,
+        dtstart: DateTime<Tz>,
+        dtdur: Option<Duration>,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+        count: &mut usize,
+    ) -> Option<Vec<DateTime<Tz>>> {
+        let selected = self.apply_by_set_pos(candidates);
+        let mut res = Vec::new();
+        for ndate in selected {
+            if ndate < dtstart {
+                continue;
+            }
+            if util::date_ranges_overlap(
+                ndate,
+                ndate + dtdur.unwrap_or(Duration::zero()),
+                start,
+                end,
+            ) {
+                res.push(ndate);
+            }
+            *count += 1;
+
+            if let Some(rcount) = self.count
+                && *count >= rcount as usize
+            {
+                if !res.is_empty() {
+                    return Some(res);
+                }
+                return None;
+            }
+        }
         Some(res)
+    }
+
+    fn apply_by_set_pos(&self, mut res: Vec<DateTime<Tz>>) -> Vec<DateTime<Tz>> {
+        let Some(by_set_pos) = self.by_set_pos.as_ref() else {
+            return res;
+        };
+
+        if res.is_empty() {
+            return res;
+        }
+
+        res.sort();
+
+        let len = res.len() as i32;
+        let mut picked = Vec::new();
+        for pos in by_set_pos {
+            let index = match pos.side {
+                CalRRuleSide::Start => pos.num as i32 - 1,
+                CalRRuleSide::End => len - pos.num as i32,
+            };
+            if index >= 0 && index < len {
+                picked.push(res[index as usize]);
+            }
+        }
+
+        picked.sort();
+        picked.dedup();
+        picked
+    }
+
+    fn has_any_by(&self) -> bool {
+        self.by_second.is_some()
+            || self.by_minute.is_some()
+            || self.by_hour.is_some()
+            || self.by_day.is_some()
+            || self.by_mon_day.is_some()
+            || self.by_year_day.is_some()
+            || self.by_week_no.is_some()
+            || self.by_month.is_some()
     }
 
     /// Returns a human-readable representation of this recurrence rule.
@@ -1059,6 +1097,7 @@ impl FromStr for CalRRule {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut rrule = CalRRule::default();
+
         let mut seen_freq = false;
         for part in s.split(';') {
             let mut name_value = part.splitn(2, '=');
@@ -1112,6 +1151,7 @@ impl FromStr for CalRRule {
                 _ => return Err(ParseError::UnexpectedRRule(name.to_string())),
             }
         }
+
         if !seen_freq {
             return Err(ParseError::UnexpectedRRule("Missing FREQ".to_string()));
         }
@@ -1121,6 +1161,22 @@ impl FromStr for CalRRule {
                 "COUNT and UNTIL must not both be present".to_string(),
             ));
         }
+
+        if let Some(by_set_pos) = &rrule.by_set_pos {
+            if !rrule.has_any_by() {
+                return Err(ParseError::UnexpectedRRule(
+                    "BYSETPOS must be used with another BYxxx rule".to_string(),
+                ));
+            }
+            for pos in by_set_pos {
+                if pos.num == 0 || pos.num > 366 {
+                    return Err(ParseError::UnexpectedRRule(
+                        "BYSETPOS must be in range 1..366 or -1..-366".to_string(),
+                    ));
+                }
+            }
+        }
+
         Ok(rrule)
     }
 }
@@ -1903,5 +1959,141 @@ mod tests {
         assert_eq!(iter.next().unwrap(), berlin_datetime(2025, 3, 31, 10, 0, 0));
         assert_eq!(iter.next().unwrap(), berlin_datetime(2025, 4, 7, 10, 0, 0));
         assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn bysetpos_requires_other_by() {
+        let result = "FREQ=MONTHLY;BYSETPOS=1".parse::<CalRRule>();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn bysetpos_range_is_validated() {
+        let result = "FREQ=MONTHLY;BYDAY=MO;BYSETPOS=0".parse::<CalRRule>();
+        assert!(result.is_err());
+        let result = "FREQ=MONTHLY;BYDAY=MO;BYSETPOS=367".parse::<CalRRule>();
+        assert!(result.is_err());
+    }
+
+    fn collect_instances(
+        rrule: &CalRRule,
+        dtstart: DateTime<Tz>,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+        limit: usize,
+    ) -> Vec<DateTime<Tz>> {
+        let mut iter = rrule.dates_between(dtstart, Some(Duration::hours(1)), start, end);
+        let mut res = Vec::new();
+        while res.len() < limit {
+            match iter.next() {
+                Some(item) => res.push(item),
+                None => break,
+            }
+        }
+        res
+    }
+
+    #[test]
+    fn bysetpos_third_instance_in_month_rfc_example() {
+        let dtstart = ny_datetime(1997, 9, 4, 9, 0, 0);
+        let rrule = "FREQ=MONTHLY;COUNT=3;BYDAY=TU,WE,TH;BYSETPOS=3"
+            .parse::<CalRRule>()
+            .unwrap();
+        let res = collect_instances(&rrule, dtstart, dtstart, dtstart + Duration::days(120), 10);
+        assert_eq!(
+            res,
+            vec![
+                ny_datetime(1997, 9, 4, 9, 0, 0),
+                ny_datetime(1997, 10, 7, 9, 0, 0),
+                ny_datetime(1997, 11, 6, 9, 0, 0)
+            ]
+        );
+    }
+
+    #[test]
+    fn bysetpos_second_to_last_weekday_rfc_example() {
+        let dtstart = ny_datetime(1997, 9, 29, 9, 0, 0);
+        let rrule = "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-2"
+            .parse::<CalRRule>()
+            .unwrap();
+        let res = collect_instances(
+            &rrule,
+            dtstart,
+            dtstart,
+            ny_datetime(1998, 3, 31, 23, 59, 59),
+            10,
+        );
+        assert_eq!(
+            res,
+            vec![
+                ny_datetime(1997, 9, 29, 9, 0, 0),
+                ny_datetime(1997, 10, 30, 9, 0, 0),
+                ny_datetime(1997, 11, 27, 9, 0, 0),
+                ny_datetime(1997, 12, 30, 9, 0, 0),
+                ny_datetime(1998, 1, 29, 9, 0, 0),
+                ny_datetime(1998, 2, 26, 9, 0, 0),
+                ny_datetime(1998, 3, 30, 9, 0, 0)
+            ]
+        );
+    }
+
+    #[test]
+    fn bysetpos_out_of_range_yields_no_instances() {
+        let dtstart = ny_datetime(1997, 9, 1, 9, 0, 0);
+        let rrule = "FREQ=MONTHLY;BYDAY=MO;BYSETPOS=10"
+            .parse::<CalRRule>()
+            .unwrap();
+        let res = collect_instances(
+            &rrule,
+            dtstart,
+            dtstart,
+            ny_datetime(1997, 12, 31, 23, 59, 59),
+            10,
+        );
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn bysetpos_deduplicates_overlapping_positions() {
+        let dtstart = ny_datetime(1997, 9, 1, 9, 0, 0);
+        let rrule = "FREQ=MONTHLY;COUNT=2;BYMONTHDAY=1;BYSETPOS=1,-1"
+            .parse::<CalRRule>()
+            .unwrap();
+        let res = collect_instances(
+            &rrule,
+            dtstart,
+            dtstart,
+            ny_datetime(1997, 11, 30, 23, 59, 59),
+            10,
+        );
+        assert_eq!(
+            res,
+            vec![
+                ny_datetime(1997, 9, 1, 9, 0, 0),
+                ny_datetime(1997, 10, 1, 9, 0, 0)
+            ]
+        );
+    }
+
+    #[test]
+    fn bysetpos_respects_chronological_order() {
+        let dtstart = ny_datetime(1997, 9, 1, 9, 0, 0);
+        let rrule = "FREQ=MONTHLY;COUNT=2;BYDAY=MO,WE;BYSETPOS=2,1"
+            .parse::<CalRRule>()
+            .unwrap();
+        let res = collect_instances(
+            &rrule,
+            dtstart,
+            dtstart,
+            ny_datetime(1997, 9, 30, 23, 59, 59),
+            10,
+        );
+        assert_eq!(
+            res,
+            vec![
+                ny_datetime(1997, 9, 1, 9, 0, 0),
+                ny_datetime(1997, 9, 3, 9, 0, 0)
+            ]
+        );
     }
 }
