@@ -217,6 +217,76 @@ where
     }
 }
 
+pub(crate) fn escape_text(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            ';' => out.push_str("\\;"),
+            ',' => out.push_str("\\,"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+pub(crate) fn unescape_text(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+
+        match chars.next() {
+            Some('n') | Some('N') => out.push('\n'),
+            Some('\\') => out.push('\\'),
+            Some(';') => out.push(';'),
+            Some(',') => out.push(','),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+pub(crate) fn split_escaped_commas(value: &str) -> Vec<String> {
+    let mut items = Vec::new();
+    let mut buf = String::new();
+    let mut escaped = false;
+
+    for c in value.chars() {
+        if escaped {
+            buf.push('\\');
+            buf.push(c);
+            escaped = false;
+            continue;
+        }
+
+        if c == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if c == ',' {
+            items.push(unescape_text(&buf));
+            buf.clear();
+            continue;
+        }
+
+        buf.push(c);
+    }
+
+    if escaped {
+        buf.push('\\');
+    }
+
+    items.push(unescape_text(&buf));
+    items
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

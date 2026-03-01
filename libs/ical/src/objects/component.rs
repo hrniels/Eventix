@@ -11,6 +11,7 @@ use crate::objects::{
     EventLike, UpdatableEventLike,
 };
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
+use crate::util;
 
 use super::recur::RecurIterator;
 
@@ -127,8 +128,8 @@ impl EventLikeComponent {
             }
             "CATEGORIES" => {
                 self.categories = Some(
-                    prop.value()
-                        .split(',')
+                    util::split_escaped_commas(prop.value())
+                        .into_iter()
                         .map(|v| v.trim().to_string())
                         .collect(),
                 );
@@ -238,7 +239,7 @@ impl PropertyProducer for EventLikeComponent {
             props.push(Property::new_escaped(
                 "CATEGORIES",
                 vec![],
-                cats.iter().join(","),
+                cats.iter().map(|c| util::escape_text(c)).join(","),
             ));
         }
         if let Some(ref org) = self.organizer {

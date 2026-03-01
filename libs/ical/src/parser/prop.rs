@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::parser::{LineReader, ParseError};
+use crate::util;
 
 /// A property according to RFC 5545.
 ///
@@ -95,7 +96,7 @@ impl fmt::Display for Property {
         if self.escaped {
             write!(f, "{}", self.value)
         } else {
-            for c in escape_text(&self.value).chars() {
+            for c in util::escape_text(&self.value).chars() {
                 if c.is_control() && c != '\n' {
                     continue;
                 }
@@ -156,7 +157,11 @@ impl FromStr for Property {
         };
 
         let value = s[val_start..].to_string();
-        let value = unescape_text(&value);
+        let value = if name == "RRULE" || name == "CATEGORIES" {
+            value
+        } else {
+            util::unescape_text(&value)
+        };
 
         Ok(Self {
             // these are special cases, which do not use escaping
@@ -166,41 +171,6 @@ impl FromStr for Property {
             value,
         })
     }
-}
-
-fn escape_text(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for c in value.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            ';' => out.push_str("\\;"),
-            ',' => out.push_str("\\,"),
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-fn unescape_text(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    let mut chars = value.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-
-        match chars.next() {
-            Some('n') | Some('N') => out.push('\n'),
-            Some('\\') => out.push('\\'),
-            Some(';') => out.push(';'),
-            Some(',') => out.push(','),
-            Some(other) => out.push(other),
-            None => out.push('\\'),
-        }
-    }
-    out
 }
 
 /// A consumer of [`Property`].
@@ -399,6 +369,14 @@ mod tests {
         let prop_str = "SUMMARY:contains\\\\backslash";
         let prop = prop_str.parse::<Property>().unwrap();
         assert_eq!(prop.value(), "contains\\backslash");
+        assert_eq!(format!("{}", prop), prop_str);
+    }
+
+    #[test]
+    fn rrule_value_is_not_unescaped() {
+        let prop_str = "RRULE:FREQ=DAILY;X-TEST=FOO\\N";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(prop.value(), "FREQ=DAILY;X-TEST=FOO\\N");
         assert_eq!(format!("{}", prop), prop_str);
     }
 

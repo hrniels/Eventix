@@ -446,6 +446,33 @@ END:VCALENDAR\n";
     }
 
     #[test]
+    fn categories_with_escaped_commas_round_trip() {
+        let ical = "BEGIN:VCALENDAR
+BEGIN:VTODO
+UID:cat-test
+DTSTAMP:20250101T000000Z
+CATEGORIES:Food\\,Drink,Work
+END:VTODO
+END:VCALENDAR";
+
+        let cal = ical.parse::<Calendar>().unwrap();
+        assert_eq!(cal.comps.len(), 1);
+        let CalComponent::Todo(ref todo) = cal.comps[0] else {
+            panic!("Expecting TODO");
+        };
+        assert_eq!(
+            todo.categories(),
+            Some(["Food,Drink".to_string(), "Work".to_string()].as_slice())
+        );
+
+        let mut res = Vec::new();
+        let writer = BufWriter::new(&mut res);
+        cal.write(writer).unwrap();
+        let res = String::from_utf8(res).unwrap();
+        assert!(res.contains("CATEGORIES:Food\\,Drink,Work\r"));
+    }
+
+    #[test]
     fn malformed_valarm_eof_returns_error() {
         let input = "BEGIN:VCALENDAR\n\
 VERSION:2.0\n\
