@@ -120,3 +120,72 @@ impl PropertyConsumer for CalEvent {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::objects::EventLike;
+    use crate::parser::{LineReader, Property};
+
+    #[test]
+    fn parse_and_to_props_roundtrip() {
+        let data = "UID:uid-1\n\
+DTSTAMP:20250102T090000Z\n\
+DTSTART:20250102T100000Z\n\
+DTEND:20250102T120000Z\n\
+STATUS:CONFIRMED\n\
+SUMMARY:Meeting\n\
+END:VEVENT\n";
+        let mut lines = LineReader::new(data.as_bytes());
+        let begin_prop = "BEGIN:VEVENT".parse::<Property>().unwrap();
+        let ev = CalEvent::from_lines(&mut lines, begin_prop).expect("failed to parse VEVENT");
+
+        // basics
+        assert_eq!(ev.uid().as_str(), "uid-1");
+        assert_eq!(ev.status(), Some(CalEventStatus::Confirmed));
+
+        // end is a datetime in UTC and must match the exact textual representation when printed
+        let end = ev.end().expect("end missing").to_string();
+        assert_eq!(end, "TU2025-01-02T12:00:00");
+
+        // start and summary were parsed into the inner component
+        let start_prop = ev.start().expect("start missing").to_string();
+        assert_eq!(start_prop, "TU2025-01-02T10:00:00");
+        assert_eq!(ev.summary(), Some(&"Meeting".to_string()));
+
+        // check produced properties are in the exact order expected by to_props
+        let props: Vec<String> = ev.to_props().into_iter().map(|p| p.to_string()).collect();
+        let expected = vec![
+            "BEGIN:VEVENT".to_string(),
+            "DTEND:20250102T120000Z".to_string(),
+            "STATUS:CONFIRMED".to_string(),
+            "UID:uid-1".to_string(),
+            "DTSTAMP:20250102T090000Z".to_string(),
+            "DTSTART:20250102T100000Z".to_string(),
+            "SUMMARY:Meeting".to_string(),
+            "END:VEVENT".to_string(),
+        ];
+        assert_eq!(props, expected);
+    }
+
+    #[test]
+    fn status_and_end_setters() {
+        let mut ev = CalEvent::new("my-uid");
+        ev.set_status(Some(CalEventStatus::Tentative));
+        assert_eq!(ev.status(), Some(CalEventStatus::Tentative));
+
+        ev.set_status(None);
+        assert_eq!(ev.status(), None);
+
+        // set and clear end
+        let dtend = "DTEND:20250103T010203Z"
+            .parse::<Property>()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        ev.set_end(Some(dtend));
+        assert!(ev.end().is_some());
+        ev.set_end(None);
+        assert!(ev.end().is_none());
+    }
+}
