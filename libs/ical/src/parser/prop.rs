@@ -95,17 +95,11 @@ impl fmt::Display for Property {
         if self.escaped {
             write!(f, "{}", self.value)
         } else {
-            for c in self.value.chars() {
-                if c == ';' || c == ',' || c == '\n' {
-                    f.write_char('\\')?;
+            for c in escape_text(&self.value).chars() {
+                if c.is_control() && c != '\n' {
+                    continue;
                 }
-                // TODO that's incomplete
-                match c {
-                    '\n' => f.write_char('n')?,
-                    // disallow other control characters
-                    c if c.is_control() => {}
-                    c => f.write_char(c)?,
-                }
+                f.write_char(c)?;
             }
             Ok(())
         }
@@ -162,10 +156,7 @@ impl FromStr for Property {
         };
 
         let value = s[val_start..].to_string();
-        let value = value.replace(r"\n", "\n");
-        let value = value.replace(r"\,", ",");
-        let value = value.replace(r"\;", ";");
-        let value = value.replace(r"\\", "\\");
+        let value = unescape_text(&value);
 
         Ok(Self {
             // these are special cases, which do not use escaping
@@ -175,6 +166,41 @@ impl FromStr for Property {
             value,
         })
     }
+}
+
+fn escape_text(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for c in value.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            ';' => out.push_str("\\;"),
+            ',' => out.push_str("\\,"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn unescape_text(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+
+        match chars.next() {
+            Some('n') | Some('N') => out.push('\n'),
+            Some('\\') => out.push('\\'),
+            Some(';') => out.push(';'),
+            Some(',') => out.push(','),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// A consumer of [`Property`].
@@ -358,6 +384,22 @@ mod tests {
             format!("{}", prop),
             "SUMMARY:foo bartest with\\n multiple\\;\\, lines"
         );
+    }
+
+    #[test]
+    fn uppercase_newline_escape_is_supported() {
+        let prop_str = "SUMMARY:line1\\Nline2";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(prop.value(), "line1\nline2");
+        assert_eq!(format!("{}", prop), "SUMMARY:line1\\nline2");
+    }
+
+    #[test]
+    fn backslash_roundtrip() {
+        let prop_str = "SUMMARY:contains\\\\backslash";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(prop.value(), "contains\\backslash");
+        assert_eq!(format!("{}", prop), prop_str);
     }
 
     #[test]
