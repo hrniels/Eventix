@@ -275,3 +275,103 @@ pub trait UpdatableEventLike: EventLike {
     /// Sets the priority.
     fn set_priority(&mut self, prio: Option<u8>);
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::Duration;
+
+    use super::{EventLike, UpdatableEventLike};
+    use crate::objects::{
+        CalAlarm, CalAttendee, CalCompType, CalDate, CalDateType, CalOrganizer, CalPartStat,
+        CalRRule, EventLikeComponent,
+    };
+    use crate::parser::{LineReader, Parameter, Property};
+
+    fn base_component() -> EventLikeComponent {
+        EventLikeComponent::new("u1", CalCompType::Event)
+    }
+
+    #[test]
+    fn time_duration_with_duration_and_is_all_day() {
+        let mut comp = base_component();
+
+        // set DURATION via parse_prop
+        let mut lr = LineReader::new("".as_bytes());
+        let prop = Property::new("DURATION", vec![], "PT2H");
+        comp.parse_prop(&mut lr, prop).unwrap();
+        assert_eq!(comp.time_duration().unwrap(), Duration::hours(2));
+
+        // no duration and no start -> None
+        let comp2 = EventLikeComponent::new("u2", CalCompType::Event);
+        assert!(comp2.time_duration().is_none());
+
+        // set DTSTART as DATE to mark all-day
+        let mut comp3 = EventLikeComponent::new("u3", CalCompType::Event);
+        let mut lr = LineReader::new("".as_bytes());
+        let prop = Property::new("DTSTART", vec![Parameter::new("VALUE", "DATE")], "20250101");
+        comp3.parse_prop(&mut lr, prop).unwrap();
+        assert!(comp3.is_all_day());
+    }
+
+    #[test]
+    fn attendee_status_and_has_alarms_and_is_recurrent() {
+        let mut comp = base_component();
+
+        // attendees None -> attendee_status returns None
+        assert_eq!(comp.attendee_status("any@example.com"), None);
+
+        // set attendees with one that has a part stat
+        let mut att = CalAttendee::new("mailto:Alice@Example.COM".to_string());
+        att.set_part_stat(Some(CalPartStat::Accepted));
+        comp.set_attendees(Some(vec![att.clone()]));
+
+        // exact match (case-insensitive)
+        assert_eq!(
+            comp.attendee_status("alice@example.com"),
+            Some(CalPartStat::Accepted)
+        );
+        assert_eq!(
+            comp.attendee_status("Alice@Example.com"),
+            Some(CalPartStat::Accepted)
+        );
+
+        // user not listed -> NeedsAction
+        assert_eq!(
+            comp.attendee_status("bob@example.com"),
+            Some(CalPartStat::NeedsAction)
+        );
+
+        // has_alarms false for None or empty vec
+        comp.set_alarms(None);
+        assert!(!comp.has_alarms());
+        comp.set_alarms(Some(vec![]));
+        assert!(!comp.has_alarms());
+        comp.set_alarms(Some(vec![CalAlarm::default()]));
+        assert!(comp.has_alarms());
+
+        // is_recurrent when rrule or rid present
+        comp.set_rrule(None);
+        comp.set_rid(None);
+        assert!(!comp.is_recurrent());
+        comp.set_rrule(Some(CalRRule::default()));
+        assert!(comp.is_recurrent());
+        comp.set_rrule(None);
+        let naive = chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        comp.set_rid(Some(CalDate::Date(naive, CalDateType::Inclusive)));
+        assert!(comp.is_recurrent());
+    }
+
+    #[test]
+    fn is_owned_by_checks() {
+        let mut comp = base_component();
+        // no organizer -> owned by any user
+        assert!(comp.is_owned_by::<&str>(None));
+
+        let org = CalOrganizer::new_named("John", "owner@example.com");
+        comp.set_organizer(Some(org));
+        // matching user (case-insensitive)
+        assert!(comp.is_owned_by(Some("Owner@Example.com")));
+        // different user
+        assert!(!comp.is_owned_by(Some("other@example.com")));
+    }
+}
