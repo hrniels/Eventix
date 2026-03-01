@@ -418,6 +418,7 @@ mod tests {
 
     use chrono::{Duration, TimeZone, Utc};
 
+    use crate::objects::CalLocaleEn;
     use crate::{objects::CalDateTime, parser::LineWriter};
 
     use super::*;
@@ -528,5 +529,132 @@ END:VALARM\r
             String::from_utf8(buf_writer.into_inner().unwrap()).unwrap(),
             expected_ical
         );
+    }
+
+    #[test]
+    fn cal_trigger_relative_to_prop() {
+        let trigger = CalTrigger::Relative {
+            related: CalRelated::Start,
+            duration: Duration::minutes(-15).into(),
+        };
+        let prop = trigger.to_prop();
+        assert_eq!(prop.name(), "TRIGGER");
+        assert!(prop.has_param_value("RELATED", "START"));
+        assert_eq!(prop.value(), "-PT15M");
+    }
+
+    #[test]
+    fn alarm_human_relative_negative() {
+        let alarm = CalAlarm::new(
+            CalAction::Audio,
+            CalTrigger::Relative {
+                related: CalRelated::Start,
+                duration: Duration::minutes(-15).into(),
+            },
+        );
+        let locale = CalLocaleEn;
+        let human = alarm.human(&locale);
+        assert_eq!(human.to_string(), "15 minutes before start");
+    }
+
+    #[test]
+    fn alarm_human_relative_positive() {
+        let alarm = CalAlarm::new(
+            CalAction::Display,
+            CalTrigger::Relative {
+                related: CalRelated::End,
+                duration: Duration::minutes(30).into(),
+            },
+        );
+        let locale = CalLocaleEn;
+        let human = alarm.human(&locale);
+        assert_eq!(human.to_string(), "30 minutes after end");
+    }
+
+    #[test]
+    fn alarm_human_absolute() {
+        let alarm = CalAlarm::new(
+            CalAction::Display,
+            CalTrigger::Absolute(CalDate::DateTime(CalDateTime::Utc(
+                Utc.with_ymd_and_hms(2024, 12, 25, 10, 0, 0).unwrap(),
+            ))),
+        );
+        let locale = CalLocaleEn;
+        let human = alarm.human(&locale);
+        assert_eq!(human.to_string(), "On Wednesday, December 25, 2024 10:00");
+    }
+
+    #[test]
+    fn alarm_display() {
+        let alarm = CalAlarm::new(
+            CalAction::Display,
+            CalTrigger::Relative {
+                related: CalRelated::Start,
+                duration: Duration::minutes(-15).into(),
+            },
+        );
+        let s = alarm.to_string();
+        assert_eq!(
+            s,
+            "BEGIN:VALARM\nACTION:DISPLAY\nTRIGGER;RELATED=START:-PT15M\nEND:VALARM\n"
+        );
+    }
+
+    #[test]
+    fn alarm_serde_round_trip() {
+        let alarm_str = "BEGIN:VALARM
+ACTION:EMAIL
+TRIGGER;RELATED=END:PT1H
+DESCRIPTION:Test description
+REPEAT:3
+DURATION:PT2H
+END:VALARM";
+        let alarm: CalAlarm = alarm_str.parse().unwrap();
+
+        let serialized = serde_json::to_string(&alarm).unwrap();
+        let deserialized: CalAlarm = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(alarm, deserialized);
+    }
+
+    #[test]
+    fn alarm_from_lines_wrong_end() {
+        let lines_str = "BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-PT15M
+END:VEVENT
+";
+        let mut lines = LineReader::new(lines_str.as_bytes());
+        lines.next().unwrap();
+        let result: Result<CalAlarm, _> =
+            CalAlarm::from_lines(&mut lines, Property::new("", vec![], ""));
+        assert!(matches!(result, Err(ParseError::UnexpectedEnd(_))));
+    }
+
+    #[test]
+    fn alarm_from_lines_unknown_property() {
+        let lines_str = "BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-PT15M
+X-CUSTOM:value
+END:VALARM
+";
+        let mut lines = LineReader::new(lines_str.as_bytes());
+        lines.next().unwrap();
+        let alarm: CalAlarm =
+            CalAlarm::from_lines(&mut lines, Property::new("", vec![], "")).unwrap();
+        assert_eq!(alarm.other.len(), 1);
+        let prop = &alarm.other[0];
+        assert_eq!(prop.name(), "X-CUSTOM");
+        assert_eq!(prop.value(), "value");
+    }
+
+    #[test]
+    fn alarm_from_lines_eof() {
+        let lines_str = "BEGIN:VALARM";
+        let mut lines = LineReader::new(lines_str.as_bytes());
+        lines.next().unwrap();
+        let result: Result<CalAlarm, _> =
+            CalAlarm::from_lines(&mut lines, Property::new("", vec![], ""));
+        assert!(matches!(result, Err(ParseError::UnexpectedEOF)));
     }
 }
