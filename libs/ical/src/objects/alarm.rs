@@ -428,10 +428,10 @@ mod tests {
         assert_eq!(dur.num_seconds(), 15 * 86400 + 5 * 3600 + 20);
 
         let dur = CalDuration::from_str("P1DT2H15M").unwrap();
-        assert_eq!(dur.num_seconds(), 1 * 86400 + 2 * 3600 + 15 * 60);
+        assert_eq!(dur.num_seconds(), 86400 + 2 * 3600 + 15 * 60);
 
         let dur = CalDuration::from_str("P1DT2H").unwrap();
-        assert_eq!(dur.num_seconds(), 1 * 86400 + 2 * 3600);
+        assert_eq!(dur.num_seconds(), 86400 + 2 * 3600);
 
         let dur = CalDuration::from_str("+P2W").unwrap();
         assert_eq!(dur.num_seconds(), 14 * 86400);
@@ -513,7 +513,7 @@ END:VALARM";
         let mut buf_writer = BufWriter::new(res);
         let mut writer = LineWriter::new(&mut buf_writer);
         for prop in alarm.to_props() {
-            writer.write_line(&prop.to_string()).unwrap();
+            writer.write_line(prop.to_string()).unwrap();
         }
 
         let expected_ical = "BEGIN:VALARM\r

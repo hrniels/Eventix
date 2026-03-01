@@ -758,7 +758,7 @@ mod tests {
         let result = result.collect::<Vec<_>>();
         assert_eq!(result.len(), uids.len());
         for uid in uids {
-            if result.iter().find(|o| o.uid() == *uid).is_none() {
+            if !result.iter().any(|o| o.uid() == *uid) {
                 return false;
             }
         }
@@ -973,7 +973,7 @@ mod tests {
                 .done(),
         ));
 
-        let overlay = DefaultAlarmOverlay::default();
+        let overlay = DefaultAlarmOverlay;
         let alarms = dir
             .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 2), &overlay)
             .collect::<Vec<_>>();
@@ -1022,7 +1022,7 @@ mod tests {
                 .done(),
         ));
 
-        let overlay = DefaultAlarmOverlay::default();
+        let overlay = DefaultAlarmOverlay;
         let alarms = dir
             .due_alarms_between(
                 new_datetime(1990, 1, 5, 23, 45, 0),
@@ -1136,7 +1136,7 @@ mod tests {
         ));
         dir.add_file(CalFile::new_simple(cal));
 
-        let overlay = DefaultAlarmOverlay::default();
+        let overlay = DefaultAlarmOverlay;
         let alarms = dir
             .due_alarms_between(new_date(1990, 1, 1), new_date(1990, 1, 11), &overlay)
             .collect::<Vec<_>>();

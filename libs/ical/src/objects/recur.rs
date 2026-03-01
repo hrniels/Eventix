@@ -1231,9 +1231,11 @@ mod tests {
 
     #[test]
     fn parse_recur_count() {
-        let mut rule = CalRRule::default();
-        rule.freq = CalRRuleFreq::Daily;
-        rule.count = Some(10);
+        let rule = CalRRule {
+            freq: CalRRuleFreq::Daily,
+            count: Some(10),
+            ..Default::default()
+        };
         assert_eq!("FREQ=DAILY;COUNT=10".parse::<CalRRule>().unwrap(), rule);
         assert_eq!(
             format!("{}", rule.human(&CalLocaleEn)),
@@ -1243,9 +1245,11 @@ mod tests {
 
     #[test]
     fn parse_recur_interval() {
-        let mut rule = CalRRule::default();
-        rule.freq = CalRRuleFreq::Monthly;
-        rule.interval = Some(2);
+        let rule = CalRRule {
+            freq: CalRRuleFreq::Monthly,
+            interval: Some(2),
+            ..Default::default()
+        };
         assert_eq!("FREQ=MONTHLY;INTERVAL=2".parse::<CalRRule>().unwrap(), rule);
         assert_eq!(
             format!("{}", rule.human(&CalLocaleEn)),
@@ -1281,11 +1285,13 @@ mod tests {
 
     #[test]
     fn parse_recur_until() {
-        let mut rule = CalRRule::default();
-        rule.freq = CalRRuleFreq::Daily;
-        rule.until = Some(CalDate::DateTime(CalDateTime::Utc(
-            Utc.with_ymd_and_hms(1997, 12, 24, 0, 0, 0).unwrap(),
-        )));
+        let rule = CalRRule {
+            freq: CalRRuleFreq::Daily,
+            until: Some(CalDate::DateTime(CalDateTime::Utc(
+                Utc.with_ymd_and_hms(1997, 12, 24, 0, 0, 0).unwrap(),
+            ))),
+            ..Default::default()
+        };
         assert_eq!(
             "FREQ=DAILY;UNTIL=19971224T000000Z"
                 .parse::<CalRRule>()
@@ -1296,22 +1302,24 @@ mod tests {
 
     #[test]
     fn parse_recur_by() {
-        let mut rule = CalRRule::default();
-        rule.freq = CalRRuleFreq::Yearly;
-        rule.by_month = Some(vec![1]);
-        rule.by_set_pos = Some(vec![
-            DayDesc::new(2, CalRRuleSide::Start),
-            DayDesc::new(5, CalRRuleSide::Start),
-        ]);
-        rule.by_day = Some(vec![
-            CalWDayDesc::new(Weekday::Sun, None),
-            CalWDayDesc::new(Weekday::Mon, None),
-            CalWDayDesc::new(Weekday::Tue, None),
-            CalWDayDesc::new(Weekday::Wed, None),
-            CalWDayDesc::new(Weekday::Thu, None),
-            CalWDayDesc::new(Weekday::Fri, None),
-            CalWDayDesc::new(Weekday::Sat, None),
-        ]);
+        let rule = CalRRule {
+            freq: CalRRuleFreq::Yearly,
+            by_month: Some(vec![1]),
+            by_set_pos: Some(vec![
+                DayDesc::new(2, CalRRuleSide::Start),
+                DayDesc::new(5, CalRRuleSide::Start),
+            ]),
+            by_day: Some(vec![
+                CalWDayDesc::new(Weekday::Sun, None),
+                CalWDayDesc::new(Weekday::Mon, None),
+                CalWDayDesc::new(Weekday::Tue, None),
+                CalWDayDesc::new(Weekday::Wed, None),
+                CalWDayDesc::new(Weekday::Thu, None),
+                CalWDayDesc::new(Weekday::Fri, None),
+                CalWDayDesc::new(Weekday::Sat, None),
+            ]),
+            ..Default::default()
+        };
 
         assert_eq!(
             "FREQ=YEARLY;BYMONTH=1;BYDAY=SU,MO,TU,WE,TH,FR,SA;BYSETPOS=2,+5"

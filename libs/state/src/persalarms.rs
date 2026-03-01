@@ -269,14 +269,14 @@ mod tests {
         let mut alarms = PersonalCalendarAlarms::new_empty("".into());
         assert_eq!(alarms.get("test", None), None);
 
-        assert_eq!(alarms.set("test", None, vec![]), true);
+        assert!(alarms.set("test", None, vec![]));
 
         let alarm = alarms.get("test", None).unwrap();
         assert_eq!(alarm.uid, "test");
         assert_eq!(alarm.rid, None);
         assert_eq!(alarm.alarms, vec![]);
 
-        assert_eq!(alarms.unset("test", None), true);
+        assert!(alarms.unset("test", None));
         assert_eq!(alarms.get("test", None), None);
     }
 
@@ -288,7 +288,7 @@ mod tests {
         );
         let mut alarms = PersonalCalendarAlarms::new_empty("".into());
 
-        assert_eq!(alarms.set("test", Some(&rid1), vec![]), true);
+        assert!(alarms.set("test", Some(&rid1), vec![]));
 
         assert_eq!(alarms.get("test", None), None);
         let alarm = alarms.get("test", Some(&rid1)).unwrap();
@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(alarm.rid.as_ref(), Some(&rid1));
         assert_eq!(alarm.alarms, vec![]);
 
-        assert_eq!(alarms.unset("test", Some(&rid1)), true);
+        assert!(alarms.unset("test", Some(&rid1)));
         assert_eq!(alarms.get("test", Some(&rid1)), None);
     }
 
@@ -319,11 +319,11 @@ mod tests {
         );
         let mut alarms = PersonalCalendarAlarms::new_empty("".into());
 
-        assert_eq!(alarms.set("test", None, vec![alarm.clone()]), true);
-        assert_eq!(alarms.set("test", Some(&rid1), vec![]), true);
+        assert!(alarms.set("test", None, vec![alarm.clone()]));
+        assert!(alarms.set("test", Some(&rid1), vec![]));
 
         assert_eq!(alarms.alarms.len(), 2);
-        assert_eq!(alarms.set("test", Some(&rid2), vec![alarm.clone()]), false);
+        assert!(!alarms.set("test", Some(&rid2), vec![alarm.clone()]));
         assert_eq!(alarms.alarms.len(), 2);
 
         let alarm = alarms.get("test", Some(&rid1)).unwrap();
@@ -343,13 +343,13 @@ mod tests {
         assert_eq!(alarm.uid, "test");
         assert_eq!(alarm.rid, None);
 
-        assert_eq!(alarms.unset("test", Some(&rid2)), false);
+        assert!(!alarms.unset("test", Some(&rid2)));
 
         let alarm = alarms.get("test", Some(&rid2)).unwrap();
         assert_eq!(alarm.uid, "test");
         assert_eq!(alarm.rid, None);
 
-        assert_eq!(alarms.unset("test", None), true);
+        assert!(alarms.unset("test", None));
         assert_eq!(alarms.get("test", Some(&rid2)), None);
         let alarm = alarms.get("test", Some(&rid1)).unwrap();
         assert_eq!(alarm.uid, "test");
