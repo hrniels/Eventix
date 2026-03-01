@@ -94,6 +94,17 @@ def cmd_davmail(args):
     subprocess.run(["ant", "dist"], cwd='contrib/davmail', check=True)
 
 
+def cmd_coverage(args):
+    subprocess.run([
+        "cargo", "llvm-cov",
+        "--workspace",
+        "--exclude", "eventix",
+        "--exclude", "eventix-import",
+        "--exclude", "eventix-app",
+        "--exclude", "evlist"
+    ])
+
+
 def cmd_flatpak(args):
     build_dir = "flatpak/build"
     repo_dir = "flatpak/repo"
@@ -169,6 +180,10 @@ def main():
     davmail_parser = subparsers.add_parser(
         "davmail", parents=[parent_parser], help="Build davmail")
     davmail_parser.set_defaults(func=cmd_davmail)
+
+    coverage_parser = subparsers.add_parser(
+        "coverage", parents=[parent_parser], help="Generate code coverage information")
+    coverage_parser.set_defaults(func=cmd_coverage)
 
     flatpak_parser = subparsers.add_parser(
         "flatpak", parents=[parent_parser], help="Build flatpak package")
