@@ -264,4 +264,270 @@ mod tests {
         assert_eq!(att.part_stat, Some(CalPartStat::Tentative));
         assert_eq!(att.role, Some(CalRole::Required));
     }
+
+    #[test]
+    fn cal_role_round_trip() {
+        let variants = [
+            (CalRole::Chair, "CHAIR"),
+            (CalRole::Required, "REQ-PARTICIPANT"),
+            (CalRole::Optional, "OPT-PARTICIPANT"),
+            (CalRole::None, "NON-PARTICIPANT"),
+        ];
+        for (role, expected_str) in variants {
+            assert_eq!(format!("{role}"), expected_str);
+            let parsed: CalRole = expected_str.parse().unwrap();
+            assert_eq!(parsed, role);
+        }
+    }
+
+    #[test]
+    fn cal_role_invalid() {
+        let result: Result<CalRole, _> = "INVALID".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cal_part_stat_round_trip() {
+        let variants = [
+            (CalPartStat::NeedsAction, "NEEDS-ACTION"),
+            (CalPartStat::Accepted, "ACCEPTED"),
+            (CalPartStat::Declined, "DECLINED"),
+            (CalPartStat::Tentative, "TENTATIVE"),
+            (CalPartStat::Delegated, "DELEGATED"),
+            (CalPartStat::Completed, "COMPLETED"),
+            (CalPartStat::InProcess, "IN-PROCESS"),
+        ];
+        for (stat, expected_str) in variants {
+            assert_eq!(format!("{stat}"), expected_str);
+            let parsed: CalPartStat = expected_str.parse().unwrap();
+            assert_eq!(parsed, stat);
+        }
+    }
+
+    #[test]
+    fn cal_part_stat_invalid() {
+        let result: Result<CalPartStat, _> = "INVALID".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn attendee_new() {
+        let att = CalAttendee::new("mailto:test@example.com".to_string());
+        assert_eq!(att.address, "mailto:test@example.com");
+        assert_eq!(att.role(), None);
+        assert_eq!(att.part_stat(), None);
+        assert_eq!(att.common_name(), None);
+    }
+
+    #[test]
+    fn attendee_setters_getters() {
+        let mut att = CalAttendee::new("mailto:test@example.com".to_string());
+
+        assert_eq!(att.role(), None);
+        att.set_role(CalRole::Optional);
+        assert_eq!(att.role(), Some(CalRole::Optional));
+
+        assert_eq!(att.part_stat(), None);
+        att.set_part_stat(Some(CalPartStat::Accepted));
+        assert_eq!(att.part_stat(), Some(CalPartStat::Accepted));
+        att.set_part_stat(None);
+        assert_eq!(att.part_stat(), None);
+
+        assert_eq!(att.common_name(), None);
+        att.set_common_name("John Doe".to_string());
+        assert_eq!(att.common_name(), Some(&"John Doe".to_string()));
+    }
+
+    #[test]
+    fn attendee_to_prop_with_all_fields() {
+        let mut att = CalAttendee::new("mailto:test@example.com".to_string());
+        att.set_role(CalRole::Chair);
+        att.set_part_stat(Some(CalPartStat::Accepted));
+        att.set_common_name("John Doe".to_string());
+
+        let prop = att.to_prop();
+        assert_eq!(prop.name(), "ATTENDEE");
+        assert_eq!(prop.value(), "mailto:test@example.com");
+
+        let params: Vec<_> = prop.params().to_vec();
+        assert_eq!(params.len(), 3);
+        assert!(
+            params
+                .iter()
+                .any(|p| p.name() == "ROLE" && p.value() == "CHAIR")
+        );
+        assert!(
+            params
+                .iter()
+                .any(|p| p.name() == "PARTSTAT" && p.value() == "ACCEPTED")
+        );
+        assert!(
+            params
+                .iter()
+                .any(|p| p.name() == "CN" && p.value() == "John Doe")
+        );
+    }
+
+    #[test]
+    fn attendee_to_prop_with_only_role() {
+        let mut att = CalAttendee::new("mailto:test@example.com".to_string());
+        att.set_role(CalRole::Required);
+
+        let prop = att.to_prop();
+        let params: Vec<_> = prop.params().to_vec();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name(), "ROLE");
+        assert_eq!(params[0].value(), "REQ-PARTICIPANT");
+    }
+
+    #[test]
+    fn attendee_to_prop_with_only_part_stat() {
+        let mut att = CalAttendee::new("mailto:test@example.com".to_string());
+        att.set_part_stat(Some(CalPartStat::Declined));
+
+        let prop = att.to_prop();
+        let params: Vec<_> = prop.params().to_vec();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name(), "PARTSTAT");
+        assert_eq!(params[0].value(), "DECLINED");
+    }
+
+    #[test]
+    fn attendee_to_prop_with_only_common_name() {
+        let mut att = CalAttendee::new("mailto:test@example.com".to_string());
+        att.set_common_name("John Doe".to_string());
+
+        let prop = att.to_prop();
+        let params: Vec<_> = prop.params().to_vec();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name(), "CN");
+        assert_eq!(params[0].value(), "John Doe");
+    }
+
+    #[test]
+    fn attendee_org_address_without_mailto() {
+        let att = CalAttendee::new("test@example.com".to_string());
+        assert_eq!(att.org_address(), "test@example.com");
+    }
+
+    #[test]
+    fn attendee_address_lowercase() {
+        let att = CalAttendee::new("mailto:Test.Example@Example.COM".to_string());
+        assert_eq!(att.address(), "test.example@example.com");
+    }
+
+    #[test]
+    fn attendee_pretty_name_with_common_name() {
+        let mut att = CalAttendee::new("mailto:test@example.com".to_string());
+        att.set_common_name("John Doe".to_string());
+        assert_eq!(att.pretty_name(), "John Doe <test@example.com>");
+    }
+
+    #[test]
+    fn attendee_pretty_name_without_common_name() {
+        let att = CalAttendee::new("mailto:test@example.com".to_string());
+        assert_eq!(att.pretty_name(), "test@example.com");
+    }
+
+    #[test]
+    fn attendee_merge_with_overwrites_existing() {
+        let mut att1 = CalAttendee::new("mailto:test@example.com".to_string());
+        att1.set_role(CalRole::Required);
+        att1.set_part_stat(Some(CalPartStat::NeedsAction));
+        att1.set_common_name("Old Name".to_string());
+
+        let mut att2 = CalAttendee::new("mailto:test@example.com".to_string());
+        att2.set_role(CalRole::Chair);
+        att2.set_part_stat(Some(CalPartStat::Accepted));
+        att2.set_common_name("New Name".to_string());
+
+        att1.merge_with(att2);
+
+        assert_eq!(att1.role(), Some(CalRole::Chair));
+        assert_eq!(att1.part_stat(), Some(CalPartStat::Accepted));
+        assert_eq!(att1.common_name(), Some(&"New Name".to_string()));
+    }
+
+    #[test]
+    fn attendee_merge_with_keeps_existing_when_other_is_none() {
+        let mut att1 = CalAttendee::new("mailto:test@example.com".to_string());
+        att1.set_role(CalRole::Required);
+        att1.set_part_stat(Some(CalPartStat::Accepted));
+        att1.set_common_name("Name".to_string());
+
+        let att2 = CalAttendee::new("mailto:other@example.com".to_string());
+
+        att1.merge_with(att2);
+
+        assert_eq!(att1.role(), Some(CalRole::Required));
+        assert_eq!(att1.part_stat(), Some(CalPartStat::Accepted));
+        assert_eq!(att1.common_name(), Some(&"Name".to_string()));
+    }
+
+    #[test]
+    fn attendee_from_str_case_insensitive() {
+        assert_eq!("chair".parse::<CalRole>().unwrap(), CalRole::Chair);
+        assert_eq!("Chair".parse::<CalRole>().unwrap(), CalRole::Chair);
+        assert_eq!(
+            "accepted".parse::<CalPartStat>().unwrap(),
+            CalPartStat::Accepted
+        );
+        assert_eq!(
+            "Accepted".parse::<CalPartStat>().unwrap(),
+            CalPartStat::Accepted
+        );
+    }
+
+    #[test]
+    fn attendee_try_from_with_unknown_param() {
+        let att_str = "ATTENDEE;X-CUSTOM=value;PARTSTAT=ACCEPTED:mailto:test@example.com";
+        let line = LineReader::new(att_str.as_bytes()).next().unwrap();
+        let prop = line.parse::<Property>().unwrap();
+        let att = CalAttendee::try_from(prop).unwrap();
+        assert_eq!(att.address, "mailto:test@example.com");
+        assert_eq!(att.part_stat, Some(CalPartStat::Accepted));
+    }
+
+    #[test]
+    fn attendee_merge_with_params_adds_new() {
+        let att_str1 = "ATTENDEE;X-OLD=oldvalue:mailto:test@example.com";
+        let line1 = LineReader::new(att_str1.as_bytes()).next().unwrap();
+        let prop1 = line1.parse::<Property>().unwrap();
+        let mut att1 = CalAttendee::try_from(prop1).unwrap();
+
+        let att_str2 = "ATTENDEE;X-NEW=newvalue:mailto:test@example.com";
+        let line2 = LineReader::new(att_str2.as_bytes()).next().unwrap();
+        let prop2 = line2.parse::<Property>().unwrap();
+        let att2 = CalAttendee::try_from(prop2).unwrap();
+
+        att1.merge_with(att2);
+
+        let prop = att1.to_prop();
+        let params: Vec<_> = prop.params().to_vec();
+        assert_eq!(params.len(), 2);
+        let names: Vec<_> = params.iter().map(|p| p.name().as_str()).collect();
+        assert!(names.contains(&"X-OLD"));
+        assert!(names.contains(&"X-NEW"));
+    }
+
+    #[test]
+    fn attendee_merge_with_params_overwrites_existing() {
+        let att_str1 = "ATTENDEE;X-KEY=oldvalue:mailto:test@example.com";
+        let line1 = LineReader::new(att_str1.as_bytes()).next().unwrap();
+        let prop1 = line1.parse::<Property>().unwrap();
+        let mut att1 = CalAttendee::try_from(prop1).unwrap();
+
+        let att_str2 = "ATTENDEE;X-KEY=newvalue:mailto:test@example.com";
+        let line2 = LineReader::new(att_str2.as_bytes()).next().unwrap();
+        let prop2 = line2.parse::<Property>().unwrap();
+        let att2 = CalAttendee::try_from(prop2).unwrap();
+
+        att1.merge_with(att2);
+
+        let prop = att1.to_prop();
+        let params: Vec<_> = prop.params().to_vec();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name(), "X-KEY");
+        assert_eq!(params[0].value(), "newvalue");
+    }
 }
