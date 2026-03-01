@@ -740,3 +740,175 @@ impl UpdatableEventLike for CalComponent {
         set_with_ev_or_todo!(self, set_priority, prio);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+    use chrono_tz::UTC;
+
+    use crate::objects::{CalComponent, CalEvent, Calendar, CompDateType};
+    use crate::parser::{LineReader, ParseError, Property, PropertyProducer};
+
+    use super::{CalCompType, EventLikeComponent};
+
+    fn parse_prop_line(component: &mut EventLikeComponent, line: &str) -> Result<(), ParseError> {
+        let mut lines = LineReader::new("".as_bytes());
+        let prop = line.parse::<Property>().unwrap();
+        component.parse_prop(&mut lines, prop)
+    }
+
+    #[test]
+    fn parse_prop_round_trips_specific_values() {
+        let mut comp = EventLikeComponent::new_empty(CalCompType::Event);
+
+        for line in [
+            "UID:uid-123",
+            "CREATED:20250101T120000Z",
+            "LAST-MODIFIED:20250101T121500Z",
+            "DTSTAMP:20250101T123000Z",
+            "DTSTART:20250102T090000Z",
+            "DURATION:PT45M",
+            "SUMMARY:Quarterly planning",
+            "DESCRIPTION:Plan work and assign owners",
+            "LOCATION:Conference Room A",
+            "CATEGORIES:Engineering\\,Platform, Operations",
+            "ORGANIZER;CN=Alex Lead:mailto:alex@example.com",
+            "ATTENDEE;CN=Alice:mailto:alice@example.com",
+            "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED:mailto:alice@example.com",
+            "EXDATE:20250103T090000Z,20250104T090000Z",
+            "PRIORITY:3",
+            "RRULE:FREQ=DAILY;COUNT=2",
+            "RECURRENCE-ID:20250103T090000Z",
+            "X-CUSTOM:kept-as-generic-prop",
+        ] {
+            parse_prop_line(&mut comp, line).unwrap();
+        }
+
+        let attendee_strings = comp
+            .attendees
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|attendee| attendee.to_prop().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            attendee_strings,
+            vec![String::from(
+                "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Alice:mailto:alice@example.com"
+            )]
+        );
+
+        let prop_strings = comp
+            .to_props()
+            .into_iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            prop_strings,
+            vec![
+                String::from("UID:uid-123"),
+                String::from("CREATED:20250101T120000Z"),
+                String::from("LAST-MODIFIED:20250101T121500Z"),
+                String::from("DTSTAMP:20250101T123000Z"),
+                String::from("DTSTART:20250102T090000Z"),
+                String::from("DURATION:PT45M"),
+                String::from("SUMMARY:Quarterly planning"),
+                String::from("DESCRIPTION:Plan work and assign owners"),
+                String::from("LOCATION:Conference Room A"),
+                String::from("CATEGORIES:Engineering\\,Platform,Operations"),
+                String::from("ORGANIZER;CN=Alex Lead:mailto:alex@example.com"),
+                String::from(
+                    "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Alice:mailto:alice@example.com"
+                ),
+                String::from("EXDATE:20250103T090000Z"),
+                String::from("EXDATE:20250104T090000Z"),
+                String::from("PRIORITY:3"),
+                String::from("RRULE:FREQ=DAILY;COUNT=2"),
+                String::from("RECURRENCE-ID:20250103T090000Z"),
+                String::from("X-CUSTOM:kept-as-generic-prop"),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_prop_reports_specific_begin_and_alarm_drain_errors() {
+        let mut comp = EventLikeComponent::new_empty(CalCompType::Event);
+
+        let non_alarm_err = parse_prop_line(&mut comp, "BEGIN:VEVENT").unwrap_err();
+        assert_eq!(
+            non_alarm_err,
+            ParseError::UnexpectedBegin(String::from("VEVENT"))
+        );
+
+        let mut wrong_end_lines = LineReader::new("TRIGGER:not-a-date\nEND:VEVENT\n".as_bytes());
+        let wrong_end = comp
+            .parse_prop(
+                &mut wrong_end_lines,
+                "BEGIN:VALARM".parse::<Property>().unwrap(),
+            )
+            .unwrap_err();
+        assert_eq!(wrong_end, ParseError::UnexpectedEnd(String::from("VEVENT")));
+
+        let mut eof_lines = LineReader::new("TRIGGER:not-a-date\n".as_bytes());
+        let eof = comp
+            .parse_prop(&mut eof_lines, "BEGIN:VALARM".parse::<Property>().unwrap())
+            .unwrap_err();
+        assert_eq!(eof, ParseError::UnexpectedEOF);
+    }
+
+    #[test]
+    fn parse_prop_rejects_invalid_priority() {
+        let mut comp = EventLikeComponent::new_empty(CalCompType::Event);
+        let err = parse_prop_line(&mut comp, "PRIORITY:10").unwrap_err();
+        assert_eq!(err, ParseError::InvalidPriority(10));
+    }
+
+    #[test]
+    fn dates_between_handles_missing_and_due_only_dates() {
+        let start = UTC.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap();
+        let end = UTC.with_ymd_and_hms(2025, 1, 10, 0, 0, 0).unwrap();
+
+        let missing_start: Calendar = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:r-1\nDTSTAMP:20250101T000000Z\nRRULE:FREQ=DAILY;COUNT=2\nEND:VEVENT\nEND:VCALENDAR"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            missing_start.components()[0]
+                .dates_between(start, end)
+                .next(),
+            None
+        );
+
+        let due_only: Calendar = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:t-1\nDTSTAMP:20250101T000000Z\nDUE:20250103T090000Z\nEND:VTODO\nEND:VCALENDAR"
+            .parse()
+            .unwrap();
+        let mut due_only_dates = due_only.components()[0].dates_between(start, end);
+        assert_eq!(
+            due_only_dates.next(),
+            Some((
+                CompDateType::EndOrDue,
+                UTC.with_ymd_and_hms(2025, 1, 3, 9, 0, 0).unwrap(),
+                false,
+            ))
+        );
+        assert_eq!(due_only_dates.next(), None);
+
+        let due_before_range: Calendar = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:t-2\nDTSTAMP:20250101T000000Z\nDUE:20241231T230000Z\nEND:VTODO\nEND:VCALENDAR"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            due_before_range.components()[0]
+                .dates_between(start, end)
+                .next(),
+            None
+        );
+
+        let no_dates = CalComponent::Event(CalEvent::new("e-no-dates"));
+        assert_eq!(no_dates.dates_between(start, end).next(), None);
+    }
+
+    #[test]
+    fn component_type_display_is_exact() {
+        assert_eq!(format!("{}", CalCompType::Event), "Event");
+        assert_eq!(format!("{}", CalCompType::Todo), "Todo");
+    }
+}
