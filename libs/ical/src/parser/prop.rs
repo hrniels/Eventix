@@ -251,15 +251,36 @@ impl FromStr for Parameter {
         let mut parts = s.splitn(2, '=');
         let name = parts.next().unwrap().to_ascii_uppercase();
         let value = parts.next().ok_or(ParseError::MissingParamValue)?;
+        let was_quoted = value.starts_with('"');
 
         // strip quotes
-        let value = if value.starts_with('"') {
+        let mut value = if was_quoted {
             value[1..value.len() - 1].to_string()
         } else {
             value.to_string()
         };
+
+        if !was_quoted && should_uppercase_param_value(&name) {
+            value = value.to_ascii_uppercase();
+        }
         Ok(Self { name, value })
     }
+}
+
+fn should_uppercase_param_value(name: &str) -> bool {
+    matches!(
+        name,
+        "VALUE"
+            | "RELATED"
+            | "PARTSTAT"
+            | "ROLE"
+            | "CUTYPE"
+            | "RSVP"
+            | "ENCODING"
+            | "FBTYPE"
+            | "RANGE"
+            | "RELTYPE"
+    )
 }
 
 #[cfg(test)]
@@ -354,5 +375,22 @@ mod tests {
             )]
         );
         assert_eq!(prop.value(), "20250101T120000");
+    }
+
+    #[test]
+    fn param_value_normalization_for_enums() {
+        let prop_str = "DTSTART;VALUE=date:20250101";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(
+            prop.params(),
+            [Parameter::new("VALUE".to_string(), "DATE".to_string())]
+        );
+
+        let prop_str = "TRIGGER;RELATED=end:PT5M";
+        let prop = prop_str.parse::<Property>().unwrap();
+        assert_eq!(
+            prop.params(),
+            [Parameter::new("RELATED".to_string(), "END".to_string())]
+        );
     }
 }
