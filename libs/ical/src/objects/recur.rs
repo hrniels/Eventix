@@ -723,7 +723,25 @@ impl CalRRule {
         let secs = [date.second() as u8];
         let mut secs = secs.as_slice();
 
-        if self.by_year_day.is_some() || self.by_week_no.is_some() {
+        if let Some(by_hour) = &self.by_hour
+            && self.freq > CalRRuleFreq::Hourly
+        {
+            hours = by_hour.as_slice();
+        }
+        if let Some(by_min) = &self.by_minute
+            && self.freq > CalRRuleFreq::Minutely
+        {
+            mins = by_min.as_slice();
+        }
+        if let Some(by_sec) = &self.by_second
+            && self.freq > CalRRuleFreq::Secondly
+        {
+            secs = by_sec.as_slice();
+        }
+
+        if self.freq > CalRRuleFreq::Monthly
+            && (self.by_year_day.is_some() || self.by_week_no.is_some())
+        {
             // Build a year-based candidate set (by year-day and/or week-no) and then reuse
             // the standard BYxxx filters so this branch stays aligned with other expansions.
             let mut base_dates = Vec::new();
@@ -784,22 +802,6 @@ impl CalRRule {
                 })
                 .collect();
         }
-        if let Some(by_hour) = &self.by_hour
-            && self.freq > CalRRuleFreq::Hourly
-        {
-            hours = by_hour.as_slice();
-        }
-        if let Some(by_min) = &self.by_minute
-            && self.freq > CalRRuleFreq::Minutely
-        {
-            mins = by_min.as_slice();
-        }
-        if let Some(by_sec) = &self.by_second
-            && self.freq > CalRRuleFreq::Secondly
-        {
-            secs = by_sec.as_slice();
-        }
-
         if self.freq >= CalRRuleFreq::Weekly
             && let Some(by_day) = self.by_day.as_ref()
         {
@@ -2293,5 +2295,43 @@ mod tests {
         assert_eq!(iter.next().unwrap(), ny_datetime(1997, 5, 12, 9, 0, 0));
         assert_eq!(iter.next().unwrap(), ny_datetime(1998, 5, 11, 9, 0, 0));
         assert_eq!(iter.next().unwrap(), ny_datetime(1999, 5, 17, 9, 0, 0));
+    }
+
+    #[test]
+    fn rrule_hourly_byyearday_does_not_duplicate_or_reorder() {
+        let dtstart = ny_datetime(2024, 1, 1, 12, 0, 0);
+        let rrule = "FREQ=HOURLY;BYYEARDAY=2,35;BYHOUR=12"
+            .parse::<CalRRule>()
+            .unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            ny_datetime(2024, 3, 1, 0, 0, 0),
+        );
+
+        assert_eq!(iter.next().unwrap(), ny_datetime(2024, 1, 2, 12, 0, 0));
+        assert_eq!(iter.next().unwrap(), ny_datetime(2024, 2, 4, 12, 0, 0));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn rrule_yearly_byyearday_expands_multiple_hours() {
+        let dtstart = ny_datetime(1997, 1, 1, 9, 0, 0);
+        let rrule = "FREQ=YEARLY;COUNT=4;BYYEARDAY=1;BYHOUR=10,12"
+            .parse::<CalRRule>()
+            .unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            ny_datetime(1999, 1, 2, 0, 0, 0),
+        );
+
+        assert_eq!(iter.next().unwrap(), ny_datetime(1997, 1, 1, 10, 0, 0));
+        assert_eq!(iter.next().unwrap(), ny_datetime(1997, 1, 1, 12, 0, 0));
+        assert_eq!(iter.next().unwrap(), ny_datetime(1998, 1, 1, 10, 0, 0));
+        assert_eq!(iter.next().unwrap(), ny_datetime(1998, 1, 1, 12, 0, 0));
+        assert_eq!(iter.next(), None);
     }
 }
