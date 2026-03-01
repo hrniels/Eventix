@@ -317,7 +317,7 @@ mod tests {
     use chrono::NaiveDate;
 
     use crate::{
-        objects::{CalComponent, CalDate, CalDateTime, Calendar, EventLike},
+        objects::{CalComponent, CalDate, CalDateTime, CalTimeZone, Calendar, EventLike},
         parser::{ParseError, Property},
     };
 
@@ -643,5 +643,240 @@ END:VCALENDAR\n";
             matches!(res, Err(ParseError::UnexpectedProp(val)) if val == "END"),
             "Expected UnexpectedProp(\"END\") before VCALENDAR"
         );
+    }
+
+    #[test]
+    fn properties_returns_calendar_properties() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+PRODID:-//Test//Test//EN\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let props = cal.properties();
+        assert_eq!(props.len(), 2);
+        assert_eq!(props[0].name(), "VERSION");
+        assert_eq!(props[0].value(), "2.0");
+        assert_eq!(props[1].name(), "PRODID");
+        assert_eq!(props[1].value(), "-//Test//Test//EN");
+    }
+
+    #[test]
+    fn timezones_returns_timezone_components() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VTIMEZONE\n\
+TZID:America/New_York\n\
+END:VTIMEZONE\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/London\n\
+END:VTIMEZONE\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let tzs = cal.timezones();
+        assert_eq!(tzs.len(), 2);
+        assert_eq!(tzs[0].tzid, "America/New_York");
+        assert_eq!(tzs[1].tzid, "Europe/London");
+    }
+
+    #[test]
+    fn add_timezone_adds_timezone_to_calendar() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
+
+        let tz = CalTimeZone::new("Asia/Tokyo".to_string());
+        cal.add_timezone(tz.clone());
+
+        let tzs = cal.timezones();
+        assert_eq!(tzs.len(), 1);
+        assert_eq!(tzs[0].tzid, "Asia/Tokyo");
+    }
+
+    #[test]
+    fn delete_components_removes_matching_components() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:keep-uid\n\
+DTSTART:20250101T120000Z\n\
+SUMMARY:Keep Me\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:delete-uid\n\
+DTSTART:20250102T120000Z\n\
+SUMMARY:Delete Me\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        {
+            let comps = cal.components_mut();
+            assert_eq!(comps.len(), 2);
+            let _ = comps.first_mut();
+        }
+
+        cal.delete_components(|c| {
+            if let CalComponent::Event(ev) = c {
+                ev.summary().map(|s| s.contains("Delete")).unwrap_or(false)
+            } else {
+                false
+            }
+        });
+
+        assert_eq!(cal.components().len(), 1);
+        let CalComponent::Event(ev) = &cal.components()[0] else {
+            panic!("Expected Event");
+        };
+        assert_eq!(ev.uid().as_str(), "keep-uid");
+    }
+
+    #[test]
+    fn split_by_uid_splits_into_multiple_calendars() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+PRODID:-//Test//Test//EN\n\
+BEGIN:VEVENT\n\
+UID:uid-1\n\
+DTSTART:20250101T120000Z\n\
+SUMMARY:Event 1\n\
+END:VEVENT\n\
+BEGIN:VTODO\n\
+UID:uid-2\n\
+DTSTART:20250101T120000Z\n\
+SUMMARY:Todo 1\n\
+END:VTODO\n\
+BEGIN:VTODO\n\
+UID:uid-3\n\
+DTSTART:20250102T120000Z\n\
+SUMMARY:Todo 2\n\
+END:VTODO\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+END:VTIMEZONE\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let splits = cal.split_by_uid();
+
+        assert_eq!(splits.len(), 3);
+
+        for split in &splits {
+            assert_eq!(split.components().len(), 1);
+            assert_eq!(split.timezones().len(), 1);
+            assert_eq!(split.properties().len(), 2);
+        }
+
+        let uids: Vec<_> = splits
+            .iter()
+            .map(|c| c.components()[0].uid().as_str().to_string())
+            .collect();
+        assert!(uids.contains(&"uid-1".to_string()));
+        assert!(uids.contains(&"uid-2".to_string()));
+        assert!(uids.contains(&"uid-3".to_string()));
+    }
+
+    #[test]
+    fn duplicate_event_without_rid_is_stored_as_unknown() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:duplicate-uid\n\
+DTSTART:20250101T120000Z\n\
+SUMMARY:First Event\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:duplicate-uid\n\
+DTSTART:20250102T120000Z\n\
+SUMMARY:Duplicate Event\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.components().len(), 1);
+        assert_eq!(cal.unknown.len(), 1);
+
+        let unknown = &cal.unknown[0];
+        assert_eq!(unknown.name, "VEVENT");
+    }
+
+    #[test]
+    fn duplicate_todo_without_rid_is_stored_as_unknown() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VTODO\n\
+UID:todo-uid\n\
+DTSTART:20250101T120000Z\n\
+SUMMARY:First Todo\n\
+END:VTODO\n\
+BEGIN:VTODO\n\
+UID:todo-uid\n\
+DTSTART:20250102T120000Z\n\
+SUMMARY:Duplicate Todo\n\
+END:VTODO\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.components().len(), 1);
+        assert_eq!(cal.unknown.len(), 1);
+
+        let unknown = &cal.unknown[0];
+        assert_eq!(unknown.name, "VTODO");
+    }
+
+    #[test]
+    fn unknown_component_round_trip() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:X-CUSTOM\n\
+X-PROP:custom-value\n\
+END:X-CUSTOM\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.unknown.len(), 1);
+        assert_eq!(cal.unknown[0].name, "X-CUSTOM");
+
+        let mut buf = Vec::new();
+        cal.write(&mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+
+        assert!(output.contains("BEGIN:X-CUSTOM"));
+        assert!(output.contains("X-PROP:custom-value"));
+        assert!(output.contains("END:X-CUSTOM"));
+    }
+
+    #[test]
+    fn timezone_serialization_includes_props() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VTIMEZONE\n\
+TZID:America/Chicago\n\
+X-CUSTOM-PROP:custom-value\n\
+END:VTIMEZONE\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let tz = &cal.timezones()[0];
+        assert_eq!(tz.tzid, "America/Chicago");
+        assert_eq!(tz.props.len(), 1);
+        assert_eq!(tz.props[0].name(), "X-CUSTOM-PROP");
+
+        let mut buf = Vec::new();
+        cal.write(&mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+
+        let expected = "BEGIN:VCALENDAR\r\n\
+VERSION:2.0\r\n\
+BEGIN:VTIMEZONE\r\n\
+TZID:America/Chicago\r\n\
+X-CUSTOM-PROP:custom-value\r\n\
+END:VTIMEZONE\r\n\
+END:VCALENDAR\r\n";
+        assert_eq!(output, expected);
     }
 }
