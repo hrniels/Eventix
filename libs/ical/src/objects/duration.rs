@@ -233,3 +233,82 @@ impl FromStr for CalDuration {
         finish(d, org, duration)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::Duration;
+
+    use super::CalDuration;
+    use crate::objects::CalLocaleEn;
+    use crate::parser::ParseError;
+
+    #[test]
+    fn display_formats_complete_positive_negative_and_zero_durations() {
+        let full = CalDuration::from(
+            Duration::days(2) + Duration::hours(3) + Duration::minutes(4) + Duration::seconds(5),
+        );
+        assert_eq!(full.to_string(), "P2DT3H4M5S");
+
+        let negative = CalDuration::from(
+            -(Duration::days(2) + Duration::hours(3) + Duration::minutes(4) + Duration::seconds(5)),
+        );
+        assert_eq!(negative.to_string(), "-P2DT3H4M5S");
+
+        let zero = CalDuration::from(Duration::zero());
+        assert_eq!(zero.to_string(), "P");
+    }
+
+    #[test]
+    fn human_display_lists_all_units_in_order() {
+        let duration = CalDuration::from(
+            Duration::weeks(1)
+                + Duration::days(2)
+                + Duration::hours(3)
+                + Duration::minutes(4)
+                + Duration::seconds(5),
+        );
+
+        let locale = CalLocaleEn;
+        assert_eq!(
+            duration.human(&locale).to_string(),
+            "1 weeks, 2 days, 3 hours, 4 minutes, 5 seconds"
+        );
+    }
+
+    #[test]
+    fn parse_supports_seconds_and_mixed_time_units() {
+        let seconds_only = "PT45S".parse::<CalDuration>().unwrap();
+        assert_eq!(seconds_only.to_string(), "PT45S");
+        assert_eq!(*seconds_only, Duration::seconds(45));
+
+        let mixed = "PT1H30S".parse::<CalDuration>().unwrap();
+        assert_eq!(mixed.to_string(), "PT1H30S");
+        assert_eq!(*mixed, Duration::hours(1) + Duration::seconds(30));
+    }
+
+    #[test]
+    fn parse_rejects_invalid_designators_in_all_positions() {
+        assert_eq!(
+            "P1X".parse::<CalDuration>(),
+            Err(ParseError::InvalidDuration("P1X".to_string()))
+        );
+        assert_eq!(
+            "PT1D".parse::<CalDuration>(),
+            Err(ParseError::InvalidDuration("PT1D".to_string()))
+        );
+        assert_eq!(
+            "PT1H2H".parse::<CalDuration>(),
+            Err(ParseError::InvalidDuration("PT1H2H".to_string()))
+        );
+        assert_eq!(
+            "PT1H2M3M".parse::<CalDuration>(),
+            Err(ParseError::InvalidDuration("PT1H2M3M".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_reports_invalid_number_overflow() {
+        let err = "P18446744073709551616D".parse::<CalDuration>().unwrap_err();
+        assert!(matches!(err, ParseError::InvalidNumber(_)));
+    }
+}
