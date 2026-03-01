@@ -1,6 +1,7 @@
 use chrono::offset::LocalResult;
 use chrono::{
-    DateTime, Datelike, Duration, Month, Months, NaiveDateTime, TimeDelta, Timelike, Weekday,
+    DateTime, Datelike, Duration, Month, Months, NaiveDate, NaiveDateTime, TimeDelta, Timelike,
+    Weekday,
 };
 use chrono_tz::Tz;
 use formatx::formatx;
@@ -369,6 +370,109 @@ fn next_date(date: DateTime<Tz>, freq: CalRRuleFreq, interval: u32) -> Option<Da
     unreachable!();
 }
 
+fn week_start_for_year(year: i32, week_start: Weekday) -> NaiveDate {
+    // RFC 5545 uses the ISO-like definition for week 1 (week containing Jan 4).
+    // This keeps week numbering stable without pulling in a separate ISO-week dependency.
+    let jan_fourth = NaiveDate::from_ymd_opt(year, 1, 4).unwrap();
+    let diff = jan_fourth.weekday().days_since(week_start) as i64;
+    jan_fourth - Duration::days(diff)
+}
+
+/// Converts ordinal day rules into concrete dates so later filters can stay uniform.
+fn base_dates_from_by_year_day(date: DateTime<Tz>, by_year_day: &[DayDesc]) -> Vec<DateTime<Tz>> {
+    let year = date.year();
+    let days_in_year = util::year_days(year) as i32;
+    let mut base_dates = Vec::new();
+
+    for yd in by_year_day {
+        if yd.num == 0 {
+            continue;
+        }
+        let ordinal = match yd.side {
+            CalRRuleSide::Start => yd.num as i32,
+            CalRRuleSide::End => days_in_year - (yd.num as i32 - 1),
+        };
+        if ordinal < 1 || ordinal > days_in_year {
+            continue;
+        }
+        if let Some(naive) = NaiveDate::from_yo_opt(year, ordinal as u32)
+            && let Some(base) = date.with_month(naive.month())
+            && let Some(base) = base.with_day(naive.day())
+        {
+            base_dates.push(base);
+        }
+    }
+
+    base_dates
+}
+
+/// Expands week numbers into actual dates before applying BYDAY or time-of-day filters.
+fn base_dates_from_by_week_no(
+    date: DateTime<Tz>,
+    by_week_no: &[DayDesc],
+    week_start: Option<Weekday>,
+) -> Vec<DateTime<Tz>> {
+    let year = date.year();
+    let wkst = week_start.unwrap_or(Weekday::Mon);
+    let week1_start = week_start_for_year(year, wkst);
+    let next_year_week1_start = week_start_for_year(year + 1, wkst);
+    let last_week_start = next_year_week1_start - Duration::weeks(1);
+    let mut base_dates = Vec::new();
+
+    for wn in by_week_no {
+        if wn.num == 0 {
+            continue;
+        }
+        let week_start = match wn.side {
+            CalRRuleSide::Start => week1_start + Duration::weeks(wn.num as i64 - 1),
+            CalRRuleSide::End => last_week_start - Duration::weeks(wn.num as i64 - 1),
+        };
+        for day_offset in 0..7 {
+            let naive = week_start + Duration::days(day_offset);
+            if naive.year() != year {
+                continue;
+            }
+            if let Some(base) = date.with_month(naive.month())
+                && let Some(base) = base.with_day(naive.day())
+            {
+                base_dates.push(base);
+            }
+        }
+    }
+
+    base_dates
+}
+
+/// Keeps BYMONTH filtering isolated so year-based paths align with the main expansion flow.
+fn passes_by_month(date: DateTime<Tz>, by_month: Option<&Vec<u8>>) -> bool {
+    match by_month {
+        Some(list) => list.contains(&(date.month() as u8)),
+        None => true,
+    }
+}
+
+/// Uses the same month-day semantics for year-based candidates as elsewhere.
+fn passes_by_month_day(date: DateTime<Tz>, by_mon_day: Option<&Vec<DayDesc>>) -> bool {
+    let Some(list) = by_mon_day else {
+        return true;
+    };
+    list.iter().any(|md| match md.side {
+        CalRRuleSide::Start => md.num as u32 == date.day(),
+        CalRRuleSide::End => {
+            let days = util::month_days(date.year(), date.month());
+            days - (md.num - 1) as u32 == date.day()
+        }
+    })
+}
+
+/// Centralizes weekday matching so BYWEEKNO/BYYEARDAY stay consistent with other paths.
+fn passes_by_day(date: DateTime<Tz>, by_day: Option<&Vec<CalWDayDesc>>, rrule: &CalRRule) -> bool {
+    match by_day {
+        Some(list) => list.iter().any(|d| d.matches(date, rrule)),
+        None => true,
+    }
+}
+
 /// Iterator for [`CalRRule`].
 pub struct RecurIterator<'a> {
     rrule: &'a CalRRule,
@@ -619,11 +723,47 @@ impl CalRRule {
         let secs = [date.second() as u8];
         let mut secs = secs.as_slice();
 
-        if self.by_year_day.is_some() && self.freq > CalRRuleFreq::Monthly {
-            unimplemented!("BYYEARDAY expansion is not supported");
-        }
-        if self.by_week_no.is_some() && self.freq > CalRRuleFreq::Monthly {
-            unimplemented!("BYWEEKNO expansion is not supported");
+        if self.by_year_day.is_some() || self.by_week_no.is_some() {
+            // Build a year-based candidate set (by year-day and/or week-no) and then reuse
+            // the standard BYxxx filters so this branch stays aligned with other expansions.
+            let mut base_dates = Vec::new();
+            if let Some(by_year_day) = &self.by_year_day {
+                base_dates.extend(base_dates_from_by_year_day(date, by_year_day));
+            }
+            if let Some(by_week_no) = &self.by_week_no {
+                base_dates.extend(base_dates_from_by_week_no(
+                    date,
+                    by_week_no,
+                    self.week_start,
+                ));
+            }
+
+            let mut candidates = Vec::new();
+            for base in base_dates {
+                if !passes_by_month(base, self.by_month.as_ref())
+                    || !passes_by_month_day(base, self.by_mon_day.as_ref())
+                    || !passes_by_day(base, self.by_day.as_ref(), self)
+                {
+                    continue;
+                }
+
+                for h in hours {
+                    for m in mins {
+                        for s in secs {
+                            if let Some(ndate) = base.with_hour(*h as u32)
+                                && let Some(ndate) = ndate.with_minute(*m as u32)
+                                && let Some(ndate) = ndate.with_second(*s as u32)
+                            {
+                                candidates.push(ndate.with_timezone(&start.timezone()));
+                            }
+                        }
+                    }
+                }
+            }
+
+            candidates.sort();
+            candidates.dedup();
+            return self.finalize_candidates(candidates, dtstart, dtdur, start, end, count);
         }
 
         if let Some(by_month) = &self.by_month
@@ -2103,5 +2243,55 @@ mod tests {
                 ny_datetime(1997, 9, 3, 9, 0, 0)
             ]
         );
+    }
+
+    #[test]
+    fn rrule_byyearday_rfc_example() {
+        let dtstart = ny_datetime(1997, 1, 1, 9, 0, 0);
+        let rrule = "FREQ=YEARLY;INTERVAL=3;COUNT=10;BYYEARDAY=1,100,200"
+            .parse::<CalRRule>()
+            .unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            ny_datetime(2006, 1, 2, 9, 0, 0),
+        );
+
+        let expected = vec![
+            ny_datetime(1997, 1, 1, 9, 0, 0),
+            ny_datetime(1997, 4, 10, 9, 0, 0),
+            ny_datetime(1997, 7, 19, 9, 0, 0),
+            ny_datetime(2000, 1, 1, 9, 0, 0),
+            ny_datetime(2000, 4, 9, 9, 0, 0),
+            ny_datetime(2000, 7, 18, 9, 0, 0),
+            ny_datetime(2003, 1, 1, 9, 0, 0),
+            ny_datetime(2003, 4, 10, 9, 0, 0),
+            ny_datetime(2003, 7, 19, 9, 0, 0),
+            ny_datetime(2006, 1, 1, 9, 0, 0),
+        ];
+
+        for exp in expected {
+            assert_eq!(iter.next().unwrap(), exp);
+        }
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn rrule_byweekno_rfc_example() {
+        let dtstart = ny_datetime(1997, 5, 12, 9, 0, 0);
+        let rrule = "FREQ=YEARLY;BYWEEKNO=20;BYDAY=MO"
+            .parse::<CalRRule>()
+            .unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            ny_datetime(2000, 1, 2, 9, 0, 0),
+        );
+
+        assert_eq!(iter.next().unwrap(), ny_datetime(1997, 5, 12, 9, 0, 0));
+        assert_eq!(iter.next().unwrap(), ny_datetime(1998, 5, 11, 9, 0, 0));
+        assert_eq!(iter.next().unwrap(), ny_datetime(1999, 5, 17, 9, 0, 0));
     }
 }
