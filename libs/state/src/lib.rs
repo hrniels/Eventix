@@ -2,6 +2,8 @@ mod misc;
 mod persalarms;
 mod settings;
 mod sync;
+
+/// Utility helpers exposed to other crates and tests.
 pub mod util;
 
 use anyhow::{Context, anyhow};
@@ -28,8 +30,17 @@ pub use settings::{
 };
 pub use sync::{SyncColResult, SyncResult, Syncer, log_file};
 
+/// Shared, async-safe handle to the global application state.
+///
+/// This type is an `Arc<Mutex<State>>` so it can be cloned and held across asynchronous tasks.
+/// Acquire access with `lock().await` to mutate or read the inner `State`.
 pub type EventixState = Arc<Mutex<State>>;
 
+/// In-memory application state.
+///
+/// Holds runtime representations of persisted data such as calendars, settings, personal alarms
+/// and locale. This struct should be wrapped in `EventixState` (an `Arc<Mutex<_>>`) when shared
+/// across async tasks.
 pub struct State {
     xdg: Arc<BaseDirectories>,
     store: CalStore,
@@ -41,6 +52,11 @@ pub struct State {
 }
 
 impl State {
+    /// Creates a new in-memory application `State` by loading persisted data from the provided XDG
+    /// base directories.
+    ///
+    /// Loads settings, personal alarms, misc state, and constructs the calendar store from all
+    /// configured collections. Returns an error if any of the underlying loads fail.
     pub fn new(xdg: Arc<BaseDirectories>) -> anyhow::Result<Self> {
         let settings = settings::Settings::load_from_file(&xdg).context("load settings")?;
 
@@ -68,11 +84,20 @@ impl State {
         })
     }
 
+    /// Reloads the `Locale` implementation from persisted misc state.
+    ///
+    /// Call this after the user changes language/locale preferences so that formatting and
+    /// translations are updated without restarting the application. Returns an error if creating
+    /// the locale fails.
     pub fn reload_locale(&mut self) -> anyhow::Result<()> {
         self.locale = eventix_locale::new(&self.xdg, self.misc.locale_type())?;
         Ok(())
     }
 
+    /// Refreshes the in-memory calendar store from the current settings.
+    ///
+    /// Adds directories for calendars that have been added to settings, updates names for existing
+    /// calendars, and removes directories for calendars that are no longer present in settings.
     pub async fn refresh_store(state: &mut State) -> anyhow::Result<()> {
         let State {
             store,
@@ -129,10 +154,11 @@ impl State {
             CalDir::new_empty(cal_id.clone(), path, cal.name().clone())
         };
 
-        // workaround for a bug in Exchange/davmail: apparently, Exchange sends events with
-        // attendees, but without organizer to davmail and davmail does not repair it. As this
-        // seems to *only* happen if we are the organizer, we implicitly add ourself as an
-        // organizer to these events.
+        // Workaround for a bug in Exchange/davmail:
+        // Exchange sometimes sends events that include attendees but lack an organizer. davmail
+        // does not repair that omission. When this happens and we are the organizer for the
+        // collection, add our organizer information to such components so downstream code can rely
+        // on it.
         let organizer = col.build_organizer();
         if let Some(organizer) = organizer {
             for comp in dir.files_mut().iter_mut().flat_map(|f| {
@@ -156,12 +182,13 @@ impl State {
         col_id: &String,
         cal_ids: Vec<String>,
     ) -> anyhow::Result<()> {
-        // delete all calendars of that collection
+        // Delete all calendars of that collection from the in-memory store; they will be reloaded
+        // from disk below.
         state
             .store_mut()
             .retain(|dir| !cal_ids.contains(&**dir.id()));
 
-        // load calendars again from file
+        // Load calendars again from file
         let col = state.settings().collections().get(col_id).unwrap();
         let mut dirs = vec![];
         for cal_id in cal_ids {
@@ -177,6 +204,10 @@ impl State {
         Ok(())
     }
 
+    /// Discovers a remote collection and return information about it.
+    ///
+    /// Returns a `SyncResult` describing the discovered collection with collection id `col_id` or
+    /// an error. If `auth_url` is given, it is used to re-authenticate the user.
     pub async fn discover_collection(
         state: &mut State,
         col_id: &String,
@@ -185,6 +216,10 @@ impl State {
         sync::discover_collection(state, col_id, auth_url).await
     }
 
+    /// Synchronizes a single collection with its remote source.
+    ///
+    /// On success returns a `SyncResult` describing the performed operations. If `auth_url` is
+    /// given, it is used to re-authenticate the user.
     pub async fn sync_collection(
         state: &mut State,
         col_id: &String,
@@ -193,6 +228,10 @@ impl State {
         sync::sync_collection(state, col_id, auth_url).await
     }
 
+    /// Reloads a collection from its remote source and refresh local files.
+    ///
+    /// Discards local files for the collection, re-fetches from the remote source, and returns
+    /// the resulting `SyncResult`. If `auth_url` is given, it is used to re-authenticate.
     pub async fn reload_collection(
         state: &mut State,
         col_id: &String,
@@ -211,6 +250,7 @@ impl State {
         Ok(res)
     }
 
+    /// Deletes a collection remotely and remove it from local settings.
     pub async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
         sync::delete_collection(state, col_id).await?;
 
@@ -218,6 +258,7 @@ impl State {
         Ok(())
     }
 
+    /// Deletes a calendar from a collection both remotely and locally.
     pub async fn delete_calendar(
         state: &mut State,
         col_id: &String,
@@ -234,6 +275,11 @@ impl State {
         Ok(())
     }
 
+    /// Reloads a single calendar from its remote source and refreshes the local file.
+    ///
+    /// Discards local files for the calendar identified by `cal_id`, re-fetches from the remote
+    /// source, and returns the resulting `SyncResult`. If `auth_url` is given, it is used to
+    /// re-authenticate.
     pub async fn reload_calendar(
         state: &mut State,
         col_id: &String,
@@ -245,67 +291,80 @@ impl State {
         Ok(res)
     }
 
+    /// Synchronizes all collections.
     pub async fn sync_all(
         state: &mut State,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
         let sync_res = sync::sync_all(state, auth_url).await?;
 
-        // remember last reload
         state.last_reload = chrono::Utc::now().naive_utc();
 
         Ok(sync_res)
     }
 
+    /// Returns a reference to the XDG base directories used for file storage.
     pub fn xdg(&self) -> &BaseDirectories {
         &self.xdg
     }
 
+    /// Returns a clone of the `Locale` implementation.
     pub fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
         self.locale.clone()
     }
 
+    /// Returns an immutable reference to the in-memory calendar store.
     pub fn store(&self) -> &CalStore {
         &self.store
     }
 
+    /// Returns a mutable reference to the in-memory calendar store.
     pub fn store_mut(&mut self) -> &mut CalStore {
         &mut self.store
     }
 
+    /// Borrows the calendar store and personal alarms mutably at the same time.
     pub fn store_and_alarms_mut(&mut self) -> (&mut CalStore, &mut PersonalAlarms) {
         (&mut self.store, &mut self.personal_alarms)
     }
 
+    /// Returns an immutable reference to personal alarms state.
     pub fn personal_alarms(&self) -> &PersonalAlarms {
         &self.personal_alarms
     }
 
+    /// Returns a mutable reference to personal alarms state.
     pub fn personal_alarms_mut(&mut self) -> &mut PersonalAlarms {
         &mut self.personal_alarms
     }
 
+    /// Returns an immutable reference to application settings.
     pub fn settings(&self) -> &Settings {
         &self.settings
     }
 
+    /// Returns a mutable reference to application settings.
     pub fn settings_mut(&mut self) -> &mut Settings {
         &mut self.settings
     }
 
+    /// Returns an immutable reference to misc persisted state.
     pub fn misc(&self) -> &misc::Misc {
         &self.misc
     }
 
+    /// Returns a mutable reference to misc persisted state.
     pub fn misc_mut(&mut self) -> &mut misc::Misc {
         &mut self.misc
     }
 
+    /// Returns the timestamp of the last successful full synchronization.
     pub fn last_reload(&self) -> NaiveDateTime {
         self.last_reload
     }
 }
 
+/// Read and deserialize a TOML file from `filename`.
 pub fn load_from_file<D: DeserializeOwned>(filename: &PathBuf) -> anyhow::Result<D> {
     debug!("Reading from {:?}", filename);
     let mut file = File::options()
@@ -318,6 +377,9 @@ pub fn load_from_file<D: DeserializeOwned>(filename: &PathBuf) -> anyhow::Result
     toml::from_str(&data).context(format!("parse {filename:?}"))
 }
 
+/// Serialize `data` as TOML and write it to `filename`.
+///
+/// The function truncates existing content and creates the file if needed.
 pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Result<()> {
     debug!("Writing to {:?}", filename);
     let mut file = File::options()
