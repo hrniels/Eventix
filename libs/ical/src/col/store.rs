@@ -202,3 +202,237 @@ impl CalStore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use crate::col::{CalDir, CalFile};
+    use crate::objects::{
+        CalAttendee, CalComponent, CalEvent, CalTodo, Calendar, UpdatableEventLike,
+    };
+
+    use super::CalStore;
+
+    // --- helpers ---
+
+    fn make_id(s: &str) -> Arc<String> {
+        Arc::new(s.to_string())
+    }
+
+    /// Builds an empty in-memory [`CalDir`] with the given id.
+    fn make_dir(id: &str) -> CalDir {
+        CalDir::new_empty(make_id(id), PathBuf::default(), id.to_string())
+    }
+
+    /// Builds an in-memory [`CalFile`] containing a single event with the given UID.
+    fn make_event_file(uid: &str) -> CalFile {
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(CalEvent::new(uid)));
+        CalFile::new(Arc::default(), PathBuf::default(), cal)
+    }
+
+    /// Builds an in-memory [`CalFile`] containing a single TODO with the given UID.
+    fn make_todo_file(uid: &str) -> CalFile {
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Todo(CalTodo::new(uid)));
+        CalFile::new(Arc::default(), PathBuf::default(), cal)
+    }
+
+    // --- add / directories ---
+
+    #[test]
+    fn add_and_directories() {
+        let mut store = CalStore::default();
+        assert!(store.directories().is_empty());
+
+        store.add(make_dir("a"));
+        store.add(make_dir("b"));
+
+        assert_eq!(store.directories().len(), 2);
+        assert_eq!(store.directories()[0].name(), "a");
+        assert_eq!(store.directories()[1].name(), "b");
+    }
+
+    // --- retain ---
+
+    #[test]
+    fn retain_keeps_matching_dirs() {
+        let mut store = CalStore::default();
+        store.add(make_dir("keep"));
+        store.add(make_dir("drop"));
+
+        store.retain(|d| d.name() == "keep");
+
+        assert_eq!(store.directories().len(), 1);
+        assert_eq!(store.directories()[0].name(), "keep");
+    }
+
+    // --- directory / directory_mut ---
+
+    #[test]
+    fn directory_found_and_not_found() {
+        let id_a = make_id("a");
+        let id_b = make_id("b");
+        let id_missing = make_id("missing");
+
+        let mut store = CalStore::default();
+        store.add(CalDir::new_empty(
+            id_a.clone(),
+            PathBuf::default(),
+            "A".into(),
+        ));
+        store.add(CalDir::new_empty(
+            id_b.clone(),
+            PathBuf::default(),
+            "B".into(),
+        ));
+
+        assert!(store.directory(&id_a).is_some());
+        assert!(store.directory(&id_b).is_some());
+        assert!(store.directory(&id_missing).is_none());
+
+        assert!(store.directory_mut(&id_a).is_some());
+        assert!(store.directory_mut(&id_missing).is_none());
+    }
+
+    // --- files ---
+
+    #[test]
+    fn files_iterator_over_multiple_dirs() {
+        let mut store = CalStore::default();
+
+        let mut dir_a = make_dir("a");
+        dir_a.add_file(make_event_file("uid-1"));
+        dir_a.add_file(make_event_file("uid-2"));
+        store.add(dir_a);
+
+        let mut dir_b = make_dir("b");
+        dir_b.add_file(make_event_file("uid-3"));
+        store.add(dir_b);
+
+        let all_files: Vec<_> = store.files().collect();
+        assert_eq!(all_files.len(), 3);
+    }
+
+    // --- file_by_id / files_by_id_mut ---
+
+    #[test]
+    fn file_by_id_found_and_not_found() {
+        let mut store = CalStore::default();
+
+        let mut dir_a = make_dir("a");
+        dir_a.add_file(make_event_file("uid-in-a"));
+        store.add(dir_a);
+
+        let mut dir_b = make_dir("b");
+        dir_b.add_file(make_event_file("uid-in-b"));
+        store.add(dir_b);
+
+        // file_by_id searches across all dirs
+        assert!(store.file_by_id("uid-in-a").is_some());
+        assert!(store.file_by_id("uid-in-b").is_some());
+        assert!(store.file_by_id("uid-absent").is_none());
+
+        // files_by_id_mut variant
+        assert!(store.files_by_id_mut("uid-in-a").is_some());
+        assert!(store.files_by_id_mut("uid-absent").is_none());
+    }
+
+    // --- todos / events ---
+
+    #[test]
+    fn todos_and_events_iterators() {
+        let mut store = CalStore::default();
+
+        let mut dir = make_dir("mixed");
+        dir.add_file(make_event_file("ev-1"));
+        dir.add_file(make_event_file("ev-2"));
+        dir.add_file(make_todo_file("td-1"));
+        store.add(dir);
+
+        assert_eq!(store.events().count(), 2);
+        assert_eq!(store.todos().count(), 1);
+    }
+
+    // --- contacts ---
+
+    #[test]
+    fn contacts_empty_store() {
+        let store = CalStore::default();
+        assert!(store.contacts().is_empty());
+    }
+
+    #[test]
+    fn contacts_deduplication_and_upgrade() {
+        // Dir A: address without a CN (will be inserted as key == value).
+        let mut cal_a = Calendar::default();
+        let mut ev_a = CalEvent::new("ev-a");
+        ev_a.set_attendees(Some(vec![CalAttendee::new(
+            "alice@example.com".to_string(),
+        )]));
+        cal_a.add_component(CalComponent::Event(ev_a));
+        let file_a = CalFile::new(Arc::default(), PathBuf::default(), cal_a);
+        let mut dir_a = make_dir("a");
+        dir_a.add_file(file_a);
+
+        // Dir B: same address, but this time with a CN. The `contacts()` method must upgrade
+        // the existing entry from the bare address to the human-readable name.
+        let mut cal_b = Calendar::default();
+        let mut ev_b = CalEvent::new("ev-b");
+        let mut att = CalAttendee::new("alice@example.com".to_string());
+        att.set_common_name("Alice Wonderland".to_string());
+        ev_b.set_attendees(Some(vec![att]));
+        cal_b.add_component(CalComponent::Event(ev_b));
+        let file_b = CalFile::new(Arc::default(), PathBuf::default(), cal_b);
+        let mut dir_b = make_dir("b");
+        dir_b.add_file(file_b);
+
+        let mut store = CalStore::default();
+        store.add(dir_a);
+        store.add(dir_b);
+
+        let contacts = store.contacts();
+        // The address should be present and its display name upgraded to the CN.
+        assert_eq!(
+            contacts.get("alice@example.com").map(String::as_str),
+            Some("Alice Wonderland")
+        );
+    }
+
+    #[test]
+    fn contacts_already_named_not_downgraded() {
+        // If an address is first seen with a CN it must not be replaced by a bare address
+        // from a subsequent file (the `_ => {}` branch).
+        let mut cal_a = Calendar::default();
+        let mut ev_a = CalEvent::new("ev-a");
+        let mut att_a = CalAttendee::new("bob@example.com".to_string());
+        att_a.set_common_name("Bob Named".to_string());
+        ev_a.set_attendees(Some(vec![att_a]));
+        cal_a.add_component(CalComponent::Event(ev_a));
+        let file_a = CalFile::new(Arc::default(), PathBuf::default(), cal_a);
+        let mut dir_a = make_dir("a");
+        dir_a.add_file(file_a);
+
+        // Second file with the same address but no CN.
+        let mut cal_b = Calendar::default();
+        let mut ev_b = CalEvent::new("ev-b");
+        ev_b.set_attendees(Some(vec![CalAttendee::new("bob@example.com".to_string())]));
+        cal_b.add_component(CalComponent::Event(ev_b));
+        let file_b = CalFile::new(Arc::default(), PathBuf::default(), cal_b);
+        let mut dir_b = make_dir("b");
+        dir_b.add_file(file_b);
+
+        let mut store = CalStore::default();
+        store.add(dir_a);
+        store.add(dir_b);
+
+        let contacts = store.contacts();
+        // The CN from the first encounter must be preserved.
+        assert_eq!(
+            contacts.get("bob@example.com").map(String::as_str),
+            Some("Bob Named")
+        );
+    }
+}
