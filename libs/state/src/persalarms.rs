@@ -13,6 +13,10 @@ use crate::CalendarAlarmType;
 
 const ALARMS_DIRECTORY: &str = "alarms";
 
+/// Manages personal alarm overrides across all calendars.
+///
+/// Stores per-calendar alarm configurations on disk under the XDG data directory, keyed by
+/// calendar ID. Each calendar's alarms are persisted as a separate TOML file.
 #[derive(Default, Debug, Eq, PartialEq)]
 pub struct PersonalAlarms {
     path: PathBuf,
@@ -20,6 +24,10 @@ pub struct PersonalAlarms {
 }
 
 impl PersonalAlarms {
+    /// Loads personal alarms from the XDG data directory.
+    ///
+    /// Reads all `.toml` files found in the alarms subdirectory. Each file corresponds to a single
+    /// calendar, identified by its stem.
     pub fn new_from_dir(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         let path = xdg
             .create_data_directory(ALARMS_DIRECTORY)
@@ -64,6 +72,9 @@ impl PersonalAlarms {
         Ok(Self { path, calendars })
     }
 
+    /// Returns the personal alarm configuration for the calendar with the given `id`.
+    ///
+    /// Returns `None` if no configuration exists for that calendar.
     pub fn get(&self, id: &str) -> Option<&PersonalCalendarAlarms> {
         self.calendars
             .iter()
@@ -71,6 +82,9 @@ impl PersonalAlarms {
             .map(|(_cid, cal)| cal)
     }
 
+    /// Returns a mutable reference to the alarm configuration for the calendar with the given `id`.
+    ///
+    /// Creates an empty in-memory entry if none exists yet.
     pub fn get_or_create(&mut self, id: &str) -> &mut PersonalCalendarAlarms {
         self.calendars.entry(id.to_string()).or_insert_with(|| {
             let mut path = self.path.clone();
@@ -79,6 +93,10 @@ impl PersonalAlarms {
         })
     }
 
+    /// Returns whether the given occurrence has at least one effective alarm.
+    ///
+    /// For `Personal` mode, falls back to the configured default alarm when no per-event override
+    /// exists.
     pub fn has_alarms(&self, occ: &Occurrence<'_>, settings: &CalendarAlarmType) -> bool {
         match settings {
             CalendarAlarmType::Personal { default } => {
@@ -92,6 +110,10 @@ impl PersonalAlarms {
         }
     }
 
+    /// Returns the effective alarms for the given occurrence, or `None` if no alarm applies.
+    ///
+    /// For `Personal` mode, per-event overrides take precedence over the default alarm. An empty
+    /// override list means alarms are explicitly disabled and yields `None`.
     pub fn effective_alarms(
         &self,
         occ: &Occurrence<'_>,
@@ -110,6 +132,11 @@ impl PersonalAlarms {
     }
 }
 
+/// A user-defined alarm override for a specific event or occurrence.
+///
+/// Associates a set of [`CalAlarm`] values with a particular UID and optional recurrence ID. When
+/// `rid` is `None`, the override applies to the base event and serves as the default for all its
+/// occurrences that have no more-specific override.
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AlarmOverwrite {
     uid: String,
@@ -119,11 +146,17 @@ pub struct AlarmOverwrite {
 }
 
 impl AlarmOverwrite {
+    /// Returns the alarms stored in this override.
     pub fn alarms(&self) -> &[CalAlarm] {
         &self.alarms
     }
 }
 
+/// Personal alarm overrides for a single calendar, persisted as a TOML file.
+///
+/// Each entry overrides the alarms for a specific event UID, optionally scoped to a single
+/// occurrence via a recurrence ID. An empty alarm list in an entry explicitly disables all alarms
+/// for that event or occurrence.
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PersonalCalendarAlarms {
     #[serde(skip)]
@@ -139,6 +172,7 @@ impl PersonalCalendarAlarms {
         }
     }
 
+    /// Loads a `PersonalCalendarAlarms` from a TOML file at the given path.
     pub fn new_from_file(path: PathBuf) -> anyhow::Result<Self> {
         super::load_from_file::<Self>(&path).map(|res| Self {
             path,
@@ -146,6 +180,9 @@ impl PersonalCalendarAlarms {
         })
     }
 
+    /// Returns whether the given occurrence has at least one effective alarm.
+    ///
+    /// Falls back to the `default` alarm when no per-event override exists.
     pub fn has_alarms(&self, occ: &Occurrence<'_>, default: &Option<CalAlarm>) -> bool {
         match self.get(occ.uid(), Self::occurrence_rid(occ).as_ref()) {
             Some(overwrite) => !overwrite.alarms().is_empty(),
@@ -153,6 +190,10 @@ impl PersonalCalendarAlarms {
         }
     }
 
+    /// Returns the effective alarms for the given occurrence, or `None` if no alarm applies.
+    ///
+    /// An empty override list means alarms are explicitly disabled for that occurrence and this
+    /// method returns `None`. Falls back to `default` when no override exists.
     pub fn effective_alarms(
         &self,
         occ: &Occurrence<'_>,
@@ -185,6 +226,9 @@ impl PersonalCalendarAlarms {
         }
     }
 
+    /// Returns a map from recurrence ID to alarm list for all occurrence-level overrides for `uid`.
+    ///
+    /// Entries without a recurrence ID (base-event overrides) are excluded.
     pub fn all_for_occurrences(&self, uid: &str) -> HashMap<CalDate, Vec<CalAlarm>> {
         let mut res = HashMap::new();
         for a in &self.alarms {
@@ -197,6 +241,10 @@ impl PersonalCalendarAlarms {
         res
     }
 
+    /// Returns the alarm override for the event identified by `uid` and optional `rid`.
+    ///
+    /// When an occurrence-level lookup (non-`None` `rid`) finds no entry, falls back to the
+    /// base-event override (where `rid` is `None`), if one exists.
     pub fn get(&self, uid: &str, rid: Option<&CalDate>) -> Option<&AlarmOverwrite> {
         let overwrite = self
             .alarms
@@ -214,6 +262,11 @@ impl PersonalCalendarAlarms {
         }
     }
 
+    /// Sets the alarm override for the event identified by `uid` and optional `rid`.
+    ///
+    /// Returns `true` if the stored data changed and a subsequent [`save`](Self::save) is needed,
+    /// or `false` if the entry was redundant (the alarms match the base-event override) and was
+    /// removed or not stored.
     pub fn set(&mut self, uid: &str, rid: Option<&CalDate>, alarms: Vec<CalAlarm>) -> bool {
         // if it's an occurrence and the alarms are the same as for the base component, we don't
         // need to store it for the occurrence
@@ -243,6 +296,9 @@ impl PersonalCalendarAlarms {
         true
     }
 
+    /// Removes the alarm override for the event identified by `uid` and optional `rid`.
+    ///
+    /// Returns `true` if an entry was found and removed, `false` if no matching entry existed.
     pub fn unset(&mut self, uid: &str, rid: Option<&CalDate>) -> bool {
         let len = self.alarms.len();
         self.alarms
@@ -250,6 +306,8 @@ impl PersonalCalendarAlarms {
         self.alarms.len() != len
     }
 
+    /// Persists the current alarm overrides to the TOML file at the path associated with this
+    /// instance.
     pub fn save(&self) -> anyhow::Result<()> {
         super::write_to_file(&self.path, self)
     }
