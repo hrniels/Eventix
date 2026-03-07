@@ -654,9 +654,12 @@ impl CalFile {
 mod tests {
     use chrono::{Datelike, Duration, NaiveDate, TimeDelta, TimeZone};
 
-    use crate::col::CalDir;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use crate::col::{CalDir, ColError};
     use crate::objects::{
-        CalAction, CalAlarm, CalComponent, CalDate, CalRRule, CalRelated, CalTrigger,
+        CalAction, CalAlarm, CalAttendee, CalComponent, CalDate, CalRRule, CalRelated, CalTrigger,
         DefaultAlarmOverlay, UpdatableEventLike,
     };
 
@@ -1407,5 +1410,445 @@ mod tests {
             new_datetime(2025, 4, 1, 10, 0, 0)
         );
         assert!(iter.next().is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // CalFile accessors and mutators
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn partial_eq_by_calendar() {
+        // Two CalFiles wrapping the same Calendar are equal regardless of dir/path.
+        let ics = concat!(
+            "BEGIN:VCALENDAR\r\n",
+            "VERSION:2.0\r\n",
+            "PRODID:-//Test//Test//EN\r\n",
+            "BEGIN:VEVENT\r\n",
+            "UID:uid-1\r\n",
+            "DTSTART;VALUE=DATE:20240101\r\n",
+            "DTEND;VALUE=DATE:20240102\r\n",
+            "DTSTAMP:20240101T000000Z\r\n",
+            "END:VEVENT\r\n",
+            "END:VCALENDAR\r\n",
+        );
+
+        let file_a = CalFile::new(
+            Arc::new("dir-a".into()),
+            PathBuf::from("/a"),
+            ics.parse::<Calendar>().unwrap(),
+        );
+        let file_b = CalFile::new(
+            Arc::new("dir-b".into()),
+            PathBuf::from("/b"),
+            ics.parse::<Calendar>().unwrap(),
+        );
+        // Same calendar contents → equal, dir/path are ignored.
+        assert_eq!(file_a, file_b);
+
+        // A different calendar → not equal.
+        let ics_other = concat!(
+            "BEGIN:VCALENDAR\r\n",
+            "VERSION:2.0\r\n",
+            "PRODID:-//Test//Test//EN\r\n",
+            "BEGIN:VEVENT\r\n",
+            "UID:uid-different\r\n",
+            "DTSTART;VALUE=DATE:20240101\r\n",
+            "DTEND;VALUE=DATE:20240102\r\n",
+            "DTSTAMP:20240101T000000Z\r\n",
+            "END:VEVENT\r\n",
+            "END:VCALENDAR\r\n",
+        );
+        let file_c = CalFile::new_simple(ics_other.parse::<Calendar>().unwrap());
+        assert_ne!(file_a, file_c);
+    }
+
+    #[test]
+    fn directory_and_set_directory() {
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(CalEvent::new("uid-1")));
+        let initial_dir = Arc::new("initial".to_string());
+        let mut file = CalFile::new(initial_dir.clone(), PathBuf::default(), cal);
+
+        assert_eq!(file.directory(), &initial_dir);
+
+        let new_dir = Arc::new("updated".to_string());
+        file.set_directory(new_dir.clone());
+        assert_eq!(file.directory(), &new_dir);
+    }
+
+    #[test]
+    fn set_path_updates_path() {
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(CalEvent::new("uid-1")));
+        let mut file = CalFile::new(Arc::default(), PathBuf::from("/original"), cal);
+
+        assert_eq!(file.path(), &PathBuf::from("/original"));
+
+        file.set_path(PathBuf::from("/updated"));
+        assert_eq!(file.path(), &PathBuf::from("/updated"));
+    }
+
+    #[test]
+    fn calendar_and_calendar_mut() {
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(CalEvent::new("uid-cal")));
+        let mut file = CalFile::new_simple(cal);
+
+        // calendar() gives read access.
+        assert_eq!(file.calendar().components().len(), 1);
+
+        // calendar_mut() allows adding a component.
+        let mut extra = CalEvent::new("uid-extra");
+        extra.set_start(Some(CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 6, 1).unwrap(),
+            CalCompType::Event.into(),
+        )));
+        file.calendar_mut()
+            .add_component(CalComponent::Event(extra));
+        assert_eq!(file.calendar().components().len(), 2);
+    }
+
+    #[test]
+    fn add_component_appends() {
+        let mut file = CalFile::new_simple(Calendar::default());
+        assert!(file.components().is_empty());
+
+        file.add_component(CalComponent::Event(CalEvent::new("uid-added")));
+        assert_eq!(file.components().len(), 1);
+        assert!(file.contains_uid("uid-added"));
+    }
+
+    #[test]
+    fn events_and_todos_filter_correctly() {
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(CalEvent::new("ev-uid")));
+        cal.add_component(CalComponent::Todo(CalTodo::new("td-uid")));
+        let file = CalFile::new_simple(cal);
+
+        let events: Vec<_> = file.events().collect();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].uid(), "ev-uid");
+
+        let todos: Vec<_> = file.todos().collect();
+        assert_eq!(todos.len(), 1);
+        assert_eq!(todos[0].uid(), "td-uid");
+    }
+
+    // -----------------------------------------------------------------------
+    // contacts()
+    // -----------------------------------------------------------------------
+
+    fn make_attendee(address: &str, common_name: Option<&str>) -> CalAttendee {
+        let mut a = CalAttendee::new(address.to_string());
+        if let Some(cn) = common_name {
+            a.set_common_name(cn.to_string());
+        }
+        a
+    }
+
+    fn make_event_with_attendees(uid: &str, attendees: Vec<CalAttendee>) -> CalFile {
+        let mut event = CalEvent::new(uid);
+        event.set_attendees(Some(attendees));
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(event));
+        CalFile::new_simple(cal)
+    }
+
+    #[test]
+    fn contacts_empty_when_no_attendees() {
+        let file = new_file(EventBuilder::new("uid").done());
+        assert!(file.contacts().is_empty());
+    }
+
+    #[test]
+    fn contacts_insert_address_without_common_name() {
+        // When an attendee has no CN the address is stored as both key and value.
+        let file = make_event_with_attendees("uid", vec![make_attendee("alice@example.com", None)]);
+        let contacts = file.contacts();
+        assert_eq!(
+            contacts.get("alice@example.com"),
+            Some(&"alice@example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn contacts_insert_address_with_common_name() {
+        // When an attendee has a CN the CN is stored as the value.
+        let file = make_event_with_attendees(
+            "uid",
+            vec![make_attendee("bob@example.com", Some("Bob Smith"))],
+        );
+        let contacts = file.contacts();
+        assert_eq!(
+            contacts.get("bob@example.com"),
+            Some(&"Bob Smith".to_string())
+        );
+    }
+
+    #[test]
+    fn contacts_upgrade_address_to_common_name() {
+        // First encounter has no CN → address stored as value.  Second encounter for the same
+        // address provides a CN → value is upgraded to the CN.
+        let file = make_event_with_attendees(
+            "uid",
+            vec![
+                make_attendee("carol@example.com", None),
+                make_attendee("carol@example.com", Some("Carol White")),
+            ],
+        );
+        let contacts = file.contacts();
+        assert_eq!(
+            contacts.get("carol@example.com"),
+            Some(&"Carol White".to_string())
+        );
+    }
+
+    #[test]
+    fn contacts_no_change_when_already_has_name() {
+        // When the stored value is already a real name (not the bare address), a subsequent
+        // attendee entry for the same address without a CN must not overwrite the name.
+        let file = make_event_with_attendees(
+            "uid",
+            vec![
+                make_attendee("dave@example.com", Some("Dave Brown")),
+                // Second entry: has CN but stored value is already "Dave Brown" (≠ address),
+                // so the `_ => {}` arm fires and nothing changes.
+                make_attendee("dave@example.com", Some("Dave B.")),
+            ],
+        );
+        let contacts = file.contacts();
+        // The first CN wins; subsequent different-CN entries hit the `_ => {}` branch.
+        assert_eq!(
+            contacts.get("dave@example.com"),
+            Some(&"Dave Brown".to_string())
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // occurrence_by_id with RID
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn occurrence_by_id_with_rid_no_overwrite() {
+        // A recurring event without any overwrite component: querying by a specific RID
+        // returns an occurrence that is not overwritten.
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let rid = CalDate::Date(base_date, CalCompType::Event.into());
+
+        let file = new_file(
+            EventBuilder::new("recurring")
+                .start(rid.clone())
+                .rrule("FREQ=DAILY;COUNT=5".parse().unwrap())
+                .done(),
+        );
+
+        let occ = file.occurrence_by_id("recurring", Some(&rid), tz).unwrap();
+        assert_eq!(occ.uid(), "recurring");
+        assert!(!occ.is_overwritten());
+    }
+
+    #[test]
+    fn occurrence_by_id_with_rid_and_overwrite() {
+        // A recurring event where the second occurrence has an overwrite component: querying by
+        // the second occurrence's RID returns an occurrence with the overwrite attached.
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let second_date = NaiveDate::from_ymd_opt(2024, 1, 2).unwrap();
+        let rid = CalDate::Date(second_date, CalCompType::Event.into());
+
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(
+            EventBuilder::new("rec-ow")
+                .start(CalDate::Date(base_date, CalCompType::Event.into()))
+                .rrule("FREQ=DAILY;COUNT=3".parse().unwrap())
+                .done(),
+        ));
+        // Overwrite component for the second occurrence. Set a custom summary to ensure the
+        // overwrite's properties take precedence over the base component's values.
+        let mut overwrite = EventBuilder::new("rec-ow")
+            .start(CalDate::Date(second_date, CalCompType::Event.into()))
+            .rid(rid.clone())
+            .done();
+        overwrite.set_summary(Some("Overwritten Summary".into()));
+        cal.add_component(CalComponent::Event(overwrite));
+        let file = CalFile::new_simple(cal);
+
+        let occ = file.occurrence_by_id("rec-ow", Some(&rid), tz).unwrap();
+        assert_eq!(occ.uid(), "rec-ow");
+        assert!(occ.is_overwritten());
+        // The occurrence should reflect the overwrite's summary, not the base component's.
+        assert_eq!(
+            occ.summary().map(|s| s.as_str()),
+            Some("Overwritten Summary")
+        );
+    }
+
+    #[test]
+    fn occurrence_by_id_excluded_rid() {
+        // When the queried RID is in the EXDATE list the occurrence is flagged as excluded.
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
+        let excluded_date = NaiveDate::from_ymd_opt(2024, 3, 2).unwrap();
+        let rid = CalDate::Date(excluded_date, CalCompType::Event.into());
+
+        let file = new_file(
+            EventBuilder::new("exc")
+                .start(CalDate::Date(base_date, CalCompType::Event.into()))
+                .rrule("FREQ=DAILY;COUNT=5".parse().unwrap())
+                .exdate(rid.clone())
+                .done(),
+        );
+
+        let occ = file.occurrence_by_id("exc", Some(&rid), tz).unwrap();
+        assert!(occ.is_excluded());
+    }
+
+    // -----------------------------------------------------------------------
+    // occurrences_between: no matching base component
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn occurrences_between_no_matching_base() {
+        // When the filter matches no component, the iterator must yield nothing.
+        let file = new_allday_file(NaiveDate::from_ymd_opt(2024, 6, 1).unwrap(), "ev");
+        let occs: Vec<_> = file
+            .occurrences_between(new_date(2024, 6, 1), new_date(2024, 6, 30), |c| {
+                c.uid() == "nonexistent"
+            })
+            .collect();
+        assert!(occs.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // create_overwrite
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn create_overwrite_success_event() {
+        // Happy path: create an overwrite for an existing recurring event.
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2024, 5, 1).unwrap();
+        let rid = CalDate::Date(base_date, CalCompType::Event.into());
+
+        let mut file = new_file(
+            EventBuilder::new("ev-ow")
+                .start(rid.clone())
+                .rrule("FREQ=WEEKLY;COUNT=4".parse().unwrap())
+                .done(),
+        );
+
+        file.create_overwrite("ev-ow", rid.clone(), tz, |_base, overwrite| {
+            overwrite.set_summary(Some("Custom Summary".into()));
+        })
+        .unwrap();
+
+        // The overwrite component should now be present.
+        let overwrite = file
+            .component_with(|c| c.uid() == "ev-ow" && c.rid() == Some(&rid))
+            .unwrap();
+        assert_eq!(overwrite.summary(), Some(&"Custom Summary".to_string()));
+    }
+
+    #[test]
+    fn create_overwrite_success_todo() {
+        // Verifies that create_overwrite works for a VTODO base (the CalCompType::Todo branch).
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2024, 5, 1).unwrap();
+        let rid = CalDate::Date(base_date, CalCompType::Todo.into());
+
+        let mut todo = CalTodo::new("todo-ow");
+        todo.set_start(Some(rid.clone()));
+        todo.set_rrule(Some("FREQ=WEEKLY;COUNT=3".parse().unwrap()));
+
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Todo(todo));
+        let mut file = CalFile::new_simple(cal);
+
+        file.create_overwrite("todo-ow", rid.clone(), tz, |_base, overwrite| {
+            overwrite.set_summary(Some("Todo Overwrite".into()));
+        })
+        .unwrap();
+
+        let overwrite = file
+            .component_with(|c| c.uid() == "todo-ow" && c.rid() == Some(&rid))
+            .unwrap();
+        assert_eq!(overwrite.ctype(), CalCompType::Todo);
+        assert_eq!(overwrite.summary(), Some(&"Todo Overwrite".to_string()));
+    }
+
+    #[test]
+    fn create_overwrite_uid_not_found() {
+        let tz = &chrono_tz::Europe::Berlin;
+        let rid = CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            CalCompType::Event.into(),
+        );
+        let mut file = CalFile::new_simple(Calendar::default());
+
+        let result = file.create_overwrite("no-such-uid", rid, tz, |_, _| {});
+        assert!(matches!(result, Err(ColError::ComponentNotFound(_))));
+    }
+
+    #[test]
+    fn create_overwrite_rid_already_exists() {
+        // Creating a second overwrite for the same RID must fail.
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2024, 8, 5).unwrap();
+        let rid = CalDate::Date(base_date, CalCompType::Event.into());
+
+        let mut file = new_file(
+            EventBuilder::new("dup-ow")
+                .start(rid.clone())
+                .rrule("FREQ=WEEKLY;COUNT=3".parse().unwrap())
+                .done(),
+        );
+
+        // First overwrite: succeeds.
+        file.create_overwrite("dup-ow", rid.clone(), tz, |_, _| {})
+            .unwrap();
+
+        // Second overwrite for the same RID: must fail.
+        let result = file.create_overwrite("dup-ow", rid, tz, |_, _| {});
+        assert!(matches!(result, Err(ColError::RidExists(_))));
+    }
+
+    // -----------------------------------------------------------------------
+    // due_alarms_between edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn due_alarms_between_no_base_component() {
+        // A CalFile that has only an overwrite component (rid is set) but no base component.
+        // due_alarms_between must return an empty vec without panicking.
+        let overwrite_date = NaiveDate::from_ymd_opt(2024, 1, 5).unwrap();
+        let rid = CalDate::Date(overwrite_date, CalCompType::Event.into());
+        let file = new_file(EventBuilder::new("ghost").rid(rid).done());
+
+        let overlay = DefaultAlarmOverlay;
+        let alarms = file.due_alarms_between(new_date(2024, 1, 1), new_date(2024, 1, 31), &overlay);
+        assert!(alarms.is_empty());
+    }
+
+    #[test]
+    fn due_alarms_between_alarm_outside_window() {
+        // The alarm fires 1 day before the event start. The event is on Jan 10; the alarm fires
+        // on Jan 9. Querying the window Jan 5–Jan 8 must return no alarms (the `_ => None` branch
+        // inside the filter_map is exercised).
+        let file = new_file(
+            new_allday_event(NaiveDate::from_ymd_opt(2024, 1, 10).unwrap(), "ev-alarm")
+                .alarm(CalAlarm::new(
+                    CalAction::Display,
+                    CalTrigger::Relative {
+                        related: CalRelated::Start,
+                        duration: (-Duration::days(1)).into(),
+                    },
+                ))
+                .done(),
+        );
+
+        let overlay = DefaultAlarmOverlay;
+        let alarms = file.due_alarms_between(new_date(2024, 1, 5), new_date(2024, 1, 8), &overlay);
+        assert!(alarms.is_empty());
     }
 }
