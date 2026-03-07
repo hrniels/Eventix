@@ -7,11 +7,14 @@ import shutil
 import shlex
 import subprocess
 
+# Define application identifiers for normal and debug mode
 APP_ID = "com.github.NilsTUD.Eventix"
 APP_ID_DEBUG = APP_ID + "-debug"
 
 
 def dev_env():
+    """Sets up the development environment by configuring environment variables
+    and creating symbolic links for required directories."""
     env = os.environ.copy()
     run_dir = Path("run")
     os.makedirs(run_dir / APP_ID_DEBUG, 0o700, exist_ok=True)
@@ -30,16 +33,20 @@ def dev_env():
                    dir_in_run,
                    target_is_directory=True)
 
+    # Add DavMail binary to PATH for subprocess usage
     davmail_bin = os.path.abspath("contrib/davmail/dist")
-    env["PATH"] = f"{davmail_bin}:{env["PATH"]}"
-    env["XDG_DATA_HOME"] = run_dir.absolute()
-    env["XDG_CONFIG_HOME"] = run_dir.absolute()
+    env["PATH"] = os.pathsep.join([davmail_bin, env.get("PATH", "")])
+    # use a project-local directory for data and config
+    env["XDG_DATA_HOME"] = str(run_dir.absolute())
+    env["XDG_CONFIG_HOME"] = str(run_dir.absolute())
+    # for debugging
     env["RUST_LOG"] = "trace"
     env["RUST_BACKTRACE"] = "full"
     return env
 
 
 def run_cmd(args):
+    """Executes a command with the prepared development environment."""
     try:
         subprocess.run(args, env=dev_env())
     except KeyboardInterrupt:
@@ -49,6 +56,7 @@ def run_cmd(args):
 
 
 def cmd_run(args):
+    """Runs the Eventix application in development mode."""
     cmd_args = [
         "cargo", "run", "--bin", "eventix", "--",
         "--address", args.address,
@@ -58,6 +66,7 @@ def cmd_run(args):
 
 
 def cmd_watch(args):
+    """Watches for changes in the source code and reruns Eventix on changes."""
     cmd = shlex.join([
         "run", "--",
         "--address", args.address,
@@ -76,6 +85,7 @@ def cmd_watch(args):
 
 
 def cmd_app(args):
+    """Runs the Eventix app."""
     cmd_args = [
         "cargo", "run", "--bin", "eventix-app", "--",
         "--address", args.address,
@@ -85,16 +95,19 @@ def cmd_app(args):
 
 
 def cmd_import(args):
+    """Imports an ICS file into Eventix."""
     cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", args.file]
     run_cmd(cmd_args)
 
 
 def cmd_davmail(args):
+    """Builds Davmail using Maven and Ant."""
     subprocess.run(["mvn", "install"], cwd='contrib/davmail', check=True)
     subprocess.run(["ant", "dist"], cwd='contrib/davmail', check=True)
 
 
 def cmd_coverage(args):
+    """Generates code coverage information for the workspace."""
     subprocess.run([
         "cargo", "llvm-cov",
         "--workspace",
@@ -106,6 +119,7 @@ def cmd_coverage(args):
 
 
 def cmd_flatpak(args):
+    """Builds a Flatpak package for Eventix, including dependencies."""
     build_dir = "flatpak/build"
     repo_dir = "flatpak/repo"
 
