@@ -7,6 +7,9 @@ use eventix_ical::{
 
 use crate::State;
 
+/// Returns an iterator over incomplete to-do occurrences due within the next `days` days.
+///
+/// Skips disabled calendars and excludes completed or excluded occurrences.
 pub fn due_todos<'a>(state: &'a State, tz: &Tz, days: u32) -> impl Iterator<Item = Occurrence<'a>> {
     let now = Local::now();
     let start = now.with_timezone(tz);
@@ -24,6 +27,10 @@ pub fn due_todos<'a>(state: &'a State, tz: &Tz, days: u32) -> impl Iterator<Item
         })
 }
 
+/// Returns an iterator over incomplete to-do occurrences whose due date lies before now.
+///
+/// Only occurrences whose end falls strictly before the current time are considered overdue.
+/// Completed, excluded, and disabled-calendar occurrences are filtered out.
 pub fn overdue_todos<'a>(state: &'a State, tz: &Tz) -> impl Iterator<Item = Occurrence<'a>> {
     let now = Local::now();
     let start = now.with_timezone(tz);
