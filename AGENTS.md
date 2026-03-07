@@ -109,7 +109,9 @@ Run Clippy (all targets and features):
 Treat Clippy warnings as actionable unless there is a strong reason not to.
 
 No custom rustfmt.toml or clippy configuration is present, so default
-Rust style conventions apply.
+Rust style conventions apply. Please wrap lines at a maximum width of 100
+characters for new or modified code to keep diffs readable and consistent
+with project conventions.
 
 ------------------------------------------------------------
 ARCHITECTURE GUIDELINES
@@ -136,12 +138,25 @@ CODE STYLE GUIDELINES
 General Rust style:
 
 - Follow standard Rust formatting (rustfmt defaults).
+- Wrap doc comments and other newly added or modified source lines at a maximum width of 100
+  characters per line.
 - Use explicit imports; avoid glob imports unless clearly justified.
 - Group imports: std, external crates, then internal crates.
 - Keep modules small and focused.
 - Add comments only when they explain non-obvious decisions; prefer "why" over "what".
 - For larger or complex blocks, add a brief high-level comment describing intent or structure.
 - When a comment applies to the whole function, prefer a doc comment on the function itself.
+- Doc comments should describe the public interface and observable behavior, not implementation
+  details. Callers of a function should not need to know how it is implemented; document what it
+  does, its inputs, outputs, and error conditions.
+- Structure doc comments as a short single-sentence summary on the first line, followed by a blank
+  `///` line and a longer description when additional detail is warranted. The summary line should
+  be self-contained and meaningful on its own.
+- Use descriptive phrasing that states what the function does (for example "Returns the current
+  setting") rather than phrasing that describes intent or imperatives (avoid "Return the current
+  setting").
+- Doc comments for trait methods belong on the method definition in the trait itself, not on
+  individual implementations. Do not add doc comments to `impl Trait for Type` methods.
 
 Naming conventions:
 
@@ -185,6 +200,11 @@ Testing:
 - Always place test modules at the very end of the file.
 - Name the test module exactly `tests` (i.e., `#[cfg(test)] mod tests`).
 - Do not create multiple test modules in the same file.
+- For trivial getter and setter methods, test them together in a single test rather than writing
+  one test per method.
+- When using inline human-readable headers to group tests (for readability in long test modules),
+  use the exact form `--- ... ---` only to separate groups of related tests; do not add such headers
+  for each individual test.
 
 ------------------------------------------------------------
 ADDING NEW CODE
