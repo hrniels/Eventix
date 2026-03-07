@@ -17,6 +17,12 @@ use crate::sync::{SyncColResult, Syncer, SyncerAuth, log_line};
 
 const PORT_BASE: u16 = 25000;
 
+/// A [`Syncer`] implementation that synchronises Microsoft 365 calendars via DavMail and
+/// vdirsyncer.
+///
+/// Manages a generated DavMail properties file and spawns a DavMail subprocess as a local CalDAV
+/// gateway, then delegates all sync operations to an inner [`VDirSyncer`]. OAuth refresh tokens
+/// are persisted to the misc state after each successful operation.
 pub struct O365 {
     col_id: String,
     vdirsyncer: VDirSyncer,
@@ -26,6 +32,12 @@ pub struct O365 {
 }
 
 impl O365 {
+    /// Creates a new `O365` syncer, generating the DavMail properties file and inner
+    /// `VDirSyncer` on disk.
+    ///
+    /// `idx` is used to derive a unique local port for the DavMail CalDAV gateway. `auth_url` is
+    /// the Microsoft login redirect URL provided by the user during an interactive auth flow;
+    /// `token` is a previously persisted OAuth refresh token that can skip re-authentication.
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         xdg: &BaseDirectories,
@@ -127,6 +139,9 @@ impl O365 {
         state: &mut State,
         res: anyhow::Result<SyncColResult>,
     ) -> anyhow::Result<SyncColResult> {
+        // Only persist the token when the sync succeeded AND this was an interactive auth flow
+        // (auth_url is Some). Background syncs that reuse a stored token should not overwrite
+        // the persisted token, because DavMail may not have written a fresh one.
         if let Ok(SyncColResult::Success(_)) = res
             && self.auth_url.is_some()
         {
@@ -201,6 +216,9 @@ impl O365 {
             Err(anyhow!("DavMail exited first"))
         };
 
+        // Race the caller-supplied sync function against DavMail's stdout monitor. Whichever
+        // branch completes first wins: if the sync finishes, we get its result; if DavMail exits
+        // (or signals an auth requirement) before the sync completes, we get that error instead.
         let res = tokio::select! {
             // wait until the function finished
             res = func() => {

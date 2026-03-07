@@ -6,11 +6,16 @@ use crate::{
     sync::{SyncColResult, Syncer},
 };
 
+/// A [`Syncer`] implementation that reads calendar data directly from the local filesystem.
+///
+/// Unlike network-backed syncers, `FSSyncer` performs no remote synchronisation; it rescans
+/// local directories on each sync to detect additions, modifications, and deletions.
 pub struct FSSyncer {
     folder_id: HashMap<String, String>,
 }
 
 impl FSSyncer {
+    /// Creates a new `FSSyncer` with the given mapping from folder names to calendar IDs.
     pub fn new(folder_id: HashMap<String, String>) -> Self {
         Self { folder_id }
     }

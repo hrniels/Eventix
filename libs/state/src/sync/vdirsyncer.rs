@@ -59,6 +59,11 @@ impl CalendarChanges {
     }
 }
 
+/// A [`Syncer`] implementation that delegates to the `vdirsyncer` command-line tool.
+///
+/// Manages a generated vdirsyncer configuration file and drives `vdirsyncer discover` and
+/// `vdirsyncer sync` as subprocesses, parsing their output to apply incremental updates to the
+/// in-memory calendar store.
 pub struct VDirSyncer {
     name: String,
     folder_id: HashMap<String, String>,
@@ -67,6 +72,10 @@ pub struct VDirSyncer {
 }
 
 impl VDirSyncer {
+    /// Creates a new `VDirSyncer`, generating the vdirsyncer configuration file on disk.
+    ///
+    /// `folder_id` maps vdirsyncer folder names to calendar IDs. Returns an error if the
+    /// configuration file cannot be written.
     pub async fn new(
         xdg: &BaseDirectories,
         name: String,
@@ -217,6 +226,9 @@ impl VDirSyncer {
 
             match res {
                 SyncResult::NeedsDiscover => {
+                    // vdirsyncer reported a collection change and asked for re-discovery. Run
+                    // discover once and retry the sync. If discover was already attempted this
+                    // run, give up to avoid an infinite loop.
                     if tried_discover {
                         return Err(anyhow!("discover did not resolve sync error"));
                     }
@@ -251,6 +263,10 @@ impl VDirSyncer {
                 continue;
             }
 
+            // Match against fixed word positions in vdirsyncer's output format:
+            //   "Copying (uploading) item <uid> to <cal>"  → Add
+            //   "Copying (updating) item <uid> to <cal>"   → Update
+            //   "Deleting item <uid> from <cal>"           → Delete
             if let Some(ev) = match (w[0], w[1], w[2], w[3], w[4], w.get(5)) {
                 ("Copying", "(uploading)", "item", _uid, "to", Some(cal)) => {
                     Some(EventType::Add(cal))
@@ -299,6 +315,8 @@ impl Syncer for VDirSyncer {
     async fn discover(&self, _state: &mut State) -> anyhow::Result<SyncColResult> {
         self.run_discover().await?;
 
+        // metasync propagates calendar metadata (display name, colour) from the remote storage
+        // to the local storage after discovery, so that subsequent syncs see up-to-date names.
         let mut cmd = Command::new("vdirsyncer");
         cmd.kill_on_drop(true);
         cmd.stdout(Stdio::null());
