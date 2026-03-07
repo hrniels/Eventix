@@ -303,3 +303,105 @@ impl CalDir {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    use crate::col::CalFile;
+    use crate::objects::{CalComponent, CalEvent, Calendar};
+
+    use super::CalDir;
+
+    /// Builds a minimal in-memory [`CalFile`] that contains a single event with the given UID.
+    fn make_file(uid: &str) -> CalFile {
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(CalEvent::new(uid)));
+        CalFile::new(Arc::default(), PathBuf::default(), cal)
+    }
+
+    #[test]
+    fn display_shows_name() {
+        let dir = CalDir::new_empty(
+            Arc::new("id1".into()),
+            PathBuf::from("/tmp"),
+            "My Cal".into(),
+        );
+        assert_eq!(format!("{dir}"), "My Cal");
+    }
+
+    #[test]
+    fn partial_eq_same_name_and_files() {
+        // Two dirs with the same name and no files are equal regardless of id/path.
+        let a = CalDir::new_empty(Arc::new("id".into()), PathBuf::from("/a"), "Work".into());
+        let b = CalDir::new_empty(Arc::new("id".into()), PathBuf::from("/b"), "Work".into());
+        assert_eq!(a, b);
+
+        // Different name makes them unequal even with no files.
+        let c = CalDir::new_empty(
+            Arc::new("id".into()),
+            PathBuf::from("/c"),
+            "Personal".into(),
+        );
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn new_empty_creates_empty_dir() {
+        let id: Arc<String> = Arc::new("cal-id".into());
+        let path = PathBuf::from("/some/path");
+        let dir = CalDir::new_empty(id.clone(), path.clone(), "Test".into());
+
+        assert_eq!(dir.id(), &id);
+        assert_eq!(dir.path(), &path);
+        assert_eq!(dir.name(), "Test");
+        assert!(dir.files().is_empty());
+    }
+
+    #[test]
+    fn set_name_updates_name() {
+        let mut dir = CalDir::new_empty(Arc::new("id".into()), PathBuf::from("/tmp"), "Old".into());
+        dir.set_name("New".into());
+        assert_eq!(dir.name(), "New");
+    }
+
+    #[test]
+    fn files_mut_allows_mutation() {
+        let mut dir = CalDir::default();
+        dir.add_file(make_file("ev-x"));
+        // files_mut must expose the same slice length.
+        assert_eq!(dir.files_mut().len(), 1);
+    }
+
+    #[test]
+    fn file_by_id_found_and_not_found() {
+        let mut dir = CalDir::default();
+        dir.add_file(make_file("uid-alpha"));
+        dir.add_file(make_file("uid-beta"));
+
+        assert!(dir.file_by_id("uid-alpha").is_some());
+        assert!(dir.file_by_id("uid-beta").is_some());
+        assert!(dir.file_by_id("uid-missing").is_none());
+
+        assert!(dir.file_by_id_mut("uid-alpha").is_some());
+        assert!(dir.file_by_id_mut("uid-nope").is_none());
+    }
+
+    #[test]
+    fn remove_by_uid_success_and_error() {
+        let mut dir = CalDir::default();
+        dir.add_file(make_file("uid-rm"));
+        dir.add_file(make_file("uid-keep"));
+
+        // Successful removal: returns the file and shrinks the collection.
+        let removed = dir.remove_by_uid("uid-rm");
+        assert!(removed.is_ok());
+        assert_eq!(dir.files().len(), 1);
+        assert!(dir.file_by_id("uid-rm").is_none());
+        assert!(dir.file_by_id("uid-keep").is_some());
+
+        // Removing a UID that no longer exists returns an error.
+        assert!(dir.remove_by_uid("uid-rm").is_err());
+    }
+}
