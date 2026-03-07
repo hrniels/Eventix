@@ -9,7 +9,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::objects::{CalDate, CalLocale, CalLocaleEn};
+use crate::objects::{CalDate, CalLocale};
 use crate::parser::{ParseError, Property};
 use crate::util;
 
@@ -310,6 +310,15 @@ impl FromStr for DayDesc {
         };
         let num = s.parse::<u16>()?;
         Ok(Self { num, side })
+    }
+}
+
+impl fmt::Display for DayDesc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.side {
+            CalRRuleSide::Start => write!(f, "{}", self.num),
+            CalRRuleSide::End => write!(f, "-{}", self.num),
+        }
     }
 }
 
@@ -1176,41 +1185,15 @@ impl fmt::Display for CalRRule {
             write!(f, ";INTERVAL={interval}")?;
         }
 
-        let locale = &CalLocaleEn;
-
         write_list(self.by_second.as_ref().map(|v| v.iter()), "BYSECOND", f)?;
         write_list(self.by_minute.as_ref().map(|v| v.iter()), "BYMINUTE", f)?;
         write_list(self.by_hour.as_ref().map(|v| v.iter()), "BYHOUR", f)?;
         write_list(self.by_day.as_ref().map(|v| v.iter()), "BYDAY", f)?;
-        write_list(
-            self.by_mon_day
-                .as_ref()
-                .map(|v| v.iter().map(|d| d.human(locale))),
-            "BYMONDAY",
-            f,
-        )?;
-        write_list(
-            self.by_year_day
-                .as_ref()
-                .map(|v| v.iter().map(|d| d.human(locale))),
-            "BYYEARDAY",
-            f,
-        )?;
-        write_list(
-            self.by_week_no
-                .as_ref()
-                .map(|v| v.iter().map(|d| d.human(locale))),
-            "BYWEEKNO",
-            f,
-        )?;
+        write_list(self.by_mon_day.as_ref().map(|v| v.iter()), "BYMONTHDAY", f)?;
+        write_list(self.by_year_day.as_ref().map(|v| v.iter()), "BYYEARDAY", f)?;
+        write_list(self.by_week_no.as_ref().map(|v| v.iter()), "BYWEEKNO", f)?;
         write_list(self.by_month.as_ref().map(|v| v.iter()), "BYMONTH", f)?;
-        write_list(
-            self.by_set_pos
-                .as_ref()
-                .map(|v| v.iter().map(|d| d.human(locale))),
-            "BYSETPOS",
-            f,
-        )?;
+        write_list(self.by_set_pos.as_ref().map(|v| v.iter()), "BYSETPOS", f)?;
         if let Some(week_start) = self.week_start {
             write!(f, ";WKST={}", CalWDayDesc::to_weekday_str(week_start))?;
         }
@@ -1327,9 +1310,511 @@ impl FromStr for CalRRule {
 mod tests {
     use chrono::{TimeZone, Utc, Weekday};
 
+    use crate::objects::CalLocaleEn;
     use crate::objects::date::CalDateTime;
 
     use super::*;
+
+    // --- CalRRuleFreq ---
+
+    #[test]
+    fn freq_display_all_variants() {
+        assert_eq!(format!("{}", CalRRuleFreq::Secondly), "SECONDLY");
+        assert_eq!(format!("{}", CalRRuleFreq::Minutely), "MINUTELY");
+        assert_eq!(format!("{}", CalRRuleFreq::Hourly), "HOURLY");
+        assert_eq!(format!("{}", CalRRuleFreq::Daily), "DAILY");
+        assert_eq!(format!("{}", CalRRuleFreq::Weekly), "WEEKLY");
+        assert_eq!(format!("{}", CalRRuleFreq::Monthly), "MONTHLY");
+        assert_eq!(format!("{}", CalRRuleFreq::Yearly), "YEARLY");
+    }
+
+    #[test]
+    fn freq_parse_invalid() {
+        assert!("FORTNIGHTLY".parse::<CalRRuleFreq>().is_err());
+        assert!("".parse::<CalRRuleFreq>().is_err());
+    }
+
+    // --- CalRRuleSide ---
+
+    #[test]
+    fn side_parse_invalid() {
+        // Any character other than '+' or '-' at position 0 must yield an error.
+        assert!("X1MO".parse::<CalRRuleSide>().is_err());
+    }
+
+    // --- CalWDayDesc ---
+
+    #[test]
+    fn wday_getters_day_and_nth() {
+        let desc = CalWDayDesc::new(Weekday::Wed, Some((3, CalRRuleSide::End)));
+        assert_eq!(desc.day(), Weekday::Wed);
+        assert_eq!(desc.nth(), Some((3, CalRRuleSide::End)));
+
+        let no_nth = CalWDayDesc::new(Weekday::Fri, None);
+        assert_eq!(no_nth.day(), Weekday::Fri);
+        assert_eq!(no_nth.nth(), None);
+    }
+
+    #[test]
+    fn to_weekday_str_all_variants() {
+        assert_eq!(CalWDayDesc::to_weekday_str(Weekday::Mon), "MO");
+        assert_eq!(CalWDayDesc::to_weekday_str(Weekday::Tue), "TU");
+        assert_eq!(CalWDayDesc::to_weekday_str(Weekday::Wed), "WE");
+        assert_eq!(CalWDayDesc::to_weekday_str(Weekday::Thu), "TH");
+        assert_eq!(CalWDayDesc::to_weekday_str(Weekday::Fri), "FR");
+        assert_eq!(CalWDayDesc::to_weekday_str(Weekday::Sat), "SA");
+        assert_eq!(CalWDayDesc::to_weekday_str(Weekday::Sun), "SU");
+    }
+
+    #[test]
+    fn wday_display() {
+        // Plain weekday — no nth component.
+        let plain = CalWDayDesc::new(Weekday::Thu, None);
+        assert_eq!(format!("{plain}"), "TH");
+
+        // Positive nth prefix.
+        let start = CalWDayDesc::new(Weekday::Mon, Some((2, CalRRuleSide::Start)));
+        assert_eq!(format!("{start}"), "+2MO");
+
+        // Negative nth prefix.
+        let end = CalWDayDesc::new(Weekday::Fri, Some((1, CalRRuleSide::End)));
+        assert_eq!(format!("{end}"), "-1FR");
+    }
+
+    #[test]
+    fn wday_parse_empty_after_sign_is_error() {
+        // A bare sign with no weekday letters must be an error.
+        assert!("-".parse::<CalWDayDesc>().is_err());
+    }
+
+    #[test]
+    fn wday_parse_invalid_weekday_abbrev() {
+        assert!("XX".parse::<CalWDayDesc>().is_err());
+        assert!("MX".parse::<CalWDayDesc>().is_err());
+    }
+
+    #[test]
+    fn wday_matches_invalid_freq_returns_false() {
+        // When a numbered weekday descriptor (nth is Some) is used with a frequency other than
+        // Weekly, Monthly, or Yearly, matches() must return false.
+        let desc = CalWDayDesc::new(Weekday::Mon, Some((1, CalRRuleSide::Start)));
+        let rrule = CalRRule {
+            freq: CalRRuleFreq::Daily,
+            by_day: Some(vec![desc]),
+            ..Default::default()
+        };
+        let date = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 9, 2, 9, 0, 0)
+            .unwrap();
+        assert!(!desc.matches(date, &rrule));
+    }
+
+    // --- CalRRule getters and setters ---
+
+    #[test]
+    fn rrule_getters_and_setters() {
+        let mut rule = CalRRule::default();
+
+        // frequency
+        assert_eq!(rule.frequency(), CalRRuleFreq::Weekly);
+        rule.set_frequency(CalRRuleFreq::Daily);
+        assert_eq!(rule.frequency(), CalRRuleFreq::Daily);
+
+        // count
+        assert_eq!(rule.count(), None);
+        rule.set_count(5);
+        assert_eq!(rule.count(), Some(5));
+
+        // interval
+        assert_eq!(rule.interval(), None);
+        rule.set_interval(3);
+        assert_eq!(rule.interval(), Some(3));
+
+        // until (must clear count first so the rule stays valid)
+        rule.set_count(0); // reset count to avoid count+until conflict at parse time (not relevant here)
+        assert_eq!(rule.until(), None);
+        let until_date = CalDate::DateTime(CalDateTime::Utc(
+            Utc.with_ymd_and_hms(2030, 1, 1, 0, 0, 0).unwrap(),
+        ));
+        rule.set_until(until_date.clone());
+        assert_eq!(rule.until(), Some(&until_date));
+
+        // by_day
+        assert_eq!(rule.by_day(), None);
+        let days = vec![CalWDayDesc::new(Weekday::Mon, None)];
+        rule.set_by_day(Some(days.clone()));
+        assert_eq!(rule.by_day(), Some(&days));
+        rule.set_by_day(None);
+        assert_eq!(rule.by_day(), None);
+    }
+
+    // --- CalRRule::FromStr error paths ---
+
+    #[test]
+    fn rrule_parse_unknown_key_is_error() {
+        assert!("FREQ=DAILY;UNKNOWN=VALUE".parse::<CalRRule>().is_err());
+    }
+
+    // --- CalRRule::Display ---
+
+    #[test]
+    fn rrule_display_round_trips_all_fields() {
+        // Build a rule with every serialisable field set and verify that the Display output
+        // round-trips through FromStr to produce an equal rule.
+        let rule: CalRRule = "FREQ=WEEKLY;COUNT=5;INTERVAL=2;BYDAY=MO,TU;WKST=SU"
+            .parse()
+            .unwrap();
+        let displayed = format!("{rule}");
+        let reparsed: CalRRule = displayed.parse().unwrap();
+        assert_eq!(rule, reparsed);
+    }
+
+    #[test]
+    fn rrule_display_with_until() {
+        let rule: CalRRule = "FREQ=DAILY;UNTIL=20250101T000000Z".parse().unwrap();
+        let displayed = format!("{rule}");
+        // Verify the exact UNTIL timestamp is present in the serialised output.
+        assert!(
+            displayed.contains("UNTIL=20250101T000000Z"),
+            "expected exact UNTIL timestamp in: {displayed}"
+        );
+        let reparsed: CalRRule = displayed.parse().unwrap();
+        assert_eq!(rule, reparsed);
+    }
+
+    #[test]
+    fn rrule_display_with_byx() {
+        // All BYxxx fields use DayDesc::Display, which emits plain integers compatible with
+        // FromStr, so every field in this rule must survive a full Display → parse round-trip.
+        // The Display ordering is:
+        // FREQ, BYSECOND, BYMINUTE, BYHOUR, BYDAY, BYMONTHDAY, BYYEARDAY, BYWEEKNO, BYMONTH,
+        // BYSETPOS
+        let rule: CalRRule = "FREQ=YEARLY;BYSECOND=10;BYMINUTE=15;BYHOUR=8;BYMONTHDAY=5;BYMONTH=3;\
+             BYYEARDAY=100;BYWEEKNO=10;BYSETPOS=1;BYDAY=MO"
+            .parse()
+            .unwrap();
+        let displayed = format!("{rule}");
+
+        let expected = "FREQ=YEARLY;BYSECOND=10;BYMINUTE=15;BYHOUR=8;BYDAY=MO;\
+                        BYMONTHDAY=5;BYYEARDAY=100;BYWEEKNO=10;BYMONTH=3;BYSETPOS=1";
+        assert_eq!(
+            displayed, expected,
+            "expected exact serialisation for BYx fields"
+        );
+
+        let reparsed: CalRRule = displayed.parse().unwrap();
+        assert_eq!(rule, reparsed);
+    }
+
+    #[test]
+    fn rrule_display_with_wkst() {
+        let rule: CalRRule = "FREQ=WEEKLY;BYDAY=TU,TH;WKST=MO".parse().unwrap();
+        let displayed = format!("{rule}");
+        assert!(displayed.contains("WKST=MO"));
+        let reparsed: CalRRule = displayed.parse().unwrap();
+        assert_eq!(rule, reparsed);
+    }
+
+    // --- RRuleHuman::Display ---
+
+    #[test]
+    fn human_every_n_units() {
+        let rule: CalRRule = "FREQ=YEARLY;INTERVAL=3".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Every 3 years");
+
+        let rule: CalRRule = "FREQ=MONTHLY;INTERVAL=6".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Every 6 months");
+
+        let rule: CalRRule = "FREQ=HOURLY;INTERVAL=4".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Every 4 hours");
+
+        let rule: CalRRule = "FREQ=MINUTELY;INTERVAL=30".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Every 30 minutes");
+
+        let rule: CalRRule = "FREQ=SECONDLY;INTERVAL=15".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Every 15 seconds");
+    }
+
+    #[test]
+    fn human_interval_1_falls_back_to_freq_name() {
+        // INTERVAL=1 (or absent) should display just the frequency name.
+        let rule: CalRRule = "FREQ=SECONDLY".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Secondly");
+
+        let rule: CalRRule = "FREQ=MINUTELY".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Minutely");
+
+        let rule: CalRRule = "FREQ=HOURLY".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Hourly");
+
+        let rule: CalRRule = "FREQ=WEEKLY".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Weekly");
+
+        let rule: CalRRule = "FREQ=MONTHLY".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Monthly");
+
+        let rule: CalRRule = "FREQ=YEARLY".parse().unwrap();
+        assert_eq!(format!("{}", rule.human(&CalLocaleEn)), "Yearly");
+    }
+
+    #[test]
+    fn human_with_by_year_day() {
+        let rule: CalRRule = "FREQ=YEARLY;BYYEARDAY=1,-1".parse().unwrap();
+        let text = format!("{}", rule.human(&CalLocaleEn));
+        let expected = "Yearly, on the 1st and last day of the year";
+        assert_eq!(text, expected, "got: {text}");
+    }
+
+    #[test]
+    fn human_with_by_mon_day() {
+        let rule: CalRRule = "FREQ=MONTHLY;BYMONTHDAY=1,-1".parse().unwrap();
+        let text = format!("{}", rule.human(&CalLocaleEn));
+        let expected = "Monthly, on the 1st and last day of the month";
+        assert_eq!(text, expected, "got: {text}");
+    }
+
+    #[test]
+    fn human_with_by_hour_minute_second() {
+        let rule: CalRRule = "FREQ=DAILY;BYHOUR=9,17;BYMINUTE=0,30;BYSECOND=0"
+            .parse()
+            .unwrap();
+        let text = format!("{}", rule.human(&CalLocaleEn));
+        let expected = "Daily, at hour(s) 9 and 17, at minute(s) 0 and 30, at second(s) 0";
+        assert_eq!(text, expected, "got: {text}");
+    }
+
+    #[test]
+    fn human_repeats_until_and_in_month() {
+        let rule: CalRRule = "FREQ=YEARLY;BYMONTH=6;UNTIL=20301231T000000Z"
+            .parse()
+            .unwrap();
+        let text = format!("{}", rule.human(&CalLocaleEn));
+        let expected = "Yearly, in June\nRepeats until December 31, 2030";
+        assert_eq!(text, expected, "got: {text}");
+    }
+
+    // --- limited() BYMONTH with sub-monthly frequencies ---
+
+    #[test]
+    fn limited_by_month_filters_secondly_freq() {
+        // BYMONTH=3 with FREQ=SECONDLY means occurrences in months other than March are
+        // filtered out by limited(). Verify via dates_between producing nothing outside March.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 3, 1, 0, 0, 0)
+            .unwrap();
+        let rrule: CalRRule = "FREQ=SECONDLY;COUNT=3;BYMONTH=3;BYHOUR=0;BYMINUTE=0;BYSECOND=0,1,2"
+            .parse()
+            .unwrap();
+        let mut iter = rrule.dates_between(dtstart, None, dtstart, dtstart + Duration::days(60));
+        // All three occurrences must fall within March.
+        for _ in 0..3 {
+            let d = iter.next().unwrap();
+            assert_eq!(d.month(), 3, "expected March, got month {}", d.month());
+        }
+        assert_eq!(iter.next(), None);
+    }
+
+    // --- expand() BYMINUTE expansion with FREQ=MINUTELY ---
+
+    #[test]
+    fn range_minutely_byminute_expand() {
+        // FREQ=MINUTELY with BYMINUTE expands per-minute occurrences at the listed minute values.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 9, 2, 9, 0, 0)
+            .unwrap();
+        let rrule: CalRRule = "FREQ=MINUTELY;COUNT=4;BYMINUTE=0,15,30,45".parse().unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::minutes(1)),
+            dtstart,
+            dtstart + Duration::hours(2),
+        );
+        // The rule starts at 09:00 and should hit :00, :15, :30, :45 of 09:xx then stop.
+        let expected_minutes = [0u32, 15, 30, 45];
+        for exp_min in expected_minutes {
+            let d = iter.next().unwrap();
+            assert_eq!(
+                d.minute(),
+                exp_min,
+                "expected :{exp_min:02}, got :{}",
+                d.minute()
+            );
+        }
+        assert_eq!(iter.next(), None);
+    }
+
+    // --- BYWEEKNO with end-side (negative week number) ---
+
+    #[test]
+    fn range_byweekno_end_side() {
+        // -1 in BYWEEKNO means the last week of the year. With BYDAY=MO we get the last Monday
+        // of the last week of each year.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 1, 1, 9, 0, 0)
+            .unwrap();
+        let rrule: CalRRule = "FREQ=YEARLY;COUNT=2;BYWEEKNO=-1;BYDAY=MO".parse().unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(800),
+        );
+        let first = iter.next().unwrap();
+        let second = iter.next().unwrap();
+        assert_eq!(iter.next(), None);
+        // Both occurrences must be Mondays in December (last week of year).
+        assert_eq!(first.weekday(), Weekday::Mon);
+        assert_eq!(second.weekday(), Weekday::Mon);
+        assert!(first.month() == 12 || first.month() == 1);
+    }
+
+    // --- BYYEARDAY with end-side (negative year-day) ---
+
+    #[test]
+    fn range_byyearday_end_side() {
+        // -1 means the last day of the year (December 31).
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 1, 1, 9, 0, 0)
+            .unwrap();
+        let rrule: CalRRule = "FREQ=YEARLY;COUNT=2;BYYEARDAY=-1".parse().unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(800),
+        );
+        let first = iter.next().unwrap();
+        let second = iter.next().unwrap();
+        assert_eq!(iter.next(), None);
+        assert_eq!(first.month(), 12);
+        assert_eq!(first.day(), 31);
+        assert_eq!(second.month(), 12);
+        assert_eq!(second.day(), 31);
+        assert_eq!(second.year() - first.year(), 1);
+    }
+
+    // --- passes_by_month_day via BYWEEKNO + BYMONTHDAY ---
+
+    #[test]
+    fn range_byweekno_with_bymonthday_start_side() {
+        // BYWEEKNO=1 limits to the first ISO week; BYMONTHDAY=1 further restricts to the 1st of
+        // the month.  The only day satisfying both is January 1 when it falls in week 1.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 1, 1, 9, 0, 0)
+            .unwrap();
+        let rrule: CalRRule = "FREQ=YEARLY;COUNT=1;BYWEEKNO=1;BYMONTHDAY=1"
+            .parse()
+            .unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(400),
+        );
+        let d = iter.next().unwrap();
+        assert_eq!(d.month(), 1);
+        assert_eq!(d.day(), 1);
+    }
+
+    #[test]
+    fn range_byweekno_with_bymonthday_end_side() {
+        // -1 in BYMONTHDAY means the last day of the month combined with BYWEEKNO=20.
+        // We use COUNT=1 to stop quickly and just verify no panic / end-side arithmetic runs.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(1997, 1, 1, 9, 0, 0)
+            .unwrap();
+        let rrule: CalRRule = "FREQ=YEARLY;COUNT=1;BYWEEKNO=20;BYMONTHDAY=-1"
+            .parse()
+            .unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(400),
+        );
+        // The combined filter may or may not yield a result; what matters is no panic.
+        let _ = iter.next();
+    }
+
+    // --- passes_by_month Some branch via BYYEARDAY + BYMONTH ---
+
+    #[test]
+    fn range_byyearday_with_bymonth_filter() {
+        // BYYEARDAY=1 (Jan 1) with BYMONTH=1 should yield Jan 1 each year.
+        // BYMONTH=2 would filter it out entirely.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 1, 1, 9, 0, 0)
+            .unwrap();
+        let rrule_pass: CalRRule = "FREQ=YEARLY;COUNT=2;BYYEARDAY=1;BYMONTH=1".parse().unwrap();
+        let mut iter = rrule_pass.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(800),
+        );
+        assert_eq!(iter.next().unwrap().month(), 1);
+        assert_eq!(iter.next().unwrap().month(), 1);
+        assert_eq!(iter.next(), None);
+
+        // BYMONTH=2 should give nothing since BYYEARDAY=1 is always January.
+        let rrule_fail: CalRRule = "FREQ=YEARLY;COUNT=2;BYYEARDAY=1;BYMONTH=2".parse().unwrap();
+        let mut iter2 = rrule_fail.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(800),
+        );
+        assert_eq!(iter2.next(), None);
+    }
+
+    // --- finalize_candidates: COUNT limit reached inside a multi-date batch ---
+
+    #[test]
+    fn count_cutoff_in_multi_date_batch() {
+        // FREQ=MONTHLY with BYMONTHDAY=1,15 produces two candidates per month.  Setting COUNT=3
+        // means we get both dates from month 1, then only the first from month 2 — the cutoff
+        // happens partway through the second batch, exercising the early-return path.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 1, 1, 9, 0, 0)
+            .unwrap();
+        let rrule: CalRRule = "FREQ=MONTHLY;COUNT=3;BYMONTHDAY=1,15".parse().unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(120),
+        );
+        assert_eq!(iter.next().unwrap().day(), 1); // Jan 1
+        assert_eq!(iter.next().unwrap().day(), 15); // Jan 15
+        assert_eq!(iter.next().unwrap().day(), 1); // Feb 1  — COUNT=3 reached here
+        assert_eq!(iter.next(), None);
+    }
+
+    // --- apply_by_set_pos: empty candidate set is a no-op ---
+
+    #[test]
+    fn bysetpos_with_empty_candidate_set_yields_nothing() {
+        // BYMONTHDAY=31 with BYSETPOS=1 in a month that has fewer than 31 days (February) means
+        // the candidate list is empty; apply_by_set_pos must return an empty vec rather than
+        // panicking or selecting a wrong element.
+        let dtstart = chrono_tz::America::New_York
+            .with_ymd_and_hms(2024, 2, 1, 9, 0, 0)
+            .unwrap();
+        // BYMONTH=2 restricts the rule to February only. February never has a 31st day, so
+        // apply_by_set_pos receives an empty candidate list and must return nothing rather than
+        // panicking or wrapping around.
+        let rrule: CalRRule = "FREQ=MONTHLY;COUNT=1;BYMONTH=2;BYMONTHDAY=31;BYSETPOS=1"
+            .parse()
+            .unwrap();
+        let mut iter = rrule.dates_between(
+            dtstart,
+            Some(Duration::hours(1)),
+            dtstart,
+            dtstart + Duration::days(60),
+        );
+        // February has no 31st, so nothing should be returned within the window.
+        assert_eq!(iter.next(), None);
+    }
 
     #[test]
     fn parse_weekday_desc() {
