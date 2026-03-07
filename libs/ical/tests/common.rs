@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 /// Path to the `tests/data/` directory that ships with the crate source.
+#[allow(unused)]
 pub fn data_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -12,6 +13,7 @@ pub fn data_dir() -> PathBuf {
 }
 
 /// Copy one fixture file into `dest_dir` and return its full path.
+#[allow(unused)]
 pub fn copy_fixture(name: &str, dest_dir: &TempDir) -> PathBuf {
     let src = data_dir().join(name);
     let dst = dest_dir.path().join(name);
@@ -19,6 +21,7 @@ pub fn copy_fixture(name: &str, dest_dir: &TempDir) -> PathBuf {
     dst
 }
 
+#[allow(unused)]
 pub fn make_id(s: &str) -> Arc<String> {
     Arc::new(s.to_string())
 }
