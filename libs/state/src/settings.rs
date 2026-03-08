@@ -350,3 +350,294 @@ impl CalendarSettings {
         self.alarms = alarms;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use eventix_ical::objects::CalCompType;
+
+    use super::{
+        CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings, SyncerType,
+    };
+
+    // --- helpers ---
+
+    fn make_email() -> EmailAccount {
+        EmailAccount::new("Alice Example".to_string(), "Alice@Example.COM".to_string())
+    }
+
+    fn make_filesystem_syncer() -> SyncerType {
+        SyncerType::FileSystem {
+            path: "/data/calendars".to_string(),
+        }
+    }
+
+    fn make_vdirsyncer() -> SyncerType {
+        SyncerType::VDirSyncer {
+            email: make_email(),
+            url: "https://dav.example.com".to_string(),
+            read_only: false,
+            username: Some("alice".to_string()),
+            password_cmd: None,
+        }
+    }
+
+    /// Creates a simple `CalendarSettings` with the given enabled state, folder, and name.
+    fn make_cal_settings(enabled: bool, folder: &str, name: &str) -> CalendarSettings {
+        let mut cal = CalendarSettings::default();
+        cal.set_enabled(enabled);
+        cal.set_folder(folder.to_string());
+        cal.set_name(name.to_string());
+        cal
+    }
+
+    /// Creates an XDG `BaseDirectories` rooted at `root`.
+    ///
+    /// Temporarily overrides `XDG_CONFIG_HOME` and `XDG_DATA_HOME` so that the XDG lookup
+    /// resolves inside the supplied temporary directory.
+    fn make_xdg(root: &std::path::Path) -> xdg::BaseDirectories {
+        // SAFETY: tests that call this function must not run concurrently with other tests that
+        // read these env vars. Each such test is serialised by the test harness when run with the
+        // default single-threaded runner for `cargo test`.
+        unsafe {
+            std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
+            std::env::set_var("XDG_DATA_HOME", root.join("data"));
+        }
+        xdg::BaseDirectories::with_prefix("")
+    }
+
+    // --- EmailAccount ---
+
+    #[test]
+    fn email_account_accessors() {
+        let email = make_email();
+
+        assert_eq!(email.name(), "Alice Example");
+        // org_address returns the original, unmodified casing.
+        assert_eq!(email.org_address(), "Alice@Example.COM");
+        // address() returns the lowercased form.
+        assert_eq!(email.address(), "alice@example.com");
+        // pretty_name formats as "Name <address>".
+        assert_eq!(email.pretty_name(), "Alice Example <Alice@Example.COM>");
+    }
+
+    // --- CalendarSettings ---
+
+    #[test]
+    fn calendar_settings_accessors() {
+        let mut cal = CalendarSettings::default();
+
+        // Defaults
+        assert!(!cal.enabled());
+        assert_eq!(cal.folder(), "");
+        assert_eq!(cal.name(), "");
+        assert_eq!(cal.fgcolor(), "");
+        assert_eq!(cal.bgcolor(), "");
+        assert!(cal.types().is_empty());
+        assert!(matches!(cal.alarms(), CalendarAlarmType::Calendar));
+
+        // Setters
+        cal.set_enabled(true);
+        assert!(cal.enabled());
+
+        cal.set_folder("home".to_string());
+        assert_eq!(cal.folder(), "home");
+
+        cal.set_name("Personal".to_string());
+        assert_eq!(cal.name(), "Personal");
+
+        cal.set_fgcolor("#ffffff".to_string());
+        assert_eq!(cal.fgcolor(), "#ffffff");
+
+        cal.set_bgcolor("#000000".to_string());
+        assert_eq!(cal.bgcolor(), "#000000");
+
+        let types = vec![CalCompType::Event, CalCompType::Todo];
+        cal.set_types(types.clone());
+        assert_eq!(cal.types(), types.as_slice());
+
+        cal.set_alarms(CalendarAlarmType::Personal { default: None });
+        assert!(matches!(
+            cal.alarms(),
+            CalendarAlarmType::Personal { default: None }
+        ));
+    }
+
+    // --- CollectionSettings ---
+
+    #[test]
+    fn collection_settings_calendars_filter() {
+        let mut col = CollectionSettings::new(make_filesystem_syncer());
+
+        col.all_calendars_mut().insert(
+            "enabled-cal".to_string(),
+            make_cal_settings(true, "enabled", "Enabled"),
+        );
+        col.all_calendars_mut().insert(
+            "disabled-cal".to_string(),
+            make_cal_settings(false, "disabled", "Disabled"),
+        );
+
+        // calendars() only yields enabled entries.
+        let enabled: Vec<_> = col.calendars().map(|(id, _)| id.clone()).collect();
+        assert_eq!(enabled, vec!["enabled-cal"]);
+
+        // all_calendars() yields both.
+        assert_eq!(col.all_calendars().len(), 2);
+    }
+
+    #[test]
+    fn collection_settings_email_and_organizer() {
+        // A FileSystem syncer has no email; build_organizer returns None.
+        let col_fs = CollectionSettings::new(make_filesystem_syncer());
+        assert!(col_fs.email().is_none());
+        assert!(col_fs.build_organizer().is_none());
+
+        // A remote syncer has an email; build_organizer returns Some.
+        let col_remote = CollectionSettings::new(make_vdirsyncer());
+        let email = col_remote
+            .email()
+            .expect("VDirSyncer collection must have email");
+        assert_eq!(email.name(), "Alice Example");
+        let organizer = col_remote
+            .build_organizer()
+            .expect("organizer must be present");
+        // The organizer encodes the lowercased address.
+        assert!(organizer.address().contains("alice@example.com"));
+    }
+
+    #[test]
+    fn collection_settings_path_and_log_file() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let xdg = make_xdg(tmpdir.path());
+
+        let col = CollectionSettings::new(make_filesystem_syncer());
+        assert_eq!(
+            col.path(&xdg, "mycol"),
+            std::path::PathBuf::from("/data/calendars")
+        );
+
+        let log = col.log_file(&xdg, "mycol");
+        assert!(log.ends_with("vdirsyncer/mycol.log"));
+    }
+
+    // --- Settings ---
+
+    #[test]
+    fn settings_calendars_iterator() {
+        let mut settings = Settings::new("/tmp/settings.toml".into());
+
+        let mut col = CollectionSettings::new(make_filesystem_syncer());
+        col.all_calendars_mut()
+            .insert("cal-a".to_string(), make_cal_settings(true, "a", "A"));
+        col.all_calendars_mut()
+            .insert("cal-b".to_string(), make_cal_settings(false, "b", "B"));
+        settings.collections_mut().insert("col1".to_string(), col);
+
+        // calendars() only returns enabled calendars across all collections.
+        let ids: Vec<_> = settings.calendars().map(|(id, _)| id.clone()).collect();
+        assert_eq!(ids, vec!["cal-a"]);
+    }
+
+    #[test]
+    fn settings_calendar_lookup() {
+        let mut settings = Settings::new("/tmp/settings.toml".into());
+
+        let mut col = CollectionSettings::new(make_filesystem_syncer());
+        col.all_calendars_mut()
+            .insert("cal-on".to_string(), make_cal_settings(true, "on", "On"));
+        col.all_calendars_mut().insert(
+            "cal-off".to_string(),
+            make_cal_settings(false, "off", "Off"),
+        );
+        settings.collections_mut().insert("col1".to_string(), col);
+
+        // Found and enabled — returns Some.
+        let (_, cal) = settings
+            .calendar(&"cal-on".to_string())
+            .expect("must find enabled calendar");
+        assert_eq!(cal.name(), "On");
+
+        // Found but disabled — returns None.
+        assert!(settings.calendar(&"cal-off".to_string()).is_none());
+
+        // Not found — returns None.
+        assert!(settings.calendar(&"missing".to_string()).is_none());
+    }
+
+    #[test]
+    fn settings_emails() {
+        let mut settings = Settings::new("/tmp/settings.toml".into());
+
+        // Collection with no email account — no entries added.
+        let mut col_fs = CollectionSettings::new(make_filesystem_syncer());
+        col_fs
+            .all_calendars_mut()
+            .insert("cal-fs".to_string(), make_cal_settings(true, "fs", "FS"));
+        settings
+            .collections_mut()
+            .insert("fs-col".to_string(), col_fs);
+
+        // Collection with an email account — all calendar IDs mapped to pretty_name.
+        let mut col_remote = CollectionSettings::new(make_vdirsyncer());
+        col_remote.all_calendars_mut().insert(
+            "cal-remote".to_string(),
+            make_cal_settings(true, "remote", "Remote"),
+        );
+        settings
+            .collections_mut()
+            .insert("remote-col".to_string(), col_remote);
+
+        let emails = settings.emails();
+        assert!(
+            !emails.contains_key("cal-fs"),
+            "FileSystem collection must not appear in emails"
+        );
+        assert_eq!(
+            emails
+                .get("cal-remote")
+                .expect("remote calendar must have email"),
+            "Alice Example <Alice@Example.COM>"
+        );
+    }
+
+    #[test]
+    fn settings_load_from_file_missing() {
+        // When no settings.toml exists, load_from_file returns an empty Settings.
+        let tmpdir = tempfile::tempdir().unwrap();
+        let xdg = make_xdg(tmpdir.path());
+
+        let settings = Settings::load_from_file(&xdg).expect("load must succeed even without file");
+        assert!(settings.collections().is_empty());
+    }
+
+    #[test]
+    fn settings_write_and_load_round_trip() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let xdg = make_xdg(tmpdir.path());
+
+        // Build settings with one collection and two calendars.
+        let config_home = tmpdir.path().join("config");
+        std::fs::create_dir_all(&config_home).unwrap();
+        let path = config_home.join("settings.toml");
+
+        let mut original = Settings::new(path);
+        let mut col = CollectionSettings::new(make_filesystem_syncer());
+        col.all_calendars_mut().insert(
+            "cal-rt".to_string(),
+            make_cal_settings(true, "rt-folder", "RT Cal"),
+        );
+        original.collections_mut().insert("col-rt".to_string(), col);
+        original
+            .write_to_file()
+            .expect("write_to_file must succeed");
+
+        // Load them back via the XDG path.
+        let loaded = Settings::load_from_file(&xdg).expect("load_from_file must succeed");
+        assert!(loaded.collections().contains_key("col-rt"));
+        let loaded_col = loaded.collections().get("col-rt").unwrap();
+        let loaded_cal = loaded_col.all_calendars().get("cal-rt").unwrap();
+        assert_eq!(loaded_cal.name(), "RT Cal");
+        assert_eq!(loaded_cal.folder(), "rt-folder");
+        assert!(loaded_cal.enabled());
+    }
+}
