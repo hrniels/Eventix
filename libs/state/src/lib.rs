@@ -413,3 +413,117 @@ pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Resul
     .context(format!("write {filename:?}"))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, sync::Arc};
+
+    use eventix_ical::col::{CalDir, CalStore};
+
+    use crate::{
+        PersonalAlarms,
+        misc::Misc,
+        settings::{CollectionSettings, SyncerType},
+    };
+
+    use super::State;
+
+    // --- helpers ---
+
+    fn make_state(id: &str, name: &str) -> State {
+        let mut store = CalStore::default();
+        store.add(CalDir::new_empty(
+            Arc::new(id.to_string()),
+            PathBuf::from(format!("/tmp/{id}")),
+            name.to_string(),
+        ));
+        State::new_for_test(store, Misc::new(PathBuf::default()))
+    }
+
+    // --- accessor tests ---
+
+    #[test]
+    fn state_store_accessors() {
+        let mut state = make_state("cal1", "My Calendar");
+
+        assert_eq!(state.store().directories().len(), 1);
+        assert_eq!(state.store().directories()[0].name(), "My Calendar");
+
+        // store_mut allows mutating the underlying store
+        state.store_mut().add(CalDir::new_empty(
+            Arc::new("cal2".to_string()),
+            PathBuf::from("/tmp/cal2"),
+            "Second".to_string(),
+        ));
+        assert_eq!(state.store().directories().len(), 2);
+    }
+
+    #[test]
+    fn state_store_and_alarms_mut() {
+        let mut state = make_state("cal1", "Cal");
+
+        let (store, alarms) = state.store_and_alarms_mut();
+        // Both references are accessible simultaneously.
+        assert_eq!(store.directories().len(), 1);
+        assert_eq!(*alarms, PersonalAlarms::default());
+    }
+
+    #[test]
+    fn state_personal_alarms_accessors() {
+        let mut state = make_state("cal1", "Cal");
+
+        assert_eq!(*state.personal_alarms(), PersonalAlarms::default());
+        // get_or_create via mutable reference creates an entry
+        state.personal_alarms_mut().get_or_create("cal1");
+        // The calendar entry now exists; get returns Some.
+        assert!(state.personal_alarms().get("cal1").is_some());
+    }
+
+    #[test]
+    fn state_settings_accessors() {
+        let mut state = make_state("cal1", "Cal");
+
+        // Default settings contain no collections.
+        assert!(state.settings().collections().is_empty());
+
+        // Insert a collection via settings_mut.
+        state.settings_mut().collections_mut().insert(
+            "col1".to_string(),
+            CollectionSettings::new(SyncerType::FileSystem {
+                path: "/tmp".to_string(),
+            }),
+        );
+        assert!(state.settings().collections().contains_key("col1"));
+    }
+
+    #[test]
+    fn state_misc_accessors() {
+        let misc = Misc::new(PathBuf::default());
+        let mut state = State::new_for_test(CalStore::default(), misc);
+
+        // misc() returns a reference to the misc state.
+        assert!(!state.misc().calendar_disabled(&"any".to_string()));
+
+        // misc_mut() allows mutation.
+        state.misc_mut().toggle_calendar(&"cal-x".to_string());
+        assert!(state.misc().calendar_disabled(&"cal-x".to_string()));
+    }
+
+    #[test]
+    fn state_locale_and_xdg_and_last_reload() {
+        let before = chrono::Utc::now().naive_utc();
+        let state = make_state("cal1", "Cal");
+        let after = chrono::Utc::now().naive_utc();
+
+        // locale() returns an Arc without panicking.
+        let _locale = state.locale();
+        // xdg() returns a valid BaseDirectories reference.
+        let _xdg = state.xdg();
+        // last_reload is set at construction time.
+        let ts = state.last_reload();
+        assert!(
+            ts >= before && ts <= after,
+            "last_reload must be set at construction time"
+        );
+    }
+}
