@@ -315,12 +315,60 @@ impl PersonalCalendarAlarms {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{NaiveDate, TimeDelta};
+    use std::sync::Arc;
+
+    use chrono::{NaiveDate, TimeDelta, TimeZone};
+    use chrono_tz::UTC;
+    use eventix_ical::col::Occurrence;
     use eventix_ical::objects::{
-        CalAction, CalAlarm, CalDate, CalDateType, CalLocaleEn, CalRelated, CalTrigger,
+        CalAction, CalAlarm, CalComponent, CalDate, CalDateType, CalEvent, CalLocaleEn, CalRelated,
+        CalTrigger, UpdatableEventLike,
     };
 
-    use super::PersonalCalendarAlarms;
+    use super::{PersonalAlarms, PersonalCalendarAlarms};
+
+    // --- helpers ---
+
+    fn make_alarm() -> CalAlarm {
+        CalAlarm::new(
+            CalAction::Display,
+            CalTrigger::Relative {
+                related: CalRelated::Start,
+                duration: TimeDelta::minutes(5).into(),
+            },
+        )
+    }
+
+    /// Builds a simple timed `Occurrence` with the given `uid` rooted in `dir_id`.
+    ///
+    /// The occurrence has a known start date so that `occurrence_startdate()` returns a value,
+    /// which is what `PersonalCalendarAlarms::occurrence_rid` uses for non-overwritten occurrences.
+    fn make_occurrence<'c>(dir_id: &Arc<String>, comp: &'c CalComponent) -> Occurrence<'c> {
+        let start = UTC.with_ymd_and_hms(2024, 6, 1, 9, 0, 0).unwrap();
+        Occurrence::new(dir_id.clone(), comp, Some(start), None, false)
+    }
+
+    /// Builds a `CalComponent::Event` with the given `uid` and no alarms set.
+    fn make_comp(uid: &str) -> CalComponent {
+        CalComponent::Event(CalEvent::new(uid))
+    }
+
+    /// Builds a `CalComponent::Event` that carries one `CalAlarm`.
+    fn make_comp_with_alarm(uid: &str) -> CalComponent {
+        let mut ev = CalEvent::new(uid);
+        ev.set_alarms(Some(vec![make_alarm()]));
+        CalComponent::Event(ev)
+    }
+
+    /// Builds an occurrence whose `occurrence_startdate()` maps to the given `CalDate`.
+    ///
+    /// The returned `CalDate` can be used directly as the `rid` key in
+    /// `PersonalCalendarAlarms::set` / `get`.
+    fn occurrence_rid_for_start(dir_id: &Arc<String>, comp: &CalComponent) -> CalDate {
+        let occ = make_occurrence(dir_id, comp);
+        occ.occurrence_startdate()
+            .expect("occurrence must have a start date")
+    }
 
     #[test]
     fn basics() {
@@ -412,5 +460,350 @@ mod tests {
         let alarm = alarms.get("test", Some(&rid1)).unwrap();
         assert_eq!(alarm.uid, "test");
         assert_eq!(alarm.rid.as_ref(), Some(&rid1));
+    }
+
+    // --- set: update existing entry ---
+
+    /// Verifies that `set` updates the alarms on an already-stored entry rather than adding a
+    /// duplicate.
+    #[test]
+    fn set_updates_existing_entry() {
+        let alarm = make_alarm();
+        let mut cal_alarms = PersonalCalendarAlarms::new_empty("".into());
+
+        // Store an initial entry (empty alarm list).
+        assert!(cal_alarms.set("uid-upd", None, vec![]));
+        assert_eq!(cal_alarms.alarms.len(), 1);
+
+        // Overwrite with a non-empty alarm list — must update the existing entry, not append.
+        assert!(cal_alarms.set("uid-upd", None, vec![alarm.clone()]));
+        assert_eq!(cal_alarms.alarms.len(), 1);
+        assert_eq!(cal_alarms.get("uid-upd", None).unwrap().alarms(), &[alarm]);
+    }
+
+    // --- PersonalCalendarAlarms: has_alarms and effective_alarms ---
+
+    /// Verifies `has_alarms` and `effective_alarms` when no override exists for the occurrence.
+    ///
+    /// Without an override the result depends entirely on whether a `default` alarm is present.
+    #[test]
+    fn has_and_effective_alarms_no_override() {
+        let dir_id = Arc::new("cal-a".to_string());
+        let comp = make_comp("uid-no-override");
+        let occ = make_occurrence(&dir_id, &comp);
+
+        let cal_alarms = PersonalCalendarAlarms::new_empty("".into());
+
+        // No override, no default → no alarm.
+        assert!(!cal_alarms.has_alarms(&occ, &None));
+        assert_eq!(cal_alarms.effective_alarms(&occ, &None), None);
+
+        // No override but default present → default alarm is returned.
+        let default = make_alarm();
+        assert!(cal_alarms.has_alarms(&occ, &Some(default.clone())));
+        assert_eq!(
+            cal_alarms.effective_alarms(&occ, &Some(default.clone())),
+            Some(vec![default]),
+        );
+    }
+
+    /// Verifies `has_alarms` and `effective_alarms` when an override with alarms is present.
+    #[test]
+    fn has_and_effective_alarms_with_override() {
+        let dir_id = Arc::new("cal-b".to_string());
+        let comp = make_comp("uid-override");
+        let rid = occurrence_rid_for_start(&dir_id, &comp);
+
+        let alarm = make_alarm();
+        let mut cal_alarms = PersonalCalendarAlarms::new_empty("".into());
+        cal_alarms.set("uid-override", Some(&rid), vec![alarm.clone()]);
+
+        let occ = make_occurrence(&dir_id, &comp);
+
+        // Override present with one alarm → has_alarms true, alarms returned regardless of default.
+        assert!(cal_alarms.has_alarms(&occ, &None));
+        assert_eq!(
+            cal_alarms.effective_alarms(&occ, &None),
+            Some(vec![alarm.clone()]),
+        );
+        // Default is ignored when an override exists.
+        let other_default = CalAlarm::new(
+            CalAction::Display,
+            CalTrigger::Relative {
+                related: CalRelated::Start,
+                duration: TimeDelta::minutes(10).into(),
+            },
+        );
+        assert_eq!(
+            cal_alarms.effective_alarms(&occ, &Some(other_default)),
+            Some(vec![alarm]),
+        );
+    }
+
+    /// Verifies that an empty override list explicitly disables alarms for the occurrence.
+    #[test]
+    fn has_and_effective_alarms_empty_override_disables() {
+        let dir_id = Arc::new("cal-c".to_string());
+        let comp = make_comp("uid-disabled");
+        let rid = occurrence_rid_for_start(&dir_id, &comp);
+
+        let mut cal_alarms = PersonalCalendarAlarms::new_empty("".into());
+        cal_alarms.set("uid-disabled", Some(&rid), vec![]);
+
+        let occ = make_occurrence(&dir_id, &comp);
+
+        // Empty override → explicitly no alarms, even if a default is set.
+        assert!(!cal_alarms.has_alarms(&occ, &Some(make_alarm())));
+        assert_eq!(cal_alarms.effective_alarms(&occ, &Some(make_alarm())), None);
+    }
+
+    // --- PersonalCalendarAlarms: all_for_occurrences ---
+
+    /// Verifies `all_for_occurrences` returns only occurrence-level entries (rid is Some) and
+    /// excludes base-event overrides (rid is None).
+    #[test]
+    fn all_for_occurrences() {
+        let rid1 = CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 11, 1).unwrap(),
+            CalDateType::Inclusive,
+        );
+        let rid2 = CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 11, 2).unwrap(),
+            CalDateType::Inclusive,
+        );
+        let alarm = make_alarm();
+        let alarm2 = CalAlarm::new(
+            CalAction::Display,
+            CalTrigger::Relative {
+                related: CalRelated::Start,
+                duration: TimeDelta::minutes(10).into(),
+            },
+        );
+
+        let mut cal_alarms = PersonalCalendarAlarms::new_empty("".into());
+        // Base-event override (no rid) — must not appear in all_for_occurrences.
+        cal_alarms.set("uid-afo", None, vec![alarm.clone()]);
+        // Two occurrence-level overrides with alarms distinct from the base, so neither is
+        // collapsed into the base-event override by `set`.
+        cal_alarms.set("uid-afo", Some(&rid1), vec![alarm2.clone()]);
+        cal_alarms.set("uid-afo", Some(&rid2), vec![]);
+
+        let map = cal_alarms.all_for_occurrences("uid-afo");
+        assert_eq!(map.len(), 2);
+        assert_eq!(map[&rid1], vec![alarm2]);
+        assert_eq!(map[&rid2], vec![]);
+
+        // A uid with no overrides at all yields an empty map.
+        assert!(cal_alarms.all_for_occurrences("uid-none").is_empty());
+
+        // A uid whose only override is at the base level also yields an empty map.
+        cal_alarms.set("uid-base-only", None, vec![alarm.clone()]);
+        assert!(cal_alarms.all_for_occurrences("uid-base-only").is_empty());
+    }
+
+    // --- PersonalCalendarAlarms: save and new_from_file ---
+
+    /// Verifies that `save` writes a TOML file and `new_from_file` can read it back unchanged.
+    #[test]
+    fn save_and_load_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cal-rt.toml");
+
+        let rid = CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 12, 1).unwrap(),
+            CalDateType::Inclusive,
+        );
+        let alarm = make_alarm();
+
+        let mut original = PersonalCalendarAlarms::new_empty(path.clone());
+        original.set("uid-rt", None, vec![alarm.clone()]);
+        original.set("uid-rt", Some(&rid), vec![]);
+        original.save().expect("save must succeed");
+
+        let loaded = PersonalCalendarAlarms::new_from_file(path).expect("load must succeed");
+
+        // Base-event override survives round-trip.
+        let base = loaded.get("uid-rt", None).unwrap();
+        assert_eq!(base.uid, "uid-rt");
+        assert_eq!(base.alarms(), &[alarm]);
+
+        // Occurrence override survives round-trip.
+        let occ_entry = loaded.get("uid-rt", Some(&rid)).unwrap();
+        assert_eq!(occ_entry.rid.as_ref(), Some(&rid));
+        assert_eq!(occ_entry.alarms(), &[] as &[CalAlarm]);
+    }
+
+    // --- PersonalAlarms ---
+
+    /// Verifies `PersonalAlarms::get` and `get_or_create` without touching the filesystem.
+    #[test]
+    fn personal_alarms_get_and_get_or_create() {
+        // new_from_dir requires a real XDG environment; exercise the public API via the default
+        // (empty) value and direct map manipulation instead.
+        let mut pa = PersonalAlarms::default();
+
+        // Nothing stored yet.
+        assert!(pa.get("cal-x").is_none());
+
+        // get_or_create inserts an empty entry and returns a mutable ref.
+        {
+            let entry = pa.get_or_create("cal-x");
+            entry.set("uid-pa", None, vec![]);
+        }
+
+        // Now get returns the stored entry.
+        let entry = pa.get("cal-x").unwrap();
+        assert!(entry.get("uid-pa", None).is_some());
+
+        // get_or_create on an existing key returns the same entry.
+        let entry2 = pa.get_or_create("cal-x");
+        assert!(entry2.get("uid-pa", None).is_some());
+    }
+
+    /// Verifies `PersonalAlarms::new_from_dir` loads TOML files from an on-disk alarms directory.
+    #[test]
+    fn personal_alarms_new_from_dir() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let alarms_dir = tmpdir.path().join("alarms");
+        std::fs::create_dir_all(&alarms_dir).unwrap();
+
+        // Write a minimal TOML file for calendar "my-cal".
+        let alarm = make_alarm();
+        let cal_path = alarms_dir.join("my-cal.toml");
+        let mut stored = PersonalCalendarAlarms::new_empty(cal_path.clone());
+        stored.set("uid-dir", None, vec![alarm.clone()]);
+        stored.save().expect("save must succeed");
+
+        // Also create a non-.toml file and a subdirectory — both must be ignored.
+        std::fs::write(alarms_dir.join("ignored.txt"), b"ignored").unwrap();
+        std::fs::create_dir(alarms_dir.join("subdir")).unwrap();
+
+        // Point XDG data home at the temp directory so that `create_data_directory("alarms")`
+        // resolves to our prepared directory.
+        // SAFETY: no other threads are reading XDG_DATA_HOME concurrently during this test.
+        unsafe { std::env::set_var("XDG_DATA_HOME", tmpdir.path()) };
+        let xdg = xdg::BaseDirectories::with_prefix("");
+        let pa = PersonalAlarms::new_from_dir(&xdg).expect("new_from_dir must succeed");
+
+        let cal = pa.get("my-cal").expect("my-cal must be loaded");
+        let entry = cal.get("uid-dir", None).unwrap();
+        assert_eq!(entry.alarms(), &[alarm]);
+
+        // The non-toml file and subdirectory were not loaded.
+        assert!(pa.get("ignored").is_none());
+        assert!(pa.get("subdir").is_none());
+    }
+
+    /// Verifies `PersonalAlarms::has_alarms` and `effective_alarms` for the `Calendar` variant.
+    ///
+    /// In `Calendar` mode the result comes directly from the occurrence's embedded alarms, not
+    /// from any personal override.
+    #[test]
+    fn personal_alarms_calendar_mode() {
+        let dir_id = Arc::new("cal-cal".to_string());
+
+        // Occurrence whose underlying event has an alarm.
+        let comp_with = make_comp_with_alarm("uid-cal-mode");
+        let occ_with = make_occurrence(&dir_id, &comp_with);
+
+        // Occurrence whose underlying event has no alarm.
+        let comp_without = make_comp("uid-no-alarm");
+        let occ_without = make_occurrence(&dir_id, &comp_without);
+
+        let pa = PersonalAlarms::default();
+        let alarm_type = crate::CalendarAlarmType::Calendar;
+
+        assert!(pa.has_alarms(&occ_with, &alarm_type));
+        assert!(!pa.has_alarms(&occ_without, &alarm_type));
+
+        // effective_alarms returns the occurrence's own alarm list.
+        let alarms = pa.effective_alarms(&occ_with, &alarm_type).unwrap();
+        assert_eq!(alarms.len(), 1);
+        assert_eq!(pa.effective_alarms(&occ_without, &alarm_type), None);
+    }
+
+    /// Verifies `PersonalAlarms::has_alarms` and `effective_alarms` for `Personal` mode when the
+    /// calendar has no stored overrides (falls back to the default alarm).
+    #[test]
+    fn personal_alarms_personal_mode_no_calendar_entry() {
+        let dir_id = Arc::new("cal-unknown".to_string());
+        let comp = make_comp("uid-unknown-cal");
+        let occ = make_occurrence(&dir_id, &comp);
+
+        let pa = PersonalAlarms::default();
+
+        let no_default = crate::CalendarAlarmType::Personal { default: None };
+        assert!(!pa.has_alarms(&occ, &no_default));
+        assert_eq!(pa.effective_alarms(&occ, &no_default), None);
+
+        let default_alarm = make_alarm();
+        let with_default = crate::CalendarAlarmType::Personal {
+            default: Some(default_alarm.clone()),
+        };
+        assert!(pa.has_alarms(&occ, &with_default));
+        assert_eq!(
+            pa.effective_alarms(&occ, &with_default),
+            Some(vec![default_alarm]),
+        );
+    }
+
+    /// Verifies `PersonalAlarms::has_alarms` and `effective_alarms` for `Personal` mode when the
+    /// calendar does have stored overrides (delegates to `PersonalCalendarAlarms`).
+    #[test]
+    fn personal_alarms_personal_mode_with_calendar_entry() {
+        let dir_id = Arc::new("cal-known".to_string());
+        let comp = make_comp("uid-known-cal");
+        let rid = occurrence_rid_for_start(&dir_id, &comp);
+
+        let alarm = make_alarm();
+        let mut pa = PersonalAlarms::default();
+        {
+            let entry = pa.get_or_create("cal-known");
+            entry.set("uid-known-cal", Some(&rid), vec![alarm.clone()]);
+        }
+
+        let occ = make_occurrence(&dir_id, &comp);
+        let alarm_type = crate::CalendarAlarmType::Personal { default: None };
+
+        assert!(pa.has_alarms(&occ, &alarm_type));
+        assert_eq!(pa.effective_alarms(&occ, &alarm_type), Some(vec![alarm]),);
+    }
+
+    /// Verifies `occurrence_rid` uses the overwrite's `rid` when the occurrence is overwritten.
+    ///
+    /// When `is_overwritten()` is true the private `occurrence_rid` helper reads `occ.rid()` from
+    /// the overwrite component rather than deriving it from `occurrence_startdate`. This test
+    /// confirms that alarm lookups work correctly in that scenario.
+    #[test]
+    fn occurrence_rid_uses_overwrite_rid() {
+        let dir_id = Arc::new("cal-ow".to_string());
+        let alarm = make_alarm();
+
+        // The rid stored in the overwrite component.
+        let rid = CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 9, 15).unwrap(),
+            CalDateType::Inclusive,
+        );
+
+        // Build base component with no alarms.
+        let comp_base = make_comp("uid-ow");
+
+        // Build overwrite component that carries the rid.
+        let mut ev_ow = CalEvent::new("uid-ow");
+        ev_ow.set_rid(Some(rid.clone()));
+        let comp_ow = CalComponent::Event(ev_ow);
+
+        // Create a timed occurrence and attach the overwrite.
+        let start = UTC.with_ymd_and_hms(2024, 9, 15, 9, 0, 0).unwrap();
+        let mut occ = Occurrence::new(dir_id.clone(), &comp_base, Some(start), None, false);
+        occ.set_overwrite(&comp_ow);
+
+        // Store an alarm override keyed by the overwrite's rid.
+        let mut cal_alarms = PersonalCalendarAlarms::new_empty("".into());
+        cal_alarms.set("uid-ow", Some(&rid), vec![alarm.clone()]);
+
+        // Lookup must find the override via the overwrite rid path (line 220).
+        assert!(cal_alarms.has_alarms(&occ, &None));
+        assert_eq!(cal_alarms.effective_alarms(&occ, &None), Some(vec![alarm]),);
     }
 }
