@@ -16,3 +16,6 @@ tracing.workspace = true
 xdg.workspace = true
 
 fs2 = "0.4.3"
+
+[dev-dependencies]
+tempfile.workspace = true
