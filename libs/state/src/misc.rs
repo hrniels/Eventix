@@ -41,7 +41,7 @@ pub struct Misc {
 }
 
 impl Misc {
-    fn new(path: PathBuf) -> Self {
+    pub(crate) fn new(path: PathBuf) -> Self {
         Self {
             path,
             locale_type: LocaleType::default(),

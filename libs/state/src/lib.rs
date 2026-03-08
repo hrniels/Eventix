@@ -84,6 +84,23 @@ impl State {
         })
     }
 
+    /// Creates a minimal in-memory `State` for use in unit tests.
+    ///
+    /// Accepts an already-built `CalStore` and `Misc` so tests can exercise logic that requires a
+    /// fully wired `State` without touching the filesystem.
+    #[cfg(test)]
+    pub(crate) fn new_for_test(store: CalStore, misc: misc::Misc) -> Self {
+        Self {
+            xdg: Arc::new(xdg::BaseDirectories::with_prefix("")),
+            store,
+            personal_alarms: PersonalAlarms::default(),
+            settings: settings::Settings::new(PathBuf::default()),
+            misc,
+            locale: eventix_locale::default(),
+            last_reload: chrono::Utc::now().naive_utc(),
+        }
+    }
+
     /// Reloads the `Locale` implementation from persisted misc state.
     ///
     /// Call this after the user changes language/locale preferences so that formatting and
