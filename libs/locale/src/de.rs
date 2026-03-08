@@ -8,6 +8,10 @@ use crate::{DateFlags, DateLike, LocaleType, Translations};
 
 use super::Locale;
 
+/// German locale implementation.
+///
+/// Overrides [`Locale::fmt_weekdate`] and [`Locale::fmt_date`] to pass weekday and month names
+/// through the translations table so they can be rendered in German.
 #[derive(Default, Debug)]
 pub struct LocaleDe {
     tz: Tz,
@@ -15,7 +19,10 @@ pub struct LocaleDe {
 }
 
 impl LocaleDe {
-    pub fn new(tz: Tz, path: &Path) -> io::Result<Self> {
+    /// Creates a new `LocaleDe` with the given timezone, loading translations from `path`.
+    ///
+    /// Returns an `io::Error` if the file cannot be opened or read.
+    pub(crate) fn new(tz: Tz, path: &Path) -> io::Result<Self> {
         let trans = Translations::new_from_file(path)?;
         Ok(Self { tz, trans })
     }

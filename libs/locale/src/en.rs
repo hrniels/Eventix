@@ -8,6 +8,11 @@ use crate::{DateFlags, LocaleType, Translations};
 
 use super::Locale;
 
+/// English locale implementation.
+///
+/// Uses English ordinal formatting for recurrence descriptions and formats dates in the
+/// `Month DD, YYYY` style. Weekday and month names are passed through the translations table,
+/// which is empty by default and therefore produces plain English output.
 #[derive(Default, Debug)]
 pub struct LocaleEn {
     tz: Tz,
@@ -15,7 +20,10 @@ pub struct LocaleEn {
 }
 
 impl LocaleEn {
-    pub fn new(tz: Tz, path: &Path) -> io::Result<Self> {
+    /// Creates a new `LocaleEn` with the given timezone, loading translations from `path`.
+    ///
+    /// Returns an `io::Error` if the file cannot be opened or read.
+    pub(crate) fn new(tz: Tz, path: &Path) -> io::Result<Self> {
         let trans = Translations::new_from_file(path)?;
         Ok(Self { tz, trans })
     }
