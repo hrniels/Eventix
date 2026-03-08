@@ -155,3 +155,109 @@ impl Misc {
         super::write_to_file(&self.path, self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+    use eventix_ical::objects::CalCompType;
+    use eventix_locale::LocaleType;
+
+    use super::Misc;
+
+    fn make_misc() -> Misc {
+        Misc::new(std::path::PathBuf::default())
+    }
+
+    #[test]
+    fn locale_type_get_and_set() {
+        let mut m = make_misc();
+        assert_eq!(m.locale_type(), LocaleType::English);
+        m.set_locale_type(LocaleType::German);
+        assert_eq!(m.locale_type(), LocaleType::German);
+    }
+
+    #[test]
+    fn last_alarm_check_get_and_set() {
+        let mut m = make_misc();
+        let dt = NaiveDate::from_ymd_opt(2024, 1, 1)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        m.set_last_alarm_check(dt);
+        assert_eq!(m.last_alarm_check(), dt);
+    }
+
+    #[test]
+    fn last_calendar_get_and_set() {
+        let mut m = make_misc();
+        assert_eq!(m.last_calendar(CalCompType::Event), None);
+        m.set_last_calendar(CalCompType::Event, "cal1".to_string());
+        assert_eq!(
+            m.last_calendar(CalCompType::Event),
+            Some(&"cal1".to_string())
+        );
+        // update existing entry
+        m.set_last_calendar(CalCompType::Event, "cal2".to_string());
+        assert_eq!(
+            m.last_calendar(CalCompType::Event),
+            Some(&"cal2".to_string())
+        );
+    }
+
+    #[test]
+    fn toggle_calendar_enables_and_disables() {
+        let mut m = make_misc();
+        let id = "my-cal".to_string();
+        assert!(!m.calendar_disabled(&id));
+        m.toggle_calendar(&id);
+        assert!(m.calendar_disabled(&id));
+        m.toggle_calendar(&id);
+        assert!(!m.calendar_disabled(&id));
+    }
+
+    #[test]
+    fn calendar_error_set_and_clear() {
+        let mut m = make_misc();
+        let id = "cal".to_string();
+        assert!(!m.has_calendar_error(&id));
+        m.set_calendar_error(&id, true);
+        assert!(m.has_calendar_error(&id));
+        // setting true again is a no-op
+        m.set_calendar_error(&id, true);
+        assert!(m.has_calendar_error(&id));
+        m.set_calendar_error(&id, false);
+        assert!(!m.has_calendar_error(&id));
+        // clearing an absent entry is a no-op
+        m.set_calendar_error(&id, false);
+        assert!(!m.has_calendar_error(&id));
+    }
+
+    #[test]
+    fn collection_token_get_and_set() {
+        let mut m = make_misc();
+        let id = "col".to_string();
+        assert_eq!(m.collection_token(&id), None);
+        m.set_collection_token(&id, "tok1".to_string());
+        assert_eq!(m.collection_token(&id), Some(&"tok1".to_string()));
+        // replace existing token
+        m.set_collection_token(&id, "tok2".to_string());
+        assert_eq!(m.collection_token(&id), Some(&"tok2".to_string()));
+    }
+
+    #[test]
+    fn write_and_load_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("misc.toml");
+        let mut m = Misc::new(path.clone());
+        m.set_locale_type(LocaleType::German);
+        m.set_collection_token(&"col".to_string(), "tok".to_string());
+        m.write_to_file().unwrap();
+
+        let loaded: Misc = crate::load_from_file(&path).unwrap();
+        assert_eq!(loaded.locale_type(), LocaleType::German);
+        assert_eq!(
+            loaded.collection_token(&"col".to_string()),
+            Some(&"tok".to_string())
+        );
+    }
+}
