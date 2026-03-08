@@ -1,3 +1,23 @@
+//! Inter-process command dispatch for eventix.
+//!
+//! This crate provides a client/server protocol for sending [`Request`]s to a running eventix
+//! daemon and receiving [`Response`]s. Communication happens over a Unix domain socket whose
+//! path is derived from the XDG runtime directory.
+//!
+//! # Server side
+//!
+//! Call [`handle_commands`] inside the daemon process. It binds the socket, then loops
+//! indefinitely, deserialising each incoming request, executing it against the shared
+//! [`EventixState`], and writing the response back.
+//!
+//! # Client side
+//!
+//! - [`send`] — connects to the daemon socket and forwards a request, returning an error if no
+//!   daemon is running.
+//! - [`send_or_execute`] — attempts to reach the daemon first; if the socket is not reachable the
+//!   request is executed in-process instead. This is the preferred entry point for CLI commands
+//!   that should work regardless of whether the daemon is running.
+
 use anyhow::{Context, anyhow};
 use chrono::Local;
 use eventix_ical::{col::CalFile, objects::EventLike};
@@ -15,19 +35,28 @@ use xdg::BaseDirectories;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
+    /// Import an iCalendar file into a named calendar.
     Import(ImportOptions),
+    /// Query the number of tasks due today and overdue.
     TaskStatus,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Response {
+    /// The request completed successfully without a return value.
     Success,
+    /// Task counts returned in response to a [`Request::TaskStatus`] query.
+    ///
+    /// The first field is the number of tasks due today; the second is the number of overdue tasks.
     TaskStatus(u32, u32),
 }
 
+/// Options for an import request.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ImportOptions {
+    /// Path to the `.ics` file to import.
     pub file: String,
+    /// Name of the calendar directory to import into.
     pub calendar: String,
 }
 
@@ -45,6 +74,13 @@ async fn acquire_lock(xdg: &BaseDirectories) -> anyhow::Result<File> {
     .unwrap()
 }
 
+/// Listens for incoming commands on the XDG runtime Unix socket and handles them in a loop.
+///
+/// Binds a `UnixListener` to the socket path derived from `xdg`, removing any stale socket file
+/// first, then processes each connection by reading a [`Request`], dispatching it against `state`,
+/// and writing back the [`Response`]. Errors on individual connections are logged but do not
+/// terminate the loop. This function runs indefinitely and is intended to be the server-side
+/// counterpart of [`send`] and [`send_or_execute`].
 pub async fn handle_commands(xdg: &BaseDirectories, state: EventixState) -> anyhow::Result<()> {
     let socket_path = get_socket_path(xdg);
 
@@ -99,6 +135,12 @@ async fn parse_and_handle(state: EventixState, stream: &mut UnixStream) -> anyho
     Ok(())
 }
 
+/// Sends a request to the running daemon if one is reachable, or executes it locally otherwise.
+///
+/// Attempts to connect to the Unix socket managed by [`handle_commands`]. On success the request
+/// is forwarded to the daemon and its response is returned. If the socket is not reachable the
+/// request is handled in-process against `state`, so callers do not need to distinguish between
+/// the two modes.
 pub async fn send_or_execute(
     xdg: &BaseDirectories,
     state: EventixState,
@@ -112,6 +154,10 @@ pub async fn send_or_execute(
     }
 }
 
+/// Sends a request to the running daemon and returns its response.
+///
+/// Connects to the Unix socket managed by [`handle_commands`] and returns an error if no daemon
+/// is listening. Prefer [`send_or_execute`] when a local fallback is acceptable.
 pub async fn send(xdg: &BaseDirectories, req: Request) -> anyhow::Result<Response> {
     let path = get_socket_path(xdg);
     let stream = UnixStream::connect(&path).await?;
