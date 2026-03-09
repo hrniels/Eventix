@@ -69,7 +69,7 @@ pub enum SyncColResult {
 }
 
 /// The aggregated result of a sync operation across one or more collections.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SyncResult {
     /// Whether any calendar data changed during the operation.
     pub changed: bool,
@@ -371,4 +371,302 @@ async fn get_sync(
         id: Arc::new(id.to_string()),
         syncer,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::{
+        misc::Misc,
+        settings::{CalendarSettings, CollectionSettings, Settings, SyncerType},
+    };
+    use eventix_ical::col::CalStore;
+
+    use super::{
+        SyncColResult, SyncResult, XDG_LOCK, delete_calendar, delete_collection,
+        discover_collection, reload_calendar, reload_collection, sync_all, sync_collection,
+    };
+
+    // --- helpers ---
+
+    /// Builds a `State` pre-loaded with one collection and one calendar.
+    ///
+    /// The collection uses a `FileSystem` syncer (no network, no subprocess), which makes it
+    /// suitable for unit-testing the orchestration logic in `sync/mod.rs`.
+    fn make_fs_state(col_id: &str, cal_id: &str, folder: &str, enabled: bool) -> crate::State {
+        let mut settings = Settings::new(PathBuf::default());
+        let mut col = CollectionSettings::new(SyncerType::FileSystem {
+            path: "/tmp".to_string(),
+        });
+        let mut cal = CalendarSettings::default();
+        cal.set_enabled(enabled);
+        cal.set_folder(folder.to_string());
+        cal.set_name("Test Cal".to_string());
+        col.all_calendars_mut().insert(cal_id.to_string(), cal);
+        settings.collections_mut().insert(col_id.to_string(), col);
+
+        let mut state =
+            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+        *state.settings_mut() = settings;
+        state
+    }
+
+    /// Creates an XDG `BaseDirectories` rooted at `root`.
+    ///
+    /// Modifies `XDG_DATA_HOME` so the XDG lookup resolves inside the supplied temporary
+    /// directory. Must only be called while holding `XDG_LOCK`.
+    fn make_xdg(root: &std::path::Path) -> xdg::BaseDirectories {
+        unsafe {
+            std::env::set_var("XDG_DATA_HOME", root.join("data"));
+        }
+        xdg::BaseDirectories::with_prefix("")
+    }
+
+    // --- SyncColResult / SyncResult ---
+
+    #[test]
+    fn new_from_single() {
+        let res = SyncResult::new_from_single(
+            "col".to_string(),
+            "cal".to_string(),
+            SyncColResult::Success(true),
+        );
+
+        assert!(res.changed, "changed must be true when Success(true)");
+        assert_eq!(
+            res.collections.get("col"),
+            Some(&SyncColResult::Success(true))
+        );
+        // A successful sync sets the calendar error flag to false.
+        assert_eq!(res.calendars.get("cal"), Some(&false));
+    }
+
+    // --- syncer_for_collection error path ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn discover_collection_unknown_id_returns_error() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        // XDG must point somewhere so the lock is consistent with other tests; the error fires
+        // before any filesystem access since the collection does not exist.
+        let _xdg = make_xdg(tmpdir.path());
+
+        let mut state =
+            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+
+        let err = discover_collection(&mut state, &"nonexistent".to_string(), None)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("nonexistent"),
+            "error must mention the missing id: {err}"
+        );
+    }
+
+    // --- discover_collection ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn discover_collection_with_fs_syncer_succeeds() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        let mut state = make_fs_state("col1", "cal1", "work", true);
+
+        let result = discover_collection(&mut state, &"col1".to_string(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.collections.get("col1"),
+            Some(&SyncColResult::Success(false))
+        );
+        assert!(!result.changed);
+    }
+
+    // --- sync_collection ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn sync_collection_with_fs_syncer_returns_success() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        let mut state = make_fs_state("col1", "cal1", "work", true);
+
+        let result = sync_collection(&mut state, &"col1".to_string(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.collections.get("col1"),
+            Some(&SyncColResult::Success(false))
+        );
+        // A sync with no file changes must not set changed.
+        assert!(!result.changed);
+        // The calendar must appear in the result with no error.
+        assert_eq!(result.calendars.get("cal1"), Some(&false));
+    }
+
+    // --- reload_collection ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn reload_collection_succeeds_with_fs_syncer() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        let mut state = make_fs_state("col1", "cal1", "work", true);
+
+        let result = reload_collection(&mut state, &"col1".to_string(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.collections.get("col1"),
+            Some(&SyncColResult::Success(false))
+        );
+    }
+
+    // --- delete_collection ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn delete_collection_succeeds_with_fs_syncer() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        let mut state = make_fs_state("col1", "cal1", "work", true);
+
+        // FSSyncer::delete is a no-op, so this should succeed without error.
+        delete_collection(&mut state, &"col1".to_string())
+            .await
+            .unwrap();
+    }
+
+    // --- reload_calendar ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn reload_calendar_returns_single_calendar_result() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        let mut state = make_fs_state("col1", "cal1", "work", true);
+
+        let result = reload_calendar(&mut state, &"col1".to_string(), &"cal1".to_string(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.collections.get("col1"),
+            Some(&SyncColResult::Success(false))
+        );
+        assert_eq!(result.calendars.get("cal1"), Some(&false));
+    }
+
+    // --- delete_calendar ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn delete_calendar_succeeds_with_fs_syncer() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        let mut state = make_fs_state("col1", "cal1", "work", true);
+
+        delete_calendar(&mut state, &"col1".to_string(), &"cal1".to_string())
+            .await
+            .unwrap();
+    }
+
+    // --- sync_all ---
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn sync_all_returns_success_for_fs_collection() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        let mut state = make_fs_state("col1", "cal1", "work", true);
+
+        let result = sync_all(&mut state, None).await.unwrap();
+
+        assert_eq!(
+            result.collections.get("col1"),
+            Some(&SyncColResult::Success(false))
+        );
+        assert!(!result.changed);
+    }
+
+    #[tokio::test]
+    async fn sync_all_empty_collections_returns_default_result() {
+        // No XDG manipulation needed – no collections means no filesystem access.
+        let mut state =
+            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+
+        let result = sync_all(&mut state, None).await.unwrap();
+
+        assert!(!result.changed);
+        assert!(result.collections.is_empty());
+        assert!(result.calendars.is_empty());
+    }
+
+    #[allow(clippy::await_holding_lock)]
+    #[tokio::test]
+    async fn sync_all_multiple_collections_all_present_in_result() {
+        let _guard = XDG_LOCK.lock().unwrap();
+        let tmpdir = tempfile::tempdir().unwrap();
+        let _xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        // Build state with two FS collections.
+        let mut settings = Settings::new(PathBuf::default());
+        for (col, cal) in [("colA", "calA"), ("colB", "calB")] {
+            let mut col_settings = CollectionSettings::new(SyncerType::FileSystem {
+                path: "/tmp".to_string(),
+            });
+            let mut cal_settings = CalendarSettings::default();
+            cal_settings.set_enabled(true);
+            cal_settings.set_folder("folder".to_string());
+            col_settings
+                .all_calendars_mut()
+                .insert(cal.to_string(), cal_settings);
+            settings
+                .collections_mut()
+                .insert(col.to_string(), col_settings);
+        }
+        let mut state =
+            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+        *state.settings_mut() = settings;
+
+        let result = sync_all(&mut state, None).await.unwrap();
+
+        assert!(result.collections.contains_key("colA"));
+        assert!(result.collections.contains_key("colB"));
+        assert_eq!(
+            result.collections.get("colA"),
+            Some(&SyncColResult::Success(false))
+        );
+        assert_eq!(
+            result.collections.get("colB"),
+            Some(&SyncColResult::Success(false))
+        );
+    }
 }
