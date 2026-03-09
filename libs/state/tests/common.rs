@@ -55,6 +55,32 @@ pub fn make_xdg_with_real_data(tmp: &TempDir) -> Arc<BaseDirectories> {
     Arc::new(xdg::BaseDirectories::with_prefix(""))
 }
 
+/// Creates an `Arc<BaseDirectories>` with both `XDG_CONFIG_HOME` and `XDG_DATA_HOME` pointing
+/// inside `tmp`, with the project locale files symlinked in so that `eventix_locale::new` works.
+///
+/// This is the preferred helper for tests that need both writable data directories (e.g. to
+/// create vdirsyncer log files) and locale support.
+#[allow(unused)]
+pub fn make_xdg_with_locale(tmp: &TempDir) -> Arc<BaseDirectories> {
+    let config = tmp.path().join("config");
+    let data = tmp.path().join("data");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::create_dir_all(&data).unwrap();
+
+    // Symlink the project locale directory into the temp data dir so locale loading succeeds.
+    let src_locale = project_data_dir().join("locale");
+    let dst_locale = data.join("locale");
+    if !dst_locale.exists() {
+        std::os::unix::fs::symlink(&src_locale, &dst_locale).unwrap();
+    }
+
+    unsafe {
+        std::env::set_var("XDG_CONFIG_HOME", &config);
+        std::env::set_var("XDG_DATA_HOME", &data);
+    }
+    Arc::new(xdg::BaseDirectories::with_prefix(""))
+}
+
 /// Builds a minimal enabled `CalendarSettings` with the given folder and display name.
 #[allow(unused)]
 pub fn make_cal_settings(
