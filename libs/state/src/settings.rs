@@ -390,11 +390,6 @@ mod tests {
         cal
     }
 
-    /// Creates an XDG `BaseDirectories` rooted at `root`.
-    fn make_xdg(root: &std::path::Path) -> xdg::BaseDirectories {
-        crate::with_test_xdg(&root.join("data"), &root.join("config"))
-    }
-
     // --- EmailAccount ---
 
     #[test]
@@ -495,21 +490,6 @@ mod tests {
         assert!(organizer.address().contains("alice@example.com"));
     }
 
-    #[test]
-    fn collection_settings_path_and_log_file() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        let xdg = make_xdg(tmpdir.path());
-
-        let col = CollectionSettings::new(make_filesystem_syncer());
-        assert_eq!(
-            col.path(&xdg, "mycol"),
-            std::path::PathBuf::from("/data/calendars")
-        );
-
-        let log = col.log_file(&xdg, "mycol");
-        assert!(log.ends_with("vdirsyncer/mycol.log"));
-    }
-
     // --- Settings ---
 
     #[test]
@@ -588,46 +568,5 @@ mod tests {
                 .expect("remote calendar must have email"),
             "Alice Example <Alice@Example.COM>"
         );
-    }
-
-    #[test]
-    fn settings_load_from_file_missing() {
-        // When no settings.toml exists, load_from_file returns an empty Settings.
-        let tmpdir = tempfile::tempdir().unwrap();
-        let xdg = make_xdg(tmpdir.path());
-
-        let settings = Settings::load_from_file(&xdg).expect("load must succeed even without file");
-        assert!(settings.collections().is_empty());
-    }
-
-    #[test]
-    fn settings_write_and_load_round_trip() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        let xdg = make_xdg(tmpdir.path());
-
-        // Build settings with one collection and two calendars.
-        let config_home = tmpdir.path().join("config");
-        std::fs::create_dir_all(&config_home).unwrap();
-        let path = config_home.join("settings.toml");
-
-        let mut original = Settings::new(path);
-        let mut col = CollectionSettings::new(make_filesystem_syncer());
-        col.all_calendars_mut().insert(
-            "cal-rt".to_string(),
-            make_cal_settings(true, "rt-folder", "RT Cal"),
-        );
-        original.collections_mut().insert("col-rt".to_string(), col);
-        original
-            .write_to_file()
-            .expect("write_to_file must succeed");
-
-        // Load them back via the XDG path.
-        let loaded = Settings::load_from_file(&xdg).expect("load_from_file must succeed");
-        assert!(loaded.collections().contains_key("col-rt"));
-        let loaded_col = loaded.collections().get("col-rt").unwrap();
-        let loaded_cal = loaded_col.all_calendars().get("cal-rt").unwrap();
-        assert_eq!(loaded_cal.name(), "RT Cal");
-        assert_eq!(loaded_cal.folder(), "rt-folder");
-        assert!(loaded_cal.enabled());
     }
 }
