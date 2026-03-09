@@ -19,12 +19,6 @@ use crate::sync::o365::O365;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
 use crate::{CollectionSettings, State};
 
-// Single process-wide lock used by all sync test modules that mutate XDG_* env vars.
-// Keeping it here (rather than per-module) prevents races between vdirsyncer and o365 tests
-// running in parallel OS threads.
-#[cfg(test)]
-pub(crate) static XDG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 #[async_trait]
 pub trait Syncer: Send {
     /// Discovers available calendars from the backend and updates state accordingly.
@@ -383,19 +377,13 @@ mod tests {
     };
     use eventix_ical::col::CalStore;
 
-    use super::{SyncColResult, SyncResult, XDG_LOCK, sync_all};
+    use super::{SyncColResult, SyncResult, sync_all};
 
     // --- helpers ---
 
     /// Creates an XDG `BaseDirectories` rooted at `root`.
-    ///
-    /// Modifies `XDG_DATA_HOME` so the XDG lookup resolves inside the supplied temporary
-    /// directory. Must only be called while holding `XDG_LOCK`.
     fn make_xdg(root: &std::path::Path) -> xdg::BaseDirectories {
-        unsafe {
-            std::env::set_var("XDG_DATA_HOME", root.join("data"));
-        }
-        xdg::BaseDirectories::with_prefix("")
+        crate::with_test_xdg(&root.join("data"), &root.join("config"))
     }
 
     // --- SyncColResult / SyncResult ---
@@ -419,13 +407,11 @@ mod tests {
 
     // --- syncer_for_collection error path ---
 
-    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn discover_collection_unknown_id_returns_error() {
-        let _guard = XDG_LOCK.lock().unwrap();
         let tmpdir = tempfile::tempdir().unwrap();
-        // XDG must point somewhere so the lock is consistent with other tests; the error fires
-        // before any filesystem access since the collection does not exist.
+        // XDG must point somewhere valid; the error fires before any filesystem access since the
+        // collection does not exist.
         let _xdg = make_xdg(tmpdir.path());
 
         let mut state =
@@ -455,12 +441,10 @@ mod tests {
         assert!(result.calendars.is_empty());
     }
 
-    #[allow(clippy::await_holding_lock)]
     #[tokio::test]
     async fn sync_all_multiple_collections_all_present_in_result() {
-        let _guard = XDG_LOCK.lock().unwrap();
         let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
+        let xdg = make_xdg(tmpdir.path());
         std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
 
         // Build state with two FS collections.
@@ -479,8 +463,13 @@ mod tests {
                 .collections_mut()
                 .insert(col.to_string(), col_settings);
         }
-        let mut state =
-            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+        // Use the XDG snapshot built above so that the log-file directory resolves correctly
+        // regardless of what other tests do to the environment after this point.
+        let mut state = crate::State::new_for_test_with_xdg(
+            xdg,
+            CalStore::default(),
+            Misc::new(PathBuf::default()),
+        );
         *state.settings_mut() = settings;
 
         let result = sync_all(&mut state, None).await.unwrap();

@@ -680,9 +680,7 @@ mod tests {
 
         // Point XDG data home at the temp directory so that `create_data_directory("alarms")`
         // resolves to our prepared directory.
-        // SAFETY: no other threads are reading XDG_DATA_HOME concurrently during this test.
-        unsafe { std::env::set_var("XDG_DATA_HOME", tmpdir.path()) };
-        let xdg = xdg::BaseDirectories::with_prefix("");
+        let xdg = crate::with_test_xdg(tmpdir.path(), tmpdir.path());
         let pa = PersonalAlarms::new_from_dir(&xdg).expect("new_from_dir must succeed");
 
         let cal = pa.get("my-cal").expect("my-cal must be loaded");

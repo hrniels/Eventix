@@ -16,28 +16,24 @@ pub fn project_data_dir() -> PathBuf {
         .join("data")
 }
 
+// Integration tests should reuse the crate-level helper so locking is consistent with unit
+// tests. `eventix_state::with_test_xdg` acquires a global lock while setting env vars and
+// constructs a `BaseDirectories` snapshot.
+fn locked_xdg(data: &Path, config: &Path) -> Arc<BaseDirectories> {
+    Arc::new(eventix_state::with_test_xdg(data, config))
+}
+
 /// Creates an `Arc<BaseDirectories>` rooted inside `root`.
 ///
 /// Sets `XDG_CONFIG_HOME` and `XDG_DATA_HOME` to subdirectories of `root` and also creates them
 /// so that callers can immediately place files there. Returns the `Arc<BaseDirectories>`.
-///
-/// # Safety
-///
-/// This function mutates process-wide environment variables. Tests that call it must not run
-/// concurrently with other tests that read those variables. Use `cargo test -- --test-threads=1`
-/// or ensure the tests are in different test binaries (each integration test file is its own
-/// binary, so this is satisfied here).
 #[allow(unused)]
 pub fn make_xdg(root: &Path) -> Arc<BaseDirectories> {
     let config = root.join("config");
     let data = root.join("data");
     std::fs::create_dir_all(&config).unwrap();
     std::fs::create_dir_all(&data).unwrap();
-    unsafe {
-        std::env::set_var("XDG_CONFIG_HOME", &config);
-        std::env::set_var("XDG_DATA_HOME", &data);
-    }
-    Arc::new(xdg::BaseDirectories::with_prefix(""))
+    locked_xdg(&data, &config)
 }
 
 /// Creates an `Arc<BaseDirectories>` whose `XDG_DATA_HOME` points to the project `data/`
@@ -48,11 +44,7 @@ pub fn make_xdg(root: &Path) -> Arc<BaseDirectories> {
 pub fn make_xdg_with_real_data(tmp: &TempDir) -> Arc<BaseDirectories> {
     let config = tmp.path().join("config");
     std::fs::create_dir_all(&config).unwrap();
-    unsafe {
-        std::env::set_var("XDG_CONFIG_HOME", &config);
-        std::env::set_var("XDG_DATA_HOME", project_data_dir());
-    }
-    Arc::new(xdg::BaseDirectories::with_prefix(""))
+    locked_xdg(&project_data_dir(), &config)
 }
 
 /// Creates an `Arc<BaseDirectories>` with both `XDG_CONFIG_HOME` and `XDG_DATA_HOME` pointing
@@ -74,11 +66,7 @@ pub fn make_xdg_with_locale(tmp: &TempDir) -> Arc<BaseDirectories> {
         std::os::unix::fs::symlink(&src_locale, &dst_locale).unwrap();
     }
 
-    unsafe {
-        std::env::set_var("XDG_CONFIG_HOME", &config);
-        std::env::set_var("XDG_DATA_HOME", &data);
-    }
-    Arc::new(xdg::BaseDirectories::with_prefix(""))
+    locked_xdg(&data, &config)
 }
 
 /// Builds a minimal enabled `CalendarSettings` with the given folder and display name.

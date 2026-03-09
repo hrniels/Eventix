@@ -778,16 +778,7 @@ mod tests {
         runner: Arc<dyn CommandRunner>,
     ) -> (VDirSyncer, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
-        // Hold the lock from set_var through BaseDirectories construction so that parallel tests
-        // do not overwrite each other's XDG_* env vars before the snapshot is taken.
-        let xdg = {
-            let _guard = crate::sync::XDG_LOCK.lock().unwrap();
-            unsafe {
-                std::env::set_var("XDG_DATA_HOME", tmp.path().join("data"));
-                std::env::set_var("XDG_CONFIG_HOME", tmp.path().join("config"));
-            }
-            BaseDirectories::with_prefix("")
-        };
+        let xdg = crate::with_test_xdg(&tmp.path().join("data"), &tmp.path().join("config"));
 
         // create the vdirsyncer data dir that generate_config expects
         let vdir: PathBuf = xdg.get_data_file("vdirsyncer").unwrap();
@@ -910,14 +901,7 @@ mod tests {
     #[tokio::test]
     async fn generate_config_writes_auth_when_provided() {
         let tmp = tempfile::tempdir().unwrap();
-        let xdg = {
-            let _guard = crate::sync::XDG_LOCK.lock().unwrap();
-            unsafe {
-                std::env::set_var("XDG_DATA_HOME", tmp.path().join("data"));
-                std::env::set_var("XDG_CONFIG_HOME", tmp.path().join("config"));
-            }
-            BaseDirectories::with_prefix("")
-        };
+        let xdg = crate::with_test_xdg(&tmp.path().join("data"), &tmp.path().join("config"));
         let vdir: PathBuf = xdg.get_data_file("vdirsyncer").unwrap();
         tokio::fs::create_dir_all(&vdir).await.unwrap();
 

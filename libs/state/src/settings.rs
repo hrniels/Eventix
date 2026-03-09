@@ -391,18 +391,8 @@ mod tests {
     }
 
     /// Creates an XDG `BaseDirectories` rooted at `root`.
-    ///
-    /// Temporarily overrides `XDG_CONFIG_HOME` and `XDG_DATA_HOME` so that the XDG lookup
-    /// resolves inside the supplied temporary directory.
     fn make_xdg(root: &std::path::Path) -> xdg::BaseDirectories {
-        // SAFETY: tests that call this function must not run concurrently with other tests that
-        // read these env vars. Each such test is serialised by the test harness when run with the
-        // default single-threaded runner for `cargo test`.
-        unsafe {
-            std::env::set_var("XDG_CONFIG_HOME", root.join("config"));
-            std::env::set_var("XDG_DATA_HOME", root.join("data"));
-        }
-        xdg::BaseDirectories::with_prefix("")
+        crate::with_test_xdg(&root.join("data"), &root.join("config"))
     }
 
     // --- EmailAccount ---

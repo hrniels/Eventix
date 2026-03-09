@@ -87,11 +87,34 @@ impl State {
     /// Creates a minimal in-memory `State` for use in unit tests.
     ///
     /// Accepts an already-built `CalStore` and `Misc` so tests can exercise logic that requires a
-    /// fully wired `State` without touching the filesystem.
+    /// fully wired `State` without touching the filesystem. Uses a default `BaseDirectories`
+    /// snapshot (from the current environment at call time).
     #[cfg(test)]
     pub(crate) fn new_for_test(store: CalStore, misc: misc::Misc) -> Self {
         Self {
             xdg: Arc::new(xdg::BaseDirectories::with_prefix("")),
+            store,
+            personal_alarms: PersonalAlarms::default(),
+            settings: settings::Settings::new(PathBuf::default()),
+            misc,
+            locale: eventix_locale::default(),
+            last_reload: chrono::Utc::now().naive_utc(),
+        }
+    }
+
+    /// Creates a minimal in-memory `State` for use in unit tests, with an explicit XDG base.
+    ///
+    /// Like `new_for_test` but accepts a pre-built `BaseDirectories` so that tests which mutate
+    /// XDG env vars can pass in their own snapshot without relying on the ambient environment at
+    /// construction time.
+    #[cfg(test)]
+    pub(crate) fn new_for_test_with_xdg(
+        xdg: xdg::BaseDirectories,
+        store: CalStore,
+        misc: misc::Misc,
+    ) -> Self {
+        Self {
+            xdg: Arc::new(xdg),
             store,
             personal_alarms: PersonalAlarms::default(),
             settings: settings::Settings::new(PathBuf::default()),
@@ -412,6 +435,25 @@ pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Resul
     )
     .context(format!("write {filename:?}"))?;
     Ok(())
+}
+
+/// Sets `XDG_DATA_HOME` to `data` and `XDG_CONFIG_HOME` to `config`, constructs a
+/// `BaseDirectories` snapshot, then releases the lock before returning.
+///
+/// The entire set-and-snapshot region is performed while holding a lock, so concurrent test
+/// threads cannot observe a partially-updated environment.
+pub fn with_test_xdg(data: &std::path::Path, config: &std::path::Path) -> xdg::BaseDirectories {
+    static XDG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    let _guard = XDG_LOCK.lock().unwrap();
+    // SAFETY: the lock above ensures no other thread reads or writes these
+    // variables while we hold it, so the unsynchronised write is safe within
+    // the test-only context.
+    unsafe {
+        std::env::set_var("XDG_DATA_HOME", data);
+        std::env::set_var("XDG_CONFIG_HOME", config);
+    }
+    xdg::BaseDirectories::with_prefix("")
 }
 
 #[cfg(test)]

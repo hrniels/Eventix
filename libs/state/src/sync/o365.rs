@@ -574,18 +574,8 @@ mod tests {
     ///
     /// Returns the configured `BaseDirectories` and also creates the `vdirsyncer` data
     /// subdirectory so that `generate_props` and `VDirSyncer::new` can write files immediately.
-    ///
-    /// Acquires `XDG_LOCK` for the duration of the env-var mutation and `BaseDirectories`
-    /// construction so that parallel tests do not race on the global environment.
     async fn make_xdg(tmp: &tempfile::TempDir) -> BaseDirectories {
-        let xdg = {
-            let _guard = crate::sync::XDG_LOCK.lock().unwrap();
-            unsafe {
-                std::env::set_var("XDG_DATA_HOME", tmp.path().join("data"));
-                std::env::set_var("XDG_CONFIG_HOME", tmp.path().join("config"));
-            }
-            BaseDirectories::with_prefix("")
-        };
+        let xdg = crate::with_test_xdg(&tmp.path().join("data"), &tmp.path().join("config"));
         let vdir: PathBuf = xdg.get_data_file("vdirsyncer").unwrap();
         tokio::fs::create_dir_all(&vdir).await.unwrap();
         xdg
