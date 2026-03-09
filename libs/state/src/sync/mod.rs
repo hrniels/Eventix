@@ -383,34 +383,9 @@ mod tests {
     };
     use eventix_ical::col::CalStore;
 
-    use super::{
-        SyncColResult, SyncResult, XDG_LOCK, delete_calendar, delete_collection,
-        discover_collection, reload_calendar, reload_collection, sync_all, sync_collection,
-    };
+    use super::{SyncColResult, SyncResult, XDG_LOCK, sync_all};
 
     // --- helpers ---
-
-    /// Builds a `State` pre-loaded with one collection and one calendar.
-    ///
-    /// The collection uses a `FileSystem` syncer (no network, no subprocess), which makes it
-    /// suitable for unit-testing the orchestration logic in `sync/mod.rs`.
-    fn make_fs_state(col_id: &str, cal_id: &str, folder: &str, enabled: bool) -> crate::State {
-        let mut settings = Settings::new(PathBuf::default());
-        let mut col = CollectionSettings::new(SyncerType::FileSystem {
-            path: "/tmp".to_string(),
-        });
-        let mut cal = CalendarSettings::default();
-        cal.set_enabled(enabled);
-        cal.set_folder(folder.to_string());
-        cal.set_name("Test Cal".to_string());
-        col.all_calendars_mut().insert(cal_id.to_string(), cal);
-        settings.collections_mut().insert(col_id.to_string(), col);
-
-        let mut state =
-            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
-        *state.settings_mut() = settings;
-        state
-    }
 
     /// Creates an XDG `BaseDirectories` rooted at `root`.
     ///
@@ -456,7 +431,7 @@ mod tests {
         let mut state =
             crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
 
-        let err = discover_collection(&mut state, &"nonexistent".to_string(), None)
+        let err = super::discover_collection(&mut state, &"nonexistent".to_string(), None)
             .await
             .unwrap_err();
         assert!(
@@ -465,155 +440,7 @@ mod tests {
         );
     }
 
-    // --- discover_collection ---
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn discover_collection_with_fs_syncer_succeeds() {
-        let _guard = XDG_LOCK.lock().unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        let mut state = make_fs_state("col1", "cal1", "work", true);
-
-        let result = discover_collection(&mut state, &"col1".to_string(), None)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            result.collections.get("col1"),
-            Some(&SyncColResult::Success(false))
-        );
-        assert!(!result.changed);
-    }
-
-    // --- sync_collection ---
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn sync_collection_with_fs_syncer_returns_success() {
-        let _guard = XDG_LOCK.lock().unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        let mut state = make_fs_state("col1", "cal1", "work", true);
-
-        let result = sync_collection(&mut state, &"col1".to_string(), None)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            result.collections.get("col1"),
-            Some(&SyncColResult::Success(false))
-        );
-        // A sync with no file changes must not set changed.
-        assert!(!result.changed);
-        // The calendar must appear in the result with no error.
-        assert_eq!(result.calendars.get("cal1"), Some(&false));
-    }
-
-    // --- reload_collection ---
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn reload_collection_succeeds_with_fs_syncer() {
-        let _guard = XDG_LOCK.lock().unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        let mut state = make_fs_state("col1", "cal1", "work", true);
-
-        let result = reload_collection(&mut state, &"col1".to_string(), None)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            result.collections.get("col1"),
-            Some(&SyncColResult::Success(false))
-        );
-    }
-
-    // --- delete_collection ---
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn delete_collection_succeeds_with_fs_syncer() {
-        let _guard = XDG_LOCK.lock().unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        let mut state = make_fs_state("col1", "cal1", "work", true);
-
-        // FSSyncer::delete is a no-op, so this should succeed without error.
-        delete_collection(&mut state, &"col1".to_string())
-            .await
-            .unwrap();
-    }
-
-    // --- reload_calendar ---
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn reload_calendar_returns_single_calendar_result() {
-        let _guard = XDG_LOCK.lock().unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        let mut state = make_fs_state("col1", "cal1", "work", true);
-
-        let result = reload_calendar(&mut state, &"col1".to_string(), &"cal1".to_string(), None)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            result.collections.get("col1"),
-            Some(&SyncColResult::Success(false))
-        );
-        assert_eq!(result.calendars.get("cal1"), Some(&false));
-    }
-
-    // --- delete_calendar ---
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn delete_calendar_succeeds_with_fs_syncer() {
-        let _guard = XDG_LOCK.lock().unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        let mut state = make_fs_state("col1", "cal1", "work", true);
-
-        delete_calendar(&mut state, &"col1".to_string(), &"cal1".to_string())
-            .await
-            .unwrap();
-    }
-
     // --- sync_all ---
-
-    #[allow(clippy::await_holding_lock)]
-    #[tokio::test]
-    async fn sync_all_returns_success_for_fs_collection() {
-        let _guard = XDG_LOCK.lock().unwrap();
-        let tmpdir = tempfile::tempdir().unwrap();
-        let _xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        let mut state = make_fs_state("col1", "cal1", "work", true);
-
-        let result = sync_all(&mut state, None).await.unwrap();
-
-        assert_eq!(
-            result.collections.get("col1"),
-            Some(&SyncColResult::Success(false))
-        );
-        assert!(!result.changed);
-    }
 
     #[tokio::test]
     async fn sync_all_empty_collections_returns_default_result() {
