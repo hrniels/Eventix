@@ -19,6 +19,12 @@ use crate::sync::o365::O365;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
 use crate::{CollectionSettings, State};
 
+// Single process-wide lock used by all sync test modules that mutate XDG_* env vars.
+// Keeping it here (rather than per-module) prevents races between vdirsyncer and o365 tests
+// running in parallel OS threads.
+#[cfg(test)]
+pub(crate) static XDG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[async_trait]
 pub trait Syncer: Send {
     /// Discovers available calendars from the backend and updates state accordingly.
@@ -52,7 +58,7 @@ pub struct SyncerAuth {
 }
 
 /// The outcome of a single collection or calendar sync operation.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum SyncColResult {
     /// The operation succeeded; the boolean indicates whether any data changed.
     Success(bool),
