@@ -91,6 +91,7 @@ pub fn make_filesystem_col(path: &Path) -> eventix_state::CollectionSettings {
     })
 }
 
+/// Wraps `s` in an `Arc<String>`, for use in tests that require an `Arc<String>` ID.
 #[allow(unused)]
 pub fn make_id(s: &str) -> Arc<String> {
     Arc::new(s.to_string())

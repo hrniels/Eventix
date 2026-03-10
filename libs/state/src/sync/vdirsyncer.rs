@@ -103,9 +103,14 @@ impl CommandRunner for RealCommandRunner {
 
 // --- Parsing types ---
 
+/// Internal result of a single vdirsyncer invocation, parsed from its stderr output.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SyncResult {
+    /// The sync completed; the boolean indicates whether any items were added, updated,
+    /// or deleted.
     Success(bool),
+    /// vdirsyncer reported a collection-structure change and requested re-discovery before
+    /// the next sync can proceed.
     NeedsDiscover,
 }
 
@@ -115,15 +120,21 @@ enum EventType<'a> {
     Delete(&'a str, &'a str),
 }
 
+/// Item-level changes detected for a single calendar during one vdirsyncer run.
 #[derive(Default)]
 pub(crate) struct Changes {
+    /// Whether at least one new item was uploaded to the local store.
     pub(crate) added: bool,
+    /// UIDs of items that were updated in the local store.
     pub(crate) changed: Vec<String>,
+    /// UIDs of items that were removed from the local store.
     pub(crate) deleted: Vec<String>,
 }
 
+/// Aggregated per-calendar changes parsed from one vdirsyncer invocation.
 #[derive(Default)]
 pub(crate) struct CalendarChanges {
+    /// Per-calendar change sets, keyed by calendar ID.
     pub(crate) calendars: HashMap<String, Changes>,
 }
 

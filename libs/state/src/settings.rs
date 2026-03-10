@@ -139,9 +139,15 @@ impl EmailAccount {
 /// user-managed overrides, falling back to an optional default alarm when no override exists.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub enum CalendarAlarmType {
+    /// Uses the alarms embedded in the iCalendar data as-is.
     #[default]
     Calendar,
+    /// Replaces embedded alarms with user-managed personal overrides.
+    ///
+    /// When no per-event override exists, `default` is used as a fallback alarm.
+    /// If `default` is `None` and no override exists, no alarm fires.
     Personal {
+        /// The fallback alarm applied when no per-event override exists.
         default: Option<CalAlarm>,
     },
 }
@@ -149,19 +155,31 @@ pub enum CalendarAlarmType {
 /// The backend used to synchronise and provide calendar data for a collection.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SyncerType {
+    /// Reads calendar data directly from a local filesystem path; no remote sync.
     FileSystem {
+        /// Absolute path to the directory containing the calendar collection.
         path: String,
     },
+    /// Synchronises via the `vdirsyncer` tool against a CalDAV server.
     VDirSyncer {
+        /// Email account associated with this collection.
         email: EmailAccount,
+        /// CalDAV server URL.
         url: String,
+        /// When `true`, the remote calendar is treated as read-only and local changes are not pushed.
         read_only: bool,
+        /// Optional username for authentication; if absent, no credentials are sent.
         username: Option<String>,
+        /// Shell command and arguments used to retrieve the password at runtime, if any.
         password_cmd: Option<Vec<String>>,
     },
+    /// Synchronises a Microsoft 365 account via DavMail as a local CalDAV gateway.
     O365 {
+        /// Email account associated with this collection.
         email: EmailAccount,
+        /// When `true`, the remote calendar is treated as read-only and local changes are not pushed.
         read_only: bool,
+        /// Shell command and arguments used to retrieve the OAuth password/token at runtime.
         password_cmd: Vec<String>,
     },
 }

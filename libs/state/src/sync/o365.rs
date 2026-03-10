@@ -233,6 +233,11 @@ impl O365 {
         }
     }
 
+    /// Generates a DavMail `.properties` file for the collection identified by `name`.
+    ///
+    /// Writes all required DavMail configuration keys, including the CalDAV port, the
+    /// bound address, and optional OAuth refresh token. Returns the path to the written
+    /// file, or an error if the file cannot be created.
     pub(crate) async fn generate_props(
         xdg: &BaseDirectories,
         name: &String,

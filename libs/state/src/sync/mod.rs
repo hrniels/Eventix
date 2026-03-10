@@ -19,6 +19,10 @@ use crate::sync::o365::O365;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
 use crate::{CollectionSettings, State};
 
+/// Defines the interface for a calendar synchronisation backend.
+///
+/// Each backend (filesystem, vdirsyncer, Microsoft 365) implements this trait to provide
+/// discover, sync, and delete operations for its collections and individual calendars.
 #[async_trait]
 pub trait Syncer: Send {
     /// Discovers available calendars from the backend and updates state accordingly.
@@ -47,7 +51,9 @@ pub trait Syncer: Send {
 
 /// Credentials used to authenticate with a remote syncer backend.
 pub struct SyncerAuth {
+    /// The account username (typically an email address).
     user: String,
+    /// Shell command and arguments used to retrieve the account password at runtime.
     pw_cmd: Vec<String>,
 }
 

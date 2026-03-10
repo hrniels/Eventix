@@ -41,6 +41,11 @@ pub struct Misc {
 }
 
 impl Misc {
+    /// Creates a new `Misc` with default values.
+    ///
+    /// All fields are initialised to their defaults, except `last_alarm_check` which is
+    /// set to the current UTC time so that alarms that fell due before the process started
+    /// are not immediately re-fired.
     pub(crate) fn new(path: PathBuf) -> Self {
         Self {
             path,
