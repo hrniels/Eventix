@@ -19,6 +19,10 @@ use crate::sync::o365::O365;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
 use crate::{CollectionSettings, State};
 
+/// Defines the interface for a calendar synchronisation backend.
+///
+/// Each backend (filesystem, vdirsyncer, Microsoft 365) implements this trait to provide
+/// discover, sync, and delete operations for its collections and individual calendars.
 #[async_trait]
 pub trait Syncer: Send {
     /// Discovers available calendars from the backend and updates state accordingly.
@@ -47,12 +51,14 @@ pub trait Syncer: Send {
 
 /// Credentials used to authenticate with a remote syncer backend.
 pub struct SyncerAuth {
+    /// The account username (typically an email address).
     user: String,
+    /// Shell command and arguments used to retrieve the account password at runtime.
     pw_cmd: Vec<String>,
 }
 
 /// The outcome of a single collection or calendar sync operation.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum SyncColResult {
     /// The operation succeeded; the boolean indicates whether any data changed.
     Success(bool),
@@ -63,7 +69,7 @@ pub enum SyncColResult {
 }
 
 /// The aggregated result of a sync operation across one or more collections.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SyncResult {
     /// Whether any calendar data changed during the operation.
     pub changed: bool,
@@ -365,4 +371,124 @@ async fn get_sync(
         id: Arc::new(id.to_string()),
         syncer,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::{
+        misc::Misc,
+        settings::{CalendarSettings, CollectionSettings, Settings, SyncerType},
+    };
+    use eventix_ical::col::CalStore;
+
+    use super::{SyncColResult, SyncResult, sync_all};
+
+    // --- helpers ---
+
+    /// Creates an XDG `BaseDirectories` rooted at `root`.
+    fn make_xdg(root: &std::path::Path) -> xdg::BaseDirectories {
+        crate::with_test_xdg(&root.join("data"), &root.join("config"))
+    }
+
+    // --- SyncColResult / SyncResult ---
+
+    #[test]
+    fn new_from_single() {
+        let res = SyncResult::new_from_single(
+            "col".to_string(),
+            "cal".to_string(),
+            SyncColResult::Success(true),
+        );
+
+        assert!(res.changed, "changed must be true when Success(true)");
+        assert_eq!(
+            res.collections.get("col"),
+            Some(&SyncColResult::Success(true))
+        );
+        // A successful sync sets the calendar error flag to false.
+        assert_eq!(res.calendars.get("cal"), Some(&false));
+    }
+
+    // --- syncer_for_collection error path ---
+
+    #[tokio::test]
+    async fn discover_collection_unknown_id_returns_error() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        // XDG must point somewhere valid; the error fires before any filesystem access since the
+        // collection does not exist.
+        let _xdg = make_xdg(tmpdir.path());
+
+        let mut state =
+            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+
+        let err = super::discover_collection(&mut state, &"nonexistent".to_string(), None)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("nonexistent"),
+            "error must mention the missing id: {err}"
+        );
+    }
+
+    // --- sync_all ---
+
+    #[tokio::test]
+    async fn sync_all_empty_collections_returns_default_result() {
+        // No XDG manipulation needed – no collections means no filesystem access.
+        let mut state =
+            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+
+        let result = sync_all(&mut state, None).await.unwrap();
+
+        assert!(!result.changed);
+        assert!(result.collections.is_empty());
+        assert!(result.calendars.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_all_multiple_collections_all_present_in_result() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let xdg = make_xdg(tmpdir.path());
+        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
+
+        // Build state with two FS collections.
+        let mut settings = Settings::new(PathBuf::default());
+        for (col, cal) in [("colA", "calA"), ("colB", "calB")] {
+            let mut col_settings = CollectionSettings::new(SyncerType::FileSystem {
+                path: "/tmp".to_string(),
+            });
+            let mut cal_settings = CalendarSettings::default();
+            cal_settings.set_enabled(true);
+            cal_settings.set_folder("folder".to_string());
+            col_settings
+                .all_calendars_mut()
+                .insert(cal.to_string(), cal_settings);
+            settings
+                .collections_mut()
+                .insert(col.to_string(), col_settings);
+        }
+        // Use the XDG snapshot built above so that the log-file directory resolves correctly
+        // regardless of what other tests do to the environment after this point.
+        let mut state = crate::State::new_for_test_with_xdg(
+            xdg,
+            CalStore::default(),
+            Misc::new(PathBuf::default()),
+        );
+        *state.settings_mut() = settings;
+
+        let result = sync_all(&mut state, None).await.unwrap();
+
+        assert!(result.collections.contains_key("colA"));
+        assert!(result.collections.contains_key("colB"));
+        assert_eq!(
+            result.collections.get("colA"),
+            Some(&SyncColResult::Success(false))
+        );
+        assert_eq!(
+            result.collections.get("colB"),
+            Some(&SyncColResult::Success(false))
+        );
+    }
 }

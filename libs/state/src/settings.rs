@@ -139,9 +139,15 @@ impl EmailAccount {
 /// user-managed overrides, falling back to an optional default alarm when no override exists.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub enum CalendarAlarmType {
+    /// Uses the alarms embedded in the iCalendar data as-is.
     #[default]
     Calendar,
+    /// Replaces embedded alarms with user-managed personal overrides.
+    ///
+    /// When no per-event override exists, `default` is used as a fallback alarm.
+    /// If `default` is `None` and no override exists, no alarm fires.
     Personal {
+        /// The fallback alarm applied when no per-event override exists.
         default: Option<CalAlarm>,
     },
 }
@@ -149,19 +155,31 @@ pub enum CalendarAlarmType {
 /// The backend used to synchronise and provide calendar data for a collection.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SyncerType {
+    /// Reads calendar data directly from a local filesystem path; no remote sync.
     FileSystem {
+        /// Absolute path to the directory containing the calendar collection.
         path: String,
     },
+    /// Synchronises via the `vdirsyncer` tool against a CalDAV server.
     VDirSyncer {
+        /// Email account associated with this collection.
         email: EmailAccount,
+        /// CalDAV server URL.
         url: String,
+        /// When `true`, the remote calendar is treated as read-only and local changes are not pushed.
         read_only: bool,
+        /// Optional username for authentication; if absent, no credentials are sent.
         username: Option<String>,
+        /// Shell command and arguments used to retrieve the password at runtime, if any.
         password_cmd: Option<Vec<String>>,
     },
+    /// Synchronises a Microsoft 365 account via DavMail as a local CalDAV gateway.
     O365 {
+        /// Email account associated with this collection.
         email: EmailAccount,
+        /// When `true`, the remote calendar is treated as read-only and local changes are not pushed.
         read_only: bool,
+        /// Shell command and arguments used to retrieve the OAuth password/token at runtime.
         password_cmd: Vec<String>,
     },
 }
@@ -348,5 +366,225 @@ impl CalendarSettings {
     /// Sets the alarm type configuration for this calendar.
     pub fn set_alarms(&mut self, alarms: CalendarAlarmType) {
         self.alarms = alarms;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use eventix_ical::objects::CalCompType;
+
+    use super::{
+        CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings, SyncerType,
+    };
+
+    // --- helpers ---
+
+    fn make_email() -> EmailAccount {
+        EmailAccount::new("Alice Example".to_string(), "Alice@Example.COM".to_string())
+    }
+
+    fn make_filesystem_syncer() -> SyncerType {
+        SyncerType::FileSystem {
+            path: "/data/calendars".to_string(),
+        }
+    }
+
+    fn make_vdirsyncer() -> SyncerType {
+        SyncerType::VDirSyncer {
+            email: make_email(),
+            url: "https://dav.example.com".to_string(),
+            read_only: false,
+            username: Some("alice".to_string()),
+            password_cmd: None,
+        }
+    }
+
+    /// Creates a simple `CalendarSettings` with the given enabled state, folder, and name.
+    fn make_cal_settings(enabled: bool, folder: &str, name: &str) -> CalendarSettings {
+        let mut cal = CalendarSettings::default();
+        cal.set_enabled(enabled);
+        cal.set_folder(folder.to_string());
+        cal.set_name(name.to_string());
+        cal
+    }
+
+    // --- EmailAccount ---
+
+    #[test]
+    fn email_account_accessors() {
+        let email = make_email();
+
+        assert_eq!(email.name(), "Alice Example");
+        // org_address returns the original, unmodified casing.
+        assert_eq!(email.org_address(), "Alice@Example.COM");
+        // address() returns the lowercased form.
+        assert_eq!(email.address(), "alice@example.com");
+        // pretty_name formats as "Name <address>".
+        assert_eq!(email.pretty_name(), "Alice Example <Alice@Example.COM>");
+    }
+
+    // --- CalendarSettings ---
+
+    #[test]
+    fn calendar_settings_accessors() {
+        let mut cal = CalendarSettings::default();
+
+        // Defaults
+        assert!(!cal.enabled());
+        assert_eq!(cal.folder(), "");
+        assert_eq!(cal.name(), "");
+        assert_eq!(cal.fgcolor(), "");
+        assert_eq!(cal.bgcolor(), "");
+        assert!(cal.types().is_empty());
+        assert!(matches!(cal.alarms(), CalendarAlarmType::Calendar));
+
+        // Setters
+        cal.set_enabled(true);
+        assert!(cal.enabled());
+
+        cal.set_folder("home".to_string());
+        assert_eq!(cal.folder(), "home");
+
+        cal.set_name("Personal".to_string());
+        assert_eq!(cal.name(), "Personal");
+
+        cal.set_fgcolor("#ffffff".to_string());
+        assert_eq!(cal.fgcolor(), "#ffffff");
+
+        cal.set_bgcolor("#000000".to_string());
+        assert_eq!(cal.bgcolor(), "#000000");
+
+        let types = vec![CalCompType::Event, CalCompType::Todo];
+        cal.set_types(types.clone());
+        assert_eq!(cal.types(), types.as_slice());
+
+        cal.set_alarms(CalendarAlarmType::Personal { default: None });
+        assert!(matches!(
+            cal.alarms(),
+            CalendarAlarmType::Personal { default: None }
+        ));
+    }
+
+    // --- CollectionSettings ---
+
+    #[test]
+    fn collection_settings_calendars_filter() {
+        let mut col = CollectionSettings::new(make_filesystem_syncer());
+
+        col.all_calendars_mut().insert(
+            "enabled-cal".to_string(),
+            make_cal_settings(true, "enabled", "Enabled"),
+        );
+        col.all_calendars_mut().insert(
+            "disabled-cal".to_string(),
+            make_cal_settings(false, "disabled", "Disabled"),
+        );
+
+        // calendars() only yields enabled entries.
+        let enabled: Vec<_> = col.calendars().map(|(id, _)| id.clone()).collect();
+        assert_eq!(enabled, vec!["enabled-cal"]);
+
+        // all_calendars() yields both.
+        assert_eq!(col.all_calendars().len(), 2);
+    }
+
+    #[test]
+    fn collection_settings_email_and_organizer() {
+        // A FileSystem syncer has no email; build_organizer returns None.
+        let col_fs = CollectionSettings::new(make_filesystem_syncer());
+        assert!(col_fs.email().is_none());
+        assert!(col_fs.build_organizer().is_none());
+
+        // A remote syncer has an email; build_organizer returns Some.
+        let col_remote = CollectionSettings::new(make_vdirsyncer());
+        let email = col_remote
+            .email()
+            .expect("VDirSyncer collection must have email");
+        assert_eq!(email.name(), "Alice Example");
+        let organizer = col_remote
+            .build_organizer()
+            .expect("organizer must be present");
+        // The organizer encodes the lowercased address.
+        assert!(organizer.address().contains("alice@example.com"));
+    }
+
+    // --- Settings ---
+
+    #[test]
+    fn settings_calendars_iterator() {
+        let mut settings = Settings::new("/tmp/settings.toml".into());
+
+        let mut col = CollectionSettings::new(make_filesystem_syncer());
+        col.all_calendars_mut()
+            .insert("cal-a".to_string(), make_cal_settings(true, "a", "A"));
+        col.all_calendars_mut()
+            .insert("cal-b".to_string(), make_cal_settings(false, "b", "B"));
+        settings.collections_mut().insert("col1".to_string(), col);
+
+        // calendars() only returns enabled calendars across all collections.
+        let ids: Vec<_> = settings.calendars().map(|(id, _)| id.clone()).collect();
+        assert_eq!(ids, vec!["cal-a"]);
+    }
+
+    #[test]
+    fn settings_calendar_lookup() {
+        let mut settings = Settings::new("/tmp/settings.toml".into());
+
+        let mut col = CollectionSettings::new(make_filesystem_syncer());
+        col.all_calendars_mut()
+            .insert("cal-on".to_string(), make_cal_settings(true, "on", "On"));
+        col.all_calendars_mut().insert(
+            "cal-off".to_string(),
+            make_cal_settings(false, "off", "Off"),
+        );
+        settings.collections_mut().insert("col1".to_string(), col);
+
+        // Found and enabled — returns Some.
+        let (_, cal) = settings
+            .calendar(&"cal-on".to_string())
+            .expect("must find enabled calendar");
+        assert_eq!(cal.name(), "On");
+
+        // Found but disabled — returns None.
+        assert!(settings.calendar(&"cal-off".to_string()).is_none());
+
+        // Not found — returns None.
+        assert!(settings.calendar(&"missing".to_string()).is_none());
+    }
+
+    #[test]
+    fn settings_emails() {
+        let mut settings = Settings::new("/tmp/settings.toml".into());
+
+        // Collection with no email account — no entries added.
+        let mut col_fs = CollectionSettings::new(make_filesystem_syncer());
+        col_fs
+            .all_calendars_mut()
+            .insert("cal-fs".to_string(), make_cal_settings(true, "fs", "FS"));
+        settings
+            .collections_mut()
+            .insert("fs-col".to_string(), col_fs);
+
+        // Collection with an email account — all calendar IDs mapped to pretty_name.
+        let mut col_remote = CollectionSettings::new(make_vdirsyncer());
+        col_remote.all_calendars_mut().insert(
+            "cal-remote".to_string(),
+            make_cal_settings(true, "remote", "Remote"),
+        );
+        settings
+            .collections_mut()
+            .insert("remote-col".to_string(), col_remote);
+
+        let emails = settings.emails();
+        assert!(
+            !emails.contains_key("cal-fs"),
+            "FileSystem collection must not appear in emails"
+        );
+        assert_eq!(
+            emails
+                .get("cal-remote")
+                .expect("remote calendar must have email"),
+            "Alice Example <Alice@Example.COM>"
+        );
     }
 }
