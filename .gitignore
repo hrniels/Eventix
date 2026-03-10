@@ -5,6 +5,7 @@
 /flatpak/*.flatpak
 /flatpak/source.tar.gz
 /.flatpak-builder
+__pycache__
 .cargo
 .rustup
 .zsh_history
