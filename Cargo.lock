@@ -726,16 +726,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "evlist"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "chrono-tz",
- "eventix-ical",
-]
-
-[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
