@@ -10,7 +10,6 @@ pub mod filters {
     use askama::filters::Safe;
     use chrono::{DateTime, NaiveDate, NaiveTime};
     use chrono_tz::Tz;
-    use eventix_ical::objects::CalDate;
     use std::{fmt::Display, sync::Arc};
 
     use eventix_locale::{DateFlags, DateLike, Locale, TimeFlags};
@@ -81,26 +80,6 @@ pub mod filters {
         flags: DateFlags,
     ) -> ::askama::Result<String> {
         Ok(locale.fmt_weekdate(date, flags))
-    }
-
-    #[allow(dead_code)]
-    #[askama::filter_fn]
-    pub fn caldate(
-        date: &CalDate,
-        _values: &dyn ::askama::Values,
-        locale: &Arc<dyn Locale + Send + Sync>,
-        flags: DateFlags,
-        end: bool,
-    ) -> ::askama::Result<String> {
-        let datetime = if end {
-            date.as_end_with_tz(locale.timezone())
-        } else {
-            date.as_start_with_tz(locale.timezone())
-        };
-        match date {
-            CalDate::Date(..) => Ok(locale.fmt_date(&datetime, flags)),
-            CalDate::DateTime(_) => Ok(locale.fmt_datetime(&datetime, flags)),
-        }
     }
 
     #[askama::filter_fn]
