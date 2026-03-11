@@ -94,12 +94,12 @@
             </div>
             {% for occ in day.occurrences %}
             <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
-                                                    'ev_id_{{ occ.uid_html() }}',
-                                                    '{{ occ.rid_html() }}',
+                                                    'ev_id_{{ occ.uid()|to_id }}',
+                                                    '{{ occ.rid_str() }}',
                                                     '{{ occ.id() }}'))"
                  id="{{ occ.id() }}"
-                 class="ev_event_occurrence
-                        ev_id_{{ occ.uid_html() }}
+                  class="ev_event_occurrence
+                         ev_id_{{ occ.uid()|to_id }}
                         {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
                         ev_cal_src ev_cal_src_{{ occ.directory() }}
                         {% endif %}
@@ -197,12 +197,12 @@
             </div>
             {% for occ in day.occurrences %}
             <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
-                                                    'ev_id_{{ occ.uid_html() }}',
-                                                    '{{ occ.rid_html() }}',
+                                                    'ev_id_{{ occ.uid()|to_id }}',
+                                                    '{{ occ.rid_str() }}',
                                                     '{{ occ.id() }}'))"
                  id="{{ occ.id() }}"
-                 class="ev_event_occurrence
-                        ev_id_{{ occ.uid_html() }}
+                  class="ev_event_occurrence
+                         ev_id_{{ occ.uid()|to_id }}
                         {% if let Some(end) = occ.occurrence_end() %}
                         {% if end < &page.now %}
                         ev_overdue

@@ -60,17 +60,17 @@
             <div class="ev_week_cell">
                 {% for occ in day.allday %}
                 <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
-                                                        'ev_id_{{ occ.uid_html() }}',
-                                                        '{{ occ.rid_html() }}',
+                                                        'ev_id_{{ occ.uid()|to_id }}',
+                                                        '{{ occ.rid_str() }}',
                                                         '{{ occ.id() }}'))"
                      style="text-align: center" id="{{ occ.id() }}"
                      data-uid="{{ occ.uid() }}"
-                     data-rid="{{ occ.rid_html() }}"
+                     data-rid="{{ occ.rid_str() }}"
                      class="
                         ev_event_occurrence
                         ev_week_event
                         ev_cal_src ev_cal_src_{{ occ.directory() }}
-                        ev_id_{{ occ.uid_html() }}
+                        ev_id_{{ occ.uid()|to_id }}
                         {% match occ.status_class() %}
                         {% when Some with (cl) %}
                         ev_status_{{ cl }}
@@ -164,17 +164,17 @@
                             left: calc({{ occ.overlap().offset * (100 / occ.overlap().slots) }}% + 1px);
                             padding: 0px"
                      onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
-                                                        'ev_id_{{ occ.uid_html() }}',
-                                                        '{{ occ.rid_html() }}',
+                                                        'ev_id_{{ occ.uid()|to_id }}',
+                                                        '{{ occ.rid_str() }}',
                                                         '{{ occ.id() }}'))"
                      id="{{ occ.id() }}"
                      data-uid="{{ occ.uid() }}"
-                     data-rid="{{ occ.rid_html() }}"
+                     data-rid="{{ occ.rid_str() }}"
                      class="
                     ev_event_occurrence
                     ev_week_event
                     ev_cal_src ev_cal_src_{{ occ.directory() }}
-                    ev_id_{{ occ.uid_html() }}
+                    ev_id_{{ occ.uid()|to_id }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}
                     ev_status_{{ cl }}

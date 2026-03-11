@@ -169,15 +169,7 @@ impl<'a> DayOccurrence<'a> {
         self.overlap = Some(overlap);
     }
 
-    pub fn uid_html(&self) -> String {
-        self.inner
-            .uid()
-            .chars()
-            .filter(|c| c.is_ascii_alphanumeric())
-            .collect()
-    }
-
-    pub fn rid_html(&self) -> String {
+    pub fn rid_str(&self) -> String {
         match self.inner.rid() {
             Some(rid) => rid.to_string(),
             None if self.inner.is_recurrent() => {
@@ -189,16 +181,6 @@ impl<'a> DayOccurrence<'a> {
             }
             None => String::new(),
         }
-    }
-
-    pub fn rid_js(&self) -> String {
-        self.rid_html()
-            .chars()
-            .map(|c| match c {
-                'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => c,
-                _ => '_',
-            })
-            .collect()
     }
 
     pub fn status_class(&self) -> Option<String> {

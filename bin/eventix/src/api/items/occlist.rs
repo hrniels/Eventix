@@ -18,7 +18,7 @@ use std::sync::Arc;
 use crate::api::JsonError;
 use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::partstat::PartStatTemplate;
-use crate::html::filters;
+use crate::html::{filters, to_id};
 use crate::objects::DayOccurrence;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -69,10 +69,10 @@ impl<'a> ListOccurrence<'a> {
             (Some(user_mail), false) => occ.attendee_status(user_mail).map(|stat| {
                 PartStatTemplate::new(
                     locale.clone(),
-                    format!("occ-{}-{}", occ.uid(), occ.rid_html()),
+                    format!("occ-{}-{}", to_id(occ.uid()), to_id(occ.rid_str())),
                     stat,
                     occ.uid().clone(),
-                    Some(occ.rid_html()),
+                    Some(occ.rid_str()),
                     false,
                 )
             }),
@@ -83,9 +83,9 @@ impl<'a> ListOccurrence<'a> {
             partstat,
             edit_modes: EditModesTemplate::new(
                 locale.clone(),
-                format!("edit-{}-{}", occ.uid(), occ.rid_js()),
+                format!("edit-{}-{}", to_id(occ.uid()), to_id(occ.rid_str())),
                 occ.uid().clone(),
-                occ.rid_html(),
+                occ.rid_str(),
             ),
             occ,
             owner,

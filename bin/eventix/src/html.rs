@@ -118,6 +118,21 @@ pub mod filters {
     ) -> ::askama::Result<String> {
         Ok(locale.fmt_datetime(date, flags))
     }
+
+    #[askama::filter_fn]
+    pub fn to_id<S: AsRef<str>>(id: S, _values: &dyn ::askama::Values) -> ::askama::Result<String> {
+        Ok(super::to_id(id))
+    }
+}
+
+pub fn to_id<S: AsRef<str>>(id: S) -> String {
+    id.as_ref()
+        .chars()
+        .map(|c| match c {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => c,
+            _ => '_',
+        })
+        .collect()
 }
 
 pub fn text_to_html(text: Option<&String>) -> Option<String> {

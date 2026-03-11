@@ -21,7 +21,7 @@ use crate::comps::{
     organizer::OrganizerTemplate, pagination::PaginationTemplate, partstat::PartStatTemplate,
 };
 use crate::extract::MultiQuery;
-use crate::html::{self, filters};
+use crate::html::{self, filters, to_id};
 use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
 
 const PER_PAGE: usize = 15;
@@ -122,7 +122,7 @@ impl<'a> ListComponent<'a> {
             part_stat_btns: part_stat.map(|stat| {
                 PartStatTemplate::new(
                     locale.clone(),
-                    format!("base-{}", c.uid()),
+                    format!("base-{}", to_id(c.uid())),
                     stat,
                     c.uid().clone(),
                     None,

@@ -126,7 +126,7 @@ async fn handler(
                 "occurrence",
                 stat,
                 req.uid.clone(),
-                Some(day_occ.rid_html()),
+                Some(day_occ.rid_str()),
                 occ.is_recurrent(),
             )
         }),
