@@ -109,3 +109,13 @@ password manager. If you want to retrieve passwords from a password manager, one
 ```bash
 flatpak-spawn --host secret-tool lookup <attribute> <value>
 ```
+
+## License
+
+Eventix is licensed under the [GNU General Public License v3.0 or later](LICENSE)
+(SPDX: `GPL-3.0-or-later`).
+
+Bundled third-party components retain their own licenses:
+
+- [DavMail](http://davmail.sourceforge.net/) (`contrib/davmail/`) — GPL-2.0
+- [vdirsyncer](https://github.com/pimutils/vdirsyncer) — BSD-3-Clause
