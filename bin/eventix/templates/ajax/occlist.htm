@@ -1,5 +1,5 @@
 {% for occ in occs %}
-<tr id="occrow_{{ occ.rid_js() }}">
+<tr id="occrow_{{ occ.rid_str()|to_id }}">
     <td style="height: 2em">
         &bull;&nbsp;
         <span class="ev_summary
@@ -37,8 +37,8 @@
         {% if occ.status_class() != Some(String::from("Cancelled")) %}
         <a style="float: right" class="ev_button ev_button_critical"
            href="javascript:cancelAndRefresh('{{ occ.uid() }}',
-                                             '{{ occ.rid_html() }}',
-                                             '{{ occ.rid_js() }}')">
+                                             '{{ occ.rid_str() }}',
+                                             '{{ occ.rid_str()|to_id }}')">
             <i class="bi bi-dash-circle"></i>
             <span>{{ "Cancel"|t(locale) }}</span>
         </a>
@@ -47,8 +47,8 @@
         <a style="float: right"
            class="ev_button ev_button_normal"
            href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
-                                                 '{{ occ.rid_html() }}',
-                                                 '{{ occ.rid_js() }}')">
+                                                 '{{ occ.rid_str() }}',
+                                                 '{{ occ.rid_str()|to_id }}')">
             {% if !occ.is_excluded() %}
             <i class="bi bi-dash-circle"></i>
             <span>{{ "Exclude"|t(locale) }}</span>
@@ -60,10 +60,10 @@
         {% endif %}
         {% else %}
         {% if personal_alarms %}
-        <a id="alarm-button-{{ occ.uid() }}-{{ occ.rid_js() }}"
+        <a id="alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}"
            style="float: right; width: 60px" class="ev_button ev_button_normal"
-           href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_js() }}',
-                                       '{{ occ.uid() }}', '{{ occ.rid_html() }}')">
+           href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}',
+                                       '{{ occ.uid() }}', '{{ occ.rid_str() }}')">
             <i class="bi bi-pencil"></i>
             <span>{{ "Alarms_short"|t(locale) }}</span>
         </a>
@@ -79,8 +79,8 @@
         <a style="float: right"
            class="ev_button ev_button_good"
            href="javascript:completeTodoAndRefresh('{{ occ.uid() }}',
-                                                   '{{ occ.rid_html() }}',
-                                                   '{{ occ.rid_js() }}')">
+                                                   '{{ occ.rid_str() }}',
+                                                   '{{ occ.rid_str()|to_id }}')">
             <i class="bi bi-check-lg"></i>
             <span>{{ "Complete"|t(locale) }}</span>
         </a>

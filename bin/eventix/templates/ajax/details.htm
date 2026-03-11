@@ -140,7 +140,7 @@
                 {% endif %}
                 {% if occ.ctype() == CalCompType::Todo %}
                 <a style="float: right" class="ev_button ev_button_good"
-                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">
+                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadPage)">
                     <i class="bi bi-check-lg"></i>
                     <span>{{ "Complete"|t(locale) }}</span>
                 </a>
@@ -149,14 +149,14 @@
                 {% if owner && occ.organizer().is_some() %}
                 {% if occ.status_class() != Some(String::from("Cancelled")) %}
                 <a style="float: left" class="ev_button ev_button_critical"
-                                       href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">
+                                       href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadPage)">
                     <i class="bi bi-dash-circle"></i>
                     <span>{{ "Cancel occ."|t(locale) }}</span>
                 </a>
                 {% endif %}
                 {% else %}
                 <a style="float: left" class="ev_button ev_button_normal"
-                                       href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_html() }}', reloadPage)">
+                                       href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadPage)">
                     <i class="bi bi-dash-circle"></i>
                     <span>{{ "Exclude occ."|t(locale) }}</span>
                 </a>
@@ -175,7 +175,7 @@
     </table>
 </div>
 
-<div id="delete-series-confirm-{{ occ.uid_html() }}" title="{{ "Are you sure?"|t(locale) }}">
+<div id="delete-series-confirm-{{ occ.uid()|to_id }}" title="{{ "Are you sure?"|t(locale) }}">
     {{ "This will permanently delete this series."|t(locale) }}
 </div>
 <script>
@@ -202,7 +202,7 @@
 
     $(function() {
         confirmDialog(
-            'delete-series-confirm-{{ occ.uid_html() }}',
+            'delete-series-confirm-{{ occ.uid()|to_id }}',
             'delete-series-button',
             function() {
                 deleteItem('{{ occ.uid() }}', null, reloadPage);

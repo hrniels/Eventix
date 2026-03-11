@@ -65,18 +65,18 @@
             </div>
             <div class="ev_month_cell">
                 {% for occ in day.occurrences %}
-                <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
-                                                        'ev_id_{{ occ.uid_html() }}',
-                                                        '{{ occ.rid_html() }}',
+                 <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid()|to_id }}',
+                                                        '{{ occ.rid_str() }}',
                                                         '{{ occ.id() }}'))"
                      {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
                      style="text-align: center"
                      {% endif %}
                      data-uid="{{ occ.uid() }}"
-                     data-rid="{{ occ.rid_html() }}"
+                     data-rid="{{ occ.rid_str() }}"
                      id="{{ occ.id() }}" class="
                     ev_event_occurrence
-                    ev_id_{{ occ.uid_html() }}
+                    ev_id_{{ occ.uid()|to_id }}
                     ev_cal_src ev_cal_src_{{ occ.directory() }}
                     {% match occ.status_class() %}
                     {% when Some with (cl) %}
