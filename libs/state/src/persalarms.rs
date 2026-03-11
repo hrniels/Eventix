@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use anyhow::{Context, anyhow};
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalAlarm, CalDate, EventLike};

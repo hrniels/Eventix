@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Collections for iCalendar objects.
 //!
 //! These collections are not part of RFC 5545, but are provided on top of these to provide a layer

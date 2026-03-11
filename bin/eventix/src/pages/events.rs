@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use chrono::{Duration, Local, NaiveDate};
 use eventix_ical::objects::{CalCompType, EventLike};
 use eventix_locale::Locale;

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Integration tests for [`Occurrence`] properties when obtained via [`CalFile`].
 //!
 //! These tests parse real `.ics` fixture files and exercise `Occurrence` getters that are

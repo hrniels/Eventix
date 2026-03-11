@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Inter-process command dispatch for eventix.
 //!
 //! This crate provides a client/server protocol for sending [`Request`]s to a running eventix

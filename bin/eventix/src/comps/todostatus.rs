@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use askama::Template;
 use eventix_ical::{
     col::Occurrence,

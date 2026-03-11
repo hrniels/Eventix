@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use eventix_state::{CalendarSettings, State};
 
 pub struct Calendar {

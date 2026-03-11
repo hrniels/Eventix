@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use anyhow::Context;
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use eventix_ical::objects::CalDate;

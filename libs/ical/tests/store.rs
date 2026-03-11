@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Integration tests for [`CalStore`] filesystem operations.
 //!
 //! These tests exercise the full public API of [`CalStore`] including methods that delegate to

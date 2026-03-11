@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};

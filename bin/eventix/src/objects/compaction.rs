@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use eventix_ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
 use eventix_ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 use eventix_locale::Locale;

@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Parser utilities for RFC 5545.
 //!
 //! This module implements various abstractions to deal with the iCalendar format according to RFC

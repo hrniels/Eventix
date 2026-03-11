@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Integration tests for [`CalFile`] filesystem operations.
 //!
 //! These tests exercise methods that interact with the real filesystem. Each test gets its own

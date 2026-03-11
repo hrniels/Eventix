@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
 use serde::{Deserialize, Serialize};
 use std::{

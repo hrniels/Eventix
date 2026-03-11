@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Abstractions for iCalendar objects.
 //!
 //! A iCalendar object is represented by [`Calendar`], which contains one or more _components_,

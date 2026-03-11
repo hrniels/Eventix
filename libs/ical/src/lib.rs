@@ -1,3 +1,7 @@
+// Copyright (C) 2025 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Abstractions for iCalendar objects according to RFC 5545.
 //!
 //! This crate provides means to parse iCalendar files into objects, perform operations on these

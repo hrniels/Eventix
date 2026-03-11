@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use chrono::offset::LocalResult;
 use chrono::{
     DateTime, Datelike, Duration, Month, Months, NaiveDate, NaiveDateTime, TimeDelta, Timelike,

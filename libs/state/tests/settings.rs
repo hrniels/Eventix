@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Integration tests for [`eventix_state`] settings types that require filesystem access.
 
 use tempfile::TempDir;

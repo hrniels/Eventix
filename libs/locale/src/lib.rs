@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Locale-aware date and time formatting for calendar events.
 //!
 //! This crate provides the [`Locale`] trait and concrete implementations for English

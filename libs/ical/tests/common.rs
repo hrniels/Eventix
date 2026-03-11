@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;

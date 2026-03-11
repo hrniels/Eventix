@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Integration tests for [`eventix_state::State`] that require filesystem access.
 //!
 //! Each test gets its own temporary directory and sets `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
