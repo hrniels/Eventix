@@ -2,7 +2,6 @@
 resolver = "2"
 members = [ "bin/app",
     "bin/eventix",
-    "bin/evlist",
     "bin/import",
     "libs/cmd",
     "libs/ical",
