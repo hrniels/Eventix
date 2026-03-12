@@ -1,7 +1,13 @@
 name: CI
 
 on:
-  pull_request:
+  pull_request: {}
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: false
+        default: 'staging'
 
 env:
   CARGO_TERM_COLOR: always
