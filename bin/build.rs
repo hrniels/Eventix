@@ -20,9 +20,9 @@ fn main() {
     println!("cargo:rustc-env=GIT_HASH={git_hash}");
 
     let app_id = if env::var("PROFILE").unwrap() == "debug" {
-        "com.github.NilsTUD.Eventix-debug"
+        "com.github.hrniels.Eventix-debug"
     } else {
-        "com.github.NilsTUD.Eventix"
+        "com.github.hrniels.Eventix"
     };
     let icons = ["month", "week", "list", "event", "todo"];
 

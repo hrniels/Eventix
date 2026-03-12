@@ -1,6 +1,6 @@
 # Eventix
 
-[![codecov](https://codecov.io/github/Nils-TUD/Eventix/graph/badge.svg?token=JTAJHMQVFU)](https://codecov.io/github/Nils-TUD/Eventix)
+[![codecov](https://codecov.io/github/hrniels/Eventix/graph/badge.svg?token=MVGTKGG6J9)](https://codecov.io/github/hrniels/Eventix)
 
 Eventix is an iCalendar event and task manager for Linux desktops. It runs a local web server that
 provides a calendar UI, and ships a GTK desktop wrapper that embeds that UI in a native application
@@ -22,7 +22,7 @@ window with system tray integration.
 - System tray icon showing due-today and overdue task counts
 - Multi-language UI (English and German)
 - XDG-compliant configuration and data storage
-- Flatpak packaging (`com.github.NilsTUD.Eventix`)
+- Flatpak packaging (`com.github.hrniels.Eventix`)
 
 ## Installation
 
@@ -39,14 +39,14 @@ flatpak install --user flatpak/Eventix.flatpak
 Start the server:
 
 ```bash
-flatpak run --command=eventix com.github.NilsTUD.Eventix
+flatpak run --command=eventix com.github.hrniels.Eventix
 ```
 
 Afterwards, start the desktop UI. The flatpak package comes with a `.desktop` file, but it can also
 be started via CLI:
 
 ```bash
-flatpak run com.github.NilsTUD.Eventix
+flatpak run com.github.hrniels.Eventix
 ```
 
 It might make sense to run the server via systemd:
@@ -57,8 +57,8 @@ Description=Eventix webserver
 
 [Service]
 Environment=RUST_LOG=info
-ExecStart=/usr/bin/flatpak run --command=eventix com.github.NilsTUD.Eventix
-ExecStop=/usr/bin/flatpak kill com.github.NilsTUD.Eventix
+ExecStart=/usr/bin/flatpak run --command=eventix com.github.hrniels.Eventix
+ExecStop=/usr/bin/flatpak kill com.github.hrniels.Eventix
 Restart=on-failure
 KillMode=process
 
@@ -70,15 +70,15 @@ WantedBy=default.target
 
 Eventix can be configured completely via its web UI. However, in case manual inspection is desired,
 configuration and other files are stored in XDG-standard locations under the app ID prefix
-`com.github.NilsTUD.Eventix`. With flatpak, the base directory will be under
-`$HOME/.var/app/com.github.NilsTUD.Eventix`. The relevant files and directories are:
+`com.github.hrniels.Eventix`. With flatpak, the base directory will be under
+`$HOME/.var/app/com.github.hrniels.Eventix`. The relevant files and directories are:
 
 | File | Purpose |
 |---|---|
-| `<base>/config/com.github.NilsTUD.Eventix/settings.toml` | Collection and calendar settings |
-| `<base>/data/com.github.NilsTUD.Eventix/misc.toml` | Runtime state: last alarm check, disabled calendars, etc. |
-| `<base>/data/com.github.NilsTUD.Eventix/alarms` | Personal alarms |
-| `<base>/data/com.github.NilsTUD.Eventix/vdirsyncer` | Calendar files from remote servers |
+| `<base>/config/com.github.hrniels.Eventix/settings.toml` | Collection and calendar settings |
+| `<base>/data/com.github.hrniels.Eventix/misc.toml` | Runtime state: last alarm check, disabled calendars, etc. |
+| `<base>/data/com.github.hrniels.Eventix/alarms` | Personal alarms |
+| `<base>/data/com.github.hrniels.Eventix/vdirsyncer` | Calendar files from remote servers |
 
 ## Architecture
 

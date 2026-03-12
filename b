@@ -8,7 +8,7 @@ import shlex
 import subprocess
 
 # Define application identifiers for normal and debug mode
-APP_ID = "com.github.NilsTUD.Eventix"
+APP_ID = "com.github.hrniels.Eventix"
 APP_ID_DEBUG = APP_ID + "-debug"
 
 
