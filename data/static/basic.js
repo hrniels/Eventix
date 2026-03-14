@@ -137,6 +137,29 @@ function bindFragmentHandler(namespace, target, event, handler) {
     $(target).off(event + '.' + namespace).on(event + '.' + namespace, handler);
 }
 
+// Fetches the content fragment for `pageSlug` and injects it into `containerId`.
+// `dateStr` is the date query parameter value (pass an empty string for "current").
+// `onLoaded` is an optional callback invoked after the HTML has been injected and
+// `resizeBoxes` has run. Does not touch browser history.
+function fetchContent(pageSlug, containerId, dateStr, onLoaded) {
+    const params = dateStr ? '?date=' + encodeURIComponent(dateStr) : '';
+    $.get('/pages/' + pageSlug + '/content' + params, function(html) {
+        $(containerId).html(html);
+        resizeBoxes();
+        if (onLoaded) onLoaded();
+    }).fail(function() {
+        $(containerId).html('<p style="color:red">Failed to load calendar.</p>');
+    });
+}
+
+// Navigates to a new date for `pageSlug` by fetching the content fragment and
+// pushing a new history entry. Delegates rendering to `fetchContent`.
+function loadPageContent(pageSlug, containerId, dateStr, onLoaded) {
+    const params = dateStr ? '?date=' + encodeURIComponent(dateStr) : '';
+    history.pushState({ date: dateStr || '' }, '', '/pages/' + pageSlug + params);
+    fetchContent(pageSlug, containerId, dateStr, onLoaded);
+}
+
 function replaceSmoothly(id, newHtml, delay) {
     let el = $('#' + id);
 

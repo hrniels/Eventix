@@ -1,0 +1,286 @@
+<div class="ev_border">
+<h1 class="ev_header" style="position: relative">
+    <div style="z-index: 1; position: absolute; float: left" class="ev_jump">
+        <input type="text" id="jump_location" size="10" />
+        <input type="button" value="{{ "Jump!"|t(locale) }}" onclick="executeJump()" />
+    </div>
+
+    <div style="z-index: 0; position: absolute; width: calc(100% - 70px); left: 70px; text-align: center">
+        <a style="margin-right: .5em" id="link-prev" href="/pages/weekly?date={{ prev_week }}">&laquo;</a>
+        <div style="display: inline-block; width: 24em">W{{ week_number }}: {{ week_start }} - {{ week_end }}</div>
+        <a style="margin-left: .5em" id="link-next" href="/pages/weekly?date={{ next_week }}">&raquo;</a>
+    </div>
+    <br clear="both"/>
+</h1>
+
+<script type="text/javascript">
+    function executeJump() {
+        window.loadWeeklyContent($('#jump_location').val());
+    }
+
+    bindFragmentHandler('weekly', '#jump_location', 'keypress', function(e) {
+        if(e.which == 13) {
+            executeJump();
+            // stop propagation
+            return false;
+        }
+    });
+</script>
+
+<table width="100%" class="ev_table ev_border_bottom" style="table-layout: fixed">
+    <tr>
+        <td style="padding: 0; width: 70px"></td>
+        {% for day in days %}
+        <td width="14%" align="center"
+            class="ev_week_day_header{% if day.date == today %} ev_today{% endif %}">
+            <a href="javascript:gotoWithPrev(
+                     '/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
+               style="float: left" class="ev_add_icon">
+                <i class="bi bi-plus-square"></i>
+            </a>
+            <b>{{ day.date|weekdate(locale, DateFlags::NoToday bitor DateFlags::Short) }}</b>
+        </td>
+        {% endfor %}
+    </tr>
+</table>
+<div style="max-height: 110px; overflow-y: scroll">
+<table width="100%" class="ev_table ev_border_bottom"
+       style="table-layout: fixed; border-bottom: none">
+    <tr>
+        <td style="padding: 0; width: 70px"></td>
+        {% for day in days %}
+        <td width="14%" align="center" class="ev_week_allday ev_month_td
+                                              {% if day.date == today %}ev_today_bg{% endif %}"
+                                       style="height: auto"
+                                       data-date="{{ day.date.format("%Y-%m-%d") }}">
+            <div class="ev_week_cell">
+                {% for occ in day.allday %}
+                <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid()|to_id }}',
+                                                        '{{ occ.rid_str() }}',
+                                                        '{{ occ.id() }}'))"
+                     style="text-align: center" id="{{ occ.id() }}"
+                     data-uid="{{ occ.uid() }}"
+                     data-rid="{{ occ.rid_str() }}"
+                     class="
+                        ev_event_occurrence
+                        ev_week_event
+                        ev_cal_src ev_cal_src_{{ occ.directory() }}
+                        ev_id_{{ occ.uid()|to_id }}
+                        {% match occ.status_class() %}
+                        {% when Some with (cl) %}
+                        ev_status_{{ cl }}
+                        {% when _ %}
+                        {% endmatch %}
+                    ">
+                    {% if !occ.is_owner() %}
+                    <div class="ev_vertbar
+                        {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
+                        {% when CalPartStat::NeedsAction %}
+                        ev_vertbar_needsaction
+                        {% when stat %}
+                        ev_vertbar_{{ stat }}
+                        {% endmatch %}
+                        ">
+                    </div>
+                    {% endif %}
+                    <div style="padding: 5px">
+                        {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                        <i class="bi bi-arrow-clockwise ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.is_overwritten() %}
+                        <i class="bi bi-pencil ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.has_effective_alarms() %}
+                        <i class="bi bi-alarm ev_right_icon"></i>
+                        {% endif %}
+                        {{ occ.summary().unwrap() }}
+                    </div>
+                </div>
+                <script type="text/javascript">
+                    $(function() {
+                        const op = new DragOperation({{ occ.is_owner() }},
+                            'ev_week_event', 'ev_week_allday');
+                        $("#{{ occ.id() }}").data('drag', op).draggable(op.settings());
+                    });
+                </script>
+                {% endfor %}
+            </div>
+        </td>
+        {% endfor %}
+    </tr>
+</table>
+</div>
+<div id="week_scroll_area" class="ev_border_top" style="height: 720px; overflow-y: scroll;">
+<table width="100%" class="ev_table" style="table-layout: fixed">
+    <tr>
+        <td class="ev_month_td" style="padding: 0; width: 70px">
+        <div style="position: relative; height: 1440px; padding: 0px">
+        {% for hour in 0..24 %}
+        <div style="position: absolute;
+                    top: {{ hour * 60 }}px;
+                    padding: 2px;
+                    {% if hour > 0 %}
+                    width: 100%;
+                    border-top: .05em dashed #000000;
+                    {% endif %}">
+            {{ format!("{:02}", hour) }}:00
+        </div>
+        {% endfor %}
+        </div>
+        </td>
+        {% for day in days %}
+        <td width="14%" class="ev_month_td">
+            <div class="ev_week_cell
+                        {% if day.date == today %}ev_today_bg{% endif %}">
+                <div style="position: relative; height: 1440px; padding: 0px">
+                {% for hour in 0..24 %}
+                <div style="position: absolute;
+                            top: {{ hour * 60 }}px;
+                            width: 100%;
+                            height: 60px;
+                            {% if hour > 0 %}
+                            border-top: .05em dashed #000000;
+                            {% endif %}"
+                     data-date="{{ day.date.format("%Y-%m-%d") }}"
+                     data-hour="{{ hour }}"
+                     class="ev_hour_cell">
+                    <a href="javascript:gotoWithPrev(
+                             '/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}')"
+                       style="float: left" class="ev_add_icon">
+                        <i class="bi bi-plus-square"></i>
+                    </a>
+                </div>
+                {% endfor %}
+                {% for occ in day.occurrences %}
+                <div style="position: absolute;
+                            top: {{ occ.minute_off(day.date.clone()) + 1 }}px;
+                            height: calc({{ occ.minute_duration(day.date.clone()) }}px - 4px);
+                            width: calc({{ occ.overlap().width * (100 / occ.overlap().slots) }}% - 4px);
+                            left: calc({{ occ.overlap().offset * (100 / occ.overlap().slots) }}% + 1px);
+                            padding: 0px"
+                     onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid()|to_id }}',
+                                                        '{{ occ.rid_str() }}',
+                                                        '{{ occ.id() }}'))"
+                     id="{{ occ.id() }}"
+                     data-uid="{{ occ.uid() }}"
+                     data-rid="{{ occ.rid_str() }}"
+                     class="
+                    ev_event_occurrence
+                    ev_week_event
+                    ev_cal_src ev_cal_src_{{ occ.directory() }}
+                    ev_id_{{ occ.uid()|to_id }}
+                    {% match occ.status_class() %}
+                    {% when Some with (cl) %}
+                    ev_status_{{ cl }}
+                    {% when _ %}
+                    {% endmatch %}
+                    "
+                     >
+                    {% if !occ.is_owner() %}
+                    <div class="ev_vertbar
+                        {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
+                        {% when CalPartStat::NeedsAction %}
+                        ev_vertbar_needsaction
+                        {% when stat %}
+                        ev_vertbar_{{ stat }}
+                        {% endmatch %}
+                        ">
+                    </div>
+                    {% endif %}
+                    <div style="padding: 2px; height: calc({{ occ.minute_duration(day.date.clone()) }}px - 8px);">
+                        {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                        <i class="bi bi-arrow-clockwise ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.is_overwritten() %}
+                        <i class="bi bi-pencil ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.has_effective_alarms() %}
+                        <i class="bi bi-alarm ev_right_icon"></i>
+                        {% endif %}
+                        {{ occ.summary().unwrap() }}<br />
+                        {% if occ.occurrence_starts_on(day.date.clone()) &&
+                              !occ.occurrence_ends_on(day.date.clone()) %}
+                        <i class="bi bi-arrow-bar-right"></i>
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
+                        {% else if !occ.occurrence_starts_on(day.date.clone()) &&
+                                   occ.occurrence_ends_on(day.date.clone()) %}
+                        <i class="bi bi-arrow-bar-left"></i>
+                        {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
+                        {% else %}
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
+                        -
+                        {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
+                        {% endif %}
+                    </div>
+                </div>
+                <script type="text/javascript">
+                    $(function() {
+                        const op = new DragOperation({{ occ.is_owner() }},
+                            'ev_week_event', 'ev_hour_cell');
+                        $("#{{ occ.id() }}").data('drag', op).draggable(op.settings());
+                    });
+                </script>
+                {% endfor %}
+                {% if day.date == today %}
+                <div id="now_line"
+                     style="position: absolute; width: 100%; border-top: .1em solid red;"></div>
+                {% endif %}
+                </div>
+            </div>
+        </td>
+        {% endfor %}
+    </tr>
+</table>
+</div>
+</div>
+
+<script type="text/javascript">
+    // setNowLine is defined here so the server-rendered timezone name is available.
+    window.setNowLine = function() {
+        const date = curDate("{{ locale.timezone().name() }}");
+        $('#now_line').css('top', (date.hour * 60 + date.minute) + 'px');
+    };
+
+    bindFragmentHandler('weekly', document, 'mousedown', function(e) {
+        if(e.which !== 2)
+            return;
+
+        // find ANY element under the pointer that has .ev_hour_cell
+        const all = document.elementsFromPoint(e.clientX, e.clientY);
+        const target = all.find(el => el.classList.contains("ev_hour_cell"));
+
+        // create event in this slot
+        if(target) {
+            e.preventDefault();
+            const date = target.dataset.date;
+            const hour = target.dataset.hour;
+            const url = '/pages/items/add?ctype=Event&date=' + date + '&hour=' + hour;
+            gotoWithPrev(url);
+        }
+    });
+
+    bindFragmentHandler('weekly', document, 'keydown', function(e) {
+        if(document.activeElement.nodeName == 'BODY') {
+            if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
+                return true;
+
+            switch(e.code) {
+                case "KeyJ":
+                    $('#jump_location').focus();
+                    return false;
+                case "Period":
+                    window.loadWeeklyContent('');
+                    break;
+                case "ArrowLeft":
+                    window.loadWeeklyContent('{{ prev_week }}');
+                    break;
+                case "ArrowRight":
+                    window.loadWeeklyContent('{{ next_week }}');
+                    break;
+            }
+        }
+        return true;
+    });
+</script>

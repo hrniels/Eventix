@@ -10,27 +10,13 @@
     // Loads the monthly calendar grid for `dateStr` via AJAX and injects it into
     // #monthly-content. Also updates the browser history so the URL stays accurate.
     window.loadMonthlyContent = function(dateStr) {
-        const params = dateStr ? '?date=' + encodeURIComponent(dateStr) : '';
-        $.get('/pages/monthly/content' + params, function(html) {
-            $('#monthly-content').html(html);
-            // Re-run any inline scripts that were injected with the fragment.
-            resizeBoxes();
-        }).fail(function() {
-            $('#monthly-content').html('<p style="color:red">Failed to load calendar.</p>');
-        });
-
-        const newUrl = '/pages/monthly' + params;
-        history.pushState({ date: dateStr || '' }, '', newUrl);
+        loadPageContent('monthly', '#monthly-content', dateStr, null);
     };
 
     // Restore content on browser back/forward navigation.
     window.addEventListener('popstate', function(e) {
         const dateStr = (e.state && e.state.date) ? e.state.date : '';
-        const params = dateStr ? '?date=' + encodeURIComponent(dateStr) : '';
-        $.get('/pages/monthly/content' + params, function(html) {
-            $('#monthly-content').html(html);
-            resizeBoxes();
-        });
+        fetchContent('monthly', '#monthly-content', dateStr, null);
     });
 
     // Seed initial history state so popstate works on first back-navigation.
@@ -38,7 +24,7 @@
 
     // Load the calendar grid for the current month on page load.
     $(function() {
-        window.loadMonthlyContent('{{ date }}');
+        fetchContent('monthly', '#monthly-content', '{{ date }}', null);
     });
 </script>
 

@@ -31,10 +31,22 @@ pub struct Request {
     date: Option<String>,
 }
 
+/// Full-page shell template. The calendar grid is loaded separately via AJAX.
 #[derive(Template)]
 #[template(path = "pages/weekly.htm")]
 struct WeeklyTemplate<'a> {
     page: Page,
+    locale: Arc<dyn Locale + Send + Sync>,
+    /// The initial date string to seed the first AJAX content request (e.g. "2025-03-10").
+    date: String,
+    events: Events<'a>,
+    tasks: Tasks<'a>,
+}
+
+/// Fragment-only template for the weekly grid, rendered by the AJAX content endpoint.
+#[derive(Template)]
+#[template(path = "pages/weekly_content.htm")]
+struct WeeklyContentTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     days: Vec<Day<'a>>,
     today: NaiveDate,
@@ -43,8 +55,6 @@ struct WeeklyTemplate<'a> {
     week_end: String,
     prev_week: String,
     next_week: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
 pub async fn handler(
@@ -52,13 +62,30 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.locale();
-    content(
-        super::new_page(&state).await,
+
+    let date = {
+        let timezone = *locale.timezone();
+        parse_human_date(req.date, &timezone)?
+            .format("%Y-%m-%d")
+            .to_string()
+    };
+
+    let page = super::new_page(&state).await;
+    let st = state.lock().await;
+    let events = Events::new(&st, &locale);
+    let tasks = Tasks::new(&st, &locale);
+
+    let html = WeeklyTemplate {
+        page,
         locale,
-        State(state),
-        Query(req),
-    )
-    .await
+        date,
+        events,
+        tasks,
+    }
+    .render()
+    .context("weekly template")?;
+
+    Ok(Html(html))
 }
 
 #[derive(Debug)]
@@ -155,12 +182,12 @@ fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, OccurrenceOverlap> {
     overlaps
 }
 
-pub async fn content(
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
+/// Renders only the weekly grid fragment for the given week. Used by the AJAX content endpoint.
+pub async fn content_fragment(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
+    let locale = state.lock().await.locale();
     let timezone = *locale.timezone();
 
     let date = parse_human_date(req.date, &timezone)?;
@@ -223,13 +250,9 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
     let now = Utc::now().with_timezone(&timezone);
 
-    let html = WeeklyTemplate {
-        page,
+    let html = WeeklyContentTemplate {
         locale: locale.clone(),
         week_number: week_start.format("%V").to_string(),
         week_start: locale.fmt_weekdate(&week_start, DateFlags::NoToday),
@@ -238,11 +261,9 @@ pub async fn content(
         next_week: next_week.format("%Y-%m-%d").to_string(),
         today: now.date_naive(),
         days,
-        events,
-        tasks,
     }
     .render()
-    .context("weekly template")?;
+    .context("weekly content template")?;
 
     Ok(Html(html))
 }
