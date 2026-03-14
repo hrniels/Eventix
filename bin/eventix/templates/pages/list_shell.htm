@@ -53,7 +53,7 @@
                         <span>{{ "Apply"|t(locale) }}</span>
                     </a>
                     <a class="ev_button_big ev_button_normal"
-                       href="javascript:document.location.href = '/pages/list'">
+                       href="javascript:navigateTo('/pages/list')">
                         <span>{{ "Reset"|t(locale) }}</span>
                     </a>
                 </div>
@@ -67,7 +67,7 @@
 </div>
 
 <script type="text/javascript">
-    bindFragmentHandler('list-keywords', '#keywords', 'keydown', function(e) {
+    bindContentHandler('page-content', '#keywords', 'keydown', function(e) {
         if(e.which == 13) {
             applyListFilter();
             return false;

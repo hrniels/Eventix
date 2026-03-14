@@ -268,7 +268,7 @@
 
 <script type="text/javascript">
     // Intercept pagination link clicks so they go through AJAX instead of full navigation.
-    bindFragmentHandler('list', '#list-pagination', 'click', function(e) {
+    bindContentHandler('list-content', '#list-pagination', 'click', function(e) {
         const anchor = $(e.target).closest('a[href]');
         if(anchor.length === 0)
             return;

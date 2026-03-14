@@ -19,7 +19,7 @@ pub fn router(state: EventixState) -> Router {
             "/",
             get(
                 |State(state): State<EventixState>, RawQuery(raw): RawQuery| async move {
-                    shell::handler(state, raw, "calendars", "calendars-content").await
+                    shell::handler(state, raw, "calendars").await
                 },
             ),
         )

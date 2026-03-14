@@ -134,37 +134,6 @@ function setPersonalOverwrite(id_prefix, overwrite) {
     $("#" + id_prefix + "_datetime__date_").datepicker("option", "disabled", !overwrite);
 }
 
-// Binds an event handler under a namespace so that re-injecting a fragment never
-// accumulates duplicate handlers on persistent targets such as `document`. Calling
-// this again with the same namespace, target, and event replaces the previous handler
-// rather than adding another one.
-function bindFragmentHandler(namespace, target, event, handler) {
-    $(target).off(event + '.' + namespace).on(event + '.' + namespace, handler);
-}
-
-// Fetches the content fragment for `pageSlug` and injects it into `containerId`.
-// `queryStr` is a pre-encoded query string such as `"keywords=foo&page=1"` or
-// `"date=2025-03"` (pass an empty string for no parameters). `onLoaded` is an
-// optional callback invoked after the HTML has been injected and `resizeBoxes`
-// has run. Does not touch browser history.
-function fetchContent(pageSlug, containerId, queryStr, onLoaded) {
-    const params = queryStr ? '?' + queryStr : '';
-    getRequest('/pages/' + pageSlug + '/content' + params, function(html) {
-        $(containerId).html(html);
-        resizeBoxes();
-        if(onLoaded)
-            onLoaded();
-    }, 'html');
-}
-
-// Navigates to a new state for `pageSlug` by fetching the content fragment and
-// pushing a new history entry. Delegates rendering to `fetchContent`.
-function loadPageContent(pageSlug, containerId, queryStr, onLoaded) {
-    const params = queryStr ? '?' + queryStr : '';
-    history.pushState({ query: queryStr || '' }, '', '/pages/' + pageSlug + params);
-    fetchContent(pageSlug, containerId, queryStr, onLoaded);
-}
-
 function replaceSmoothly(id, newHtml, delay) {
     let el = $('#' + id);
 

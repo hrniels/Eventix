@@ -19,7 +19,7 @@ use crate::{
 ///
 /// Renders the outer page frame (nav, sidebar, etc.) with a single placeholder `<div>` whose
 /// content is fetched via AJAX. All per-page shell pages use this template, parameterised by
-/// `slug`, `div_id`, and `init_query`.
+/// `slug` and `init_query`. The placeholder div always has `id="page-content"`.
 #[derive(Template)]
 #[template(path = "pages/shell.htm")]
 struct ShellTemplate<'a> {
@@ -29,8 +29,6 @@ struct ShellTemplate<'a> {
     tasks: Tasks<'a>,
     /// The `data-page-slug` value used by the JS bootstrap to build the AJAX content URL.
     slug: &'a str,
-    /// The `id` attribute of the placeholder `<div>`.
-    div_id: &'a str,
     /// The raw query string forwarded as `data-init-query` to seed the first content request.
     init_query: String,
 }
@@ -43,7 +41,6 @@ pub async fn handler(
     state: EventixState,
     raw: Option<String>,
     slug: &str,
-    div_id: &str,
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = Page::new(&state).await;
 
@@ -59,7 +56,6 @@ pub async fn handler(
         events,
         tasks,
         slug,
-        div_id,
         init_query: raw.unwrap_or_default(),
     }
     .render()

@@ -6,25 +6,27 @@
     </div>
 
     <div style="z-index: 0; position: absolute; width: calc(100% - 30px); left: 30px; text-align: center">
-        <a style="margin-right: .5em" id="link-prev" href="/pages/monthly?date={{ prev_month }}">&laquo;</a>
+        <a style="margin-right: .5em" id="link-prev"
+           href="javascript:loadMonthlyContent('{{ prev_month }}')">&laquo;</a>
         <div style="display: inline-block; width: 8em">{{ month }}</div>
-        <a style="margin-left: .5em" id="link-next" href="/pages/monthly?date={{ next_month }}">&raquo;</a>
+        <a style="margin-left: .5em" id="link-next"
+           href="javascript:loadMonthlyContent('{{ next_month }}')">&raquo;</a>
     </div>
     <br clear="both"/>
 </h1>
 
 <script type="text/javascript">
     // Loads the monthly calendar grid for `dateStr` via AJAX and injects it into
-    // #monthly-content. Also updates the browser history so the URL stays accurate.
+    // #page-content. Also updates the browser history so the URL stays accurate.
     function loadMonthlyContent(dateStr) {
-        loadPageContent('monthly', '#monthly-content', 'date=' + encodeURIComponent(dateStr), null);
+        loadPageContent('monthly', '#page-content', 'date=' + encodeURIComponent(dateStr), null);
     }
 
     function executeJump() {
         loadMonthlyContent($('#jump_location').val());
     }
 
-    bindFragmentHandler('monthly', '#jump_location', 'keypress', function(e) {
+    bindContentHandler('page-content', '#jump_location', 'keypress', function(e) {
         if(e.which == 13) {
             executeJump();
             // stop propagation
@@ -45,7 +47,7 @@
     {% if idx % 7 == 0 %}
     <tr>
         <td class="ev_month_td" align="center" style="vertical-align: middle">
-            <a href="/pages/weekly?date={{ date.format("%Y-%m-%d") }}">{{ date.format("%V") }}</a>
+            <a href="javascript:navigateTo('/pages/weekly?date={{ date.format("%Y-%m-%d") }}')">{{ date.format("%V") }}</a>
         </td>
     {% endif %}
         <td width="14%" data-date="{{ date.format("%Y-%m-%d") }}"
@@ -143,7 +145,7 @@
 </div>
 
 <script type="text/javascript">
-    bindFragmentHandler('monthly', document, 'keydown', function(e) {
+    bindContentHandler('page-content', document, 'keydown', function(e) {
         if(document.activeElement.nodeName == 'BODY') {
             if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
                 return true;

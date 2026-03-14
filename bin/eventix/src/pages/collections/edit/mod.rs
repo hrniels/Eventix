@@ -31,7 +31,7 @@ pub fn router(state: EventixState) -> Router {
             "/",
             get(
                 |State(state): State<EventixState>, RawQuery(raw): RawQuery| async move {
-                    shell::handler(state, raw, "collections/edit", "edit-content").await
+                    shell::handler(state, raw, "collections/edit").await
                 },
             ),
         )

@@ -39,7 +39,7 @@
     </head>
     <body>
         <div id="outer">
-            <form method="get" action="/pages/list">
+            <form onsubmit="navigateTo('/pages/list?' + $(this).serialize()); return false;">
             <div style="float: left; padding-bottom: .5em" class="ev_button_medium ev_button_normal">
                 <span>{{ "Search"|t(locale) }}:</span>
                 <input type="text" id="quick-search" name="keywords"
@@ -49,7 +49,7 @@
 
             <div style="float: right;" class="ev_padbottom">
                 <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
-                    <a class="ev_button_link" href="/pages/calendars">{{ "Calendars"|t(locale) }}:</a>
+                    <a class="ev_button_link" href="javascript:navigateTo('/pages/calendars')">{{ "Calendars"|t(locale) }}:</a>
                     {% for cal in page.calendars() %}
                     <a style="vertical-align: middle"
                        href="javascript:toggleCalendar('{{ cal.id }}')">
@@ -88,16 +88,19 @@
                     {% endfor %}
                 </div>
                 &nbsp;
-                <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/pages/monthly">
+                <a id="link-monthly" class="ev_button_medium ev_button_normal"
+                                  href="javascript:navigateTo('/pages/monthly')">
                     <i class="bi bi-calendar2-month"></i>
                     <span>{{ "Month"|t(locale) }}</span>
                 </a>
-                <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/pages/weekly">
+                <a id="link-weekly" class="ev_button_medium ev_button_normal"
+                                  href="javascript:navigateTo('/pages/weekly')">
                     <i class="bi bi-calendar2-week"></i>
                     <span>{{ "Week"|t(locale) }}</span>
                 </a>
                 <a id="link-list" class="ev_button_medium ev_button_normal"
-                                  style="padding-left: 1em; padding-right: 1em" href="/pages/list">
+                                  style="padding-left: 1em; padding-right: 1em"
+                                  href="javascript:navigateTo('/pages/list')">
                     <i class="bi bi-card-list"></i>
                     <span>{{ "List"|t(locale) }}</span>
                 </a>

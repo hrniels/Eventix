@@ -34,7 +34,7 @@
 
 {% if page != 1 || page != num %}
 <script type="text/javascript">
-    bindFragmentHandler('pagination', document, 'keydown', function(e) {
+    bindContentHandler('page-content', document, 'keydown', function(e) {
         // we have to ignore these keys if the focus is on an input element or similar. to be sure,
         // we only accept them when the body is focused.
         if(document.activeElement.nodeName == 'BODY') {
