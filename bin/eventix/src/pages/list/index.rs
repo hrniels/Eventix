@@ -138,21 +138,32 @@ impl<'a> ListComponent<'a> {
     }
 }
 
+/// Full-page shell template. The list content is loaded separately via AJAX.
 #[derive(Template)]
 #[template(path = "pages/list.htm")]
-struct ListTemplate<'a, F: Fn(&usize) -> String> {
+struct ListTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
+    /// The initial serialized filter query string to seed the first AJAX content request
+    /// (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
+    filter_query: String,
     filter: Filter,
     conjunction: RadioGroupTemplate<Conjunction>,
     directories: Vec<&'a CalDir>,
-    comps: Vec<ListComponent<'a>>,
-    pagination: PaginationTemplate<F>,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
 
-impl<F: Fn(&usize) -> String> ListTemplate<'_, F> {
+/// Fragment-only template for the list content, rendered by the AJAX content endpoint.
+#[derive(Template)]
+#[template(path = "pages/list_content.htm")]
+struct ListContentTemplate<'a, F: Fn(&usize) -> String> {
+    locale: Arc<dyn Locale + Send + Sync>,
+    comps: Vec<ListComponent<'a>>,
+    pagination: PaginationTemplate<F>,
+}
+
+impl<F: Fn(&usize) -> String> ListContentTemplate<'_, F> {
     fn attendees_sorted(atts: &[CalAttendee]) -> Vec<&CalAttendee> {
         let mut att = atts.iter().collect::<Vec<_>>();
         att.sort_by(|a, b| match (a.common_name(), b.common_name()) {
@@ -169,6 +180,65 @@ pub async fn handler(
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state).await;
 
+    let st = state.lock().await;
+    let locale = st.locale();
+
+    // Populate dirs default so the seeded query string includes them.
+    if filter.dirs.is_empty() {
+        filter.dirs = st
+            .store()
+            .directories()
+            .iter()
+            .map(|s| s.id().deref().clone())
+            .collect();
+    }
+
+    let directories = st.store().directories().iter().collect::<Vec<_>>();
+    if filter.dirs.is_empty() {
+        filter.dirs = directories.iter().map(|s| s.id().deref().clone()).collect();
+    }
+
+    let filter_query = serde_qs::to_string(&filter).unwrap_or_default();
+
+    let conjunction = RadioGroupTemplate::new(
+        String::from("conjunction"),
+        filter.conjunction,
+        vec![
+            (
+                Conjunction::And,
+                locale.translate("All keywords need to match").to_string(),
+            ),
+            (
+                Conjunction::Or,
+                locale.translate("Any keyword needs to match").to_string(),
+            ),
+        ],
+    );
+
+    let events = Events::new(&st, &locale);
+    let tasks = Tasks::new(&st, &locale);
+
+    let html = ListTemplate {
+        page,
+        locale,
+        filter,
+        conjunction,
+        directories,
+        filter_query,
+        events,
+        tasks,
+    }
+    .render()
+    .context("list template")?;
+
+    Ok(Html(html))
+}
+
+/// Renders only the list content fragment for the given filter. Used by the AJAX content endpoint.
+pub async fn content_fragment(
+    State(state): State<EventixState>,
+    MultiQuery(mut filter): MultiQuery<Filter>,
+) -> Result<impl IntoResponse, HTMLError> {
     let state = state.lock().await;
     let locale = state.locale();
 
@@ -244,45 +314,20 @@ pub async fn handler(
         .take(PER_PAGE)
         .collect::<Vec<_>>();
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
-    let filter_clone = filter.clone();
     let pagination = PaginationTemplate::new(
-        |page| filter_clone.with_page(*page).url(),
+        |page| filter.with_page(*page).url(),
         total,
         PER_PAGE,
         filter.page,
     );
 
-    let conjunction = RadioGroupTemplate::new(
-        String::from("conjunction"),
-        filter.conjunction,
-        vec![
-            (
-                Conjunction::And,
-                locale.translate("All keywords need to match").to_string(),
-            ),
-            (
-                Conjunction::Or,
-                locale.translate("Any keyword needs to match").to_string(),
-            ),
-        ],
-    );
-
-    let html = ListTemplate {
-        page,
+    let html = ListContentTemplate {
         locale,
-        filter,
-        conjunction,
-        directories,
         comps,
         pagination,
-        events,
-        tasks,
     }
     .render()
-    .context("search template")?;
+    .context("list content template")?;
 
     Ok(Html(html))
 }
