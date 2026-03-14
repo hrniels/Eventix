@@ -1,0 +1,162 @@
+<div class="ev_border">
+<h1 class="ev_header" style="position: relative">
+    <div style="z-index: 1; position: absolute; float: left" class="ev_jump">
+        <input type="text" id="jump_location" size="10" />
+        <input type="button" value="{{ "Jump!"|t(locale) }}" onclick="executeJump()" />
+    </div>
+
+    <div style="z-index: 0; position: absolute; width: calc(100% - 30px); left: 30px; text-align: center">
+        <a style="margin-right: .5em" id="link-prev" href="/pages/monthly?date={{ prev_month }}">&laquo;</a>
+        <div style="display: inline-block; width: 8em">{{ month }}</div>
+        <a style="margin-left: .5em" id="link-next" href="/pages/monthly?date={{ next_month }}">&raquo;</a>
+    </div>
+    <br clear="both"/>
+</h1>
+
+<script type="text/javascript">
+    function executeJump() {
+        window.loadMonthlyContent($('#jump_location').val());
+    }
+
+    bindFragmentHandler('monthly', '#jump_location', 'keypress', function(e) {
+        if(e.which == 13) {
+            executeJump();
+            // stop propagation
+            return false;
+        }
+    });
+</script>
+
+<table width="100%" class="ev_table" style="table-layout: fixed">
+    <tr>
+        <td align="center" style="padding: 0; width: 30px"></td>
+        {% for wday in weekdays %}
+        <td align="center"><b>{{ wday }}</b></td>
+        {% endfor %}
+    </tr>
+    {% for (idx, day) in days.iter().enumerate() %}
+    {% let date = day.date.unwrap() %}
+    {% if idx % 7 == 0 %}
+    <tr>
+        <td class="ev_month_td" align="center" style="vertical-align: middle">
+            <a href="/pages/weekly?date={{ date.format("%Y-%m-%d") }}">{{ date.format("%V") }}</a>
+        </td>
+    {% endif %}
+        <td width="14%" data-date="{{ date.format("%Y-%m-%d") }}"
+            class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}">
+            <div class="
+                ev_month_day_header
+                {% if date == today %}ev_today{% endif %}
+                {% if day.cur_month %}ev_cur_month{% endif %}
+                ">
+                <a href="javascript:gotoWithPrev('/pages/items/add?ctype=Event&date={{ date.format("%Y-%m-%d") }}')"
+                   style="float: left" class="ev_add_icon">
+                    <i class="bi bi-plus-square"></i>
+                </a>
+                {% if day.show_month %}
+                {{ date.format("%b %-d") }}
+                {% else %}
+                {{ date.format("%-d") }}
+                {% endif %}
+            </div>
+            <div class="ev_month_cell">
+                {% for occ in day.occurrences %}
+                 <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid()|to_id }}',
+                                                        '{{ occ.rid_str() }}',
+                                                        '{{ occ.id() }}'))"
+                     {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
+                     style="text-align: center"
+                     {% endif %}
+                     data-uid="{{ occ.uid() }}"
+                     data-rid="{{ occ.rid_str() }}"
+                     id="{{ occ.id() }}" class="
+                    ev_event_occurrence
+                    ev_id_{{ occ.uid()|to_id }}
+                    ev_cal_src ev_cal_src_{{ occ.directory() }}
+                    {% match occ.status_class() %}
+                    {% when Some with (cl) %}
+                    ev_status_{{ cl }}
+                    {% when _ %}
+                    {% endmatch %}
+                    ">
+                    {% if !occ.is_owner() %}
+                    <div class="ev_vertbar
+                        {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
+                        {% when CalPartStat::NeedsAction %}
+                        ev_vertbar_needsaction
+                        {% when stat %}
+                        ev_vertbar_{{ stat }}
+                        {% endmatch %}
+                        ">
+                    </div>
+                    {% else %}
+                    <div class="ev_vertbar_spacer">&nbsp;</div>
+                    {% endif %}
+                    <div style="padding: 5px">
+                        {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                        <i class="bi bi-arrow-clockwise ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.is_overwritten() %}
+                        <i class="bi bi-pencil ev_right_icon"></i>
+                        {% endif %}
+                        {% if occ.has_effective_alarms() %}
+                        <i class="bi bi-alarm ev_right_icon"></i>
+                        {% endif %}
+                        {% if !occ.is_all_day() && !occ.is_all_day_on(day.date.unwrap()) %}
+                        {% if occ.occurrence_starts_on(day.date.unwrap()) &&
+                              !occ.occurrence_ends_on(day.date.unwrap()) %}
+                        <i class="bi bi-arrow-bar-right"></i>
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
+                        {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
+                                   occ.occurrence_ends_on(day.date.unwrap()) %}
+                        <i class="bi bi-arrow-bar-left"></i>
+                        {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
+                        {% else %}
+                        {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
+                        {% endif %}
+                        {% endif %}
+                        {{ occ.summary().unwrap() }}
+                    </div>
+                </div>
+                <script type="text/javascript">
+                    $(function() {
+                        const op = new DragOperation({{ occ.is_owner() }},
+                            'ev_event_occurrence', 'ev_month_td');
+                        $("#{{ occ.id() }}").data('drag', op).draggable(op.settings());
+                    });
+                </script>
+                {% endfor %}
+            </div>
+        </td>
+    {% if idx % 7 == 6 %}
+    </tr>
+    {% endif %}
+    {% endfor %}
+</table>
+</div>
+
+<script type="text/javascript">
+    bindFragmentHandler('monthly', document, 'keydown', function(e) {
+        if(document.activeElement.nodeName == 'BODY') {
+            if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
+                return true;
+
+            switch(e.code) {
+                case "KeyJ":
+                    $('#jump_location').focus();
+                    return false;
+                case "Period":
+                    window.loadMonthlyContent('');
+                    break;
+                case "ArrowLeft":
+                    window.loadMonthlyContent('{{ prev_month }}');
+                    break;
+                case "ArrowRight":
+                    window.loadMonthlyContent('{{ next_month }}');
+                    break;
+            }
+        }
+        return true;
+    });
+</script>

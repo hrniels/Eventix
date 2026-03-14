@@ -35,10 +35,22 @@ pub struct Request {
     date: Option<String>,
 }
 
+/// Full-page shell template. The calendar grid is loaded separately via AJAX.
 #[derive(Template)]
 #[template(path = "pages/monthly.htm")]
 struct MonthlyTemplate<'a> {
     page: Page,
+    locale: Arc<dyn Locale + Send + Sync>,
+    /// The initial date string to seed the first AJAX content request (e.g. "2025-03").
+    date: String,
+    events: Events<'a>,
+    tasks: Tasks<'a>,
+}
+
+/// Fragment-only template for the calendar grid, rendered by the AJAX content endpoint.
+#[derive(Template)]
+#[template(path = "pages/monthly_content.htm")]
+struct MonthlyContentTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     weekdays: Vec<String>,
     days: Vec<Day<'a>>,
@@ -46,8 +58,6 @@ struct MonthlyTemplate<'a> {
     month: String,
     prev_month: String,
     next_month: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
 pub async fn handler(
@@ -55,21 +65,38 @@ pub async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.locale();
-    content(
-        super::new_page(&state).await,
+
+    let date = {
+        let timezone = *locale.timezone();
+        parse_human_date(req.date, &timezone)?
+            .format("%Y-%m")
+            .to_string()
+    };
+
+    let page = super::new_page(&state).await;
+    let st = state.lock().await;
+    let events = Events::new(&st, &locale);
+    let tasks = Tasks::new(&st, &locale);
+
+    let html = MonthlyTemplate {
+        page,
         locale,
-        State(state),
-        Query(req),
-    )
-    .await
+        date,
+        events,
+        tasks,
+    }
+    .render()
+    .context("monthly template")?;
+
+    Ok(Html(html))
 }
 
-pub async fn content(
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
+/// Renders only the calendar grid fragment for the given month. Used by the AJAX content endpoint.
+pub async fn content_fragment(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
+    let locale = state.lock().await.locale();
     let timezone = *locale.timezone();
 
     let weekdays = vec![
@@ -130,11 +157,7 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
-    let html = MonthlyTemplate {
-        page,
+    let html = MonthlyContentTemplate {
         weekdays,
         month: format!(
             "{} {}",
@@ -146,11 +169,9 @@ pub async fn content(
         today: Utc::now().with_timezone(&timezone).date_naive(),
         days,
         locale,
-        events,
-        tasks,
     }
     .render()
-    .context("monthly template")?;
+    .context("monthly content template")?;
 
     Ok(Html(html))
 }

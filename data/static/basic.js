@@ -129,6 +129,14 @@ function setPersonalOverwrite(id_prefix, overwrite) {
     $("#" + id_prefix + "_datetime__date_").datepicker("option", "disabled", !overwrite);
 }
 
+// Binds an event handler under a namespace so that re-injecting a fragment never
+// accumulates duplicate handlers on persistent targets such as `document`. Calling
+// this again with the same namespace, target, and event replaces the previous handler
+// rather than adding another one.
+function bindFragmentHandler(namespace, target, event, handler) {
+    $(target).off(event + '.' + namespace).on(event + '.' + namespace, handler);
+}
+
 function replaceSmoothly(id, newHtml, delay) {
     let el = $('#' + id);
 
