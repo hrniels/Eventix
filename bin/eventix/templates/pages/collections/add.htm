@@ -2,59 +2,23 @@
 
 {% block inner %}
 
+<div id="add-content">
+    <p>{{ "Loading..."|t(locale) }}</p>
+</div>
+
 <script type="text/javascript">
-    setFormPage(true);
-</script>
+    // Seed initial history state so popstate works on first back-navigation.
+    history.replaceState({ query: '{{ request_query|safe }}' }, '', window.location.href);
 
-{% if let Some(prev) = prev %}
-<form id="form" method="post" action="/pages/collections/add?prev={{ prev }}">
-{% else %}
-<form id="form" method="post" action="/pages/collections/add">
-{% endif %}
-    <div class="ev_border">
-        <fieldset class="ev_form">
-            <h1 id="title" class="ev_header">{{ "New Collection"|t(locale) }}</h1>
-            <dl>
-                <dt>{{ "Name"|t(locale) }}:</dt>
-                <dd>
-                    <input type="text" size="15" id="name" name="name" value="{{ name }}" />
-                    <div>{{ "info.collection_name"|t(locale) }}</div>
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Syncer"|t(locale) }}:</dt>
-                <dd>{{ syncer|safe }}</dd>
-            </dl>
-            <div class="ev_submit">
-                <a class="ev_button_big ev_button_normal" style="width: 80px"
-                   href="javascript:$('#form').submit()">
-                    <span>{{ "Save"|t(locale) }}</span>
-                </a>
-                <a class="ev_button_big ev_button_normal" style="width: 80px"
-                   {% if let Some(prev) = prev %}
-                   href="javascript:document.location.href = '{{ prev }}'"
-                   {% else %}
-                   href="javascript:document.location.href = '/'"
-                   {% endif %}
-                >
-                    <span>{{ "Back"|t(locale) }}</span>
-                </a>
-            </div>
-        </fieldset>
-    </div>
-</form>
-
-<script>
+    // Load the form content on page load.
     $(function() {
-        $('#name').focus();
+        fetchContentWithQuery('collections/add', '#add-content', '{{ request_query|safe }}', null);
     });
 
-    $(document).keydown(function(e) {
-        if(e.ctrlKey && e.code == "Enter") {
-            $('#form').submit();
-            return false;
-        }
-        return true;
+    // Restore content on browser back/forward navigation.
+    window.addEventListener('popstate', function(e) {
+        const queryStr = (e.state && e.state.query) ? e.state.query : '';
+        fetchContentWithQuery('collections/add', '#add-content', queryStr, null);
     });
 </script>
 

@@ -1,0 +1,82 @@
+{% if page.errors().len() > 0 %}
+<div class="ev_border ev_padbottom_big">
+    <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
+    <div class="ev_main">
+        <div style="padding: 0.3em;">
+            <ul>
+                {% for err in page.errors() %}
+                <li><span class="ev_msg_error">{{ err|safe }}</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if page.infos().len() > 0 %}
+<div class="ev_border ev_padbottom_big">
+    <h1 class="ev_header ev_info">{{ "Information"|t(locale) }}</h1>
+    <div class="ev_main">
+        <div style="padding: 0.3em;">
+            <ul>
+                {% for info in page.infos() %}
+                <li><span class="ev_msg_info">{{ info|safe }}</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if let Some(prev) = prev %}
+<form id="edit-form" method="post" action="/pages/collections/edit?col_id={{ col_id }}&prev={{ prev }}">
+{% else %}
+<form id="edit-form" method="post" action="/pages/collections/edit?col_id={{ col_id }}">
+{% endif %}
+    <div class="ev_border">
+        <fieldset class="ev_form">
+            <h1 id="title" class="ev_header">{{ "Edit Collection"|t(locale) }}</h1>
+            <dl>
+                <dt>{{ "Name"|t(locale) }}:</dt>
+                <dd>{{ col_id }}</dd>
+            </dl>
+            <dl>
+                <dt>{{ "Syncer"|t(locale) }}:</dt>
+                <dd>{{ syncer|safe }}</dd>
+            </dl>
+            <div class="ev_submit">
+                <a class="ev_button_big ev_button_normal" style="width: 80px"
+                   href="javascript:submitEditForm()">
+                    <span>{{ "Save"|t(locale) }}</span>
+                </a>
+                <a class="ev_button_big ev_button_normal" style="width: 80px"
+                   {% if let Some(prev) = prev %}
+                   href="javascript:document.location.href = '{{ prev }}'"
+                   {% else %}
+                   href="javascript:document.location.href = '/'"
+                   {% endif %}
+                >
+                    <span>{{ "Back"|t(locale) }}</span>
+                </a>
+            </div>
+        </fieldset>
+    </div>
+</form>
+
+<script>
+    // Submits the edit form via AJAX and injects the response fragment into #edit-content.
+    function submitEditForm() {
+        formRequest('edit-form', function(html) {
+            $('#edit-content').html(html);
+            resizeBoxes();
+        });
+    }
+
+    bindFragmentHandler('edit-form', document, 'keydown', function(e) {
+        if(e.ctrlKey && e.code == "Enter") {
+            submitEditForm();
+            return false;
+        }
+        return true;
+    });
+</script>

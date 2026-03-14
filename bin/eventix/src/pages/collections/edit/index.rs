@@ -17,34 +17,67 @@ use super::Request;
 use crate::pages::{Page, collections::Form, error::HTMLError, events::Events, tasks::Tasks};
 use crate::{comps::syncer::SyncerTemplate, html::filters};
 
+/// Full-page shell template. The form content is loaded separately via AJAX.
 #[derive(Template)]
 #[template(path = "pages/collections/edit.htm")]
-struct CollectionAddTemplate<'a> {
+struct CollectionEditShellTemplate<'a> {
+    page: Page,
+    locale: Arc<dyn Locale + Send + Sync>,
+    /// The initial serialized query string to seed the first AJAX content request.
+    request_query: String,
+    events: Events<'a>,
+    tasks: Tasks<'a>,
+}
+
+/// Fragment-only template for the edit-collection form, rendered by the AJAX content endpoint.
+#[derive(Template)]
+#[template(path = "pages/collections/edit_content.htm")]
+struct CollectionEditContentTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     col_id: &'a String,
     prev: Option<&'a String>,
     syncer: SyncerTemplate<'a>,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
 pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = state.lock().await.locale();
+    let page = super::new_page(&state).await;
 
-    content(
-        super::new_page(&state).await,
-        locale.clone(),
-        State(state),
-        None,
-        req,
-    )
-    .await
+    let st = state.lock().await;
+    let locale = st.locale();
+    let events = Events::new(&st, &locale);
+    let tasks = Tasks::new(&st, &locale);
+
+    let request_query = serde_qs::to_string(&req).unwrap_or_default();
+
+    let html = CollectionEditShellTemplate {
+        page,
+        locale,
+        request_query,
+        events,
+        tasks,
+    }
+    .render()
+    .context("collections edit shell template")?;
+
+    Ok(Html(html))
 }
 
+/// Renders only the edit-collection form fragment for the given request. Used by both the
+/// AJAX content endpoint (GET) and the save handler (POST) to re-render the form.
+pub async fn content_fragment(
+    State(state): State<EventixState>,
+    Query(req): Query<Request>,
+) -> Result<impl IntoResponse, HTMLError> {
+    let locale = state.lock().await.locale();
+    content(Page::default(), locale, State(state), None, req).await
+}
+
+/// Renders the edit-collection form fragment with the given page state and form data.
+/// Called by `content_fragment` for the initial GET and by `save::handler` after a POST.
 pub async fn content(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
@@ -65,21 +98,17 @@ pub async fn content(
         Form::new_from(col)
     };
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
     let syncer = form.syncer_type();
 
-    let html = CollectionAddTemplate {
+    let html = CollectionEditContentTemplate {
         page,
         syncer: SyncerTemplate::new(locale.clone(), "syncer", form.syncer, syncer),
         col_id: &req.col_id,
         prev: req.prev.as_ref(),
         locale,
-        events,
-        tasks,
     }
     .render()
-    .context("collections edit template")?;
+    .context("collections edit content template")?;
 
     Ok(Html(html))
 }
