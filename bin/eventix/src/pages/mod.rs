@@ -8,6 +8,7 @@ pub mod error;
 pub mod items;
 pub mod list;
 pub mod monthly;
+pub mod shell;
 pub mod weekly;
 
 mod events;

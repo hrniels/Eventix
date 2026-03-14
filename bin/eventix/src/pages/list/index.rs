@@ -4,14 +4,13 @@
 
 use anyhow::{Context, Result};
 use askama::Template;
-use axum::extract::{RawQuery, State};
+use axum::extract::State;
 use axum::response::{Html, IntoResponse};
 use eventix_ical::col::{CalDir, CalFile, Occurrence};
 use eventix_ical::objects::{
-    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalPartStat, CalTodoStatus,
-    EventLike,
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalPartStat, CalTodoStatus, EventLike,
 };
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::{DateFlags, Locale};
 use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -26,7 +25,7 @@ use crate::comps::{
 };
 use crate::extract::MultiQuery;
 use crate::html::{self, filters, to_id};
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::error::HTMLError;
 
 const PER_PAGE: usize = 15;
 
@@ -138,20 +137,6 @@ impl<'a> ListComponent<'a> {
     }
 }
 
-/// Full-page outer shell template. The list shell (filter form + JS) is loaded via AJAX into
-/// `#list-shell-content`, which in turn lazy-loads the paginated results into `#list-content`.
-#[derive(Template)]
-#[template(path = "pages/list.htm")]
-struct ListTemplate<'a> {
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
-    /// The raw filter query string from the request URL, passed through to seed the first
-    /// AJAX shell request (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
-    filter_query: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
-}
-
 /// Fragment-only template for the filter form and JS helpers. Loaded via AJAX into
 /// `#list-shell-content` and immediately triggers a second AJAX load of the paginated results.
 #[derive(Template)]
@@ -184,34 +169,6 @@ impl<F: Fn(&usize) -> String> ListContentTemplate<'_, F> {
         });
         att
     }
-}
-
-/// Renders the outer full-page shell. The actual list UI is lazy-loaded in two AJAX steps.
-pub async fn handler(
-    State(state): State<EventixState>,
-    RawQuery(raw): RawQuery,
-) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state).await;
-
-    let st = state.lock().await;
-    let locale = st.locale();
-
-    let filter_query = raw.unwrap_or_default();
-
-    let events = Events::new(&st, &locale);
-    let tasks = Tasks::new(&st, &locale);
-
-    let html = ListTemplate {
-        page,
-        locale,
-        filter_query,
-        events,
-        tasks,
-    }
-    .render()
-    .context("list template")?;
-
-    Ok(Html(html))
 }
 
 /// Renders the list shell fragment containing the filter form, JS helpers, and the inner

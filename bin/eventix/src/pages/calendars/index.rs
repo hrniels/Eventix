@@ -8,31 +8,17 @@ use axum::{
     extract::State,
     response::{Html, IntoResponse},
 };
-use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::Locale;
 use eventix_state::{CollectionSettings, EventixState, SyncerType};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use tokio::{fs, io::AsyncReadExt};
 use xdg::BaseDirectories;
 
-use crate::{
-    comps::calbox::CalendarBoxTemplate,
-    pages::{Page, error::HTMLError, events::Events, tasks::Tasks},
-};
+use crate::{comps::calbox::CalendarBoxTemplate, pages::error::HTMLError};
 use crate::{
     comps::calbox::{CalendarBox, CalendarBoxMode},
     html::filters,
 };
-
-/// Full-page shell template. The calendar content is loaded separately via AJAX.
-#[derive(Template)]
-#[template(path = "pages/calendars.htm")]
-struct CalendarsTemplate<'a> {
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
-}
 
 /// Fragment-only template for the calendars list, rendered by the AJAX content endpoint.
 #[derive(Template)]
@@ -99,26 +85,6 @@ async fn add_unknown_calendars<'a>(
 
     known.sort_by(|a, b| a.cal().name().cmp(b.cal().name()));
     Ok(())
-}
-
-pub async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state).await;
-
-    let st = state.lock().await;
-    let locale = st.locale();
-    let events = Events::new(&st, &locale);
-    let tasks = Tasks::new(&st, &locale);
-
-    let html = CalendarsTemplate {
-        page,
-        locale,
-        events,
-        tasks,
-    }
-    .render()
-    .context("calendars template")?;
-
-    Ok(Html(html))
 }
 
 /// Renders only the calendars list fragment. Used by the AJAX content endpoint.

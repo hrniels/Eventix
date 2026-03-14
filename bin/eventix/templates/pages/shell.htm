@@ -2,9 +2,10 @@
 
 {% block inner %}
 
-<div id="edit-content"
-     data-page-slug="collections/edit"
-     data-init-query="{{ request_query|safe }}">
+<div id="{{ div_id }}"
+     data-page-slug="{{ slug }}"
+     data-init-query="{{ init_query|safe }}"
+     >
     <p>{{ "Loading..."|t(locale) }}</p>
 </div>
 

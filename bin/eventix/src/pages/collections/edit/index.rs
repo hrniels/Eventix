@@ -5,30 +5,16 @@
 use anyhow::{Context, Result, anyhow};
 use askama::Template;
 use axum::{
-    extract::{Query, RawQuery, State},
+    extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::sync::Arc;
 
 use super::Request;
-use crate::pages::{Page, collections::Form, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::{Page, collections::Form, error::HTMLError};
 use crate::{comps::syncer::SyncerTemplate, html::filters};
-
-/// Full-page shell template. The form content is loaded separately via AJAX.
-#[derive(Template)]
-#[template(path = "pages/collections/edit.htm")]
-struct CollectionEditShellTemplate<'a> {
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
-    /// The raw query string from the request URL, passed through to seed the first AJAX content
-    /// request.
-    request_query: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
-}
 
 /// Fragment-only template for the edit-collection form, rendered by the AJAX content endpoint.
 #[derive(Template)]
@@ -39,32 +25,6 @@ struct CollectionEditContentTemplate<'a> {
     col_id: &'a String,
     prev: Option<&'a String>,
     syncer: SyncerTemplate<'a>,
-}
-
-pub async fn handler(
-    State(state): State<EventixState>,
-    RawQuery(raw): RawQuery,
-) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state).await;
-
-    let st = state.lock().await;
-    let locale = st.locale();
-    let events = Events::new(&st, &locale);
-    let tasks = Tasks::new(&st, &locale);
-
-    let request_query = raw.unwrap_or_default();
-
-    let html = CollectionEditShellTemplate {
-        page,
-        locale,
-        request_query,
-        events,
-        tasks,
-    }
-    .render()
-    .context("collections edit shell template")?;
-
-    Ok(Html(html))
 }
 
 /// Renders only the edit-collection form fragment for the given request. Used by both the

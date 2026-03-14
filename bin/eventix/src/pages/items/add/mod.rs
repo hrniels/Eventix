@@ -7,6 +7,7 @@ mod save;
 
 use axum::{
     Router,
+    extract::{RawQuery, State},
     routing::{get, post},
 };
 use chrono::{Duration, NaiveDateTime, NaiveTime, Timelike, Utc};
@@ -20,7 +21,7 @@ use crate::comps::{
     datetimerange::DateTimeRange, recur::RecurRequest, time::Time, todostatus::TodoStatus,
 };
 use crate::objects::CompAction;
-use crate::pages::Page;
+use crate::pages::{Page, shell};
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -144,7 +145,14 @@ pub async fn new_page(state: &EventixState) -> Page {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/", get(self::index::handler))
+        .route(
+            "/",
+            get(
+                |State(state): State<EventixState>, RawQuery(raw): RawQuery| async move {
+                    shell::handler(state, raw, "items/add", "add-content").await
+                },
+            ),
+        )
         .route("/", post(self::save::handler))
         .route("/content", get(self::index::content_fragment))
         .with_state(state)

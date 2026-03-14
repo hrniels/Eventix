@@ -290,3 +290,23 @@
         return true;
     });
 </script>
+
+<script type="text/javascript">
+    function _weeklyOnLoaded() {
+        if(window.ev.weekly.nowInterval !== null)
+            clearInterval(window.ev.weekly.nowInterval);
+        window.setNowLine();
+        window.ev.weekly.nowInterval = setInterval(window.setNowLine, 60 * 1000);
+        const area = document.getElementById('week_scroll_area');
+        if(area)
+            area.scrollTop = 60 * 8;
+    }
+
+    // Module state: interval handle for the "now" line ticker, cleared and restarted
+    // on each fragment load so there is never more than one active interval.
+    window.ev.weekly = { nowInterval: null };
+
+    $(function() {
+        _weeklyOnLoaded();
+    })
+</script>

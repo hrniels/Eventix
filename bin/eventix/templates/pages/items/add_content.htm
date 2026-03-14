@@ -116,6 +116,9 @@
 </form>
 
 <script>
+    // Initialise module state on first load; reset calendars map on every reload.
+    if(typeof window.ev.add === 'undefined')
+        window.ev.add = {};
     window.ev.add.calendars = {};
     {% for (id, personal) in cal_personal %}
     window.ev.add.calendars['{{ id }}'] = {{ personal }};

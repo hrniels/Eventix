@@ -5,22 +5,22 @@
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::{
-    extract::{Query, RawQuery, State},
+    extract::{Query, State},
     response::{Html, IntoResponse},
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use eventix_ical::{
-    objects::{CalCompType, CalDate, CalPartStat, EventLike},
+    objects::{CalCompType, CalPartStat, EventLike},
     util,
 };
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::{Locale, TimeFlags};
 use eventix_state::EventixState;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::html::filters;
 use crate::objects::DayOccurrence;
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::error::HTMLError;
 use crate::util::parse_human_date;
 
 struct Day<'a> {
@@ -35,19 +35,6 @@ pub struct Request {
     date: Option<String>,
 }
 
-/// Full-page shell template. The calendar grid is loaded separately via AJAX.
-#[derive(Template)]
-#[template(path = "pages/monthly.htm")]
-struct MonthlyTemplate<'a> {
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
-    /// The raw query string from the request URL, passed through to seed the first AJAX content
-    /// request (e.g. `"date=2026-03"`).
-    init_query: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
-}
-
 /// Fragment-only template for the calendar grid, rendered by the AJAX content endpoint.
 #[derive(Template)]
 #[template(path = "pages/monthly_content.htm")]
@@ -59,29 +46,6 @@ struct MonthlyContentTemplate<'a> {
     month: String,
     prev_month: String,
     next_month: String,
-}
-
-pub async fn handler(
-    State(state): State<EventixState>,
-    RawQuery(raw): RawQuery,
-) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state).await;
-    let st = state.lock().await;
-    let locale = st.locale();
-    let events = Events::new(&st, &locale);
-    let tasks = Tasks::new(&st, &locale);
-
-    let html = MonthlyTemplate {
-        page,
-        locale,
-        init_query: raw.unwrap_or_default(),
-        events,
-        tasks,
-    }
-    .render()
-    .context("monthly template")?;
-
-    Ok(Html(html))
 }
 
 /// Renders only the calendar grid fragment for the given month. Used by the AJAX content endpoint.

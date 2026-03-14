@@ -5,11 +5,11 @@
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::{
-    extract::{Query, RawQuery, State},
+    extract::{Query, State},
     response::{Html, IntoResponse},
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
-use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_ical::objects::{CalCompType, CalPartStat, EventLike};
 use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::EventixState;
 use serde::Deserialize;
@@ -17,7 +17,7 @@ use std::{collections::HashMap, fmt, sync::Arc};
 
 use crate::html::filters;
 use crate::objects::{DayOccurrence, OccurrenceOverlap};
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::error::HTMLError;
 use crate::util::parse_human_date;
 
 struct Day<'a> {
@@ -29,19 +29,6 @@ struct Day<'a> {
 #[derive(Default, Debug, Deserialize)]
 pub struct Request {
     date: Option<String>,
-}
-
-/// Full-page shell template. The calendar grid is loaded separately via AJAX.
-#[derive(Template)]
-#[template(path = "pages/weekly.htm")]
-struct WeeklyTemplate<'a> {
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
-    /// The raw query string from the request URL, passed through to seed the first AJAX content
-    /// request (e.g. `"date=2026-03-14"`).
-    init_query: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
 /// Fragment-only template for the weekly grid, rendered by the AJAX content endpoint.
@@ -56,29 +43,6 @@ struct WeeklyContentTemplate<'a> {
     week_end: String,
     prev_week: String,
     next_week: String,
-}
-
-pub async fn handler(
-    State(state): State<EventixState>,
-    RawQuery(raw): RawQuery,
-) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state).await;
-    let st = state.lock().await;
-    let locale = st.locale();
-    let events = Events::new(&st, &locale);
-    let tasks = Tasks::new(&st, &locale);
-
-    let html = WeeklyTemplate {
-        page,
-        locale,
-        init_query: raw.unwrap_or_default(),
-        events,
-        tasks,
-    }
-    .render()
-    .context("weekly template")?;
-
-    Ok(Html(html))
 }
 
 #[derive(Debug)]
@@ -159,6 +123,12 @@ impl<'d> fmt::Debug for Slot<'d> {
     }
 }
 
+/// Builds a map from occurrence ID to its overlap descriptor for all occurrences in a day.
+///
+/// Occurrences are arranged into rows such that overlapping occurrences share a row. Within each
+/// row, each occurrence is placed in the first slot that does not overlap with it. The resulting
+/// map encodes, for every occurrence, the total number of columns in its row, its column index,
+/// and the number of adjacent free columns to the right.
 fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, OccurrenceOverlap> {
     // first insert all of them into our rows datastructure that puts occurrences into the same row
     // if they overlap or in separate rows otherwise.
