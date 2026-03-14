@@ -37,8 +37,8 @@ pub struct Request {
 
 /// Fragment-only template for the calendar grid, rendered by the AJAX content endpoint.
 #[derive(Template)]
-#[template(path = "pages/monthly_content.htm")]
-struct MonthlyContentTemplate<'a> {
+#[template(path = "pages/monthly.htm")]
+struct MonthlyTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     weekdays: Vec<String>,
     days: Vec<Day<'a>>,
@@ -49,7 +49,7 @@ struct MonthlyContentTemplate<'a> {
 }
 
 /// Renders only the calendar grid fragment for the given month. Used by the AJAX content endpoint.
-pub async fn content_fragment(
+pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
@@ -114,7 +114,7 @@ pub async fn content_fragment(
         date += Duration::days(1);
     }
 
-    let html = MonthlyContentTemplate {
+    let html = MonthlyTemplate {
         weekdays,
         month: format!(
             "{} {}",

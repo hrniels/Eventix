@@ -25,8 +25,8 @@ use super::{CompNew, Request};
 
 /// Fragment-only template for the add-item form, rendered by the AJAX content endpoint.
 #[derive(Template)]
-#[template(path = "pages/items/add_content.htm")]
-struct NewContentTemplate<'a> {
+#[template(path = "pages/items/add.htm")]
+struct NewTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     prev: Option<&'a String>,
@@ -43,9 +43,9 @@ struct NewContentTemplate<'a> {
     status: Option<TodoStatusTemplate>,
 }
 
-/// Renders only the add-item form fragment for the given request. Used by both the
-/// AJAX content endpoint (GET) and the save handler (POST) to re-render the form.
-pub async fn content_fragment(
+/// Renders only the add-item form fragment for the given request. Used by the AJAX content
+/// endpoint (GET).
+pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
@@ -56,7 +56,7 @@ pub async fn content_fragment(
         (locale, calendar)
     };
 
-    content(
+    content_with(
         Page::default(),
         locale.clone(),
         State(state),
@@ -67,8 +67,8 @@ pub async fn content_fragment(
 }
 
 /// Renders the add-item form fragment with the given page state and form data.
-/// Called by `content_fragment` for the initial GET and by `save::handler` after a POST.
-pub async fn content(
+/// Called by `content` for the initial GET and by `save::handler` after a POST.
+pub async fn content_with(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
@@ -90,7 +90,7 @@ pub async fn content(
         })
         .collect();
 
-    let html = NewContentTemplate {
+    let html = NewTemplate {
         page,
         summary: &form.summary,
         location: &form.location,

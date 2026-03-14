@@ -24,6 +24,6 @@ pub fn router(state: EventixState) -> Router {
             ),
         )
         .route("/shell/content", get(self::index::shell_fragment))
-        .route("/content", get(self::index::content_fragment))
+        .route("/content", get(self::index::content))
         .with_state(state)
 }

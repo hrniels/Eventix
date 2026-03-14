@@ -31,8 +31,8 @@ use crate::{
 
 /// Fragment-only template for the edit-item form, rendered by the AJAX content endpoint.
 #[derive(Template)]
-#[template(path = "pages/items/edit_content.htm")]
-struct EditContentTemplate<'a> {
+#[template(path = "pages/items/edit.htm")]
+struct EditTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     edit_start: String,
@@ -53,19 +53,19 @@ struct EditContentTemplate<'a> {
     occ: &'a Occurrence<'a>,
 }
 
-/// Renders only the edit-item form fragment for the given request. Used by both the
-/// AJAX content endpoint (GET) and the update handler (POST) to re-render the form.
-pub async fn content_fragment(
+/// Renders only the edit-item form fragment for the given request. Used by the AJAX content
+/// endpoint (GET).
+pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.locale();
-    content(Page::default(), locale, State(state), Query(req), None).await
+    content_with(Page::default(), locale, State(state), Query(req), None).await
 }
 
 /// Renders the edit-item form fragment with the given page state and form data.
-/// Called by `content_fragment` for the initial GET and by `update::handler` after a POST.
-pub async fn content(
+/// Called by `content` for the initial GET and by `update::handler` after a POST.
+pub async fn content_with(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
@@ -129,7 +129,7 @@ pub async fn content(
         CalendarAlarmType::Personal { .. }
     );
 
-    let html = EditContentTemplate {
+    let html = EditTemplate {
         page,
         prev: &req.prev,
         edit_start: format!("{}", form.edit_start),

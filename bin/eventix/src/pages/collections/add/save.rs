@@ -56,5 +56,5 @@ pub async fn handler(
         }
     }
 
-    super::index::content(page, locale, State(state), form, req).await
+    super::index::content_with(page, locale, State(state), form, req).await
 }

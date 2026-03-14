@@ -22,8 +22,8 @@ use crate::{
 
 /// Fragment-only template for the calendars list, rendered by the AJAX content endpoint.
 #[derive(Template)]
-#[template(path = "pages/calendars_content.htm")]
-struct CalendarsContentTemplate<'a> {
+#[template(path = "pages/calendars.htm")]
+struct CalendarsTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     collections: &'a BTreeMap<String, CollectionSettings>,
     calendars: BTreeMap<&'a String, Vec<CalendarBoxTemplate<'a>>>,
@@ -88,9 +88,7 @@ async fn add_unknown_calendars<'a>(
 }
 
 /// Renders only the calendars list fragment. Used by the AJAX content endpoint.
-pub async fn content_fragment(
-    State(state): State<EventixState>,
-) -> Result<impl IntoResponse, HTMLError> {
+pub async fn content(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
     let state = state.lock().await;
     let xdg = state.xdg();
     let locale = state.locale();
@@ -124,7 +122,7 @@ pub async fn content_fragment(
         calendars.insert(col_id, cals);
     }
 
-    let html = CalendarsContentTemplate {
+    let html = CalendarsTemplate {
         locale,
         collections: state.settings().collections(),
         calendars,

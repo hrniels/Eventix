@@ -33,8 +33,8 @@ pub struct Request {
 
 /// Fragment-only template for the weekly grid, rendered by the AJAX content endpoint.
 #[derive(Template)]
-#[template(path = "pages/weekly_content.htm")]
-struct WeeklyContentTemplate<'a> {
+#[template(path = "pages/weekly.htm")]
+struct WeeklyTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     days: Vec<Day<'a>>,
     today: NaiveDate,
@@ -146,7 +146,7 @@ fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, OccurrenceOverlap> {
 }
 
 /// Renders only the weekly grid fragment for the given week. Used by the AJAX content endpoint.
-pub async fn content_fragment(
+pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
@@ -215,7 +215,7 @@ pub async fn content_fragment(
 
     let now = Utc::now().with_timezone(&timezone);
 
-    let html = WeeklyContentTemplate {
+    let html = WeeklyTemplate {
         locale: locale.clone(),
         week_number: week_start.format("%V").to_string(),
         week_start: locale.fmt_weekdate(&week_start, DateFlags::NoToday),
