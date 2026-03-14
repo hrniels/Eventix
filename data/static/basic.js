@@ -149,14 +149,12 @@ function bindFragmentHandler(namespace, target, event, handler) {
 // has run. Does not touch browser history.
 function fetchContent(pageSlug, containerId, queryStr, onLoaded) {
     const params = queryStr ? '?' + queryStr : '';
-    $.get('/pages/' + pageSlug + '/content' + params, function(html) {
+    getRequest('/pages/' + pageSlug + '/content' + params, function(html) {
         $(containerId).html(html);
         resizeBoxes();
         if(onLoaded)
             onLoaded();
-    }).fail(function() {
-        $(containerId).html('<p style="color:red">Failed to load content.</p>');
-    });
+    }, 'html');
 }
 
 // Navigates to a new state for `pageSlug` by fetching the content fragment and

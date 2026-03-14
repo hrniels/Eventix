@@ -3,11 +3,11 @@ function handleAJAXError(jqXHR, textStatus, errorThrown) {
     console.log(msg);
 }
 
-function getRequest(url, success) {
+function getRequest(url, success, type = 'json') {
     $.ajax({
         type: 'GET',
         url: url,
-        dataType: 'json',
+        dataType: type,
         success: success,
         error: handleAJAXError,
     });
