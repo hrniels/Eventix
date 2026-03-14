@@ -7,6 +7,9 @@
 </div>
 
 <script type="text/javascript">
+    // Module state: cal_personal map populated by add_content.htm on each AJAX reload.
+    window.ev.add = { calendars: {} };
+
     // Seed initial history state so popstate works on first back-navigation.
     history.replaceState({ query: '{{ request_query|safe }}' }, '', window.location.href);
 
@@ -20,8 +23,6 @@
         const queryStr = (e.state && e.state.query) ? e.state.query : '';
         fetchContentWithQuery('items/add', '#add-content', queryStr, null);
     });
-
-    let calendars = {}; // will be filled in add_content.htm
 </script>
 
 {% endblock inner %}

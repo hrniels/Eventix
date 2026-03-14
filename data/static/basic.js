@@ -1,3 +1,8 @@
+// Global state namespace for all cross-fragment mutable state in templates.
+// Each module that uses cross-fragment state is responsible for initializing
+// its own keys here.
+window.ev = {};
+
 function reloadPage() {
     window.location.reload();
 }

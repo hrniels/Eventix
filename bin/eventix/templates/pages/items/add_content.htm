@@ -116,13 +116,13 @@
 </form>
 
 <script>
-    calendars = {};
+    window.ev.add.calendars = {};
     {% for (id, personal) in cal_personal %}
-    calendars['{{ id }}'] = {{ personal }};
+    window.ev.add.calendars['{{ id }}'] = {{ personal }};
     {% endfor %}
 
     function setPersonalAlarms(cal) {
-        if(!calendars[cal]) {
+        if(!window.ev.add.calendars[cal]) {
             $("#alarm-tabs").tabs("option", "active", 0);
             $("#alarm-tabs ul li:eq(1)").hide();
         }

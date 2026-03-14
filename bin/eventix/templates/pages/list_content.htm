@@ -241,19 +241,21 @@
 {% endfor %}
 
 <script>
-    ids = [
+    window.ev.list.ids = [
         {% for (id, c) in comps.iter().enumerate() %}
         '{{ c.comp.uid() }}',
         {% endfor %}
     ];
-    for(let i = 0; i < ids.length; i++) {
+    // Reset occurrence state on each reload so stale pages are not reused.
+    window.ev.list.occs_state = {};
+    for(let i = 0; i < window.ev.list.ids.length; i++) {
         // ensure that we pass the current value of i to the closure
         (function(i) {
             confirmDialog(
                 'delete-confirm-' + i,
                 'delete-button-' + i,
                 function() {
-                    deleteItem(ids[i], null, reloadPage);
+                    deleteItem(window.ev.list.ids[i], null, reloadPage);
                 }
             );
         })(i);

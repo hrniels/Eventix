@@ -141,8 +141,9 @@
     if(Cookies.get('ev_list_filter') != 1)
         $('#filter_box').hide();
 
-    let ids = []; // will be filled in list_content.htm
-    let occs_state = {};
+    // Module state: ids is populated by list_content.htm on each AJAX reload;
+    // occs_state tracks loaded occurrence pages keyed by UID.
+    window.ev.list = { ids: [], occs_state: {} };
 
     function loadOccs(uid, ndate, dir, count, onsuccess) {
         getRequest(
@@ -152,9 +153,9 @@
     }
 
     function loadPrev(id, uid) {
-        if(occs_state[uid].prev) {
-            loadOccs(uid, occs_state[uid].prev, 'Backwards', 5, function(data) {
-                occs_state[uid].prev = data.date;
+        if(window.ev.list.occs_state[uid].prev) {
+            loadOccs(uid, window.ev.list.occs_state[uid].prev, 'Backwards', 5, function(data) {
+                window.ev.list.occs_state[uid].prev = data.date;
                 let row = $('#row_' + id + '_prev');
                 row.after(data.html);
                 if(data.date == null)
@@ -164,9 +165,9 @@
     }
 
     function loadNext(id, uid) {
-        if(occs_state[uid].next) {
-            loadOccs(uid, occs_state[uid].next, 'Forward', 5, function(data) {
-                occs_state[uid].next = data.date;
+        if(window.ev.list.occs_state[uid].next) {
+            loadOccs(uid, window.ev.list.occs_state[uid].next, 'Forward', 5, function(data) {
+                window.ev.list.occs_state[uid].next = data.date;
                 let row = $('#row_' + id + '_next');
                 row.before(data.html);
                 if(data.date == null)
@@ -178,9 +179,9 @@
     function toggleRow(id, uid) {
         $('#row_' + id).toggle(100);
 
-        if(!occs_state[uid]) {
+        if(!window.ev.list.occs_state[uid]) {
             const date = curDateStr("{{ locale.timezone().name() }}");
-            occs_state[uid] = {
+            window.ev.list.occs_state[uid] = {
                 'prev': date,
                 'next': date,
             };
