@@ -146,5 +146,6 @@ pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/", get(self::index::handler))
         .route("/", post(self::save::handler))
+        .route("/content", get(self::index::content_fragment))
         .with_state(state)
 }
