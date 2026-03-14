@@ -233,7 +233,12 @@ pub async fn handler(
     let total = iter().count();
 
     let comps = iter()
-        .sorted_by_key(|c| (c.comp.last_modified(), c.comp.created(), c.comp.stamp()))
+        .sorted_by_key(|c| {
+            c.comp
+                .last_modified()
+                .or_else(|| c.comp.created())
+                .unwrap_or_else(|| c.comp.stamp())
+        })
         .rev()
         .skip((filter.page - 1) * PER_PAGE)
         .take(PER_PAGE)
