@@ -2,24 +2,10 @@
 
 {% block inner %}
 
-<div id="edit-content">
+<div id="edit-content"
+     data-page-slug="items/edit"
+     data-init-query="{{ request_query|safe }}">
     <p>{{ "Loading..."|t(locale) }}</p>
 </div>
-
-<script type="text/javascript">
-    // Seed initial history state so popstate works on first back-navigation.
-    history.replaceState({ query: '{{ request_query|safe }}' }, '', window.location.href);
-
-    // Load the form content on page load.
-    $(function() {
-        fetchContentWithQuery('items/edit', '#edit-content', '{{ request_query|safe }}', null);
-    });
-
-    // Restore content on browser back/forward navigation.
-    window.addEventListener('popstate', function(e) {
-        const queryStr = (e.state && e.state.query) ? e.state.query : '';
-        fetchContentWithQuery('items/edit', '#edit-content', queryStr, null);
-    });
-</script>
 
 {% endblock inner %}

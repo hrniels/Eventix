@@ -333,4 +333,49 @@
     });
 </script>
 
+<script type="text/javascript">
+    // Generic AJAX bootstrap for lazy-loaded pages. Any page that places a
+    // <div data-page-slug="..."> inside the inner block gets content fetched
+    // automatically without needing its own bootstrap script.
+    //
+    // Supported data attributes on the container div:
+    //   data-page-slug  – the page slug passed to fetchContent / loadPageContent
+    //   data-init-query – the initial pre-encoded query string (e.g. "date=2025-03"
+    //                     or "keywords=foo&page=1"); pass empty for no parameters
+    //   data-on-loaded  – optional dotted path to a window function called after each
+    //                     fragment load (e.g. "ev.weekly.onLoaded")
+    (function() {
+        const container = document.querySelector('[data-page-slug]');
+        if (!container) return;
+
+        const slug         = container.dataset.pageSlug;
+        const containerId  = '#' + container.id;
+        const initQuery    = container.dataset.initQuery || '';
+        const onLoadedPath = container.dataset.onLoaded || null;
+
+        // Resolve a dotted property path on window (e.g. "ev.weekly.onLoaded").
+        function resolveOnLoaded() {
+            if (!onLoadedPath) return null;
+            return onLoadedPath.split('.').reduce(function(obj, key) {
+                return obj ? obj[key] : null;
+            }, window) || null;
+        }
+
+        // Expose a navigate function so fragments can trigger history-pushing
+        // navigation without knowing the page slug or container id.
+        window.genericLoadContent = function(queryStr) {
+            loadPageContent(slug, containerId, queryStr, resolveOnLoaded());
+        };
+
+        window.addEventListener('popstate', function(e) {
+            const q = (e.state && e.state.query) || '';
+            fetchContent(slug, containerId, q, resolveOnLoaded());
+        });
+
+        history.replaceState({ query: initQuery }, '', window.location.href);
+
+        $(function() { fetchContent(slug, containerId, initQuery, resolveOnLoaded()); });
+    })();
+</script>
+
 {% endblock %}

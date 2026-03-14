@@ -138,23 +138,35 @@ impl<'a> ListComponent<'a> {
     }
 }
 
-/// Full-page shell template. The list content is loaded separately via AJAX.
+/// Full-page outer shell template. The list shell (filter form + JS) is loaded via AJAX into
+/// `#list-shell-content`, which in turn lazy-loads the paginated results into `#list-content`.
 #[derive(Template)]
 #[template(path = "pages/list.htm")]
 struct ListTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    /// The initial serialized filter query string to seed the first AJAX content request
+    /// The initial serialized filter query string used to seed the first AJAX shell request
     /// (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
     filter_query: String,
-    filter: Filter,
-    conjunction: RadioGroupTemplate<Conjunction>,
-    directories: Vec<&'a CalDir>,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
 
-/// Fragment-only template for the list content, rendered by the AJAX content endpoint.
+/// Fragment-only template for the filter form and JS helpers. Loaded via AJAX into
+/// `#list-shell-content` and immediately triggers a second AJAX load of the paginated results.
+#[derive(Template)]
+#[template(path = "pages/list_shell.htm")]
+struct ListShellTemplate<'a> {
+    locale: Arc<dyn Locale + Send + Sync>,
+    /// The serialized filter query string used to pre-populate the form and seed the inner
+    /// content request (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
+    filter_query: String,
+    filter: Filter,
+    conjunction: RadioGroupTemplate<Conjunction>,
+    directories: Vec<&'a CalDir>,
+}
+
+/// Fragment-only template for the paginated list, rendered by the AJAX content endpoint.
 #[derive(Template)]
 #[template(path = "pages/list_content.htm")]
 struct ListContentTemplate<'a, F: Fn(&usize) -> String> {
@@ -174,6 +186,7 @@ impl<F: Fn(&usize) -> String> ListContentTemplate<'_, F> {
     }
 }
 
+/// Renders the outer full-page shell. The actual list UI is lazy-loaded in two AJAX steps.
 pub async fn handler(
     State(state): State<EventixState>,
     MultiQuery(mut filter): MultiQuery<Filter>,
@@ -192,6 +205,33 @@ pub async fn handler(
             .map(|s| s.id().deref().clone())
             .collect();
     }
+
+    let filter_query = serde_qs::to_string(&filter).unwrap_or_default();
+
+    let events = Events::new(&st, &locale);
+    let tasks = Tasks::new(&st, &locale);
+
+    let html = ListTemplate {
+        page,
+        locale,
+        filter_query,
+        events,
+        tasks,
+    }
+    .render()
+    .context("list template")?;
+
+    Ok(Html(html))
+}
+
+/// Renders the list shell fragment containing the filter form, JS helpers, and the inner
+/// `#list-content` placeholder. Used as the first AJAX step from the outer shell.
+pub async fn shell_fragment(
+    State(state): State<EventixState>,
+    MultiQuery(mut filter): MultiQuery<Filter>,
+) -> Result<impl IntoResponse, HTMLError> {
+    let st = state.lock().await;
+    let locale = st.locale();
 
     let directories = st.store().directories().iter().collect::<Vec<_>>();
     if filter.dirs.is_empty() {
@@ -215,26 +255,20 @@ pub async fn handler(
         ],
     );
 
-    let events = Events::new(&st, &locale);
-    let tasks = Tasks::new(&st, &locale);
-
-    let html = ListTemplate {
-        page,
+    let html = ListShellTemplate {
         locale,
         filter,
         conjunction,
         directories,
         filter_query,
-        events,
-        tasks,
     }
     .render()
-    .context("list template")?;
+    .context("list shell template")?;
 
     Ok(Html(html))
 }
 
-/// Renders only the list content fragment for the given filter. Used by the AJAX content endpoint.
+/// Renders only the paginated list fragment for the given filter. Used as the second AJAX step.
 pub async fn content_fragment(
     State(state): State<EventixState>,
     MultiQuery(mut filter): MultiQuery<Filter>,

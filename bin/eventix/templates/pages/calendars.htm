@@ -2,20 +2,9 @@
 
 {% block inner %}
 
-<div id="calendars-content">
+<div id="calendars-content"
+     data-page-slug="calendars">
     <p>{{ "Loading..."|t(locale) }}</p>
 </div>
-
-<script type="text/javascript">
-    // Load the calendars content on page load.
-    $(function() {
-        fetchContent('calendars', '#calendars-content', null, null);
-    });
-
-    // Restore content on browser back/forward navigation.
-    window.addEventListener('popstate', function(e) {
-        fetchContent('calendars', '#calendars-content', null, null);
-    });
-</script>
 
 {% endblock inner %}

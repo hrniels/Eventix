@@ -2,30 +2,10 @@
 
 {% block inner %}
 
-<div id="monthly-content">
+<div id="monthly-content"
+     data-page-slug="monthly"
+     data-init-query="date={{ date }}">
     <p>{{ "Loading..."|t(locale) }}</p>
 </div>
-
-<script type="text/javascript">
-    // Loads the monthly calendar grid for `dateStr` via AJAX and injects it into
-    // #monthly-content. Also updates the browser history so the URL stays accurate.
-    window.loadMonthlyContent = function(dateStr) {
-        loadPageContent('monthly', '#monthly-content', dateStr, null);
-    };
-
-    // Restore content on browser back/forward navigation.
-    window.addEventListener('popstate', function(e) {
-        const dateStr = (e.state && e.state.date) ? e.state.date : '';
-        fetchContent('monthly', '#monthly-content', dateStr, null);
-    });
-
-    // Seed initial history state so popstate works on first back-navigation.
-    history.replaceState({ date: '{{ date }}' }, '', window.location.href);
-
-    // Load the calendar grid for the current month on page load.
-    $(function() {
-        fetchContent('monthly', '#monthly-content', '{{ date }}', null);
-    });
-</script>
 
 {% endblock inner %}

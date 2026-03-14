@@ -2,27 +2,15 @@
 
 {% block inner %}
 
-<div id="add-content">
+<div id="add-content"
+     data-page-slug="items/add"
+     data-init-query="{{ request_query|safe }}">
     <p>{{ "Loading..."|t(locale) }}</p>
 </div>
 
 <script type="text/javascript">
     // Module state: cal_personal map populated by add_content.htm on each AJAX reload.
     window.ev.add = { calendars: {} };
-
-    // Seed initial history state so popstate works on first back-navigation.
-    history.replaceState({ query: '{{ request_query|safe }}' }, '', window.location.href);
-
-    // Load the form content on page load.
-    $(function() {
-        fetchContentWithQuery('items/add', '#add-content', '{{ request_query|safe }}', null);
-    });
-
-    // Restore content on browser back/forward navigation.
-    window.addEventListener('popstate', function(e) {
-        const queryStr = (e.state && e.state.query) ? e.state.query : '';
-        fetchContentWithQuery('items/add', '#add-content', queryStr, null);
-    });
 </script>
 
 {% endblock inner %}

@@ -14,8 +14,14 @@
 </h1>
 
 <script type="text/javascript">
+    // Loads the weekly calendar grid for `dateStr` via AJAX and injects it into
+    // #weekly-content. Also updates the browser history so the URL stays accurate.
+    function loadWeeklyContent(dateStr) {
+        loadPageContent('weekly', '#weekly-content', 'date=' + encodeURIComponent(dateStr), _weeklyOnLoaded);
+    }
+
     function executeJump() {
-        window.loadWeeklyContent($('#jump_location').val());
+        loadWeeklyContent($('#jump_location').val());
     }
 
     bindFragmentHandler('weekly', '#jump_location', 'keypress', function(e) {
@@ -271,13 +277,13 @@
                     $('#jump_location').focus();
                     return false;
                 case "Period":
-                    window.loadWeeklyContent('');
+                    loadWeeklyContent('');
                     break;
                 case "ArrowLeft":
-                    window.loadWeeklyContent('{{ prev_week }}');
+                    loadWeeklyContent('{{ prev_week }}');
                     break;
                 case "ArrowRight":
-                    window.loadWeeklyContent('{{ next_week }}');
+                    loadWeeklyContent('{{ next_week }}');
                     break;
             }
         }

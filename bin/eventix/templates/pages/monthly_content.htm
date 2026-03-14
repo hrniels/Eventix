@@ -14,8 +14,14 @@
 </h1>
 
 <script type="text/javascript">
+    // Loads the monthly calendar grid for `dateStr` via AJAX and injects it into
+    // #monthly-content. Also updates the browser history so the URL stays accurate.
+    function loadMonthlyContent(dateStr) {
+        loadPageContent('monthly', '#monthly-content', 'date=' + encodeURIComponent(dateStr), null);
+    }
+
     function executeJump() {
-        window.loadMonthlyContent($('#jump_location').val());
+        loadMonthlyContent($('#jump_location').val());
     }
 
     bindFragmentHandler('monthly', '#jump_location', 'keypress', function(e) {
@@ -147,13 +153,13 @@
                     $('#jump_location').focus();
                     return false;
                 case "Period":
-                    window.loadMonthlyContent('');
+                    loadMonthlyContent('');
                     break;
                 case "ArrowLeft":
-                    window.loadMonthlyContent('{{ prev_month }}');
+                    loadMonthlyContent('{{ prev_month }}');
                     break;
                 case "ArrowRight":
-                    window.loadMonthlyContent('{{ next_month }}');
+                    loadMonthlyContent('{{ next_month }}');
                     break;
             }
         }

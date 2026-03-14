@@ -143,34 +143,11 @@ function bindFragmentHandler(namespace, target, event, handler) {
 }
 
 // Fetches the content fragment for `pageSlug` and injects it into `containerId`.
-// `dateStr` is the date query parameter value (pass an empty string for "current").
-// `onLoaded` is an optional callback invoked after the HTML has been injected and
-// `resizeBoxes` has run. Does not touch browser history.
-function fetchContent(pageSlug, containerId, dateStr, onLoaded) {
-    const params = dateStr ? '?date=' + encodeURIComponent(dateStr) : '';
-    $.get('/pages/' + pageSlug + '/content' + params, function(html) {
-        $(containerId).html(html);
-        resizeBoxes();
-        if(onLoaded)
-            onLoaded();
-    }).fail(function() {
-        $(containerId).html('<p style="color:red">Failed to load calendar.</p>');
-    });
-}
-
-// Navigates to a new date for `pageSlug` by fetching the content fragment and
-// pushing a new history entry. Delegates rendering to `fetchContent`.
-function loadPageContent(pageSlug, containerId, dateStr, onLoaded) {
-    const params = dateStr ? '?date=' + encodeURIComponent(dateStr) : '';
-    history.pushState({ date: dateStr || '' }, '', '/pages/' + pageSlug + params);
-    fetchContent(pageSlug, containerId, dateStr, onLoaded);
-}
-
-// Fetches the content fragment for `pageSlug` and injects it into `containerId`.
-// `queryStr` is a pre-encoded query string such as `"keywords=foo&page=1"` (pass an
-// empty string for no parameters). `onLoaded` is an optional callback invoked after
-// the HTML has been injected and `resizeBoxes` has run. Does not touch browser history.
-function fetchContentWithQuery(pageSlug, containerId, queryStr, onLoaded) {
+// `queryStr` is a pre-encoded query string such as `"keywords=foo&page=1"` or
+// `"date=2025-03"` (pass an empty string for no parameters). `onLoaded` is an
+// optional callback invoked after the HTML has been injected and `resizeBoxes`
+// has run. Does not touch browser history.
+function fetchContent(pageSlug, containerId, queryStr, onLoaded) {
     const params = queryStr ? '?' + queryStr : '';
     $.get('/pages/' + pageSlug + '/content' + params, function(html) {
         $(containerId).html(html);
@@ -182,12 +159,12 @@ function fetchContentWithQuery(pageSlug, containerId, queryStr, onLoaded) {
     });
 }
 
-// Navigates to a new filter state for `pageSlug` by fetching the content fragment
-// and pushing a new history entry. Delegates rendering to `fetchContentWithQuery`.
-function loadPageContentWithQuery(pageSlug, containerId, queryStr, onLoaded) {
+// Navigates to a new state for `pageSlug` by fetching the content fragment and
+// pushing a new history entry. Delegates rendering to `fetchContent`.
+function loadPageContent(pageSlug, containerId, queryStr, onLoaded) {
     const params = queryStr ? '?' + queryStr : '';
     history.pushState({ query: queryStr || '' }, '', '/pages/' + pageSlug + params);
-    fetchContentWithQuery(pageSlug, containerId, queryStr, onLoaded);
+    fetchContent(pageSlug, containerId, queryStr, onLoaded);
 }
 
 function replaceSmoothly(id, newHtml, delay) {
