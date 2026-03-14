@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::{
-    extract::{Query, State},
+    extract::{Query, RawQuery, State},
     response::{Html, IntoResponse},
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
@@ -37,8 +37,9 @@ pub struct Request {
 struct WeeklyTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    /// The initial date string to seed the first AJAX content request (e.g. "2025-03-10").
-    date: String,
+    /// The raw query string from the request URL, passed through to seed the first AJAX content
+    /// request (e.g. `"date=2026-03-14"`).
+    init_query: String,
     events: Events<'a>,
     tasks: Tasks<'a>,
 }
@@ -59,26 +60,18 @@ struct WeeklyContentTemplate<'a> {
 
 pub async fn handler(
     State(state): State<EventixState>,
-    Query(req): Query<Request>,
+    RawQuery(raw): RawQuery,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = state.lock().await.locale();
-
-    let date = {
-        let timezone = *locale.timezone();
-        parse_human_date(req.date, &timezone)?
-            .format("%Y-%m-%d")
-            .to_string()
-    };
-
     let page = super::new_page(&state).await;
     let st = state.lock().await;
+    let locale = st.locale();
     let events = Events::new(&st, &locale);
     let tasks = Tasks::new(&st, &locale);
 
     let html = WeeklyTemplate {
         page,
         locale,
-        date,
+        init_query: raw.unwrap_or_default(),
         events,
         tasks,
     }

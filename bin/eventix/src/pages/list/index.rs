@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result};
 use askama::Template;
-use axum::extract::State;
+use axum::extract::{RawQuery, State};
 use axum::response::{Html, IntoResponse};
 use eventix_ical::col::{CalDir, CalFile, Occurrence};
 use eventix_ical::objects::{
@@ -145,8 +145,8 @@ impl<'a> ListComponent<'a> {
 struct ListTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    /// The initial serialized filter query string used to seed the first AJAX shell request
-    /// (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
+    /// The raw filter query string from the request URL, passed through to seed the first
+    /// AJAX shell request (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
     filter_query: String,
     events: Events<'a>,
     tasks: Tasks<'a>,
@@ -189,24 +189,14 @@ impl<F: Fn(&usize) -> String> ListContentTemplate<'_, F> {
 /// Renders the outer full-page shell. The actual list UI is lazy-loaded in two AJAX steps.
 pub async fn handler(
     State(state): State<EventixState>,
-    MultiQuery(mut filter): MultiQuery<Filter>,
+    RawQuery(raw): RawQuery,
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state).await;
 
     let st = state.lock().await;
     let locale = st.locale();
 
-    // Populate dirs default so the seeded query string includes them.
-    if filter.dirs.is_empty() {
-        filter.dirs = st
-            .store()
-            .directories()
-            .iter()
-            .map(|s| s.id().deref().clone())
-            .collect();
-    }
-
-    let filter_query = serde_qs::to_string(&filter).unwrap_or_default();
+    let filter_query = raw.unwrap_or_default();
 
     let events = Events::new(&st, &locale);
     let tasks = Tasks::new(&st, &locale);

@@ -5,7 +5,7 @@
 use anyhow::{Context, Result, anyhow};
 use askama::Template;
 use axum::{
-    extract::{Query, State},
+    extract::{Query, RawQuery, State},
     response::{Html, IntoResponse},
 };
 use eventix_ical::{
@@ -35,8 +35,8 @@ use crate::{
 struct EditTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    /// The initial serialized query string to seed the first AJAX content request
-    /// (e.g. `"uid=abc&mode=Series&prev=%2Fpages%2Flist"`).
+    /// The raw query string from the request URL, passed through to seed the first AJAX content
+    /// request (e.g. `"uid=abc&mode=Series&prev=%2Fpages%2Flist"`).
     request_query: String,
     events: Events<'a>,
     tasks: Tasks<'a>,
@@ -68,7 +68,7 @@ struct EditContentTemplate<'a> {
 
 pub async fn handler(
     State(state): State<EventixState>,
-    Query(req): Query<Request>,
+    RawQuery(raw): RawQuery,
 ) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state).await;
 
@@ -77,7 +77,7 @@ pub async fn handler(
     let events = Events::new(&st, &locale);
     let tasks = Tasks::new(&st, &locale);
 
-    let request_query = serde_qs::to_string(&req).unwrap_or_default();
+    let request_query = raw.unwrap_or_default();
 
     let html = EditTemplate {
         page,
