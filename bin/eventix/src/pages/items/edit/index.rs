@@ -29,9 +29,23 @@ use crate::{
     pages::items::edit::EditMode,
 };
 
+/// Full-page shell template. The form content is loaded separately via AJAX.
 #[derive(Template)]
 #[template(path = "pages/items/edit.htm")]
 struct EditTemplate<'a> {
+    page: Page,
+    locale: Arc<dyn Locale + Send + Sync>,
+    /// The initial serialized query string to seed the first AJAX content request
+    /// (e.g. `"uid=abc&mode=Series&prev=%2Fpages%2Flist"`).
+    request_query: String,
+    events: Events<'a>,
+    tasks: Tasks<'a>,
+}
+
+/// Fragment-only template for the edit-item form, rendered by the AJAX content endpoint.
+#[derive(Template)]
+#[template(path = "pages/items/edit_content.htm")]
+struct EditContentTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     edit_start: String,
@@ -50,25 +64,46 @@ struct EditTemplate<'a> {
     attendees: AttendeesTemplate,
     status: Option<TodoStatusTemplate>,
     occ: &'a Occurrence<'a>,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
 pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let locale = state.lock().await.locale();
-    content(
-        super::new_page(&state).await,
+    let page = super::new_page(&state).await;
+
+    let st = state.lock().await;
+    let locale = st.locale();
+    let events = Events::new(&st, &locale);
+    let tasks = Tasks::new(&st, &locale);
+
+    let request_query = serde_qs::to_string(&req).unwrap_or_default();
+
+    let html = EditTemplate {
+        page,
         locale,
-        State(state),
-        Query(req),
-        None,
-    )
-    .await
+        request_query,
+        events,
+        tasks,
+    }
+    .render()
+    .context("edit template")?;
+
+    Ok(Html(html))
 }
 
+/// Renders only the edit-item form fragment for the given request. Used by both the
+/// AJAX content endpoint (GET) and the update handler (POST) to re-render the form.
+pub async fn content_fragment(
+    State(state): State<EventixState>,
+    Query(req): Query<Request>,
+) -> Result<impl IntoResponse, HTMLError> {
+    let locale = state.lock().await.locale();
+    content(Page::default(), locale, State(state), Query(req), None).await
+}
+
+/// Renders the edit-item form fragment with the given page state and form data.
+/// Called by `content_fragment` for the initial GET and by `update::handler` after a POST.
 pub async fn content(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
@@ -133,10 +168,7 @@ pub async fn content(
         CalendarAlarmType::Personal { .. }
     );
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
-    let html = EditTemplate {
+    let html = EditContentTemplate {
         page,
         prev: &req.prev,
         edit_start: format!("{}", form.edit_start),
@@ -185,12 +217,10 @@ pub async fn content(
             .status
             .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),
         occ: &occ,
-        events,
         locale,
-        tasks,
     }
     .render()
-    .context("edit template")?;
+    .context("edit content template")?;
 
     Ok(Html(html))
 }

@@ -95,7 +95,14 @@ pub async fn content_fragment(
         (locale, calendar)
     };
 
-    content(Page::default(), locale.clone(), State(state), CompNew::new(&req, locale.timezone(), calendar), req).await
+    content(
+        Page::default(),
+        locale.clone(),
+        State(state),
+        CompNew::new(&req, locale.timezone(), calendar),
+        req,
+    )
+    .await
 }
 
 /// Renders the add-item form fragment with the given page state and form data.
