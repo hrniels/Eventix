@@ -24,15 +24,23 @@ use crate::{
     html::filters,
 };
 
+/// Full-page shell template. The calendar content is loaded separately via AJAX.
 #[derive(Template)]
 #[template(path = "pages/calendars.htm")]
 struct CalendarsTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
-    collections: &'a BTreeMap<String, CollectionSettings>,
-    calendars: BTreeMap<&'a String, Vec<CalendarBoxTemplate<'a>>>,
     events: Events<'a>,
     tasks: Tasks<'a>,
+}
+
+/// Fragment-only template for the calendars list, rendered by the AJAX content endpoint.
+#[derive(Template)]
+#[template(path = "pages/calendars_content.htm")]
+struct CalendarsContentTemplate<'a> {
+    locale: Arc<dyn Locale + Send + Sync>,
+    collections: &'a BTreeMap<String, CollectionSettings>,
+    calendars: BTreeMap<&'a String, Vec<CalendarBoxTemplate<'a>>>,
 }
 
 async fn metadata_or_default(dir: &Path, folder: &str, filename: &str, def: &str) -> String {
@@ -96,6 +104,27 @@ async fn add_unknown_calendars<'a>(
 pub async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
     let page = super::new_page(&state).await;
 
+    let st = state.lock().await;
+    let locale = st.locale();
+    let events = Events::new(&st, &locale);
+    let tasks = Tasks::new(&st, &locale);
+
+    let html = CalendarsTemplate {
+        page,
+        locale,
+        events,
+        tasks,
+    }
+    .render()
+    .context("calendars template")?;
+
+    Ok(Html(html))
+}
+
+/// Renders only the calendars list fragment. Used by the AJAX content endpoint.
+pub async fn content_fragment(
+    State(state): State<EventixState>,
+) -> Result<impl IntoResponse, HTMLError> {
     let state = state.lock().await;
     let xdg = state.xdg();
     let locale = state.locale();
@@ -129,19 +158,13 @@ pub async fn handler(State(state): State<EventixState>) -> Result<impl IntoRespo
         calendars.insert(col_id, cals);
     }
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
-    let html = CalendarsTemplate {
-        page,
+    let html = CalendarsContentTemplate {
         locale,
         collections: state.settings().collections(),
         calendars,
-        events,
-        tasks,
     }
     .render()
-    .context("edit template")?;
+    .context("calendars content template")?;
 
     Ok(Html(html))
 }

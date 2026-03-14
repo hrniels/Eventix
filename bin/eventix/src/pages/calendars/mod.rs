@@ -16,5 +16,6 @@ pub async fn new_page(state: &EventixState) -> Page {
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .route("/", get(self::index::handler))
+        .route("/content", get(self::index::content_fragment))
         .with_state(state)
 }
