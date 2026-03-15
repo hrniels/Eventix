@@ -79,9 +79,12 @@
     window.ev.list = { ids: [], occs_state: {} };
 
     // Loads the list content for `queryStr` via AJAX and injects it into
-    // #list-content. Also updates the browser history so the URL stays accurate.
+    // #list-content. Pushes the filter state onto /pages/list in browser history
+    // so the URL stays accurate without exposing the internal /content/results sub-path.
     window.loadListContent = function(queryStr, onloaded) {
-        loadPageContent('list', '#list-content', queryStr, onloaded || null);
+        const params = queryStr ? '?' + queryStr : '';
+        history.pushState({ slug: 'list', query: queryStr || '' }, '', '/pages/list' + params);
+        fetchContent('list/results', '#list-content', queryStr, onloaded || null);
     };
 
     function applyListFilter(onloaded) {
@@ -175,5 +178,5 @@
     }
 
     // Load the list content for the current filter on shell load.
-    fetchContent('list', '#list-content', '{{ filter_query|safe }}', null);
+    fetchContent('list/results', '#list-content', '{{ filter_query|safe }}', null);
 </script>

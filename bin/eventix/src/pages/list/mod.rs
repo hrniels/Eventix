@@ -19,11 +19,11 @@ pub fn router(state: EventixState) -> Router {
             "/",
             get(
                 |State(state): State<EventixState>, RawQuery(raw): RawQuery| async move {
-                    shell::handler(state, raw, "list/shell").await
+                    shell::handler(state, raw, "list").await
                 },
             ),
         )
-        .route("/shell/content", get(self::index::shell_fragment))
         .route("/content", get(self::index::content))
+        .route("/results/content", get(self::index::content_results))
         .with_state(state)
 }

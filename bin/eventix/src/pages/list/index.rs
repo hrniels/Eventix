@@ -153,7 +153,7 @@ struct ListShellTemplate<'a> {
 
 /// Fragment-only template for the paginated list, rendered by the AJAX content endpoint.
 #[derive(Template)]
-#[template(path = "pages/list.htm")]
+#[template(path = "pages/list_results.htm")]
 struct ListTemplate<'a, F: Fn(&usize) -> String> {
     locale: Arc<dyn Locale + Send + Sync>,
     comps: Vec<ListComponent<'a>>,
@@ -173,7 +173,7 @@ impl<F: Fn(&usize) -> String> ListTemplate<'_, F> {
 
 /// Renders the list shell fragment containing the filter form, JS helpers, and the inner
 /// `#list-content` placeholder. Used as the first AJAX step from the outer shell.
-pub async fn shell_fragment(
+pub async fn content(
     State(state): State<EventixState>,
     MultiQuery(mut filter): MultiQuery<Filter>,
 ) -> Result<impl IntoResponse, HTMLError> {
@@ -216,7 +216,7 @@ pub async fn shell_fragment(
 }
 
 /// Renders only the paginated list fragment for the given filter. Used as the second AJAX step.
-pub async fn content(
+pub async fn content_results(
     State(state): State<EventixState>,
     MultiQuery(mut filter): MultiQuery<Filter>,
 ) -> Result<impl IntoResponse, HTMLError> {

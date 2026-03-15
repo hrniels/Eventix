@@ -83,7 +83,7 @@
         <div class="ev_header">
             {{ "Next Events"|t(locale) }}
             <a id="link-event" style="float: right"
-               href="javascript:gotoWithPrev('/pages/items/add?ctype=Event')">
+               href="javascript:loadWithPrev('/pages/items/add?ctype=Event')">
                 <i class="bi bi-plus-square" style="color: white"></i>
             </a>
         </div>
@@ -182,7 +182,7 @@
         <div class="ev_header">
             {{ "Next Tasks"|t(locale) }}
             <a id="link-todo" style="float: right"
-               href="javascript:gotoWithPrev('/pages/items/add?ctype=Todo')">
+               href="javascript:loadWithPrev('/pages/items/add?ctype=Todo')">
                 <i class="bi bi-plus-square" style="color: white"></i>
             </a>
         </div>
@@ -357,11 +357,20 @@
         };
 
         window.addEventListener('popstate', function(e) {
+            // window.location is already updated to the target URL when popstate fires.
+            // Look up the correct slug from PAGE_SLUGS so that navigating between
+            // different SPA pages (e.g. weekly → list → back) loads the right content.
+            const slug = (e.state && e.state.slug) || PAGE_SLUGS[window.location.pathname];
+            if (!slug) {
+                // URL is not a known SPA page; perform a full reload.
+                window.location.reload();
+                return;
+            }
             const q = (e.state && e.state.query) || '';
             fetchContent(slug, containerId, q, null);
         });
 
-        history.replaceState({ query: initQuery }, '', window.location.href);
+        history.replaceState({ slug: slug, query: initQuery }, '', window.location.href);
 
         $(function() { fetchContent(slug, containerId, initQuery, null); });
     })();

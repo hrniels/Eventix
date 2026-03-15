@@ -112,17 +112,6 @@ function hideArrowBottom(inst) {
     $('.ui-datepicker-header').css('zIndex', 2);
 }
 
-function gotoWithPrev(url) {
-    const prev = document.location.href;
-    // check if we already have a prev URL
-    const prev_url = new URL(prev);
-    const prev_prev = prev_url.searchParams.get('prev');
-    let full_url = new URL(url, prev_url.origin);
-    // if so, go back to this one (the last none-edit/new page)
-    full_url.searchParams.append('prev', prev_prev ?? prev);
-    document.location.href = full_url;
-}
-
 function setPersonalOverwrite(id_prefix, overwrite) {
     const ids = ["none", "relative", "absolute", "datetime__time_"];
     for(id in ids) {

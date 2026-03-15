@@ -102,9 +102,9 @@
                     </a>
                     <a class="ev_button_big ev_button_normal"
                        {% if let Some(prev) = prev %}
-                       href="javascript:document.location.href = '{{ prev }}'"
+                       href="javascript:navigateTo('{{ prev }}')"
                        {% else %}
-                       href="javascript:document.location.href = '/'"
+                       href="javascript:navigateTo('/')"
                        {% endif %}
                     >
                         <span>{{ "Back"|t(locale) }}</span>
@@ -144,11 +144,11 @@
                 url: form.attr('action'),
                 data: form.serialize(),
                 success: function(html) {
-                    $('#add-content').html(html);
+                    $('#page-content').html(html);
                     resizeBoxes();
                 },
                 error: function() {
-                    $('#add-content').html('<p style="color:red">Failed to save.</p>');
+                    $('#page-content').html('<p style="color:red">Failed to save.</p>');
                 }
             });
         }

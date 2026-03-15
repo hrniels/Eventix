@@ -128,7 +128,7 @@
                                 <span>{{ "Save"|t(locale) }}</span>
                             </a>
                             <a class="ev_button_big ev_button_normal"
-                               href="javascript:document.location.href = '{{ prev }}'">
+                               href="javascript:navigateTo('{{ prev }}')">
                                 <span>{{ "Back"|t(locale) }}</span>
                             </a>
                         </td>
@@ -142,7 +142,7 @@
 
 <script>
     function onDeleted() {
-        window.location.href = '/';
+        navigateTo('/');
     }
 
     // Submits the edit form via AJAX and injects the response fragment into #edit-content.
@@ -151,7 +151,7 @@
             errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
         else {
             formRequest('edit-form', function(html) {
-                $('#edit-content').html(html);
+                $('#page-content').html(html);
                 resizeBoxes();
             });
         }

@@ -27,9 +27,9 @@
 
         $('#{{ id }}-menu a').on('click', function() {
             if($(this).data('value') == 'Series')
-                gotoWithPrev('/pages/items/edit?uid={{ uid }}&mode=Series');
+                loadWithPrev('/pages/items/edit?uid={{ uid }}&mode=Series');
             else
-                gotoWithPrev('/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode=' + $(this).data('value'));
+                loadWithPrev('/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode=' + $(this).data('value'));
         });
 
         $(document).on('click', function(e) {

@@ -51,9 +51,9 @@
                 </a>
                 <a class="ev_button_big ev_button_normal" style="width: 80px"
                    {% if let Some(prev) = prev %}
-                   href="javascript:document.location.href = '{{ prev }}'"
+                   href="javascript:navigateTo('{{ prev }}')"
                    {% else %}
-                   href="javascript:document.location.href = '/'"
+                   href="javascript:navigateTo('/')"
                    {% endif %}
                 >
                     <span>{{ "Back"|t(locale) }}</span>
@@ -64,10 +64,10 @@
 </form>
 
 <script>
-    // Submits the edit form via AJAX and injects the response fragment into #edit-content.
+    // Submits the edit form via AJAX and injects the response fragment into #page-content.
     function submitEditForm() {
         formRequest('edit-form', function(html) {
-            $('#edit-content').html(html);
+            $('#page-content').html(html);
             resizeBoxes();
         });
     }

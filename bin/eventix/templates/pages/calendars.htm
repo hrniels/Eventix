@@ -33,7 +33,7 @@
                         <i class="bi bi-trash"></i>
                     </a>
                     <a class="ev_button ev_button_normal"
-                       href="javascript:gotoWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
+                       href="javascript:loadWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
                        title="{{ "Edit"|t(locale) }}">
                         <i class="bi bi-pencil"></i>
                     </a>
@@ -109,7 +109,7 @@
 </div>
 
 <a style="float: left" class="ev_padtop ev_button ev_button_normal"
-    href="javascript:gotoWithPrev('/pages/collections/add')">
+    href="javascript:loadWithPrev('/pages/collections/add')">
     <i class="bi bi-plus-square"></i>
     <span>{{ "Add Collection"|t(locale) }}</span>
 </a>
