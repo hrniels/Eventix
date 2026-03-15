@@ -22,10 +22,7 @@ use chrono_tz::Tz;
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::EventixState;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use crate::{
     comps::calcombo::CalComboTemplate,
@@ -45,7 +42,6 @@ pub fn router(state: EventixState) -> Router {
 }
 
 pub struct Page {
-    start: Instant,
     now: DateTime<Tz>,
     errors: Vec<String>,
     infos: Vec<String>,
@@ -58,7 +54,6 @@ pub struct Page {
 impl Default for Page {
     fn default() -> Self {
         Self {
-            start: Instant::now(),
             now: Local::now().with_timezone(&Tz::UTC),
             errors: Vec::new(),
             infos: Vec::new(),
@@ -84,7 +79,6 @@ impl Page {
         });
 
         Self {
-            start: Instant::now(),
             now: Local::now().with_timezone(locale.timezone()),
             calendars: Calendars::new(&state, |_id, _settings| true),
             quickcals: if !calendars.0.is_empty() {
@@ -143,9 +137,5 @@ impl Page {
     #[allow(dead_code)]
     pub fn add_info<S: ToString>(&mut self, message: S) {
         self.infos.push(message.to_string());
-    }
-
-    pub fn time_elapsed(&self) -> Duration {
-        self.start.elapsed()
     }
 }
