@@ -34,12 +34,12 @@ const PAGE_SLUGS = {
 
 // Navigates to a SPA page by AJAX-loading its content fragment into
 // `#page-content` and pushing a new history entry, without a full page reload.
-// If the target path is not a known SPA page the browser performs a normal
-// full navigation instead.
+// Falls back to a full navigation when `#page-content` is absent (e.g. on error
+// pages) or when the target path is not a known SPA page.
 function navigateTo(url) {
     const parsed = new URL(url, window.location.origin);
     const slug = PAGE_SLUGS[parsed.pathname];
-    if (!slug) {
+    if (!slug || !document.getElementById('page-content')) {
         window.location.href = url;
         return;
     }
