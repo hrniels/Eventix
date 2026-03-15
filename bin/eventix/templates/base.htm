@@ -15,14 +15,6 @@
         <link rel="stylesheet" type="text/css" href="/static/contrib/jquery-ui/jquery-ui.theme{{ js_suffix }}.css">
         <link rel="stylesheet" type="text/css" href="/generated/contrib{{ js_suffix }}.css">
         <link rel="stylesheet" href="/static/contrib/bootstrap/bootstrap-icons{{ js_suffix }}.css">
-        <style type="text/css">
-            {% for cal in page.calendars() %}
-            div.ev_cal_src_{{ cal.id }}, span.ev_cal_src_{{ cal.id }} {
-                background-color: {{ cal.bgcolor }};
-                color: {{ cal.fgcolor }};
-            }
-            {% endfor %}
-        </style>
         <script type="text/javascript" src="/generated/locale.js"></script>
         <script type="text/javascript" src="/generated/contrib{{ js_suffix }}.js"></script>
         <script type="text/javascript" src="/generated/bundle.js"></script>
@@ -39,12 +31,57 @@
     </head>
     <body>
         <div id="outer">
-            <div id="topbar-content"></div>
-            <script type="text/javascript">
-                // Lazy-load the topbar (search form, calendar toggles, nav links) independently of
-                // the main content area so neither blocks the other.
-                $(function() { fetchContent('topbar', '#topbar-content', '', null); });
-            </script>
+            <form onsubmit="navigateTo('/pages/list?' + $(this).serialize()); return false;">
+            <div style="float: left; padding-bottom: .5em" class="ev_button_medium ev_button_normal">
+                <span>{{ "Search"|t(locale) }}:</span>
+                <input type="text" id="quick-search" name="keywords"
+                       style="font-size: .8em; padding: 2px; width: 150px" />
+            </div>
+            </form>
+
+            <div style="float: right;" class="ev_padbottom">
+                <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
+                    <a class="ev_button_link" href="javascript:navigateTo('/pages/calendars')">{{ "Calendars"|t(locale) }}:</a>
+                    <span id="callist-content"></span>
+                    <script type="text/javascript">
+                        // Lazy-load the calendar toggle buttons independently of the initial page
+                        // render so that calendar state is always fetched fresh.
+                        $(function() { fetchContent('callist', '#callist-content', '', null); });
+                    </script>
+                </div>
+                &nbsp;
+                <a id="link-monthly" class="ev_button_medium ev_button_normal"
+                                   href="javascript:navigateTo('/pages/monthly')">
+                    <i class="bi bi-calendar2-month"></i>
+                    <span>{{ "Month"|t(locale) }}</span>
+                </a>
+                <a id="link-weekly" class="ev_button_medium ev_button_normal"
+                                   href="javascript:navigateTo('/pages/weekly')">
+                    <i class="bi bi-calendar2-week"></i>
+                    <span>{{ "Week"|t(locale) }}</span>
+                </a>
+                <a id="link-list" class="ev_button_medium ev_button_normal"
+                                   style="padding-left: 1em; padding-right: 1em"
+                                   href="javascript:navigateTo('/pages/list')">
+                    <i class="bi bi-card-list"></i>
+                    <span>{{ "List"|t(locale) }}</span>
+                </a>
+                <a id="link-help" class="ev_button_medium ev_button_normal"
+                                   style="padding-left: 1em; padding-right: 1em"
+                                   href="javascript:fireEvent(createHelpEvent())">
+                    <i class="bi bi-question-circle"></i>
+                    <span>{{ "Help"|t(locale) }}</span>
+                </a>
+                <a id="link-refresh" class="ev_button_medium ev_button_normal"
+                                     href="javascript:syncAll('last-update', 'sync-spinner', 'out-of-sync', true)">
+                    <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
+                    <span id="last-update">
+                        {{ &page.last_reload(locale)|time(locale, TimeFlags::None) }}
+                    </span>
+                    <i id="out-of-sync" style="color: transparent" class="bi bi-exclamation-circle-fill"></i>
+                </a>
+            </div>
+            <br style="clear: both;" />
 
             {% block content %}
             <h1>Dummy content</h1>

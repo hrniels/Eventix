@@ -120,11 +120,11 @@ function reloadSidebar() {
         fetchContent('sidebar', '#sidebar-content', '', null);
 }
 
-// Reloads the topbar by re-fetching its content fragment. This is a no-op when
-// the topbar placeholder is absent (e.g. on error pages).
-function reloadTopbar() {
-    if (document.getElementById('topbar-content'))
-        fetchContent('topbar', '#topbar-content', '', null);
+// Reloads the calendar list by re-fetching its content fragment. This is a no-op when
+// the calendar list placeholder is absent (e.g. on error pages).
+function reloadCalList() {
+    if (document.getElementById('callist-content'))
+        fetchContent('callist', '#callist-content', '', null);
 }
 
 // Navigates to a new state for `pageSlug` by fetching the content fragment and

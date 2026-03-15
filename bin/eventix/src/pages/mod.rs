@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod calendars;
+pub mod callist;
 pub mod collections;
 pub mod error;
 pub mod items;
@@ -10,7 +11,6 @@ pub mod list;
 pub mod monthly;
 pub mod shell;
 pub mod sidebar;
-pub mod topbar;
 pub mod weekly;
 
 mod events;
@@ -35,12 +35,12 @@ use crate::{
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .nest("/calendars", calendars::router(state.clone()))
+        .nest("/callist", callist::router(state.clone()))
         .nest("/collections", collections::router(state.clone()))
         .nest("/items", items::router(state.clone()))
         .nest("/list", list::router(state.clone()))
         .nest("/monthly", monthly::router(state.clone()))
         .nest("/sidebar", sidebar::router(state.clone()))
-        .nest("/topbar", topbar::router(state.clone()))
         .nest("/weekly", weekly::router(state.clone()))
 }
 
