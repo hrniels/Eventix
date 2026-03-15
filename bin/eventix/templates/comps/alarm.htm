@@ -1,56 +1,61 @@
 <div id="{{ id }}-tabs">
     <ul>
-        <li><a href="#{{ id }}-tabs-CALENDAR">{{ "Calendar"|t(locale) }}</a></li>
+        <li>
+            <a href="#{{ id }}-tabs-CALENDAR">{{ "Calendar"|t(locale) }}</a>
+        </li>
         {% if personal.is_some() %}
-        <li><a href="#{{ id }}-tabs-PERSONAL">{{ "Personal"|t(locale) }}</a></li>
+            <li>
+                <a href="#{{ id }}-tabs-PERSONAL">{{ "Personal"|t(locale) }}</a>
+            </li>
         {% endif %}
     </ul>
-    <div id="{{ id }}-tabs-CALENDAR">
-        {{ calendar|safe }}
-    </div>
+    <div id="{{ id }}-tabs-CALENDAR">{{ calendar|safe }}</div>
     {% if let Some(personal) = personal %}
-    <div id="{{ id }}-tabs-PERSONAL">
-        <div style="padding: .4em">
-            <input type="checkbox" id="{{ id }}_personal_overwrite"
-                                   name="{{ name }}_personal_overwrite"
-                                   {% if personal.overwrite %}checked="checked"{% endif %}/>
-            <label for="{{ id }}_personal_overwrite">{{ "Overwrite default"|t(locale) }}</label>
+        <div id="{{ id }}-tabs-PERSONAL">
+            <div style="padding: .4em">
+                <input
+                    type="checkbox"
+                    id="{{ id }}_personal_overwrite"
+                    name="{{ name }}_personal_overwrite"
+                    {% if personal.overwrite %}checked="checked"{% endif %}
+                />
+                <label for="{{ id }}_personal_overwrite">{{ "Overwrite default"|t(locale) }}</label>
+            </div>
+            {{ personal.config|safe }}
         </div>
-        {{ personal.config|safe }}
-    </div>
     {% endif %}
 </div>
 
 {% if let Some(personal) = personal %}
-{% if edit %}
-<div style="padding-top: .6em; padding-left: .4em">
-    <b>{{ "Effective"|t(locale) }}:</b>
-    {% if let Some(effective) = personal.effective %}
-    {{ effective[0].human(&**locale) }}
-    {% else %}
-    -
+    {% if edit %}
+        <div style="padding-top: .6em; padding-left: .4em">
+            <b>{{ "Effective"|t(locale) }}:</b>
+            {% if let Some(effective) = personal.effective %}
+                {{ effective[0].human(&**locale) }}
+            {% else %}
+                -
+            {% endif %}
+        </div>
     {% endif %}
-</div>
 {% endif %}
-{% endif %}
-
+<!-- prettier-ignore-start -->
 <style type="text/css">
-#{{ id }}-tabs > div {
-    padding: 0;
-}
+    #{{ id }}-tabs > div {
+        padding: 0;
+    }
 </style>
 <script>
-    $(function() {
+    $(function () {
         $("#{{ id }}-tabs").tabs();
 
         {% if let Some(personal) = personal %}
-        $("#{{ id }}_personal_overwrite").click(function() {
-            setPersonalOverwrite('{{ id }}_personal_', this.checked)
+        $("#{{ id }}_personal_overwrite").click(function () {
+            setPersonalOverwrite("{{ id }}_personal_", this.checked);
         });
         {% if !personal.overwrite %}
-        setPersonalOverwrite('{{ id }}_personal_', false);
+        setPersonalOverwrite("{{ id }}_personal_", false);
         {% endif %}
         {% endif %}
     });
 </script>
-
+<!-- prettier-ignore-end -->

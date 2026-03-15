@@ -3,172 +3,197 @@
         <tr>
             <th colspan="2" align="center">
                 <span style="float: left">
-                    <i class="ev_tag bi bi-tag" title="{{ occ.uid() }}"
-                       onclick="copyToClipboard('{{ occ.uid() }}')">
+                    <i
+                        class="ev_tag bi bi-tag"
+                        title="{{ occ.uid() }}"
+                        onclick="copyToClipboard('{{ occ.uid() }}')"
+                    >
                     </i>
                 </span>
                 {{ occ.summary().unwrap() }}
                 <span style="float: right">
-                    <div class="ev_cal_src ev_cal_src_{{ dir.id() }}"
-                         style="width: 20px; height: 20px"
-                         title="{{ dir.name() }}">
-                    </div>
+                    <div
+                        class="ev_cal_src ev_cal_src_{{ dir.id() }}"
+                        style="width: 20px; height: 20px"
+                        title="{{ dir.name() }}"
+                    ></div>
                 </span>
             </th>
         </tr>
         {% if occ.occurrence_start().is_some() || occ.occurrence_end().is_some() %}
-        <tr>
-            <td width="30%">
-                {% if occ.occurrence_start().is_some() && occ.occurrence_end().is_some() %}
-                {{ "Date"|t(locale) }}:
-                {% else if occ.occurrence_start().is_some() %}
-                {{ "Start"|t(locale) }}:
-                {% else %}
-                {% if occ.ctype() == CalCompType::Todo %}
-                {{ "Due"|t(locale) }}:
-                {% else %}
-                {{ "End"|t(locale) }}:
-                {% endif %}
-                {% endif %}
-            </td>
-            <td width="70%">
-                {{ locale.date_range(occ.occurrence_startdate(),
-                                     occ.occurrence_enddate())|safe }}
-            </td>
-        </tr>
+            <tr>
+                <td width="30%">
+                    {% if occ.occurrence_start().is_some() && occ.occurrence_end().is_some() %}
+                        {{ "Date"|t(locale) }}:
+                    {% else if occ.occurrence_start().is_some() %}
+                        {{ "Start"|t(locale) }}:
+                    {% else %}
+                        {% if occ.ctype() == CalCompType::Todo %}
+                            {{ "Due"|t(locale) }}:
+                        {% else %}
+                            {{ "End"|t(locale) }}:
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td width="70%">
+                    {{
+                        locale.date_range(occ.occurrence_startdate(),
+                        occ.occurrence_enddate())|safe
+                    }}
+                </td>
+            </tr>
         {% endif %}
         {% if let Some(loc) = html::text_to_html(occ.location()) %}
-        <tr>
-            <td width="30%">{{ "Location"|t(locale) }}:</td>
-            <td width="70%">{{ loc|safe }}</td>
-        </tr>
+            <tr>
+                <td width="30%">{{ "Location"|t(locale) }}:</td>
+                <td width="70%">{{ loc|safe }}</td>
+            </tr>
         {% endif %}
         {% if let Some(status) = occ.event_status() %}
-        <tr>
-            <td width="30%">{{ "Status"|t(locale) }}:</td>
-            <td width="70%">{{ status|fmt("{}")|t(locale) }}</td>
-        </tr>
+            <tr>
+                <td width="30%">{{ "Status"|t(locale) }}:</td>
+                <td width="70%">{{ status|fmt("{}")|t(locale) }}</td>
+            </tr>
         {% endif %}
         {% if let Some(status) = occ.todo_status() %}
-        <tr>
-            <td width="30%">{{ "Status"|t(locale) }}:</td>
-            <td width="70%">{{ status|fmt("{}")|t(locale) }}</td>
-        </tr>
+            <tr>
+                <td width="30%">{{ "Status"|t(locale) }}:</td>
+                <td width="70%">{{ status|fmt("{}")|t(locale) }}</td>
+            </tr>
         {% endif %}
         {% if let Some(rrule) = occ.rrule() %}
-        <tr>
-            <td width="30%">{{ "Repeats"|t(locale) }}:</td>
-            <td width="70%">{{ rrule.human(&**locale)|newlines()|safe }}</td>
-        </tr>
+            <tr>
+                <td width="30%">{{ "Repeats"|t(locale) }}:</td>
+                <td width="70%">{{ rrule.human(&**locale)|newlines()|safe }}</td>
+            </tr>
         {% endif %}
         {% if let Some(alarms) = alarms %}
-        <tr>
-            <td width="30%">
-                {% if personal_alarms %}
-                {{ "Personal reminder"|t(locale) }}:
-                {% else %}
-                {{ "Reminder"|t(locale) }}:
-                {% endif %}
-            </td>
-            <td width="70%">
-                <div id="alarms">{{ alarms|safe }}</div>
-            </td>
-        </tr>
+            <tr>
+                <td width="30%">
+                    {% if personal_alarms %}
+                        {{ "Personal reminder"|t(locale) }}:
+                    {% else %}
+                        {{ "Reminder"|t(locale) }}:
+                    {% endif %}
+                </td>
+                <td width="70%">
+                    <div id="alarms">{{ alarms|safe }}</div>
+                </td>
+            </tr>
         {% endif %}
         {% if let Some(org) = org %}
-        <tr>
-            <td width="30%">{{ "Organizer"|t(locale) }}:</td>
-            <td width="70%">{{ org|safe }}</td>
-        </tr>
+            <tr>
+                <td width="30%">{{ "Organizer"|t(locale) }}:</td>
+                <td width="70%">{{ org|safe }}</td>
+            </tr>
         {% endif %}
         {% if let Some(atts) = occ.attendees() %}
-        <tr>
-            <td width="30%">{{ "Attendees"|t(locale) }}:</td>
-            <td width="70%">
-                <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
-                    <ul class="ev_iconlist">
-                    {% for att in occ.attendees_sorted() %}
-                        <li>
-                            <i title="{{ html::attendee_title(att) }}"
-                               class="{{ html::attendee_icon(att) }}"></i>
-                            <a href="mailto:{{ att.address() }}">
-                            {% if let Some(cn) = att.common_name() %}
-                            {{ cn }}
-                            {% else %}
-                            {{ att.address() }}
-                            {% endif %}
-                            </a>
-                        </li>
-                    {% endfor %}
-                    </ul>
-                </div>
-            </td>
-        </tr>
+            <tr>
+                <td width="30%">{{ "Attendees"|t(locale) }}:</td>
+                <td width="70%">
+                    <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
+                        <ul class="ev_iconlist">
+                            {% for att in occ.attendees_sorted() %}
+                                <li>
+                                    <i
+                                        title="{{ html::attendee_title(att) }}"
+                                        class="{{ html::attendee_icon(att) }}"
+                                    ></i>
+                                    <a href="mailto:{{ att.address() }}">
+                                        {% if let Some(cn) = att.common_name() %}
+                                            {{ cn }}
+                                        {% else %}
+                                            {{ att.address() }}
+                                        {% endif %}
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </td>
+            </tr>
         {% endif %}
         {% if let Some(desc) = html::text_to_html(occ.description()) %}
-        <tr>
-            <td width="30%">{{ "Description"|t(locale) }}:</td>
-            <td width="70%">
-                <div class="ev_vscrollbox" style="max-width: 350px; max-height: 150px;">
-                    {{ desc|safe }}
-                </div>
-            </td>
-        </tr>
+            <tr>
+                <td width="30%">{{ "Description"|t(locale) }}:</td>
+                <td width="70%">
+                    <div class="ev_vscrollbox" style="max-width: 350px; max-height: 150px;">
+                        {{ desc|safe }}
+                    </div>
+                </td>
+            </tr>
         {% endif %}
         <tr>
             <td colspan="2" align="right">
                 {% if let Some(edit) = edit_modes %}
-                {{ edit|safe }}
+                    {{ edit|safe }}
                 {% endif %}
-                <a id="delete-series-button" style="float: left" class="ev_button ev_button_critical" href="#">
+                <a
+                    id="delete-series-button"
+                    style="float: left"
+                    class="ev_button ev_button_critical"
+                    href="#"
+                >
                     <i class="bi bi-trash"></i>
                     <span>
                         {% if occ.is_recurrent() %}
-                        {{ "Delete series"|t(locale) }}
+                            {{ "Delete series"|t(locale) }}
                         {% else %}
-                        {{ "Delete"|t(locale) }}
+                            {{ "Delete"|t(locale) }}
                         {% endif %}
                     </span>
                 </a>
                 {% if owner %}
-                {% if !occ.is_recurrent() %}
-                <a style="float: right" class="ev_button ev_button_normal"
-                   href="javascript:loadWithPrev('/pages/items/edit?uid={{ occ.uid() }}&mode=Series')">
-                    <i class="bi bi-pencil"></i>
-                    <span>{{ "Edit"|t(locale) }}</span>
-                </a>
-                {% endif %}
-                {% if occ.ctype() == CalCompType::Todo %}
-                <a style="float: right" class="ev_button ev_button_good"
-                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)">
-                    <i class="bi bi-check-lg"></i>
-                    <span>{{ "Complete"|t(locale) }}</span>
-                </a>
-                {% endif %}
-                {% if occ.is_recurrent() %}
-                {% if owner && occ.organizer().is_some() %}
-                {% if occ.status_class() != Some(String::from("Cancelled")) %}
-                <a style="float: left" class="ev_button ev_button_critical"
-                                       href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)">
-                    <i class="bi bi-dash-circle"></i>
-                    <span>{{ "Cancel occ."|t(locale) }}</span>
-                </a>
-                {% endif %}
+                    {% if !occ.is_recurrent() %}
+                        <a
+                            style="float: right"
+                            class="ev_button ev_button_normal"
+                            href="javascript:loadWithPrev('/pages/items/edit?uid={{ occ.uid() }}&mode=Series')"
+                        >
+                            <i class="bi bi-pencil"></i>
+                            <span>{{ "Edit"|t(locale) }}</span>
+                        </a>
+                    {% endif %}
+                    {% if occ.ctype() == CalCompType::Todo %}
+                        <a
+                            style="float: right"
+                            class="ev_button ev_button_good"
+                            href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
+                        >
+                            <i class="bi bi-check-lg"></i>
+                            <span>{{ "Complete"|t(locale) }}</span>
+                        </a>
+                    {% endif %}
+                    {% if occ.is_recurrent() %}
+                        {% if owner && occ.organizer().is_some() %}
+                            {% if occ.status_class() != Some(String::from("Cancelled")) %}
+                                <a
+                                    style="float: left"
+                                    class="ev_button ev_button_critical"
+                                    href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
+                                >
+                                    <i class="bi bi-dash-circle"></i>
+                                    <span>{{ "Cancel occ."|t(locale) }}</span>
+                                </a>
+                            {% endif %}
+                        {% else %}
+                            <a
+                                style="float: left"
+                                class="ev_button ev_button_normal"
+                                href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
+                            >
+                                <i class="bi bi-dash-circle"></i>
+                                <span>{{ "Exclude occ."|t(locale) }}</span>
+                            </a>
+                        {% endif %}
+                    {% endif %}
                 {% else %}
-                <a style="float: left" class="ev_button ev_button_normal"
-                                       href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)">
-                    <i class="bi bi-dash-circle"></i>
-                    <span>{{ "Exclude occ."|t(locale) }}</span>
-                </a>
-                {% endif %}
-                {% endif %}
-                {% else %}
-                {% if let Some(series_partstat) = series_partstat %}
-                {{ series_partstat|safe }}
-                {% endif %}
-                {% if let Some(occ_partstat) = occ_partstat %}
-                {{ occ_partstat|safe }}
-                {% endif %}
+                    {% if let Some(series_partstat) = series_partstat %}
+                        {{ series_partstat|safe }}
+                    {% endif %}
+                    {% if let Some(occ_partstat) = occ_partstat %}
+                        {{ occ_partstat|safe }}
+                    {% endif %}
                 {% endif %}
             </td>
         </tr>
@@ -180,33 +205,32 @@
 </div>
 <script>
     function alarmURL(uid, rid, edit) {
-        let url = '/api/items/editalarm?edit=' + edit + '&uid=' + uid;
-        if(rid)
-            url += '&rid=' + rid;
+        let url = "/api/items/editalarm?edit=" + edit + "&uid=" + uid;
+        if (rid) url += "&rid=" + rid;
         return url;
     }
 
     function editAlarm(uid, rid) {
         fireEvent(new EditEvent(null, uid, rid));
-        getRequest(alarmURL(uid, rid, true), function(data) {
-            $('#alarms').html(data.html);
+        getRequest(alarmURL(uid, rid, true), function (data) {
+            $("#alarms").html(data.html);
         });
     }
 
     function cancelAlarm(uid, rid) {
         fireEvent(new CancelEvent());
-        getRequest(alarmURL(uid, rid, false), function(data) {
-            $('#alarms').html(data.html);
+        getRequest(alarmURL(uid, rid, false), function (data) {
+            $("#alarms").html(data.html);
         });
     }
 
-    $(function() {
+    $(function () {
         confirmDialog(
-            'delete-series-confirm-{{ occ.uid()|to_id }}',
-            'delete-series-button',
-            function() {
-                deleteItem('{{ occ.uid() }}', null, reloadContent);
-            }
+            "delete-series-confirm-{{ occ.uid()|to_id }}",
+            "delete-series-button",
+            function () {
+                deleteItem("{{ occ.uid() }}", null, reloadContent);
+            },
         );
     });
 </script>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
     <head>
         <title>{{ "Eventix"|t(locale) }}</title>
@@ -6,96 +6,135 @@
         <meta http-equiv="Content-Style-Type" content="text/css" />
         {% decl js_suffix %}
         {% if page.debug() %}
-        {% let js_suffix = "" %}
+            {% let js_suffix = "" %}
         {% else %}
-        {% let js_suffix = ".min" %}
+            {% let js_suffix = ".min" %}
         {% endif %}
         <link rel="stylesheet" type="text/css" href="/static/style.css" />
-        <link rel="stylesheet" type="text/css" href="/static/contrib/jquery-ui/jquery-ui{{ js_suffix }}.css">
-        <link rel="stylesheet" type="text/css" href="/static/contrib/jquery-ui/jquery-ui.theme{{ js_suffix }}.css">
-        <link rel="stylesheet" type="text/css" href="/generated/contrib{{ js_suffix }}.css">
-        <link rel="stylesheet" href="/static/contrib/bootstrap/bootstrap-icons{{ js_suffix }}.css">
+        <link
+            rel="stylesheet"
+            type="text/css"
+            href="/static/contrib/jquery-ui/jquery-ui{{ js_suffix }}.css"
+        />
+        <link
+            rel="stylesheet"
+            type="text/css"
+            href="/static/contrib/jquery-ui/jquery-ui.theme{{ js_suffix }}.css"
+        />
+        <link rel="stylesheet" type="text/css" href="/generated/contrib{{ js_suffix }}.css" />
+        <link
+            rel="stylesheet"
+            href="/static/contrib/bootstrap/bootstrap-icons{{ js_suffix }}.css"
+        />
         <script type="text/javascript" src="/generated/locale.js"></script>
         <script type="text/javascript" src="/generated/contrib{{ js_suffix }}.js"></script>
         <script type="text/javascript" src="/generated/bundle.js"></script>
         <script type="text/javascript">
             trackActivity();
-            syncAllEvery(1000 * 5 * 60, 'last-update', 'sync-spinner', 'out-of-sync');
+            syncAllEvery(1000 * 5 * 60, "last-update", "sync-spinner", "out-of-sync");
 
             const startDay = curUTCDay();
-            setInterval(function() {
-                if(curUTCDay() != startDay)
-                    requestReload('out-of-sync', false);
+            setInterval(function () {
+                if (curUTCDay() != startDay) requestReload("out-of-sync", false);
             }, 60 * 1000);
         </script>
     </head>
     <body>
         <div id="outer">
             <form onsubmit="navigateTo('/pages/list?' + $(this).serialize()); return false;">
-            <div style="float: left; padding-bottom: .5em" class="ev_button_medium ev_button_normal">
-                <span>{{ "Search"|t(locale) }}:</span>
-                <input type="text" id="quick-search" name="keywords"
-                       style="font-size: .8em; padding: 2px; width: 150px" />
-            </div>
+                <div
+                    style="float: left; padding-bottom: .5em"
+                    class="ev_button_medium ev_button_normal"
+                >
+                    <span>{{ "Search"|t(locale) }}:</span>
+                    <input
+                        type="text"
+                        id="quick-search"
+                        name="keywords"
+                        style="font-size: .8em; padding: 2px; width: 150px"
+                    />
+                </div>
             </form>
 
             <div style="float: right;" class="ev_padbottom">
                 <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
-                    <a class="ev_button_link" href="javascript:navigateTo('/pages/calendars')">{{ "Calendars"|t(locale) }}:</a>
+                    <a class="ev_button_link" href="javascript:navigateTo('/pages/calendars')">
+                        {{ "Calendars"|t(locale) }}:
+                    </a>
                     <span id="callist-content"></span>
                     <script type="text/javascript">
                         // Lazy-load the calendar toggle buttons independently of the initial page
                         // render so that calendar state is always fetched fresh.
-                        $(function() { fetchContent('callist', '#callist-content', '', null); });
+                        $(function () {
+                            fetchContent("callist", "#callist-content", "", null);
+                        });
                     </script>
                 </div>
                 &nbsp;
-                <a id="link-monthly" class="ev_button_medium ev_button_normal"
-                                   href="javascript:navigateTo('/pages/monthly')">
+                <a
+                    id="link-monthly"
+                    class="ev_button_medium ev_button_normal"
+                    href="javascript:navigateTo('/pages/monthly')"
+                >
                     <i class="bi bi-calendar2-month"></i>
                     <span>{{ "Month"|t(locale) }}</span>
                 </a>
-                <a id="link-weekly" class="ev_button_medium ev_button_normal"
-                                   href="javascript:navigateTo('/pages/weekly')">
+                <a
+                    id="link-weekly"
+                    class="ev_button_medium ev_button_normal"
+                    href="javascript:navigateTo('/pages/weekly')"
+                >
                     <i class="bi bi-calendar2-week"></i>
                     <span>{{ "Week"|t(locale) }}</span>
                 </a>
-                <a id="link-list" class="ev_button_medium ev_button_normal"
-                                   style="padding-left: 1em; padding-right: 1em"
-                                   href="javascript:navigateTo('/pages/list')">
+                <a
+                    id="link-list"
+                    class="ev_button_medium ev_button_normal"
+                    style="padding-left: 1em; padding-right: 1em"
+                    href="javascript:navigateTo('/pages/list')"
+                >
                     <i class="bi bi-card-list"></i>
                     <span>{{ "List"|t(locale) }}</span>
                 </a>
-                <a id="link-help" class="ev_button_medium ev_button_normal"
-                                   style="padding-left: 1em; padding-right: 1em"
-                                   href="javascript:fireEvent(createHelpEvent())">
+                <a
+                    id="link-help"
+                    class="ev_button_medium ev_button_normal"
+                    style="padding-left: 1em; padding-right: 1em"
+                    href="javascript:fireEvent(createHelpEvent())"
+                >
                     <i class="bi bi-question-circle"></i>
                     <span>{{ "Help"|t(locale) }}</span>
                 </a>
-                <a id="link-refresh" class="ev_button_medium ev_button_normal"
-                                     href="javascript:syncAll('last-update', 'sync-spinner', 'out-of-sync', true)">
+                <a
+                    id="link-refresh"
+                    class="ev_button_medium ev_button_normal"
+                    href="javascript:syncAll('last-update', 'sync-spinner', 'out-of-sync', true)"
+                >
                     <i id="sync-spinner" class="bi bi-arrow-clockwise"></i>
                     <span id="last-update">
                         {{ &page.last_reload(locale)|time(locale, TimeFlags::None) }}
                     </span>
-                    <i id="out-of-sync" style="color: transparent" class="bi bi-exclamation-circle-fill"></i>
+                    <i
+                        id="out-of-sync"
+                        style="color: transparent"
+                        class="bi bi-exclamation-circle-fill"
+                    ></i>
                 </a>
             </div>
             <br style="clear: both;" />
 
             {% block content %}
-            <h1>Dummy content</h1>
+                <h1>Dummy content</h1>
             {% endblock %}
 
             <div class="ev_padtop ev_border">
                 <div class="ev_main">
                     <div style="float: right;">
-                        Eventix #{{ page.git_hash() }}
-                        &nbsp;&mdash;&nbsp;
+                        Eventix #{{ page.git_hash() }} &nbsp;&mdash;&nbsp;
                         {% if locale.ty() == eventix_locale::LocaleType::German %}
-                        <a href="javascript:setLang('English')"> 🇬🇧</a>
+                            <a href="javascript:setLang('English')"> 🇬🇧</a>
                         {% else %}
-                        <a href="javascript:setLang('German')"> 🇩🇪</a>
+                            <a href="javascript:setLang('German')"> 🇩🇪</a>
                         {% endif %}
                     </div>
                     <br style="clear: both" />

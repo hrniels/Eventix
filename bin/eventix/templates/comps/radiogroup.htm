@@ -1,8 +1,13 @@
 {% for (idx, e) in elems.iter().enumerate() %}
-<input type="radio" id="{{ name }}_{{ e.0 }}" name="{{ name }}"
-       value="{{ e.0 }}"{% if value == e.0 %} checked="checked"{% endif %} />
-<label for="{{ name }}_{{ e.0 }}">{{ e.1 }}</label>
-{% if idx + 1 < elems.len() %}
-<br />
-{% endif %}
+    <input
+        type="radio"
+        id="{{ name }}_{{ e.0 }}"
+        name="{{ name }}"
+        value="{{ e.0 }}"
+        {% if value == e.0 %}checked="checked"{% endif %}
+    />
+    <label for="{{ name }}_{{ e.0 }}">{{ e.1 }}</label>
+    {% if idx + 1 < elems.len() %}
+        <br />
+    {% endif %}
 {% endfor %}

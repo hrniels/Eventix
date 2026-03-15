@@ -2,167 +2,183 @@
     <h1 id="title" class="ev_header">{{ "Calendars"|t(locale) }}</h1>
     <table width="100%" class="ev_table">
         {% if collections.is_empty() %}
-        <tr>
-            <td colspan="2" align="center">{{ "No calendars found"|t(locale) }}</td>
-        </tr>
+            <tr>
+                <td colspan="2" align="center">{{ "No calendars found"|t(locale) }}</td>
+            </tr>
         {% endif %}
         {% for (col_id, col) in collections.iter() %}
-        <tr>
-            <td class="ev_desc" width="40%" style="vertical-align: top">
-                <div class="ev_cal_title">
-                    {% match col.syncer() %}
-                    {% when SyncerType::VDirSyncer { .. } %}
-                    <img src="/static/caldav.png" />
-                    {% when SyncerType::O365 { .. } %}
-                    <img src="/static/o365.png" />
-                    {% when _ %}
-                    <img src="/static/fs.png" />
-                    {% endmatch %}
-                    <b>{{ col_id }}</b>
-                </div>
-
-                <div style="padding-top: .3em">
-                    {% if let Some(email) = col.email() %}
-                    {{ email.name() }} &lt;{{ email.org_address() }}&gt;
-                    {% endif %}
-                </div>
-                <div class="ev_col_buttons" style="padding-top: .3em">
-                    <a href="javascript:askDeleteCollection('{{ col_id }}')"
-                       class="ev_button ev_button_critical"
-                       title="{{ "Delete"|t(locale) }}">
-                        <i class="bi bi-trash"></i>
-                    </a>
-                    <a class="ev_button ev_button_normal"
-                       href="javascript:loadWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
-                       title="{{ "Edit"|t(locale) }}">
-                        <i class="bi bi-pencil"></i>
-                    </a>
-                    {% if col.syncer().supports_reload() %}
-                    <a class="ev_button ev_button_warn"
-                       title="{{ "warning.reload_collection"|t(locale) }}"
-                       href="javascript:reloadCollection('{{ col_id }}',
-                                                         'reload_spinner_{{ col_id }}',
-                                                         reloadContentIfPossible)">
-                        <i id="reload_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
-                        <span>{{ "Reload"|t(locale) }}</span>
-                    </a>
-                    {% endif %}
-                    {% if col.syncer().supports_discover() %}
-                    <a class="ev_button ev_button_normal"
-                       title="{{ "info.discover_collection"|t(locale) }}"
-                       href="javascript:discoverCollection('{{ col_id }}',
-                                                           'discover_spinner_{{ col_id }}',
-                                                           reloadContentIfPossible)">
-                        <i id="discover_spinner_{{ col_id }}" class="bi bi-compass"></i>
-                        <span>{{ "Discover"|t(locale) }}</span>
-                    </a>
-                    {% endif %}
-                    <a class="ev_button ev_button_normal"
-                       href="javascript:syncCollection('{{ col_id }}',
-                                                       'sync_spinner_{{ col_id }}',
-                                                       reloadContentIfPossible)">
-                        <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
-                        <span>{{ "Sync"|t(locale) }}</span>
-                    </a>
-                    {% if matches!(col.syncer(), SyncerType::VDirSyncer { .. } | SyncerType::O365 { .. }) %}
-                    <a class="ev_button ev_button_normal"
-                       href="javascript:fireEvent(new PageEvent('/api/collections/log?col_id={{ col_id }}'))">
-                        <i class="bi bi-list-ul"></i>
-                        <span>{{ "Log"|t(locale) }}</span>
-                    </a>
-                    {% endif %}
-                </div>
-            </td>
-            <td class="ev_main" width="60%" style="vertical-align: top">
-                <div style="display: flex; flex-direction: column; gap: .3em">
-                    {% for cal in calendars.get(col_id).unwrap() %}
-                    <div id="ev_cal_box_{{ cal.cal().id() }}">
-                        {{ cal|safe }}
+            <tr>
+                <td class="ev_desc" width="40%" style="vertical-align: top">
+                    <div class="ev_cal_title">
+                        {% match col.syncer() %}
+                            {% when SyncerType::VDirSyncer { .. } %}
+                            <img src="/static/caldav.png" />
+                            {% when SyncerType::O365 { .. } %}
+                            <img src="/static/o365.png" />
+                            {% when _ %}
+                            <img src="/static/fs.png" />
+                        {% endmatch %}
+                        <b>{{ col_id }}</b>
                     </div>
-                    {% endfor %}
-                </div>
 
-                {% if let SyncerType::FileSystem { .. } = col.syncer() %}
-                <div class="ev_padtop ev_add_cal">
-                    <span>{{ "Folder"|t(locale) }}:</span>
-                    <input id="folder_{{ col_id }}" type="text" name="folder" size="20" />
-                    <a class="ev_button ev_button_normal"
-                       href="javascript:addCalendar('{{ col_id }}')">
-                        <i class="bi bi-plus-square"></i>
-                        <span>{{ "Add"|t(locale) }}</span>
-                    </a>
-                    <script type="text/javascript">
-                        $('#folder_{{ col_id }}').keypress(function(e) {
-                            if(e.which == 13) {
-                                addCalendar('{{ col_id }}');
-                                // stop propagation
-                                return false;
-                            }
-                        });
-                    </script>
-                </div>
-                {% endif %}
-            </td>
-        </tr>
+                    <div style="padding-top: .3em">
+                        {% if let Some(email) = col.email() %}
+                            {{ email.name() }}
+                            &lt;{{ email.org_address() }}&gt;
+                        {% endif %}
+                    </div>
+                    <div class="ev_col_buttons" style="padding-top: .3em">
+                        <a
+                            href="javascript:askDeleteCollection('{{ col_id }}')"
+                            class="ev_button ev_button_critical"
+                            title="{{ "Delete"|t(locale) }}"
+                        >
+                            <i class="bi bi-trash"></i>
+                        </a>
+                        <a
+                            class="ev_button ev_button_normal"
+                            href="javascript:loadWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
+                            title="{{ "Edit"|t(locale) }}"
+                        >
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% if col.syncer().supports_reload() %}
+                            <a
+                                class="ev_button ev_button_warn"
+                                title="{{ "warning.reload_collection"|t(locale) }}"
+                                href="javascript:reloadCollection('{{ col_id }}',
+                                                                  'reload_spinner_{{ col_id }}',
+                                                                  reloadContentIfPossible)"
+                            >
+                                <i
+                                    id="reload_spinner_{{ col_id }}"
+                                    class="bi bi-arrow-clockwise"
+                                ></i>
+                                <span>{{ "Reload"|t(locale) }}</span>
+                            </a>
+                        {% endif %}
+                        {% if col.syncer().supports_discover() %}
+                            <a
+                                class="ev_button ev_button_normal"
+                                title="{{ "info.discover_collection"|t(locale) }}"
+                                href="javascript:discoverCollection('{{ col_id }}',
+                                                                    'discover_spinner_{{ col_id }}',
+                                                                    reloadContentIfPossible)"
+                            >
+                                <i id="discover_spinner_{{ col_id }}" class="bi bi-compass"></i>
+                                <span>{{ "Discover"|t(locale) }}</span>
+                            </a>
+                        {% endif %}
+                        <a
+                            class="ev_button ev_button_normal"
+                            href="javascript:syncCollection('{{ col_id }}',
+                                                            'sync_spinner_{{ col_id }}',
+                                                            reloadContentIfPossible)"
+                        >
+                            <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
+                            <span>{{ "Sync"|t(locale) }}</span>
+                        </a>
+                        {% if matches!(col.syncer(), SyncerType::VDirSyncer { .. } | SyncerType::O365 { .. }) %}
+                            <a
+                                class="ev_button ev_button_normal"
+                                href="javascript:fireEvent(new PageEvent('/api/collections/log?col_id={{ col_id }}'))"
+                            >
+                                <i class="bi bi-list-ul"></i>
+                                <span>{{ "Log"|t(locale) }}</span>
+                            </a>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="ev_main" width="60%" style="vertical-align: top">
+                    <div style="display: flex; flex-direction: column; gap: .3em">
+                        {% for cal in calendars.get(col_id).unwrap() %}
+                            <div id="ev_cal_box_{{ cal.cal().id() }}">{{ cal|safe }}</div>
+                        {% endfor %}
+                    </div>
+
+                    {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                        <div class="ev_padtop ev_add_cal">
+                            <span>{{ "Folder"|t(locale) }}:</span>
+                            <input id="folder_{{ col_id }}" type="text" name="folder" size="20" />
+                            <a
+                                class="ev_button ev_button_normal"
+                                href="javascript:addCalendar('{{ col_id }}')"
+                            >
+                                <i class="bi bi-plus-square"></i>
+                                <span>{{ "Add"|t(locale) }}</span>
+                            </a>
+                            <script type="text/javascript">
+                                $("#folder_{{ col_id }}").keypress(function (e) {
+                                    if (e.which == 13) {
+                                        addCalendar("{{ col_id }}");
+                                        // stop propagation
+                                        return false;
+                                    }
+                                });
+                            </script>
+                        </div>
+                    {% endif %}
+                </td>
+            </tr>
         {% endfor %}
     </table>
 </div>
 
-<a style="float: left" class="ev_padtop ev_button ev_button_normal"
-    href="javascript:loadWithPrev('/pages/collections/add')">
+<a
+    style="float: left"
+    class="ev_padtop ev_button ev_button_normal"
+    href="javascript:loadWithPrev('/pages/collections/add')"
+>
     <i class="bi bi-plus-square"></i>
     <span>{{ "Add Collection"|t(locale) }}</span>
 </a>
-<br style="clear: both"/>
+<br style="clear: both" />
 
 <div id="delete-collection-confirm" title="{{ "Are you sure?"|t(locale) }}" style="display: none">
     {{ "warning.delete_collection"|t(locale) }}
 </div>
 
 <style type="text/css">
-.ev_cal_title {
-    display: flex;
-    gap: .3em;
-}
-.ev_cal_title img {
-    width: 20px;
-    height: 20px;
-}
+    .ev_cal_title {
+        display: flex;
+        gap: 0.3em;
+    }
+    .ev_cal_title img {
+        width: 20px;
+        height: 20px;
+    }
 </style>
 <script type="text/javascript">
     function reloadContentIfPossible() {
-        requestReload('out-of-sync', false);
+        requestReload("out-of-sync", false);
         reloadCalList();
     }
 
     function askDeleteCollection(col_id) {
-        showConfirmDialog('delete-collection-confirm', function() {
-            deleteCollection(col_id, reloadContentIfPossible)
-        })
+        showConfirmDialog("delete-collection-confirm", function () {
+            deleteCollection(col_id, reloadContentIfPossible);
+        });
     }
 
     function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {
-        const rmode = mode == 'Cancel' ? 'View' : mode;
-        let url = '/api/calendars/calbox?col_id=' + col_id + '&cal_id=' + cal_id + '&mode=' + rmode;
-        if(folder && name && color) {
-            url += '&folder=' + encodeURIComponent(folder);
-            url += '&name=' + encodeURIComponent(name);
-            url += '&color=' + encodeURIComponent(color);
+        const rmode = mode == "Cancel" ? "View" : mode;
+        let url = "/api/calendars/calbox?col_id=" + col_id + "&cal_id=" + cal_id + "&mode=" + rmode;
+        if (folder && name && color) {
+            url += "&folder=" + encodeURIComponent(folder);
+            url += "&name=" + encodeURIComponent(name);
+            url += "&color=" + encodeURIComponent(color);
         }
-        getRequest(url, function(data) {
-            replaceSmoothly('ev_cal_box_' + cal_id, data.html, 150);
-            if(mode == 'Edit')
-                openForm();
-            else
-                closeForm();
-            if(outOfSync || mode == 'View')
-                reloadContentIfPossible();
+        getRequest(url, function (data) {
+            replaceSmoothly("ev_cal_box_" + cal_id, data.html, 150);
+            if (mode == "Edit") openForm();
+            else closeForm();
+            if (outOfSync || mode == "View") reloadContentIfPossible();
         });
     }
 
     function addCalendar(col_id) {
-        const folder = $('#folder_' + col_id);
-        const url = '/api/calendars/addcal?col_id=' + col_id + '&folder=' + folder.val();
+        const folder = $("#folder_" + col_id);
+        const url = "/api/calendars/addcal?col_id=" + col_id + "&folder=" + folder.val();
         postRequest(url, reloadContentIfPossible);
     }
 </script>

@@ -1,73 +1,79 @@
 <select name="{{ name }}" id="{{ id }}">
     {% for cal in calendars.0 %}
-    <option value="{{ cal.id }}"{% if *calendar == cal.id %} selected="selected"{% endif %}
-            data-style="float: left; margin-right: .5em" data-class="{{ cal.id }}">{{ cal.name }}</option>
+        <option
+            value="{{ cal.id }}"
+            {% if *calendar == cal.id %}selected="selected"{% endif %}
+            data-style="float: left; margin-right: .5em"
+            data-class="{{ cal.id }}"
+        >
+            {{ cal.name }}
+        </option>
     {% endfor %}
 </select>
 
 <script>
-    $(function() {
-        $.widget( "custom.iconselectmenu", $.ui.selectmenu, {
-            _select: function(event, ui) {
+    // Defines the iconselectmenu widget if it has not been registered yet.
+    // The widget is shared across all calcombo instances on the page.
+    if (!$.fn.iconselectmenu) {
+        $.widget("custom.iconselectmenu", $.ui.selectmenu, {
+            _select: function (event, ui) {
                 this._super(event, ui);
                 this.element.trigger("change", ui);
             },
 
-            _renderButtonItem: function(item) {
-                {% if !compact %}
-                let buttonItem = this._super(item);
-                {% else %}
-                let buttonItem = $("<span>");
-                {% endif %}
+            _renderButtonItem: function (item) {
+                let buttonItem = this.options.compact ? $("<span>") : this._super(item);
 
                 let icon = $("<span>", {
                     style: item.element.attr("data-style"),
-                    "class": "ev_cal_src ev_cal_src_" + item.element.attr("data-class")
+                    class: "ev_cal_src ev_cal_src_" + item.element.attr("data-class"),
                 });
                 icon.appendTo(buttonItem);
 
                 return buttonItem;
             },
 
-            _renderItem: function(ul, item) {
+            _renderItem: function (ul, item) {
                 let li = $("<li>");
-                let wrapper = $("<div>", { text: item.label } );
+                let wrapper = $("<div>", { text: item.label });
 
-                if(item.disabled)
-                    li.addClass("ui-state-disabled");
+                if (item.disabled) li.addClass("ui-state-disabled");
 
                 $("<span>", {
                     style: item.element.attr("data-style"),
-                    "class": "ev_cal_src ev_cal_src_" + item.element.attr("data-class")
-                })
-                .appendTo(wrapper);
+                    class: "ev_cal_src ev_cal_src_" + item.element.attr("data-class"),
+                }).appendTo(wrapper);
 
                 return li.append(wrapper).appendTo(ul);
-            }
+            },
         });
-
+    }
+</script>
+<!-- prettier-ignore-start -->
+<script>
+    $(function () {
         $("#{{ id }}")
             .iconselectmenu({
+                compact: {{ compact }},
                 position: {
-                    my: "left top",      // my top-left corner
-                    at: "left bottom",   // aligns to bottom of button
-                    collision: "flipfit" // try flipping if not enough space
-                }
+                    my: "left top", // my top-left corner
+                    at: "left bottom", // aligns to bottom of button
+                    collision: "flipfit", // try flipping if not enough space
+                },
             })
-        {% if compact %}
-            .iconselectmenu("widget")              // the button element
-            .addClass("iconselectmenu-compact");
-        {% endif %}
+            .iconselectmenu("widget") // the button element
+            .toggleClass("iconselectmenu-compact", {{ compact }});
 
         $("#{{ id }}")
-            .iconselectmenu("menuWidget")          // the dropdown
+            .iconselectmenu("menuWidget") // the dropdown
             .addClass("ui-menu-icons customicons");
     });
 </script>
+<!-- prettier-ignore-end -->
 
 <style>
     .ui-selectmenu-menu .ui-menu.customicons .ui-menu-item-wrapper {
-        padding: .5em;
+        padding: 0.5em;
     }
     .ui-selectmenu-menu .ui-menu.customicons .ui-menu-item .ui-icon {
         height: 24px;

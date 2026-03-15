@@ -1,24 +1,24 @@
 <script type="text/javascript">
     function resizeBoxes() {
         // resize events and tasks box to fit within the available height
-        const top = $('#box_events').offset().top;
+        const top = $("#box_events").offset().top;
         const bottom = $(window).height() - 70;
         const available_yspace = Math.max(400, bottom - top);
-        $('#box_events').css('height', available_yspace / 2 - 12);
-        $('#box_tasks').css('height', available_yspace / 2 - 12);
+        $("#box_events").css("height", available_yspace / 2 - 12);
+        $("#box_tasks").css("height", available_yspace / 2 - 12);
 
         // as the week area is scrollable, resize it to fit within the height as well
-        let week_scroll_area = $('#week_scroll_area');
-        if(week_scroll_area.length) {
+        let week_scroll_area = $("#week_scroll_area");
+        if (week_scroll_area.length) {
             const top = week_scroll_area.offset().top;
-            week_scroll_area.css('height', bottom - top);
+            week_scroll_area.css("height", bottom - top);
         }
     }
 
-    $(window).resize(function() {
+    $(window).resize(function () {
         resizeBoxes();
     });
-    $(window).on('load', function() {
+    $(window).on("load", function () {
         resizeBoxes();
     });
 </script>
@@ -26,96 +26,106 @@
 <div class="ev_border ev_box" id="box_events">
     <div class="ev_header">
         {{ "Next Events"|t(locale) }}
-        <a id="link-event" style="float: right"
-           href="javascript:loadWithPrev('/pages/items/add?ctype=Event')">
+        <a
+            id="link-event"
+            style="float: right"
+            href="javascript:loadWithPrev('/pages/items/add?ctype=Event')"
+        >
             <i class="bi bi-plus-square" style="color: white"></i>
         </a>
     </div>
     <div class="ev_scrollbox">
         {% for day in events.days %}
-        <div class="ev_next_day_header">
-            {{ &day.date.unwrap()|weekdate(locale, DateFlags::empty()) }}
-        </div>
-        {% for occ in day.occurrences %}
-        <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
-                                                'ev_id_{{ occ.uid()|to_id }}',
-                                                '{{ occ.rid_str() }}',
-                                                '{{ occ.id() }}'))"
-             id="{{ occ.id() }}"
-              class="ev_event_occurrence
-                     ev_id_{{ occ.uid()|to_id }}
-                    {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
-                    ev_cal_src ev_cal_src_{{ occ.directory() }}
-                    {% endif %}
-                    {% match occ.status_class() %}
-                    {% when Some with (cl) %}
-                    ev_status_{{ cl }}
-                    {% when _ %}
-                    {% endmatch %}
-                    ">
-            {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
-            {% if !occ.is_owner() %}
-            <div class="ev_vertbar
-                {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
-                {% when CalPartStat::NeedsAction %}
-                ev_vertbar_needsaction
-                {% when stat %}
-                ev_vertbar_{{ stat }}
-                {% endmatch %}
-                ">
+            <div class="ev_next_day_header">
+                {{ &day.date.unwrap()|weekdate(locale, DateFlags::empty()) }}
             </div>
+            <!-- prettier-ignore-start -->
+            {% for occ in day.occurrences %}
+            <div
+                onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                   'ev_id_{{ occ.uid()|to_id }}',
+                                                   '{{ occ.rid_str() }}',
+                                                   '{{ occ.id() }}'))"
+                id="{{ occ.id() }}"
+                class="ev_event_occurrence
+                       ev_id_{{ occ.uid()|to_id }}
+                       {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
+                           ev_cal_src ev_cal_src_{{ occ.directory() }}
+                       {% endif %}
+                       {% match occ.status_class() %}
+                           {% when Some with (cl) %}
+                               ev_status_{{ cl }}
+                           {% when _ %}
+                       {% endmatch %}
+                    "
+            >
+            {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
+                {% if !occ.is_owner() %}
+                    <div
+                        class="ev_vertbar
+                               {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
+                                   {% when CalPartStat::NeedsAction %}
+                                       ev_vertbar_needsaction
+                                   {% when stat %}
+                                       ev_vertbar_{{ stat }}
+                               {% endmatch %}
+                               "
+                    >
+                    </div>
+                {% else %}
+                    <div class="ev_vertbar_spacer">&nbsp;</div>
+                {% endif %}
+                <div style="padding: 5px; padding-left: 12px">
             {% else %}
-            <div class="ev_vertbar_spacer">&nbsp;</div>
+                <div style="padding: 5px">
             {% endif %}
-            <div style="padding: 5px; padding-left: 12px">
-            {% else %}
-            <div style="padding: 5px">
-            {% endif %}
+
                 {% if occ.rid().is_some() || occ.rrule().is_some() %}
-                <i class="bi bi-arrow-clockwise ev_right_icon"></i>
+                    <i class="bi bi-arrow-clockwise ev_right_icon"></i>
                 {% endif %}
                 {% if occ.is_overwritten() %}
-                <i class="bi bi-pencil ev_right_icon"></i>
+                    <i class="bi bi-pencil ev_right_icon"></i>
                 {% endif %}
                 {% if occ.has_effective_alarms() %}
-                <i class="bi bi-alarm ev_right_icon"></i>
+                    <i class="bi bi-alarm ev_right_icon"></i>
                 {% endif %}
                 {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
-                {{ occ.summary().unwrap() }}
+                    {{ occ.summary().unwrap() }}
                 {% else %}
-                <div style="display: flex; gap: .4em">
-                    <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}">
-                        {% if !occ.is_owner() %}
-                        <div class="ev_cal_src_inner">
-                        {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
-                        {% when CalPartStat::Accepted %}
-                        <i class="ev_good_color bi bi-check-lg"></i>
-                        {% when CalPartStat::Tentative %}
-                        <i class="ev_warn_color bi bi-question-lg"></i>
-                        {% when CalPartStat::Declined %}
-                        <i class="ev_critical_color bi bi-x-lg"></i>
-                        {% when _ %}
-                        {% endmatch %}
-                        </div>
+                    <div style="display: flex; gap: .4em">
+                        <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}">
+                            {% if !occ.is_owner() %}
+                                <div class="ev_cal_src_inner">
+                                    {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
+                                        {% when CalPartStat::Accepted %}
+                                            <i class="ev_good_color bi bi-check-lg"></i>
+                                        {% when CalPartStat::Tentative %}
+                                            <i class="ev_warn_color bi bi-question-lg"></i>
+                                        {% when CalPartStat::Declined %}
+                                            <i class="ev_critical_color bi bi-x-lg"></i>
+                                        {% when _ %}
+                                    {% endmatch %}
+                                </div>
+                            {% endif %}
+                        </span>
+                        {% if occ.occurrence_starts_on(day.date.unwrap()) &&
+                              !occ.occurrence_ends_on(day.date.unwrap()) %}
+                            <i class="bi bi-arrow-bar-right"></i>
+                            <span><b>{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
+                        {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
+                                   occ.occurrence_ends_on(day.date.unwrap()) %}
+                            <i class="bi bi-arrow-bar-left"></i>
+                            <span><b>{{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
+                        {% else if occ.occurrence_starts_on(day.date.unwrap()) %}
+                            <span><b>{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
                         {% endif %}
-                    </span>
-                    {% if occ.occurrence_starts_on(day.date.unwrap()) &&
-                          !occ.occurrence_ends_on(day.date.unwrap()) %}
-                    <i class="bi bi-arrow-bar-right"></i>
-                    <span><b>{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
-                    {% else if !occ.occurrence_starts_on(day.date.unwrap()) &&
-                               occ.occurrence_ends_on(day.date.unwrap()) %}
-                    <i class="bi bi-arrow-bar-left"></i>
-                    <span><b>{{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
-                    {% else if occ.occurrence_starts_on(day.date.unwrap()) %}
-                    <span><b>{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</b></span>
-                    {% endif %}
-                    <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
-                </div>
+                        <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                    </div>
                 {% endif %}
             </div>
         </div>
         {% endfor %}
+        <!-- prettier-ignore-end -->
         {% endfor %}
     </div>
 </div>
@@ -125,117 +135,140 @@
 <div class="ev_border ev_box" id="box_tasks">
     <div class="ev_header">
         {{ "Next Tasks"|t(locale) }}
-        <a id="link-todo" style="float: right"
-           href="javascript:loadWithPrev('/pages/items/add?ctype=Todo')">
+        <a
+            id="link-todo"
+            style="float: right"
+            href="javascript:loadWithPrev('/pages/items/add?ctype=Todo')"
+        >
             <i class="bi bi-plus-square" style="color: white"></i>
         </a>
     </div>
     <div class="ev_scrollbox">
+        <!-- prettier-ignore-start -->
         {% for day in tasks.days %}
-        <div class="ev_next_day_header">
-            {% if let Some(date) = day.date %}
-            {{ date|weekdate(locale, DateFlags::empty()) }}
-            {% else %}
-            {{ "Unplanned"|t(locale) }}
-            {% endif %}
-        </div>
-        {% for occ in day.occurrences %}
-        <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
-                                                'ev_id_{{ occ.uid()|to_id }}',
-                                                '{{ occ.rid_str() }}',
-                                                '{{ occ.id() }}'))"
-             id="{{ occ.id() }}"
-              class="ev_event_occurrence
-                     ev_id_{{ occ.uid()|to_id }}
-                    {% if let Some(end) = occ.occurrence_end() %}
-                    {% if end < &page.now %}
-                    ev_overdue
-                    {% else if end.date_naive() == tasks.today %}
-                    ev_duetoday
+            <div class="ev_next_day_header">
+                {% if let Some(date) = day.date %}
+                    {{ date|weekdate(locale, DateFlags::empty()) }}
+                {% else %}
+                    {{ "Unplanned"|t(locale) }}
+                {% endif %}
+            </div>
+            {% for occ in day.occurrences %}
+                <div onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
+                                                        'ev_id_{{ occ.uid()|to_id }}',
+                                                        '{{ occ.rid_str() }}',
+                                                        '{{ occ.id() }}'))"
+                     id="{{ occ.id() }}"
+                     class="ev_event_occurrence
+                            ev_id_{{ occ.uid()|to_id }}
+                            {% if let Some(end) = occ.occurrence_end() %}
+                                {% if end < &page.now %}
+                                    ev_overdue
+                                {% else if end.date_naive() == tasks.today %}
+                                ev_duetoday
+                                {% endif %}
+                            {% endif %}
+                            {% match occ.status_class() %}
+                                {% when Some with (cl) %}
+                                    ev_status_{{ cl }}
+                                {% when _ %}
+                            {% endmatch %}
+                            "
+                >
+                <div style="padding: 5px">
+                    {% if occ.rid().is_some() || occ.rrule().is_some() %}
+                        <i class="bi bi-arrow-clockwise ev_right_icon"></i>
                     {% endif %}
+                    {% if occ.is_overwritten() %}
+                        <i class="bi bi-pencil ev_right_icon"></i>
                     {% endif %}
-                    {% match occ.status_class() %}
-                    {% when Some with (cl) %}
-                    ev_status_{{ cl }}
-                    {% when _ %}
-                    {% endmatch %}
-                    ">
-            <div style="padding: 5px">
-                {% if occ.rid().is_some() || occ.rrule().is_some() %}
-                <i class="bi bi-arrow-clockwise ev_right_icon"></i>
-                {% endif %}
-                {% if occ.is_overwritten() %}
-                <i class="bi bi-pencil ev_right_icon"></i>
-                {% endif %}
-                {% if occ.has_effective_alarms() %}
-                <i class="bi bi-alarm ev_right_icon"></i>
-                {% endif %}
-                <div style="display: flex; gap: .4em">
-                    <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}">
-                        {% if !occ.is_owner() %}
-                        <div class="ev_cal_src_inner">
-                        {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
-                        {% when CalPartStat::Accepted %}
-                        <i class="ev_good_color bi bi-check-lg"></i>
-                        {% when CalPartStat::Tentative %}
-                        <i class="ev_warn_color bi bi-question-lg"></i>
-                        {% when CalPartStat::Declined %}
-                        <i class="ev_critical_color bi bi-x-lg"></i>
-                        {% when _ %}
-                        {% endmatch %}
-                        </div>
+                    {% if occ.has_effective_alarms() %}
+                        <i class="bi bi-alarm ev_right_icon"></i>
+                    {% endif %}
+                    <div style="display: flex; gap: .4em">
+                        <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}">
+                            {% if !occ.is_owner() %}
+                                <div class="ev_cal_src_inner">
+                                {% match occ.participant_status().unwrap_or(CalPartStat::NeedsAction) %}
+                                    {% when CalPartStat::Accepted %}
+                                        <i class="ev_good_color bi bi-check-lg"></i>
+                                    {% when CalPartStat::Tentative %}
+                                        <i class="ev_warn_color bi bi-question-lg"></i>
+                                    {% when CalPartStat::Declined %}
+                                        <i class="ev_critical_color bi bi-x-lg"></i>
+                                    {% when _ %}
+                                {% endmatch %}
+                                </div>
+                            {% endif %}
+                        </span>
+                        {% if let Some(due) = occ.occurrence_enddate() %}
+                            {% match due %}
+                                {% when CalDate::DateTime with (due_date) %}
+                                    <span><b>
+                                        {{
+                                            &due_date.with_tz(locale.timezone())
+                                            |time(locale, TimeFlags::Short)
+                                        }}
+                                    </b></span>
+                                {% when _ %}
+                            {% endmatch %}
                         {% endif %}
-                    </span>
-                    {% if let Some(due) = occ.occurrence_enddate() %}
-                    {% match due %}
-                    {% when CalDate::DateTime with (due_date) %}
-                    <span><b>{{ &due_date.with_tz(locale.timezone())|time(locale, TimeFlags::Short) }}</b></span>
-                    {% when _ %}
-                    {% endmatch %}
-                    {% endif %}
-                    <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                        <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                    </div>
                 </div>
             </div>
-        </div>
+            {% endfor %}
         {% endfor %}
-        {% endfor %}
+        <!-- prettier-ignore-end -->
     </div>
     {% if let Some(quickcals) = page.quickcals %}
-    <form id="quick_todo_form" method="post" action="/api/items/add">
-    <div class="ev_quicktask">
-        {{ quickcals|safe }}
-        <input type="text" id="quick_summary" name="summary" title="{{ "Summary"|t(locale) }}" />
-        <script type="text/javascript">
-            $(function() {
-                $("#due_date").datepicker({
-                    dateFormat: "mm-dd",
-                    altField: "#due_date_val",
-                    altFormat: "yy-mm-dd",
-                    yearRange: "c-100:c+10",
-                    changeMonth: true,
-                    changeYear: true,
-                    numberOfMonths: 1,
-                });
-                $("#due_date").datepicker("option", calLocale());
-                $("#due_date_icon").on('click', function() {
-                    $("#due_date").datepicker("show");
-                });
-                $("#due_date_btn").on('keydown', function(e) {
-                    if(e.key == 'Enter') {
-                        e.preventDefault();
-                        formRequest('quick_todo_form', reloadContent);
-                    }
-                });
-            });
-        </script>
-        <i id="due_date_icon" class="bi bi-stopwatch" title="{{ "Due date"|t(locale) }}"></i>
-        <input type="hidden" id="due_date_val" name="due_date" />
-        <input type="text" id="due_date" size="5" title="{{ "Due date"|t(locale) }}" />
-        <a id="due_date_btn" class="ev_button ev_button_normal"
-           href="javascript:formRequest('quick_todo_form', reloadContent)">
-            <i class="bi bi-plus-square"></i>
-        </a>
-    </div>
-    </form>
+        <form id="quick_todo_form" method="post" action="/api/items/add">
+            <div class="ev_quicktask">
+                {{ quickcals|safe }}
+                <input
+                    type="text"
+                    id="quick_summary"
+                    name="summary"
+                    title="{{ "Summary"|t(locale) }}"
+                />
+                <script type="text/javascript">
+                    $(function () {
+                        $("#due_date").datepicker({
+                            dateFormat: "mm-dd",
+                            altField: "#due_date_val",
+                            altFormat: "yy-mm-dd",
+                            yearRange: "c-100:c+10",
+                            changeMonth: true,
+                            changeYear: true,
+                            numberOfMonths: 1,
+                        });
+                        $("#due_date").datepicker("option", calLocale());
+                        $("#due_date_icon").on("click", function () {
+                            $("#due_date").datepicker("show");
+                        });
+                        $("#due_date_btn").on("keydown", function (e) {
+                            if (e.key == "Enter") {
+                                e.preventDefault();
+                                formRequest("quick_todo_form", reloadContent);
+                            }
+                        });
+                    });
+                </script>
+                <i
+                    id="due_date_icon"
+                    class="bi bi-stopwatch"
+                    title="{{ "Due date"|t(locale) }}"
+                ></i>
+                <input type="hidden" id="due_date_val" name="due_date" />
+                <input type="text" id="due_date" size="5" title="{{ "Due date"|t(locale) }}" />
+                <a
+                    id="due_date_btn"
+                    class="ev_button ev_button_normal"
+                    href="javascript:formRequest('quick_todo_form', reloadContent)"
+                >
+                    <i class="bi bi-plus-square"></i>
+                </a>
+            </div>
+        </form>
     {% endif %}
 </div>

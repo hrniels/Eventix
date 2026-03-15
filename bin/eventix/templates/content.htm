@@ -1,150 +1,153 @@
 {% extends "base.htm" %}
 
 {% block content %}
-
-<script type="text/javascript">
-    function errorDialog(message) {
-        $("#error-dialog").html("<p>" + message + "</p>").dialog({
-            resizable: false,
-            draggable: false,
-            modal: true,
-            buttons: {
-                "{{ "Close"|t(locale) }}": function() {
-                    $(this).dialog("close");
-                }
-            }
-        });
-    }
-
-    function createConfirmDialog(id, onClick) {
-        $("#" + id).dialog({
-            resizable: false,
-            height: "auto",
-            width: 400,
-            modal: true,
-            autoOpen: false,
-            buttons: {
-                "Delete": function() {
-                    $(this).dialog("close");
-                    onClick();
-                },
-                "Cancel": function() {
-                    $(this).dialog("close");
-                }
-            }
-        });
-    }
-
-    function showConfirmDialog(id, onClick) {
-        createConfirmDialog(id, onClick);
-        $("#" + id).dialog("open");
-    }
-
-    function confirmDialog(id, btn, onClick) {
-        createConfirmDialog(id, onClick);
-        $("#" + btn).on("click", function() {
-            $("#" + id).dialog("open");
-        });
-    }
-</script>
-
-<div id="error-dialog" title="{{ "Error"|t(locale) }}" style="display: none"></div>
-
-<div style="float: left; width: 80%">
-    {% block main %}
-    <h1>Dummy content</h1>
-    {% endblock main %}
-</div>
-
-<div style="float: right; width: 19%">
-    <div id="sidebar-content">
-        <p>{{ "Loading..."|t(locale) }}</p>
-    </div>
-</div>
-<br style="clear: both" />
-
-<script type="text/javascript">
-    $(document).keydown(function(e) {
-        // we have to ignore these keys if the focus is on an input element or similar. to be sure,
-        // we only accept them when the body is focused.
-        if(document.activeElement.nodeName == 'BODY') {
-            if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
-                return true;
-
-            switch(e.code) {
-                case "KeyA":
-                    $('#quick_summary').focus();
-                    return false;
-                case "KeyE":
-                    document.getElementById('link-event').click();
-                    break;
-                case "KeyF":
-                    $('#quick-search').focus();
-                    return false;
-                case "KeyT":
-                    document.getElementById('link-todo').click();
-                    break;
-                case "KeyM":
-                    document.getElementById('link-monthly').click();
-                    break;
-                case "KeyW":
-                    document.getElementById('link-weekly').click();
-                    break;
-                case "KeyL":
-                    document.getElementById('link-list').click();
-                    break;
-            }
+    <script type="text/javascript">
+        function errorDialog(message) {
+            $("#error-dialog")
+                .html("<p>" + message + "</p>")
+                .dialog({
+                    resizable: false,
+                    draggable: false,
+                    modal: true,
+                    buttons: {
+                        '{{ "Close"|t(locale) }}': function () {
+                            $(this).dialog("close");
+                        },
+                    },
+                });
         }
-    });
-</script>
 
-<script type="text/javascript">
-    // Generic AJAX bootstrap for lazy-loaded pages. Any page that places a
-    // <div data-page-slug="..."> inside the main block gets content fetched
-    // automatically without needing its own bootstrap script.
-    //
-    // Supported data attributes on the container div:
-    //   data-page-slug  – the page slug passed to fetchContent / loadPageContent
-    //   data-init-query – the initial pre-encoded query string (e.g. "date=2025-03"
-    //                     or "keywords=foo&page=1"); pass empty for no parameters
-    (function() {
-        const container = document.querySelector('[data-page-slug]');
-        if (!container) return;
+        function createConfirmDialog(id, onClick) {
+            $("#" + id).dialog({
+                resizable: false,
+                height: "auto",
+                width: 400,
+                modal: true,
+                autoOpen: false,
+                buttons: {
+                    Delete: function () {
+                        $(this).dialog("close");
+                        onClick();
+                    },
+                    Cancel: function () {
+                        $(this).dialog("close");
+                    },
+                },
+            });
+        }
 
-        const slug         = container.dataset.pageSlug;
-        const containerId  = '#' + container.id;
-        const initQuery    = container.dataset.initQuery || '';
+        function showConfirmDialog(id, onClick) {
+            createConfirmDialog(id, onClick);
+            $("#" + id).dialog("open");
+        }
 
-        // Expose a navigate function so fragments can trigger history-pushing
-        // navigation without knowing the page slug or container id.
-        window.genericLoadContent = function(queryStr) {
-            loadPageContent(slug, containerId, queryStr, null);
-        };
+        function confirmDialog(id, btn, onClick) {
+            createConfirmDialog(id, onClick);
+            $("#" + btn).on("click", function () {
+                $("#" + id).dialog("open");
+            });
+        }
+    </script>
 
-        window.addEventListener('popstate', function(e) {
-            // window.location is already updated to the target URL when popstate fires.
-            // Look up the correct slug from PAGE_SLUGS so that navigating between
-            // different SPA pages (e.g. weekly → list → back) loads the right content.
-            const slug = (e.state && e.state.slug) || PAGE_SLUGS[window.location.pathname];
-            if (!slug) {
-                // URL is not a known SPA page; perform a full reload.
-                window.location.reload();
-                return;
+    <div id="error-dialog" title="{{ "Error"|t(locale) }}" style="display: none"></div>
+
+    <div style="float: left; width: 80%">
+        {% block main %}
+            <h1>Dummy content</h1>
+        {% endblock main %}
+    </div>
+
+    <div style="float: right; width: 19%">
+        <div id="sidebar-content">
+            <p>{{ "Loading..."|t(locale) }}</p>
+        </div>
+    </div>
+    <br style="clear: both" />
+
+    <script type="text/javascript">
+        $(document).keydown(function (e) {
+            // we have to ignore these keys if the focus is on an input element or similar. to be sure,
+            // we only accept them when the body is focused.
+            if (document.activeElement.nodeName == "BODY") {
+                if (e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return true;
+
+                switch (e.code) {
+                    case "KeyA":
+                        $("#quick_summary").focus();
+                        return false;
+                    case "KeyE":
+                        document.getElementById("link-event").click();
+                        break;
+                    case "KeyF":
+                        $("#quick-search").focus();
+                        return false;
+                    case "KeyT":
+                        document.getElementById("link-todo").click();
+                        break;
+                    case "KeyM":
+                        document.getElementById("link-monthly").click();
+                        break;
+                    case "KeyW":
+                        document.getElementById("link-weekly").click();
+                        break;
+                    case "KeyL":
+                        document.getElementById("link-list").click();
+                        break;
+                }
             }
-            const q = (e.state && e.state.query) || '';
-            fetchContent(slug, containerId, q, null);
         });
+    </script>
 
-        history.replaceState({ slug: slug, query: initQuery }, '', window.location.href);
+    <script type="text/javascript">
+        // Generic AJAX bootstrap for lazy-loaded pages. Any page that places a
+        // <div data-page-slug="..."> inside the main block gets content fetched
+        // automatically without needing its own bootstrap script.
+        //
+        // Supported data attributes on the container div:
+        //   data-page-slug  – the page slug passed to fetchContent / loadPageContent
+        //   data-init-query – the initial pre-encoded query string (e.g. "date=2025-03"
+        //                     or "keywords=foo&page=1"); pass empty for no parameters
+        (function () {
+            const container = document.querySelector("[data-page-slug]");
+            if (!container) return;
 
-        $(function() { fetchContent(slug, containerId, initQuery, null); });
-    })();
-</script>
+            const slug = container.dataset.pageSlug;
+            const containerId = "#" + container.id;
+            const initQuery = container.dataset.initQuery || "";
 
-<script type="text/javascript">
-    // Lazy-load the sidebar (next events and next tasks) independently of the
-    // main content area so neither blocks the other.
-    $(function() { fetchContent('sidebar', '#sidebar-content', '', null); });
-</script>
+            // Expose a navigate function so fragments can trigger history-pushing
+            // navigation without knowing the page slug or container id.
+            window.genericLoadContent = function (queryStr) {
+                loadPageContent(slug, containerId, queryStr, null);
+            };
 
+            window.addEventListener("popstate", function (e) {
+                // window.location is already updated to the target URL when popstate fires.
+                // Look up the correct slug from PAGE_SLUGS so that navigating between
+                // different SPA pages (e.g. weekly → list → back) loads the right content.
+                const slug = (e.state && e.state.slug) || PAGE_SLUGS[window.location.pathname];
+                if (!slug) {
+                    // URL is not a known SPA page; perform a full reload.
+                    window.location.reload();
+                    return;
+                }
+                const q = (e.state && e.state.query) || "";
+                fetchContent(slug, containerId, q, null);
+            });
+
+            history.replaceState({ slug: slug, query: initQuery }, "", window.location.href);
+
+            $(function () {
+                fetchContent(slug, containerId, initQuery, null);
+            });
+        })();
+    </script>
+
+    <script type="text/javascript">
+        // Lazy-load the sidebar (next events and next tasks) independently of the
+        // main content area so neither blocks the other.
+        $(function () {
+            fetchContent("sidebar", "#sidebar-content", "", null);
+        });
+    </script>
 {% endblock %}

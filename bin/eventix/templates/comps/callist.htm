@@ -1,45 +1,53 @@
+<!-- prettier-ignore-start -->
 <style type="text/css">
-{% for cal in page.calendars() %}
-div.ev_cal_src_{{ cal.id }}, span.ev_cal_src_{{ cal.id }} {
-    background-color: {{ cal.bgcolor }};
-    color: {{ cal.fgcolor }};
-}
-{% endfor %}
+    {% for cal in page.calendars() %}
+    div.ev_cal_src_{{ cal.id }},
+    span.ev_cal_src_{{ cal.id }} {
+        background-color: {{ cal.bgcolor }};
+        color: {{ cal.fgcolor }};
+    }
+    {% endfor %}
 </style>
+<!-- prettier-ignore-end -->
 
 {% for cal in page.calendars() %}
-<a style="vertical-align: middle"
-   href="javascript:toggleCalendar('{{ cal.id }}')">
-    <span id="calendar_enabled_{{ cal.id }}"
-          data-name="{{ cal.name }}"
-          title="{{ cal.name }}"
-          class="ev_cal_src ev_cal_src_button
+    <a style="vertical-align: middle" href="javascript:toggleCalendar('{{ cal.id }}')">
+        <span
+            id="calendar_enabled_{{ cal.id }}"
+            data-name="{{ cal.name }}"
+            title="{{ cal.name }}"
+            class="ev_cal_src ev_cal_src_button
                  {% if cal.enabled %}
-                 ev_cal_src_{{ cal.id }}
-                 {% else %}
-                 ev_cal_src_disabled
-                 {% endif %}
-                ">
-        <i id="ev_cal_src_button_{{ cal.id }}"
-           {% if cal.sync_error %}
-           style="display: inline"
-           {% else %}
-           style="display: none"
-           {% endif %}
-           class="bi bi-exclamation-triangle-fill"></i>
-    </span>
-</a>
-<script type="text/javascript">
-    $(function() {
-        {% if !cal.enabled %}
-        $("#calendar_enabled_{{ cal.id }}").hover(function() {
-            $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");
+                ev_cal_src_{{ cal.id }}
+            {% else %}
+                ev_cal_src_disabled
+            {% endif %}
+                "
+        >
+            <i
+                id="ev_cal_src_button_{{ cal.id }}"
+                {% if cal.sync_error %}
+                    style="display: inline"
+                {% else %}
+                    style="display: none"
+                {% endif %}
+                class="bi bi-exclamation-triangle-fill"
+            ></i>
+        </span>
+    </a>
+    <!-- prettier-ignore-start -->
+    <script type="text/javascript">
+        $(function () {
+            {% if !cal.enabled %}
+            $("#calendar_enabled_{{ cal.id }}").hover(function () {
+                $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");
+            });
+            {% else %}
+            $("#calendar_enabled_{{ cal.id }}").hover(function () {
+                $(this).toggleClass("ev_cal_src_highlight");
+            });
+            {% endif %}
         });
-        {% else %}
-        $("#calendar_enabled_{{ cal.id }}").hover(function() {
-            $(this).toggleClass("ev_cal_src_highlight");
-        });
-        {% endif %}
-    });
-</script>
+    </script>
+    <!-- prettier-ignore-end -->
 {% endfor %}

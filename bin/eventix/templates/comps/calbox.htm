@@ -1,269 +1,338 @@
 <script type="text/javascript">
     function submitForm() {
-        formRequest('savecal_{{ cal.id() }}', function() {
-            reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'View');
+        formRequest("savecal_{{ cal.id() }}", function () {
+            reloadCalBox("{{ col_id }}", "{{ cal.id() }}", "View");
         });
     }
 </script>
 
 <div class="ev_cal_box ev_border">
-    <form id="savecal_{{ cal.id() }}" method="post"
-          action="/api/calendars/savecal?col_id={{ col_id }}&cal_id={{ cal.id() }}">
-    <div class="ev_cal_box_header">
-        <div class="ev_cal_box_left">
-            <input id="ev_toggle_{{ cal.id() }}"
-                   class="ev_cal_box_left_item ev_toggle_button" type="checkbox"
-                   {% if let CalendarBox::Known { settings, .. } = cal %}
-                   {% if settings.enabled() %}
-                   checked="checked"
-                   {% endif %}
-                   {% else %}
-                   style="visibility: hidden"
-                   {% endif %}/>
-
-            {% if let CalendarBox::Known { .. } = cal %}
-            <script type="text/javascript">
-                $(function() {
-                    $("#ev_toggle_{{ cal.id() }}").off("click").on("click", function() {
-                        $(this).one("transitionend", function() {
-                            calendarOperation('{{ col_id }}', '{{ cal.id() }}', 'Toggle',
-                                              reloadContentIfPossible);
-                        });
-                    });
-                });
-            </script>
-            {% endif %}
-
-            <div class="ev_cal_box_left_item" style="padding-left: 1em">
-                <span id="bgcolor_head_{{ cal.id() }}" class="ev_cal_src ev_cal_src_button"
-                      style="background-color: {{ cal.bgcolor() }}"></span>
-                <span style="padding-left: .3em">
-                {% if mode == CalendarBoxMode::View %}
-                {{ cal.name() }}
-                {% else %}
-                <input type="text" name="name" size="30" value="{{ cal.name() }}" />
-                {% endif %}
-                </span>
-            </div>
-        </div>
-
-        <div class="ev_cal_box_right">
-            {% if mode == CalendarBoxMode::View %}
-            {% if let CalendarBox::Known { id: cal_id, .. } = cal %}
-            <div class="ev_cal_box_right_item">
-                <a href="javascript:reloadCalendar('{{ col_id }}', '{{ cal_id }}',
-                                                   'reload_calendar_{{ cal_id }}',
-                                                    reloadContentIfPossible)"
-                   {% if let SyncerType::FileSystem { .. } = col.syncer() %}
-                   class="ev_button ev_button_normal"
-                   {% else %}
-                   class="ev_button ev_button_warn"
-                   title="{{ "warning.reload_calendar"|t(locale) }}"
-                   {% endif %}
-                   >
-                    <i id="reload_calendar_{{ cal_id }}" class="bi bi-arrow-clockwise"></i>
-                    <span>{{ "Reload"|t(locale) }}</span>
-                </a>
-            </div>
-            <div class="ev_cal_box_right_item">
-                <a href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}', 'Delete',
-                                                      reloadContentIfPossible)"
-                   {% if let SyncerType::FileSystem { .. } = col.syncer() %}
-                   class="ev_button ev_button_normal"
-                   {% else %}
-                   class="ev_button ev_button_warn"
-                   title="{{ "warning.delete_calendar"|t(locale) }}"
-                   {% endif %}
-                   >
-                    <i class="bi bi-trash"></i>
-                </a>
-            </div>
-            {% endif %}
-            <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_normal"
-                   {% if let CalendarBox::Known { .. } = cal %}
-                   title="{{ "Edit"|t(locale) }}"
-                   {% else %}
-                   title="{{ "Add"|t(locale) }}"
-                   {% endif %}
-                   href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'Edit',
-                                                 '{{ cal.folder() }}', '{{ cal.name() }}',
-                                                 '{{ cal.bgcolor() }}')">
-                    {% if let CalendarBox::Known { .. } = cal %}
-                    <i class="bi bi-pencil"></i>
+    <form
+        id="savecal_{{ cal.id() }}"
+        method="post"
+        action="/api/calendars/savecal?col_id={{ col_id }}&cal_id={{ cal.id() }}"
+    >
+        <div class="ev_cal_box_header">
+            <div class="ev_cal_box_left">
+                <input
+                    id="ev_toggle_{{ cal.id() }}"
+                    class="ev_cal_box_left_item ev_toggle_button"
+                    type="checkbox"
+                    {% if let CalendarBox::Known { settings, .. } = cal %}
+                        {% if settings.enabled() %}
+                            checked="checked"
+                        {% endif %}
                     {% else %}
-                    <i class="bi bi-plus-square"></i>
+                        style="visibility: hidden"
                     {% endif %}
-                </a>
-            </div>
-            {% else %}
-            <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_normal"
-                   href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'Cancel',
-                                                 '{{ cal.folder() }}', '{{ cal.name() }}',
-                                                 '{{ cal.bgcolor() }}')">
-                    <i class="bi bi-x-circle"></i>
-                    <span>{{ "Cancel"|t(locale) }}</span>
-                </a>
-            </div>
-            <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_normal"
-                   href="javascript:submitForm()">
-                    <i class="bi bi-floppy2-fill"></i>
-                </a>
-            </div>
-            {% endif %}
-            <div class="ev_cal_box_right_item">
-                <a class="ev_button ev_button_uid ev_folder"
-                   title="{{ col_path }}/{{ cal.folder() }}"
-                   href="javascript:copyToClipboard('{{ col_path }}/{{ cal.folder() }}')">
-                    <i class="bi bi-folder"></i>
-                    <i class="bi bi-folder-fill"></i>
-                </a>
-            </div>
-        </div>
-    </div>
+                />
 
-    {% if mode == CalendarBoxMode::Edit %}
-    <div class="ev_cal_box_body">
-        <table width="100%" class="ev_table ev_noborder">
-            <tr>
-                <td width="20%"><b>{{ "Folder"|t(locale) }}:</b></td>
-                <td>
-                    {% if let SyncerType::FileSystem { .. } = col.syncer() %}
-                    <input type="text" name="folder" size="30" value="{{ cal.folder() }}" />
-                    {% else %}
-                    <input type="hidden" name="folder" value="{{ cal.folder() }}" />
-                    {{ cal.folder() }}
-                    {% endif %}
-                </td>
-            </tr>
-            <tr>
-                <td><b>{{ "Color"|t(locale) }}:</b></td>
-                <td>
-                    <div class="ev_cal_box_color_grid">
-                        <div>
-                            <label for="bgcolor_{{ cal.id() }}">
-                                {{ "Background"|t(locale) }}:
-                            </label>
-                        </div>
-                        <div>
-                            <input type="color" id="bgcolor_{{ cal.id() }}" name="bgcolor"
-                                   value="{{ cal.bgcolor() }}" />
-                        </div>
-                        <div>
-                            <span>{{ "Timed"|t(locale) }}:
-                        </div>
-                        <div>
-                            <span id="bgcolor_preview_{{ cal.id() }}"
-                                  class="ev_cal_src ev_cal_src_button"
-                                  style="background-color: {{ cal.bgcolor() }}"></span>
-                        </div>
-                        <div>
-                            <label for="fgcolor_{{ cal.id() }}">
-                                {{ "Foreground"|t(locale) }}:
-                            </label>
-                        </div>
-                        <div>
-                            <input type="color" id="fgcolor_{{ cal.id() }}" name="fgcolor"
-                                   value="{{ cal.fgcolor() }}" />
-                        </div>
-                        <div>
-                            <span>{{ "All-day"|t(locale) }}:</span>
-                        </div>
-                        <div>
-                            <span id="fgcolor_preview_{{ cal.id() }}"
-                                 style="background-color: {{ cal.bgcolor() }};
-                                        color: {{ cal.fgcolor() }}">
-                                Event Title
-                            </span>
-                        </div>
-
-                        <script type="text/javascript">
-                            $(function() {
-                                $('#bgcolor_{{ cal.id() }}').on('change', function() {
-                                    const ids = [
-                                        "bgcolor_preview_",
-                                        "fgcolor_preview_",
-                                        "bgcolor_head_"
-                                    ];
-                                    for(id in ids) {
-                                        let el = $('#' + ids[id] + '{{ cal.id() }}');
-                                        el.css('background-color', $(this).val());
-                                    }
+                {% if let CalendarBox::Known { .. } = cal %}
+                    <script type="text/javascript">
+                        $(function () {
+                            $("#ev_toggle_{{ cal.id() }}")
+                                .off("click")
+                                .on("click", function () {
+                                    $(this).one("transitionend", function () {
+                                        calendarOperation(
+                                            "{{ col_id }}",
+                                            "{{ cal.id() }}",
+                                            "Toggle",
+                                            reloadContentIfPossible,
+                                        );
+                                    });
                                 });
-                                $('#fgcolor_{{ cal.id() }}').on('change', function() {
-                                    let el = $('#fgcolor_preview_{{ cal.id() }}');
-                                    el.css('color', $(this).val());
-                                });
-                            });
-                        </script>
-                    </div>
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    <b>{{ "Creation"|t(locale) }}:</b>
-                    <i class="bi bi-question-circle"
-                       title="{{ "info.calendar_item_types"|t(locale) }}">
-                    </i>
-                </td>
-                <td>
-                    <input type="checkbox" id="type_event_{{ cal.id() }}"
-                           name="ev_types[]" value="Event"
-                           {% if cal.types().contains(&CalCompType::Event) %}checked="checked" {% endif %}/>
-                    <label for="type_event_{{ cal.id() }}">{{ "Events"|t(locale) }}</label>
-                    <input type="checkbox" id="type_todo_{{ cal.id() }}"
-                           name="ev_types[]" value="Todo"
-                           {% if cal.types().contains(&CalCompType::Todo) %}checked="checked" {% endif %}/>
-                    <label for="type_todo_{{ cal.id() }}">{{ "Tasks"|t(locale) }}</label>
-                </td>
-            </tr>
-            <tr>
-                <td>
-                    <b>{{ "Alarms"|t(locale) }}:</b>
-                    <i class="bi bi-question-circle"
-                       title="{{ "info.calendar_alarms"|t(locale) }}">
-                    </i>
-                </td>
-                <td>
-                    <input id="alarms_hidden" type="hidden" name="alarm_type"
-                           value="{{ alarm_type|fmt("{:?}") }}" />
-                    <div id="cal_tabs_{{ cal.id() }}">
-                        <ul>
-                            <li><a href="#cal_tabs_{{ cal.id() }}-Calendar">{{ "Calendar"|t(locale) }}</a></li>
-                            <li><a href="#cal_tabs_{{ cal.id() }}-Personal">{{ "Personal"|t(locale) }}</a></li>
-                        </ul>
-                        <div id="cal_tabs_{{ cal.id() }}-Calendar">
-                        </div>
-                        <div id="cal_tabs_{{ cal.id() }}-Personal">
-                            {{ personal|safe }}
-                        </div>
-                    </div>
-
-                    <style type="text/css">
-                    #cal_tabs_{{ cal.id() }} > div {
-                        padding: 0;
-                    }
-                    </style>
-                    <script>
-                        $(function() {
-                            $("#cal_tabs_{{ cal.id() }}").tabs({
-                                activate: function(event, data) {
-                                    const id = data.newPanel.attr('id');
-                                    const name = id.replace("cal_tabs_{{ cal.id() }}-", "");
-                                    $('#alarms_hidden').attr('value', name);
-                                }
-                            });
-                            {% if alarm_type == AlarmType::Personal %}
-                            $("#cal_tabs_{{ cal.id() }}").tabs("option", "active", 1);
-                            {% endif %}
                         });
                     </script>
-                </td>
-            </tr>
-        </table>
-    </div>
-    {% endif %}
+                {% endif %}
+
+                <div class="ev_cal_box_left_item" style="padding-left: 1em">
+                    <span
+                        id="bgcolor_head_{{ cal.id() }}"
+                        class="ev_cal_src ev_cal_src_button"
+                        style="background-color: {{ cal.bgcolor() }}"
+                    ></span>
+                    <span style="padding-left: .3em">
+                        {% if mode == CalendarBoxMode::View %}
+                            {{ cal.name() }}
+                        {% else %}
+                            <input type="text" name="name" size="30" value="{{ cal.name() }}" />
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+
+            <div class="ev_cal_box_right">
+                {% if mode == CalendarBoxMode::View %}
+                    {% if let CalendarBox::Known { id: cal_id, .. } = cal %}
+                        <div class="ev_cal_box_right_item">
+                            <a
+                                href="javascript:reloadCalendar('{{ col_id }}', '{{ cal_id }}',
+                                                                'reload_calendar_{{ cal_id }}',
+                                                                 reloadContentIfPossible)"
+                                {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                                    class="ev_button ev_button_normal"
+                                {% else %}
+                                    class="ev_button ev_button_warn"
+                                    title="{{ "warning.reload_calendar"|t(locale) }}"
+                                {% endif %}
+                            >
+                                <i
+                                    id="reload_calendar_{{ cal_id }}"
+                                    class="bi bi-arrow-clockwise"
+                                ></i>
+                                <span>{{ "Reload"|t(locale) }}</span>
+                            </a>
+                        </div>
+                        <div class="ev_cal_box_right_item">
+                            <a
+                                href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}',
+                                                                   'Delete',
+                                                                   reloadContentIfPossible)"
+                                {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                                    class="ev_button ev_button_normal"
+                                {% else %}
+                                    class="ev_button ev_button_warn"
+                                    title="{{ "warning.delete_calendar"|t(locale) }}"
+                                {% endif %}
+                            >
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    {% endif %}
+                    <div class="ev_cal_box_right_item">
+                        <a
+                            class="ev_button ev_button_normal"
+                            {% if let CalendarBox::Known { .. } = cal %}
+                                title="{{ "Edit"|t(locale) }}"
+                            {% else %}
+                                title="{{ "Add"|t(locale) }}"
+                            {% endif %}
+                            href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'Edit',
+                                                          '{{ cal.folder() }}', '{{ cal.name() }}',
+                                                          '{{ cal.bgcolor() }}')"
+                        >
+                            {% if let CalendarBox::Known { .. } = cal %}
+                                <i class="bi bi-pencil"></i>
+                            {% else %}
+                                <i class="bi bi-plus-square"></i>
+                            {% endif %}
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="ev_cal_box_right_item">
+                        <a
+                            class="ev_button ev_button_normal"
+                            href="javascript:reloadCalBox('{{ col_id }}', '{{ cal.id() }}', 'Cancel',
+                                                          '{{ cal.folder() }}', '{{ cal.name() }}',
+                                                          '{{ cal.bgcolor() }}')"
+                        >
+                            <i class="bi bi-x-circle"></i>
+                            <span>{{ "Cancel"|t(locale) }}</span>
+                        </a>
+                    </div>
+                    <div class="ev_cal_box_right_item">
+                        <a class="ev_button ev_button_normal" href="javascript:submitForm()">
+                            <i class="bi bi-floppy2-fill"></i>
+                        </a>
+                    </div>
+                {% endif %}
+                <div class="ev_cal_box_right_item">
+                    <a
+                        class="ev_button ev_button_uid ev_folder"
+                        title="{{ col_path }}/{{ cal.folder() }}"
+                        href="javascript:copyToClipboard('{{ col_path }}/{{ cal.folder() }}')"
+                    >
+                        <i class="bi bi-folder"></i>
+                        <i class="bi bi-folder-fill"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% if mode == CalendarBoxMode::Edit %}
+            <div class="ev_cal_box_body">
+                <table width="100%" class="ev_table ev_noborder">
+                    <tr>
+                        <td width="20%"><b>{{ "Folder"|t(locale) }}:</b></td>
+                        <td>
+                            {% if let SyncerType::FileSystem { .. } = col.syncer() %}
+                                <input
+                                    type="text"
+                                    name="folder"
+                                    size="30"
+                                    value="{{ cal.folder() }}"
+                                />
+                            {% else %}
+                                <input type="hidden" name="folder" value="{{ cal.folder() }}" />
+                                {{ cal.folder() }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>{{ "Color"|t(locale) }}:</b></td>
+                        <td>
+                            <div class="ev_cal_box_color_grid">
+                                <div>
+                                    <label for="bgcolor_{{ cal.id() }}">
+                                        {{ "Background"|t(locale) }}:
+                                    </label>
+                                </div>
+                                <div>
+                                    <input
+                                        type="color"
+                                        id="bgcolor_{{ cal.id() }}"
+                                        name="bgcolor"
+                                        value="{{ cal.bgcolor() }}"
+                                    />
+                                </div>
+                                <div>
+                                    <span>{{ "Timed"|t(locale) }}:</span>
+                                </div>
+                                <div>
+                                    <span
+                                        id="bgcolor_preview_{{ cal.id() }}"
+                                        class="ev_cal_src ev_cal_src_button"
+                                        style="background-color: {{ cal.bgcolor() }}"
+                                    ></span>
+                                </div>
+                                <div>
+                                    <label for="fgcolor_{{ cal.id() }}">
+                                        {{ "Foreground"|t(locale) }}:
+                                    </label>
+                                </div>
+                                <div>
+                                    <input
+                                        type="color"
+                                        id="fgcolor_{{ cal.id() }}"
+                                        name="fgcolor"
+                                        value="{{ cal.fgcolor() }}"
+                                    />
+                                </div>
+                                <div>
+                                    <span>{{ "All-day"|t(locale) }}:</span>
+                                </div>
+                                <div>
+                                    <span
+                                        id="fgcolor_preview_{{ cal.id() }}"
+                                        style="background-color: {{ cal.bgcolor() }};
+                                        color: {{ cal.fgcolor() }}"
+                                    >
+                                        Event Title
+                                    </span>
+                                </div>
+
+                                <script type="text/javascript">
+                                    $(function () {
+                                        $("#bgcolor_{{ cal.id() }}").on("change", function () {
+                                            const ids = [
+                                                "bgcolor_preview_",
+                                                "fgcolor_preview_",
+                                                "bgcolor_head_",
+                                            ];
+                                            for (id in ids) {
+                                                let el = $("#" + ids[id] + "{{ cal.id() }}");
+                                                el.css("background-color", $(this).val());
+                                            }
+                                        });
+                                        $("#fgcolor_{{ cal.id() }}").on("change", function () {
+                                            let el = $("#fgcolor_preview_{{ cal.id() }}");
+                                            el.css("color", $(this).val());
+                                        });
+                                    });
+                                </script>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <b>{{ "Creation"|t(locale) }}:</b>
+                            <i
+                                class="bi bi-question-circle"
+                                title="{{ "info.calendar_item_types"|t(locale) }}"
+                            >
+                            </i>
+                        </td>
+                        <td>
+                            <input
+                                type="checkbox"
+                                id="type_event_{{ cal.id() }}"
+                                name="ev_types[]"
+                                value="Event"
+                                {% if cal.types().contains(&CalCompType::Event) %}checked="checked"{% endif %}
+                            />
+                            <label for="type_event_{{ cal.id() }}">{{ "Events"|t(locale) }}</label>
+                            <input
+                                type="checkbox"
+                                id="type_todo_{{ cal.id() }}"
+                                name="ev_types[]"
+                                value="Todo"
+                                {% if cal.types().contains(&CalCompType::Todo) %}checked="checked"{% endif %}
+                            />
+                            <label for="type_todo_{{ cal.id() }}">{{ "Tasks"|t(locale) }}</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <b>{{ "Alarms"|t(locale) }}:</b>
+                            <i
+                                class="bi bi-question-circle"
+                                title="{{ "info.calendar_alarms"|t(locale) }}"
+                            >
+                            </i>
+                        </td>
+                        <td>
+                            <input
+                                id="alarms_hidden"
+                                type="hidden"
+                                name="alarm_type"
+                                value="{{ alarm_type|fmt("{:?}") }}"
+                            />
+                            <div id="cal_tabs_{{ cal.id() }}">
+                                <ul>
+                                    <li>
+                                        <a href="#cal_tabs_{{ cal.id() }}-Calendar">
+                                            {{ "Calendar"|t(locale) }}
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="#cal_tabs_{{ cal.id() }}-Personal">
+                                            {{ "Personal"|t(locale) }}
+                                        </a>
+                                    </li>
+                                </ul>
+                                <div id="cal_tabs_{{ cal.id() }}-Calendar"></div>
+                                <div id="cal_tabs_{{ cal.id() }}-Personal">{{ personal|safe }}</div>
+                            </div>
+
+                            <!-- prettier-ignore-start -->
+                            <style type="text/css">
+                                #cal_tabs_{{ cal.id() }} > div {
+                                    padding: 0;
+                                }
+                            </style>
+                            <script>
+                                $(function () {
+                                    $("#cal_tabs_{{ cal.id() }}").tabs({
+                                        activate: function (event, data) {
+                                            const id = data.newPanel.attr("id");
+                                            const name = id.replace(
+                                                "cal_tabs_{{ cal.id() }}-",
+                                                "",
+                                            );
+                                            $("#alarms_hidden").attr("value", name);
+                                        },
+                                    });
+                                    {% if alarm_type == AlarmType::Personal %}
+                                    $("#cal_tabs_{{ cal.id() }}").tabs("option", "active", 1);
+                                    {% endif %}
+                                });
+                            </script>
+                            <!-- prettier-ignore-end -->
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        {% endif %}
     </form>
 </div>

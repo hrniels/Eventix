@@ -1,106 +1,114 @@
 <div id="{{ id }}-attendees">
     {% if attendees.names.is_empty() %}
-    -
+        -
     {% else %}
-    {% for (i, (att, role)) in attendees.names.iter().zip(attendees.roles).enumerate() %}
-    <div id="{{ id }}-attendee_{{ i }}" style="padding-bottom: .5em">
-        <a href="javascript:toggleRole({{ i }})">
-        {% if role == &AttendeeRole::Required %}
-        <i id="{{ id }}_roleicon_{{ i }}" class="bi bi-person-fill"></i>
-        {% else %}
-        <i id="{{ id }}_roleicon_{{ i }}" class="bi bi-person"></i>
-        {% endif %}
-        </a>
-        <input type="hidden" id="{{ id }}_role_{{ i }}"
-               name="{{ name }}[role][{{ i }}]" value="{{ role }}"/>
-        <input type="text" size="50" name="{{ name }}[name][{{ i }}]" value="{{ att }}"/>
-        <input type="button" value="{{ "Remove"|t(locale) }}"
-                             onclick="removeAttendee({{ i }})" />
-    </div>
-    {% endfor %}
+        {% for (i, (att, role)) in attendees.names.iter().zip(attendees.roles).enumerate() %}
+            <div id="{{ id }}-attendee_{{ i }}" style="padding-bottom: .5em">
+                <a href="javascript:toggleRole({{ i }})">
+                    {% if role == &AttendeeRole::Required %}
+                        <i id="{{ id }}_roleicon_{{ i }}" class="bi bi-person-fill"></i>
+                    {% else %}
+                        <i id="{{ id }}_roleicon_{{ i }}" class="bi bi-person"></i>
+                    {% endif %}
+                </a>
+                <input
+                    type="hidden"
+                    id="{{ id }}_role_{{ i }}"
+                    name="{{ name }}[role][{{ i }}]"
+                    value="{{ role }}"
+                />
+                <input type="text" size="50" name="{{ name }}[name][{{ i }}]" value="{{ att }}" />
+                <input
+                    type="button"
+                    value="{{ "Remove"|t(locale) }}"
+                    onclick="removeAttendee({{ i }})"
+                />
+            </div>
+        {% endfor %}
     {% endif %}
 </div>
 {{ "New attendee"|t(locale) }}: <input id="{{ id }}-new-attendee" size="50" />
 <input type="button" onclick="addAttendee()" value="{{ "Add"|t(locale) }}" />
 
+<!-- prettier-ignore-start -->
 <script>
     function toggleRole(id) {
-        if($('#{{ id }}_roleicon_' + id).hasClass('bi-person-fill')) {
-            $('#{{ id }}_roleicon_' + id).removeClass('bi-person-fill');
-            $('#{{ id }}_roleicon_' + id).addClass('bi-person');
-            $('#{{ id }}_role_' + id).val('Optional');
-        }
-        else {
-            $('#{{ id }}_roleicon_' + id).removeClass('bi-person');
-            $('#{{ id }}_roleicon_' + id).addClass('bi-person-fill');
-            $('#{{ id }}_role_' + id).val('Required');
+        if ($("#{{ id }}_roleicon_" + id).hasClass("bi-person-fill")) {
+            $("#{{ id }}_roleicon_" + id).removeClass("bi-person-fill");
+            $("#{{ id }}_roleicon_" + id).addClass("bi-person");
+            $("#{{ id }}_role_" + id).val("Optional");
+        } else {
+            $("#{{ id }}_roleicon_" + id).removeClass("bi-person");
+            $("#{{ id }}_roleicon_" + id).addClass("bi-person-fill");
+            $("#{{ id }}_role_" + id).val("Required");
         }
     }
 
-    window.ev['attendees_{{ id }}'] = {
+    window.ev["attendees_{{ id }}"] = {
         {% for (cal, email) in emails %}
-        '{{ cal }}': '{{ email }}',
+        "{{ cal }}": "{{ email }}",
         {% endfor %}
     };
 
     function addAttendee() {
-        const list = $('#{{ id }}-attendees');
-        if(list.html().trim() == '-') {
-            list.html('');
+        const list = $("#{{ id }}-attendees");
+        if (list.html().trim() == "-") {
+            list.html("");
             {% if let Some(cal_combo_id) = cal_combo_id %}
-            const cal = $('#{{ cal_combo_id }}').val();
-            if(cal && window.ev['attendees_{{ id }}'][cal])
-                doAddAttendee(list, window.ev['attendees_{{ id }}'][cal]);
+            const cal = $("#{{ cal_combo_id }}").val();
+            if (cal && window.ev["attendees_{{ id }}"][cal])
+                doAddAttendee(list, window.ev["attendees_{{ id }}"][cal]);
             {% endif %}
         }
 
-        const attendee = $('#{{ id }}-new-attendee').val();
+        const attendee = $("#{{ id }}-new-attendee").val();
         doAddAttendee(list, attendee);
-        $('#{{ id }}-new-attendee').val('');
+        $("#{{ id }}-new-attendee").val("");
     }
 
     function doAddAttendee(list, attendee) {
         let id = 0;
-        for(; ; ++id) {
-            const el = document.getElementById('{{ id }}-attendee_' + id);
-            if(el == null)
-                break;
-            if($('#{{ id }}-attendee-name-' + id).val() == attendee)
-                return;
+        for (; ; ++id) {
+            const el = document.getElementById("{{ id }}-attendee_" + id);
+            if (el == null) break;
+            if ($("#{{ id }}-attendee-name-" + id).val() == attendee) return;
         }
 
         list.html(list.html() + '\
             <div id="{{ id }}-attendee_' + id + '" style="padding-bottom: .5em">\
-            <a href="javascript:toggleRole(' + id + ')">\
-            <i id="{{ id }}_roleicon_' + id + '" class="bi bi-person-fill"></i>\
-            </a>\
-            <input type="hidden" id="{{ id }}_role_' + id + '"\
-                   name="{{ name }}[role][' + id + ']" value="Required"/>\
-            <input type="text" size="50" id="{{ id }}-attendee-name-' + id + '"\
-                   name="{{ name }}[name][' + id + ']"\
-                   value="' + attendee + '"/>\
-            <input type="button" value="{{ "Remove"|t(locale) }}"\
-                   onclick="removeAttendee(' + id + ')" />\
+                <a href="javascript:toggleRole(' + id + ')">\
+                    <i id="{{ id }}_roleicon_' + id + '" class="bi bi-person-fill"></i>\
+                </a>\
+                <input type="hidden" id="{{ id }}_role_' + id + '"\
+                       name="{{ name }}[role][' + id + ']" value="Required"/>\
+                <input type="text" size="50" id="{{ id }}-attendee-name-' + id + '"\
+                       name="{{ name }}[name][' + id + ']"\
+                       value="' + attendee + '"/>\
+                <input type="button" value="{{ "Remove"|t(locale) }}"\
+                       onclick="removeAttendee(' + id + ')" />\
             </div>\
         ');
     }
+</script>
+<!-- prettier-ignore-end -->
 
+<script>
     function removeAttendee(id) {
-        $('#{{ id }}-attendee_' + id).remove();
+        $("#{{ id }}-attendee_" + id).remove();
 
-        const list = $('#{{ id }}-attendees');
-        if(list.html().trim() == '') {
-            list.html('-');
+        const list = $("#{{ id }}-attendees");
+        if (list.html().trim() == "") {
+            list.html("-");
         }
     }
 
-    $(function() {
+    $(function () {
         $("#{{ id }}-new-attendee").autocomplete({
             source: "/api/attendees",
             minLength: 2,
         });
-        $('#{{ id }}-new-attendee').keyup(function(e) {
-            if(e.keyCode == 13) {
+        $("#{{ id }}-new-attendee").keyup(function (e) {
+            if (e.keyCode == 13) {
                 addAttendee();
             }
         });

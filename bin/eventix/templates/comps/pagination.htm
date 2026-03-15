@@ -1,60 +1,69 @@
 {% if page != 1 %}
-<a id="link-prev" href="{{ (build_url)(&(page - 1)) }}"><i style="float: left" class="bi bi-caret-left-fill"></i></a>
+    <a id="link-prev" href="{{ (build_url)(&(page - 1)) }}">
+        <i style="float: left" class="bi bi-caret-left-fill"></i>
+    </a>
 {% else %}
-<i style="float: left" class="bi bi-caret-left-fill"></i>
+    <i style="float: left" class="bi bi-caret-left-fill"></i>
 {% endif %}
 
-<span class="{% if page == 1 %}ev_pagecurrent{% else %}ev_pageno{% endif %}"><a href="{{ (build_url)(&1) }}">1</a></span>
+<span class="{% if page == 1 %}ev_pagecurrent{% else %}ev_pageno{% endif %}">
+    <a href="{{ (build_url)(&1) }}">1</a>
+</span>
 
 {% if before_range.start > 2 %}...{% endif %}
 
 {% for i in before_range.clone() %}
-<span class="ev_pageno"><a href="{{ (build_url)(i) }}">{{ i }}</a></span>
+    <span class="ev_pageno"><a href="{{ (build_url)(i) }}">{{ i }}</a></span>
 {% endfor %}
 
 {% if page != 1 && page != num %}
-<span class="ev_pagecurrent"><a href="{{ (build_url)(&page) }}">{{ page }}</a></span>
+    <span class="ev_pagecurrent"><a href="{{ (build_url)(&page) }}">{{ page }}</a></span>
 {% endif %}
 
 {% for i in after_range.clone() %}
-<span class="ev_pageno"><a href="{{ (build_url)(i) }}">{{ i }}</a></span>
+    <span class="ev_pageno"><a href="{{ (build_url)(i) }}">{{ i }}</a></span>
 {% endfor %}
 
 {% if after_range.end < num %}...{% endif %}
 
 {% if num > 1 %}
-<span class="{% if page == num %}ev_pagecurrent{% else %}ev_pageno{% endif %}"><a href="{{ (build_url)(num) }}">{{ num }}</a></span>
+    <span class="{% if page == num %}ev_pagecurrent{% else %}ev_pageno{% endif %}">
+        <a href="{{ (build_url)(num) }}">{{ num }}</a>
+    </span>
 {% endif %}
 
 {% if page != num && num > 0 %}
-<a id="link-next" href="{{ (build_url)(&(page + 1)) }}"><i style="float: right" class="bi bi-caret-right-fill"></i></a>
+    <a id="link-next" href="{{ (build_url)(&(page + 1)) }}">
+        <i style="float: right" class="bi bi-caret-right-fill"></i>
+    </a>
 {% else %}
-<i style="float: right" class="bi bi-caret-right-fill"></i>
+    <i style="float: right" class="bi bi-caret-right-fill"></i>
 {% endif %}
 
 {% if page != 1 || page != num %}
-<script type="text/javascript">
-    bindContentHandler('page-content', document, 'keydown', function(e) {
-        // we have to ignore these keys if the focus is on an input element or similar. to be sure,
-        // we only accept them when the body is focused.
-        if(document.activeElement.nodeName == 'BODY') {
-            if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
-                return true;
+    <!-- prettier-ignore-start -->
+    <script type="text/javascript">
+        bindContentHandler("page-content", document, "keydown", function (e) {
+            // we have to ignore these keys if the focus is on an input element or similar.
+            // to be sure, we only accept them when the body is focused.
+            if (document.activeElement.nodeName == "BODY") {
+                if (e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return true;
 
-            switch(e.code) {
-                {% if page != 1 %}
-                case "ArrowLeft":
-                    document.getElementById('link-prev').click();
-                    break;
-                {% endif %}
-                {% if page != num %}
-                case "ArrowRight":
-                    document.getElementById('link-next').click();
-                    break;
-                {% endif %}
+                switch (e.code) {
+                    {% if page != 1 %}
+                    case "ArrowLeft":
+                        document.getElementById("link-prev").click();
+                        break;
+                    {% endif %}
+                    {% if page != num %}
+                    case "ArrowRight":
+                        document.getElementById("link-next").click();
+                        break;
+                    {% endif %}
+                }
             }
-        }
-        return true;
-    });
-</script>
+            return true;
+        });
+    </script>
+    <!-- prettier-ignore-end -->
 {% endif %}

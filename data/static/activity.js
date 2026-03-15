@@ -35,10 +35,13 @@ function trackActivity() {
         keyMouse = true;
 
         clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            // timeout: user wasn't active recently
-            keyMouse = false;
-        }, 5 * 60 * 1000);
+        timeout = setTimeout(
+            () => {
+                // timeout: user wasn't active recently
+                keyMouse = false;
+            },
+            5 * 60 * 1000,
+        );
     }
 
     document.addEventListener("mousemove", onActivity);

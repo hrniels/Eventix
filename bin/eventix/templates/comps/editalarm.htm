@@ -1,68 +1,80 @@
 {% if edit %}
-
-<form id="alarm-form" method="post" action="/api/items/editalarm">
-    <input type="hidden" name="uid" value="{{ uid }}" />
-    {% if let Some(rid) = rid %}
-    <input type="hidden" name="rid" value="{{ rid }}" />
-    {% endif %}
-    <div id="smaller-font">
-        <div style="padding: .4em">
-            <input type="checkbox" id="personal_overwrite"
-                                   name="personal_overwrite"
-                                   {% if overwrite %}checked="checked"{% endif %}/>
-            <label for="personal_overwrite">{{ "Overwrite default"|t(locale) }}</label>
+    <form id="alarm-form" method="post" action="/api/items/editalarm">
+        <input type="hidden" name="uid" value="{{ uid }}" />
+        {% if let Some(rid) = rid %}
+            <input type="hidden" name="rid" value="{{ rid }}" />
+        {% endif %}
+        <div id="smaller-font">
+            <div style="padding: .4em">
+                <input
+                    type="checkbox"
+                    id="personal_overwrite"
+                    name="personal_overwrite"
+                    {% if overwrite %}checked="checked"{% endif %}
+                />
+                <label for="personal_overwrite">{{ "Overwrite default"|t(locale) }}</label>
+            </div>
+            {{ config|safe }}
         </div>
-        {{ config|safe }}
-    </div>
-    <a class="ev_button ev_button_normal"
-       href="javascript:formRequest('alarm-form', reloadContent)">
-        <span>{{ "Save"|t(locale) }}</span>
-    </a>
-    <a class="ev_button ev_button_normal"
-       href="javascript:cancelAlarm('{{ uid }}', '{{ rid_str }}')">
-        <span>{{ "Cancel"|t(locale) }}</span>
-    </a>
-</form>
+        <a
+            class="ev_button ev_button_normal"
+            href="javascript:formRequest('alarm-form', reloadContent)"
+        >
+            <span>{{ "Save"|t(locale) }}</span>
+        </a>
+        <a
+            class="ev_button ev_button_normal"
+            href="javascript:cancelAlarm('{{ uid }}', '{{ rid_str }}')"
+        >
+            <span>{{ "Cancel"|t(locale) }}</span>
+        </a>
+    </form>
 
-<script type="text/javascript">
-    $("#personal_overwrite").click(function() {
-        setPersonalOverwrite('personal', this.checked)
-    });
-    {% if !overwrite %}
-    $(function() {
-        setPersonalOverwrite('personal', false);
-    });
-    {% endif %}
-</script>
-
+    <!-- prettier-ignore-start -->
+    <script type="text/javascript">
+        $("#personal_overwrite").click(function () {
+            setPersonalOverwrite("personal", this.checked);
+        });
+        {% if !overwrite %}
+        $(function () {
+            setPersonalOverwrite("personal", false);
+        });
+        {% endif %}
+    </script>
+    <!-- prettier-ignore-end -->
 {% else %}
 
-{% if let Some(effective) = effective %}
-{{ effective[0].human(&**locale) }}
-{% else %}
--
-{% endif %}
-{% if personal_alarms %}
-<div style="margin-top: .5em">
-    {% if occ.is_recurrent() %}
-    <a class="ev_button ev_button_normal"
-       href="javascript:editAlarm('{{ occ.uid() }}', null)">
-        <i class="bi bi-pencil"></i>
-        <span>{{ "Edit series"|t(locale) }}</span>
-    </a>
-    <a class="ev_button ev_button_normal"
-       href="javascript:editAlarm('{{ occ.uid() }}', '{{ occ.rid_str() }}')">
-        <i class="bi bi-pencil"></i>
-        <span>{{ "Edit occ."|t(locale) }}</span>
-    </a>
+    {% if let Some(effective) = effective %}
+        {{ effective[0].human(&**locale) }}
     {% else %}
-    <a class="ev_button ev_button_normal"
-       href="javascript:editAlarm('{{ occ.uid() }}', null)">
-        <i class="bi bi-pencil"></i>
-        <span>{{ "Edit"|t(locale) }}</span>
-    </a>
+        -
     {% endif %}
-</div>
-{% endif %}
-
+    {% if personal_alarms %}
+        <div style="margin-top: .5em">
+            {% if occ.is_recurrent() %}
+                <a
+                    class="ev_button ev_button_normal"
+                    href="javascript:editAlarm('{{ occ.uid() }}', null)"
+                >
+                    <i class="bi bi-pencil"></i>
+                    <span>{{ "Edit series"|t(locale) }}</span>
+                </a>
+                <a
+                    class="ev_button ev_button_normal"
+                    href="javascript:editAlarm('{{ occ.uid() }}', '{{ occ.rid_str() }}')"
+                >
+                    <i class="bi bi-pencil"></i>
+                    <span>{{ "Edit occ."|t(locale) }}</span>
+                </a>
+            {% else %}
+                <a
+                    class="ev_button ev_button_normal"
+                    href="javascript:editAlarm('{{ occ.uid() }}', null)"
+                >
+                    <i class="bi bi-pencil"></i>
+                    <span>{{ "Edit"|t(locale) }}</span>
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
 {% endif %}

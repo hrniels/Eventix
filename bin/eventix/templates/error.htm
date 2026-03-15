@@ -1,19 +1,17 @@
 {% extends "base.htm" %}
 
 {% block content %}
-
-<div class="ev_border ev_padbottom_big">
-    <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
-    <div class="ev_main">
-        <div style="padding: 0.3em;">
-            <h1>{{ "Error"|t(locale) }}: {{ msg }}</h1>
-            <ul>
-                {% for e in trace %}
-                <li><span class="ev_msg_error">{{ e }}</span></li>
-                {% endfor %}
-            </ul>
+    <div class="ev_border ev_padbottom_big">
+        <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
+        <div class="ev_main">
+            <div style="padding: 0.3em;">
+                <h1>{{ "Error"|t(locale) }}: {{ msg }}</h1>
+                <ul>
+                    {% for e in trace %}
+                        <li><span class="ev_msg_error">{{ e }}</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
     </div>
-</div>
-
 {% endblock %}
