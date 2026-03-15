@@ -18,7 +18,7 @@ function postRequest(url, success) {
         type: 'POST',
         url: url,
         dataType: 'json',
-        success: success,
+        success: function(data) { success(data); reloadSidebar(); },
         error: handleAJAXError,
     });
 }
@@ -29,7 +29,7 @@ function formRequest(id, success) {
         url: form.attr('action'),
         type: form.attr('method'),
         data: form.serialize(),
-        success: success,
+        success: function(data) { success(data); reloadSidebar(); },
         error: handleAJAXError,
     });
 }

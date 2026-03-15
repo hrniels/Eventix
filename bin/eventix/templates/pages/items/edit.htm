@@ -149,12 +149,8 @@
     function submitEditForm() {
         if($('#attendees-new-attendee').val() != "")
             errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
-        else {
-            formRequest('edit-form', function(html) {
-                $('#page-content').html(html);
-                resizeBoxes();
-            });
-        }
+        else
+            formRequest('edit-form', replaceContent);
     }
 
     $(function() {

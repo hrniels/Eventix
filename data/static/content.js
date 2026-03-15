@@ -61,6 +61,15 @@ function loadWithPrev(url) {
     navigateTo(fullUrl.toString());
 }
 
+// Replaces the content of the given container with `html`, making sure that our state is refreshed
+// properly (e.g., clearing previously registered event handlers).
+function replaceContent(html, containerId = "#page-content") {
+    clearContentHandler(containerId.slice(1));
+    $(containerId).html(html);
+    if(typeof resizeBoxes === 'function')
+        resizeBoxes();
+}
+
 // Fetches the content fragment for `pageSlug` and injects it into `containerId`.
 // `queryStr` is a pre-encoded query string such as `"keywords=foo&page=1"` or
 // `"date=2025-03"` (pass an empty string for no parameters). `onLoaded` is an
@@ -69,13 +78,17 @@ function loadWithPrev(url) {
 function fetchContent(pageSlug, containerId, queryStr, onLoaded) {
     const params = queryStr ? '?' + queryStr : '';
     getRequest('/pages/' + pageSlug + '/content' + params, function(html) {
-        clearContentHandler(containerId.slice(1));
-        $(containerId).html(html);
-        if(typeof resizeBoxes === 'function')
-            resizeBoxes();
+        replaceContent(html, containerId);
         if(onLoaded)
             onLoaded();
     }, 'html');
+}
+
+// Reloads the sidebar by re-fetching its content fragment. This is a no-op when
+// the sidebar placeholder is absent (e.g. on error pages).
+function reloadSidebar() {
+    if (document.getElementById('sidebar-content'))
+        fetchContent('sidebar', '#sidebar-content', '', null);
 }
 
 // Navigates to a new state for `pageSlug` by fetching the content fragment and

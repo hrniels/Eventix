@@ -69,10 +69,7 @@
 <script>
     // Submits the add form via AJAX and injects the response fragment into #page-content.
     function submitAddForm() {
-        formRequest('add-form', function(html) {
-            $('#page-content').html(html);
-            resizeBoxes();
-        });
+        formRequest('add-form', replaceContent);
     }
 
     $(function() {

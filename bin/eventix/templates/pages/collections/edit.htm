@@ -66,10 +66,7 @@
 <script>
     // Submits the edit form via AJAX and injects the response fragment into #page-content.
     function submitEditForm() {
-        formRequest('edit-form', function(html) {
-            $('#page-content').html(html);
-            resizeBoxes();
-        });
+        formRequest('edit-form', replaceContent);
     }
 
     bindContentHandler('page-content', document, 'keydown', function(e) {

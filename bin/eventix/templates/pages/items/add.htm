@@ -137,21 +137,8 @@
     function submitAddForm() {
         if($('#attendees-new-attendee').val() != "")
             errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
-        else {
-            const form = $('#add-form');
-            $.ajax({
-                type: 'POST',
-                url: form.attr('action'),
-                data: form.serialize(),
-                success: function(html) {
-                    $('#page-content').html(html);
-                    resizeBoxes();
-                },
-                error: function() {
-                    $('#page-content').html('<p style="color:red">Failed to save.</p>');
-                }
-            });
-        }
+        else
+            formRequest('add-form', replaceContent, 'html');
     }
 
     $(function() {
