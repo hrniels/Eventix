@@ -1,91 +1,101 @@
 {% for occ in occs %}
-<tr id="occrow_{{ occ.rid_str()|to_id }}">
-    <td style="height: 2em">
-        &bull;&nbsp;
-        <span class="ev_summary
-                     {% match occ.status_class() %}
-                     {% when Some with (cl) %}
-                     ev_status_{{ cl }}
-                     {% when _ %}
-                     {% endmatch %}
-                     {% if occ.is_excluded() %}
-                     ev_status_Completed
-                     {% endif %}">
-        {{ occ.summary().unwrap() }}
-        </span>
-        &nbsp;
-        {% if let Some(td) = occ.todo_status() %}
-        {% if td == &CalTodoStatus::Completed %}
-        <i class="bi bi-check-circle"></i>
-        {% endif %}
-        {% endif %}
-        {% if occ.is_overwritten() %}
-        <i class="bi bi-pencil"></i>
-        {% endif %}
-        {% if occ.has_effective_alarms() %}
-        <i class="bi bi-alarm"></i>
-        {% endif %}
-    </td>
-    <td align="center">
-        {{ locale.date_range(occ.occurrence_startdate(),
-                             occ.occurrence_enddate())|safe }}
-    </td>
-    <td>
-        {% if occ.owner %}
-        {{ occ.edit_modes|safe }}
-        {% if occ.organizer().is_some() %}
-        {% if occ.status_class() != Some(String::from("Cancelled")) %}
-        <a style="float: right" class="ev_button ev_button_critical"
-           href="javascript:cancelAndRefresh('{{ occ.uid() }}',
-                                             '{{ occ.rid_str() }}',
-                                             '{{ occ.rid_str()|to_id }}')">
-            <i class="bi bi-dash-circle"></i>
-            <span>{{ "Cancel"|t(locale) }}</span>
-        </a>
-        {% endif %}
-        {% else %}
-        <a style="float: right"
-           class="ev_button ev_button_normal"
-           href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
-                                                 '{{ occ.rid_str() }}',
-                                                 '{{ occ.rid_str()|to_id }}')">
-            {% if !occ.is_excluded() %}
-            <i class="bi bi-dash-circle"></i>
-            <span>{{ "Exclude"|t(locale) }}</span>
-            {% else %}
-            <i class="bi bi-plus-circle"></i>
-            <span>{{ "Include"|t(locale) }}</span>
+    <tr id="occrow_{{ occ.rid_str()|to_id }}">
+        <td style="height: 2em">
+            &bull;&nbsp;
+            <span
+                class="ev_summary
+                {% match occ.status_class() %}
+                    {% when Some with (cl) %}
+                    ev_status_{{ cl }}
+                    {% when _ %}
+                {% endmatch %}
+                {% if occ.is_excluded() %}
+                    ev_status_Completed
+                {% endif %}"
+            >
+                {{ occ.summary().unwrap() }}
+            </span>
+            &nbsp;
+            {% if let Some(td) = occ.todo_status() %}
+                {% if td == &CalTodoStatus::Completed %}
+                    <i class="bi bi-check-circle"></i>
+                {% endif %}
             {% endif %}
-        </a>
-        {% endif %}
-        {% else %}
-        {% if personal_alarms %}
-        <a id="alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}"
-           style="float: right; width: 60px" class="ev_button ev_button_normal"
-           href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}',
-                                       '{{ occ.uid() }}', '{{ occ.rid_str() }}')">
-            <i class="bi bi-pencil"></i>
-            <span>{{ "Alarms_short"|t(locale) }}</span>
-        </a>
-        {% endif %}
-        {% if let Some(partstat) = occ.partstat %}
-        <span style="float: right">
-            {{ partstat|safe }}
-        </span>
-        {% endif %}
-        {% endif %}
-        {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
-        {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
-        <a style="float: right"
-           class="ev_button ev_button_good"
-           href="javascript:completeTodoAndRefresh('{{ occ.uid() }}',
-                                                   '{{ occ.rid_str() }}',
-                                                   '{{ occ.rid_str()|to_id }}')">
-            <i class="bi bi-check-lg"></i>
-            <span>{{ "Complete"|t(locale) }}</span>
-        </a>
-        {% endif %}
-        {% endif %}
-    </td>
-</tr>
+            {% if occ.is_overwritten() %}
+                <i class="bi bi-pencil"></i>
+            {% endif %}
+            {% if occ.has_effective_alarms() %}
+                <i class="bi bi-alarm"></i>
+            {% endif %}
+        </td>
+        <td align="center">
+            {{ locale.date_range(occ.occurrence_startdate(), occ.occurrence_enddate())|safe }}
+        </td>
+        <td>
+            {% if occ.owner %}
+                {{ occ.edit_modes|safe }}
+                {% if occ.organizer().is_some() %}
+                    {% if occ.status_class() != Some(String::from("Cancelled")) %}
+                        <a
+                            style="float: right"
+                            class="ev_button ev_button_critical"
+                            href="javascript:cancelAndRefresh('{{ occ.uid() }}',
+                                                              '{{ occ.rid_str() }}',
+                                                              '{{ occ.rid_str()|to_id }}')"
+                        >
+                            <i class="bi bi-dash-circle"></i>
+                            <span>{{ "Cancel"|t(locale) }}</span>
+                        </a>
+                    {% endif %}
+                {% else %}
+                    <a
+                        style="float: right"
+                        class="ev_button ev_button_normal"
+                        href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
+                                                              '{{ occ.rid_str() }}',
+                                                              '{{ occ.rid_str()|to_id }}')"
+                    >
+                        {% if !occ.is_excluded() %}
+                            <i class="bi bi-dash-circle"></i>
+                            <span>{{ "Exclude"|t(locale) }}</span>
+                        {% else %}
+                            <i class="bi bi-plus-circle"></i>
+                            <span>{{ "Include"|t(locale) }}</span>
+                        {% endif %}
+                    </a>
+                {% endif %}
+            {% else %}
+                {% if personal_alarms %}
+                    <a
+                        id="alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}"
+                        style="float: right; width: 60px"
+                        class="ev_button ev_button_normal"
+                        href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}',
+                                                    '{{ occ.uid() }}',
+                                                    '{{ occ.rid_str() }}')"
+                    >
+                        <i class="bi bi-pencil"></i>
+                        <span>{{ "Alarms_short"|t(locale) }}</span>
+                    </a>
+                {% endif %}
+                {% if let Some(partstat) = occ.partstat %}
+                    <span style="float: right"> {{ partstat|safe }} </span>
+                {% endif %}
+            {% endif %}
+            {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
+                {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
+                    <a
+                        style="float: right"
+                        class="ev_button ev_button_good"
+                        href="javascript:completeTodoAndRefresh('{{ occ.uid() }}',
+                                                                '{{ occ.rid_str() }}',
+                                                                '{{ occ.rid_str()|to_id }}')"
+                    >
+                        <i class="bi bi-check-lg"></i>
+                        <span>{{ "Complete"|t(locale) }}</span>
+                    </a>
+                {% endif %}
+            {% endif %}
+        </td>
+    </tr>
 {% endfor %}

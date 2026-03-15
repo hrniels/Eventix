@@ -1,25 +1,30 @@
 <script type="text/javascript">
-function calSettings() {
-    return {
-        dateFormat: "yy-mm-dd",
-        yearRange: "c-100:c+10",
-        changeMonth: true,
-        changeYear: true,
-        numberOfMonths: 1,
-    };
-}
+    function calSettings() {
+        return {
+            dateFormat: "yy-mm-dd",
+            yearRange: "c-100:c+10",
+            changeMonth: true,
+            changeYear: true,
+            numberOfMonths: 1,
+        };
+    }
 
-$(function() {
-    const settings = calSettings();
-    let d = $("#{{ id }}");
-    d.datepicker(settings);
-    d.datepicker("option", "beforeShow", addArrowToDatePicker);
-    d.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
-    d.datepicker("option", "showAnim", "");
-    d.datepicker("option", calLocale());
-});
+    $(function () {
+        const settings = calSettings();
+        let d = $("#{{ id }}");
+        d.datepicker(settings);
+        d.datepicker("option", "beforeShow", addArrowToDatePicker);
+        d.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
+        d.datepicker("option", "showAnim", "");
+        d.datepicker("option", calLocale());
+    });
 </script>
 
-<input id="{{ id }}" type="text" name="{{ name }}" size="10"
-       maxlength="10" value="{{ date|naive_date }}" />
-
+<input
+    id="{{ id }}"
+    type="text"
+    name="{{ name }}"
+    size="10"
+    maxlength="10"
+    value="{{ date|naive_date }}"
+/>

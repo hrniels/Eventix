@@ -1,122 +1,160 @@
 <script type="text/javascript">
-function calSettings() {
-    return {
-        dateFormat: "yy-mm-dd",
-        yearRange: "c-100:c+10",
-        changeMonth: true,
-        changeYear: true,
-        numberOfMonths: 1,
-    };
-}
-
-function setChecked(id, value) {
-    $("#" + id).prop('checked', value != "");
-}
-
-$(function() {
-    const settings = calSettings();
-    let from = $("#{{ id }}from_date")
-        .datepicker(settings)
-        .on("change", function() {
-            {% if ctype == CalCompType::Todo %}
-            setChecked('{{ id }}from_enabled', this.value);
-            {% endif %}
-            to.datepicker("option", "minDate", getDate(this));
-        });
-    let to = $("#{{ id }}to_date")
-        .datepicker(settings)
-        .on("change", function() {
-            {% if ctype == CalCompType::Todo %}
-            setChecked('{{ id }}to_enabled', this.value);
-            {% endif %}
-            from.datepicker("option", "maxDate", getDate(this));
-        });
-    from.datepicker("option", "beforeShow", addArrowToDatePicker);
-    to.datepicker("option", "beforeShow", addArrowToDatePicker);
-    from.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
-    to.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
-    from.datepicker("option", "showAnim", "");
-    to.datepicker("option", "showAnim", "");
-    from.datepicker("option", calLocale());
-    to.datepicker("option", calLocale());
-
-    function getDate(element) {
-        let date;
-        try {
-            date = $.datepicker.parseDate(settings.dateFormat, element.value);
-        }
-        catch(error) {
-            date = null;
-        }
-        return date;
+    function calSettings() {
+        return {
+            dateFormat: "yy-mm-dd",
+            yearRange: "c-100:c+10",
+            changeMonth: true,
+            changeYear: true,
+            numberOfMonths: 1,
+        };
     }
-});
+
+    function setChecked(id, value) {
+        $("#" + id).prop("checked", value != "");
+    }
+
+    // Initialises the date-range pickers for a single datetimerange instance.
+    // `fromId` and `toId` are the date input element ids. When `isTodo` is true,
+    // changing a date also checks/unchecks the corresponding enabled checkbox
+    // identified by `fromEnabledId` / `toEnabledId`.
+    function initDateRange(fromId, toId, fromEnabledId, toEnabledId, isTodo) {
+        const settings = calSettings();
+        let from = $("#" + fromId)
+            .datepicker(settings)
+            .on("change", function () {
+                if (isTodo) setChecked(fromEnabledId, this.value);
+                to.datepicker("option", "minDate", getDate(this));
+            });
+        let to = $("#" + toId)
+            .datepicker(settings)
+            .on("change", function () {
+                if (isTodo) setChecked(toEnabledId, this.value);
+                from.datepicker("option", "maxDate", getDate(this));
+            });
+        from.datepicker("option", "beforeShow", addArrowToDatePicker);
+        to.datepicker("option", "beforeShow", addArrowToDatePicker);
+        from.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
+        to.datepicker("option", "onUpdateDatepicker", hideArrowBottom);
+        from.datepicker("option", "showAnim", "");
+        to.datepicker("option", "showAnim", "");
+        from.datepicker("option", calLocale());
+        to.datepicker("option", calLocale());
+
+        function getDate(element) {
+            let date;
+            try {
+                date = $.datepicker.parseDate(settings.dateFormat, element.value);
+            } catch (error) {
+                date = null;
+            }
+            return date;
+        }
+    }
 </script>
+<!-- prettier-ignore-start -->
+<script type="text/javascript">
+    $(function () {
+        initDateRange(
+            "{{ id }}from_date",
+            "{{ id }}to_date",
+            "{{ id }}from_enabled",
+            "{{ id }}to_enabled",
+            {{ ctype == CalCompType::Todo }},
+        );
+    });
+</script>
+<!-- prettier-ignore-end -->
 
 <div style="padding-bottom: .3em">
-    <input type="checkbox" id="{{ id }}all_day" name="{{ name }}all_day"
-           {% if all_day %}checked="checked"{% endif %} />
+    <input
+        type="checkbox"
+        id="{{ id }}all_day"
+        name="{{ name }}all_day"
+        {% if all_day %}checked="checked"{% endif %}
+    />
     <label for="{{ id }}all_day">{{ "All day"|t(locale) }}</label>
 </div>
 
 <table class="ev_date">
     <tr>
-        <td style="width: 3em">
-            {{ "Start"|t(locale) }}:
-        </td>
+        <td style="width: 3em">{{ "Start"|t(locale) }}:</td>
         <td>
             {% if ctype == CalCompType::Todo %}
-            <input type="checkbox" id="{{ id }}from_enabled" name="{{ name }}[from_enabled]"
-                                   value="true"{% if from_enabled %} checked="checked"{% endif %}/>
+                <input
+                    type="checkbox"
+                    id="{{ id }}from_enabled"
+                    name="{{ name }}[from_enabled]"
+                    value="true"
+                    {% if from_enabled %}checked="checked"{% endif %}
+                />
             {% else %}
-            <input type="hidden" name="{{ name}}[from_enabled]" value="true"/>
+                <input type="hidden" name="{{ name }}[from_enabled]" value="true" />
             {% endif %}
-            <input id="{{ id }}from_date" type="text" name="{{ name }}[from][date]" size="10"
-                   maxlength="10" value="{{ from_date|naive_date }}" />
+            <input
+                id="{{ id }}from_date"
+                type="text"
+                name="{{ name }}[from][date]"
+                size="10"
+                maxlength="10"
+                value="{{ from_date|naive_date }}"
+            />
             {{ from_time|safe }}
         </td>
     </tr>
     <tr>
         <td>
             {% if ctype == CalCompType::Todo %}
-            {{ "Due"|t(locale) }}:
+                {{ "Due"|t(locale) }}:
             {% else %}
-            {{ "End"|t(locale) }}:
+                {{ "End"|t(locale) }}:
             {% endif %}
         </td>
         <td>
             {% if ctype == CalCompType::Todo %}
-            <input type="checkbox" id="{{ id }}to_enabled" name="{{ name }}[to_enabled]"
-                                   value="true"{% if to_enabled %} checked="checked"{% endif %}/>
+                <input
+                    type="checkbox"
+                    id="{{ id }}to_enabled"
+                    name="{{ name }}[to_enabled]"
+                    value="true"
+                    {% if to_enabled %}checked="checked"{% endif %}
+                />
             {% else %}
-            <input type="hidden" name="{{ name}}[to_enabled]" value="true"/>
+                <input type="hidden" name="{{ name }}[to_enabled]" value="true" />
             {% endif %}
-            <input id="{{ id }}to_date" type="text" name="{{ name }}[to][date]" size="10"
-                   maxlength="10" value="{{ to_date|naive_date }}" />
+            <input
+                id="{{ id }}to_date"
+                type="text"
+                name="{{ name }}[to][date]"
+                size="10"
+                maxlength="10"
+                value="{{ to_date|naive_date }}"
+            />
             {{ to_time|safe }}
         </td>
     </tr>
 </table>
 
+<!-- prettier-ignore-start -->
 <script type="text/javascript">
-$(function() {
-    {% if all_day %}
-    setAllDay(true);
-    {% endif %}
+    $(function () {
+        {% if all_day %}
+        setAllDay(true);
+        {% endif %}
 
-    $("#{{ id }}all_day").click(function() {
-        setAllDay(this.checked)
+        $("#{{ id }}all_day").click(function () {
+            setAllDay(this.checked);
+        });
     });
-});
-
-function setAllDay(allday) {
-    if(allday) {
-        $("#{{ id }}_from__time_").prop("disabled", true);
-        $("#{{ id }}_to__time_").prop("disabled", true);
+</script>
+<!-- prettier-ignore-end -->
+<script type="text/javascript">
+    function setAllDay(allday) {
+        if (allday) {
+            $("#{{ id }}_from__time_").prop("disabled", true);
+            $("#{{ id }}_to__time_").prop("disabled", true);
+        } else {
+            $("#{{ id }}_from__time_").prop("disabled", false);
+            $("#{{ id }}_to__time_").prop("disabled", false);
+        }
     }
-    else {
-        $("#{{ id }}_from__time_").prop("disabled", false);
-        $("#{{ id }}_to__time_").prop("disabled", false);
-    }
-}
 </script>

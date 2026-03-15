@@ -1,16 +1,19 @@
 <select id="{{ id }}" name="{{ name }}">
     {% for opt in options %}
-    <option value="{{ opt.value }}"
-        {% if let Some(val) = value %}
-        {% if &opt.value == val %} selected="selected"{% endif %}
-        {% endif %}
-        >{{ opt.name|t(locale) }}</option>
+        <option
+            value="{{ opt.value }}"
+            {% if let Some(val) = value %}
+                {% if &opt.value == val %}selected="selected"{% endif %}
+            {% endif %}
+        >
+            {{ opt.name|t(locale) }}
+        </option>
     {% endfor %}
 </select>
 <script type="text/javascript">
-    $(function() {
-        $('#{{ id }}').selectmenu({
-            width: 'auto',
+    $(function () {
+        $("#{{ id }}").selectmenu({
+            width: "auto",
         });
     });
 </script>

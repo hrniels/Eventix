@@ -20,21 +20,24 @@
 </div>
 
 <script>
-    $(document).ready(function() {
-        $('#{{ id }}-toggle').on('click', function() {
-            $('#{{ id }}-menu').toggle();
+    $(document).ready(function () {
+        $("#{{ id }}-toggle").on("click", function () {
+            $("#{{ id }}-menu").toggle();
         });
 
-        $('#{{ id }}-menu a').on('click', function() {
-            if($(this).data('value') == 'Series')
-                loadWithPrev('/pages/items/edit?uid={{ uid }}&mode=Series');
-            else
-                loadWithPrev('/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode=' + $(this).data('value'));
+        $("#{{ id }}-menu a").on("click", function () {
+            if ($(this).data("value") == "Series")
+                loadWithPrev("/pages/items/edit?uid={{ uid }}&mode=Series");
+            else {
+                loadWithPrev(
+                    "/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode=" + $(this).data("value"),
+                );
+            }
         });
 
-        $(document).on('click', function(e) {
-            if (!$(e.target).closest('#{{ id }}-dropdown').length) {
-                $('#{{ id }}-menu').hide();
+        $(document).on("click", function (e) {
+            if (!$(e.target).closest("#{{ id }}-dropdown").length) {
+                $("#{{ id }}-menu").hide();
             }
         });
     });

@@ -1,11 +1,11 @@
 <a href="mailto:{{ org.address() }}">
     {% if let Some(cn) = org.common_name() %}
-    {{ cn }}
+        {{ cn }}
     {% else %}
-    {{ org.address() }}
+        {{ org.address() }}
     {% endif %}
 </a>
 {% if let Some(sent_by) = org.sent_by() %}
-, {{ "sent by"|t(locale) }}
-<a href="{{ sent_by }}">{{ sent_by }}</a>
+    , {{ "sent by"|t(locale) }}
+    <a href="{{ sent_by }}">{{ sent_by }}</a>
 {% endif %}

@@ -1,18 +1,18 @@
 <div>
     <style>
-    h1.title {
-        font-size: 1.4rem;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    .container {
-        margin: 1em;
-        text-align: center;
-    }
+        h1.title {
+            font-size: 1.4rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .container {
+            margin: 1em;
+            text-align: center;
+        }
     </style>
     <script type="text/javascript">
         function submitAndClose() {
-            syncAll('last-update', 'sync-spinner', 'out-of-sync', true, $('#result_url').val());
+            syncAll("last-update", "sync-spinner", "out-of-sync", true, $("#result_url").val());
             fireEvent(new DeselectEvent());
         }
     </script>
@@ -20,9 +20,7 @@
     <h1 class="title">{{ "Authentication Failed"|t(locale) }}</h1>
 
     <div class="container">
-        <p>
-        {{ error }}
-        </p>
+        <p>{{ error }}</p>
         <p>
             <a href="{{ url }}">{{ "Authenticate"|t(locale) }}</a>
         </p>
@@ -31,7 +29,10 @@
         <br />
         <input type="text" id="result_url" name="result_url" size="50" />
         <input type="submit" value="{{ "Retry"|t(locale) }}" onclick="submitAndClose()" />
-        <input type="button" value="{{ "Cancel"|t(locale) }}"
-               onclick="fireEvent(new DeselectEvent())" />
+        <input
+            type="button"
+            value="{{ "Cancel"|t(locale) }}"
+            onclick="fireEvent(new DeselectEvent())"
+        />
     </div>
 </div>

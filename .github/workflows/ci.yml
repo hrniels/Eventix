@@ -15,6 +15,18 @@ env:
 
 jobs:
   # --------------------------------------------------------------------------
+  # Prettier formatting check (JS, CSS, HTML templates)
+  # --------------------------------------------------------------------------
+  prettier:
+    name: Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check formatting
+        run: ./b format-check
+
+  # --------------------------------------------------------------------------
   # Formatting check
   # --------------------------------------------------------------------------
   fmt:

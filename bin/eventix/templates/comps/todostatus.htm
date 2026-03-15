@@ -1,8 +1,12 @@
 {{ status|safe }}
 <span id="{{ id }}_process" style="display: none">
     ,
-    <input id="{{ id }}_percent" name="{{ name }}[percent]" size="5"
-           value="{{ percent.unwrap_or(0) }}" />
+    <input
+        id="{{ id }}_percent"
+        name="{{ name }}[percent]"
+        size="5"
+        value="{{ percent.unwrap_or(0) }}"
+    />
     %
 </span>
 <span id="{{ id }}_completed_head" style="display: none">, on</span>
@@ -10,21 +14,18 @@
 
 <script>
     function updateStatus() {
-        if($("#{{ id }}_status_").val() == "COMPLETED") {
+        if ($("#{{ id }}_status_").val() == "COMPLETED") {
             $("#{{ id }}_completed_head").show();
             $("#{{ id }}_completed_").show();
-        }
-        else {
+        } else {
             $("#{{ id }}_completed_head").hide();
             $("#{{ id }}_completed_").hide();
         }
-        if($("#{{ id }}_status_").val() == "IN-PROCESS")
-            $("#{{ id }}_process").show();
-        else
-            $("#{{ id }}_process").hide();
+        if ($("#{{ id }}_status_").val() == "IN-PROCESS") $("#{{ id }}_process").show();
+        else $("#{{ id }}_process").hide();
     }
 
-    $(function() {
+    $(function () {
         $("#{{ id }}_status_").on("change", updateStatus);
         $("#{{ id }}_percent").spinner({
             min: 0,

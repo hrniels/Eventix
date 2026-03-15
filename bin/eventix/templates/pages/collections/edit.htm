@@ -1,10 +1,13 @@
 {% include "messages.htm" %}
-
-{% if let Some(prev) = prev %}
-<form id="edit-form" method="post" action="/pages/collections/edit?col_id={{ col_id }}&prev={{ prev }}">
-{% else %}
-<form id="edit-form" method="post" action="/pages/collections/edit?col_id={{ col_id }}">
-{% endif %}
+<form
+    id="edit-form"
+    method="post"
+    {% if let Some(prev) = prev %}
+        action="/pages/collections/edit?col_id={{ col_id }}&prev={{ prev }}"
+    {% else %}
+        action="/pages/collections/edit?col_id={{ col_id }}"
+    {% endif %}
+>
     <div class="ev_border">
         <fieldset class="ev_form">
             <h1 id="title" class="ev_header">{{ "Edit Collection"|t(locale) }}</h1>
@@ -17,16 +20,21 @@
                 <dd>{{ syncer|safe }}</dd>
             </dl>
             <div class="ev_submit">
-                <a class="ev_button_big ev_button_normal" style="width: 80px"
-                   href="javascript:submitEditForm()">
+                <a
+                    class="ev_button_big ev_button_normal"
+                    style="width: 80px"
+                    href="javascript:submitEditForm()"
+                >
                     <span>{{ "Save"|t(locale) }}</span>
                 </a>
-                <a class="ev_button_big ev_button_normal" style="width: 80px"
-                   {% if let Some(prev) = prev %}
-                   href="javascript:navigateTo('{{ prev }}')"
-                   {% else %}
-                   href="javascript:navigateTo('/')"
-                   {% endif %}
+                <a
+                    class="ev_button_big ev_button_normal"
+                    style="width: 80px"
+                    {% if let Some(prev) = prev %}
+                        href="javascript:navigateTo('{{ prev }}')"
+                    {% else %}
+                        href="javascript:navigateTo('/')"
+                    {% endif %}
                 >
                     <span>{{ "Back"|t(locale) }}</span>
                 </a>
@@ -38,11 +46,11 @@
 <script>
     // Submits the edit form via AJAX and injects the response fragment into #page-content.
     function submitEditForm() {
-        formRequest('edit-form', replaceContent);
+        formRequest("edit-form", replaceContent);
     }
 
-    bindContentHandler('page-content', document, 'keydown', function(e) {
-        if(e.ctrlKey && e.code == "Enter") {
+    bindContentHandler("page-content", document, "keydown", function (e) {
+        if (e.ctrlKey && e.code == "Enter") {
             submitEditForm();
             return false;
         }

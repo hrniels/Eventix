@@ -2,113 +2,178 @@
 <div id="{{ id }}-tabs">
     <ul>
         {% if only.is_none() || only.unwrap() == Syncer::VDirSyncer %}
-        <li>
-            <a href="#{{ id }}-tabs-VDIRSYNCER">
-                <img src="/static/caldav.png" />
-                <span>{{ "CalDAV"|t(locale) }}</span>
-            </a>
-        </li>
+            <li>
+                <a href="#{{ id }}-tabs-VDIRSYNCER">
+                    <img src="/static/caldav.png" />
+                    <span>{{ "CalDAV"|t(locale) }}</span>
+                </a>
+            </li>
         {% endif %}
         {% if only.is_none() || only.unwrap() == Syncer::O365 %}
-        <li>
-            <a href="#{{ id }}-tabs-O365">
-                <img src="/static/o365.png" />
-                <span>{{ "O365"|t(locale) }}</span>
-            </a>
-        </li>
+            <li>
+                <a href="#{{ id }}-tabs-O365">
+                    <img src="/static/o365.png" />
+                    <span>{{ "O365"|t(locale) }}</span>
+                </a>
+            </li>
         {% endif %}
         {% if only.is_none() || only.unwrap() == Syncer::FileSystem %}
-        <li>
-            <a href="#{{ id }}-tabs-FILESYSTEM">
-                <img src="/static/fs.png" />
-                <span>{{ "FileSystem"|t(locale) }}</span>
-            </a>
-        </li>
+            <li>
+                <a href="#{{ id }}-tabs-FILESYSTEM">
+                    <img src="/static/fs.png" />
+                    <span>{{ "FileSystem"|t(locale) }}</span>
+                </a>
+            </li>
         {% endif %}
     </ul>
-    <div id="{{ id }}-tabs-VDIRSYNCER"
-        {% if only.is_some() && only.unwrap() != Syncer::VDirSyncer %}style="display: none"{% endif %}
-        >
+    <div
+        id="{{ id }}-tabs-VDIRSYNCER"
+        {% if only.is_some() && only.unwrap() != Syncer::VDirSyncer %}
+            style="display: none"
+        {% endif %}
+    >
         <fieldset style="padding: 0">
             <dl>
                 <dt>{{ "Your Name"|t(locale) }}: *</dt>
-                <dd><input type="text" name="{{ name }}[vdir_name]" size="30"
-                           value="{{ value.vdir_name }}" /></dd>
+                <dd>
+                    <input
+                        type="text"
+                        name="{{ name }}[vdir_name]"
+                        size="30"
+                        value="{{ value.vdir_name }}"
+                    />
+                </dd>
             </dl>
             <dl>
                 <dt>{{ "Email Address"|t(locale) }}: *</dt>
                 <dd>
-                    <input type="text" name="{{ name }}[vdir_email]" size="50"
-                           value="{{ value.vdir_email }}" />
+                    <input
+                        type="text"
+                        name="{{ name }}[vdir_email]"
+                        size="50"
+                        value="{{ value.vdir_email }}"
+                    />
                     <div>{{ "info.name_and_email"|t(locale) }}</div>
                 </dd>
             </dl>
             <dl>
                 <dt>{{ "Location"|t(locale) }}: *</dt>
-                <dd><input type="text" name="{{ name }}[vdir_url]" size="60"
-                           value="{{ value.vdir_url }}" /></dd>
+                <dd>
+                    <input
+                        type="text"
+                        name="{{ name }}[vdir_url]"
+                        size="60"
+                        value="{{ value.vdir_url }}"
+                    />
+                </dd>
             </dl>
             <dl>
                 <dt>{{ "Read-only"|t(locale) }}:</dt>
-                <dd><input type="checkbox" name="{{ name }}[vdir_readonly]" value="true"
-                           {% if value.vdir_readonly.is_some() %}checked="checked"{% endif %} /></dd>
+                <dd>
+                    <input
+                        type="checkbox"
+                        name="{{ name }}[vdir_readonly]"
+                        value="true"
+                        {% if value.vdir_readonly.is_some() %}checked="checked"{% endif %}
+                    />
+                </dd>
             </dl>
             <dl>
                 <dt>{{ "Username"|t(locale) }}:</dt>
-                <dd><input type="text" name="{{ name }}[vdir_username]" size="30"
-                           value="{{ value.vdir_username }}" /></dd>
+                <dd>
+                    <input
+                        type="text"
+                        name="{{ name }}[vdir_username]"
+                        size="30"
+                        value="{{ value.vdir_username }}"
+                    />
+                </dd>
             </dl>
             <dl>
                 <dt>{{ "Password Command"|t(locale) }}:</dt>
                 <dd>
-                    <input type="text" name="{{ name }}[vdir_pw_cmd]" size="60"
-                           value="{{ value.vdir_pw_cmd }}" />
+                    <input
+                        type="text"
+                        name="{{ name }}[vdir_pw_cmd]"
+                        size="60"
+                        value="{{ value.vdir_pw_cmd }}"
+                    />
                     <div>{{ "info.user_pw_cmd"|t(locale) }}</div>
                 </dd>
             </dl>
         </fieldset>
     </div>
-    <div id="{{ id }}-tabs-O365"
-        {% if only.is_some() && only.unwrap() != Syncer::O365 %}style="display: none"{% endif %}
-        >
+    <div
+        id="{{ id }}-tabs-O365"
+        {% if only.is_some() && only.unwrap() != Syncer::O365 %}
+            style="display: none"
+        {% endif %}
+    >
         <fieldset style="padding: 0">
             <dl>
                 <dt>{{ "Your Name"|t(locale) }}: *</dt>
-                <dd><input type="text" name="{{ name }}[o365_name]" size="30"
-                           value="{{ value.o365_name }}" /></dd>
+                <dd>
+                    <input
+                        type="text"
+                        name="{{ name }}[o365_name]"
+                        size="30"
+                        value="{{ value.o365_name }}"
+                    />
+                </dd>
             </dl>
             <dl>
                 <dt>{{ "Email Address"|t(locale) }}: *</dt>
                 <dd>
-                    <input type="text" name="{{ name }}[o365_email]" size="50"
-                           value="{{ value.o365_email }}" />
+                    <input
+                        type="text"
+                        name="{{ name }}[o365_email]"
+                        size="50"
+                        value="{{ value.o365_email }}"
+                    />
                     <div>{{ "info.name_and_email"|t(locale) }}</div>
                 </dd>
             </dl>
             <dl>
                 <dt>{{ "Read-only"|t(locale) }}:</dt>
-                <dd><input type="checkbox" name="{{ name }}[o365_readonly]" value="true"
-                           {% if value.o365_readonly.is_some() %}checked="checked"{% endif %} /></dd>
+                <dd>
+                    <input
+                        type="checkbox"
+                        name="{{ name }}[o365_readonly]"
+                        value="true"
+                        {% if value.o365_readonly.is_some() %}checked="checked"{% endif %}
+                    />
+                </dd>
             </dl>
             <dl>
                 <dt>{{ "Password Command"|t(locale) }}:</dt>
                 <dd>
-                    <input type="text" name="{{ name }}[o365_pw_cmd]" size="60"
-                           value="{{ value.o365_pw_cmd }}" />
+                    <input
+                        type="text"
+                        name="{{ name }}[o365_pw_cmd]"
+                        size="60"
+                        value="{{ value.o365_pw_cmd }}"
+                    />
                     <div>{{ "info.user_pw_cmd"|t(locale) }}</div>
                 </dd>
             </dl>
         </fieldset>
     </div>
-    <div id="{{ id }}-tabs-FILESYSTEM"
-        {% if only.is_some() && only.unwrap() != Syncer::FileSystem %}style="display: none"{% endif %}
-        >
+    <div
+        id="{{ id }}-tabs-FILESYSTEM"
+        {% if only.is_some() && only.unwrap() != Syncer::FileSystem %}
+            style="display: none"
+        {% endif %}
+    >
         <fieldset style="padding: 0">
             <dl>
                 <dt>{{ "Path"|t(locale) }}: *</dt>
                 <dd>
-                    <input type="text" name="{{ name }}[fs_path]" size="50"
-                           value="{{ value.fs_path }}" />
+                    <input
+                        type="text"
+                        name="{{ name }}[fs_path]"
+                        size="50"
+                        value="{{ value.fs_path }}"
+                    />
                     <div>{{ "info.collection_folder_path"|t(locale) }}</div>
                 </dd>
             </dl>
@@ -118,34 +183,38 @@
 
 <div class="ev_padtop">{{ "info.required_fields"|t(locale) }}</div>
 
+<!-- prettier-ignore-start -->
 <style type="text/css">
-#{{ id }}-tabs > div {
-    padding: 0;
-}
-#{{ id }}-tabs ul li a {
-    display: flex;
-    gap: .3em;
-}
-#{{ id }}-tabs ul li a img {
-    width: 20px;
-    height: 20px;
-}
+    #{{ id }}-tabs > div {
+        padding: 0;
+    }
+    #{{ id }}-tabs ul li a {
+        display: flex;
+        gap: 0.3em;
+    }
+    #{{ id }}-tabs ul li a img {
+        width: 20px;
+        height: 20px;
+    }
 </style>
+<!-- prettier-ignore-end -->
+<!-- prettier-ignore-start -->
 <script>
-    $(function() {
+    $(function () {
         $("#{{ id }}-tabs").tabs({
-            activate: function(event, data) {
-                const name = data.newPanel.attr('id').replace("{{ id }}-tabs-", "");
-                $("#{{ id }}_syncer").attr('value', name);
-            }
+            activate: function (event, data) {
+                const name = data.newPanel.attr("id").replace("{{ id }}-tabs-", "");
+                $("#{{ id }}_syncer").attr("value", name);
+            },
         });
 
-        const tab = $("#{{ id }}_syncer").attr('value');
+        const tab = $("#{{ id }}_syncer").attr("value");
         {% if only.is_none() %}
-        if(tab != 'NONE') {
-            const tabs = ['VDIRSYNCER', 'O365', 'FILESYSTEM'];
+        if (tab != "NONE") {
+            const tabs = ["VDIRSYNCER", "O365", "FILESYSTEM"];
             $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
         }
         {% endif %}
     });
 </script>
+<!-- prettier-ignore-end -->

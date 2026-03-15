@@ -8,107 +8,142 @@
         <li><a href="#{{ id }}-tabs-MONTHLY">{{ "Monthly"|t(locale) }}</a></li>
         <li><a href="#{{ id }}-tabs-YEARLY">{{ "Annually"|t(locale) }}</a></li>
     </ul>
-    <div id="{{ id }}-tabs-NONE">
-    </div>
-    <div id="{{ id }}-tabs-HOURLY">
-    </div>
-    <div id="{{ id }}-tabs-DAILY">
-    </div>
+    <div id="{{ id }}-tabs-NONE"></div>
+    <div id="{{ id }}-tabs-HOURLY"></div>
+    <div id="{{ id }}-tabs-DAILY"></div>
     <div id="{{ id }}-tabs-WEEKLY">
         <div id="{{ id }}_weekdays_list" style="padding: .4em">
-            <input type="hidden" id="{{ id }}_weekdays" name="{{ name }}[weekly_days]"
-                                 value="{{ weekly_days }}" />
+            <input
+                type="hidden"
+                id="{{ id }}_weekdays"
+                name="{{ name }}[weekly_days]"
+                value="{{ weekly_days }}"
+            />
             {{ "On"|t(locale) }}:
-            <a id="{{ id }}_weekday_MO" href="javascript:toggle_wday('MO')">{{ "Mon"|t(locale) }}</a>
-            <a id="{{ id }}_weekday_TU" href="javascript:toggle_wday('TU')">{{ "Tue"|t(locale) }}</a>
-            <a id="{{ id }}_weekday_WE" href="javascript:toggle_wday('WE')">{{ "Wed"|t(locale) }}</a>
-            <a id="{{ id }}_weekday_TH" href="javascript:toggle_wday('TH')">{{ "Thu"|t(locale) }}</a>
-            <a id="{{ id }}_weekday_FR" href="javascript:toggle_wday('FR')">{{ "Fri"|t(locale) }}</a>
-            <a id="{{ id }}_weekday_SA" href="javascript:toggle_wday('SA')">{{ "Sat"|t(locale) }}</a>
-            <a id="{{ id }}_weekday_SU" href="javascript:toggle_wday('SU')">{{ "Sun"|t(locale) }}</a>
+            <a id="{{ id }}_weekday_MO" href="javascript:toggle_wday('MO')">
+                {{ "Mon"|t(locale) }}
+            </a>
+            <a id="{{ id }}_weekday_TU" href="javascript:toggle_wday('TU')">
+                {{ "Tue"|t(locale) }}
+            </a>
+            <a id="{{ id }}_weekday_WE" href="javascript:toggle_wday('WE')">
+                {{ "Wed"|t(locale) }}
+            </a>
+            <a id="{{ id }}_weekday_TH" href="javascript:toggle_wday('TH')">
+                {{ "Thu"|t(locale) }}
+            </a>
+            <a id="{{ id }}_weekday_FR" href="javascript:toggle_wday('FR')">
+                {{ "Fri"|t(locale) }}
+            </a>
+            <a id="{{ id }}_weekday_SA" href="javascript:toggle_wday('SA')">
+                {{ "Sat"|t(locale) }}
+            </a>
+            <a id="{{ id }}_weekday_SU" href="javascript:toggle_wday('SU')">
+                {{ "Sun"|t(locale) }}
+            </a>
         </div>
     </div>
     <div id="{{ id }}-tabs-MONTHLY" style="display: flex; gap: .4em">
-        <div style="padding: .4em">
-        {{ "On"|t(locale) }}:
-        </div>
+        <div style="padding: .4em">{{ "On"|t(locale) }}:</div>
         <div>
             <div style="padding-top: .4em">
-                <input class="radio" type="radio"
-                                     name="{{ name }}[monthly_type]" id="{{ id }}-monthly-none"
-                                     value="None"
-                                     {% if monthly_type == MonthlyType::None %}checked="checked"{% endif %}/>
+                <input
+                    class="radio"
+                    type="radio"
+                    name="{{ name }}[monthly_type]"
+                    id="{{ id }}-monthly-none"
+                    value="None"
+                    {% if monthly_type == MonthlyType::None %}checked="checked"{% endif %}
+                />
                 <label for="{{ id }}-monthly-none">{{ "Same day"|t(locale) }}</label>
             </div>
             <div style="padding-top: .4em">
-                <input class="radio" type="radio"
-                                     name="{{ name }}[monthly_type]" id="{{ id }}-monthly-type"
-                                     value="ByDay"
-                                     {% if monthly_type == MonthlyType::ByDay %}checked="checked"{% endif %}/>
+                <input
+                    class="radio"
+                    type="radio"
+                    name="{{ name }}[monthly_type]"
+                    id="{{ id }}-monthly-type"
+                    value="ByDay"
+                    {% if monthly_type == MonthlyType::ByDay %}checked="checked"{% endif %}
+                />
                 <label for="{{ id }}-monthly-byday">
-                {{ monthly_nth|safe }}
-                {{ monthly_wday|safe }}
+                    {{ monthly_nth|safe }}
+                    {{ monthly_wday|safe }}
                 </label>
             </div>
         </div>
     </div>
-    <div id="{{ id }}-tabs-YEARLY">
-    </div>
+    <div id="{{ id }}-tabs-YEARLY"></div>
     <div id="{{ id }}-tabs-end" style="display: none; padding: .4em">
         <div style="padding-top: .3em">
             {{ "Every"|t(locale) }}
-            <input id="{{ id }}_interval" name="{{ name }}[interval]" size="5"
-                                          value="{{ interval }}" />
+            <input
+                id="{{ id }}_interval"
+                name="{{ name }}[interval]"
+                size="5"
+                value="{{ interval }}"
+            />
             <label id="{{ id }}_interval_label"></label>
         </div>
         <div style="padding-top: .6em">
             <b>{{ "Range of recurrence"|t(locale) }}:</b>
         </div>
         <div style="padding-top: .4em">
-            <input class="radio" type="radio"
-                                 name="{{ name }}[end]" id="{{ id }}-end0"
-                                 value="NoEnd"
-                                 {% if end == RecurEnd::NoEnd %}checked="checked"{% endif %}/>
+            <input
+                class="radio"
+                type="radio"
+                name="{{ name }}[end]"
+                id="{{ id }}-end0"
+                value="NoEnd"
+                {% if end == RecurEnd::NoEnd %}checked="checked"{% endif %}
+            />
             <label for="{{ id }}-end0">{{ "No end date"|t(locale) }}</label>
         </div>
         <div style="padding-top: .4em">
-            <input class="radio" type="radio"
-                                 name="{{ name }}[end]" id="{{ id }}-end-1"
-                                 value="Count"
-                                 {% if end == RecurEnd::Count %}checked="checked"{% endif %}/>
+            <input
+                class="radio"
+                type="radio"
+                name="{{ name }}[end]"
+                id="{{ id }}-end-1"
+                value="Count"
+                {% if end == RecurEnd::Count %}checked="checked"{% endif %}
+            />
             <label for="{{ id }}-end-1">{{ "Create"|t(locale) }}</label>
-            <input id="{{ id }}_count" name="{{ name }}[count]" size="5"
-                                       value="{{ count }}" />
+            <input id="{{ id }}_count" name="{{ name }}[count]" size="5" value="{{ count }}" />
             {{ "Repetitions"|t(locale) }}
         </div>
         <div style="padding-top: .4em">
-            <input class="radio" type="radio"
-                                 name="{{ name }}[end]" id="{{ id }}-end-2"
-                                 value="Until"
-                                 {% if end == RecurEnd::Until %}checked="checked"{% endif %}/>
+            <input
+                class="radio"
+                type="radio"
+                name="{{ name }}[end]"
+                id="{{ id }}-end-2"
+                value="Until"
+                {% if end == RecurEnd::Until %}checked="checked"{% endif %}
+            />
             <label for="{{ id }}-end-2">{{ "Repeat until"|t(locale) }}</label>
             {{ until|safe }}
         </div>
     </div>
 </div>
 
+<!-- prettier-ignore-start -->
 <style type="text/css">
-#{{ id }}-tabs > div {
-    padding: 0;
-}
+    #{{ id }}-tabs > div {
+        padding: 0;
+    }
 </style>
+<!-- prettier-ignore-end -->
 <script>
     function toggle_wday(wday) {
-        let wdaylist = $("#{{ id }}_weekdays").attr('value');
-        if(wdaylist.indexOf(wday) != -1)
-            wdaylist = wdaylist.replace(wday + ",", "");
-        else
-            wdaylist += wday + ",";
-        $("#{{ id }}_weekday_" + wday).toggleClass('ev_button_selected');
-        $("#{{ id }}_weekdays").attr('value', wdaylist);
+        let wdaylist = $("#{{ id }}_weekdays").attr("value");
+        if (wdaylist.indexOf(wday) != -1) wdaylist = wdaylist.replace(wday + ",", "");
+        else wdaylist += wday + ",";
+        $("#{{ id }}_weekday_" + wday).toggleClass("ev_button_selected");
+        $("#{{ id }}_weekdays").attr("value", wdaylist);
     }
 
-    $(function() {
+    $(function () {
         $("#{{ id }}_weekdays_list a").button();
         $("#{{ id }}_interval").spinner({
             min: 1,
@@ -117,45 +152,43 @@
             min: 1,
         });
 
-        const weekdays = $("#{{ id }}_weekdays").attr('value');
-        for(let i = 0; i < weekdays.length; i += 3) {
+        const weekdays = $("#{{ id }}_weekdays").attr("value");
+        for (let i = 0; i < weekdays.length; i += 3) {
             const wday = weekdays.substr(i, 2);
-            $("#{{ id }}_weekday_" + wday).toggleClass('ev_button_selected');
+            $("#{{ id }}_weekday_" + wday).toggleClass("ev_button_selected");
         }
 
         $("#{{ id }}-tabs").tabs({
-            activate: function(event, data) {
-                const name = data.newPanel.attr('id').replace("{{ id }}-tabs-", "");
-                if(name != 'NONE') {
+            activate: function (event, data) {
+                const name = data.newPanel.attr("id").replace("{{ id }}-tabs-", "");
+                if (name != "NONE") {
                     $("#{{ id }}-tabs-end").show();
                     let label = $("#{{ id }}_interval_label");
-                    switch(name) {
+                    switch (name) {
                         case "HOURLY":
-                            label.html("{{ "hour(s)"|t(locale) }}");
+                            label.html('{{ "hour(s)"|t(locale) }}');
                             break;
                         case "DAILY":
-                            label.html("{{ "day(s)"|t(locale) }}");
+                            label.html('{{ "day(s)"|t(locale) }}');
                             break;
                         case "WEEKLY":
-                            label.html("{{ "week(s)"|t(locale) }}");
+                            label.html('{{ "week(s)"|t(locale) }}');
                             break;
                         case "MONTHLY":
-                            label.html("{{ "month(s)"|t(locale) }}");
+                            label.html('{{ "month(s)"|t(locale) }}');
                             break;
                         case "YEARLY":
-                            label.html("{{ "year(s)"|t(locale) }}");
+                            label.html('{{ "year(s)"|t(locale) }}');
                             break;
                     }
-                }
-                else
-                    $("#{{ id }}-tabs-end").hide();
-                $("#{{ id }}_freq").attr('value', name);
-            }
+                } else $("#{{ id }}-tabs-end").hide();
+                $("#{{ id }}_freq").attr("value", name);
+            },
         });
 
-        const tab = $("#{{ id }}_freq").attr('value');
-        if(tab != 'NONE') {
-            const tabs = ['NONE', 'HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+        const tab = $("#{{ id }}_freq").attr("value");
+        if (tab != "NONE") {
+            const tabs = ["NONE", "HOURLY", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
             $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
             $("#{{ id }}-tabs-end").show();
         }

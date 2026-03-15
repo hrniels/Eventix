@@ -1,56 +1,57 @@
 <div>
     <style>
-    h1.title {
-        font-size: 1.4rem;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
+        h1.title {
+            font-size: 1.4rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
 
-    .container {
-        max-width: 1000px;
-        margin: 0 auto;
-        display: grid;
-    }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+        }
 
-    .container_2cols {
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-    }
+        .container_2cols {
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
 
-    .shortcut-row {
-        display: flex;
-        align-items: center;
-        padding: 0.3rem 0;
-    }
+        .shortcut-row {
+            display: flex;
+            align-items: center;
+            padding: 0.3rem 0;
+        }
 
-    .shortcut-keys {
-        min-width: 180px;
-        display: flex;
-        justify-content: flex-end;
-        padding-right: 1rem;
-    }
+        .shortcut-keys {
+            min-width: 180px;
+            display: flex;
+            justify-content: flex-end;
+            padding-right: 1rem;
+        }
 
-    .key, .mousebtn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 28px;
-        text-align: center;
-    }
+        .key,
+        .mousebtn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 28px;
+            text-align: center;
+        }
 
-    .key {
-        background: #eeeeec;
-        border: 1px solid #d3d7cf;
-        border-radius: 6px;
-        font-weight: bold;
-        font-size: 0.9rem;
-        box-shadow: inset 0 -1px 0 #babdb6;
-    }
+        .key {
+            background: #eeeeec;
+            border: 1px solid #d3d7cf;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: inset 0 -1px 0 #babdb6;
+        }
 
-    .code {
-        font-family: monospace;
-    }
+        .code {
+            font-family: monospace;
+        }
     </style>
     <h1 class="title">{{ "Help"|t(locale) }}</h1>
 

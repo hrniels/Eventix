@@ -4,17 +4,21 @@
 
 {% include "messages.htm" %}
 
-{% if let Some(rid) = rid %}
-<form id="edit-form" method="post"
-                action="/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
-{% else %}
-<form id="edit-form" method="post"
-                action="/pages/items/edit?uid={{ uid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
-{% endif %}
+<form
+    id="edit-form"
+    method="post"
+    {% if let Some(rid) = rid %}
+        action="/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}"
+    {% else %}
+        action="/pages/items/edit?uid={{ uid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}"
+    {% endif %}
+>
     <input type="hidden" name="edit_start" value="{{ edit_start }}" />
     <div class="ev_border">
         <fieldset class="ev_form">
-            <h1 id="title" class="ev_tabheader">{{ super::build_title(occ, rid, *mode)|t(locale) }}</h1>
+            <h1 id="title" class="ev_tabheader">
+                {{ super::build_title(occ, rid, *mode)|t(locale) }}
+            </h1>
             <div id="tabs" style="padding: 0">
                 <ul id="tab-bar">
                     <li><a href="#tabs-basics">{{ "Basics"|t(locale) }}</a></li>
@@ -24,33 +28,43 @@
                     <dl>
                         <dt>{{ "Calendar"|t(locale) }}:</dt>
                         <dd>
-                        {% if let Some(calendars) = calendars %}
-                        {{ calendars|safe }}
-                        {% else %}
-                        <div style="display: flex; gap: .4em">
-                            <span class="ev_cal_src ev_cal_src_{{ dir.id() }}"></span>
-                            {{ dir.name() }}
-                        </div>
-                        {% endif %}
+                            {% if let Some(calendars) = calendars %}
+                                {{ calendars|safe }}
+                            {% else %}
+                                <div style="display: flex; gap: .4em">
+                                    <span class="ev_cal_src ev_cal_src_{{ dir.id() }}"></span>
+                                    {{ dir.name() }}
+                                </div>
+                            {% endif %}
                         </dd>
                     </dl>
                     <dl>
                         <dt>{{ "Summary"|t(locale) }}:</dt>
-                        <dd><input type="text" size="50" id="summary" name="summary" value="{{ summary }}" /></dd>
+                        <dd>
+                            <input
+                                type="text"
+                                size="50"
+                                id="summary"
+                                name="summary"
+                                value="{{ summary }}"
+                            />
+                        </dd>
                     </dl>
                     <dl>
                         <dt>{{ "Location"|t(locale) }}:</dt>
-                        <dd><input type="text" size="50" name="location" value="{{ location }}" /></dd>
+                        <dd>
+                            <input type="text" size="50" name="location" value="{{ location }}" />
+                        </dd>
                     </dl>
                     <dl>
                         <dt>{{ "Date"|t(locale) }}:</dt>
                         <dd>{{ start_end|safe }}</dd>
                     </dl>
                     {% if let Some(status) = status %}
-                    <dl>
-                        <dt>{{ "Status"|t(locale) }}:</dt>
-                        <dd>{{ status|safe }}</dd>
-                    </dl>
+                        <dl>
+                            <dt>{{ "Status"|t(locale) }}:</dt>
+                            <dd>{{ status|safe }}</dd>
+                        </dl>
                     {% endif %}
                     <dl>
                         <dt>{{ "Reminder"|t(locale) }}:</dt>
@@ -59,7 +73,9 @@
                     <dl>
                         <dt>{{ "Description"|t(locale) }}:</dt>
                         <dd>
-                            <textarea rows="10" style="width: 90%;" name="description">{{ description }}</textarea>
+                            <textarea rows="10" style="width: 90%;" name="description">
+                                {{ description }}
+                            </textarea>
                         </dd>
                     </dl>
                 </div>
@@ -68,14 +84,14 @@
                         <dt>{{ "Repeat"|t(locale) }}:</dt>
                         <dd>
                             {% match rrule %}
-                            {% when Some(rrule) %}
-                            {{ rrule|safe }}
-                            {% when _ %}
-                            {% if let Some(rrule) = occ.rrule() %}
-                            {{ rrule.human(&**locale)|newlines()|safe }}
-                            {% else %}
-                            -
-                            {% endif %}
+                                {% when Some(rrule) %}
+                                {{ rrule|safe }}
+                                {% when _ %}
+                                {% if let Some(rrule) = occ.rrule() %}
+                                    {{ rrule.human(&**locale)|newlines()|safe }}
+                                {% else %}
+                                    -
+                                {% endif %}
                             {% endmatch %}
                         </dd>
                     </dl>
@@ -90,17 +106,26 @@
                     <tr>
                         <td width="25%" align="left">
                             {% if rid.is_none() %}
-                            <a id="delete-button" class="ev_button_big ev_button_critical" href="#">
-                                <span>{{ "Delete series"|t(locale) }}</span>
-                            </a>
+                                <a
+                                    id="delete-button"
+                                    class="ev_button_big ev_button_critical"
+                                    href="#"
+                                >
+                                    <span>{{ "Delete series"|t(locale) }}</span>
+                                </a>
                             {% endif %}
                         </td>
                         <td width="50%" align="center">
-                            <a class="ev_button_big ev_button_normal" href="javascript:submitEditForm()">
+                            <a
+                                class="ev_button_big ev_button_normal"
+                                href="javascript:submitEditForm()"
+                            >
                                 <span>{{ "Save"|t(locale) }}</span>
                             </a>
-                            <a class="ev_button_big ev_button_normal"
-                               href="javascript:navigateTo('{{ prev }}')">
+                            <a
+                                class="ev_button_big ev_button_normal"
+                                href="javascript:navigateTo('{{ prev }}')"
+                            >
                                 <span>{{ "Back"|t(locale) }}</span>
                             </a>
                         </td>
@@ -119,43 +144,47 @@
 
     // Submits the edit form via AJAX and injects the response fragment into #edit-content.
     function submitEditForm() {
-        if($('#attendees-new-attendee').val() != "")
-            errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
-        else
-            formRequest('edit-form', replaceContent);
+        if ($("#attendees-new-attendee").val() != "")
+            errorDialog('{{ "error.new_attendee_not_empty"|t(locale) }}');
+        else formRequest("edit-form", replaceContent);
     }
 
-    $(function() {
-        {% if rid.is_none() %}
-        confirmDialog(
-            'delete-confirm',
-            'delete-button',
-            function() {
-                deleteItem('{{ uid }}', null, onDeleted);
-            }
-        );
-        {% endif %}
-
-        moveToTabCenter('title', 'tabs', 'tab-bar');
-        $('#summary').focus();
-
-        $("#tabs").tabs({
-            create: function(event, ui) {
-                moveToTabCenter('title', 'tabs', 'tab-bar');
-            }
-        });
-    });
-
-    bindContentHandler('page-content', document, 'keydown', function(e) {
-        if(e.ctrlKey && e.code == "Enter") {
+    bindContentHandler("page-content", document, "keydown", function (e) {
+        if (e.ctrlKey && e.code == "Enter") {
             submitEditForm();
             return false;
         }
         return true;
     });
 </script>
+
+<!-- prettier-ignore-start -->
+<script>
+    $(function () {
+        {% if rid.is_none() %}
+        confirmDialog(
+            "delete-confirm",
+            "delete-button",
+            function () {
+                deleteItem("{{ uid }}", null, onDeleted);
+            },
+        );
+        {% endif %}
+
+        moveToTabCenter("title", "tabs", "tab-bar");
+        $("#summary").focus();
+
+        $("#tabs").tabs({
+            create: function (event, ui) {
+                moveToTabCenter("title", "tabs", "tab-bar");
+            },
+        });
+    });
+</script>
+<!-- prettier-ignore-end -->
+
 {% if rid.is_none() %}
-<div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "warning.delete_series"|t(locale) }}
-</div>
+    <div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
+        {{ "warning.delete_series"|t(locale) }}
+    </div>
 {% endif %}

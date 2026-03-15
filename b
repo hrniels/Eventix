@@ -118,6 +118,43 @@ def cmd_coverage(args):
     ])
 
 
+NPM_PREFIX = Path("target")
+PRETTIER = ["npx", "--prefix", str(NPM_PREFIX), "prettier"]
+
+
+def _ensure_npm_deps():
+    """Installs npm dependencies into target/node_modules if not already present.
+
+    Uses ``npm install --prefix target`` so that node_modules stays out of the
+    repository root. A symlink from target/package.json to the root package.json
+    is created first so that npm can locate the dependency list.
+    """
+    NPM_PREFIX.mkdir(exist_ok=True)
+    pkg_link = NPM_PREFIX / "package.json"
+    if not pkg_link.exists():
+        pkg_link.symlink_to("../package.json")
+    if not (NPM_PREFIX / "node_modules").exists():
+        subprocess.run(["npm", "install", "--prefix", str(NPM_PREFIX)], check=True)
+
+
+def cmd_format(args):
+    """Formats JS, CSS, and HTML template files with Prettier."""
+    _ensure_npm_deps()
+    subprocess.run(PRETTIER + ["--write",
+                               "data/static/**/*.js",
+                               "data/static/style.css",
+                               "bin/eventix/templates/**/*.htm"], check=True)
+
+
+def cmd_format_check(args):
+    """Checks JS, CSS, and HTML template files with Prettier (exits non-zero on diff)."""
+    _ensure_npm_deps()
+    subprocess.run(PRETTIER + ["--check",
+                               "data/static/**/*.js",
+                               "data/static/style.css",
+                               "bin/eventix/templates/**/*.htm"], check=True)
+
+
 def cmd_flatpak(args):
     """Builds a Flatpak package for Eventix, including dependencies."""
     build_dir = "flatpak/build"
@@ -204,6 +241,16 @@ def main():
     flatpak_parser.add_argument("--no-rebuild", help="Skip build step, just repackage",
                                 action="store_true")
     flatpak_parser.set_defaults(func=cmd_flatpak)
+
+    format_parser = subparsers.add_parser(
+        "format", parents=[parent_parser],
+        help="Format JS, CSS, and HTML templates with Prettier")
+    format_parser.set_defaults(func=cmd_format)
+
+    format_check_parser = subparsers.add_parser(
+        "format-check", parents=[parent_parser],
+        help="Check JS, CSS, and HTML template formatting with Prettier")
+    format_check_parser.set_defaults(func=cmd_format_check)
 
     args = parser.parse_args()
     args.func(args)
