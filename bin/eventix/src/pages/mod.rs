@@ -10,6 +10,7 @@ pub mod list;
 pub mod monthly;
 pub mod shell;
 pub mod sidebar;
+pub mod topbar;
 pub mod weekly;
 
 mod events;
@@ -39,6 +40,7 @@ pub fn router(state: EventixState) -> Router {
         .nest("/list", list::router(state.clone()))
         .nest("/monthly", monthly::router(state.clone()))
         .nest("/sidebar", sidebar::router(state.clone()))
+        .nest("/topbar", topbar::router(state.clone()))
         .nest("/weekly", weekly::router(state.clone()))
 }
 

@@ -8,7 +8,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use eventix_locale::{Locale, TimeFlags};
+use eventix_locale::Locale;
 use std::fmt;
 use std::sync::Arc;
 

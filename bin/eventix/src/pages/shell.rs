@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::response::{Html, IntoResponse};
-use eventix_locale::{Locale, TimeFlags};
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::sync::Arc;
 

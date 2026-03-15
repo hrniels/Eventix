@@ -79,7 +79,7 @@ function deleteItem(uid, rid, onDeleted) {
 }
 
 function toggleCalendar(id) {
-    postRequest('/api/togglecal?id=' + id, reloadContent);
+    postRequest('/api/togglecal?id=' + id, function(data) { reloadContent(); reloadTopbar(); });
 }
 
 function calendarOperation(col_id, cal_id, op, onsuccess) {

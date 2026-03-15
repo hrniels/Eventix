@@ -120,6 +120,13 @@ function reloadSidebar() {
         fetchContent('sidebar', '#sidebar-content', '', null);
 }
 
+// Reloads the topbar by re-fetching its content fragment. This is a no-op when
+// the topbar placeholder is absent (e.g. on error pages).
+function reloadTopbar() {
+    if (document.getElementById('topbar-content'))
+        fetchContent('topbar', '#topbar-content', '', null);
+}
+
 // Navigates to a new state for `pageSlug` by fetching the content fragment and
 // pushing a new history entry. Delegates rendering to `fetchContent`.
 function loadPageContent(pageSlug, containerId, queryStr, onLoaded) {
