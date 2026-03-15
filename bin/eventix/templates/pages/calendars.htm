@@ -42,7 +42,7 @@
                        title="{{ "warning.reload_collection"|t(locale) }}"
                        href="javascript:reloadCollection('{{ col_id }}',
                                                          'reload_spinner_{{ col_id }}',
-                                                         reloadPageIfPossible)">
+                                                         reloadContentIfPossible)">
                         <i id="reload_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Reload"|t(locale) }}</span>
                     </a>
@@ -52,7 +52,7 @@
                        title="{{ "info.discover_collection"|t(locale) }}"
                        href="javascript:discoverCollection('{{ col_id }}',
                                                            'discover_spinner_{{ col_id }}',
-                                                           reloadPageIfPossible)">
+                                                           reloadContentIfPossible)">
                         <i id="discover_spinner_{{ col_id }}" class="bi bi-compass"></i>
                         <span>{{ "Discover"|t(locale) }}</span>
                     </a>
@@ -60,7 +60,7 @@
                     <a class="ev_button ev_button_normal"
                        href="javascript:syncCollection('{{ col_id }}',
                                                        'sync_spinner_{{ col_id }}',
-                                                       reloadPageIfPossible)">
+                                                       reloadContentIfPossible)">
                         <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Sync"|t(locale) }}</span>
                     </a>
@@ -130,13 +130,13 @@
 }
 </style>
 <script type="text/javascript">
-    function reloadPageIfPossible() {
-        requestReload('out-of-sync', !userIsBusy());
+    function reloadContentIfPossible() {
+        requestReload('out-of-sync', false);
     }
 
     function askDeleteCollection(col_id) {
         showConfirmDialog('delete-collection-confirm', function() {
-            deleteCollection(col_id, reloadPageIfPossible)
+            deleteCollection(col_id, reloadContentIfPossible)
         })
     }
 
@@ -155,13 +155,13 @@
             else
                 closeForm();
             if(outOfSync || mode == 'View')
-                reloadPageIfPossible();
+                reloadContentIfPossible();
         });
     }
 
     function addCalendar(col_id) {
         const folder = $('#folder_' + col_id);
         const url = '/api/calendars/addcal?col_id=' + col_id + '&folder=' + folder.val();
-        postRequest(url, reloadPageIfPossible);
+        postRequest(url, reloadContentIfPossible);
     }
 </script>

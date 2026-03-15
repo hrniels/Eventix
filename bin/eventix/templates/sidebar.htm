@@ -223,7 +223,7 @@
                 $("#due_date_btn").on('keydown', function(e) {
                     if(e.key == 'Enter') {
                         e.preventDefault();
-                        formRequest('quick_todo_form', resetPage);
+                        formRequest('quick_todo_form', reloadContent);
                     }
                 });
             });
@@ -232,7 +232,7 @@
         <input type="hidden" id="due_date_val" name="due_date" />
         <input type="text" id="due_date" size="5" title="{{ "Due date"|t(locale) }}" />
         <a id="due_date_btn" class="ev_button ev_button_normal"
-           href="javascript:formRequest('quick_todo_form', resetPage)">
+           href="javascript:formRequest('quick_todo_form', reloadContent)">
             <i class="bi bi-plus-square"></i>
         </a>
     </div>

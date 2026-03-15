@@ -27,7 +27,7 @@
                     $("#ev_toggle_{{ cal.id() }}").off("click").on("click", function() {
                         $(this).one("transitionend", function() {
                             calendarOperation('{{ col_id }}', '{{ cal.id() }}', 'Toggle',
-                                              reloadPageIfPossible);
+                                              reloadContentIfPossible);
                         });
                     });
                 });
@@ -53,7 +53,7 @@
             <div class="ev_cal_box_right_item">
                 <a href="javascript:reloadCalendar('{{ col_id }}', '{{ cal_id }}',
                                                    'reload_calendar_{{ cal_id }}',
-                                                    reloadPageIfPossible)"
+                                                    reloadContentIfPossible)"
                    {% if let SyncerType::FileSystem { .. } = col.syncer() %}
                    class="ev_button ev_button_normal"
                    {% else %}
@@ -67,7 +67,7 @@
             </div>
             <div class="ev_cal_box_right_item">
                 <a href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}', 'Delete',
-                                                      reloadPageIfPossible)"
+                                                      reloadContentIfPossible)"
                    {% if let SyncerType::FileSystem { .. } = col.syncer() %}
                    class="ev_button ev_button_normal"
                    {% else %}

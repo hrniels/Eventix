@@ -18,6 +18,35 @@ function clearContentHandler(namespace) {
     }
 }
 
+function reloadPage() {
+    window.location.reload();
+}
+
+// Reloads the main content area by re-fetching it via AJAX, without a full page reload. Closes the
+// popup first so it is not left open with stale data. Falls back to a full reload when the SPA
+// shell is absent (e.g. on error pages).
+function reloadContent() {
+    if (!document.getElementById('page-content')) {
+        reloadPage();
+        return;
+    }
+    const slug  = history.state && history.state.slug;
+    const query = history.state && history.state.query || '';
+    if (!slug) {
+        reloadPage();
+        return;
+    }
+    fireEvent(new DeselectEvent());
+    fetchContent(slug, '#page-content', query, null);
+}
+
+function resetPage() {
+    let url = window.location.href;
+    const pound = url.indexOf('#');
+    url = pound !== -1 ? url.slice(0, pound) : url;
+    window.location.href = url;
+}
+
 // Maps the pathname of each SPA page to the content slug used to build the AJAX
 // request URL `/pages/<slug>/content`. Pages not listed here fall back to a full
 // navigation in `navigateTo`.

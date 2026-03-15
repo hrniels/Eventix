@@ -64,7 +64,7 @@
             {% if let Some(td) = c.comp.as_todo() %}
             {% if !td.is_recurrent() && td.status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed %}
             <a class="ev_button ev_button_good"
-               href="javascript:completeTodo('{{ c.comp.uid() }}', null, reloadPage)">
+               href="javascript:completeTodo('{{ c.comp.uid() }}', null, reloadContent)">
                 <i class="bi bi-check-lg"></i>
                 <span>{{ "Complete"|t(locale) }}</span>
             </a>
@@ -255,7 +255,7 @@
                 'delete-confirm-' + i,
                 'delete-button-' + i,
                 function() {
-                    deleteItem(window.ev.list.ids[i], null, reloadPage);
+                    deleteItem(window.ev.list.ids[i], null, reloadContent);
                 }
             );
         })(i);
