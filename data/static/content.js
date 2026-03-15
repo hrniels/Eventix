@@ -80,7 +80,11 @@ function fetchContent(pageSlug, containerId, queryStr, onLoaded) {
 // Navigates to a new state for `pageSlug` by fetching the content fragment and
 // pushing a new history entry. Delegates rendering to `fetchContent`.
 function loadPageContent(pageSlug, containerId, queryStr, onLoaded) {
+    // remember history
     const params = queryStr ? '?' + queryStr : '';
     history.pushState({ slug: pageSlug, query: queryStr || '' }, '', '/pages/' + pageSlug + params);
+    // close popup in case there is one
+    fireEvent(new DeselectEvent());
+    // now replace content block
     fetchContent(pageSlug, containerId, queryStr, onLoaded);
 }
