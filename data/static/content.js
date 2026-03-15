@@ -71,7 +71,8 @@ function fetchContent(pageSlug, containerId, queryStr, onLoaded) {
     getRequest('/pages/' + pageSlug + '/content' + params, function(html) {
         clearContentHandler(containerId.slice(1));
         $(containerId).html(html);
-        resizeBoxes();
+        if(typeof resizeBoxes === 'function')
+            resizeBoxes();
         if(onLoaded)
             onLoaded();
     }, 'html');
