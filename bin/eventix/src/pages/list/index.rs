@@ -140,7 +140,7 @@ impl<'a> ListComponent<'a> {
 /// Fragment-only template for the filter form and JS helpers. Loaded via AJAX into
 /// `#list-shell-content` and immediately triggers a second AJAX load of the paginated results.
 #[derive(Template)]
-#[template(path = "pages/list_shell.htm")]
+#[template(path = "pages/list.htm")]
 struct ListShellTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     /// The serialized filter query string used to pre-populate the form and seed the inner
