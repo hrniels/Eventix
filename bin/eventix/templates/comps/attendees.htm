@@ -37,7 +37,7 @@
         }
     }
 
-    const cal_emails = {
+    window.ev['attendees_{{ id }}'] = {
         {% for (cal, email) in emails %}
         '{{ cal }}': '{{ email }}',
         {% endfor %}
@@ -49,8 +49,8 @@
             list.html('');
             {% if let Some(cal_combo_id) = cal_combo_id %}
             const cal = $('#{{ cal_combo_id }}').val();
-            if(cal && cal_emails[cal])
-                doAddAttendee(list, cal_emails[cal]);
+            if(cal && window.ev['attendees_{{ id }}'][cal])
+                doAddAttendee(list, window.ev['attendees_{{ id }}'][cal]);
             {% endif %}
         }
 

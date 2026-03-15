@@ -133,14 +133,14 @@
                 {% if owner %}
                 {% if !occ.is_recurrent() %}
                 <a style="float: right" class="ev_button ev_button_normal"
-                   href="javascript:gotoWithPrev('/pages/items/edit?uid={{ occ.uid() }}&mode=Series')">
+                   href="javascript:loadWithPrev('/pages/items/edit?uid={{ occ.uid() }}&mode=Series')">
                     <i class="bi bi-pencil"></i>
                     <span>{{ "Edit"|t(locale) }}</span>
                 </a>
                 {% endif %}
                 {% if occ.ctype() == CalCompType::Todo %}
                 <a style="float: right" class="ev_button ev_button_good"
-                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadPage)">
+                   href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)">
                     <i class="bi bi-check-lg"></i>
                     <span>{{ "Complete"|t(locale) }}</span>
                 </a>
@@ -149,14 +149,14 @@
                 {% if owner && occ.organizer().is_some() %}
                 {% if occ.status_class() != Some(String::from("Cancelled")) %}
                 <a style="float: left" class="ev_button ev_button_critical"
-                                       href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadPage)">
+                                       href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)">
                     <i class="bi bi-dash-circle"></i>
                     <span>{{ "Cancel occ."|t(locale) }}</span>
                 </a>
                 {% endif %}
                 {% else %}
                 <a style="float: left" class="ev_button ev_button_normal"
-                                       href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadPage)">
+                                       href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)">
                     <i class="bi bi-dash-circle"></i>
                     <span>{{ "Exclude occ."|t(locale) }}</span>
                 </a>
@@ -205,7 +205,7 @@
             'delete-series-confirm-{{ occ.uid()|to_id }}',
             'delete-series-button',
             function() {
-                deleteItem('{{ occ.uid() }}', null, reloadPage);
+                deleteItem('{{ occ.uid() }}', null, reloadContent);
             }
         );
     });

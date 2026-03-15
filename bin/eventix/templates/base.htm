@@ -15,14 +15,6 @@
         <link rel="stylesheet" type="text/css" href="/static/contrib/jquery-ui/jquery-ui.theme{{ js_suffix }}.css">
         <link rel="stylesheet" type="text/css" href="/generated/contrib{{ js_suffix }}.css">
         <link rel="stylesheet" href="/static/contrib/bootstrap/bootstrap-icons{{ js_suffix }}.css">
-        <style type="text/css">
-            {% for cal in page.calendars() %}
-            div.ev_cal_src_{{ cal.id }}, span.ev_cal_src_{{ cal.id }} {
-                background-color: {{ cal.bgcolor }};
-                color: {{ cal.fgcolor }};
-            }
-            {% endfor %}
-        </style>
         <script type="text/javascript" src="/generated/locale.js"></script>
         <script type="text/javascript" src="/generated/contrib{{ js_suffix }}.js"></script>
         <script type="text/javascript" src="/generated/bundle.js"></script>
@@ -39,7 +31,7 @@
     </head>
     <body>
         <div id="outer">
-            <form method="get" action="/pages/list">
+            <form onsubmit="navigateTo('/pages/list?' + $(this).serialize()); return false;">
             <div style="float: left; padding-bottom: .5em" class="ev_button_medium ev_button_normal">
                 <span>{{ "Search"|t(locale) }}:</span>
                 <input type="text" id="quick-search" name="keywords"
@@ -49,61 +41,34 @@
 
             <div style="float: right;" class="ev_padbottom">
                 <div style="cursor: default; float: left" class="ev_button_medium ev_button_normal">
-                    <a class="ev_button_link" href="/pages/calendars">{{ "Calendars"|t(locale) }}:</a>
-                    {% for cal in page.calendars() %}
-                    <a style="vertical-align: middle"
-                       href="javascript:toggleCalendar('{{ cal.id }}')">
-                        <span id="calendar_enabled_{{ cal.id }}"
-                              data-name="{{ cal.name }}"
-                              title="{{ cal.name }}"
-                              class="ev_cal_src ev_cal_src_button
-                                     {% if cal.enabled %}
-                                     ev_cal_src_{{ cal.id }}
-                                     {% else %}
-                                     ev_cal_src_disabled
-                                     {% endif %}
-                                    ">
-                            <i id="ev_cal_src_button_{{ cal.id }}"
-                               {% if cal.sync_error %}
-                               style="display: inline"
-                               {% else %}
-                               style="display: none"
-                               {% endif %}
-                               class="bi bi-exclamation-triangle-fill"></i>
-                        </span>
-                    </a>
+                    <a class="ev_button_link" href="javascript:navigateTo('/pages/calendars')">{{ "Calendars"|t(locale) }}:</a>
+                    <span id="callist-content"></span>
                     <script type="text/javascript">
-                        $(function() {
-                            {% if !cal.enabled %}
-                            $("#calendar_enabled_{{ cal.id }}").hover(function() {
-                                $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");
-                            });
-                            {% else %}
-                            $("#calendar_enabled_{{ cal.id }}").hover(function() {
-                                $(this).toggleClass("ev_cal_src_highlight");
-                            });
-                            {% endif %}
-                        });
+                        // Lazy-load the calendar toggle buttons independently of the initial page
+                        // render so that calendar state is always fetched fresh.
+                        $(function() { fetchContent('callist', '#callist-content', '', null); });
                     </script>
-                    {% endfor %}
                 </div>
                 &nbsp;
-                <a id="link-monthly" class="ev_button_medium ev_button_normal" href="/pages/monthly">
+                <a id="link-monthly" class="ev_button_medium ev_button_normal"
+                                   href="javascript:navigateTo('/pages/monthly')">
                     <i class="bi bi-calendar2-month"></i>
                     <span>{{ "Month"|t(locale) }}</span>
                 </a>
-                <a id="link-weekly" class="ev_button_medium ev_button_normal" href="/pages/weekly">
+                <a id="link-weekly" class="ev_button_medium ev_button_normal"
+                                   href="javascript:navigateTo('/pages/weekly')">
                     <i class="bi bi-calendar2-week"></i>
                     <span>{{ "Week"|t(locale) }}</span>
                 </a>
                 <a id="link-list" class="ev_button_medium ev_button_normal"
-                                  style="padding-left: 1em; padding-right: 1em" href="/pages/list">
+                                   style="padding-left: 1em; padding-right: 1em"
+                                   href="javascript:navigateTo('/pages/list')">
                     <i class="bi bi-card-list"></i>
                     <span>{{ "List"|t(locale) }}</span>
                 </a>
                 <a id="link-help" class="ev_button_medium ev_button_normal"
-                                  style="padding-left: 1em; padding-right: 1em"
-                                  href="javascript:fireEvent(createHelpEvent())">
+                                   style="padding-left: 1em; padding-right: 1em"
+                                   href="javascript:fireEvent(createHelpEvent())">
                     <i class="bi bi-question-circle"></i>
                     <span>{{ "Help"|t(locale) }}</span>
                 </a>
@@ -118,45 +83,12 @@
             </div>
             <br style="clear: both;" />
 
-            {% if page.errors().len() > 0 %}
-            <div class="ev_border ev_padbottom_big">
-                <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
-                <div class="ev_main">
-                    <div style="padding: 0.3em;">
-                        <ul>
-                            {% for err in page.errors() %}
-                            <li><span class="ev_msg_error">{{ err|safe }}</span></li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if page.infos().len() > 0 %}
-            <div class="ev_border ev_padbottom_big">
-                <h1 class="ev_header ev_info">{{ "Information"|t(locale) }}</h1>
-                <div class="ev_main">
-                    <div style="padding: 0.3em;">
-                        <ul>
-                            {% for info in page.infos() %}
-                            <li><span class="ev_msg_info">{{ info|safe }}</span></li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
             {% block content %}
             <h1>Dummy content</h1>
             {% endblock %}
 
             <div class="ev_padtop ev_border">
                 <div class="ev_main">
-                    <div style="float: left;">
-                        {{ "Page generation time"|t(locale) }}: <b>{{ page.time_elapsed()|as_time }}</b>
-                    </div>
                     <div style="float: right;">
                         Eventix #{{ page.git_hash() }}
                         &nbsp;&mdash;&nbsp;

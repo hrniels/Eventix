@@ -10,16 +10,16 @@ use axum::{
 };
 use eventix_ical::{
     col::{CalDir, Occurrence},
-    objects::{CalDate, CalPartStat, EventLike},
+    objects::{CalDate, EventLike},
 };
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
 use std::sync::Arc;
 
 use super::{CompEdit, Request};
 use crate::html::filters;
 use crate::objects::Calendars;
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::{Page, error::HTMLError};
 use crate::util;
 use crate::{
     comps::{
@@ -29,6 +29,7 @@ use crate::{
     pages::items::edit::EditMode,
 };
 
+/// Fragment-only template for the edit-item form, rendered by the AJAX content endpoint.
 #[derive(Template)]
 #[template(path = "pages/items/edit.htm")]
 struct EditTemplate<'a> {
@@ -50,26 +51,21 @@ struct EditTemplate<'a> {
     attendees: AttendeesTemplate,
     status: Option<TodoStatusTemplate>,
     occ: &'a Occurrence<'a>,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
-pub async fn handler(
+/// Renders only the edit-item form fragment for the given request. Used by the AJAX content
+/// endpoint (GET).
+pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.locale();
-    content(
-        super::new_page(&state).await,
-        locale,
-        State(state),
-        Query(req),
-        None,
-    )
-    .await
+    content_with(Page::default(), locale, State(state), Query(req), None).await
 }
 
-pub async fn content(
+/// Renders the edit-item form fragment with the given page state and form data.
+/// Called by `content` for the initial GET and by `update::handler` after a POST.
+pub async fn content_with(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
@@ -133,9 +129,6 @@ pub async fn content(
         CalendarAlarmType::Personal { .. }
     );
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
     let html = EditTemplate {
         page,
         prev: &req.prev,
@@ -185,12 +178,10 @@ pub async fn content(
             .status
             .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),
         occ: &occ,
-        events,
         locale,
-        tasks,
     }
     .render()
-    .context("edit template")?;
+    .context("edit content template")?;
 
     Ok(Html(html))
 }

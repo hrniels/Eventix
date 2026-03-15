@@ -8,10 +8,9 @@ use axum::extract::State;
 use axum::response::{Html, IntoResponse};
 use eventix_ical::col::{CalDir, CalFile, Occurrence};
 use eventix_ical::objects::{
-    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalPartStat, CalTodoStatus,
-    EventLike,
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalPartStat, CalTodoStatus, EventLike,
 };
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::{DateFlags, Locale};
 use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -26,7 +25,7 @@ use crate::comps::{
 };
 use crate::extract::MultiQuery;
 use crate::html::{self, filters, to_id};
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::error::HTMLError;
 
 const PER_PAGE: usize = 15;
 
@@ -138,18 +137,27 @@ impl<'a> ListComponent<'a> {
     }
 }
 
+/// Fragment-only template for the filter form and JS helpers. Loaded via AJAX into
+/// `#list-shell-content` and immediately triggers a second AJAX load of the paginated results.
 #[derive(Template)]
 #[template(path = "pages/list.htm")]
-struct ListTemplate<'a, F: Fn(&usize) -> String> {
-    page: Page,
+struct ListShellTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
+    /// The serialized filter query string used to pre-populate the form and seed the inner
+    /// content request (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
+    filter_query: String,
     filter: Filter,
     conjunction: RadioGroupTemplate<Conjunction>,
     directories: Vec<&'a CalDir>,
+}
+
+/// Fragment-only template for the paginated list, rendered by the AJAX content endpoint.
+#[derive(Template)]
+#[template(path = "pages/list_results.htm")]
+struct ListTemplate<'a, F: Fn(&usize) -> String> {
+    locale: Arc<dyn Locale + Send + Sync>,
     comps: Vec<ListComponent<'a>>,
     pagination: PaginationTemplate<F>,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
 impl<F: Fn(&usize) -> String> ListTemplate<'_, F> {
@@ -163,12 +171,55 @@ impl<F: Fn(&usize) -> String> ListTemplate<'_, F> {
     }
 }
 
-pub async fn handler(
+/// Renders the list shell fragment containing the filter form, JS helpers, and the inner
+/// `#list-content` placeholder. Used as the first AJAX step from the outer shell.
+pub async fn content(
     State(state): State<EventixState>,
     MultiQuery(mut filter): MultiQuery<Filter>,
 ) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state).await;
+    let st = state.lock().await;
+    let locale = st.locale();
 
+    let directories = st.store().directories().iter().collect::<Vec<_>>();
+    if filter.dirs.is_empty() {
+        filter.dirs = directories.iter().map(|s| s.id().deref().clone()).collect();
+    }
+
+    let filter_query = serde_qs::to_string(&filter).unwrap_or_default();
+
+    let conjunction = RadioGroupTemplate::new(
+        String::from("conjunction"),
+        filter.conjunction,
+        vec![
+            (
+                Conjunction::And,
+                locale.translate("All keywords need to match").to_string(),
+            ),
+            (
+                Conjunction::Or,
+                locale.translate("Any keyword needs to match").to_string(),
+            ),
+        ],
+    );
+
+    let html = ListShellTemplate {
+        locale,
+        filter,
+        conjunction,
+        directories,
+        filter_query,
+    }
+    .render()
+    .context("list shell template")?;
+
+    Ok(Html(html))
+}
+
+/// Renders only the paginated list fragment for the given filter. Used as the second AJAX step.
+pub async fn content_results(
+    State(state): State<EventixState>,
+    MultiQuery(mut filter): MultiQuery<Filter>,
+) -> Result<impl IntoResponse, HTMLError> {
     let state = state.lock().await;
     let locale = state.locale();
 
@@ -233,51 +284,31 @@ pub async fn handler(
     let total = iter().count();
 
     let comps = iter()
-        .sorted_by_key(|c| (c.comp.last_modified(), c.comp.created(), c.comp.stamp()))
+        .sorted_by_key(|c| {
+            c.comp
+                .last_modified()
+                .or_else(|| c.comp.created())
+                .unwrap_or_else(|| c.comp.stamp())
+        })
         .rev()
         .skip((filter.page - 1) * PER_PAGE)
         .take(PER_PAGE)
         .collect::<Vec<_>>();
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
-    let filter_clone = filter.clone();
     let pagination = PaginationTemplate::new(
-        |page| filter_clone.with_page(*page).url(),
+        |page| filter.with_page(*page).url(),
         total,
         PER_PAGE,
         filter.page,
     );
 
-    let conjunction = RadioGroupTemplate::new(
-        String::from("conjunction"),
-        filter.conjunction,
-        vec![
-            (
-                Conjunction::And,
-                locale.translate("All keywords need to match").to_string(),
-            ),
-            (
-                Conjunction::Or,
-                locale.translate("Any keyword needs to match").to_string(),
-            ),
-        ],
-    );
-
     let html = ListTemplate {
-        page,
         locale,
-        filter,
-        conjunction,
-        directories,
         comps,
         pagination,
-        events,
-        tasks,
     }
     .render()
-    .context("search template")?;
+    .context("list content template")?;
 
     Ok(Html(html))
 }

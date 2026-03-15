@@ -8,44 +8,38 @@ use axum::{
     extract::{Query, State},
     response::{Html, IntoResponse},
 };
-use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::sync::Arc;
 
 use super::Request;
-use crate::pages::{Page, collections::Form, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::{Page, collections::Form, error::HTMLError};
 use crate::{comps::syncer::SyncerTemplate, html::filters};
 
+/// Fragment-only template for the edit-collection form, rendered by the AJAX content endpoint.
 #[derive(Template)]
 #[template(path = "pages/collections/edit.htm")]
-struct CollectionAddTemplate<'a> {
+struct CollectionEditTemplate<'a> {
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     col_id: &'a String,
     prev: Option<&'a String>,
     syncer: SyncerTemplate<'a>,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
-pub async fn handler(
+/// Renders only the edit-collection form fragment for the given request. Used by the AJAX content
+/// endpoint (GET).
+pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.locale();
-
-    content(
-        super::new_page(&state).await,
-        locale.clone(),
-        State(state),
-        None,
-        req,
-    )
-    .await
+    content_with(Page::default(), locale, State(state), None, req).await
 }
 
-pub async fn content(
+/// Renders the edit-collection form fragment with the given page state and form data.
+/// Called by `content` for the initial GET and by `save::handler` after a POST.
+pub async fn content_with(
     page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
@@ -65,21 +59,17 @@ pub async fn content(
         Form::new_from(col)
     };
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
     let syncer = form.syncer_type();
 
-    let html = CollectionAddTemplate {
+    let html = CollectionEditTemplate {
         page,
         syncer: SyncerTemplate::new(locale.clone(), "syncer", form.syncer, syncer),
         col_id: &req.col_id,
         prev: req.prev.as_ref(),
         locale,
-        events,
-        tasks,
     }
     .render()
-    .context("collections edit template")?;
+    .context("collections edit content template")?;
 
     Ok(Html(html))
 }

@@ -270,5 +270,5 @@ pub async fn handler(
         }
     };
 
-    super::index::content(page, locale, State(state), Query(req), form).await
+    super::index::content_with(page, locale, State(state), Query(req), form).await
 }

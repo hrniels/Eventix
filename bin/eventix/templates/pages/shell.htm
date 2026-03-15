@@ -1,0 +1,12 @@
+{% extends "content.htm" %}
+
+{% block main %}
+
+<div id="page-content"
+     data-page-slug="{{ slug }}"
+     data-init-query="{{ init_query|safe }}"
+     >
+    <p>{{ "Loading..."|t(locale) }}</p>
+</div>
+
+{% endblock main %}

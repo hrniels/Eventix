@@ -349,6 +349,10 @@ impl VDirSyncer {
             cfg.write_all(b"password = \"\"\n").await?;
         }
 
+        // tokio::fs::File does not flush on drop; explicitly flush so all buffered writes reach
+        // the filesystem before the caller reads the file back.
+        cfg.flush().await?;
+
         Ok(cfg_path)
     }
 

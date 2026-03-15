@@ -1,13 +1,7 @@
-function reloadPage() {
-    window.location.reload();
-}
-
-function resetPage() {
-    let url = window.location.href;
-    const pound = url.indexOf('#');
-    url = pound !== -1 ? url.slice(0, pound) : url;
-    window.location.href = url;
-}
+// Global state namespace for all cross-fragment mutable state in templates.
+// Each module that uses cross-fragment state is responsible for initializing
+// its own keys here.
+window.ev = {};
 
 function curUTCDay() {
     const date = new Date();
@@ -105,17 +99,6 @@ function addArrowToDatePicker(input, inst) {
 function hideArrowBottom(inst) {
     // ensure that the datepicker header is above the arrow
     $('.ui-datepicker-header').css('zIndex', 2);
-}
-
-function gotoWithPrev(url) {
-    const prev = document.location.href;
-    // check if we already have a prev URL
-    const prev_url = new URL(prev);
-    const prev_prev = prev_url.searchParams.get('prev');
-    let full_url = new URL(url, prev_url.origin);
-    // if so, go back to this one (the last none-edit/new page)
-    full_url.searchParams.append('prev', prev_prev ?? prev);
-    document.location.href = full_url;
 }
 
 function setPersonalOverwrite(id_prefix, overwrite) {

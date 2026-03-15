@@ -1,8 +1,4 @@
-{% extends "content.htm" %}
-
-{% block inner %}
-
-<form id="form" method="get" action="/pages/list">
+<form id="form">
     <div class="ev_border">
         <fieldset class="ev_form">
             <h1 class="ev_header" onmouseover="this.style.cursor='pointer';"
@@ -14,7 +10,8 @@
                 <dl>
                     <dt>{{ "Keywords"|t(locale) }}:</dt>
                     <dd>
-                        <input type="text" size="50" name="keywords" value="{{ filter.keywords }}" />
+                        <input type="text" size="50" id="keywords" name="keywords"
+                               value="{{ filter.keywords }}" />
                         <div style="margin-top: .5em">
                             {{ conjunction|safe }}
                         </div>
@@ -52,11 +49,11 @@
                 </dl>
                 <div class="ev_submit">
                     <a class="ev_button_big ev_button_normal"
-                       href="javascript:$('#form').submit()">
+                       href="javascript:applyListFilter()">
                         <span>{{ "Apply"|t(locale) }}</span>
                     </a>
                     <a class="ev_button_big ev_button_normal"
-                       href="javascript:document.location.href = '/pages/list'">
+                       href="javascript:navigateTo('/pages/list')">
                         <span>{{ "Reset"|t(locale) }}</span>
                     </a>
                 </div>
@@ -65,11 +62,34 @@
     </div>
 </form>
 
-<script>
-    function toggleFilter() {
-        const hidden = document.getElementById('filter_box').style.display == 'none';
-        $('#filter_box').toggle('blind', {}, 300);
-        Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
+<div id="list-content">
+    <p>{{ "Loading..."|t(locale) }}</p>
+</div>
+
+<script type="text/javascript">
+    bindContentHandler('page-content', '#keywords', 'keydown', function(e) {
+        if(e.which == 13) {
+            applyListFilter();
+            return false;
+        }
+    });
+
+    // Module state: ids is populated by list_content.htm on each AJAX reload;
+    // occs_state tracks loaded occurrence pages keyed by UID.
+    window.ev.list = { ids: [], occs_state: {} };
+
+    // Loads the list content for `queryStr` via AJAX and injects it into
+    // #list-content. Pushes the filter state onto /pages/list in browser history
+    // so the URL stays accurate without exposing the internal /content/results sub-path.
+    window.loadListContent = function(queryStr, onloaded) {
+        const params = queryStr ? '?' + queryStr : '';
+        history.pushState({ slug: 'list', query: queryStr || '' }, '', '/pages/list' + params);
+        fetchContent('list/results', '#list-content', queryStr, onloaded || null);
+    };
+
+    function applyListFilter(onloaded) {
+        const queryStr = $('#form').serialize();
+        window.loadListContent(queryStr, onloaded || null);
     }
 
     function refreshRow(uid, rid, rid_js) {
@@ -102,8 +122,6 @@
     if(Cookies.get('ev_list_filter') != 1)
         $('#filter_box').hide();
 
-    let occs_state = {};
-
     function loadOccs(uid, ndate, dir, count, onsuccess) {
         getRequest(
             '/api/items/occlist?uid=' + uid + '&date=' + ndate + '&dir=' + dir + '&count=' + count,
@@ -112,9 +130,9 @@
     }
 
     function loadPrev(id, uid) {
-        if(occs_state[uid].prev) {
-            loadOccs(uid, occs_state[uid].prev, 'Backwards', 5, function(data) {
-                occs_state[uid].prev = data.date;
+        if(window.ev.list.occs_state[uid].prev) {
+            loadOccs(uid, window.ev.list.occs_state[uid].prev, 'Backwards', 5, function(data) {
+                window.ev.list.occs_state[uid].prev = data.date;
                 let row = $('#row_' + id + '_prev');
                 row.after(data.html);
                 if(data.date == null)
@@ -124,9 +142,9 @@
     }
 
     function loadNext(id, uid) {
-        if(occs_state[uid].next) {
-            loadOccs(uid, occs_state[uid].next, 'Forward', 5, function(data) {
-                occs_state[uid].next = data.date;
+        if(window.ev.list.occs_state[uid].next) {
+            loadOccs(uid, window.ev.list.occs_state[uid].next, 'Forward', 5, function(data) {
+                window.ev.list.occs_state[uid].next = data.date;
                 let row = $('#row_' + id + '_next');
                 row.before(data.html);
                 if(data.date == null)
@@ -138,9 +156,9 @@
     function toggleRow(id, uid) {
         $('#row_' + id).toggle(100);
 
-        if(!occs_state[uid]) {
+        if(!window.ev.list.occs_state[uid]) {
             const date = curDateStr("{{ locale.timezone().name() }}");
-            occs_state[uid] = {
+            window.ev.list.occs_state[uid] = {
                 'prev': date,
                 'next': date,
             };
@@ -152,272 +170,13 @@
     function editAlarms(id, uid, rid) {
         fireEvent(new EditEvent(id, uid, rid));
     }
-</script>
 
-<div class="ev_border ev_padtop">
-<h1 class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
-<table width="100%" class="ev_table">
-    {% if comps.is_empty() %}
-    <tr>
-        <td colspan="3" align="center">{{ "No items found"|t(locale) }}</td>
-    </tr>
-    {% endif %}
-    {% for (id, c) in comps.iter().enumerate() %}
-    <tr>
-        <td width="3%" align="center" style="height: 2em">
-            {% if c.comp.ctype() == CalCompType::Event %}
-            <i class="bi bi-calendar-date"></i>
-            {% else %}
-            <i class="bi bi-check2-square"></i>
-            {% endif %}
-        </td>
-        <td width="32%">
-            <div style="display: flex; gap: .4em; float: left">
-                <span class="ev_cal_src ev_cal_src_{{ c.dir }}">
-                    {% if !c.owner %}
-                    <div class="ev_cal_src_inner">
-                    {% match c.part_stat.unwrap_or(CalPartStat::NeedsAction) %}
-                    {% when CalPartStat::Accepted %}
-                    <i class="ev_good_color bi bi-check-lg"></i>
-                    {% when CalPartStat::Tentative %}
-                    <i class="ev_warn_color bi bi-question-lg"></i>
-                    {% when CalPartStat::Declined %}
-                    <i class="ev_critical_color bi bi-x-lg"></i>
-                    {% when _ %}
-                    {% endmatch %}
-                    </div>
-                    {% endif %}
-                </span>
-                <span class="ev_summary
-                             {% if let Some(td) = c.comp.as_todo() %}
-                             {% if td.status().unwrap_or(CalTodoStatus::NeedsAction) == CalTodoStatus::Completed %}
-                             ev_status_Completed
-                             {% endif %}
-                             {% endif %}">
-                    {% if let Some(summary) = c.comp.summary() %}
-                    <a href="javascript:toggleRow('{{ id }}', '{{ c.comp.uid() }}')">
-                        {{ summary }}
-                    </a>
-                    {% endif %}
-                </span>
-            </div>
-            {% if let Some(td) = c.comp.as_todo() %}
-            {% if td.status().unwrap_or(CalTodoStatus::NeedsAction) == CalTodoStatus::Completed %}
-            <i class="bi bi-check-circle ev_right_icon"></i>
-            {% endif %}
-            {% endif %}
-            {% if c.comp.rid().is_some() || c.comp.rrule().is_some() %}
-            <i class="bi bi-arrow-clockwise ev_right_icon"></i>
-            {% endif %}
-            {% if c.alarms.is_some() %}
-            <i class="bi bi-alarm ev_right_icon"></i>
-            {% endif %}
-        </td>
-        <td width="33%" align="center">
-            {{ locale.date_range(c.comp.start().cloned(), c.comp.end_or_due().cloned())|safe }}
-        </td>
-        <td width="32%" align="right">
-            {% if let Some(td) = c.comp.as_todo() %}
-            {% if !td.is_recurrent() && td.status().unwrap_or(CalTodoStatus::NeedsAction) != CalTodoStatus::Completed %}
-            <a class="ev_button ev_button_good"
-               href="javascript:completeTodo('{{ c.comp.uid() }}', null, reloadPage)">
-                <i class="bi bi-check-lg"></i>
-                <span>{{ "Complete"|t(locale) }}</span>
-            </a>
-            {% endif %}
-            {% endif %}
-            {% if c.owner %}
-            <a id="delete-button-{{ id }}" class="ev_button ev_button_critical">
-                <i class="bi bi-trash"></i>
-                <span>{{ "Delete"|t(locale) }}</span>
-            </a>
-            <a class="ev_button ev_button_normal" style="width: 60px"
-               href="javascript:gotoWithPrev('/pages/items/edit?uid={{ c.comp.uid() }}&mode=Series')">
-                <i class="bi bi-pencil"></i>
-                <span>{{ "Edit_short"|t(locale) }}</span>
-            </a>
-            {% else %}
-            {% if let Some(part_stat_btns) = c.part_stat_btns %}
-            {{ part_stat_btns|safe }}
-            {% endif %}
-            {% if c.personal_alarms %}
-            <a id="alarm-button-{{ id }}" style="width: 60px" class="ev_button ev_button_normal"
-               href="javascript:editAlarms('alarm-button-{{ id }}', '{{ c.comp.uid() }}', null)">
-                <i class="bi bi-pencil"></i>
-                <span>{{ "Alarms_short"|t(locale) }}</span>
-            </a>
-            {% endif %}
-            {% endif %}
-            <a class="ev_button ev_button_uid"
-               href="javascript:copyToClipboard('{{ c.comp.uid() }}')">
-                <i class="ev_tag bi bi-tag" title="{{ c.comp.uid() }}"></i>
-            </a>
-        </td>
-    </tr>
-    <tr id="row_{{ id }}" style="display: none">
-        <td></td>
-        <td colspan="3" style="padding: .2em">
-        <table width="100%" class="ev_noborder">
-            <tr>
-                <td width="33%" style="vertical-align: top">
-                    <table width="100%" class="ev_noborder">
-                        {% if let Some(rrule) = c.comp.rrule() %}
-                        <tr>
-                            <td width="20%" style="vertical-align: top"><b>{{ "Repeats"|t(locale) }}:</b></td>
-                            <td width="80%">{{ rrule.human(&**locale)|newlines()|safe }}</td>
-                        </tr>
-                        {% else %}
-                        {% if let Some(start) = c.comp.start() %}
-                        <tr>
-                            <td width="20%"><b>{{ "Start date"|t(locale) }}:</b></td>
-                            <td width="80%">
-                                {% if c.comp.is_all_day() %}
-                                {{ &start.as_start_with_tz(locale.timezone())|date(locale, DateFlags::None) }}
-                                {% else %}
-                                {{ &start.as_start_with_tz(locale.timezone())|datetime(locale, DateFlags::None) }}
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endif %}
-                        {% if let Some(end) = c.comp.end_or_due() %}
-                        <tr>
-                            <td width="20%">
-                                {% if c.comp.ctype() == CalCompType::Event %}
-                                <b>{{ "End date"|t(locale) }}:</b>
-                                {% else %}
-                                <b>{{ "Due"|t(locale) }}:</b>
-                                {% endif %}
-                            </td>
-                            <td width="80%">
-                                {% if c.comp.is_all_day() %}
-                                {{ &end.as_end_with_tz(locale.timezone())|date(locale, DateFlags::None) }}
-                                {% else %}
-                                {{ &end.as_end_with_tz(locale.timezone())|datetime(locale, DateFlags::None) }}
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endif %}
-                        {% endif %}
-                        {% if !c.comp.is_recurrent() %}
-                        {% if let Some(td) = c.comp.as_todo() %}
-                        {% if let Some(st) = td.status() %}
-                        <tr>
-                            <td width="20%"><b>{{ "Status"|t(locale) }}:</b></td>
-                            <td width="80%">{{ "{}"|format(st)|t(locale) }}</td>
-                        </tr>
-                        {% endif %}
-                        {% endif %}
-                        {% endif %}
-                        {% if let Some(alarms) = c.alarms %}
-                        <tr>
-                            <td width="20%"><b>{{ "Reminder"|t(locale) }}:</b></td>
-                            <td width="80%">
-                                {{ alarms.first().unwrap().human(&**locale)|safe }}
-                            </td>
-                        </tr>
-                        {% endif %}
-                        {% if let Some(loc) = c.comp.location() %}
-                        <tr>
-                            <td width="20%"><b>{{ "Location"|t(locale) }}:</b></td>
-                            <td width="80%">{{ loc }}</td>
-                        </tr>
-                        {% endif %}
-                        {% if let Some(org) = c.org %}
-                        <tr>
-                            <td width="20%"><b>{{ "Organizer"|t(locale) }}:</b></td>
-                            <td width="80%">{{ org|safe }}</td>
-                        </tr>
-                        {% endif %}
-                    </table>
-                </td>
-                <td width="34%" style="vertical-align: top">
-                    {% if let Some(desc) = html::text_to_html(c.comp.description()) %}
-                    <b>{{ "Description"|t(locale) }}:</b><br />
-                    <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
-                        {{ desc|safe }}
-                    </div>
-                    {% endif %}
-                </td>
-                <td width="33%" style="vertical-align: top">
-                    {% if let Some(atts) = c.comp.attendees() %}
-                    <b>{{ "Attendees"|t(locale) }}:</b><br />
-                    <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
-                        <ul class="ev_iconlist">
-                            {% for att in Self::attendees_sorted(atts) %}
-                            <li>
-                                <i title="{{ html::attendee_title(att) }}"
-                                   class="{{ html::attendee_icon(att) }}"></i>
-                                <a href="{{ att.address() }}">
-                                    {% if let Some(cn) = att.common_name() %}
-                                    {{ cn }}
-                                    {% else %}
-                                    {{ att.address() }}
-                                    {% endif %}
-                                </a>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                    {% endif %}
-                </td>
-            </tr>
-            {% if c.comp.is_recurrent() %}
-            <tr>
-                <td class="ev_table_sep" colspan="3"></td>
-            </tr>
-            <tr>
-                <td colspan="3"><b>{{ "Occurrences"|t(locale) }}</b>:</td>
-            </tr>
-            <tr id="row_{{ id }}_prev">
-                <td colspan="3" align="center">
-                    <a style="font-size: 1.5em" href="javascript:loadPrev('{{ id }}', '{{ c.comp.uid() }}')">
-                        ...
-                    </a>
-                </td>
-            </tr>
-            <tr id="row_{{ id }}_next">
-                <td colspan="3" align="center">
-                    <a style="font-size: 1.5em" href="javascript:loadNext('{{ id }}', '{{ c.comp.uid() }}')">
-                       ...
-                    </a>
-                </td>
-            </tr>
-            {% endif %}
-        </table>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
-</div>
-
-{% for (id, _) in comps.iter().enumerate() %}
-<div style="display: none" id="delete-confirm-{{ id }}" title="{{ "Are you sure?"|t(locale) }}">
-    {{ "warning.delete_item"|t(locale) }}
-</div>
-{% endfor %}
-
-<script>
-    const ids = [
-        {% for (id, c) in comps.iter().enumerate() %}
-        '{{ c.comp.uid() }}',
-        {% endfor %}
-    ];
-    for(let i = 0; i < ids.length; i++) {
-        // ensure that we pass the current value of i to the closure
-        (function(i) {
-            confirmDialog(
-                'delete-confirm-' + i,
-                'delete-button-' + i,
-                function() {
-                    deleteItem(ids[i], null, reloadPage);
-                }
-            );
-        })(i);
+    function toggleFilter() {
+        const hidden = document.getElementById('filter_box').style.display == 'none';
+        $('#filter_box').toggle('blind', {}, 300);
+        Cookies.set('ev_list_filter', hidden ? 1 : 0, { expires: 30, sameSite: 'strict' });
     }
+
+    // Load the list content for the current filter on shell load.
+    fetchContent('list/results', '#list-content', '{{ filter_query|safe }}', null);
 </script>
-
-<div class="ev_padtop" align="center">
-{{ pagination|safe }}
-</div>
-
-{% endblock inner %}

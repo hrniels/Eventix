@@ -10,17 +10,17 @@ use axum::{
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use eventix_ical::{
-    objects::{CalCompType, CalDate, CalPartStat, EventLike},
+    objects::{CalCompType, CalPartStat, EventLike},
     util,
 };
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::{Locale, TimeFlags};
 use eventix_state::EventixState;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::html::filters;
 use crate::objects::DayOccurrence;
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::error::HTMLError;
 use crate::util::parse_human_date;
 
 struct Day<'a> {
@@ -35,10 +35,10 @@ pub struct Request {
     date: Option<String>,
 }
 
+/// Fragment-only template for the calendar grid, rendered by the AJAX content endpoint.
 #[derive(Template)]
 #[template(path = "pages/monthly.htm")]
 struct MonthlyTemplate<'a> {
-    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     weekdays: Vec<String>,
     days: Vec<Day<'a>>,
@@ -46,30 +46,14 @@ struct MonthlyTemplate<'a> {
     month: String,
     prev_month: String,
     next_month: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
-pub async fn handler(
+/// Renders only the calendar grid fragment for the given month. Used by the AJAX content endpoint.
+pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.locale();
-    content(
-        super::new_page(&state).await,
-        locale,
-        State(state),
-        Query(req),
-    )
-    .await
-}
-
-pub async fn content(
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
-    State(state): State<EventixState>,
-    Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
     let timezone = *locale.timezone();
 
     let weekdays = vec![
@@ -130,11 +114,7 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
     let html = MonthlyTemplate {
-        page,
         weekdays,
         month: format!(
             "{} {}",
@@ -146,11 +126,9 @@ pub async fn content(
         today: Utc::now().with_timezone(&timezone).date_naive(),
         days,
         locale,
-        events,
-        tasks,
     }
     .render()
-    .context("monthly template")?;
+    .context("monthly content template")?;
 
     Ok(Html(html))
 }

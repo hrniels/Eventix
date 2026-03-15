@@ -9,7 +9,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
-use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, EventLike};
+use eventix_ical::objects::{CalCompType, CalPartStat, EventLike};
 use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::EventixState;
 use serde::Deserialize;
@@ -17,7 +17,7 @@ use std::{collections::HashMap, fmt, sync::Arc};
 
 use crate::html::filters;
 use crate::objects::{DayOccurrence, OccurrenceOverlap};
-use crate::pages::{Page, error::HTMLError, events::Events, tasks::Tasks};
+use crate::pages::error::HTMLError;
 use crate::util::parse_human_date;
 
 struct Day<'a> {
@@ -31,10 +31,10 @@ pub struct Request {
     date: Option<String>,
 }
 
+/// Fragment-only template for the weekly grid, rendered by the AJAX content endpoint.
 #[derive(Template)]
 #[template(path = "pages/weekly.htm")]
 struct WeeklyTemplate<'a> {
-    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     days: Vec<Day<'a>>,
     today: NaiveDate,
@@ -43,22 +43,6 @@ struct WeeklyTemplate<'a> {
     week_end: String,
     prev_week: String,
     next_week: String,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
-}
-
-pub async fn handler(
-    State(state): State<EventixState>,
-    Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
-    let locale = state.lock().await.locale();
-    content(
-        super::new_page(&state).await,
-        locale,
-        State(state),
-        Query(req),
-    )
-    .await
 }
 
 #[derive(Debug)]
@@ -139,6 +123,12 @@ impl<'d> fmt::Debug for Slot<'d> {
     }
 }
 
+/// Builds a map from occurrence ID to its overlap descriptor for all occurrences in a day.
+///
+/// Occurrences are arranged into rows such that overlapping occurrences share a row. Within each
+/// row, each occurrence is placed in the first slot that does not overlap with it. The resulting
+/// map encodes, for every occurrence, the total number of columns in its row, its column index,
+/// and the number of adjacent free columns to the right.
 fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, OccurrenceOverlap> {
     // first insert all of them into our rows datastructure that puts occurrences into the same row
     // if they overlap or in separate rows otherwise.
@@ -155,12 +145,12 @@ fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, OccurrenceOverlap> {
     overlaps
 }
 
+/// Renders only the weekly grid fragment for the given week. Used by the AJAX content endpoint.
 pub async fn content(
-    page: Page,
-    locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
+    let locale = state.lock().await.locale();
     let timezone = *locale.timezone();
 
     let date = parse_human_date(req.date, &timezone)?;
@@ -223,13 +213,9 @@ pub async fn content(
         date += Duration::days(1);
     }
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
     let now = Utc::now().with_timezone(&timezone);
 
     let html = WeeklyTemplate {
-        page,
         locale: locale.clone(),
         week_number: week_start.format("%V").to_string(),
         week_start: locale.fmt_weekdate(&week_start, DateFlags::NoToday),
@@ -238,11 +224,9 @@ pub async fn content(
         next_week: next_week.format("%Y-%m-%d").to_string(),
         today: now.date_naive(),
         days,
-        events,
-        tasks,
     }
     .render()
-    .context("weekly template")?;
+    .context("weekly content template")?;
 
     Ok(Html(html))
 }

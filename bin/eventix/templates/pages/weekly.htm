@@ -1,7 +1,3 @@
-{% extends "content.htm" %}
-
-{% block inner %}
-
 <div class="ev_border">
 <h1 class="ev_header" style="position: relative">
     <div style="z-index: 1; position: absolute; float: left" class="ev_jump">
@@ -10,19 +6,27 @@
     </div>
 
     <div style="z-index: 0; position: absolute; width: calc(100% - 70px); left: 70px; text-align: center">
-        <a style="margin-right: .5em" id="link-prev" href="/pages/weekly?date={{ prev_week }}">&laquo;</a>
+        <a style="margin-right: .5em" id="link-prev"
+           href="javascript:loadWeeklyContent('{{ prev_week }}')">&laquo;</a>
         <div style="display: inline-block; width: 24em">W{{ week_number }}: {{ week_start }} - {{ week_end }}</div>
-        <a style="margin-left: .5em" id="link-next" href="/pages/weekly?date={{ next_week }}">&raquo;</a>
+        <a style="margin-left: .5em" id="link-next"
+           href="javascript:loadWeeklyContent('{{ next_week }}')">&raquo;</a>
     </div>
     <br clear="both"/>
 </h1>
 
 <script type="text/javascript">
-    function executeJump() {
-        document.location.href = '?date=' + $('#jump_location').val();
+    // Loads the weekly calendar grid for `dateStr` via AJAX and injects it into
+    // #page-content. Also updates the browser history so the URL stays accurate.
+    function loadWeeklyContent(dateStr) {
+        loadPageContent('weekly', '#page-content', 'date=' + encodeURIComponent(dateStr), _weeklyOnLoaded);
     }
 
-    $('#jump_location').keypress(function(e) {
+    function executeJump() {
+        loadWeeklyContent($('#jump_location').val());
+    }
+
+    bindContentHandler('page-content', '#jump_location', 'keypress', function(e) {
         if(e.which == 13) {
             executeJump();
             // stop propagation
@@ -37,7 +41,7 @@
         {% for day in days %}
         <td width="14%" align="center"
             class="ev_week_day_header{% if day.date == today %} ev_today{% endif %}">
-            <a href="javascript:gotoWithPrev(
+            <a href="javascript:loadWithPrev(
                      '/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
                style="float: left" class="ev_add_icon">
                 <i class="bi bi-plus-square"></i>
@@ -149,7 +153,7 @@
                      data-date="{{ day.date.format("%Y-%m-%d") }}"
                      data-hour="{{ hour }}"
                      class="ev_hour_cell">
-                    <a href="javascript:gotoWithPrev(
+                    <a href="javascript:loadWithPrev(
                              '/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}')"
                        style="float: left" class="ev_add_icon">
                         <i class="bi bi-plus-square"></i>
@@ -241,20 +245,13 @@
 </div>
 
 <script type="text/javascript">
-    function setNowLine() {
+    // setNowLine is defined here so the server-rendered timezone name is available.
+    window.setNowLine = function() {
         const date = curDate("{{ locale.timezone().name() }}");
         $('#now_line').css('top', (date.hour * 60 + date.minute) + 'px');
-    }
+    };
 
-    setNowLine();
-    setInterval(setNowLine, 60 * 1000);
-
-    $(function() {
-        let area = document.getElementById("week_scroll_area");
-        area.scrollTop = 60 * 8;
-    });
-
-    $(document).on('mousedown', function(e) {
+    bindContentHandler('page-content', document, 'mousedown', function(e) {
         if(e.which !== 2)
             return;
 
@@ -268,11 +265,11 @@
             const date = target.dataset.date;
             const hour = target.dataset.hour;
             const url = '/pages/items/add?ctype=Event&date=' + date + '&hour=' + hour;
-            gotoWithPrev(url);
+            loadWithPrev(url);
         }
     });
 
-    $(document).keydown(function(e) {
+    bindContentHandler('page-content', document, 'keydown', function(e) {
         if(document.activeElement.nodeName == 'BODY') {
             if(e.ctrlKey || e.shiftKey || e.metaKey || e.altKey)
                 return true;
@@ -282,13 +279,13 @@
                     $('#jump_location').focus();
                     return false;
                 case "Period":
-                    document.location.href = '/pages/weekly';
+                    loadWeeklyContent('');
                     break;
                 case "ArrowLeft":
-                    document.getElementById('link-prev').click();
+                    loadWeeklyContent('{{ prev_week }}');
                     break;
                 case "ArrowRight":
-                    document.getElementById('link-next').click();
+                    loadWeeklyContent('{{ next_week }}');
                     break;
             }
         }
@@ -296,4 +293,22 @@
     });
 </script>
 
-{% endblock inner %}
+<script type="text/javascript">
+    function _weeklyOnLoaded() {
+        if(window.ev.weekly.nowInterval !== null)
+            clearInterval(window.ev.weekly.nowInterval);
+        window.setNowLine();
+        window.ev.weekly.nowInterval = setInterval(window.setNowLine, 60 * 1000);
+        const area = document.getElementById('week_scroll_area');
+        if(area)
+            area.scrollTop = 60 * 8;
+    }
+
+    // Module state: interval handle for the "now" line ticker, cleared and restarted
+    // on each fragment load so there is never more than one active interval.
+    window.ev.weekly = { nowInterval: null };
+
+    $(function() {
+        _weeklyOnLoaded();
+    })
+</script>

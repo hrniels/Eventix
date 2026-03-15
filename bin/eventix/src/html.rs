@@ -4,7 +4,6 @@
 
 use eventix_ical::objects::{CalAttendee, CalPartStat, CalRole};
 use regex::{Captures, Regex};
-use std::time::Duration;
 
 pub mod filters {
     use askama::filters::Safe;
@@ -13,14 +12,6 @@ pub mod filters {
     use std::{fmt::Display, sync::Arc};
 
     use eventix_locale::{DateFlags, DateLike, Locale, TimeFlags};
-
-    #[askama::filter_fn]
-    pub fn as_time(
-        time: super::Duration,
-        _values: &dyn ::askama::Values,
-    ) -> ::askama::Result<String> {
-        Ok(format!("{} µs", time.as_micros()))
-    }
 
     #[askama::filter_fn]
     pub fn newlines<T: Display>(

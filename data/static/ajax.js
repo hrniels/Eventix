@@ -3,11 +3,11 @@ function handleAJAXError(jqXHR, textStatus, errorThrown) {
     console.log(msg);
 }
 
-function getRequest(url, success) {
+function getRequest(url, success, type = 'json') {
     $.ajax({
         type: 'GET',
         url: url,
-        dataType: 'json',
+        dataType: type,
         success: success,
         error: handleAJAXError,
     });
@@ -18,7 +18,7 @@ function postRequest(url, success) {
         type: 'POST',
         url: url,
         dataType: 'json',
-        success: success,
+        success: function(data) { success(data); reloadSidebar(); },
         error: handleAJAXError,
     });
 }
@@ -29,7 +29,7 @@ function formRequest(id, success) {
         url: form.attr('action'),
         type: form.attr('method'),
         data: form.serialize(),
-        success: success,
+        success: function(data) { success(data); reloadSidebar(); },
         error: handleAJAXError,
     });
 }
@@ -79,7 +79,7 @@ function deleteItem(uid, rid, onDeleted) {
 }
 
 function toggleCalendar(id) {
-    postRequest('/api/togglecal?id=' + id, reloadPage);
+    postRequest('/api/togglecal?id=' + id, function(data) { reloadContent(); reloadCalList(); });
 }
 
 function calendarOperation(col_id, cal_id, op, onsuccess) {

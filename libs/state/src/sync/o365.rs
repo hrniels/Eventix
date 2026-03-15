@@ -292,6 +292,11 @@ impl O365 {
                 .write_all(format!("davmail.oauth.{}.refreshToken={}\n", user, token).as_bytes())
                 .await?;
         }
+
+        // tokio::fs::File does not flush on drop; explicitly flush so all buffered writes reach
+        // the filesystem before the caller reads the file back.
+        props.flush().await?;
+
         Ok(props_path)
     }
 

@@ -1,16 +1,14 @@
-{% extends "content.htm" %}
-
-{% block inner %}
-
 <script type="text/javascript">
     setFormPage(true);
 </script>
 
+{% include "messages.htm" %}
+
 {% if let Some(rid) = rid %}
-<form id="form" method="post"
+<form id="edit-form" method="post"
                 action="/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
 {% else %}
-<form id="form" method="post"
+<form id="edit-form" method="post"
                 action="/pages/items/edit?uid={{ uid }}&mode={{ mode }}&prev={{ prev|urlencode_strict }}">
 {% endif %}
     <input type="hidden" name="edit_start" value="{{ edit_start }}" />
@@ -98,11 +96,11 @@
                             {% endif %}
                         </td>
                         <td width="50%" align="center">
-                            <a class="ev_button_big ev_button_normal" href="javascript:submit()">
+                            <a class="ev_button_big ev_button_normal" href="javascript:submitEditForm()">
                                 <span>{{ "Save"|t(locale) }}</span>
                             </a>
                             <a class="ev_button_big ev_button_normal"
-                               href="javascript:document.location.href = '{{ prev }}'">
+                               href="javascript:navigateTo('{{ prev }}')">
                                 <span>{{ "Back"|t(locale) }}</span>
                             </a>
                         </td>
@@ -116,7 +114,15 @@
 
 <script>
     function onDeleted() {
-        window.location.href = '/';
+        reloadContent();
+    }
+
+    // Submits the edit form via AJAX and injects the response fragment into #edit-content.
+    function submitEditForm() {
+        if($('#attendees-new-attendee').val() != "")
+            errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
+        else
+            formRequest('edit-form', replaceContent);
     }
 
     $(function() {
@@ -140,16 +146,9 @@
         });
     });
 
-    function submit() {
-        if($('#attendees-new-attendee').val() != "")
-            errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
-        else
-            $('#form').submit();
-    }
-
-    $(document).keydown(function(e) {
+    bindContentHandler('page-content', document, 'keydown', function(e) {
         if(e.ctrlKey && e.code == "Enter") {
-            submit();
+            submitEditForm();
             return false;
         }
         return true;
@@ -160,5 +159,3 @@
     {{ "warning.delete_series"|t(locale) }}
 </div>
 {% endif %}
-
-{% endblock inner %}

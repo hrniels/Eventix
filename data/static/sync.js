@@ -99,7 +99,7 @@ function syncAll(lastReloadId, spinnerId, iconId, force, auth_url) {
 
 function requestReload(iconId, force) {
     if(force || !userIsActive())
-        reloadPage();
+        reloadContent();
     else {
         outOfSync = true;
         $('#' + iconId).css('color', 'red');

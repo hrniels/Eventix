@@ -8,31 +8,25 @@ use axum::{
     extract::State,
     response::{Html, IntoResponse},
 };
-use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
-use eventix_locale::{DateFlags, Locale, TimeFlags};
+use eventix_locale::Locale;
 use eventix_state::{CollectionSettings, EventixState, SyncerType};
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 use tokio::{fs, io::AsyncReadExt};
 use xdg::BaseDirectories;
 
-use crate::{
-    comps::calbox::CalendarBoxTemplate,
-    pages::{Page, error::HTMLError, events::Events, tasks::Tasks},
-};
+use crate::{comps::calbox::CalendarBoxTemplate, pages::error::HTMLError};
 use crate::{
     comps::calbox::{CalendarBox, CalendarBoxMode},
     html::filters,
 };
 
+/// Fragment-only template for the calendars list, rendered by the AJAX content endpoint.
 #[derive(Template)]
 #[template(path = "pages/calendars.htm")]
 struct CalendarsTemplate<'a> {
-    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     collections: &'a BTreeMap<String, CollectionSettings>,
     calendars: BTreeMap<&'a String, Vec<CalendarBoxTemplate<'a>>>,
-    events: Events<'a>,
-    tasks: Tasks<'a>,
 }
 
 async fn metadata_or_default(dir: &Path, folder: &str, filename: &str, def: &str) -> String {
@@ -93,9 +87,8 @@ async fn add_unknown_calendars<'a>(
     Ok(())
 }
 
-pub async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
-    let page = super::new_page(&state).await;
-
+/// Renders only the calendars list fragment. Used by the AJAX content endpoint.
+pub async fn content(State(state): State<EventixState>) -> Result<impl IntoResponse, HTMLError> {
     let state = state.lock().await;
     let xdg = state.xdg();
     let locale = state.locale();
@@ -129,19 +122,13 @@ pub async fn handler(State(state): State<EventixState>) -> Result<impl IntoRespo
         calendars.insert(col_id, cals);
     }
 
-    let events = Events::new(&state, &locale);
-    let tasks = Tasks::new(&state, &locale);
-
     let html = CalendarsTemplate {
-        page,
         locale,
         collections: state.settings().collections(),
         calendars,
-        events,
-        tasks,
     }
     .render()
-    .context("edit template")?;
+    .context("calendars content template")?;
 
     Ok(Html(html))
 }

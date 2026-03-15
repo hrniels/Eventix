@@ -7,12 +7,13 @@ mod save;
 
 use axum::{
     Router,
+    extract::{RawQuery, State},
     routing::{get, post},
 };
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use super::Page;
+use crate::pages::{Page, shell};
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -26,7 +27,15 @@ pub async fn new_page(state: &EventixState) -> Page {
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/", get(self::index::handler))
+        .route(
+            "/",
+            get(
+                |State(state): State<EventixState>, RawQuery(raw): RawQuery| async move {
+                    shell::handler(state, raw, "collections/edit").await
+                },
+            ),
+        )
         .route("/", post(self::save::handler))
+        .route("/content", get(self::index::content))
         .with_state(state)
 }

@@ -1,7 +1,3 @@
-{% extends "content.htm" %}
-
-{% block inner %}
-
 <div class="ev_border">
     <h1 id="title" class="ev_header">{{ "Calendars"|t(locale) }}</h1>
     <table width="100%" class="ev_table">
@@ -37,7 +33,7 @@
                         <i class="bi bi-trash"></i>
                     </a>
                     <a class="ev_button ev_button_normal"
-                       href="javascript:gotoWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
+                       href="javascript:loadWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
                        title="{{ "Edit"|t(locale) }}">
                         <i class="bi bi-pencil"></i>
                     </a>
@@ -46,7 +42,7 @@
                        title="{{ "warning.reload_collection"|t(locale) }}"
                        href="javascript:reloadCollection('{{ col_id }}',
                                                          'reload_spinner_{{ col_id }}',
-                                                         reloadPageIfPossible)">
+                                                         reloadContentIfPossible)">
                         <i id="reload_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Reload"|t(locale) }}</span>
                     </a>
@@ -56,7 +52,7 @@
                        title="{{ "info.discover_collection"|t(locale) }}"
                        href="javascript:discoverCollection('{{ col_id }}',
                                                            'discover_spinner_{{ col_id }}',
-                                                           reloadPageIfPossible)">
+                                                           reloadContentIfPossible)">
                         <i id="discover_spinner_{{ col_id }}" class="bi bi-compass"></i>
                         <span>{{ "Discover"|t(locale) }}</span>
                     </a>
@@ -64,7 +60,7 @@
                     <a class="ev_button ev_button_normal"
                        href="javascript:syncCollection('{{ col_id }}',
                                                        'sync_spinner_{{ col_id }}',
-                                                       reloadPageIfPossible)">
+                                                       reloadContentIfPossible)">
                         <i id="sync_spinner_{{ col_id }}" class="bi bi-arrow-clockwise"></i>
                         <span>{{ "Sync"|t(locale) }}</span>
                     </a>
@@ -113,7 +109,7 @@
 </div>
 
 <a style="float: left" class="ev_padtop ev_button ev_button_normal"
-    href="javascript:gotoWithPrev('/pages/collections/add')">
+    href="javascript:loadWithPrev('/pages/collections/add')">
     <i class="bi bi-plus-square"></i>
     <span>{{ "Add Collection"|t(locale) }}</span>
 </a>
@@ -134,13 +130,14 @@
 }
 </style>
 <script type="text/javascript">
-    function reloadPageIfPossible() {
-        requestReload('out-of-sync', !userIsBusy());
+    function reloadContentIfPossible() {
+        requestReload('out-of-sync', false);
+        reloadCalList();
     }
 
     function askDeleteCollection(col_id) {
         showConfirmDialog('delete-collection-confirm', function() {
-            deleteCollection(col_id, reloadPageIfPossible)
+            deleteCollection(col_id, reloadContentIfPossible)
         })
     }
 
@@ -159,15 +156,13 @@
             else
                 closeForm();
             if(outOfSync || mode == 'View')
-                reloadPageIfPossible();
+                reloadContentIfPossible();
         });
     }
 
     function addCalendar(col_id) {
         const folder = $('#folder_' + col_id);
         const url = '/api/calendars/addcal?col_id=' + col_id + '&folder=' + folder.val();
-        postRequest(url, reloadPageIfPossible);
+        postRequest(url, reloadContentIfPossible);
     }
 </script>
-
-{% endblock inner %}

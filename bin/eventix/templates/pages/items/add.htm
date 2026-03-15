@@ -1,15 +1,13 @@
-{% extends "content.htm" %}
-
-{% block inner %}
-
 <script type="text/javascript">
     setFormPage(true);
 </script>
 
+{% include "messages.htm" %}
+
 {% if let Some(prev) = prev %}
-<form id="form" method="post" action="/pages/items/add?ctype={{ ctype }}&prev={{ prev|urlencode_strict }}">
+<form id="add-form" method="post" action="/pages/items/add?ctype={{ ctype }}&prev={{ prev|urlencode_strict }}">
 {% else %}
-<form id="form" method="post" action="/pages/items/add?ctype={{ ctype }}">
+<form id="add-form" method="post" action="/pages/items/add?ctype={{ ctype }}">
 {% endif %}
     <div class="ev_border">
         <fieldset class="ev_form">
@@ -71,14 +69,14 @@
                 </div>
                 <div class="ev_submit">
                     <a class="ev_button_big ev_button_normal"
-                       href="javascript:submit()">
+                       href="javascript:submitAddForm()">
                         <span>{{ "Save"|t(locale) }}</span>
                     </a>
                     <a class="ev_button_big ev_button_normal"
                        {% if let Some(prev) = prev %}
-                       href="javascript:document.location.href = '{{ prev }}'"
+                       href="javascript:navigateTo('{{ prev }}')"
                        {% else %}
-                       href="javascript:document.location.href = '/'"
+                       href="javascript:navigateTo('/')"
                        {% endif %}
                     >
                         <span>{{ "Back"|t(locale) }}</span>
@@ -90,13 +88,16 @@
 </form>
 
 <script>
-    const calendars = {};
+    // Initialise module state on first load; reset calendars map on every reload.
+    if(typeof window.ev.add === 'undefined')
+        window.ev.add = {};
+    window.ev.add.calendars = {};
     {% for (id, personal) in cal_personal %}
-    calendars['{{ id }}'] = {{ personal }};
+    window.ev.add.calendars['{{ id }}'] = {{ personal }};
     {% endfor %}
 
     function setPersonalAlarms(cal) {
-        if(!calendars[cal]) {
+        if(!window.ev.add.calendars[cal]) {
             $("#alarm-tabs").tabs("option", "active", 0);
             $("#alarm-tabs ul li:eq(1)").hide();
         }
@@ -104,11 +105,12 @@
             $("#alarm-tabs ul li:eq(1)").show();
     }
 
-    function submit() {
+    // Submits the add form via AJAX and injects the response fragment into #add-content.
+    function submitAddForm() {
         if($('#attendees-new-attendee').val() != "")
             errorDialog("{{ "error.new_attendee_not_empty"|t(locale) }}");
         else
-            $('#form').submit();
+            formRequest('add-form', replaceContent, 'html');
     }
 
     $(function() {
@@ -127,13 +129,11 @@
         });
     });
 
-    $(document).keydown(function(e) {
+    bindContentHandler('page-content', document, 'keydown', function(e) {
         if(e.ctrlKey && e.code == "Enter") {
-            submit();
+            submitAddForm();
             return false;
         }
         return true;
     });
 </script>
-
-{% endblock inner %}

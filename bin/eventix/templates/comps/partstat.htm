@@ -53,9 +53,9 @@
 
         $('#{{ id }}-menu a').on('click', function() {
             {% if let Some(rid) = rid %}
-            respond('{{ uid }}', '{{ rid }}', $(this).data('value'), reloadPage);
+            respond('{{ uid }}', '{{ rid }}', $(this).data('value'), reloadContent);
             {% else %}
-            respond('{{ uid }}', null, $(this).data('value'), reloadPage);
+            respond('{{ uid }}', null, $(this).data('value'), reloadContent);
             {% endif %}
         });
 

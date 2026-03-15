@@ -66,7 +66,7 @@ class DragOperation {
                     const rid = drag.dragging[0].dataset.rid;
                     const $date = el.dataset.date;
                     const hour = el.dataset.hour;
-                    moveEvent(uid, rid, $date, hour, reloadPage);
+                    moveEvent(uid, rid, $date, hour, reloadContent);
                 }
 
                 drag._clear();

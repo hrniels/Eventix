@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod calendars;
+pub mod callist;
 pub mod collections;
 pub mod error;
 pub mod items;
 pub mod list;
 pub mod monthly;
+pub mod shell;
+pub mod sidebar;
 pub mod weekly;
 
 mod events;
@@ -19,10 +22,7 @@ use chrono_tz::Tz;
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::EventixState;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use crate::{
     comps::calcombo::CalComboTemplate,
@@ -32,15 +32,16 @@ use crate::{
 pub fn router(state: EventixState) -> Router {
     Router::new()
         .nest("/calendars", calendars::router(state.clone()))
+        .nest("/callist", callist::router(state.clone()))
         .nest("/collections", collections::router(state.clone()))
         .nest("/items", items::router(state.clone()))
         .nest("/list", list::router(state.clone()))
         .nest("/monthly", monthly::router(state.clone()))
+        .nest("/sidebar", sidebar::router(state.clone()))
         .nest("/weekly", weekly::router(state.clone()))
 }
 
 pub struct Page {
-    start: Instant,
     now: DateTime<Tz>,
     errors: Vec<String>,
     infos: Vec<String>,
@@ -53,7 +54,6 @@ pub struct Page {
 impl Default for Page {
     fn default() -> Self {
         Self {
-            start: Instant::now(),
             now: Local::now().with_timezone(&Tz::UTC),
             errors: Vec::new(),
             infos: Vec::new(),
@@ -79,7 +79,6 @@ impl Page {
         });
 
         Self {
-            start: Instant::now(),
             now: Local::now().with_timezone(locale.timezone()),
             calendars: Calendars::new(&state, |_id, _settings| true),
             quickcals: if !calendars.0.is_empty() {
@@ -138,9 +137,5 @@ impl Page {
     #[allow(dead_code)]
     pub fn add_info<S: ToString>(&mut self, message: S) {
         self.infos.push(message.to_string());
-    }
-
-    pub fn time_elapsed(&self) -> Duration {
-        self.start.elapsed()
     }
 }

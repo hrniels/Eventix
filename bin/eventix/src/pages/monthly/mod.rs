@@ -4,17 +4,25 @@
 
 pub mod index;
 
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    extract::{RawQuery, State},
+    routing::get,
+};
 use eventix_state::EventixState;
 
-use super::Page;
-
-pub async fn new_page(state: &EventixState) -> Page {
-    Page::new(state).await
-}
+use crate::pages::shell;
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/", get(self::index::handler))
+        .route(
+            "/",
+            get(
+                |State(state): State<EventixState>, RawQuery(raw): RawQuery| async move {
+                    shell::handler(state, raw, "monthly").await
+                },
+            ),
+        )
+        .route("/content", get(self::index::content))
         .with_state(state)
 }

@@ -1,15 +1,9 @@
-{% extends "content.htm" %}
-
-{% block inner %}
-
-<script type="text/javascript">
-    setFormPage(true);
-</script>
+{% include "messages.htm" %}
 
 {% if let Some(prev) = prev %}
-<form id="form" method="post" action="/pages/collections/add?prev={{ prev }}">
+<form id="add-form" method="post" action="/pages/collections/add?prev={{ prev }}">
 {% else %}
-<form id="form" method="post" action="/pages/collections/add">
+<form id="add-form" method="post" action="/pages/collections/add">
 {% endif %}
     <div class="ev_border">
         <fieldset class="ev_form">
@@ -27,14 +21,14 @@
             </dl>
             <div class="ev_submit">
                 <a class="ev_button_big ev_button_normal" style="width: 80px"
-                   href="javascript:$('#form').submit()">
+                   href="javascript:submitAddForm()">
                     <span>{{ "Save"|t(locale) }}</span>
                 </a>
                 <a class="ev_button_big ev_button_normal" style="width: 80px"
                    {% if let Some(prev) = prev %}
-                   href="javascript:document.location.href = '{{ prev }}'"
+                   href="javascript:navigateTo('{{ prev }}')"
                    {% else %}
-                   href="javascript:document.location.href = '/'"
+                   href="javascript:navigateTo('/')"
                    {% endif %}
                 >
                     <span>{{ "Back"|t(locale) }}</span>
@@ -45,17 +39,20 @@
 </form>
 
 <script>
+    // Submits the add form via AJAX and injects the response fragment into #page-content.
+    function submitAddForm() {
+        formRequest('add-form', replaceContent);
+    }
+
     $(function() {
         $('#name').focus();
     });
 
-    $(document).keydown(function(e) {
+    bindContentHandler('page-content', document, 'keydown', function(e) {
         if(e.ctrlKey && e.code == "Enter") {
-            $('#form').submit();
+            submitAddForm();
             return false;
         }
         return true;
     });
 </script>
-
-{% endblock inner %}
