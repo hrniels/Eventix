@@ -46,36 +46,6 @@
                 $(function() { fetchContent('topbar', '#topbar-content', '', null); });
             </script>
 
-            {% if page.errors().len() > 0 %}
-            <div class="ev_border ev_padbottom_big">
-                <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
-                <div class="ev_main">
-                    <div style="padding: 0.3em;">
-                        <ul>
-                            {% for err in page.errors() %}
-                            <li><span class="ev_msg_error">{{ err|safe }}</span></li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if page.infos().len() > 0 %}
-            <div class="ev_border ev_padbottom_big">
-                <h1 class="ev_header ev_info">{{ "Information"|t(locale) }}</h1>
-                <div class="ev_main">
-                    <div style="padding: 0.3em;">
-                        <ul>
-                            {% for info in page.infos() %}
-                            <li><span class="ev_msg_info">{{ info|safe }}</span></li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
             {% block content %}
             <h1>Dummy content</h1>
             {% endblock %}
