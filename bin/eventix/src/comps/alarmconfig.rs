@@ -181,14 +181,17 @@ impl AlarmConfig {
         }
     }
 
-    pub fn check(&self, page: &mut Page, locale: &Arc<dyn Locale + Send + Sync>) -> bool {
+    pub fn check(
+        &self,
+        page: &mut Page,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        event_tz: &str,
+    ) -> bool {
         if let Some(Trigger::Absolute) = self.trigger
             && self
                 .datetime
                 .as_ref()
-                .and_then(|dt| {
-                    dt.to_caldate(locale.timezone().name(), CalDateType::Inclusive, false)
-                })
+                .and_then(|dt| dt.to_caldate(event_tz, CalDateType::Inclusive, false))
                 .is_none()
         {
             page.add_error(locale.translate("error.valid_date_time"));
@@ -197,10 +200,7 @@ impl AlarmConfig {
         true
     }
 
-    pub fn to_alarms(
-        &self,
-        locale: &Arc<dyn Locale + Send + Sync>,
-    ) -> anyhow::Result<Option<Vec<CalAlarm>>> {
+    pub fn to_alarms(&self, event_tz: &str) -> anyhow::Result<Option<Vec<CalAlarm>>> {
         if let Some(trigger) = self.trigger {
             let duration = match self.durtype {
                 DurType::BeforeStart | DurType::BeforeEnd => -(self.duration as i64),
@@ -220,9 +220,7 @@ impl AlarmConfig {
                 },
                 Trigger::Absolute => CalTrigger::Absolute(
                     match self.datetime {
-                        Some(ref dt) => {
-                            dt.to_caldate(locale.timezone().name(), CalDateType::Inclusive, false)
-                        }
+                        Some(ref dt) => dt.to_caldate(event_tz, CalDateType::Inclusive, false),
                         None => None,
                     }
                     .ok_or_else(|| anyhow!("Invalid datetime"))?

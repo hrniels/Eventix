@@ -80,7 +80,9 @@ pub async fn post_handler(
         pers_cal.set(
             &req.uid,
             req.rid.as_ref(),
-            req.personal.to_alarms(&locale)?.unwrap_or_default(),
+            req.personal
+                .to_alarms(locale.timezone().name())?
+                .unwrap_or_default(),
         )
     } else {
         pers_cal.unset(&req.uid, req.rid.as_ref())

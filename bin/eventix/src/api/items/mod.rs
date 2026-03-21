@@ -12,6 +12,7 @@ pub mod occlist;
 pub mod respond;
 pub mod shift;
 pub mod toggle;
+pub mod tzconvert;
 
 use axum::Router;
 use eventix_state::EventixState;
@@ -29,4 +30,5 @@ pub fn router(state: EventixState) -> Router {
         .merge(occlist::router(state.clone()))
         .merge(respond::router(state.clone()))
         .merge(toggle::router(state.clone()))
+        .merge(tzconvert::router(state.clone()))
 }

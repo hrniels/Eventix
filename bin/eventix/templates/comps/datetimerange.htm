@@ -164,3 +164,35 @@
         }
     }
 </script>
+
+<script type="text/javascript">
+    $(function () {
+        let previousTz = $("#{{ id }}_timezone_").val();
+
+        $("#{{ id }}_timezone_").on("change", function () {
+            let newTz = $(this).val();
+            if (!newTz || newTz === previousTz) return;
+            if ($("#{{ id }}all_day").is(":checked")) {
+                previousTz = newTz;
+                return;
+            }
+
+            let params = new URLSearchParams({
+                from_date: $("#{{ id }}from_date").val(),
+                from_time: $("#{{ id }}_from__time_").val(),
+                to_date: $("#{{ id }}to_date").val(),
+                to_time: $("#{{ id }}_to__time_").val(),
+                from_tz: previousTz,
+                to_tz: newTz,
+            });
+
+            getRequest("/api/items/tzconvert?" + params.toString(), function (data) {
+                if (data.from_date) $("#{{ id }}from_date").val(data.from_date);
+                if (data.from_time) $("#{{ id }}_from__time_").val(data.from_time);
+                if (data.to_date) $("#{{ id }}to_date").val(data.to_date);
+                if (data.to_time) $("#{{ id }}_to__time_").val(data.to_time);
+                previousTz = newTz;
+            });
+        });
+    });
+</script>

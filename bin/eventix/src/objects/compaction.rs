@@ -36,6 +36,7 @@ pub trait CompAction {
             return false;
         }
 
+        let event_tz = self.start_end().effective_timezone(locale);
         let (start, end) = self.start_end().as_caldates(locale, ctype.into());
 
         if ctype == CalCompType::Event {
@@ -73,7 +74,7 @@ pub trait CompAction {
             return false;
         }
 
-        if !self.alarm().check(page, locale) {
+        if !self.alarm().check(page, locale, &event_tz) {
             return false;
         }
 
@@ -94,6 +95,7 @@ pub trait CompAction {
         locale: &Arc<dyn Locale + Send + Sync>,
     ) {
         let dtype = comp.ctype().into();
+        let event_tz = self.start_end().effective_timezone(locale);
         let (start, end) = self.start_end().as_caldates(locale, dtype);
 
         comp.set_summary(Self::nonempty_or_none(self.summary().clone()));
@@ -106,7 +108,7 @@ pub trait CompAction {
             comp.as_todo_mut().unwrap().set_due(end);
         }
 
-        let (cal_alarms, pers_alarms) = self.alarm().to_alarms(locale).unwrap();
+        let (cal_alarms, pers_alarms) = self.alarm().to_alarms(&event_tz).unwrap();
         if let Some(cal_alarms) = cal_alarms {
             comp.set_alarms(Some(cal_alarms));
         } else {

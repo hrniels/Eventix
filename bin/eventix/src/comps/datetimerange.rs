@@ -37,31 +37,42 @@ impl DateTimeRange {
     }
 
     pub fn new_from_caldate(from: Option<CalDate>, to: Option<CalDate>, tz: &Tz) -> Self {
-        // Extract the event's own timezone from the start date if available.
-        let event_tz = from.as_ref().and_then(|f| match f {
-            CalDate::DateTime(CalDateTime::Timezone(_, tzid)) => Some(tzid.clone()),
-            CalDate::DateTime(CalDateTime::Utc(_)) => Some("UTC".to_string()),
-            _ => None,
-        });
+        // Use the event's own timezone for conversion when available so that
+        // the form fields show the time in the timezone the event was created
+        // in, falling back to the locale timezone otherwise.
+        let (event_tz_name, conv_tz) = from
+            .as_ref()
+            .and_then(|f| match f {
+                CalDate::DateTime(CalDateTime::Timezone(_, tzid)) => {
+                    tzid.parse::<Tz>().ok().map(|t| (tzid.clone(), t))
+                }
+                CalDate::DateTime(CalDateTime::Utc(_)) => Some(("UTC".to_string(), chrono_tz::UTC)),
+                _ => None,
+            })
+            .unzip();
+        let conv_tz = conv_tz.as_ref().unwrap_or(tz);
 
         Self {
             from: DateTime::new(
-                Date::new(from.as_ref().map(|f| f.as_start_with_tz(tz).date_naive())),
+                Date::new(
+                    from.as_ref()
+                        .map(|f| f.as_start_with_tz(conv_tz).date_naive()),
+                ),
                 from.as_ref().and_then(|f| match f {
-                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(tz).time())),
+                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(conv_tz).time())),
                     CalDate::Date(..) => None,
                 }),
             ),
             to: DateTime::new(
-                Date::new(to.as_ref().map(|t| t.as_end_with_tz(tz).date_naive())),
+                Date::new(to.as_ref().map(|t| t.as_end_with_tz(conv_tz).date_naive())),
                 to.as_ref().and_then(|t| match t {
-                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(tz).time())),
+                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(conv_tz).time())),
                     CalDate::Date(..) => None,
                 }),
             ),
             from_enabled: from.map(|_| true),
             to_enabled: to.map(|_| true),
-            timezone: event_tz,
+            timezone: event_tz_name,
         }
     }
 
@@ -71,7 +82,7 @@ impl DateTimeRange {
 
     /// Returns the timezone name stored in this range, falling back to the
     /// locale timezone if none was set.
-    fn effective_timezone(&self, locale: &Arc<dyn Locale + Send + Sync>) -> String {
+    pub fn effective_timezone(&self, locale: &Arc<dyn Locale + Send + Sync>) -> String {
         self.timezone
             .clone()
             .unwrap_or_else(|| locale.timezone().name().to_string())
