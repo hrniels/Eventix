@@ -96,11 +96,11 @@ LINTING AND FORMATTING
 
 Format code (required before commit):
 
-    cargo fmt
+    ./b format
 
 Check formatting in CI mode:
 
-    cargo fmt -- --check
+    ./b format-check
 
 Run Clippy (all targets and features):
 
@@ -253,7 +253,7 @@ SAFE WORKFLOW FOR AGENTS
 
 Before committing changes:
 
-1. Run cargo fmt
+1. Run ./b format
 2. Run cargo clippy --all-targets --all-features
 3. Run cargo test (or targeted crate tests first)
 

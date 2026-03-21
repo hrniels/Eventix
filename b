@@ -138,8 +138,9 @@ def _ensure_npm_deps():
 
 
 def cmd_format(args):
-    """Formats JS, CSS, and HTML template files with Prettier."""
+    """Formats Rust, JS, CSS, and HTML template files."""
     _ensure_npm_deps()
+    subprocess.run(["cargo", "fmt"])
     subprocess.run(PRETTIER + ["--write",
                                "data/static/**/*.js",
                                "data/static/style.css",
@@ -147,8 +148,9 @@ def cmd_format(args):
 
 
 def cmd_format_check(args):
-    """Checks JS, CSS, and HTML template files with Prettier (exits non-zero on diff)."""
+    """Checks Rust, JS, CSS, and HTML template files (exits non-zero on diff)."""
     _ensure_npm_deps()
+    subprocess.run(["cargo", "fmt", "--", "--check"])
     subprocess.run(PRETTIER + ["--check",
                                "data/static/**/*.js",
                                "data/static/style.css",
