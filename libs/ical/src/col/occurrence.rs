@@ -8,8 +8,8 @@ use chrono::{DateTime, Duration, NaiveDate};
 use chrono_tz::Tz;
 
 use crate::objects::{
-    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalDuration, CalEventStatus,
-    CalOrganizer, CalRRule, CalTodoStatus, CompDateType, EventLike,
+    CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalDateTime, CalDuration,
+    CalEventStatus, CalOrganizer, CalRRule, CalTodoStatus, CompDateType, EventLike,
 };
 use crate::parser::{Property, PropertyProducer};
 use crate::util;
@@ -50,6 +50,39 @@ pub struct Occurrence<'c> {
     base: &'c CalComponent,
     overwrite: Option<&'c CalComponent>,
     excluded: bool,
+}
+
+/// Date range in the event's original timezone.
+///
+/// Returned by [`Occurrence::occurrence_range_in_tz`] when the event specifies
+/// a timezone that differs from the local timezone.
+#[derive(Debug, Clone)]
+pub struct EventTzRange {
+    start: Option<CalDate>,
+    end: Option<CalDate>,
+    tz: Tz,
+}
+
+impl EventTzRange {
+    /// Returns the start date in the event's timezone.
+    pub fn start(&self) -> Option<&CalDate> {
+        self.start.as_ref()
+    }
+
+    /// Returns the end date in the event's timezone.
+    pub fn end(&self) -> Option<&CalDate> {
+        self.end.as_ref()
+    }
+
+    /// Returns the event's timezone.
+    pub fn tz(&self) -> &Tz {
+        &self.tz
+    }
+
+    /// Returns the IANA timezone name (e.g. `"Europe/Berlin"`).
+    pub fn tz_name(&self) -> &str {
+        self.tz.name()
+    }
 }
 
 impl<'c> Occurrence<'c> {
@@ -225,6 +258,35 @@ impl<'c> Occurrence<'c> {
             } else {
                 Some(e.into())
             }
+        })
+    }
+
+    /// Returns start and end dates in the event's original timezone, if it
+    /// differs from the given local timezone.
+    ///
+    /// Returns `None` if neither start nor end specifies a timezone different
+    /// from `local`, or if the event is all-day or uses floating time.
+    pub fn occurrence_range_in_tz(&self, local: &Tz) -> Option<EventTzRange> {
+        fn foreign_tz(date: Option<&CalDate>, local: &Tz) -> Option<Tz> {
+            match date? {
+                CalDate::DateTime(CalDateTime::Timezone(_, tzid)) => {
+                    tzid.parse::<Tz>().ok().filter(|tz| tz != local)
+                }
+                _ => None,
+            }
+        }
+
+        let event_tz =
+            foreign_tz(self.start(), local).or_else(|| foreign_tz(self.end_or_due(), local))?;
+
+        let start = self.start.map(|s| s.with_timezone(&event_tz).into());
+        let end = self
+            .occurrence_end()
+            .map(|e| e.with_timezone(&event_tz).into());
+        Some(EventTzRange {
+            start,
+            end,
+            tz: event_tz,
         })
     }
 
@@ -1011,5 +1073,126 @@ mod tests {
         // alarm fires 15 minutes before start
         let expected = start - Duration::minutes(15);
         assert_eq!(alarm_occ.alarm_date(), Some(expected));
+    }
+
+    // --- occurrence_range_in_tz ---
+
+    #[test]
+    fn occurrence_range_in_tz_different_tz() {
+        let berlin: Tz = "Europe/Berlin".parse().unwrap();
+        let ny: Tz = "America/New_York".parse().unwrap();
+
+        // Event defined in Europe/Berlin, local timezone is America/New_York
+        let berlin_start = berlin.with_ymd_and_hms(2025, 6, 15, 14, 0, 0).unwrap();
+        let berlin_end = berlin.with_ymd_and_hms(2025, 6, 15, 15, 0, 0).unwrap();
+
+        let mut ev = CalEvent::new("uid-tz-diff");
+        ev.set_start(Some(berlin_start.into()));
+        ev.set_end(Some(berlin_end.into()));
+        let comp = CalComponent::Event(ev);
+
+        // Occurrence stored in local (NY) timezone
+        let ny_start = berlin_start.with_timezone(&ny);
+        let ny_end = berlin_end.with_timezone(&ny);
+        let occ = Occurrence::new(dir(), &comp, Some(ny_start), Some(ny_end), false);
+
+        let result = occ.occurrence_range_in_tz(&ny);
+        assert!(result.is_some());
+        let range = result.unwrap();
+        assert_eq!(range.tz_name(), "Europe/Berlin");
+
+        // The returned CalDates should be in Europe/Berlin
+        let start_dt = range.start().unwrap().as_start_with_tz(&berlin);
+        assert_eq!(start_dt, berlin_start);
+        let end_dt = range.end().unwrap().as_end_with_tz(&berlin);
+        assert_eq!(end_dt, berlin_end);
+    }
+
+    #[test]
+    fn occurrence_range_in_tz_same_tz() {
+        let berlin: Tz = "Europe/Berlin".parse().unwrap();
+
+        let start = berlin.with_ymd_and_hms(2025, 6, 15, 14, 0, 0).unwrap();
+        let end = berlin.with_ymd_and_hms(2025, 6, 15, 15, 0, 0).unwrap();
+
+        let mut ev = CalEvent::new("uid-tz-same");
+        ev.set_start(Some(start.into()));
+        ev.set_end(Some(end.into()));
+        let comp = CalComponent::Event(ev);
+
+        let occ = Occurrence::new(dir(), &comp, Some(start), Some(end), false);
+
+        assert!(occ.occurrence_range_in_tz(&berlin).is_none());
+    }
+
+    #[test]
+    fn occurrence_range_in_tz_allday() {
+        let berlin: Tz = "Europe/Berlin".parse().unwrap();
+        let date = NaiveDate::from_ymd_opt(2025, 6, 15).unwrap();
+
+        let ev = allday_event("uid-tz-allday", date);
+        let comp = CalComponent::Event(ev);
+
+        let start = UTC.with_ymd_and_hms(2025, 6, 15, 0, 0, 0).unwrap();
+        let end = UTC.with_ymd_and_hms(2025, 6, 16, 0, 0, 0).unwrap();
+        let occ = Occurrence::new(dir(), &comp, Some(start), Some(end), false);
+
+        assert!(occ.occurrence_range_in_tz(&berlin).is_none());
+    }
+
+    #[test]
+    fn occurrence_range_in_tz_floating() {
+        let berlin: Tz = "Europe/Berlin".parse().unwrap();
+
+        let naive = NaiveDate::from_ymd_opt(2025, 6, 15)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
+        let mut ev = CalEvent::new("uid-tz-float");
+        ev.set_start(Some(CalDate::DateTime(CalDateTime::Floating(naive))));
+        let comp = CalComponent::Event(ev);
+
+        let start = berlin.with_ymd_and_hms(2025, 6, 15, 10, 0, 0).unwrap();
+        let occ = Occurrence::new(dir(), &comp, Some(start), None, false);
+
+        assert!(occ.occurrence_range_in_tz(&berlin).is_none());
+    }
+
+    #[test]
+    fn occurrence_range_in_tz_utc_event() {
+        let berlin: Tz = "Europe/Berlin".parse().unwrap();
+
+        let utc_dt = Utc::now();
+        let mut ev = CalEvent::new("uid-tz-utc");
+        ev.set_start(Some(CalDate::DateTime(CalDateTime::Utc(utc_dt))));
+        let comp = CalComponent::Event(ev);
+
+        let start = utc_dt.with_timezone(&berlin);
+        let occ = Occurrence::new(dir(), &comp, Some(start), None, false);
+
+        // UTC is stored as CalDateTime::Utc, not Timezone, so returns None
+        assert!(occ.occurrence_range_in_tz(&berlin).is_none());
+    }
+
+    #[test]
+    fn occurrence_range_in_tz_only_end_foreign() {
+        let berlin: Tz = "Europe/Berlin".parse().unwrap();
+        let ny: Tz = "America/New_York".parse().unwrap();
+
+        let berlin_due = berlin.with_ymd_and_hms(2025, 6, 15, 14, 0, 0).unwrap();
+
+        let mut td = CalTodo::new("uid-tz-end");
+        td.set_due(Some(berlin_due.into()));
+        let comp = CalComponent::Todo(td);
+
+        let ny_due = berlin_due.with_timezone(&ny);
+        let occ = Occurrence::new_single(dir(), &comp, CompDateType::EndOrDue, ny_due, false);
+
+        let result = occ.occurrence_range_in_tz(&ny);
+        assert!(result.is_some());
+        let range = result.unwrap();
+        assert_eq!(range.tz_name(), "Europe/Berlin");
+        assert!(range.start().is_none());
+        assert!(range.end().is_some());
     }
 }
