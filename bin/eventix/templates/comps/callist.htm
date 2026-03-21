@@ -17,7 +17,7 @@
             data-name="{{ cal.name }}"
             title="{{ cal.name }}"
             class="ev_cal_src ev_cal_src_button
-                 {% if cal.enabled %}
+            {% if cal.enabled %}
                 ev_cal_src_{{ cal.id }}
             {% else %}
                 ev_cal_src_disabled

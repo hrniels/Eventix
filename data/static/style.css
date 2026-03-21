@@ -741,6 +741,7 @@ span.ev_cal_src {
     border: 1px solid #bbbbbb;
     border-radius: 50%;
     display: inline-block;
+    vertical-align: text-bottom;
     flex: 0 0 18px; /* minimum width */
 }
 span.ev_cal_src_button {
