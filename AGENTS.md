@@ -157,6 +157,12 @@ General Rust style:
   setting").
 - Doc comments for trait methods belong on the method definition in the trait itself, not on
   individual implementations. Do not add doc comments to `impl Trait for Type` methods.
+- Every Rust file has a license header of the form:
+    // Copyright (C) <year> Nils Asmussen
+    //
+    // SPDX-License-Identifier: GPL-3.0-or-later
+  <year> is the year of the last change in that file.
+
 
 Naming conventions:
 
