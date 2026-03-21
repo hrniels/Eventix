@@ -34,11 +34,14 @@ async fn action_update(
         }
     };
 
+    let event_tz = form.start_end().effective_timezone(locale);
+
     create_component(
         state,
         locale,
         &form.calendar,
         req.ctype,
+        &event_tz,
         |cal, alarm_type, comp, persalarms, organizer, locale| {
             comp.set_rrule(rrule);
             form.update(cal, alarm_type, comp, persalarms, organizer, locale);

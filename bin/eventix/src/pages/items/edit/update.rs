@@ -5,6 +5,7 @@
 use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
+use chrono_tz::Tz;
 use eventix_ical::col::CalFile;
 use eventix_ical::objects::{
     CalCompType, CalComponent, CalDate, CalDateType, CalEvent, CalTimeZone, CalTodo, Calendar,
@@ -108,6 +109,8 @@ fn action_update(
         calendar
     };
 
+    let event_tz = form.start_end.effective_timezone(locale);
+
     let new_uid = if req.mode == EditMode::Following {
         let rid = rid.unwrap();
 
@@ -181,7 +184,7 @@ fn action_update(
         path.push(format!("{uid}.ics"));
 
         let mut cal = Calendar::default();
-        cal.add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
+        cal.add_timezone(CalTimeZone::new(event_tz.clone()));
 
         let mut new_file = CalFile::new(calendar, path, cal);
         new_file.add_component(comp);
@@ -211,7 +214,10 @@ fn action_update(
                 return Err(anyhow!("Component {} is not recurrent", req.uid));
             }
 
-            file.create_overwrite(&req.uid, rid.unwrap(), locale.timezone(), |_, c| {
+            let tz: Tz = event_tz
+                .parse()
+                .map_err(|_| anyhow!("Invalid timezone: {}", event_tz))?;
+            file.create_overwrite(&req.uid, rid.unwrap(), &tz, |_, c| {
                 form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
             })
             .context("Creating overwrite failed")?;
@@ -220,8 +226,7 @@ fn action_update(
         // add "empty" timezone information as a workaround for davmail/exchange
         // see comment in new/save.rs for details.
         if file.calendar().timezones().is_empty() {
-            file.calendar_mut()
-                .add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
+            file.calendar_mut().add_timezone(CalTimeZone::new(event_tz));
         }
 
         // should we move the file to a different directory?

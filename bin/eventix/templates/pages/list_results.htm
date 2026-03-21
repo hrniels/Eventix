@@ -60,7 +60,7 @@
                     {% endif %}
                 </td>
                 <td width="33%" align="center">
-                    {{ locale.date_range(c.comp.start().cloned(), c.comp.end_or_due().cloned())|safe }}
+                    {{ locale.date_range(c.comp.start().cloned(), c.comp.end_or_due().cloned(), locale.timezone())|safe }}
                 </td>
                 <td width="32%" align="right">
                     {% if let Some(td) = c.comp.as_todo() %}

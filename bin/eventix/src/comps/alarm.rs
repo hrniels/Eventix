@@ -31,12 +31,17 @@ impl AlarmRequest {
         }
     }
 
-    pub fn check(&self, page: &mut Page, locale: &Arc<dyn Locale + Send + Sync>) -> bool {
-        if !self.calendar.check(page, locale) {
+    pub fn check(
+        &self,
+        page: &mut Page,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        event_tz: &str,
+    ) -> bool {
+        if !self.calendar.check(page, locale, event_tz) {
             return false;
         }
         if let Some(personal) = &self.personal {
-            personal.check(page, locale)
+            personal.check(page, locale, event_tz)
         } else {
             true
         }
@@ -45,12 +50,12 @@ impl AlarmRequest {
     #[allow(clippy::type_complexity)]
     pub fn to_alarms(
         &self,
-        locale: &Arc<dyn Locale + Send + Sync>,
+        event_tz: &str,
     ) -> anyhow::Result<(Option<Vec<CalAlarm>>, Option<Option<Vec<CalAlarm>>>)> {
         Ok((
-            self.calendar.to_alarms(locale)?,
+            self.calendar.to_alarms(event_tz)?,
             match &self.personal {
-                Some(pers) => Some(pers.to_alarms(locale)?),
+                Some(pers) => Some(pers.to_alarms(event_tz)?),
                 None => None,
             },
         ))

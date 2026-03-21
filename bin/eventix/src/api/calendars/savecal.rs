@@ -63,7 +63,7 @@ pub async fn handler(
         let alarms = match form.alarm_type {
             AlarmType::Calendar => CalendarAlarmType::Calendar,
             AlarmType::Personal => CalendarAlarmType::Personal {
-                default: if let Some(alarms) = form.alarms.to_alarms(&locale)? {
+                default: if let Some(alarms) = form.alarms.to_alarms(locale.timezone().name())? {
                     alarms.into_iter().next()
                 } else {
                     None

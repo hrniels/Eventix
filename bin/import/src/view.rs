@@ -89,7 +89,7 @@ impl ImportView {
             if let Some(sum) = c.summary.as_ref() {
                 label.push_str(&format!("{sum}\n"));
             }
-            label.push_str(&locale.date_range(c.start.clone(), c.end.clone()));
+            label.push_str(&locale.date_range(c.start.clone(), c.end.clone(), locale.timezone()));
             if let Some(rrule) = c.rrule.as_ref() {
                 label.push_str(&format!("\n{}", rrule.human(locale)));
             }

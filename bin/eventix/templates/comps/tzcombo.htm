@@ -1,0 +1,59 @@
+<input type="hidden" name="{{ name }}" id="{{ id }}" value="{{ selected }}" />
+<input type="text" id="{{ id }}_input" value="{{ selected }}" size="20" />
+
+<!-- prettier-ignore-start -->
+<script type="text/javascript">
+    function initTimezones() {
+        window.TZ_NAMES = [
+            {%- for tz in crate::comps::tzcombo::tz_names() -%}
+                "{{ tz }}",
+            {%- endfor -%}
+        ];
+    }
+</script>
+<!-- prettier-ignore-end -->
+
+<script type="text/javascript">
+    // Registers the timezone combobox widget once across all instances.
+    if (!$.fn.tzcombobox) {
+        $.widget("custom.tzcombobox", {
+            _create: function () {
+                let self = this;
+                let input = this.element;
+                let hidden = $("#" + input.attr("id").replace(/_input$/, ""));
+
+                input.autocomplete({
+                    source: function (request, response) {
+                        let term = request.term.toLowerCase();
+                        let matches = TZ_NAMES.filter(function (tz) {
+                            return tz.toLowerCase().indexOf(term) !== -1;
+                        });
+                        response(matches.slice(0, 20));
+                    },
+                    minLength: 0,
+                    delay: 0,
+                    select: function (_event, ui) {
+                        hidden.val(ui.item.value).trigger("change");
+                    },
+                    change: function (_event, ui) {
+                        if (!ui.item) {
+                            // restore to the last known good value
+                            input.val(hidden.val());
+                        }
+                    },
+                });
+
+                // open the full list on focus
+                input.on("focus", function () {
+                    input.autocomplete("search", input.val());
+                });
+            },
+        });
+
+        initTimezones();
+    }
+
+    $(function () {
+        $("#{{ id }}_input").tzcombobox();
+    });
+</script>

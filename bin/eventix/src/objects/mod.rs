@@ -26,6 +26,7 @@ pub fn create_component<F>(
     locale: &Arc<dyn Locale + Send + Sync>,
     calendar: &str,
     ctype: CalCompType,
+    event_tz: &str,
     populate: F,
 ) -> anyhow::Result<()>
 where
@@ -80,7 +81,7 @@ where
     //
     // A working fix is to add a VTIMEZONE entry with just the timezone name and let davmail/MS
     // exchange add the daylight/standard information for us.
-    cal.add_timezone(CalTimeZone::new(locale.timezone().name().to_string()));
+    cal.add_timezone(CalTimeZone::new(event_tz.to_string()));
 
     let mut file = CalFile::new(calendar.clone(), path, cal);
 

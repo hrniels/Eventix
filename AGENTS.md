@@ -96,11 +96,11 @@ LINTING AND FORMATTING
 
 Format code (required before commit):
 
-    cargo fmt
+    ./b format
 
 Check formatting in CI mode:
 
-    cargo fmt -- --check
+    ./b format-check
 
 Run Clippy (all targets and features):
 
@@ -157,6 +157,12 @@ General Rust style:
   setting").
 - Doc comments for trait methods belong on the method definition in the trait itself, not on
   individual implementations. Do not add doc comments to `impl Trait for Type` methods.
+- Every Rust file has a license header of the form:
+    // Copyright (C) <year> Nils Asmussen
+    //
+    // SPDX-License-Identifier: GPL-3.0-or-later
+  <year> is the year of the last change in that file.
+
 
 Naming conventions:
 
@@ -253,7 +259,7 @@ SAFE WORKFLOW FOR AGENTS
 
 Before committing changes:
 
-1. Run cargo fmt
+1. Run ./b format
 2. Run cargo clippy --all-targets --all-features
 3. Run cargo test (or targeted crate tests first)
 
