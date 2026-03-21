@@ -6,9 +6,7 @@ use askama::Template;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalDate, CalDateTime, CalDateType};
-use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 use crate::comps::date::{Date, DateTemplate};
 use crate::comps::time::{Time, TimeTemplate};
@@ -37,16 +35,11 @@ impl DateTime {
         self.time.clone()
     }
 
-    pub fn to_caldate(
-        &self,
-        locale: &Arc<dyn Locale + Send + Sync>,
-        ty: CalDateType,
-        end: bool,
-    ) -> Option<CalDate> {
+    pub fn to_caldate(&self, timezone: &str, ty: CalDateType, end: bool) -> Option<CalDate> {
         match &self.time {
             Some(time) => Some(CalDate::DateTime(CalDateTime::Timezone(
                 self.date.date()?.and_time(time.value()),
-                locale.timezone().name().to_string(),
+                timezone.to_string(),
             ))),
             None => Some(self.date.to_caldate(ty, end)?),
         }

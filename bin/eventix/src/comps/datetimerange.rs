@@ -5,7 +5,7 @@
 use askama::Template;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
-use eventix_ical::objects::{CalCompType, CalDate, CalDateType};
+use eventix_ical::objects::{CalCompType, CalDate, CalDateTime, CalDateType};
 use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -13,6 +13,7 @@ use std::sync::Arc;
 use crate::comps::date::Date;
 use crate::comps::datetime::DateTime;
 use crate::comps::time::{Time, TimeTemplate};
+use crate::comps::tzcombo::TzComboTemplate;
 use crate::html::filters;
 
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -21,19 +22,28 @@ pub struct DateTimeRange {
     to: DateTime,
     from_enabled: Option<bool>,
     to_enabled: Option<bool>,
+    timezone: Option<String>,
 }
 
 impl DateTimeRange {
-    pub fn new(from: DateTime, to: DateTime) -> Self {
+    pub fn new(from: DateTime, to: DateTime, timezone: String) -> Self {
         Self {
             from_enabled: from.date().map(|_| true),
             to_enabled: to.date().map(|_| true),
             from,
             to,
+            timezone: Some(timezone),
         }
     }
 
     pub fn new_from_caldate(from: Option<CalDate>, to: Option<CalDate>, tz: &Tz) -> Self {
+        // Extract the event's own timezone from the start date if available.
+        let event_tz = from.as_ref().and_then(|f| match f {
+            CalDate::DateTime(CalDateTime::Timezone(_, tzid)) => Some(tzid.clone()),
+            CalDate::DateTime(CalDateTime::Utc(_)) => Some("UTC".to_string()),
+            _ => None,
+        });
+
         Self {
             from: DateTime::new(
                 Date::new(from.as_ref().map(|f| f.as_start_with_tz(tz).date_naive())),
@@ -51,6 +61,7 @@ impl DateTimeRange {
             ),
             from_enabled: from.map(|_| true),
             to_enabled: to.map(|_| true),
+            timezone: event_tz,
         }
     }
 
@@ -58,21 +69,30 @@ impl DateTimeRange {
         self.from.time().is_none() && self.to.time().is_none()
     }
 
+    /// Returns the timezone name stored in this range, falling back to the
+    /// locale timezone if none was set.
+    fn effective_timezone(&self, locale: &Arc<dyn Locale + Send + Sync>) -> String {
+        self.timezone
+            .clone()
+            .unwrap_or_else(|| locale.timezone().name().to_string())
+    }
+
     pub fn as_caldates(
         &self,
         locale: &Arc<dyn Locale + Send + Sync>,
         ty: CalDateType,
     ) -> (Option<CalDate>, Option<CalDate>) {
+        let tz = self.effective_timezone(locale);
         (
             if self.from_enabled.is_none() {
                 None
             } else {
-                self.from.to_caldate(locale, ty, false)
+                self.from.to_caldate(&tz, ty, false)
             },
             if self.to_enabled.is_none() {
                 None
             } else {
-                self.to.to_caldate(locale, ty, true)
+                self.to.to_caldate(&tz, ty, true)
             },
         )
     }
@@ -92,6 +112,7 @@ pub struct DateTimeRangeTemplate<'a> {
     from_enabled: bool,
     to_enabled: bool,
     all_day: bool,
+    tz_combo: TzComboTemplate,
 }
 
 impl<'a> DateTimeRangeTemplate<'a> {
@@ -101,11 +122,15 @@ impl<'a> DateTimeRangeTemplate<'a> {
         name: &'a str,
         value: Option<DateTimeRange>,
     ) -> Self {
+        let tz_name = value
+            .as_ref()
+            .and_then(|v| v.timezone.clone())
+            .unwrap_or_else(|| locale.timezone().name().to_string());
         Self {
             locale,
             ctype,
             name,
-            id: name.replace("[", "_").replace("]", "_"),
+            id: name.replace(['[', ']'], "_"),
             from_date: value.as_ref().and_then(|v| v.from.date()),
             to_date: value.as_ref().and_then(|v| v.to.date()),
             from_time: TimeTemplate::new(
@@ -125,6 +150,7 @@ impl<'a> DateTimeRangeTemplate<'a> {
                 .as_ref()
                 .map(|v| v.to_enabled.is_some())
                 .unwrap_or(false),
+            tz_combo: TzComboTemplate::new(format!("{name}[timezone]"), tz_name),
         }
     }
 }

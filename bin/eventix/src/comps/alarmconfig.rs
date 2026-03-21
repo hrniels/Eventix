@@ -186,7 +186,9 @@ impl AlarmConfig {
             && self
                 .datetime
                 .as_ref()
-                .and_then(|dt| dt.to_caldate(locale, CalDateType::Inclusive, false))
+                .and_then(|dt| {
+                    dt.to_caldate(locale.timezone().name(), CalDateType::Inclusive, false)
+                })
                 .is_none()
         {
             page.add_error(locale.translate("error.valid_date_time"));
@@ -218,7 +220,9 @@ impl AlarmConfig {
                 },
                 Trigger::Absolute => CalTrigger::Absolute(
                     match self.datetime {
-                        Some(ref dt) => dt.to_caldate(locale, CalDateType::Inclusive, false),
+                        Some(ref dt) => {
+                            dt.to_caldate(locale.timezone().name(), CalDateType::Inclusive, false)
+                        }
                         None => None,
                     }
                     .ok_or_else(|| anyhow!("Invalid datetime"))?

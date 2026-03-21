@@ -132,6 +132,10 @@
             {{ to_time|safe }}
         </td>
     </tr>
+    <tr id="{{ id }}tz_row">
+        <td>{{ "Timezone"|t(locale) }}:</td>
+        <td>{{ tz_combo|safe }}</td>
+    </tr>
 </table>
 
 <!-- prettier-ignore-start -->
@@ -152,9 +156,11 @@
         if (allday) {
             $("#{{ id }}_from__time_").prop("disabled", true);
             $("#{{ id }}_to__time_").prop("disabled", true);
+            $("#{{ id }}tz_row").hide();
         } else {
             $("#{{ id }}_from__time_").prop("disabled", false);
             $("#{{ id }}_to__time_").prop("disabled", false);
+            $("#{{ id }}tz_row").show();
         }
     }
 </script>

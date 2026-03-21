@@ -88,13 +88,13 @@ impl CompNew {
                     Some(Time::new(next_next_hour.naive_local().time())),
                 );
 
-                DateTimeRange::new(start, end)
+                DateTimeRange::new(start, end, timezone.name().to_string())
             }
 
             // all-day event on given date
             (CalCompType::Event, true) => {
                 let start = DateTime::new(Date::new(Some(date.date_naive())), None);
-                DateTimeRange::new(start.clone(), start)
+                DateTimeRange::new(start.clone(), start, timezone.name().to_string())
             }
 
             (CalCompType::Todo, _) => DateTimeRange::default(),
