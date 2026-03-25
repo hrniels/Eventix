@@ -24,6 +24,7 @@ pub fn router(state: EventixState) -> Router {
 struct Request {
     calendar: String,
     url: String,
+    op_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -37,6 +38,7 @@ struct AuthTemplate {
     locale: Arc<dyn Locale + Send + Sync>,
     error: String,
     url: String,
+    op_url: String,
 }
 
 async fn handler(
@@ -50,6 +52,7 @@ async fn handler(
         locale,
         error,
         url: req.url,
+        op_url: req.op_url,
     }
     .render()
     .context("auth template")?;

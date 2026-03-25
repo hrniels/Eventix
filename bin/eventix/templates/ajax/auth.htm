@@ -12,8 +12,19 @@
     </style>
     <script type="text/javascript">
         function submitAndClose() {
-            syncAll("last-update", "sync-spinner", "out-of-sync", true, $("#result_url").val());
+            const auth_url = $("#result_url").val();
+            const op_url = "{{ op_url|safe }}";
+            let url =
+                op_url +
+                (op_url.includes("?") ? "&" : "?") +
+                "auth_url=" +
+                encodeURIComponent(auth_url);
             fireEvent(new DeselectEvent());
+            postRequest(url, function (data) {
+                handleCalErrors(data);
+                if (handleAuthErrors(data, op_url)) return;
+                if (data.changed) reloadContent();
+            });
         }
     </script>
 

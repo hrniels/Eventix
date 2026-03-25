@@ -7,16 +7,16 @@ function postWithSpinner(spinnerId, url, onresponse) {
     postRequest(url, function (data) {
         $("#" + spinnerId).removeClass("ev_spin");
         handleCalErrors(data);
-        const auth = handleAuthErrors(data);
+        const auth = handleAuthErrors(data, url);
         onresponse(data, !auth);
     });
 }
 
-function handleAuthErrors(data) {
+function handleAuthErrors(data, op_url) {
     for (var cal in data.collections) {
         // auth problem? Then show auth popup
         if (data.collections[cal].AuthFailed) {
-            fireEvent(createAuthEvent(cal, data.collections[cal].AuthFailed));
+            fireEvent(createAuthEvent(cal, data.collections[cal].AuthFailed, op_url));
             return true;
         }
     }
