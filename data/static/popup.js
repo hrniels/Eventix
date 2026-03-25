@@ -182,14 +182,16 @@ function createHelpEvent() {
     return new PageEvent("/api/help");
 }
 
-function createAuthEvent(cal, url, op_url) {
+function createAuthEvent(cal, url, op_url, spinnerId) {
     return new PageEvent(
         "/api/auth?calendar=" +
             cal +
             "&url=" +
             encodeURIComponent(url) +
             "&op_url=" +
-            encodeURIComponent(op_url),
+            encodeURIComponent(op_url) +
+            "&spinner_id=" +
+            encodeURIComponent(spinnerId),
     );
 }
 

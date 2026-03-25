@@ -25,6 +25,7 @@ struct Request {
     calendar: String,
     url: String,
     op_url: String,
+    spinner_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -39,6 +40,7 @@ struct AuthTemplate {
     error: String,
     url: String,
     op_url: String,
+    spinner_id: String,
 }
 
 async fn handler(
@@ -53,6 +55,7 @@ async fn handler(
         error,
         url: req.url,
         op_url: req.op_url,
+        spinner_id: req.spinner_id,
     }
     .render()
     .context("auth template")?;

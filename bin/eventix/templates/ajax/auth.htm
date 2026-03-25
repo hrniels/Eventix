@@ -20,9 +20,12 @@
                 "auth_url=" +
                 encodeURIComponent(auth_url);
             fireEvent(new DeselectEvent());
+            const spinner_id = "{{ spinner_id }}";
+            $("#" + spinner_id).addClass("ev_spin");
             postRequest(url, function (data) {
+                $("#" + spinner_id).removeClass("ev_spin");
                 handleCalErrors(data);
-                if (handleAuthErrors(data, op_url)) return;
+                if (handleAuthErrors(data, op_url, spinner_id)) return;
                 if (data.changed) reloadContent();
             });
         }
