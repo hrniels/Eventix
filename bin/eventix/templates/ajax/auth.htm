@@ -20,12 +20,7 @@
                 "auth_url=" +
                 encodeURIComponent(auth_url);
             fireEvent(new DeselectEvent());
-            const spinner_id = "{{ spinner_id }}";
-            $("#" + spinner_id).addClass("ev_spin");
-            postRequest(url, function (data) {
-                $("#" + spinner_id).removeClass("ev_spin");
-                handleCalErrors(data);
-                if (handleAuthErrors(data, op_url, spinner_id)) return;
+            postWithSpinner("{{ spinner_id }}", url, function (data, auth_failed) {
                 if (data.changed) reloadContent();
             });
         }

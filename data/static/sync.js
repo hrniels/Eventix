@@ -2,33 +2,55 @@ let syncForce = false;
 let syncing = false;
 let outOfSync = false;
 
-function postWithSpinner(spinnerId, url, onresponse) {
+function startSpinning(spinnerId) {
     $("#" + spinnerId).addClass("ev_spin");
+    $("#" + spinnerId)
+        .parent()
+        .removeClass("ev_button_error");
+}
+
+function stopSpinning(spinnerId, error) {
+    $("#" + spinnerId).removeClass("ev_spin");
+    if (error) {
+        $("#" + spinnerId)
+            .parent()
+            .addClass("ev_button_error")
+            .effect("shake");
+    }
+}
+
+function postWithSpinner(spinnerId, url, onresponse) {
+    startSpinning(spinnerId);
     postRequest(url, function (data) {
-        $("#" + spinnerId).removeClass("ev_spin");
-        handleCalErrors(data);
-        const auth = handleAuthErrors(data, url, spinnerId);
-        onresponse(data, !auth);
+        const error = handleCalErrors(data);
+        const auth_error = handleAuthErrors(data, url, spinnerId);
+        stopSpinning(spinnerId, error || auth_error);
+        onresponse(data, !auth_error);
     });
 }
 
 function handleAuthErrors(data, op_url, spinnerId) {
+    var error = false;
     for (var cal in data.collections) {
         // auth problem? Then show auth popup
         if (data.collections[cal].AuthFailed) {
             fireEvent(createAuthEvent(cal, data.collections[cal].AuthFailed, op_url, spinnerId));
             return true;
-        }
+        } else if (data.collections[cal].Error) error = true;
     }
-    return false;
+    return error;
 }
 
 function handleCalErrors(data) {
+    var error = false;
     for (var cal in data.calendars) {
         let btn = $("#ev_cal_src_button_" + cal);
-        if (data.calendars[cal]) btn.show();
-        else btn.hide();
+        if (data.calendars[cal]) {
+            error = true;
+            btn.show();
+        } else btn.hide();
     }
+    return error;
 }
 
 function defaultSyncFinish(onsuccess) {
