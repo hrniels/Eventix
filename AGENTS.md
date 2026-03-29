@@ -6,9 +6,7 @@ project-specific code style and architectural conventions.
 
 The project is a Rust workspace built with Cargo.
 
-------------------------------------------------------------
-PROJECT OVERVIEW
-------------------------------------------------------------
+## PROJECT OVERVIEW
 
 - Language: Rust (stable toolchain assumed)
 - Build system: Cargo (workspace)
@@ -21,15 +19,13 @@ PROJECT OVERVIEW
 Workspace layout:
 
 - Cargo.toml (workspace root)
-- bin/        -> binary crates (app entrypoints)
-- libs/       -> reusable domain libraries
-- tools/      -> helper scripts (not part of core build)
+- bin/ -> binary crates (app entrypoints)
+- libs/ -> reusable domain libraries
+- tools/ -> helper scripts (not part of core build)
 
 Workspace members are defined in the root Cargo.toml under [workspace].
 
-------------------------------------------------------------
-BUILD COMMANDS
-------------------------------------------------------------
+## BUILD COMMANDS
 
 Build entire workspace:
 
@@ -51,9 +47,7 @@ Check only (faster, no artifacts):
 
     cargo check
 
-------------------------------------------------------------
-TEST COMMANDS
-------------------------------------------------------------
+## TEST COMMANDS
 
 Run all tests in workspace:
 
@@ -90,9 +84,7 @@ Show output from passing tests:
 Agents should prefer running tests at the smallest relevant scope first
 (single crate or single test) before running the full workspace suite.
 
-------------------------------------------------------------
-LINTING AND FORMATTING
-------------------------------------------------------------
+## LINTING AND FORMATTING
 
 Format code (required before commit):
 
@@ -113,9 +105,7 @@ Rust style conventions apply. Please wrap lines at a maximum width of 100
 characters for new or modified code to keep diffs readable and consistent
 with project conventions.
 
-------------------------------------------------------------
-ARCHITECTURE GUIDELINES
-------------------------------------------------------------
+## ARCHITECTURE GUIDELINES
 
 The workspace is layered:
 
@@ -131,9 +121,7 @@ Agents should:
 
 Tests are colocated with modules using #[cfg(test)]. Follow this pattern.
 
-------------------------------------------------------------
-CODE STYLE GUIDELINES
-------------------------------------------------------------
+## CODE STYLE GUIDELINES
 
 General Rust style:
 
@@ -158,11 +146,10 @@ General Rust style:
 - Doc comments for trait methods belong on the method definition in the trait itself, not on
   individual implementations. Do not add doc comments to `impl Trait for Type` methods.
 - Every Rust file has a license header of the form:
-    // Copyright (C) <year> Nils Asmussen
-    //
-    // SPDX-License-Identifier: GPL-3.0-or-later
+  // Copyright (C) <year> Nils Asmussen
+  //
+  // SPDX-License-Identifier: GPL-3.0-or-later
   <year> is the year of the last change in that file.
-
 
 Naming conventions:
 
@@ -215,9 +202,7 @@ Testing:
   (e.g. `#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]`). That code is maintained and
   tested by the upstream crate; testing it here provides no value.
 
-------------------------------------------------------------
-ADDING NEW CODE
-------------------------------------------------------------
+## ADDING NEW CODE
 
 When adding features:
 
@@ -234,18 +219,14 @@ Public APIs in libs/ should:
 - Hide internal implementation details.
 - Avoid leaking external crate types in public interfaces unless stable.
 
-------------------------------------------------------------
-SCRIPTS AND TOOLS
-------------------------------------------------------------
+## SCRIPTS AND TOOLS
 
 The tools/ directory contains helper scripts (Python and shell).
 They are not part of the Cargo build graph.
 
 Agents should not modify tooling unless explicitly requested.
 
-------------------------------------------------------------
-CURSOR / COPILOT RULES
-------------------------------------------------------------
+## CURSOR / COPILOT RULES
 
 No .cursor/rules/, .cursorrules, or
 .github/copilot-instructions.md files are present.
@@ -253,9 +234,7 @@ No .cursor/rules/, .cursorrules, or
 If such files are added in the future, agents must treat them as
 authoritative guidance and update this document accordingly.
 
-------------------------------------------------------------
-SAFE WORKFLOW FOR AGENTS
-------------------------------------------------------------
+## SAFE WORKFLOW FOR AGENTS
 
 Before committing changes:
 
@@ -268,10 +247,3 @@ in libs/state, always run that crate's full test suite.
 
 Avoid destructive git commands. Do not amend commits unless explicitly
 requested. Never reset unrelated changes in the working tree.
-
-------------------------------------------------------------
-END
-------------------------------------------------------------
-
-This file is intended to help automated agents operate safely and
-consistently within this Rust workspace.
