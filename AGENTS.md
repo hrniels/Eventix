@@ -219,6 +219,46 @@ Public APIs in libs/ should:
 - Hide internal implementation details.
 - Avoid leaking external crate types in public interfaces unless stable.
 
+## INTERNATIONALIZATION (i18n)
+
+The application supports English and German. All user-visible text must
+be translated. Never introduce hardcoded user-facing strings without
+routing them through the translation system.
+
+Translation files:
+
+- data/locale/English.toml
+- data/locale/German.toml
+
+Both files contain a single [table] section with alphabetically sorted
+key-value pairs. The English file maps keys to themselves; the German
+file maps keys to their German translations.
+
+Adding a new translatable string:
+
+1. Add the key to both TOML files in alphabetical order.
+   English: "My Label" = "My Label"
+   German: "My Label" = "Mein Label"
+
+2a. In Askama templates (.htm), use the |t(locale) filter:
+{{ "My Label"|t(locale) }}
+The template struct must have a `locale` field of type
+Arc<dyn Locale + Send + Sync> and `use crate::html::filters;`.
+
+2b. In Rust code, call translate() on any CalLocale/Locale implementor:
+locale.translate("My Label")
+
+2c. For parameterized strings, use formatx!:
+TOML key: "{} items" = "{} Einträge"
+Code: formatx!(locale.translate("{} items"), count).unwrap()
+
+When text is needed inside JavaScript in templates, emit the translated
+strings as JS variables in the template and reference those variables
+from the JS code. Do not hardcode user-facing strings in JavaScript.
+
+If a key is missing from a TOML file, the system falls back to the
+English key string.
+
 ## SCRIPTS AND TOOLS
 
 The tools/ directory contains helper scripts (Python and shell).
