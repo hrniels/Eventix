@@ -137,6 +137,7 @@ impl<'a> DateTimeRangeTemplate<'a> {
             .as_ref()
             .and_then(|v| v.timezone.clone())
             .unwrap_or_else(|| locale.timezone().name().to_string());
+        let tz_combo = TzComboTemplate::new(locale.clone(), format!("{name}[timezone]"), tz_name);
         Self {
             locale,
             ctype,
@@ -161,7 +162,7 @@ impl<'a> DateTimeRangeTemplate<'a> {
                 .as_ref()
                 .map(|v| v.to_enabled.is_some())
                 .unwrap_or(false),
-            tz_combo: TzComboTemplate::new(format!("{name}[timezone]"), tz_name),
+            tz_combo,
         }
     }
 }

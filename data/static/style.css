@@ -329,6 +329,7 @@ td.ev_status_need_info {
     background-image: linear-gradient(#f9f9f9, #f1f1f1);
     border-radius: 5px;
     display: inline-block;
+    position: relative;
     width: auto;
     padding-top: 2px;
     padding-left: 0.6em;
@@ -421,6 +422,16 @@ a.ev_button_critical:hover {
     background-image: linear-gradient(#ff0000, #e00000) !important;
     color: white;
     text-decoration: none;
+}
+
+.ev_button_error {
+    background-image: linear-gradient(#ff0000, #e00000) !important;
+    border: 1px solid red;
+    border-left: 5px solid red;
+    color: white;
+}
+.ev_button_error * {
+    color: white;
 }
 
 .ev_button_selected,
@@ -824,6 +835,62 @@ span.ev_cal_src_disabled {
     justify-content: flex-end;
     align-items: center;
     gap: 0.3em;
+}
+
+/* ------------ TIMEZONE COMBO ------------ */
+
+.ev_tz_filter {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-bottom: 1px solid #dddddd;
+    font-size: 11pt;
+    outline: none;
+}
+
+.ev_tz_list {
+    max-height: 250px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+}
+
+.ev_tz_wrapper {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.ev_tz_name {
+    flex: 1 1 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.ev_tz_offset {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    opacity: 0.65;
+}
+
+.ev_tz_selected > .ui-menu-item-wrapper {
+    background: #637591;
+    color: #fff;
+}
+
+.ev_tz_selected .ev_tz_offset {
+    opacity: 1;
+}
+
+.ev_tz_empty {
+    padding: 8px;
+    text-align: center;
+    color: #999;
+    font-style: italic;
 }
 
 /* ------------ JQUERY ------------ */

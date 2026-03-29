@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import shlex
 import subprocess
+import sys
 
 # Define application identifiers for normal and debug mode
 APP_ID = "com.github.hrniels.Eventix"
@@ -35,6 +36,8 @@ def dev_env():
 
     # Add DavMail binary to PATH for subprocess usage
     davmail_bin = os.path.abspath("contrib/davmail/dist")
+    if not os.path.isfile(davmail_bin + "/davmail"):
+        sys.exit("Please install davmail first via ./b davmail")
     env["PATH"] = os.pathsep.join([davmail_bin, env.get("PATH", "")])
     # use a project-local directory for data and config
     env["XDG_DATA_HOME"] = str(run_dir.absolute())
