@@ -1,59 +1,315 @@
 <input type="hidden" name="{{ name }}" id="{{ id }}" value="{{ selected }}" />
-<input type="text" id="{{ id }}_input" value="{{ selected }}" size="20" />
 
 <!-- prettier-ignore-start -->
 <script type="text/javascript">
     function initTimezones() {
         window.TZ_NAMES = [
-            {%- for tz in crate::comps::tzcombo::tz_names() -%}
-                "{{ tz }}",
-            {%- endfor -%}
+            {% for e in crate::comps::tzcombo::tz_entries() -%}
+            { offset: "{{ e.offset }}", value: "{{ e.value }}" },
+            {% endfor -%}
         ];
     }
 </script>
 <!-- prettier-ignore-end -->
-
 <script type="text/javascript">
     // Registers the timezone combobox widget once across all instances.
     if (!$.fn.tzcombobox) {
+        initTimezones();
+
+        var TZ_FILTER_LABEL = '{{ "Filter"|t(locale) }}';
+        var TZ_NO_MATCHES = '{{ "No matches"|t(locale) }}';
+
+        function tzFindByValue(val) {
+            for (let i = 0; i < TZ_NAMES.length; i++) {
+                if (TZ_NAMES[i].value === val) return TZ_NAMES[i];
+            }
+            return null;
+        }
+
+        function tzDisplayText(tz) {
+            return tz.value + " " + tz.offset;
+        }
+
         $.widget("custom.tzcombobox", {
             _create: function () {
-                let self = this;
-                let input = this.element;
-                let hidden = $("#" + input.attr("id").replace(/_input$/, ""));
+                let hidden = this.element;
+                let selected = hidden.val();
+                let entry = tzFindByValue(selected);
+                let displayText = entry ? tzDisplayText(entry) : selected;
 
-                input.autocomplete({
-                    source: function (request, response) {
-                        let term = request.term.toLowerCase();
-                        let matches = TZ_NAMES.filter(function (tz) {
-                            return tz.toLowerCase().indexOf(term) !== -1;
-                        });
-                        response(matches.slice(0, 20));
+                // Build the trigger button using jQuery UI selectmenu classes
+                // so it looks identical to other selectmenu buttons.
+                this.button = $("<span>", {
+                    tabindex: 0,
+                    role: "combobox",
+                    "aria-expanded": "false",
+                    "aria-haspopup": "listbox",
+                    class:
+                        "ui-selectmenu-button ui-selectmenu-button-closed" + " ui-button ui-widget",
+                }).insertAfter(hidden);
+
+                $("<span>", {
+                    class: "ui-selectmenu-icon ui-icon ui-icon-triangle-1-s",
+                }).appendTo(this.button);
+
+                this.buttonText = $("<span>", {
+                    class: "ui-selectmenu-text",
+                })
+                    .text(displayText)
+                    .appendTo(this.button);
+
+                // Build the popup using selectmenu menu-wrapper classes.
+                this.menuWrap = $("<div>", {
+                    class: "ui-selectmenu-menu ui-front",
+                }).appendTo(this.button.parent());
+
+                this.filterInput = $("<input>", {
+                    class: "ev_tz_filter",
+                    type: "text",
+                    placeholder: TZ_FILTER_LABEL + "\u2026",
+                }).appendTo(this.menuWrap);
+
+                this.list = $("<ul>", {
+                    class: "ui-menu ui-corner-bottom ui-widget" + " ui-widget-content ev_tz_list",
+                    role: "listbox",
+                }).appendTo(this.menuWrap);
+
+                this.isOpen = false;
+                this.focusIdx = -1;
+                this.filtered = [];
+                this._buildList("");
+
+                // --- Event handlers ---
+
+                this._on(this.button, {
+                    click: function (e) {
+                        e.stopPropagation();
+                        this._toggle();
                     },
-                    minLength: 0,
-                    delay: 0,
-                    select: function (_event, ui) {
-                        hidden.val(ui.item.value).trigger("change");
-                    },
-                    change: function (_event, ui) {
-                        if (!ui.item) {
-                            // restore to the last known good value
-                            input.val(hidden.val());
+                    keydown: function (e) {
+                        if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+                            e.preventDefault();
+                            if (!this.isOpen) this._open();
+                        } else if (e.key === "Escape") {
+                            if (this.isOpen) this._close();
                         }
                     },
                 });
 
-                // open the full list on focus
-                input.on("focus", function () {
-                    input.autocomplete("search", input.val());
+                this._on(this.filterInput, {
+                    input: function () {
+                        this._buildList(this.filterInput.val());
+                    },
+                    keydown: function (e) {
+                        if (
+                            e.key === "ArrowDown" ||
+                            e.key === "ArrowUp" ||
+                            e.key === "PageUp" ||
+                            e.key === "PageDown" ||
+                            e.key === "Enter" ||
+                            e.key === "Home" ||
+                            e.key === "End"
+                        ) {
+                            e.preventDefault();
+                            switch (e.key) {
+                                case "ArrowDown":
+                                    this._moveFocus(1);
+                                    break;
+                                case "ArrowUp":
+                                    this._moveFocus(-1);
+                                    break;
+                                case "PageDown":
+                                    this._moveFocus(10);
+                                    break;
+                                case "PageUp":
+                                    this._moveFocus(-10);
+                                    break;
+                                case "Home":
+                                    this._setFocus(0);
+                                    break;
+                                case "End":
+                                    this._setFocus(this.list.children(".ui-menu-item").length - 1);
+                                    break;
+                                case "Enter":
+                                    if (
+                                        this.focusIdx >= 0 &&
+                                        this.focusIdx < this.filtered.length
+                                    ) {
+                                        this._select(this.filtered[this.focusIdx]);
+                                    }
+                                    break;
+                            }
+                        } else if (e.key === "Escape") {
+                            this._close();
+                        }
+                    },
+                });
+
+                this._on(this.menuWrap, {
+                    click: function (e) {
+                        e.stopPropagation();
+                    },
+                });
+
+                this._on(this.document, {
+                    click: function () {
+                        if (this.isOpen) this._close();
+                    },
                 });
             },
-        });
 
-        initTimezones();
+            _toggle: function () {
+                if (this.isOpen) {
+                    this._close();
+                } else {
+                    this._open();
+                }
+            },
+
+            _open: function () {
+                this.filterInput.val("");
+                this._buildList("");
+                this.isOpen = true;
+
+                this.button
+                    .removeClass("ui-selectmenu-button-closed")
+                    .addClass("ui-selectmenu-button-open ui-corner-top");
+                this.menuWrap.addClass("ui-selectmenu-open");
+                this.button.attr("aria-expanded", "true");
+
+                // Position the menu below the button.
+                this.menuWrap.position({
+                    my: "left top",
+                    at: "left bottom",
+                    of: this.button,
+                    collision: "none",
+                });
+
+                this.filterInput.focus();
+                this._scrollToSelected();
+            },
+
+            _close: function () {
+                this.isOpen = false;
+
+                this.button
+                    .removeClass("ui-selectmenu-button-open ui-corner-top")
+                    .addClass("ui-selectmenu-button-closed");
+                this.menuWrap.removeClass("ui-selectmenu-open");
+                this.button.attr("aria-expanded", "false");
+                this.focusIdx = -1;
+                this.button.focus();
+            },
+
+            _buildList: function (term) {
+                let lowerTerm = term.toLowerCase();
+                this.filtered =
+                    lowerTerm === ""
+                        ? TZ_NAMES
+                        : TZ_NAMES.filter(function (tz) {
+                              let text = tz.value + " " + tz.offset;
+                              return text.toLowerCase().indexOf(lowerTerm) !== -1;
+                          });
+
+                let self = this;
+                let currentVal = this.element.val();
+                this.list.empty();
+
+                if (this.filtered.length === 0) {
+                    $("<li>", { class: "ev_tz_empty" }).text(TZ_NO_MATCHES).appendTo(this.list);
+                    this.focusIdx = -1;
+                    return;
+                }
+
+                $.each(this.filtered, function (i, tz) {
+                    let wrapper = $("<div>", {
+                        class: "ui-menu-item-wrapper ev_tz_wrapper",
+                    });
+                    $("<span>", { class: "ev_tz_name" }).text(tz.value).appendTo(wrapper);
+                    $("<span>", { class: "ev_tz_offset" }).text(tz.offset).appendTo(wrapper);
+
+                    let li = $("<li>", { class: "ui-menu-item" }).append(wrapper).data("tz", tz);
+
+                    if (tz.value === currentVal) {
+                        li.addClass("ev_tz_selected");
+                        wrapper.addClass("ui-state-active");
+                    }
+
+                    li.on("click", function () {
+                        self._select(tz);
+                    });
+
+                    li.appendTo(self.list);
+                });
+
+                this.focusIdx = -1;
+            },
+
+            _select: function (tz) {
+                let old = this.element.val();
+                this.element.val(tz.value);
+                this.buttonText.text(tzDisplayText(tz));
+                this._close();
+
+                if (old !== tz.value) {
+                    this.element.trigger("change");
+                }
+            },
+
+            _moveFocus: function (delta) {
+                let items = this.list.children(".ui-menu-item");
+
+                let idx = 0;
+                if (this.focusIdx < 0) {
+                    idx = delta > 0 ? 0 : items.length - 1;
+                } else {
+                    idx = this.focusIdx + delta;
+                    if (idx < 0) idx = 0;
+                    if (idx >= items.length) idx = items.length - 1;
+                }
+
+                this._setFocus(idx);
+            },
+
+            _setFocus: function (idx) {
+                if (this.filtered.length === 0) return;
+
+                let items = this.list.children(".ui-menu-item");
+                if (items.length === 0) return;
+
+                // Remove old focus.
+                if (this.focusIdx >= 0 && this.focusIdx < items.length) {
+                    $(items[this.focusIdx]).children().removeClass("ui-state-active");
+                }
+
+                this.focusIdx = idx;
+                let focused = $(items[this.focusIdx]);
+                focused.children().addClass("ui-state-active");
+                this._scrollIntoView(focused);
+            },
+
+            _scrollToSelected: function () {
+                let selected = this.list.children(".ev_tz_selected").first();
+                if (selected.length) {
+                    this._scrollIntoView(selected);
+                }
+            },
+
+            _scrollIntoView: function (item) {
+                let container = this.list[0];
+                let el = item[0];
+                let top = el.offsetTop - container.offsetTop;
+                let bottom = top + el.offsetHeight;
+                if (top < container.scrollTop) {
+                    container.scrollTop = top;
+                } else if (bottom > container.scrollTop + container.clientHeight) {
+                    container.scrollTop = bottom - container.clientHeight;
+                }
+            },
+        });
     }
 
     $(function () {
-        $("#{{ id }}_input").tzcombobox();
+        $("#{{ id }}").tzcombobox();
     });
 </script>
