@@ -1,25 +1,23 @@
-<div>
+<div class="ev_border ev_box">
+    <div class="ev_header">
+        <span style="float: left">
+            <i
+                class="ev_tag bi bi-tag"
+                title="{{ occ.uid() }}"
+                onclick="copyToClipboard('{{ occ.uid() }}')"
+            >
+            </i>
+        </span>
+        {{ occ.summary().unwrap() }}
+        <span style="float: right">
+            <div
+                class="ev_cal_src ev_cal_src_{{ dir.id() }}"
+                style="width: 20px; height: 20px"
+                title="{{ dir.name() }}"
+            ></div>
+        </span>
+    </div>
     <table width="100%" class="ev_table">
-        <tr>
-            <th colspan="2" align="center">
-                <span style="float: left">
-                    <i
-                        class="ev_tag bi bi-tag"
-                        title="{{ occ.uid() }}"
-                        onclick="copyToClipboard('{{ occ.uid() }}')"
-                    >
-                    </i>
-                </span>
-                {{ occ.summary().unwrap() }}
-                <span style="float: right">
-                    <div
-                        class="ev_cal_src ev_cal_src_{{ dir.id() }}"
-                        style="width: 20px; height: 20px"
-                        title="{{ dir.name() }}"
-                    ></div>
-                </span>
-            </th>
-        </tr>
         {% if occ.occurrence_start().is_some() || occ.occurrence_end().is_some() %}
             <tr>
                 <td width="30%">

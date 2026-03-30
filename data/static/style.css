@@ -144,6 +144,7 @@ fieldset.ev_form div.ev_submit {
 
 .ev_header {
     background-color: #637591;
+    border-radius: 3px 3px 0px 0px;
     color: #fff;
     padding: 0.5em !important;
     margin: 0;
@@ -250,10 +251,10 @@ table.ev_date td {
 }
 
 .ev_border {
-    border-radius: 2px;
-    -moz-border-radius: 2px;
-    -khtml-border-radius: 2px;
-    -webkit-border-radius: 2px;
+    border-radius: 3px;
+    -moz-border-radius: 3px;
+    -khtml-border-radius: 3px;
+    -webkit-border-radius: 3px;
     padding: 1px;
     border: 1px solid #7f90ae;
 }
@@ -701,7 +702,6 @@ div.ev_selected {
 
 .ev_popup {
     background-color: #ffffff;
-    border: 1px solid #555;
     box-shadow: 2px 2px 3px #555;
     position: absolute;
     cursor: default;
@@ -790,10 +790,10 @@ span.ev_cal_src_disabled {
 
 .ev_cal_box {
     background-color: #ffffff;
-    border-radius: 8px;
-    -moz-border-radius: 8px;
-    -khtml-border-radius: 8px;
-    -webkit-border-radius: 8px;
+    border-radius: 3px;
+    -moz-border-radius: 3px;
+    -khtml-border-radius: 3px;
+    -webkit-border-radius: 3px;
 }
 
 .ev_cal_box_header {
@@ -917,6 +917,9 @@ span.ev_cal_src_disabled {
 .ui-state-active {
     margin: 0px !important;
 }
+.ui-corner-all {
+    border-radius: 3px 3px 0px 0px !important;
+}
 
 .popup {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
@@ -937,6 +940,7 @@ span.ev_cal_src_disabled {
 }
 .popover-title {
     background-color: #637591 !important;
+    border-radius: 3px 3px 0 0 !important;
     padding: 0.1em !important;
     margin-top: 2px !important;
     margin-left: 2px !important;
@@ -946,6 +950,7 @@ span.ev_cal_src_disabled {
 .popover-content {
     border: 1px solid #c5c5c5 !important;
     border-top: none !important;
+    border-radius: 0 0 3px 3px !important;
     background-color: #f6f6f6 !important;
     padding: 0.2em !important;
     margin-left: 2px !important;
