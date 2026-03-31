@@ -225,8 +225,9 @@ fn action_update(
 
         // add "empty" timezone information as a workaround for davmail/exchange
         // see comment in new/save.rs for details.
-        if file.calendar().timezones().is_empty() {
-            file.calendar_mut().add_timezone(CalTimeZone::new(event_tz));
+        let ctz = CalTimeZone::new(event_tz);
+        if !file.calendar().timezones().contains(&ctz) {
+            file.calendar_mut().add_timezone(ctz);
         }
 
         // should we move the file to a different directory?

@@ -1,4 +1,4 @@
-const POPUP_SPEED = 100;
+const POPUP_SPEED = 50;
 const RESIZE_SPEED = 200;
 
 class State {
