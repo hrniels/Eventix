@@ -25,14 +25,15 @@ impl FSSyncer {
     }
 
     fn sync_folder(state: &mut State, id: &str) -> anyhow::Result<bool> {
+        let local_tz = *state.timezone();
         let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.to_string())) else {
             // if we don't know this directory, the calendar is disabled - so, do nothing
             return Ok(false);
         };
 
         let mut seen_changes = false;
-        seen_changes |= dir.rescan_for_additions()?;
-        seen_changes |= dir.rescan_files()?;
+        seen_changes |= dir.rescan_for_additions(&local_tz)?;
+        seen_changes |= dir.rescan_files(&local_tz)?;
         seen_changes |= dir.rescan_for_deletions();
         Ok(seen_changes)
     }

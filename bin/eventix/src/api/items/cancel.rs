@@ -60,7 +60,7 @@ pub async fn handler(
         Ok(())
     };
 
-    let complete = |base: Option<&CalComponent>, c: &mut CalComponent| {
+    let complete = |base: Option<&CalComponent>, c: &mut CalComponent| -> anyhow::Result<()> {
         let summary = match base {
             Some(base) => base.summary(),
             None => c.summary(),
@@ -86,11 +86,12 @@ pub async fn handler(
 
         c.set_last_modified(CalDate::now());
         c.set_stamp(CalDate::now());
+        Ok(())
     };
 
     if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == Some(&rid)) {
         checks(comp)?;
-        complete(None, comp);
+        complete(None, comp)?;
     } else {
         let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {

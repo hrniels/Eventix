@@ -37,7 +37,7 @@ where
         &mut PersonalAlarms,
         Option<CalOrganizer>,
         &Arc<dyn Locale + Send + Sync>,
-    ),
+    ) -> anyhow::Result<()>,
 {
     let calendar = Arc::from(calendar.to_string());
     let (col_settings, cal_settings) = state.settings().calendar(&calendar).unwrap();
@@ -58,7 +58,7 @@ where
         state.personal_alarms_mut(),
         organizer,
         locale,
-    );
+    )?;
 
     let dir = state
         .store_mut()

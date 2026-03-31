@@ -44,7 +44,7 @@ async fn action_update(
         &event_tz,
         |cal, alarm_type, comp, persalarms, organizer, locale| {
             comp.set_rrule(rrule);
-            form.update(cal, alarm_type, comp, persalarms, organizer, locale);
+            form.update(cal, alarm_type, comp, persalarms, organizer, locale)
         },
     )?;
 

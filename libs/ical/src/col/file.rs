@@ -201,8 +201,10 @@ impl CalFile {
     /// Creates a new [`CalFile`] for given directory by reading it from given path.
     ///
     /// Note that this method assumes that all calendar components in this file have the same UID.
-    pub fn new_from_file(dir: Arc<String>, path: PathBuf) -> Result<Self, ColError> {
-        let cal = Self::read_calendar(&path)?;
+    /// After parsing, all component dates are validated against `local_tz`. Components with times
+    /// falling in a DST gap (non-existent) or DST fold (ambiguous) are removed with a warning.
+    pub fn new_from_file(dir: Arc<String>, path: PathBuf, local_tz: &Tz) -> Result<Self, ColError> {
+        let cal = Self::read_calendar(&path, local_tz)?;
         Ok(Self::new(dir, path, cal))
     }
 
@@ -214,12 +216,16 @@ impl CalFile {
     /// directory and may contain components with different UIDs in the same file. For that reason,
     /// potentially multiple [`CalFile`] instances are created and one file per UID is created in
     /// the given directory path `dir_path`.
+    ///
+    /// After parsing, all component dates are validated against `local_tz`. Components with times
+    /// falling in a DST gap (non-existent) or DST fold (ambiguous) are removed with a warning.
     pub fn new_from_external_file(
         dir: Arc<String>,
         dir_path: PathBuf,
         path: PathBuf,
+        local_tz: &Tz,
     ) -> Result<Vec<CalFile>, ColError> {
-        let cal = Self::read_calendar(&path)?;
+        let cal = Self::read_calendar(&path, local_tz)?;
         let cals = cal.split_by_uid();
         Ok(cals
             .into_iter()
@@ -563,24 +569,29 @@ impl CalFile {
     ///
     /// Expects that the component with given uid exists, but *not* the overwrite.
     ///
+    /// Returns `Err(ColError::ComponentNotFound)` if no base component with `uid` exists, and
+    /// `Err(ColError::RidExists)` if an overwrite for `rid` is already present. Both errors are
+    /// converted via `E::from`. Any error returned by `func` is propagated as-is.
+    ///
     /// Note that this does not save to file. Please call [`Self::save`] to do so.
-    pub fn create_overwrite<F, U>(
+    pub fn create_overwrite<F, U, E>(
         &mut self,
         uid: U,
         rid: CalDate,
         tz: &Tz,
         func: F,
-    ) -> Result<(), ColError>
+    ) -> Result<(), E>
     where
-        F: FnOnce(&CalComponent, &mut CalComponent),
+        F: FnOnce(&CalComponent, &mut CalComponent) -> Result<(), E>,
         U: ToString,
+        E: From<ColError>,
     {
         let uid = uid.to_string();
         let base = self
             .components()
             .iter()
             .find(|c| c.uid() == &uid && c.rid().is_none())
-            .ok_or_else(|| ColError::ComponentNotFound(uid.clone()))?;
+            .ok_or_else(|| E::from(ColError::ComponentNotFound(uid.clone())))?;
 
         // does the overwrite exist?
         if self
@@ -588,10 +599,8 @@ impl CalFile {
             .iter()
             .any(|c| c.uid() == &uid && c.rid() == Some(&rid))
         {
-            return Err(ColError::RidExists(rid));
+            return Err(E::from(ColError::RidExists(rid)));
         }
-
-        info!("{}: creating overwrite for {} @ {}", self.dir, uid, rid);
 
         let mut comp = if base.ctype() == CalCompType::Event {
             CalComponent::Event(CalEvent::new(base.uid()))
@@ -604,33 +613,40 @@ impl CalFile {
             tz.name().to_string(),
         ));
         comp.set_start(Some(start));
-        comp.set_rid(Some(rid));
+        comp.set_rid(Some(rid.clone()));
         comp.set_last_modified(CalDate::now());
         comp.set_stamp(CalDate::now());
 
-        func(base, &mut comp);
+        func(base, &mut comp)?;
+
+        info!("{}: creating overwrite for {} @ {}", self.dir, uid, rid);
 
         self.add_component(comp);
         Ok(())
     }
 
     /// Reloads the calendar from file.
-    pub fn reload_calendar(&mut self) -> Result<(), ColError> {
-        let cal = Self::read_calendar(&self.path)?;
+    ///
+    /// After parsing, all component dates are validated against `local_tz`. Components with times
+    /// falling in a DST gap (non-existent) or DST fold (ambiguous) are removed with a warning.
+    pub fn reload_calendar(&mut self, local_tz: &Tz) -> Result<(), ColError> {
+        let cal = Self::read_calendar(&self.path, local_tz)?;
         self.cal = cal;
         Ok(())
     }
 
-    fn read_calendar(path: &Path) -> Result<Calendar, ColError> {
+    fn read_calendar(path: &Path, local_tz: &Tz) -> Result<Calendar, ColError> {
         let mut input = String::new();
         File::open(path)
             .map_err(|e| ColError::FileOpen(path.to_path_buf(), e))?
             .read_to_string(&mut input)
             .map_err(|e| ColError::FileRead(path.to_path_buf(), e))?;
 
-        input
+        let mut cal = input
             .parse::<Calendar>()
-            .map_err(|e| ColError::FileParse(path.to_path_buf(), e))
+            .map_err(|e| ColError::FileParse(path.to_path_buf(), e))?;
+        cal.validate_times(local_tz);
+        Ok(cal)
     }
 
     /// Saves the current state to file.
@@ -1742,8 +1758,9 @@ mod tests {
                 .done(),
         );
 
-        file.create_overwrite("ev-ow", rid.clone(), tz, |_base, overwrite| {
+        file.create_overwrite::<_, _, ColError>("ev-ow", rid.clone(), tz, |_base, overwrite| {
             overwrite.set_summary(Some("Custom Summary".into()));
+            Ok(())
         })
         .unwrap();
 
@@ -1769,8 +1786,9 @@ mod tests {
         cal.add_component(CalComponent::Todo(todo));
         let mut file = CalFile::new_simple(cal);
 
-        file.create_overwrite("todo-ow", rid.clone(), tz, |_base, overwrite| {
+        file.create_overwrite::<_, _, ColError>("todo-ow", rid.clone(), tz, |_base, overwrite| {
             overwrite.set_summary(Some("Todo Overwrite".into()));
+            Ok(())
         })
         .unwrap();
 
@@ -1790,7 +1808,8 @@ mod tests {
         );
         let mut file = CalFile::new_simple(Calendar::default());
 
-        let result = file.create_overwrite("no-such-uid", rid, tz, |_, _| {});
+        let result: Result<(), ColError> =
+            file.create_overwrite("no-such-uid", rid, tz, |_, _| Ok(()));
         assert!(matches!(result, Err(ColError::ComponentNotFound(_))));
     }
 
@@ -1809,11 +1828,11 @@ mod tests {
         );
 
         // First overwrite: succeeds.
-        file.create_overwrite("dup-ow", rid.clone(), tz, |_, _| {})
+        file.create_overwrite::<_, _, ColError>("dup-ow", rid.clone(), tz, |_, _| Ok(()))
             .unwrap();
 
         // Second overwrite for the same RID: must fail.
-        let result = file.create_overwrite("dup-ow", rid, tz, |_, _| {});
+        let result: Result<(), ColError> = file.create_overwrite("dup-ow", rid, tz, |_, _| Ok(()));
         assert!(matches!(result, Err(ColError::RidExists(_))));
     }
 
@@ -1831,28 +1850,6 @@ mod tests {
 
         let overlay = DefaultAlarmOverlay;
         let alarms = file.due_alarms_between(new_date(2024, 1, 1), new_date(2024, 1, 31), &overlay);
-        assert!(alarms.is_empty());
-    }
-
-    #[test]
-    fn due_alarms_between_alarm_outside_window() {
-        // The alarm fires 1 day before the event start. The event is on Jan 10; the alarm fires
-        // on Jan 9. Querying the window Jan 5–Jan 8 must return no alarms (the `_ => None` branch
-        // inside the filter_map is exercised).
-        let file = new_file(
-            new_allday_event(NaiveDate::from_ymd_opt(2024, 1, 10).unwrap(), "ev-alarm")
-                .alarm(CalAlarm::new(
-                    CalAction::Display,
-                    CalTrigger::Relative {
-                        related: CalRelated::Start,
-                        duration: (-Duration::days(1)).into(),
-                    },
-                ))
-                .done(),
-        );
-
-        let overlay = DefaultAlarmOverlay;
-        let alarms = file.due_alarms_between(new_date(2024, 1, 5), new_date(2024, 1, 8), &overlay);
         assert!(alarms.is_empty());
     }
 }

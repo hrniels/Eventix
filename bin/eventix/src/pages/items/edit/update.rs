@@ -152,7 +152,7 @@ fn action_update(
             personal_alarms,
             organizer,
             locale,
-        );
+        )?;
 
         // update old event/TODO; check if there are no occurrences left
         let start = old_start.as_start_with_tz(locale.timezone());
@@ -204,7 +204,7 @@ fn action_update(
                 personal_alarms,
                 organizer,
                 locale,
-            );
+            )?;
             if rid.is_none() {
                 comp.set_rrule(rrule);
             }
@@ -218,7 +218,7 @@ fn action_update(
                 .parse()
                 .map_err(|_| anyhow!("Invalid timezone: {}", event_tz))?;
             file.create_overwrite(&req.uid, rid.unwrap(), &tz, |_, c| {
-                form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale);
+                form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale)
             })
             .context("Creating overwrite failed")?;
         }

@@ -8,7 +8,7 @@
 //! most naturally reached through a full parse-and-iterate round-trip.
 
 use chrono::TimeZone;
-use chrono_tz::UTC;
+use chrono_tz::{Tz, UTC};
 
 use eventix_ical::col::{CalFile, Occurrence};
 use eventix_ical::objects::{CalEventStatus, CalTodoStatus};
@@ -35,7 +35,7 @@ fn first_occurrence(file: &CalFile) -> Occurrence<'_> {
 #[test]
 fn todo_cancelled_and_properties_via_occurrence() {
     let path = data_dir().join("todo_with_status.ics");
-    let file = CalFile::new_from_file(make_id("cal"), path).unwrap();
+    let file = CalFile::new_from_file(make_id("cal"), path, &Tz::UTC).unwrap();
 
     let occ = first_occurrence(&file);
 
@@ -50,7 +50,7 @@ fn todo_cancelled_and_properties_via_occurrence() {
 #[test]
 fn event_cancelled_via_occurrence() {
     let path = data_dir().join("event_cancelled.ics");
-    let file = CalFile::new_from_file(make_id("cal"), path).unwrap();
+    let file = CalFile::new_from_file(make_id("cal"), path, &Tz::UTC).unwrap();
 
     let occ = first_occurrence(&file);
 

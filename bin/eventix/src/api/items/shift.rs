@@ -82,19 +82,21 @@ pub async fn handler(
         }
     };
 
-    let complete = |start: CalDate, end: CalDate, c: &mut CalComponent| {
-        c.set_start(Some(start));
-        c.as_event_mut().unwrap().set_end(Some(end));
+    let complete = |start: CalDate, end: CalDate, c: &mut CalComponent| -> anyhow::Result<()> {
+        let local_tz = locale.timezone();
+        c.set_start_checked(Some(start), local_tz)?;
+        c.set_end_checked(Some(end), local_tz)?;
 
         c.set_last_modified(CalDate::now());
         c.set_stamp(CalDate::now());
+        Ok(())
     };
 
     if let Some(comp) =
         file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
     {
         let (start, end) = get_timespan(comp)?;
-        complete(start, end, comp);
+        complete(start, end, comp)?;
     } else {
         let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {

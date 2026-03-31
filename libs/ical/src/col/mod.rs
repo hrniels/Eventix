@@ -60,4 +60,6 @@ pub enum ColError {
     FileMetadata(PathBuf),
     #[error("Getting last modified timestamp of {0} failed")]
     FileModified(PathBuf),
+    #[error("Validation failed: {0}")]
+    Validation(#[from] ParseError),
 }

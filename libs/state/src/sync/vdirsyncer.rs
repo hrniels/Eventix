@@ -431,16 +431,17 @@ impl VDirSyncer {
             return Ok(result);
         }
 
+        let local_tz = *state.timezone();
         for (id, changes) in changes.calendars.iter() {
             if let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.clone())) {
                 if changes.added {
                     // rescan the whole directory for new files as we only know the new UIDs, but
                     // not necessarily their filenames (as these can be different).
-                    dir.rescan_for_additions()?;
+                    dir.rescan_for_additions(&local_tz)?;
                 }
                 for uid in &changes.changed {
                     if let Some(file) = dir.file_by_id_mut(uid) {
-                        file.reload_calendar()?;
+                        file.reload_calendar(&local_tz)?;
                     } else {
                         tracing::warn!("file for uid {} does not exist", uid);
                     }

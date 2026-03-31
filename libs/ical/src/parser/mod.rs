@@ -72,6 +72,10 @@ pub enum ParseError {
     InvalidAction(String),
     #[error("Invalid duration: {0}")]
     InvalidDuration(String),
+    #[error("Non-existent local time: {0}")]
+    NonExistentTime(String),
+    #[error("Ambiguous local time: {0}")]
+    AmbiguousTime(String),
 }
 
 impl From<ParseIntError> for ParseError {

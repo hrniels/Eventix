@@ -109,7 +109,14 @@ fn main() {
         .collect();
 
     // parse items from ICS file
-    let ics = parse_ics_file(&args.file).unwrap();
+    let mut ics = parse_ics_file(&args.file).unwrap();
+    if !ics.validate_times(state.timezone()) {
+        ImportView::show_error(
+            "The ICS file contains dates that are not representable in the local timezone.",
+        );
+        std::process::exit(1);
+    }
+
     let items = ics
         .components()
         .iter()

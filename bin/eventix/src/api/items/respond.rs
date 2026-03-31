@@ -61,7 +61,7 @@ pub async fn handler(
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    let complete = |base: Option<&CalComponent>, c: &mut CalComponent| {
+    let complete = |base: Option<&CalComponent>, c: &mut CalComponent| -> anyhow::Result<()> {
         let mut atts = c
             .attendees()
             .unwrap_or(base.and_then(|b| b.attendees()).unwrap_or(&[]))
@@ -77,12 +77,13 @@ pub async fn handler(
         c.set_attendees(Some(atts));
         c.set_last_modified(CalDate::now());
         c.set_stamp(CalDate::now());
+        Ok(())
     };
 
     if let Some(comp) =
         file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
     {
-        complete(None, comp);
+        complete(None, comp)?;
     } else {
         let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {

@@ -6,9 +6,12 @@ use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
+use chrono_tz::Tz;
 use tracing::warn;
 
-use crate::objects::{CalCompType, CalComponent, CalEvent, CalTodo, EventLike};
+use crate::objects::{
+    CalCompType, CalComponent, CalDate, CalEvent, CalTodo, CalTrigger, EventLike,
+};
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
 };
@@ -111,6 +114,72 @@ impl Calendar {
         } else {
             self.comps.push(comp);
         }
+    }
+
+    /// Validates all component dates against the given local timezone.
+    ///
+    /// Components whose dates fall in a DST gap (non-existent time) or a DST fold (ambiguous
+    /// time) are removed and a warning is logged.
+    ///
+    /// Returns true if no components were removed.
+    pub fn validate_times(&mut self, local_tz: &Tz) -> bool {
+        let len = self.comps.len();
+        self.comps.retain(|comp| {
+            if let Err(e) = Self::validate_component(comp, local_tz) {
+                warn!(
+                    "ignoring component {} (uid {}): {}",
+                    comp.ctype(),
+                    comp.uid(),
+                    e
+                );
+                return false;
+            }
+            true
+        });
+        self.comps.len() == len
+    }
+
+    fn validate_component(comp: &CalComponent, local_tz: &Tz) -> Result<(), ParseError> {
+        Self::validate_eventlike_dates(comp, local_tz)?;
+        match comp {
+            CalComponent::Event(ev) => {
+                Self::validate_opt_date(ev.end(), local_tz)?;
+            }
+            CalComponent::Todo(td) => {
+                Self::validate_opt_date(td.due(), local_tz)?;
+                Self::validate_opt_date(td.completed(), local_tz)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_eventlike_dates(comp: &CalComponent, local_tz: &Tz) -> Result<(), ParseError> {
+        Self::validate_opt_date(comp.start(), local_tz)?;
+        Self::validate_opt_date(comp.created(), local_tz)?;
+        Self::validate_opt_date(comp.last_modified(), local_tz)?;
+        comp.stamp().validate(local_tz)?;
+        Self::validate_opt_date(comp.rid(), local_tz)?;
+        for exdate in comp.exdates() {
+            exdate.validate(local_tz)?;
+        }
+        if let Some(alarms) = comp.alarms() {
+            for alarm in alarms {
+                if let CalTrigger::Absolute(date) = alarm.trigger() {
+                    date.validate(local_tz)?;
+                }
+            }
+        }
+        if let Some(rrule) = comp.rrule() {
+            Self::validate_opt_date(rrule.until(), local_tz)?;
+        }
+        Ok(())
+    }
+
+    fn validate_opt_date(date: Option<&CalDate>, local_tz: &Tz) -> Result<(), ParseError> {
+        if let Some(d) = date {
+            d.validate(local_tz)?;
+        }
+        Ok(())
     }
 }
 
@@ -319,6 +388,8 @@ mod tests {
     use std::io::BufWriter;
 
     use chrono::NaiveDate;
+
+    use chrono_tz::Tz;
 
     use crate::{
         objects::{CalComponent, CalDate, CalDateTime, CalTimeZone, Calendar, EventLike},
@@ -882,5 +953,131 @@ X-CUSTOM-PROP:custom-value\r\n\
 END:VTIMEZONE\r\n\
 END:VCALENDAR\r\n";
         assert_eq!(output, expected);
+    }
+
+    // --- validate_times ---
+
+    #[test]
+    fn validate_times_removes_event_with_dst_gap_start() {
+        // 2:30 AM on 2025-03-30 doesn't exist in Europe/Berlin (spring forward).
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:gap-ev\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T023000\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:ok-ev\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.components().len(), 2);
+
+        cal.validate_times(&Tz::Europe__Berlin);
+
+        assert_eq!(cal.components().len(), 1);
+        assert_eq!(cal.components()[0].uid().as_str(), "ok-ev");
+    }
+
+    #[test]
+    fn validate_times_removes_todo_with_dst_gap_due() {
+        // 2:30 AM on 2025-03-09 doesn't exist in America/New_York (spring
+        // forward).
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTODO\n\
+UID:gap-td\n\
+DTSTAMP:20250101T000000Z\n\
+DUE;TZID=America/New_York:20250309T023000\n\
+END:VTODO\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.components().len(), 1);
+
+        cal.validate_times(&Tz::America__New_York);
+
+        assert!(cal.components().is_empty());
+    }
+
+    #[test]
+    fn validate_times_keeps_utc_components() {
+        // UTC times are always valid, even if local_tz has a gap at the same
+        // wall-clock time.
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:utc-ev\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART:20250330T023000Z\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        cal.validate_times(&Tz::Europe__Berlin);
+
+        assert_eq!(cal.components().len(), 1);
+    }
+
+    #[test]
+    fn validate_times_removes_event_with_floating_dst_gap() {
+        // Floating times are checked against local_tz.
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:float-gap\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART:20250330T023000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        cal.validate_times(&Tz::Europe__Berlin);
+
+        assert!(cal.components().is_empty());
+    }
+
+    #[test]
+    fn validate_times_removes_event_with_dst_fold_start() {
+        // 2:30 AM on 2025-10-26 is ambiguous in Europe/Berlin (fall back).
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:fold-ev\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20251026T023000\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:ok-ev\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20251026T040000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.components().len(), 2);
+
+        cal.validate_times(&Tz::Europe__Berlin);
+
+        assert_eq!(cal.components().len(), 1);
+        assert_eq!(cal.components()[0].uid().as_str(), "ok-ev");
+    }
+
+    #[test]
+    fn validate_times_removes_todo_with_dst_fold_due() {
+        // 1:30 AM on 2025-11-02 is ambiguous in America/New_York (fall back).
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTODO\n\
+UID:fold-td\n\
+DTSTAMP:20250101T000000Z\n\
+DUE;TZID=America/New_York:20251102T013000\n\
+END:VTODO\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.components().len(), 1);
+
+        cal.validate_times(&Tz::America__New_York);
+
+        assert!(cal.components().is_empty());
     }
 }

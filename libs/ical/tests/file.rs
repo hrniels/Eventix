@@ -9,6 +9,7 @@
 
 use std::path::PathBuf;
 
+use chrono_tz::Tz;
 use tempfile::TempDir;
 
 use eventix_ical::col::{CalFile, ColError};
@@ -29,7 +30,8 @@ fn new_from_external_file_splits_by_uid() {
     let src = data_dir().join("multi_uid.ics");
 
     let files =
-        CalFile::new_from_external_file(make_id("cal"), tmp.path().to_path_buf(), src).unwrap();
+        CalFile::new_from_external_file(make_id("cal"), tmp.path().to_path_buf(), src, &Tz::UTC)
+            .unwrap();
 
     assert_eq!(files.len(), 2);
 
@@ -58,6 +60,7 @@ fn new_from_external_file_nonexistent_path_returns_error() {
         make_id("cal"),
         tmp.path().to_path_buf(),
         PathBuf::from("/nonexistent/file.ics"),
+        &Tz::UTC,
     );
     assert!(matches!(result, Err(ColError::FileOpen(_, _))));
 }
@@ -66,7 +69,8 @@ fn new_from_external_file_nonexistent_path_returns_error() {
 fn new_from_external_file_parse_error_returns_error() {
     let tmp = TempDir::new().unwrap();
     let src = data_dir().join("invalid.ics");
-    let result = CalFile::new_from_external_file(make_id("cal"), tmp.path().to_path_buf(), src);
+    let result =
+        CalFile::new_from_external_file(make_id("cal"), tmp.path().to_path_buf(), src, &Tz::UTC);
     assert!(matches!(result, Err(ColError::FileParse(_, _))));
 }
 
@@ -76,13 +80,17 @@ fn new_from_external_file_parse_error_returns_error() {
 
 #[test]
 fn new_from_file_nonexistent_path_returns_error() {
-    let result = CalFile::new_from_file(make_id("cal"), PathBuf::from("/nonexistent/missing.ics"));
+    let result = CalFile::new_from_file(
+        make_id("cal"),
+        PathBuf::from("/nonexistent/missing.ics"),
+        &Tz::UTC,
+    );
     assert!(matches!(result, Err(ColError::FileOpen(_, _))));
 }
 
 #[test]
 fn new_from_file_parse_error_returns_error() {
-    let result = CalFile::new_from_file(make_id("cal"), data_dir().join("invalid.ics"));
+    let result = CalFile::new_from_file(make_id("cal"), data_dir().join("invalid.ics"), &Tz::UTC);
     assert!(matches!(result, Err(ColError::FileParse(_, _))));
 }
 
@@ -94,7 +102,7 @@ fn new_from_file_parse_error_returns_error() {
 fn last_modified_returns_time_for_real_file() {
     let tmp = TempDir::new().unwrap();
     let path = copy_fixture("event_a.ics", &tmp);
-    let file = CalFile::new_from_file(make_id("cal"), path).unwrap();
+    let file = CalFile::new_from_file(make_id("cal"), path, &Tz::UTC).unwrap();
 
     assert!(file.last_modified().is_ok());
 }
@@ -149,7 +157,7 @@ fn save_and_reload_calendar_round_trip() {
     // Write a CalFile to disk, reload it, and verify the mutation survived.
     let tmp = TempDir::new().unwrap();
     let path = copy_fixture("event_a.ics", &tmp);
-    let mut file = CalFile::new_from_file(make_id("cal"), path).unwrap();
+    let mut file = CalFile::new_from_file(make_id("cal"), path, &Tz::UTC).unwrap();
 
     // Mutate the summary in memory.
     file.component_with_mut(|c| c.uid() == "event-a")
@@ -160,7 +168,7 @@ fn save_and_reload_calendar_round_trip() {
     file.save().unwrap();
 
     // Reload from disk and verify the mutation survived.
-    file.reload_calendar().unwrap();
+    file.reload_calendar(&Tz::UTC).unwrap();
     let summary = file
         .component_with(|c| c.uid() == "event-a")
         .and_then(|c| c.summary().cloned());
@@ -177,7 +185,7 @@ fn remove_deletes_file_from_disk() {
     let path = copy_fixture("event_a.ics", &tmp);
     assert!(path.exists());
 
-    let mut file = CalFile::new_from_file(make_id("cal"), path.clone()).unwrap();
+    let mut file = CalFile::new_from_file(make_id("cal"), path.clone(), &Tz::UTC).unwrap();
     file.remove().unwrap();
 
     assert!(!path.exists());
