@@ -34,6 +34,8 @@
 "error.collection_your_name" = "Please specify your name!"
 "error.syncer_change" = "You cannot change the syncer type."
 "error.new_attendee_not_empty" = "The 'New attendee' field is not empty. Maybe you forgot to add the last attendee?"
+"error.dst_ambiguous" = "The date/time is ambiguous due to a DST transition. Please choose a different time."
+"error.dst_nonexistent" = "The date/time does not exist due to a DST transition. Please choose a different time."
 "error.end_before_start" = "The end cannot be before the start."
 "error.reauth_required" = "The authentication for calendar '{}' failed. Please re-authenticate yourself by following the instruction here:"
 

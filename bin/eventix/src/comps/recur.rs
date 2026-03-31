@@ -5,7 +5,9 @@
 use anyhow::anyhow;
 use askama::Template;
 use chrono::Weekday;
+use chrono_tz::Tz;
 use eventix_ical::objects::{CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
+use eventix_ical::parser::ParseError;
 use eventix_locale::Locale;
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
@@ -328,6 +330,22 @@ impl RecurRequest {
         } else {
             Ok(None)
         }
+    }
+
+    /// Validates the recurrence `until` date against the given local timezone for DST safety.
+    ///
+    /// Returns `Ok(())` when the date is valid or absent. Returns the offending [`ParseError`]
+    /// when the date falls in a DST gap or fold.
+    pub fn check_dst(&self, local_tz: &Tz) -> Result<(), ParseError> {
+        if self.end == RecurEnd::Until
+            && let Some(cal_date) = self
+                .until
+                .as_ref()
+                .and_then(|d| d.to_caldate(CalDateType::Inclusive, false))
+        {
+            cal_date.validate(local_tz)?;
+        }
+        Ok(())
     }
 }
 

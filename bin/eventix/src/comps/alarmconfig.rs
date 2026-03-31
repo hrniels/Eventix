@@ -7,6 +7,7 @@ use askama::Template;
 use chrono::Duration;
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalAction, CalAlarm, CalDateType, CalRelated, CalTrigger};
+use eventix_ical::parser::ParseError;
 use eventix_locale::Locale;
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
@@ -187,15 +188,26 @@ impl AlarmConfig {
         locale: &Arc<dyn Locale + Send + Sync>,
         event_tz: &str,
     ) -> bool {
-        if let Some(Trigger::Absolute) = self.trigger
-            && self
+        if let Some(Trigger::Absolute) = self.trigger {
+            match self
                 .datetime
                 .as_ref()
                 .and_then(|dt| dt.to_caldate(event_tz, CalDateType::Inclusive, false))
-                .is_none()
-        {
-            page.add_error(locale.translate("error.valid_date_time"));
-            return false;
+            {
+                None => {
+                    page.add_error(locale.translate("error.valid_date_time"));
+                    return false;
+                }
+                Some(cal_date) => {
+                    if let Err(e) = cal_date.validate(locale.timezone()) {
+                        page.add_error(match &e {
+                            ParseError::AmbiguousTime(_) => locale.translate("error.dst_ambiguous"),
+                            _ => locale.translate("error.dst_nonexistent"),
+                        });
+                        return false;
+                    }
+                }
+            }
         }
         true
     }

@@ -4,6 +4,7 @@
 
 use eventix_ical::objects::{CalCompType, CalOrganizer, CalTodoStatus, EventLike, PRIORITY_MEDIUM};
 use eventix_ical::objects::{CalComponent, CalDate, UpdatableEventLike};
+use eventix_ical::parser::ParseError;
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, PersonalAlarms};
 use std::sync::Arc;
@@ -14,6 +15,14 @@ use crate::comps::{
     todostatus::TodoStatus,
 };
 use crate::pages::Page;
+
+/// Maps a DST-related [`ParseError`] to the appropriate localized error message.
+fn dst_error_msg<'a>(locale: &'a (dyn Locale + Send + Sync), err: &ParseError) -> &'a str {
+    match err {
+        ParseError::AmbiguousTime(_) => locale.translate("error.dst_ambiguous"),
+        _ => locale.translate("error.dst_nonexistent"),
+    }
+}
 
 pub trait CompAction {
     fn summary(&self) -> &String;
@@ -50,6 +59,21 @@ pub trait CompAction {
             }
         }
 
+        // validate start/end before using it afterwards (e.g. testing start > end)
+        let local_tz = locale.timezone();
+        if let Some(ref d) = start
+            && let Err(e) = d.validate(local_tz)
+        {
+            page.add_error(dst_error_msg(locale.as_ref(), &e));
+            return false;
+        }
+        if let Some(ref d) = end
+            && let Err(e) = d.validate(local_tz)
+        {
+            page.add_error(dst_error_msg(locale.as_ref(), &e));
+            return false;
+        }
+
         if start.is_some()
             && end.is_some()
             && matches!(start.as_ref().unwrap(), CalDate::Date(..))
@@ -61,6 +85,23 @@ pub trait CompAction {
 
         if start.is_some() && end.is_some() && start.as_ref().unwrap() > end.as_ref().unwrap() {
             page.add_error(locale.translate("error.end_before_start"));
+            return false;
+        }
+
+        if let Some(st) = self.status()
+            && let Some(completed) = st
+                .completed()
+                .and_then(|d| d.to_caldate(ctype.into(), false))
+            && let Err(e) = completed.validate(local_tz)
+        {
+            page.add_error(dst_error_msg(locale.as_ref(), &e));
+            return false;
+        }
+
+        if let Some(rr) = self.rrule()
+            && let Err(e) = rr.check_dst(local_tz)
+        {
+            page.add_error(dst_error_msg(locale.as_ref(), &e));
             return false;
         }
 
