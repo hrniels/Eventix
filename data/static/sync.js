@@ -81,8 +81,24 @@ function reloadCalendar(col_id, cal_id, spinnerId, onsuccess) {
     postWithSpinner(spinnerId, url, defaultSyncFinish(onsuccess));
 }
 
+let syncAllTimer = null;
+let syncAllArgs = null;
+
+// Schedules a sync to run once, `period` ms after the last user interaction.
+// The timer is reset on every interaction via `resetSyncTimer`, so a sync only
+// fires after the user has been idle for the full period.
 function syncAllEvery(period, lastReloadId, spinnerId, iconId) {
-    setInterval(function () {
+    syncAllArgs = { period, lastReloadId, spinnerId, iconId };
+    resetSyncTimer();
+}
+
+// Cancels any pending sync timer and reschedules it for `period` ms from now.
+// Called by `trackActivity` on every user interaction.
+function resetSyncTimer() {
+    if (syncAllArgs === null) return;
+    clearTimeout(syncAllTimer);
+    const { period, lastReloadId, spinnerId, iconId } = syncAllArgs;
+    syncAllTimer = setTimeout(function () {
         syncAll(lastReloadId, spinnerId, iconId, false);
     }, period);
 }
