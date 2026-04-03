@@ -92,6 +92,11 @@ function loadWithPrev(url) {
 // Replaces the content of the given container with `html`, making sure that our state is refreshed
 // properly (e.g., clearing previously registered event handlers).
 function replaceContent(html, containerId = "#page-content") {
+    if (containerId == "#page-content") {
+        // by default, the page does not contain a form
+        setFormPage(false);
+    }
+
     clearContentHandler(containerId.slice(1));
     $(containerId).html(html);
     if (typeof resizeBoxes === "function") resizeBoxes();

@@ -3,12 +3,8 @@ let formPage = false;
 let keyMouse = false;
 let openForms = 0;
 
-function userIsBusy() {
-    return popupOpen || formPage || openForms > 0;
-}
-
 function userIsActive() {
-    return userIsBusy() || openForms > 0;
+    return keyMouse || popupOpen || formPage || openForms > 0;
 }
 
 function setFormPage(val) {

@@ -100,6 +100,7 @@ function resetSyncTimer() {
     const { period, lastReloadId, spinnerId, iconId } = syncAllArgs;
     syncAllTimer = setTimeout(function () {
         syncAll(lastReloadId, spinnerId, iconId, false);
+        syncAllEvery(period, lastReloadId, spinnerId, iconId);
     }, period);
 }
 
