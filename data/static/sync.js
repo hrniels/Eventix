@@ -131,9 +131,11 @@ function syncAll(lastReloadId, spinnerId, iconId, force, auth_url) {
     });
 }
 
-function requestReload(iconId, force) {
-    if (force || !userIsActive()) reloadContent();
-    else {
+function requestReload(iconId, force, sidebar = false) {
+    if (force || !userIsActive()) {
+        reloadContent();
+        if (sidebar) reloadSidebar();
+    } else {
         outOfSync = true;
         $("#" + iconId).css("color", "red");
     }
