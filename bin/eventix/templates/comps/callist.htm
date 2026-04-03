@@ -39,13 +39,18 @@
     <script type="text/javascript">
         $(function () {
             {% if !cal.enabled %}
-            $("#calendar_enabled_{{ cal.id }}").hover(function () {
-                $(this).toggleClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight");
-            });
+            $("#calendar_enabled_{{ cal.id }}").hover(
+                // use explicit add/remove calls for in/out instead of toggle here, because the
+                // click event handler replaces this whole block via AJAX, so that we do not execute
+                // the out handler in this case.
+                function () { $(this).addClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight"); },
+                function () { $(this).removeClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight"); }
+            );
             {% else %}
-            $("#calendar_enabled_{{ cal.id }}").hover(function () {
-                $(this).toggleClass("ev_cal_src_highlight");
-            });
+            $("#calendar_enabled_{{ cal.id }}").hover(
+                function () { $(this).addClass("ev_cal_src_highlight"); },
+                function () { $(this).removeClass("ev_cal_src_highlight"); }
+            );
             {% endif %}
         });
     </script>
