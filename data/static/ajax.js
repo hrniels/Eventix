@@ -81,7 +81,7 @@ function deleteItem(uid, rid, onDeleted) {
 
 function toggleCalendar(id) {
     postRequest("/api/togglecal?id=" + id, function (data) {
-        reloadContent();
+        if (!userOnForm()) reloadContent();
         reloadCalList();
     });
 }

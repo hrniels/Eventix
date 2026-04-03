@@ -10,6 +10,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use chrono_tz::Tz;
 use tempfile::TempDir;
 
 use eventix_ical::col::{CalDir, ColError};
@@ -28,8 +29,13 @@ fn new_from_dir_loads_ics_files() {
     copy_fixture("event_a.ics", &tmp);
     copy_fixture("event_b.ics", &tmp);
 
-    let dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     assert_eq!(dir.files().len(), 2);
     assert!(dir.file_by_id("event-a").is_some());
@@ -40,8 +46,13 @@ fn new_from_dir_loads_ics_files() {
 fn new_from_dir_empty_dir() {
     let tmp = TempDir::new().unwrap();
 
-    let dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     assert!(dir.files().is_empty());
 }
@@ -58,8 +69,13 @@ fn new_from_dir_skips_non_ics_and_subdirectories() {
     // A subdirectory must be ignored (not cause an error either).
     fs::create_dir(tmp.path().join("subdir")).unwrap();
 
-    let dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     assert_eq!(dir.files().len(), 1);
     assert!(dir.file_by_id("event-a").is_some());
@@ -71,6 +87,7 @@ fn new_from_dir_nonexistent_path_returns_error() {
         make_id("cal"),
         PathBuf::from("/nonexistent/path/that/does/not/exist"),
         "Test".into(),
+        &Tz::UTC,
     );
 
     assert!(matches!(result, Err(ColError::ReadDir(_, _))));
@@ -85,19 +102,24 @@ fn rescan_for_additions_detects_new_file() {
     let tmp = TempDir::new().unwrap();
     copy_fixture("event_a.ics", &tmp);
 
-    let mut dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let mut dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     assert_eq!(dir.files().len(), 1);
 
-    let changed = dir.rescan_for_additions().unwrap();
+    let changed = dir.rescan_for_additions(&Tz::UTC).unwrap();
     assert!(!changed);
     assert_eq!(dir.files().len(), 1);
 
     // Add a second file to the directory after the initial load.
     copy_fixture("event_b.ics", &tmp);
 
-    let changed = dir.rescan_for_additions().unwrap();
+    let changed = dir.rescan_for_additions(&Tz::UTC).unwrap();
 
     assert!(changed);
     assert_eq!(dir.files().len(), 2);
@@ -113,8 +135,13 @@ fn rescan_files_reloads_changed_file() {
     let tmp = TempDir::new().unwrap();
     copy_fixture("event_a.ics", &tmp);
 
-    let mut dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let mut dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     // Verify original summary.
     let summary_before = dir
@@ -142,7 +169,7 @@ fn rescan_files_reloads_changed_file() {
     )
     .unwrap();
 
-    let changed = dir.rescan_files().unwrap();
+    let changed = dir.rescan_files(&Tz::UTC).unwrap();
 
     assert!(changed);
 
@@ -164,8 +191,13 @@ fn rescan_for_deletions_detects_removed_file() {
     copy_fixture("event_a.ics", &tmp);
     copy_fixture("event_b.ics", &tmp);
 
-    let mut dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let mut dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     assert_eq!(dir.files().len(), 2);
 
@@ -192,8 +224,13 @@ fn delete_by_uid_removes_component_and_file_from_disk() {
     let tmp = TempDir::new().unwrap();
     let path = copy_fixture("event_a.ics", &tmp);
 
-    let mut dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let mut dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     assert!(path.exists());
 
@@ -212,8 +249,13 @@ fn delete_by_uid_saves_file_when_not_empty() {
     let tmp = TempDir::new().unwrap();
     let ics_path = copy_fixture("two_events.ics", &tmp);
 
-    let mut dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let mut dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     assert_eq!(dir.files().len(), 1);
 
@@ -224,8 +266,13 @@ fn delete_by_uid_saves_file_when_not_empty() {
     assert!(ics_path.exists());
 
     // Reload and verify only event-d survives.
-    let reloaded =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let reloaded = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
     assert!(reloaded.file_by_id("event-c").is_none());
     assert!(reloaded.file_by_id("event-d").is_some());
 }
@@ -235,8 +282,13 @@ fn delete_by_uid_not_found_returns_error() {
     let tmp = TempDir::new().unwrap();
     copy_fixture("event_a.ics", &tmp);
 
-    let mut dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let mut dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     let result = dir.delete_by_uid("uid-does-not-exist");
     assert!(matches!(result, Err(ColError::ComponentNotFound(_))));
@@ -251,8 +303,13 @@ fn save_persists_mutations_to_disk() {
     let tmp = TempDir::new().unwrap();
     copy_fixture("event_a.ics", &tmp);
 
-    let mut dir =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let mut dir = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     // Mutate the summary of event-a in memory.
     let file = dir.file_by_id_mut("event-a").unwrap();
@@ -265,8 +322,13 @@ fn save_persists_mutations_to_disk() {
     dir.save().unwrap();
 
     // Reload the directory from disk and verify the mutation survived.
-    let reloaded =
-        CalDir::new_from_dir(make_id("cal"), tmp.path().to_path_buf(), "Test".into()).unwrap();
+    let reloaded = CalDir::new_from_dir(
+        make_id("cal"),
+        tmp.path().to_path_buf(),
+        "Test".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
     let summary = reloaded
         .files()
         .first()

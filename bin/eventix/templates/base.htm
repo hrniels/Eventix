@@ -35,7 +35,7 @@
 
             const startDay = curUTCDay();
             setInterval(function () {
-                if (curUTCDay() != startDay) requestReload("out-of-sync", false);
+                if (curUTCDay() != startDay) requestReload("out-of-sync", false, true);
             }, 60 * 1000);
         </script>
     </head>

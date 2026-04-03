@@ -911,12 +911,14 @@ impl CalRRule {
             if ndate < dtstart {
                 continue;
             }
-            if util::date_ranges_overlap(
-                ndate,
-                ndate + dtdur.unwrap_or(Duration::zero()),
-                start,
-                end,
-            ) {
+            // Compute the effective end of this candidate occurrence in wall-clock time so
+            // that a DST transition between the candidate start and its end does not shift
+            // the end by the DST delta.
+            let nend = dtdur.map_or(ndate, |d| {
+                let naive_end = ndate.naive_local() + d;
+                util::resolve_local_time(ndate.timezone(), naive_end)
+            });
+            if util::date_ranges_overlap(ndate, nend, start, end) {
                 res.push(ndate);
             }
             *count += 1;
@@ -2822,5 +2824,43 @@ mod tests {
         assert_eq!(iter.next().unwrap(), ny_datetime(1998, 1, 1, 10, 0, 0));
         assert_eq!(iter.next().unwrap(), ny_datetime(1998, 1, 1, 12, 0, 0));
         assert_eq!(iter.next(), None);
+    }
+
+    // --- DST-aware overlap check in finalize_candidates ---
+
+    /// Verifies that the range overlap check in `finalize_candidates` uses wall-clock end times.
+    ///
+    /// Europe/Berlin springs forward on 2025-03-30 at 02:00 → 03:00. An occurrence starting at
+    /// 01:00 CET with a 3-hour duration ends at 04:00 CEST (wall-clock). A naive absolute
+    /// addition would compute 05:00 CEST instead (one hour too late).
+    ///
+    /// The query window [04:30 CEST, 05:30 CEST) should NOT be overlapped by this occurrence,
+    /// because 04:00 is before 04:30. The buggy absolute-time computation would incorrectly
+    /// include it (05:00 falls inside the window).
+    #[test]
+    fn finalize_candidates_dst_overlap_uses_wall_clock_end() {
+        // DTSTART: 2025-03-30 01:00 CET (one hour before spring-forward)
+        let dtstart = berlin_datetime(2025, 3, 30, 1, 0, 0);
+
+        // A non-recurrent rule (single occurrence via COUNT=1) so that exactly one candidate
+        // is produced at dtstart itself.
+        let rrule: CalRRule = "FREQ=DAILY;COUNT=1".parse().unwrap();
+
+        // Duration: 3 hours. Wall-clock end = 04:00 CEST; absolute end = 05:00 CEST.
+        let duration = Duration::hours(3);
+
+        // Query window that only the buggy absolute end (05:00) would overlap.
+        let window_start = berlin_datetime(2025, 3, 30, 4, 30, 0);
+        let window_end = berlin_datetime(2025, 3, 30, 5, 30, 0);
+
+        let mut iter = rrule.dates_between(dtstart, Some(duration), window_start, window_end);
+
+        // the occurrence ends at 04:00 CEST which is before the window start (04:30 CEST), so it
+        // must NOT appear in the results.
+        assert_eq!(
+            iter.next(),
+            None,
+            "occurrence must not overlap a window that starts after its wall-clock end"
+        );
     }
 }

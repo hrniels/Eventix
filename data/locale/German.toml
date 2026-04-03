@@ -34,6 +34,8 @@
 "error.collection_your_name" = "Bitte gib deinen Namen an!"
 "error.syncer_change" = "Du kannst den Synchronisierer nicht ändern."
 "error.new_attendee_not_empty" = "Das 'Neuer Teilnehmer'-Feld ist nicht leer. Hast Du vielleicht vergessen den letzten Teilnehmer hinzuzufügen?"
+"error.dst_ambiguous" = "Das Datum/die Uhrzeit ist aufgrund einer Zeitumstellung mehrdeutig. Bitte wähle eine andere Uhrzeit."
+"error.dst_nonexistent" = "Das Datum/die Uhrzeit existiert aufgrund einer Zeitumstellung nicht. Bitte wähle eine andere Uhrzeit."
 "error.end_before_start" = "Das Ende kann nicht vor dem Start sein."
 "error.reauth_required" = "Die Authentifizierung für den Kalender '{}' ist fehlgeschlagen. Bitte authentifiziere dich hier erneut:"
 
@@ -292,6 +294,7 @@
 "This and following occ." = "Dieser und Folgende"
 "This occurrence" = "Dieser Termin"
 "Timed" = "Uhrzeitgebunden"
+"Timezone" = "Zeitzone"
 "Today" = "Heute"
 "Tomorrow" = "Morgen"
 "Unplanned" = "Ungeplant"

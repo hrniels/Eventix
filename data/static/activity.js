@@ -3,12 +3,12 @@ let formPage = false;
 let keyMouse = false;
 let openForms = 0;
 
-function userIsBusy() {
-    return popupOpen || formPage || openForms > 0;
+function userOnForm() {
+    return formPage || openForms > 0;
 }
 
 function userIsActive() {
-    return userIsBusy() || openForms > 0;
+    return keyMouse || popupOpen || userOnForm();
 }
 
 function setFormPage(val) {
@@ -42,8 +42,13 @@ function trackActivity() {
             },
             5 * 60 * 1000,
         );
+
+        // reset the background sync timer so it only fires after a full period
+        // of inactivity, not while the user is actively using the page
+        if (typeof resetSyncTimer === "function") resetSyncTimer();
     }
 
     document.addEventListener("mousemove", onActivity);
     document.addEventListener("keydown", onActivity);
+    document.addEventListener("click", onActivity);
 }

@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use chrono::{NaiveDate, TimeZone, Timelike};
+use chrono::{NaiveDate, Timelike};
 use chrono_tz::Tz;
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalAttendee, CalPartStat, EventLike};
+use eventix_ical::util;
 use eventix_state::{PersonalAlarms, Settings};
 use once_cell::sync::Lazy;
 use std::cmp::Ordering;
@@ -88,12 +89,8 @@ impl<'a> DayOccurrence<'a> {
         date: NaiveDate,
         timezone: &Tz,
     ) -> Vec<DayOccurrence<'occ>> {
-        let day_start = timezone
-            .from_local_datetime(&date.and_hms_opt(0, 0, 0).unwrap())
-            .unwrap();
-        let day_end = timezone
-            .from_local_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
-            .unwrap();
+        let day_start = util::resolve_local_time(*timezone, date.and_hms_opt(0, 0, 0).unwrap());
+        let day_end = util::resolve_local_time(*timezone, date.and_hms_opt(23, 59, 59).unwrap());
 
         let mut day_occs = occs
             .iter()

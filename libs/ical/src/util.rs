@@ -8,10 +8,37 @@ use std::fmt::{Debug, Display};
 
 use formatx::formatx;
 
-use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeZone, Weekday};
+use chrono::{DateTime, Datelike, Duration, MappedLocalTime, NaiveDate, TimeZone, Weekday};
 use chrono_tz::Tz;
 
 use crate::objects::CalLocale;
+
+/// Resolves a [`MappedLocalTime`] to a single [`DateTime`].
+///
+/// For unambiguous times, returns the single result. For ambiguous times (DST
+/// fall-back), returns the earlier interpretation. For non-existent times (DST
+/// spring-forward gap), walks forward in one-minute increments from the
+/// requested time until a valid local time is found (i.e., snaps to the
+/// earliest moment after the gap).
+pub fn resolve_local_time(tz: Tz, naive: chrono::NaiveDateTime) -> DateTime<Tz> {
+    match tz.from_local_datetime(&naive) {
+        MappedLocalTime::Single(dt) => dt,
+        MappedLocalTime::Ambiguous(early, _) => early,
+        MappedLocalTime::None => {
+            // The requested local time falls in a DST gap. Typical gaps are
+            // one hour; walk forward in 1-minute steps until we leave the gap.
+            let mut candidate = naive;
+            loop {
+                candidate += Duration::minutes(1);
+                match tz.from_local_datetime(&candidate) {
+                    MappedLocalTime::Single(dt) => return dt,
+                    MappedLocalTime::Ambiguous(early, _) => return early,
+                    MappedLocalTime::None => {}
+                }
+            }
+        }
+    }
+}
 
 /// Returns true if the given date ranges overlap.
 pub fn date_ranges_overlap(
@@ -89,7 +116,10 @@ pub fn week_start(date: DateTime<Tz>, first_day: Option<Weekday>) -> DateTime<Tz
         _ => date.weekday().num_days_from_monday(),
     };
     if date.day() > day_of_week {
-        date.with_day(date.day() - day_of_week).unwrap()
+        let naive_dt = NaiveDate::from_ymd_opt(date.year(), date.month(), date.day() - day_of_week)
+            .unwrap()
+            .and_time(date.time());
+        resolve_local_time(date.timezone(), naive_dt)
     } else {
         let (pyear, pmonth) = prev_month(date.year(), date.month());
         let days = month_days(pyear, pmonth);
@@ -97,7 +127,7 @@ pub fn week_start(date: DateTime<Tz>, first_day: Option<Weekday>) -> DateTime<Tz
         let naive_dt = NaiveDate::from_ymd_opt(pyear, pmonth, day)
             .unwrap()
             .and_time(date.time());
-        date.timezone().from_local_datetime(&naive_dt).unwrap()
+        resolve_local_time(date.timezone(), naive_dt)
     }
 }
 
@@ -113,14 +143,17 @@ pub fn week_end(date: DateTime<Tz>, first_day: Option<Weekday>) -> DateTime<Tz> 
     let days = month_days(date.year(), date.month());
     let diff = 7 - day_of_week - 1;
     if date.day() + diff <= days {
-        date.with_day(date.day() + diff).unwrap()
+        let naive_dt = NaiveDate::from_ymd_opt(date.year(), date.month(), date.day() + diff)
+            .unwrap()
+            .and_time(date.time());
+        resolve_local_time(date.timezone(), naive_dt)
     } else {
         let (nyear, nmonth) = next_month(date.year(), date.month());
         let day = diff - (days - date.day());
         let naive_dt = NaiveDate::from_ymd_opt(nyear, nmonth, day)
             .unwrap()
             .and_time(date.time());
-        date.timezone().from_local_datetime(&naive_dt).unwrap()
+        resolve_local_time(date.timezone(), naive_dt)
     }
 }
 
@@ -331,5 +364,51 @@ mod tests {
         let expected = tz.with_ymd_and_hms(2025, 3, 30, 10, 0, 0).unwrap();
         assert_eq!(week_end(date, Some(chrono::Weekday::Mon)), expected);
         assert_eq!((expected - date).num_hours(), 6 * 24 - 1);
+    }
+
+    // --- resolve_local_time via week boundaries ---
+
+    #[test]
+    fn resolve_local_time_snaps_forward_on_gap() {
+        // Directly test the helper through week_end: construct a scenario
+        // where the target wall-clock time falls in a DST gap.
+        //
+        // Europe/Berlin springs forward on 2025-03-30 at 02:00 → 03:00.
+        // A date at 02:30 on Monday March 24, moving to Sunday March 30,
+        // would try to create 02:30 on March 30 which is in the gap.
+        use chrono::Timelike;
+
+        let tz = chrono_tz::Europe::Berlin;
+        let date = tz.with_ymd_and_hms(2025, 3, 24, 2, 30, 0).unwrap();
+        let result = week_end(date, Some(chrono::Weekday::Mon));
+        // The wall-clock time should snap to 03:00 (first valid time after
+        // the gap).
+        assert_eq!(result.hour(), 3);
+        assert_eq!(result.minute(), 0);
+        assert_eq!(result.day(), 30);
+        assert_eq!(result.month(), 3);
+    }
+
+    #[test]
+    fn resolve_local_time_snaps_forward_on_gap_week_start() {
+        // Europe/Berlin springs forward on 2025-03-30 at 02:00 → 03:00.
+        // If we have a date on Sunday March 30 and want to find the start
+        // of the week (Monday March 24), that crosses DST but the target
+        // date (March 24) is before the transition, so 02:30 is fine there.
+        //
+        // Instead, use America/New_York which springs forward on 2025-03-09
+        // at 02:00 → 03:00. A date on Sunday 2025-03-09 at 02:30 doesn't
+        // work directly (it's in the gap), so pick March 15 at 02:30 and
+        // week_start goes back to March 9 at 02:30 which IS in the gap.
+        use chrono::Timelike;
+
+        let tz = chrono_tz::America::New_York;
+        let date = tz.with_ymd_and_hms(2025, 3, 15, 2, 30, 0).unwrap();
+        let result = week_start(date, Some(chrono::Weekday::Sun));
+        // March 9 at 02:30 is in the gap; should snap to 03:00.
+        assert_eq!(result.day(), 9);
+        assert_eq!(result.month(), 3);
+        assert_eq!(result.hour(), 3);
+        assert_eq!(result.minute(), 0);
     }
 }

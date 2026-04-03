@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 
 use chrono::TimeZone;
-use chrono_tz::UTC;
+use chrono_tz::{Tz, UTC};
 use tempfile::TempDir;
 
 use eventix_ical::col::{CalDir, CalStore, ColError};
@@ -43,10 +43,20 @@ fn two_dir_store(
         copy_fixture(f, tmp_b);
     }
 
-    let dir_a =
-        CalDir::new_from_dir(make_id("dir-a"), tmp_a.path().to_path_buf(), "DirA".into()).unwrap();
-    let dir_b =
-        CalDir::new_from_dir(make_id("dir-b"), tmp_b.path().to_path_buf(), "DirB".into()).unwrap();
+    let dir_a = CalDir::new_from_dir(
+        make_id("dir-a"),
+        tmp_a.path().to_path_buf(),
+        "DirA".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
+    let dir_b = CalDir::new_from_dir(
+        make_id("dir-b"),
+        tmp_b.path().to_path_buf(),
+        "DirB".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     let mut store = CalStore::default();
     store.add(dir_a);
@@ -129,7 +139,13 @@ fn occurrence_by_id_with_rid_returns_overwrite() {
     // with an overwrite for the second occurrence (rid = 2024-01-08).
     let tmp = TempDir::new().unwrap();
     copy_fixture("recurring_with_overwrite.ics", &tmp);
-    let dir = CalDir::new_from_dir(make_id("dir"), tmp.path().to_path_buf(), "D".into()).unwrap();
+    let dir = CalDir::new_from_dir(
+        make_id("dir"),
+        tmp.path().to_path_buf(),
+        "D".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
     let mut store = CalStore::default();
     store.add(dir);
 
@@ -202,10 +218,20 @@ fn save_persists_all_dirs() {
     copy_fixture("event_a.ics", &tmp_a);
     copy_fixture("event_b.ics", &tmp_b);
 
-    let dir_a =
-        CalDir::new_from_dir(make_id("dir-a"), tmp_a.path().to_path_buf(), "DirA".into()).unwrap();
-    let dir_b =
-        CalDir::new_from_dir(make_id("dir-b"), tmp_b.path().to_path_buf(), "DirB".into()).unwrap();
+    let dir_a = CalDir::new_from_dir(
+        make_id("dir-a"),
+        tmp_a.path().to_path_buf(),
+        "DirA".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
+    let dir_b = CalDir::new_from_dir(
+        make_id("dir-b"),
+        tmp_b.path().to_path_buf(),
+        "DirB".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     let mut store = CalStore::default();
     store.add(dir_a);
@@ -229,10 +255,20 @@ fn save_persists_all_dirs() {
     store.save().unwrap();
 
     // Reload both dirs and check mutations survived.
-    let reloaded_a =
-        CalDir::new_from_dir(make_id("dir-a"), tmp_a.path().to_path_buf(), "DirA".into()).unwrap();
-    let reloaded_b =
-        CalDir::new_from_dir(make_id("dir-b"), tmp_b.path().to_path_buf(), "DirB".into()).unwrap();
+    let reloaded_a = CalDir::new_from_dir(
+        make_id("dir-a"),
+        tmp_a.path().to_path_buf(),
+        "DirA".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
+    let reloaded_b = CalDir::new_from_dir(
+        make_id("dir-b"),
+        tmp_b.path().to_path_buf(),
+        "DirB".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     let sum_a = reloaded_a
         .file_by_id("event-a")
@@ -260,10 +296,20 @@ fn switch_directory_success() {
     let id_a = make_id("dir-a");
     let id_b = make_id("dir-b");
 
-    let dir_a =
-        CalDir::new_from_dir(id_a.clone(), tmp_a.path().to_path_buf(), "DirA".into()).unwrap();
-    let dir_b =
-        CalDir::new_from_dir(id_b.clone(), tmp_b.path().to_path_buf(), "DirB".into()).unwrap();
+    let dir_a = CalDir::new_from_dir(
+        id_a.clone(),
+        tmp_a.path().to_path_buf(),
+        "DirA".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
+    let dir_b = CalDir::new_from_dir(
+        id_b.clone(),
+        tmp_b.path().to_path_buf(),
+        "DirB".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     let mut store = CalStore::default();
     store.add(dir_a);
@@ -295,8 +341,13 @@ fn switch_directory_old_dir_not_found() {
     let id_missing = make_id("no-such-dir");
     let id_b = make_id("dir-b");
 
-    let dir_b =
-        CalDir::new_from_dir(id_b.clone(), tmp_b.path().to_path_buf(), "DirB".into()).unwrap();
+    let dir_b = CalDir::new_from_dir(
+        id_b.clone(),
+        tmp_b.path().to_path_buf(),
+        "DirB".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     let mut store = CalStore::default();
     store.add(dir_b);
@@ -316,8 +367,13 @@ fn switch_directory_new_dir_not_found_restores_file() {
     let id_a = make_id("dir-a");
     let id_missing = make_id("no-such-dir");
 
-    let dir_a =
-        CalDir::new_from_dir(id_a.clone(), tmp_a.path().to_path_buf(), "DirA".into()).unwrap();
+    let dir_a = CalDir::new_from_dir(
+        id_a.clone(),
+        tmp_a.path().to_path_buf(),
+        "DirA".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
 
     let mut store = CalStore::default();
     store.add(dir_a);
@@ -348,8 +404,13 @@ fn switch_directory_save_failure_rolls_back() {
 
     // dir-b points at a path that does not exist, so any save attempt will fail.
     let nonexistent_path = tmp_a.path().join("nonexistent_subdir");
-    let dir_a =
-        CalDir::new_from_dir(id_a.clone(), tmp_a.path().to_path_buf(), "DirA".into()).unwrap();
+    let dir_a = CalDir::new_from_dir(
+        id_a.clone(),
+        tmp_a.path().to_path_buf(),
+        "DirA".into(),
+        &Tz::UTC,
+    )
+    .unwrap();
     let dir_b = CalDir::new_empty(id_b.clone(), nonexistent_path, "DirB".into());
 
     let mut store = CalStore::default();

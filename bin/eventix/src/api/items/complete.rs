@@ -44,7 +44,7 @@ async fn handler(
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    let complete = |c: &mut CalComponent| {
+    let complete = |c: &mut CalComponent| -> anyhow::Result<()> {
         let td = c.as_todo_mut().unwrap();
         td.set_status(Some(CalTodoStatus::Completed));
         td.set_percent(Some(100));
@@ -54,12 +54,13 @@ async fn handler(
         td.set_priority(Some(PRIORITY_MEDIUM));
         td.set_last_modified(CalDate::now());
         td.set_stamp(CalDate::now());
+        Ok(())
     };
 
     if let Some(comp) =
         file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
     {
-        complete(comp);
+        complete(comp)?;
     } else {
         let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {

@@ -266,6 +266,9 @@ They are not part of the Cargo build graph.
 
 Agents should not modify tooling unless explicitly requested.
 
+Never perform state-changing git commands (git stash, git commit, etc.) without explicit request
+from the user.
+
 ## CURSOR / COPILOT RULES
 
 No .cursor/rules/, .cursorrules, or

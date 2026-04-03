@@ -578,6 +578,71 @@ impl CalComponent {
             (None, None) => CompDateIterator::default(),
         }
     }
+
+    /// Sets the start of the component, validating it against the user's local timezone.
+    ///
+    /// Returns an error when the datetime falls in a DST gap (non-existent time) or DST fold
+    /// (ambiguous time).
+    pub fn set_start_checked(
+        &mut self,
+        start: Option<CalDate>,
+        local_tz: &Tz,
+    ) -> Result<(), ParseError> {
+        if let Some(ref d) = start {
+            d.validate(local_tz)?;
+        }
+        self.set_start(start);
+        Ok(())
+    }
+
+    /// Sets the end of an event component, validating it against the user's local timezone.
+    ///
+    /// Returns an error when the datetime falls in a DST gap (non-existent time) or DST fold
+    /// (ambiguous time). Panics if the component is not an event.
+    pub fn set_end_checked(
+        &mut self,
+        end: Option<CalDate>,
+        local_tz: &Tz,
+    ) -> Result<(), ParseError> {
+        if let Some(ref d) = end {
+            d.validate(local_tz)?;
+        }
+        self.as_event_mut().unwrap().set_end(end);
+        Ok(())
+    }
+
+    /// Sets the due date of a TODO component, validating it against the user's local timezone.
+    ///
+    /// Returns an error when the datetime falls in a DST gap (non-existent time) or DST fold
+    /// (ambiguous time). Panics if the component is not a TODO.
+    pub fn set_due_checked(
+        &mut self,
+        due: Option<CalDate>,
+        local_tz: &Tz,
+    ) -> Result<(), ParseError> {
+        if let Some(ref d) = due {
+            d.validate(local_tz)?;
+        }
+        self.as_todo_mut().unwrap().set_due(due);
+        Ok(())
+    }
+
+    /// Sets the completion date of a TODO component, validating it against the user's local
+    /// timezone.
+    ///
+    /// Returns an error when the datetime falls in a DST gap (non-existent time) or DST fold
+    /// (ambiguous time). Panics if the component is not a TODO.
+    pub fn set_completed_checked(
+        &mut self,
+        completed: Option<CalDate>,
+        local_tz: &Tz,
+    ) -> Result<(), ParseError> {
+        if let Some(ref d) = completed {
+            d.validate(local_tz)?;
+        }
+        self.as_todo_mut().unwrap().set_completed(completed);
+        Ok(())
+    }
 }
 
 impl PropertyProducer for CalComponent {
@@ -914,5 +979,112 @@ mod tests {
     fn component_type_display_is_exact() {
         assert_eq!(format!("{}", CalCompType::Event), "Event");
         assert_eq!(format!("{}", CalCompType::Todo), "Todo");
+    }
+
+    // --- checked setters ---
+
+    #[test]
+    fn set_checked_rejects_invalid_times() {
+        use chrono::NaiveDate;
+        use chrono_tz::Tz;
+
+        use crate::objects::{CalDate, CalDateTime, CalTodo, EventLike};
+
+        // Helper to build a floating CalDate at the given (y, m, d, h, min).
+        let floating = |y, mo, d, h, mi| {
+            CalDate::DateTime(CalDateTime::Floating(
+                NaiveDate::from_ymd_opt(y, mo, d)
+                    .and_then(|dt| dt.and_hms_opt(h, mi, 0))
+                    .unwrap(),
+            ))
+        };
+
+        // 2:30 AM on 2025-03-30 doesn't exist in Europe/Berlin (spring forward / gap).
+        let gap = floating(2025, 3, 30, 2, 30);
+        // 2:30 AM on 2025-10-26 is ambiguous in Europe/Berlin (fall back / fold).
+        let fold = floating(2025, 10, 26, 2, 30);
+
+        // set_start_checked: both gap and fold must be rejected, leaving start None.
+        let mut ev = CalComponent::Event(CalEvent::new("ev-1"));
+        assert!(
+            ev.set_start_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(ev.start().is_none());
+        assert!(
+            ev.set_start_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(ev.start().is_none());
+
+        // set_end_checked: both gap and fold must be rejected, leaving end None.
+        let mut ev = CalComponent::Event(CalEvent::new("ev-2"));
+        assert!(
+            ev.set_end_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(ev.as_event().unwrap().end().is_none());
+        assert!(
+            ev.set_end_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(ev.as_event().unwrap().end().is_none());
+
+        // set_due_checked: both gap and fold must be rejected, leaving due None.
+        let mut td = CalComponent::Todo(CalTodo::new("td-1"));
+        assert!(
+            td.set_due_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(td.as_todo().unwrap().due().is_none());
+        assert!(
+            td.set_due_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(td.as_todo().unwrap().due().is_none());
+
+        // set_completed_checked: both gap and fold must be rejected, leaving completed None.
+        let mut td = CalComponent::Todo(CalTodo::new("td-2"));
+        assert!(
+            td.set_completed_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(td.as_todo().unwrap().completed().is_none());
+        assert!(
+            td.set_completed_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+                .is_err()
+        );
+        assert!(td.as_todo().unwrap().completed().is_none());
+    }
+
+    #[test]
+    fn set_checked_accepts_valid_time_and_none() {
+        use chrono::NaiveDate;
+        use chrono_tz::Tz;
+
+        use crate::objects::{CalDate, CalDateTime, CalTodo, EventLike};
+
+        // 10:00 AM on 2025-03-30 is a valid time in Europe/Berlin.
+        let valid = CalDate::DateTime(CalDateTime::Floating(
+            NaiveDate::from_ymd_opt(2025, 3, 30)
+                .and_then(|d| d.and_hms_opt(10, 0, 0))
+                .unwrap(),
+        ));
+
+        let mut ev = CalComponent::Event(CalEvent::new("ev-v"));
+        assert!(
+            ev.set_start_checked(Some(valid.clone()), &Tz::Europe__Berlin)
+                .is_ok()
+        );
+        assert!(ev.start().is_some());
+
+        // None is always accepted (clears the field).
+        let mut ev = CalComponent::Event(CalEvent::new("ev-n"));
+        assert!(ev.set_start_checked(None, &Tz::Europe__Berlin).is_ok());
+        assert!(ev.set_end_checked(None, &Tz::Europe__Berlin).is_ok());
+
+        let mut td = CalComponent::Todo(CalTodo::new("td-n"));
+        assert!(td.set_due_checked(None, &Tz::Europe__Berlin).is_ok());
+        assert!(td.set_completed_checked(None, &Tz::Europe__Berlin).is_ok());
     }
 }

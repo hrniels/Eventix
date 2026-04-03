@@ -12,6 +12,7 @@ pub mod util;
 
 use anyhow::{Context, anyhow};
 use chrono::NaiveDateTime;
+use chrono_tz::Tz;
 use eventix_ical::{
     col::{CalDir, CalStore},
     objects::{EventLike, UpdatableEventLike},
@@ -70,9 +71,10 @@ impl State {
         let locale = eventix_locale::new(&xdg, misc.locale_type())?;
 
         let mut store = CalStore::default();
+        let local_tz = locale.timezone();
         for (col_id, col) in settings.collections().iter() {
             for (cal_id, cal) in col.calendars() {
-                let dir = Self::load_calendar(&xdg, col_id, col, cal_id, cal)?;
+                let dir = Self::load_calendar(&xdg, col_id, col, cal_id, cal, local_tz)?;
                 store.add(dir);
             }
         }
@@ -147,8 +149,10 @@ impl State {
             store,
             settings,
             xdg,
+            locale,
             ..
         } = &mut *state;
+        let local_tz = locale.timezone();
 
         // detect added/updated calendars
         for (col_id, col) in settings.collections().iter() {
@@ -156,7 +160,7 @@ impl State {
                 match store.directory_mut(&Arc::new(cal_id.clone())) {
                     Some(dir) => dir.set_name(cal.name().clone()),
                     None => {
-                        let dir = Self::load_calendar(xdg, col_id, col, cal_id, cal)?;
+                        let dir = Self::load_calendar(xdg, col_id, col, cal_id, cal, local_tz)?;
                         store.add(dir);
                     }
                 }
@@ -175,20 +179,20 @@ impl State {
         col: &CollectionSettings,
         cal_id: &str,
         cal: &CalendarSettings,
+        local_tz: &Tz,
     ) -> anyhow::Result<CalDir> {
         let cal_id: Arc<String> = Arc::from(cal_id.to_owned());
         let col_path = col.path(xdg, col_id);
         let path = col_path.join(cal.folder());
         let mut dir = if path.exists() {
-            CalDir::new_from_dir(cal_id.clone(), path.clone(), cal.name().clone()).with_context(
-                || {
+            CalDir::new_from_dir(cal_id.clone(), path.clone(), cal.name().clone(), local_tz)
+                .with_context(|| {
                     format!(
                         "Loading calendar {} from '{}' failed",
                         cal_id,
                         path.to_str().unwrap()
                     )
-                },
-            )?
+                })?
         } else {
             tracing::warn!(
                 "Creating empty calendar '{}' from non-existing directory {}",
@@ -234,10 +238,11 @@ impl State {
 
         // Load calendars again from file
         let col = state.settings().collections().get(col_id).unwrap();
+        let local_tz = *state.timezone();
         let mut dirs = vec![];
         for cal_id in cal_ids {
             let cal = col.all_calendars().get(&cal_id).unwrap();
-            let dir = Self::load_calendar(state.xdg(), col_id, col, &cal_id, cal)?;
+            let dir = Self::load_calendar(state.xdg(), col_id, col, &cal_id, cal, &local_tz)?;
             dirs.push(dir);
         }
 
@@ -355,6 +360,11 @@ impl State {
     /// Returns a clone of the `Locale` implementation.
     pub fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
         self.locale.clone()
+    }
+
+    /// Returns the user's local timezone as configured in the locale.
+    pub fn timezone(&self) -> &Tz {
+        self.locale.timezone()
     }
 
     /// Returns an immutable reference to the in-memory calendar store.
