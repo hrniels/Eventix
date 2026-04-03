@@ -242,7 +242,14 @@ impl<'c> Occurrence<'c> {
     pub fn occurrence_end(&self) -> Option<DateTime<Tz>> {
         match self.end {
             Some(end) => Some(end),
-            None => self.time_duration().map(|d| self.start.unwrap() + d),
+            None => self.time_duration().map(|d| {
+                let start = self.start.unwrap();
+                // Add the duration in naive (wall-clock) time and re-localize so that the
+                // result stays at the correct wall-clock offset even when a DST transition
+                // falls between the occurrence start and its due/end time.
+                let naive_end = start.naive_local() + d;
+                util::resolve_local_time(start.timezone(), naive_end)
+            }),
         }
     }
 
@@ -764,6 +771,35 @@ mod tests {
         // end must be derived from start + duration
         let expected_end = start_dt + Duration::hours(2);
         assert_eq!(occ.occurrence_end(), Some(expected_end));
+    }
+
+    /// Verifies that `occurrence_end` preserves wall-clock time when a DST spring-forward
+    /// falls between the occurrence start and its computed end.
+    ///
+    /// Europe/Berlin springs forward on 2025-03-30 at 02:00 → 03:00 (CET → CEST).
+    /// An occurrence starting at 01:00 CET with a 3-hour duration should end at
+    /// 04:00 CEST (wall-clock), not 05:00 CEST (what a raw absolute-time addition gives).
+    #[test]
+    fn occurrence_end_via_duration_across_dst_spring_forward() {
+        let berlin: Tz = "Europe/Berlin".parse().unwrap();
+
+        // 2025-03-30 01:00 CET (UTC+1) — one hour before clocks spring forward
+        let start_dt = berlin.with_ymd_and_hms(2025, 3, 30, 1, 0, 0).unwrap();
+        let mut td = CalTodo::new("uid-dst");
+        td.set_start(Some(start_dt.into()));
+        let mut lr = LineReader::new("".as_bytes());
+        td.parse_prop(&mut lr, Property::new("DURATION", vec![], "PT3H"))
+            .unwrap();
+        let comp = CalComponent::Todo(td);
+        let occ = Occurrence::new(dir(), &comp, Some(start_dt), None, false);
+
+        let end = occ.occurrence_end().unwrap();
+        // Wall-clock: 01:00 + 3h = 04:00; in CEST (UTC+2) that is 04:00 CEST.
+        let expected = berlin.with_ymd_and_hms(2025, 3, 30, 4, 0, 0).unwrap();
+        assert_eq!(
+            end, expected,
+            "due date should be 04:00 CEST, not 05:00 CEST"
+        );
     }
 
     /// Verifies `event_status` and `is_cancelled` for the Event component type.
