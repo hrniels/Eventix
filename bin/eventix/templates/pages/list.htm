@@ -105,7 +105,7 @@
     }
 
     function refreshRow(uid, rid, rid_js) {
-        loadOccs(uid, rid, "Forward", 1, function (data) {
+        loadOccs(uid, rid, "ForwardFrom", 1, function (data) {
             let row = document.getElementById("occrow_" + rid_js);
             let prev = row.previousSibling;
             row.remove();

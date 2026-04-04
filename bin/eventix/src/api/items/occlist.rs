@@ -27,8 +27,13 @@ use crate::objects::DayOccurrence;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
+    /// Returns occurrences whose start is strictly before `date`.
     Backwards,
+    /// Returns occurrences whose start is strictly after `date`. Used for forward pagination.
     Forward,
+    /// Returns occurrences whose start is greater than or equal to `date`. Used to reload a
+    /// specific occurrence in place by passing its own start as `date`.
+    ForwardFrom,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,13 +153,17 @@ pub async fn handler(
         .context(format!("Unable to find file with uid {}", req.uid))?;
 
     let occs: Vec<_> = match req.dir {
-        Direction::Forward => {
+        Direction::Forward | Direction::ForwardFrom => {
             let end = max_datetime(*locale.timezone());
-            // Select occurrences whose start is strictly after `date`, ignoring occurrence end.
-            // Using only the start ensures correctness when the end is unknown (e.g. a recurring
-            // task with no DUE date) and avoids ambiguity when occurrences overlap.
+            // Select occurrences whose start is strictly after `date` (Forward) or at/after
+            // `date` (ForwardFrom), ignoring occurrence end. Using only the start ensures
+            // correctness when the end is unknown (e.g. a recurring task with no DUE date) and
+            // avoids ambiguity when occurrences overlap.
             file.occurrences_between(date, end, |_| true)
-                .filter(|o| o.occurrence_start().unwrap() > date)
+                .filter(|o| match req.dir {
+                    Direction::Forward => o.occurrence_start().unwrap() > date,
+                    _ => o.occurrence_start().unwrap() >= date,
+                })
                 .take(req.count + 1)
                 .collect()
         }
@@ -179,7 +188,7 @@ pub async fn handler(
 
     let more = occs.len() > req.count;
     let occs: Vec<_> = match req.dir {
-        Direction::Forward => occs
+        Direction::Forward | Direction::ForwardFrom => occs
             .iter()
             .take(req.count)
             .map(|o| {
@@ -209,7 +218,9 @@ pub async fn handler(
 
     let date = if more {
         match req.dir {
-            Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_startdate()),
+            Direction::Forward | Direction::ForwardFrom => {
+                occs.iter().last().and_then(|l| l.occurrence_startdate())
+            }
             Direction::Backwards => occs.first().and_then(|l| l.occurrence_startdate()),
         }
     } else {
