@@ -162,7 +162,7 @@ pub async fn handler(
                 .occurrences_between(start, end, |_| true)
                 // ignore the occurrences where the end is later, because we'll find these when
                 // walking forward
-                .filter(|o| o.occurrence_end().unwrap() < end)
+                .filter(|o| o.occurrence_end().unwrap_or(o.occurrence_start().unwrap()) < end)
                 .collect::<Vec<_>>();
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
@@ -205,7 +205,10 @@ pub async fn handler(
 
     let date = if more {
         match req.dir {
-            Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_enddate()),
+            Direction::Forward => occs.iter().last().map(|l| {
+                l.occurrence_enddate()
+                    .unwrap_or(l.occurrence_startdate().unwrap())
+            }),
             Direction::Backwards => occs.first().and_then(|l| l.occurrence_startdate()),
         }
     } else {
