@@ -149,9 +149,12 @@ pub async fn handler(
 
     let occs: Vec<_> = match req.dir {
         Direction::Forward => {
-            let start = date + Duration::seconds(1);
             let end = max_datetime(*locale.timezone());
-            file.occurrences_between(start, end, |_| true)
+            // Select occurrences whose start is strictly after `date`, ignoring occurrence end.
+            // Using only the start ensures correctness when the end is unknown (e.g. a recurring
+            // task with no DUE date) and avoids ambiguity when occurrences overlap.
+            file.occurrences_between(date, end, |_| true)
+                .filter(|o| o.occurrence_start().unwrap() > date)
                 .take(req.count + 1)
                 .collect()
         }
@@ -160,9 +163,10 @@ pub async fn handler(
             let end = date;
             let occs = file
                 .occurrences_between(start, end, |_| true)
-                // ignore the occurrences where the end is later, because we'll find these when
-                // walking forward
-                .filter(|o| o.occurrence_end().unwrap_or(o.occurrence_start().unwrap()) < end)
+                // Select only occurrences whose start is strictly before `date`, ignoring
+                // occurrence end. This mirrors the Forward direction and avoids pulling in
+                // occurrences that merely overlap the boundary.
+                .filter(|o| o.occurrence_start().unwrap() < end)
                 .collect::<Vec<_>>();
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
@@ -205,10 +209,7 @@ pub async fn handler(
 
     let date = if more {
         match req.dir {
-            Direction::Forward => occs.iter().last().map(|l| {
-                l.occurrence_enddate()
-                    .unwrap_or(l.occurrence_startdate().unwrap())
-            }),
+            Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_startdate()),
             Direction::Backwards => occs.first().and_then(|l| l.occurrence_startdate()),
         }
     } else {
