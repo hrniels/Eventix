@@ -15,6 +15,4 @@ tempfile.workspace = true
 tokio.workspace = true
 xdg.workspace = true
 
-gtk = "0.18.2"
-glib = "0.18"
-gdk-pixbuf = "0.18.0"
+gtk = { version = "0.11.1", package = "gtk4" }

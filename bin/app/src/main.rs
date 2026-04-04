@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -11,12 +11,12 @@ use std::{
 
 use async_channel::unbounded;
 use clap::Parser;
-use gtk::{gio::ApplicationFlags, glib, prelude::*};
+use gtk::{glib, prelude::*};
 use ksni::blocking::{Handle, TrayMethods};
 use tokio::runtime::Runtime;
-use webkit2gtk::{
-    NavigationPolicyDecision, NavigationPolicyDecisionExt, NavigationType, PolicyDecisionExt,
-    PolicyDecisionType, SettingsExt, URIRequestExt, WebView, WebViewExt,
+use webkit6::{
+    NavigationPolicyDecision, PolicyDecisionType, WebView,
+    prelude::{PolicyDecisionExt, WebViewExt},
 };
 use xdg::BaseDirectories;
 
@@ -47,7 +47,7 @@ fn main() {
     let args = Args::parse();
 
     let xdg = BaseDirectories::with_prefix(APP_ID);
-    let app = gtk::Application::new(Some(APP_ID), ApplicationFlags::empty());
+    let app = gtk::Application::builder().application_id(APP_ID).build();
 
     app.connect_activate(move |app| {
         // create channel between tray icon and main GTK thread
@@ -67,17 +67,19 @@ fn main() {
             None
         };
 
-        let window = gtk::ApplicationWindow::new(app);
-        window.set_default_size(1400, 900);
-        window.set_title("Eventix");
+        let window = gtk::ApplicationWindow::builder()
+            .application(app)
+            .default_width(1400)
+            .default_height(900)
+            .title("Eventix")
+            .build();
 
         let webview = WebView::new();
-        if let Some(settings) = WebViewExt::settings(&webview) {
-            settings.set_enable_developer_extras(true);
-            // smooth scrolling feels really laggy, so disable it
-            settings.set_enable_smooth_scrolling(false);
-            settings.set_enable_write_console_messages_to_stdout(true);
-        }
+        let settings = WebViewExt::settings(&webview).expect("webview settings");
+        settings.set_enable_developer_extras(true);
+        // smooth scrolling feels really laggy, so disable it
+        settings.set_enable_smooth_scrolling(false);
+        settings.set_enable_write_console_messages_to_stdout(true);
 
         let url = format!("http://{}:{}", args.address, args.port);
         let base_url = url.clone();
@@ -85,32 +87,26 @@ fn main() {
         // overwrite policy for clicked links
         webview.connect_decide_policy(move |_webview, decision, decision_type| {
             if decision_type == PolicyDecisionType::NavigationAction
-                && let Some(nav_decision) = decision.dynamic_cast_ref::<NavigationPolicyDecision>()
+                && let Some(nav_decision) = decision.downcast_ref::<NavigationPolicyDecision>()
+                && let Some(action) = nav_decision.navigation_action()
+                && let Some(request) = action.request()
+                && let Some(uri) = request.uri()
+                && !uri.starts_with(&base_url)
+                && action.navigation_type() == webkit6::NavigationType::LinkClicked
             {
-                // TODO method is deprecated, but it's unclear to me what the replacement is
-                #[allow(deprecated)]
-                if let Some(request) = nav_decision.request()
-                    // open external URLs with xdg-open
-                    && let Some(uri) = request.uri()
-                        && !uri.starts_with(&base_url)
-                {
-                    let action = nav_decision.navigation_action().unwrap();
-                    if action.navigation_type() == NavigationType::LinkClicked {
-                        let _ = Command::new("xdg-open").arg(uri).spawn();
-                        // tell WebKit not to handle it internally
-                        decision.ignore();
-                        return true;
-                    }
-                }
+                let _ = Command::new("xdg-open").arg(uri.as_str()).spawn();
+                // tell WebKit not to handle it internally
+                decision.ignore();
+                return true;
             }
             // let WebKit handle it by default
             false
         });
 
         webview.load_uri(&url);
-        window.add(&webview);
+        window.set_child(Some(&webview));
 
-        window.show_all();
+        window.present();
 
         // handle messages in main GTK thread
         if let Some(tray) = tray {
@@ -120,15 +116,15 @@ fn main() {
                     match msg {
                         TrayMessage::LoadPage(uri) => {
                             if !window.is_visible() {
-                                window.show_all();
+                                window.present();
                             }
                             webview.load_uri(&format!("{base_url}{uri}"));
                         }
                         TrayMessage::ToggleWindow => {
                             if window.is_visible() {
-                                window.hide();
+                                window.set_visible(false);
                             } else {
-                                window.show_all();
+                                window.present();
                             }
                         }
                     }
@@ -152,7 +148,7 @@ fn main() {
     });
 
     // pass no arguments to GTK, because it doesn't support our application arguments above
-    app.run_with_args(&[""]);
+    app.run_with_args(&[] as &[&str]);
 }
 
 fn update_icon(

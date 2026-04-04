@@ -6,14 +6,33 @@ use askama::Template;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalDate, CalDateTime, CalDateType};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::comps::date::{Date, DateTemplate};
 use crate::comps::time::{Time, TimeTemplate};
 
+/// Deserializes an optional time from a form field, treating an empty string as `None`.
+///
+/// HTML time inputs submit an empty string when left blank. `NaiveTime`'s built-in
+/// deserializer rejects empty strings, so this helper maps them to `None` instead.
+fn deserialize_time<'de, D>(deserializer: D) -> Result<Option<Time>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let buf = String::deserialize(deserializer)?;
+    if buf.is_empty() {
+        Ok(None)
+    } else {
+        buf.parse()
+            .map(|t| Some(Time::new(t)))
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct DateTime {
     date: Date,
+    #[serde(default, deserialize_with = "deserialize_time")]
     time: Option<Time>,
 }
 

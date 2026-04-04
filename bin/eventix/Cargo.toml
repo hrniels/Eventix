@@ -25,19 +25,19 @@ toml.workspace = true
 tracing.workspace = true
 xdg.workspace = true
 
-askama = "0.15.4"
+askama = "0.15.6"
 axum = { version = "0.8.8", features = ["macros", "multipart"] }
 email_address = "0.2.9"
 futures = "0.3.32"
 numfmt = "1.2.0"
 regex = "1.12.3"
-serde_qs = "0.15.0"
+serde_qs = "1.1.0"
 serde_urlencoded = "0.7.1"
 strum = { version = "0.28.0", features = ["derive"] }
 tower = "0.5.3"
 tower-http = { version = "0.6.8", features = ["fs", "trace", "set-header"] }
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-uuid = { version = "1.22.0", features = ["v4"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid = { version = "1.23.0", features = ["v4"] }
 
 [build-dependencies]
-askama = "0.15.4"
+askama = "0.15.6"

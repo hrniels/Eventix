@@ -176,8 +176,8 @@ def cmd_flatpak(args):
 
     # install flatpak dependencies
     runtimes = [
-        "org.gnome.Platform//49",
-        "org.gnome.Sdk//49",
+        "org.gnome.Platform//50",
+        "org.gnome.Sdk//50",
         "org.freedesktop.Sdk.Extension.rust-stable//25.08",
         "org.freedesktop.Sdk.Extension.openjdk//25.08"
     ]
