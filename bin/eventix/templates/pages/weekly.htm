@@ -103,7 +103,8 @@
                                     onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
                                                                        'ev_id_{{ occ.uid()|to_id }}',
                                                                        '{{ occ.rid_str() }}',
-                                                                       '{{ occ.id() }}'))"
+                                                                       '{{ occ.id() }}',
+                                                                       event))"
                                     style="text-align: center"
                                     id="{{ occ.id() }}"
                                     data-uid="{{ occ.uid() }}"
@@ -222,7 +223,8 @@
                                         onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
                                                                            'ev_id_{{ occ.uid()|to_id }}',
                                                                            '{{ occ.rid_str() }}',
-                                                                           '{{ occ.id() }}'))"
+                                                                           '{{ occ.id() }}',
+                                                                           event))"
                                         id="{{ occ.id() }}"
                                         data-uid="{{ occ.uid() }}"
                                         data-rid="{{ occ.rid_str() }}"

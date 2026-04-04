@@ -102,7 +102,8 @@
                         onclick="fireEvent(new SelectEvent('{{ occ.uid() }}',
                                                            'ev_id_{{ occ.uid()|to_id }}',
                                                            '{{ occ.rid_str() }}',
-                                                           '{{ occ.id() }}'))"
+                                                           '{{ occ.id() }}',
+                                                           event))"
                         {% if occ.is_all_day() || occ.is_all_day_on(day.date.unwrap()) %}
                         style="text-align: center"
                         {% endif %}

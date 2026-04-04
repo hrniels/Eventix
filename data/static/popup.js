@@ -44,13 +44,18 @@ class Event {
 }
 
 class SelectEvent extends Event {
-    constructor(uid, jsuid, rid, id) {
+    constructor(uid, jsuid, rid, id, clickEv) {
         super("select");
+        const doc = document.documentElement;
+        const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
         this.data = {
             uid: uid,
             jsuid: jsuid,
             rid: rid,
             id: id,
+            // Page-absolute Y of the click; used as fallback anchor when the event element
+            // extends outside the visible viewport.
+            clickPageY: clickEv ? clickEv.clientY + scrollTop : null,
         };
     }
 
@@ -331,6 +336,39 @@ async function _shrinkPopup(pos) {
     });
 }
 
+// Returns the page-absolute Y coordinate at which the small popup should be anchored (its top
+// edge) before the popup height is known. A precise correction is applied later in
+// _correctPosition() once the content has loaded and the popup height can be measured.
+//
+// Strategy:
+//   - If the event's top edge is visible, use it as-is (normal case).
+//   - If the event starts above the viewport, use the viewport top as a temporary anchor;
+//     _correctPosition() will shift the popup to align its bottom with the event's bottom edge.
+//   - If the event is entirely outside the viewport (defensive fallback), use the click position.
+function _visibleAnchorTop(elRect, clickPageY) {
+    const doc = document.documentElement;
+    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+    const viewTop = scrollTop;
+    const viewBottom = scrollTop + window.innerHeight;
+
+    const eventVisibleAtTop = elRect.top >= viewTop && elRect.top < viewBottom;
+    const eventSpansViewport = elRect.top < viewTop && elRect.bottom > viewBottom;
+    const eventVisibleAtBottom = elRect.bottom > viewTop && elRect.bottom <= viewBottom;
+
+    if (eventVisibleAtTop) {
+        // Normal case: the event starts within the visible area.
+        return elRect.top;
+    } else if (eventSpansViewport || eventVisibleAtBottom) {
+        // Event top is above the viewport; use viewport top as a temporary position.
+        // _correctPosition() will refine this to bottom-align with the event's bottom edge.
+        return viewTop;
+    } else if (clickPageY !== null) {
+        // Entire event is outside the viewport (defensive fallback): use click position.
+        return clickPageY;
+    }
+    return elRect.top;
+}
+
 async function _select(newid) {
     await new Promise(async function (resolve) {
         $("#" + newid.id).addClass("ev_current");
@@ -345,7 +383,7 @@ async function _select(newid) {
         if (elRect.right + popWidth > window.innerWidth) popup.css("left", elRect.left - popWidth);
         else popup.css("left", elRect.right);
         popup.css("width", popWidth + "px");
-        popup.css("top", elRect.top);
+        popup.css("top", _visibleAnchorTop(elRect, newid.clickPageY));
         popup.css("position", "absolute");
         popup.slideFadeToggle();
 
@@ -357,13 +395,40 @@ async function _select(newid) {
     });
 }
 
+// Adjusts the popup's vertical position after its content has loaded and its final height is known.
+//
+// Cases handled (all comparisons in page-absolute coordinates):
+//   - Top clipped, bottom visible: align the popup bottom with the event's bottom edge.
+//   - Top visible, popup overflows viewport bottom: shift the popup upward, clamping its bottom to
+//     the event's bottom edge or the viewport bottom, whichever is higher.
+//   - In both cases, ensure the popup never goes above the current scroll top.
 function _correctPosition(id) {
     let el = document.getElementById(id);
     const elRect = _pageBoundingBox(el);
     const popupRect = _pageBoundingBox(document.getElementById("popup"));
-    let popup = $("#popup");
-    if (elRect.top + popupRect.height > window.innerHeight && elRect.bottom >= popupRect.height)
-        popup.css("top", elRect.bottom - popupRect.height);
+    const doc = document.documentElement;
+    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+    const viewTop = scrollTop;
+    const viewBottom = scrollTop + window.innerHeight;
+
+    const topClipped = elRect.top < viewTop;
+    const bottomVisible = elRect.bottom > viewTop && elRect.bottom <= viewBottom;
+
+    let top = parseFloat($("#popup").css("top"));
+
+    if (topClipped && bottomVisible) {
+        // Align the popup bottom with the visible bottom edge of the event.
+        top = elRect.bottom - popupRect.height;
+    } else if (top + popupRect.height > viewBottom) {
+        // Popup overflows the bottom of the viewport: shift upward.
+        // Prefer aligning with the event's bottom edge; fall back to the viewport bottom.
+        const anchor = elRect.bottom > viewBottom ? viewBottom : elRect.bottom;
+        top = anchor - popupRect.height;
+    }
+
+    // Ensure we do not push the popup above the current scroll top.
+    top = Math.max(top, scrollTop);
+    $("#popup").css("top", top);
 }
 
 async function _deselect(oldid) {

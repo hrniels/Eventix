@@ -27,8 +27,13 @@ use crate::objects::DayOccurrence;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 enum Direction {
+    /// Returns occurrences whose start is strictly before `date`.
     Backwards,
+    /// Returns occurrences whose start is strictly after `date`. Used for forward pagination.
     Forward,
+    /// Returns occurrences whose start is greater than or equal to `date`. Used to reload a
+    /// specific occurrence in place by passing its own start as `date`.
+    ForwardFrom,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,10 +153,17 @@ pub async fn handler(
         .context(format!("Unable to find file with uid {}", req.uid))?;
 
     let occs: Vec<_> = match req.dir {
-        Direction::Forward => {
-            let start = date + Duration::seconds(1);
+        Direction::Forward | Direction::ForwardFrom => {
             let end = max_datetime(*locale.timezone());
-            file.occurrences_between(start, end, |_| true)
+            // Select occurrences whose start is strictly after `date` (Forward) or at/after
+            // `date` (ForwardFrom), ignoring occurrence end. Using only the start ensures
+            // correctness when the end is unknown (e.g. a recurring task with no DUE date) and
+            // avoids ambiguity when occurrences overlap.
+            file.occurrences_between(date, end, |_| true)
+                .filter(|o| match req.dir {
+                    Direction::Forward => o.occurrence_start().unwrap() > date,
+                    _ => o.occurrence_start().unwrap() >= date,
+                })
                 .take(req.count + 1)
                 .collect()
         }
@@ -160,9 +172,10 @@ pub async fn handler(
             let end = date;
             let occs = file
                 .occurrences_between(start, end, |_| true)
-                // ignore the occurrences where the end is later, because we'll find these when
-                // walking forward
-                .filter(|o| o.occurrence_end().unwrap() < end)
+                // Select only occurrences whose start is strictly before `date`, ignoring
+                // occurrence end. This mirrors the Forward direction and avoids pulling in
+                // occurrences that merely overlap the boundary.
+                .filter(|o| o.occurrence_start().unwrap() < end)
                 .collect::<Vec<_>>();
             occs[occs.len().saturating_sub(req.count + 1)..].to_vec()
         }
@@ -175,7 +188,7 @@ pub async fn handler(
 
     let more = occs.len() > req.count;
     let occs: Vec<_> = match req.dir {
-        Direction::Forward => occs
+        Direction::Forward | Direction::ForwardFrom => occs
             .iter()
             .take(req.count)
             .map(|o| {
@@ -205,7 +218,9 @@ pub async fn handler(
 
     let date = if more {
         match req.dir {
-            Direction::Forward => occs.iter().last().and_then(|l| l.occurrence_enddate()),
+            Direction::Forward | Direction::ForwardFrom => {
+                occs.iter().last().and_then(|l| l.occurrence_startdate())
+            }
             Direction::Backwards => occs.first().and_then(|l| l.occurrence_startdate()),
         }
     } else {
