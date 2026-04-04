@@ -4,14 +4,13 @@
 
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
-use gdk_pixbuf::{Colorspace, Pixbuf};
-use glib::value::ToValue;
 use gtk::gdk::RGBA;
-use gtk::gio::Icon;
-use gtk::{prelude::*, Align, ButtonsType, DialogFlags, Image, MessageDialog, MessageType};
+use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
+use gtk::gio;
+use gtk::glib;
 use gtk::{
-    Box as GtkBox, Button, CellRendererPixbuf, CellRendererText, ComboBox, Dialog, Label,
-    ListStore, Orientation,
+    prelude::*, Align, Box as GtkBox, Button, DropDown, Image, Label, ListItem, Orientation,
+    SignalListItemFactory, StringObject, Window,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,8 +18,14 @@ use xdg::BaseDirectories;
 
 use crate::model::{ImportCalendar, ImportModel};
 
+// Stores the calendar id for each entry in the DropDown model.
+struct CalEntry {
+    id: String,
+    icon: Pixbuf,
+}
+
 pub struct ImportView {
-    dialog: Dialog,
+    window: Window,
 }
 
 impl ImportView {
@@ -39,21 +44,22 @@ impl ImportView {
     where
         T: 'static,
     {
-        // Create the dialog (no parent window needed in GTK3)
-        let dialog = Dialog::new();
-        dialog.set_title(locale.translate("Eventix Importer"));
-        dialog.set_modal(true);
-        dialog.set_default_size(300, 120);
-        dialog.set_icon_name(Some(crate::APP_ID));
+        // Create the top-level window
+        let window = Window::builder()
+            .title(locale.translate("Eventix Importer"))
+            .modal(true)
+            .default_width(300)
+            .default_height(120)
+            .build();
+        window.set_icon_name(Some(crate::APP_ID));
 
         // Main container
-        let content_area = dialog.content_area();
         let vbox = GtkBox::new(Orientation::Vertical, 8);
         vbox.set_margin_top(4);
         vbox.set_margin_bottom(4);
         vbox.set_margin_start(4);
         vbox.set_margin_end(4);
-        content_area.pack_start(&vbox, true, true, 0);
+        window.set_child(Some(&vbox));
 
         // Info label
         let label = Label::new(Some(&format!(
@@ -62,7 +68,7 @@ impl ImportView {
         )));
         label.set_use_markup(true);
         label.set_xalign(0.0);
-        vbox.pack_start(&label, false, false, 0);
+        vbox.append(&label);
 
         // load icons
         const ICON_SIZE: i32 = 25;
@@ -109,48 +115,53 @@ impl ImportView {
             }
 
             let row = Self::create_component_row(icon, &label);
-            list_box.pack_start(&row, false, false, 0);
+            list_box.append(&row);
         }
 
-        vbox.pack_start(&list_box, false, false, 0);
+        vbox.append(&list_box);
 
-        // Horizontal container for "Calendar:" + combobox
+        // Horizontal container for "Calendar:" + dropdown
         let calendar_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
 
         let calendar_label = gtk::Label::new(Some(&format!("{}:", locale.translate("Calendar"))));
         calendar_label.set_use_markup(true);
-        calendar_label.set_xalign(0.0); // left-align the label
-        calendar_box.pack_start(&calendar_label, false, false, 0);
+        calendar_label.set_xalign(0.0);
+        calendar_box.append(&calendar_label);
 
-        let calendar_combo = Self::create_color_combo(model.calendars.iter().filter(|cal| {
-            // Filter out categories that we can't import into
-            if !cal_filter.is_empty() && !cal_filter.contains(&cal.id) {
-                return false;
-            }
-            if !cal.types.iter().any(|x| type_filter.contains(x)) {
-                return false;
-            }
-            true
-        }));
-        calendar_box.pack_start(&calendar_combo, true, true, 0);
+        // Build list of calendar entries (filtered), keeping ids alongside
+        let filtered_cals: Vec<&ImportCalendar> = model
+            .calendars
+            .iter()
+            .filter(|cal| {
+                if !cal_filter.is_empty() && !cal_filter.contains(&cal.id) {
+                    return false;
+                }
+                if !cal.types.iter().any(|x| type_filter.contains(x)) {
+                    return false;
+                }
+                true
+            })
+            .collect();
 
-        vbox.pack_start(&calendar_box, false, false, 0);
+        let (calendar_dropdown, cal_entries) =
+            Self::create_color_dropdown(filtered_cals.iter().copied());
+        calendar_box.append(&calendar_dropdown);
+
+        vbox.append(&calendar_box);
 
         // Buttons
         let button_box = GtkBox::new(Orientation::Horizontal, 8);
         let import_button = Button::with_label(locale.translate("Import"));
         let cancel_button = Button::with_label(locale.translate("Cancel"));
-        button_box.pack_start(&import_button, true, true, 0);
-        button_box.pack_start(&cancel_button, true, true, 0);
-        vbox.pack_start(&button_box, false, false, 0);
+        button_box.append(&import_button);
+        button_box.append(&cancel_button);
+        vbox.append(&button_box);
 
         // Connect Import
-        let calendar_combo_clone = calendar_combo.clone();
         let data = Rc::new(RefCell::new(Some(data)));
         import_button.connect_clicked(move |_| {
-            let iter = calendar_combo_clone.active_iter().unwrap();
-            let cb_model = calendar_combo_clone.model().unwrap();
-            let cal_id: String = cb_model.value(&iter, 2).get().unwrap();
+            let idx = calendar_dropdown.selected() as usize;
+            let cal_id = cal_entries[idx].id.clone();
             let data = data.borrow_mut().take().unwrap();
             import(data, cal_id).unwrap();
             Self::quit(0);
@@ -160,26 +171,54 @@ impl ImportView {
         cancel_button.connect_clicked(|_| Self::quit(0));
 
         // Quit the app when "X" is clicked
-        dialog.connect_delete_event(|_, _| Self::quit(0));
+        window.connect_close_request(|_| {
+            Self::quit(0);
+        });
 
-        Self { dialog }
+        Self { window }
     }
 
     pub fn show_error(message: &str) {
-        let dialog = MessageDialog::new::<gtk::Window>(
-            None,
-            DialogFlags::MODAL,
-            MessageType::Error,
-            ButtonsType::Ok,
-            message,
-        );
-        dialog.run();
-        dialog.close();
+        let dialog = Window::builder()
+            .title("Error")
+            .modal(true)
+            .default_width(300)
+            .build();
+
+        let vbox = GtkBox::new(Orientation::Vertical, 8);
+        vbox.set_margin_top(12);
+        vbox.set_margin_bottom(12);
+        vbox.set_margin_start(12);
+        vbox.set_margin_end(12);
+        dialog.set_child(Some(&vbox));
+
+        let label = Label::new(Some(message));
+        label.set_wrap(true);
+        vbox.append(&label);
+
+        let ok_button = Button::with_label("Ok");
+        ok_button.connect_clicked({
+            let dialog = dialog.clone();
+            move |_| {
+                dialog.close();
+                Self::quit(0);
+            }
+        });
+        vbox.append(&ok_button);
+
+        dialog.connect_close_request(|_| {
+            Self::quit(0);
+        });
+
+        let main_loop = glib::MainLoop::new(None, false);
+        dialog.present();
+        main_loop.run();
     }
 
     pub fn show(&self) {
-        self.dialog.show_all();
-        gtk::main();
+        let main_loop = glib::MainLoop::new(None, false);
+        self.window.present();
+        main_loop.run();
     }
 
     fn create_component_row(icon: &Pixbuf, text: &str) -> GtkBox {
@@ -188,49 +227,98 @@ impl ImportView {
         // icon
         let image = Image::from_pixbuf(Some(icon));
         image.set_valign(Align::Start);
-        row.pack_start(&image, false, false, 0);
+        row.append(&image);
 
         // label
         let label = Label::new(Some(text));
         label.set_xalign(0.0);
         label.set_use_markup(true);
         label.set_valign(Align::Start);
-        row.pack_start(&label, true, true, 0);
+        row.append(&label);
 
         row
     }
 
-    fn create_color_combo<'a, I>(calendars: I) -> ComboBox
+    fn create_color_dropdown<'a, I>(calendars: I) -> (DropDown, Vec<CalEntry>)
     where
-        I: Iterator<Item = &'a ImportCalendar>,
+        I: IntoIterator<Item = &'a ImportCalendar>,
     {
-        let store = ListStore::new(&[
-            Icon::static_type(),
-            String::static_type(),
-            String::static_type(),
-        ]);
+        // Build two parallel lists: display strings (for the model) and CalEntry metadata
+        let mut display_strings: Vec<String> = Vec::new();
+        let mut cal_entries: Vec<CalEntry> = Vec::new();
 
         for cal in calendars {
             let color = Self::parse_color(&cal.color).unwrap();
-            let name = format!(" {}", cal.name);
             let pixbuf = Self::create_color_circle(color, 16);
-            store.insert_with_values(None, &[(0, &pixbuf.to_value()), (1, &name), (2, &cal.id)]);
+            display_strings.push(format!(" {}", cal.name));
+            cal_entries.push(CalEntry {
+                id: cal.id.clone(),
+                icon: pixbuf,
+            });
         }
 
-        let combo = ComboBox::with_model(&store);
+        // Build a StringList model
+        let model = gtk::StringList::new(
+            &display_strings
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        );
 
-        // Cell renderer for the icon
-        let pixbuf_renderer = CellRendererPixbuf::new();
-        combo.pack_start(&pixbuf_renderer, false);
-        combo.add_attribute(&pixbuf_renderer, "pixbuf", 0);
+        // Build a factory that shows the color circle alongside the text
+        let factory = SignalListItemFactory::new();
+        let icons: Rc<Vec<Pixbuf>> = Rc::new(cal_entries.iter().map(|e| e.icon.clone()).collect());
 
-        // Cell renderer for the text
-        let text_renderer = CellRendererText::new();
-        combo.pack_start(&text_renderer, true);
-        combo.add_attribute(&text_renderer, "text", 1);
+        factory.connect_setup(|_, list_item| {
+            let list_item = list_item.downcast_ref::<ListItem>().unwrap();
+            let hbox = GtkBox::new(Orientation::Horizontal, 4);
+            let image = Image::new();
+            let label = Label::new(None);
+            hbox.append(&image);
+            hbox.append(&label);
+            list_item.set_child(Some(&hbox));
+        });
 
-        combo.set_active(Some(0));
-        combo
+        factory.connect_bind({
+            let icons = icons.clone();
+            move |_, list_item| {
+                let list_item = list_item.downcast_ref::<ListItem>().unwrap();
+                let pos = list_item.position() as usize;
+                let hbox = list_item.child().unwrap().downcast::<GtkBox>().unwrap();
+                let mut children = hbox.first_child();
+                let image = children
+                    .as_ref()
+                    .unwrap()
+                    .downcast_ref::<Image>()
+                    .unwrap()
+                    .clone();
+                children = children.unwrap().next_sibling();
+                let label = children
+                    .as_ref()
+                    .unwrap()
+                    .downcast_ref::<Label>()
+                    .unwrap()
+                    .clone();
+
+                if let Some(pixbuf) = icons.get(pos) {
+                    image.set_from_pixbuf(Some(pixbuf));
+                }
+                if let Some(item) = list_item.item() {
+                    if let Some(string_obj) = item.downcast_ref::<StringObject>() {
+                        label.set_text(string_obj.string().as_str());
+                    }
+                }
+            }
+        });
+
+        let dropdown = DropDown::new(
+            Some(model.upcast::<gio::ListModel>()),
+            gtk::Expression::NONE,
+        );
+        dropdown.set_factory(Some(&factory));
+        dropdown.set_selected(0);
+
+        (dropdown, cal_entries)
     }
 
     fn parse_color(spec: &str) -> Option<(u8, u8, u8)> {
@@ -262,7 +350,6 @@ impl ImportView {
     }
 
     fn quit(code: i32) -> ! {
-        gtk::main_quit();
         std::process::exit(code);
     }
 }
