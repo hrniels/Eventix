@@ -87,6 +87,7 @@ impl<'a> AlarmTemplate<'a> {
         personal: bool,
         effective: Option<&'a Vec<CalAlarm>>,
         value: AlarmRequest,
+        is_todo: bool,
     ) -> Self {
         Self {
             name,
@@ -97,6 +98,7 @@ impl<'a> AlarmTemplate<'a> {
                 format!("{name}[calendar]"),
                 Some(value.calendar),
                 true,
+                is_todo,
             ),
             personal: if personal {
                 Some(PersonalAlarms {
@@ -107,6 +109,7 @@ impl<'a> AlarmTemplate<'a> {
                         format!("{name}[personal]"),
                         value.personal,
                         true,
+                        is_todo,
                     ),
                 })
             } else {

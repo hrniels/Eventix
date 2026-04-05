@@ -102,7 +102,15 @@ pub async fn content_with(
             Some(form.start_end),
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
-        alarm: AlarmTemplate::new(locale.clone(), "alarm", false, true, None, form.alarm),
+        alarm: AlarmTemplate::new(
+            locale.clone(),
+            "alarm",
+            false,
+            true,
+            None,
+            form.alarm,
+            req.ctype == CalCompType::Todo,
+        ),
         calendars: CalComboTemplate::new(
             "calendar",
             Calendars::new(&state, |_id, settings| {

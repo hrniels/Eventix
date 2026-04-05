@@ -80,6 +80,7 @@ impl<'a> EditAlarmTemplate<'a> {
                 String::from("personal"),
                 config,
                 true,
+                false,
             ),
             personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
             locale,

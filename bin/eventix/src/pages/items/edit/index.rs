@@ -10,7 +10,7 @@ use axum::{
 };
 use eventix_ical::{
     col::{CalDir, Occurrence},
-    objects::{CalDate, EventLike},
+    objects::{CalCompType, CalDate, EventLike},
 };
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
@@ -166,6 +166,7 @@ pub async fn content_with(
             have_personal,
             effective_alarms.as_ref(),
             form.alarm,
+            occ.ctype() == CalCompType::Todo,
         ),
         attendees: AttendeesTemplate::new(
             locale.clone(),

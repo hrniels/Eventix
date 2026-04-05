@@ -258,6 +258,9 @@ pub struct AlarmConfigTemplate {
     durunit: ComboboxTemplate<DurUnit>,
     durtype: ComboboxTemplate<DurType>,
     datetime: Option<DateTimeTemplate>,
+    /// When true, JS is emitted to watch the start/end enabled checkboxes and update the
+    /// relative trigger row and duration-type options accordingly.
+    is_todo: bool,
 }
 
 impl AlarmConfigTemplate {
@@ -266,6 +269,7 @@ impl AlarmConfigTemplate {
         name: String,
         value: Option<AlarmConfig>,
         absolute: bool,
+        is_todo: bool,
     ) -> Self {
         let value = value.unwrap_or_default();
         Self {
@@ -292,6 +296,7 @@ impl AlarmConfigTemplate {
             } else {
                 None
             },
+            is_todo,
             id: name.replace("[", "_").replace("]", "_"),
             name,
             locale,
