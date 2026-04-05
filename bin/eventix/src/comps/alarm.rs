@@ -80,6 +80,10 @@ pub struct AlarmTemplate<'a> {
 }
 
 impl<'a> AlarmTemplate<'a> {
+    /// Creates a new alarm template.
+    ///
+    /// `date_availability` is a `(has_start, has_end)` pair indicating which date fields are set
+    /// on the item being edited. This controls which relative trigger options are offered.
     pub fn new(
         locale: Arc<dyn Locale + Send + Sync>,
         name: &'a str,
@@ -87,7 +91,9 @@ impl<'a> AlarmTemplate<'a> {
         personal: bool,
         effective: Option<&'a Vec<CalAlarm>>,
         value: AlarmRequest,
+        date_availability: (bool, bool),
     ) -> Self {
+        let (has_start, has_end) = date_availability;
         Self {
             name,
             edit,
@@ -97,6 +103,8 @@ impl<'a> AlarmTemplate<'a> {
                 format!("{name}[calendar]"),
                 Some(value.calendar),
                 true,
+                has_start,
+                has_end,
             ),
             personal: if personal {
                 Some(PersonalAlarms {
@@ -107,6 +115,8 @@ impl<'a> AlarmTemplate<'a> {
                         format!("{name}[personal]"),
                         value.personal,
                         true,
+                        has_start,
+                        has_end,
                     ),
                 })
             } else {

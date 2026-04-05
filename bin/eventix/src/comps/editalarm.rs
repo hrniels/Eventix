@@ -80,6 +80,8 @@ impl<'a> EditAlarmTemplate<'a> {
                 String::from("personal"),
                 config,
                 true,
+                occ.start().is_some(),
+                occ.end_or_due().is_some(),
             ),
             personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
             locale,

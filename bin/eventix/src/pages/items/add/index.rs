@@ -90,6 +90,8 @@ pub async fn content_with(
         })
         .collect();
 
+    let alarm_has_start = form.start_end.has_start();
+    let alarm_has_end = form.start_end.has_end();
     let html = NewTemplate {
         page,
         summary: &form.summary,
@@ -102,7 +104,15 @@ pub async fn content_with(
             Some(form.start_end),
         ),
         rrule: RecurTemplate::new(locale.clone(), "rrule", form.rrule),
-        alarm: AlarmTemplate::new(locale.clone(), "alarm", false, true, None, form.alarm),
+        alarm: AlarmTemplate::new(
+            locale.clone(),
+            "alarm",
+            false,
+            true,
+            None,
+            form.alarm,
+            (alarm_has_start, alarm_has_end),
+        ),
         calendars: CalComboTemplate::new(
             "calendar",
             Calendars::new(&state, |_id, settings| {
