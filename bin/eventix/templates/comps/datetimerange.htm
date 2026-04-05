@@ -10,7 +10,9 @@
     }
 
     function setChecked(id, value) {
-        $("#" + id).prop("checked", value != "");
+        $("#" + id)
+            .prop("checked", value != "")
+            .trigger("change");
     }
 
     // Initialises the date-range pickers for a single datetimerange instance.

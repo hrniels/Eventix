@@ -142,8 +142,7 @@ impl<'a> CalendarBoxTemplate<'a> {
                 String::from("alarms"),
                 personal,
                 false,
-                true,
-                true,
+                false,
             ),
             locale,
         }

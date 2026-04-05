@@ -10,7 +10,7 @@ use axum::{
 };
 use eventix_ical::{
     col::{CalDir, Occurrence},
-    objects::{CalDate, EventLike},
+    objects::{CalCompType, CalDate, EventLike},
 };
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
@@ -129,8 +129,6 @@ pub async fn content_with(
         CalendarAlarmType::Personal { .. }
     );
 
-    let alarm_has_start = form.start_end.has_start();
-    let alarm_has_end = form.start_end.has_end();
     let html = EditTemplate {
         page,
         prev: &req.prev,
@@ -168,7 +166,7 @@ pub async fn content_with(
             have_personal,
             effective_alarms.as_ref(),
             form.alarm,
-            (alarm_has_start, alarm_has_end),
+            occ.ctype() == CalCompType::Todo,
         ),
         attendees: AttendeesTemplate::new(
             locale.clone(),

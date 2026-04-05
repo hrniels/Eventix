@@ -11,37 +11,35 @@
             <label for="{{ id }}_none">{{ "None"|t(locale) }}</label>
         </td>
     </tr>
-    {% if has_relative %}
-        <tr>
-            <td width="25%">
-                <input
-                    type="radio"
-                    id="{{ id }}_relative"
-                    name="{{ name }}[trigger]"
-                    value="RELATIVE"
-                    {% if trigger == "RELATIVE" %}checked="checked"{% endif %}
-                />
-                <label for="{{ id }}_relative">{{ "Relative"|t(locale) }}:</label>
-            </td>
-            <td width="75%">
-                <input
-                    id="{{ id }}_duration"
-                    name="{{ name }}[duration]"
-                    size="2"
-                    value="{{ duration }}"
-                />
-                {{ durunit|safe }}
-                {{ durtype|safe }}
-                <script>
-                    $(function () {
-                        $("#{{ id }}_duration").spinner({
-                            min: 1,
-                        });
+    <tr id="{{ id }}_relative_row">
+        <td width="25%">
+            <input
+                type="radio"
+                id="{{ id }}_relative"
+                name="{{ name }}[trigger]"
+                value="RELATIVE"
+                {% if trigger == "RELATIVE" %}checked="checked"{% endif %}
+            />
+            <label for="{{ id }}_relative">{{ "Relative"|t(locale) }}:</label>
+        </td>
+        <td width="75%">
+            <input
+                id="{{ id }}_duration"
+                name="{{ name }}[duration]"
+                size="2"
+                value="{{ duration }}"
+            />
+            {{ durunit|safe }}
+            {{ durtype|safe }}
+            <script>
+                $(function () {
+                    $("#{{ id }}_duration").spinner({
+                        min: 1,
                     });
-                </script>
-            </td>
-        </tr>
-    {% endif %}
+                });
+            </script>
+        </td>
+    </tr>
     {% if let Some(datetime) = datetime %}
         <tr>
             <td>
@@ -58,3 +56,48 @@
         </tr>
     {% endif %}
 </table>
+{% if is_todo %}
+    <!-- prettier-ignore-start -->
+    <script type="text/javascript">
+        $(function () {
+            // Updates visibility of the relative trigger row and the start/end options in the
+            // durtype selectmenu based on which date fields are currently enabled.
+            function updateRelativeOptions_{{ id }}() {
+                const hasStart = $("#start_endfrom_enabled").is(":checked");
+                const hasEnd = $("#start_endto_enabled").is(":checked");
+
+                // Show/hide individual durtype <option> elements and refresh the selectmenu.
+                // selectmenu reads the HTML `hidden` property (not CSS display), so we must use
+                // .prop("hidden", ...) rather than .toggle() / .hide().
+                const sel = $("#{{ id }}_durtype_");
+                sel.find("option[value='BeforeStart'], option[value='AfterStart']")
+                    .prop("hidden", !hasStart);
+                sel.find("option[value='BeforeEnd'], option[value='AfterEnd']")
+                    .prop("hidden", !hasEnd);
+
+                // If the currently selected option is now hidden, pick the first visible one.
+                const current = sel.val();
+                const currentHidden = sel.find("option[value='" + current + "']").prop("hidden");
+                if (currentHidden) {
+                    const first = sel.find("option:not([hidden])").first().val();
+                    if (first !== undefined) sel.val(first);
+                }
+                sel.selectmenu("refresh");
+
+                // Show or hide the entire relative row; if hidden, deselect relative trigger.
+                const showRelative = hasStart || hasEnd;
+                $("#{{ id }}_relative_row").toggle(showRelative);
+                if (!showRelative && $("#{{ id }}_relative").is(":checked")) {
+                    $("#{{ id }}_none").prop("checked", true);
+                }
+            }
+
+            $("#start_endfrom_enabled, #start_endto_enabled").on(
+                "change",
+                updateRelativeOptions_{{ id }},
+            );
+            updateRelativeOptions_{{ id }}();
+        });
+    </script>
+    <!-- prettier-ignore-end -->
+{% endif %}

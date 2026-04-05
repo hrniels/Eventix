@@ -12,11 +12,9 @@ use eventix_locale::Locale;
 use serde::{Deserialize, Deserializer};
 use std::fmt::{self, Display};
 use std::sync::Arc;
-use strum::{EnumIter, IntoEnumIterator};
+use strum::EnumIter;
 
-use crate::comps::{
-    combobox::ComboOption, combobox::Named, datetime::DateTime, datetime::DateTimeTemplate,
-};
+use crate::comps::{combobox::Named, datetime::DateTime, datetime::DateTimeTemplate};
 use crate::html::filters;
 use crate::pages::Page;
 
@@ -260,32 +258,20 @@ pub struct AlarmConfigTemplate {
     durunit: ComboboxTemplate<DurUnit>,
     durtype: ComboboxTemplate<DurType>,
     datetime: Option<DateTimeTemplate>,
-    /// Whether a relative trigger makes any sense. False when neither start nor end is present.
-    has_relative: bool,
+    /// When true, JS is emitted to watch the start/end enabled checkboxes and update the
+    /// relative trigger row and duration-type options accordingly.
+    is_todo: bool,
 }
 
 impl AlarmConfigTemplate {
-    /// Creates a new alarm config template.
-    ///
-    /// `has_start` and `has_end` control which relative-trigger options are offered: start-relative
-    /// options are omitted when `has_start` is false, end-relative options are omitted when
-    /// `has_end` is false. When both are false the relative trigger radio button is hidden entirely.
     pub fn new(
         locale: Arc<dyn Locale + Send + Sync>,
         name: String,
         value: Option<AlarmConfig>,
         absolute: bool,
-        has_start: bool,
-        has_end: bool,
+        is_todo: bool,
     ) -> Self {
         let value = value.unwrap_or_default();
-        let durtype_options = DurType::iter()
-            .filter(|dt| match dt {
-                DurType::BeforeStart | DurType::AfterStart => has_start,
-                DurType::BeforeEnd | DurType::AfterEnd => has_end,
-            })
-            .map(|e| ComboOption::new(e.name(&*locale), e))
-            .collect();
         Self {
             trigger: match value.trigger {
                 Some(f) => format!("{f}"),
@@ -297,11 +283,10 @@ impl AlarmConfigTemplate {
                 format!("{}[durunit]", &name),
                 Some(value.durunit),
             ),
-            durtype: ComboboxTemplate::new_with_options(
+            durtype: ComboboxTemplate::new(
                 locale.clone(),
                 format!("{}[durtype]", &name),
                 Some(value.durtype),
-                durtype_options,
             ),
             datetime: if absolute {
                 Some(DateTimeTemplate::new(
@@ -311,7 +296,7 @@ impl AlarmConfigTemplate {
             } else {
                 None
             },
-            has_relative: has_start || has_end,
+            is_todo,
             id: name.replace("[", "_").replace("]", "_"),
             name,
             locale,

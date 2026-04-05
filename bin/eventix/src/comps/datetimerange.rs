@@ -80,16 +80,6 @@ impl DateTimeRange {
         self.from.time().is_none() && self.to.time().is_none()
     }
 
-    /// Returns true if the start date/time is set.
-    pub fn has_start(&self) -> bool {
-        self.from_enabled.is_some()
-    }
-
-    /// Returns true if the end/due date/time is set.
-    pub fn has_end(&self) -> bool {
-        self.to_enabled.is_some()
-    }
-
     /// Returns the timezone name stored in this range, falling back to the
     /// locale timezone if none was set.
     pub fn effective_timezone(&self, locale: &Arc<dyn Locale + Send + Sync>) -> String {

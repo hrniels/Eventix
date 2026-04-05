@@ -90,8 +90,6 @@ pub async fn content_with(
         })
         .collect();
 
-    let alarm_has_start = form.start_end.has_start();
-    let alarm_has_end = form.start_end.has_end();
     let html = NewTemplate {
         page,
         summary: &form.summary,
@@ -111,7 +109,7 @@ pub async fn content_with(
             true,
             None,
             form.alarm,
-            (alarm_has_start, alarm_has_end),
+            req.ctype == CalCompType::Todo,
         ),
         calendars: CalComboTemplate::new(
             "calendar",
