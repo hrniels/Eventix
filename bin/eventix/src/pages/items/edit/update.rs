@@ -197,6 +197,23 @@ fn action_update(
         if let Some(comp) =
             file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
         {
+            // For EditMode::Series, shift all overwrite RECURRENCE-IDs before applying the rest
+            // of the form data. This ensures overwrites remain findable after a time change.
+            if req.mode == EditMode::Series {
+                let dtype = comp.ctype().into();
+                let (new_start, new_end) = form.start_end.as_caldates(locale, dtype);
+                let tz: Tz = event_tz
+                    .parse()
+                    .map_err(|_| anyhow!("Invalid timezone: {}", event_tz))?;
+                if let Some(new_start) = new_start {
+                    file.change_start(&req.uid, new_start, new_end, &tz)
+                        .context("Shifting overwrite RIDs failed")?;
+                }
+            }
+
+            let comp = file
+                .component_with_mut(|c| c.uid() == &req.uid && c.rid() == rid.as_ref())
+                .unwrap();
             form.update(
                 &new_cal,
                 &alarm_type,
