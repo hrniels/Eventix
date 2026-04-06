@@ -58,7 +58,15 @@
                     </dl>
                     <dl>
                         <dt>{{ "Date"|t(locale) }}:</dt>
-                        <dd>{{ start_end|safe }}</dd>
+                        <dd>
+                            {{ start_end|safe }}
+                            {% if mode == EditMode::Series && occ.rrule().is_some() %}
+                                <div style="margin-top: .5em">
+                                    <b>{{ "Note"|t(locale) }}:</b>
+                                    {{ "info.series_overwritten_start"|t(locale) }}
+                                </div>
+                            {% endif %}
+                        </dd>
                     </dl>
                     {% if let Some(status) = status %}
                         <dl>
