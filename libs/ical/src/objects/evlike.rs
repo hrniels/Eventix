@@ -229,6 +229,9 @@ pub trait EventLike: PropertyProducer {
 /// This trait offers methods for changing these properties. [`EventLike`] offers methods for
 /// reading them.
 pub trait UpdatableEventLike: EventLike {
+    /// Sets the UID of this calendar object to given value.
+    fn set_uid(&mut self, uid: String);
+
     /// Sets the start of this calendar object to given value.
     fn set_start(&mut self, start: Option<CalDate>);
 

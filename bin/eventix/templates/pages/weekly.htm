@@ -150,6 +150,7 @@
                                     $(function () {
                                         const op = new DragOperation(
                                             {{ occ.is_owner() }},
+                                            {{ occ.is_recurrent() }},
                                             "ev_week_event",
                                             "ev_week_allday",
                                         );
@@ -303,6 +304,7 @@
                                         $(function () {
                                             const op = new DragOperation(
                                                 {{ occ.is_owner() }},
+                                                {{ occ.is_recurrent() }},
                                                 "ev_week_event",
                                                 "ev_hour_cell",
                                             );

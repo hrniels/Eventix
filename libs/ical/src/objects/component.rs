@@ -30,7 +30,7 @@ pub const PRIORITY_HIGH: u8 = 1;
 ///
 /// As events and TODOs share many properties and behaviours, these are captured in this struct.
 /// For example, both have a UID, summary, can be recurrent, and so on.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EventLikeComponent {
     ctype: CalCompType,
     uid: String,
@@ -353,6 +353,10 @@ impl EventLike for EventLikeComponent {
 }
 
 impl UpdatableEventLike for EventLikeComponent {
+    fn set_uid(&mut self, uid: String) {
+        self.uid = uid;
+    }
+
     fn set_start(&mut self, start: Option<CalDate>) {
         self.start = start;
     }
@@ -481,7 +485,7 @@ impl Iterator for CompDateIterator<'_> {
 }
 
 /// Represents a component in an iCalendar object.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CalComponent {
     /// A VEVENT component.
     Event(CalEvent),
@@ -757,6 +761,10 @@ impl EventLike for CalComponent {
 }
 
 impl UpdatableEventLike for CalComponent {
+    fn set_uid(&mut self, uid: String) {
+        set_with_ev_or_todo!(self, set_uid, uid);
+    }
+
     fn set_start(&mut self, start: Option<CalDate>) {
         set_with_ev_or_todo!(self, set_start, start);
     }

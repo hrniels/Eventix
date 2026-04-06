@@ -164,6 +164,7 @@
                         $(function () {
                             const op = new DragOperation(
                                 {{ occ.is_owner() }},
+                                {{ occ.is_recurrent() }},
                                 "ev_event_occurrence",
                                 "ev_month_td",
                             );

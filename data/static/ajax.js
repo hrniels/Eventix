@@ -61,6 +61,14 @@ function moveEvent(uid, rid, date, hour, onsuccess) {
     });
 }
 
+function copyEvent(uid, date, hour, onsuccess) {
+    let url = "/api/items/copy?uid=" + uid + "&date=" + date;
+    if (hour) url += "&hour=" + hour;
+    postRequest(url, function (data) {
+        onsuccess(data);
+    });
+}
+
 function cancelOcc(uid, rid, onsuccess) {
     postRequest("/api/items/cancel?uid=" + uid + "&rid=" + rid, onsuccess);
 }
