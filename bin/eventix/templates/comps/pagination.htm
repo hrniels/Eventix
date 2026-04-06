@@ -44,9 +44,7 @@
     <!-- prettier-ignore-start -->
     <script type="text/javascript">
         bindContentHandler("page-content", document, "keydown", function (e) {
-            // we have to ignore these keys if the focus is on an input element or similar.
-            // to be sure, we only accept them when the body is focused.
-            if (document.activeElement.nodeName == "BODY") {
+            if (!isInputFocused()) {
                 if (e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return true;
 
                 switch (e.code) {

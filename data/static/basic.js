@@ -105,6 +105,15 @@ function setPersonalOverwrite(id_prefix, overwrite) {
     $("#" + id_prefix + "_datetime__date_").datepicker("option", "disabled", !overwrite);
 }
 
+// Returns true when the currently focused element accepts keyboard input, meaning global
+// navigation shortcuts should not fire.
+function isInputFocused() {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.nodeName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
 function replaceSmoothly(id, newHtml, delay) {
     let el = $("#" + id);
 
