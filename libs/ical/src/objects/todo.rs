@@ -21,7 +21,7 @@ use super::CalCompType;
 /// [`Completed`](`CalTodoStatus::Completed`).
 ///
 /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.2>.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CalTodo {
     pub(crate) inner: EventLikeComponent,
     due: Option<CalDate>,

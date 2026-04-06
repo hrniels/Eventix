@@ -395,7 +395,7 @@ pub trait AlarmOverlay {
 /// The default alarm overlay.
 ///
 /// The default implementation simply takes the alarms from the calendar components.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct DefaultAlarmOverlay;
 
 impl AlarmOverlay for DefaultAlarmOverlay {

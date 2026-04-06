@@ -5,6 +5,7 @@
 pub mod add;
 pub mod cancel;
 pub mod complete;
+pub mod copy;
 pub mod delete;
 pub mod details;
 pub mod editalarm;
@@ -23,6 +24,7 @@ pub fn router(state: EventixState) -> Router {
         .merge(add::router(state.clone()))
         .merge(cancel::router(state.clone()))
         .merge(complete::router(state.clone()))
+        .merge(copy::router(state.clone()))
         .merge(delete::router(state.clone()))
         .merge(details::router(state.clone()))
         .merge(editalarm::router(state.clone()))

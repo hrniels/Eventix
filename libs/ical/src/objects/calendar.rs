@@ -22,7 +22,7 @@ use crate::parser::{
 /// Additionally, the calendar itself can have properties such as the version or product id.
 ///
 /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.4>.
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct Calendar {
     comps: Vec<CalComponent>,
     timezones: Vec<CalTimeZone>,

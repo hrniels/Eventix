@@ -19,7 +19,7 @@ use super::component::EventLikeComponent;
 /// contrast to TODOs, events have a [`CalEventStatus`] and an end date instead of a due date.
 ///
 /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1>.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CalEvent {
     pub(crate) inner: EventLikeComponent,
     status: Option<CalEventStatus>,
