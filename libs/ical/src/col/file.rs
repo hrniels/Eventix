@@ -689,14 +689,19 @@ impl CalFile {
             .filter(|(_, c)| c.uid() == uid && c.rid().is_some())
             .map(|(i, c)| {
                 let rid = c.rid().unwrap();
-                let new_rid = Self::shift_caldate(rid, delta);
+                // Convert the RID to match the variant of the new series start, shifting its
+                // date by `delta`. This handles all-day ↔ timed conversions as well as
+                // same-type shifts.
+                let new_rid = Self::convert_rid(rid, delta, &new_start);
                 new_rid.validate(local_tz)?;
 
                 // Shift DTSTART only when it currently matches the RID (no custom time set).
                 let (new_ow_start, new_ow_end) = if c.start() == Some(rid) {
-                    let shifted_start = Self::shift_caldate(rid, delta);
+                    let shifted_start = Self::convert_rid(rid, delta, &new_start);
                     shifted_start.validate(local_tz)?;
-                    let shifted_end = c.end_or_due().map(|e| Self::shift_caldate(e, delta));
+                    let shifted_end = c.end_or_due().map(|e| {
+                        Self::convert_rid(e, delta, new_end_or_due.as_ref().unwrap_or(&new_start))
+                    });
                     (Some(shifted_start), shifted_end)
                 } else {
                     (None, None)
@@ -777,7 +782,39 @@ impl CalFile {
         }
     }
 
-    /// Reloads the calendar from file.
+    /// Converts a RECURRENCE-ID (or DTSTART/end of an overwrite) to match the variant of
+    /// `target_shape`, shifting the date by `delta` whole days in the process.
+    ///
+    /// When the series changes between all-day and timed (or vice versa), the RID must change its
+    /// [`CalDate`] variant to match the new series start. The date is advanced by `delta` whole
+    /// days (fractional days are ignored for all-day dates). For timed variants the time-of-day is
+    /// taken from `target_shape` so that the RID points at the correct occurrence slot after the
+    /// type change.
+    fn convert_rid(date: &CalDate, delta: Duration, target_shape: &CalDate) -> CalDate {
+        // Shift the source date within its own variant first to get the target NaiveDate.
+        let shifted = Self::shift_caldate(date, delta);
+        let shifted_naive_date = shifted.as_naive_date();
+
+        match target_shape {
+            // Target is all-day: produce a Date with the shifted day, preserving CalDateType.
+            CalDate::Date(_, ty) => CalDate::Date(shifted_naive_date, *ty),
+            // Target is timed: produce a DateTime whose date is the shifted day and whose
+            // time-of-day matches the target shape.
+            CalDate::DateTime(CalDateTime::Timezone(target_naive, tz_name)) => {
+                let new_naive = shifted_naive_date.and_time(target_naive.time());
+                CalDate::DateTime(CalDateTime::Timezone(new_naive, tz_name.clone()))
+            }
+            CalDate::DateTime(CalDateTime::Floating(target_naive)) => {
+                let new_naive = shifted_naive_date.and_time(target_naive.time());
+                CalDate::DateTime(CalDateTime::Floating(new_naive))
+            }
+            CalDate::DateTime(CalDateTime::Utc(target_dt)) => {
+                let new_naive = shifted_naive_date.and_time(target_dt.naive_utc().time());
+                CalDate::DateTime(CalDateTime::Utc(new_naive.and_utc()))
+            }
+        }
+    }
+
     ///
     /// After parsing, all component dates are validated against `local_tz`. Components with times
     /// falling in a DST gap (non-existent) or DST fold (ambiguous) are removed with a warning.
@@ -2377,6 +2414,136 @@ mod tests {
             "Europe/Berlin".to_string(),
         ));
         assert_eq!(ow_comp.start(), Some(&expected_ow_start));
+    }
+
+    #[test]
+    fn change_start_allday_to_timed_converts_rid() {
+        // Converting an all-day series to a timed series: the overwrite RID must be converted
+        // from CalDate::Date to CalDate::DateTime with the same date and the new start time.
+        let tz = &chrono_tz::Europe::Berlin;
+
+        let base_date = NaiveDate::from_ymd_opt(2024, 7, 1).unwrap();
+        let rid_date = NaiveDate::from_ymd_opt(2024, 7, 3).unwrap(); // 3rd occurrence
+
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(
+            new_allday_event(base_date, "conv")
+                .rrule("FREQ=DAILY;COUNT=5".parse().unwrap())
+                .done(),
+        ));
+        // Overwrite for 3rd occurrence (all-day, DTSTART == RID).
+        let rid = CalDate::Date(rid_date, CalCompType::Event.into());
+        let ow = EventBuilder::new("conv")
+            .start(CalDate::Date(rid_date, CalCompType::Event.into()))
+            .end(CalDate::Date(
+                rid_date.succ_opt().unwrap(),
+                CalCompType::Event.into(),
+            ))
+            .rid(rid)
+            .done();
+        cal.add_component(CalComponent::Event(ow));
+        let mut file = CalFile::new_simple(cal);
+
+        // Convert series to timed: start at 10:00 on 2024-07-01.
+        let new_base_naive = NaiveDate::from_ymd_opt(2024, 7, 1)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
+        let new_start = CalDate::DateTime(CalDateTime::Timezone(
+            new_base_naive,
+            "Europe/Berlin".to_string(),
+        ));
+        let new_end = CalDate::DateTime(CalDateTime::Timezone(
+            new_base_naive + Duration::hours(1),
+            "Europe/Berlin".to_string(),
+        ));
+        file.change_start("conv", new_start, Some(new_end), tz)
+            .unwrap();
+
+        let ow_comp = file
+            .component_with(|c| c.uid() == "conv" && c.rid().is_some())
+            .unwrap();
+
+        // RID must now be a DateTime on the same date as the old RID (Jul 3), at 10:00.
+        let expected_rid = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2024, 7, 3)
+                .unwrap()
+                .and_hms_opt(10, 0, 0)
+                .unwrap(),
+            "Europe/Berlin".to_string(),
+        ));
+        assert_eq!(ow_comp.rid(), Some(&expected_rid));
+
+        // DTSTART was equal to the old RID (all-day, no custom time), so it is also converted.
+        assert_eq!(ow_comp.start(), Some(&expected_rid));
+    }
+
+    #[test]
+    fn change_start_timed_to_allday_converts_rid() {
+        // Converting a timed series to an all-day series: the overwrite RID must be converted
+        // from CalDate::DateTime to CalDate::Date, preserving the date.
+        let tz = &chrono_tz::Europe::Berlin;
+
+        let base_naive = NaiveDate::from_ymd_opt(2024, 8, 1)
+            .unwrap()
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
+        let rid_naive = NaiveDate::from_ymd_opt(2024, 8, 3)
+            .unwrap()
+            .and_hms_opt(9, 0, 0)
+            .unwrap();
+
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(
+            EventBuilder::new("conv2")
+                .start(CalDate::DateTime(CalDateTime::Timezone(
+                    base_naive,
+                    "Europe/Berlin".to_string(),
+                )))
+                .end(CalDate::DateTime(CalDateTime::Timezone(
+                    base_naive + Duration::hours(1),
+                    "Europe/Berlin".to_string(),
+                )))
+                .rrule("FREQ=DAILY;COUNT=5".parse().unwrap())
+                .done(),
+        ));
+        // Overwrite for 3rd occurrence (DTSTART == RID, only summary changed).
+        let rid = CalDate::DateTime(CalDateTime::Timezone(
+            rid_naive,
+            "Europe/Berlin".to_string(),
+        ));
+        let mut ow = EventBuilder::new("conv2")
+            .start(rid.clone())
+            .end(CalDate::DateTime(CalDateTime::Timezone(
+                rid_naive + Duration::hours(1),
+                "Europe/Berlin".to_string(),
+            )))
+            .rid(rid)
+            .done();
+        ow.set_summary(Some("Custom".into()));
+        cal.add_component(CalComponent::Event(ow));
+        let mut file = CalFile::new_simple(cal);
+
+        // Convert series to all-day starting 2024-08-01.
+        let new_base_date = NaiveDate::from_ymd_opt(2024, 8, 1).unwrap();
+        let new_start = CalDate::Date(new_base_date, CalCompType::Event.into());
+        let new_end = CalDate::Date(new_base_date.succ_opt().unwrap(), CalCompType::Event.into());
+        file.change_start("conv2", new_start, Some(new_end), tz)
+            .unwrap();
+
+        let ow_comp = file
+            .component_with(|c| c.uid() == "conv2" && c.rid().is_some())
+            .unwrap();
+
+        // RID must now be a Date on Aug 3 (same date as the old timed RID).
+        let expected_rid = CalDate::Date(
+            NaiveDate::from_ymd_opt(2024, 8, 3).unwrap(),
+            CalCompType::Event.into(),
+        );
+        assert_eq!(ow_comp.rid(), Some(&expected_rid));
+
+        // DTSTART was equal to the old RID, so it is also converted to all-day on Aug 3.
+        assert_eq!(ow_comp.start(), Some(&expected_rid));
     }
 
     #[test]
