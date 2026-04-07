@@ -33,6 +33,7 @@
 "error.repeating_event_start" = "Please specify the start for repeating events/tasks."
 "error.time_for_both_or_none" = "Please specify the time for both start and end or for none."
 "error.collection_your_name" = "Please specify your name!"
+"error.collection_time_span_years" = "Please specify at most 100 years for the sync window."
 "error.syncer_change" = "You cannot change the syncer type."
 "error.new_attendee_not_empty" = "The 'New attendee' field is not empty. Maybe you forgot to add the last attendee?"
 "error.dst_ambiguous" = "The date/time is ambiguous due to a DST transition. Please choose a different time."

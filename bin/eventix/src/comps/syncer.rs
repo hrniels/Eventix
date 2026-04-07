@@ -60,6 +60,7 @@ impl Syncer {
 }
 
 const DEFAULT_TIME_SPAN_YEARS: u32 = 5;
+const MAX_TIME_SPAN_YEARS: u32 = 100;
 
 fn default_time_span_years() -> u32 {
     DEFAULT_TIME_SPAN_YEARS
@@ -203,6 +204,11 @@ impl SyncerRequest {
                     );
                     return false;
                 }
+                if self.vdir_time_span == "years" && self.vdir_time_span_years > MAX_TIME_SPAN_YEARS
+                {
+                    page.add_error(locale.translate("error.collection_time_span_years"));
+                    return false;
+                }
                 true
             }
             Syncer::O365 => {
@@ -212,6 +218,11 @@ impl SyncerRequest {
                 }
                 if !EmailAddress::is_valid(&self.o365_email) {
                     page.add_error(locale.translate("error.collection_your_email"));
+                    return false;
+                }
+                if self.o365_time_span == "years" && self.o365_time_span_years > MAX_TIME_SPAN_YEARS
+                {
+                    page.add_error(locale.translate("error.collection_time_span_years"));
                     return false;
                 }
                 true

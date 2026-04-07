@@ -280,8 +280,8 @@
         }
         {% endif %}
 
-        $("#{{ id }}_vdir_time_span_years_val").spinner({ min: 1 });
-        $("#{{ id }}_o365_time_span_years_val").spinner({ min: 1 });
+        $("#{{ id }}_vdir_time_span_years_val").spinner({ min: 1, max: 100 });
+        $("#{{ id }}_o365_time_span_years_val").spinner({ min: 1, max: 100 });
     });
 </script>
 <!-- prettier-ignore-end -->

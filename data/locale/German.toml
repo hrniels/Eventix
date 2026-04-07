@@ -33,6 +33,7 @@
 "error.repeating_event_start" = "Bitte gib den Start für sich wiederholende Termine/Aufgaben an."
 "error.time_for_both_or_none" = "Bitte gib die Zeit für Start und Ende oder keines von beiden an."
 "error.collection_your_name" = "Bitte gib deinen Namen an!"
+"error.collection_time_span_years" = "Bitte gib maximal 100 Jahre für den Synchronisierungszeitraum an."
 "error.syncer_change" = "Du kannst den Synchronisierer nicht ändern."
 "error.new_attendee_not_empty" = "Das 'Neuer Teilnehmer'-Feld ist nicht leer. Hast Du vielleicht vergessen den letzten Teilnehmer hinzuzufügen?"
 "error.dst_ambiguous" = "Das Datum/die Uhrzeit ist aufgrund einer Zeitumstellung mehrdeutig. Bitte wähle eine andere Uhrzeit."

@@ -172,7 +172,7 @@ pub enum SyncTimeBound {
 /// The time range to request from the CalDAV server during synchronisation.
 ///
 /// When at least one bound is `Years`, both `start_date` and `end_date` are emitted in the
-/// generated vdirsyncer configuration. An `Infinite` bound uses `timedelta(days=365*9999)` as a
+/// generated vdirsyncer configuration. An `Infinite` bound uses `timedelta(days=365*100)` as a
 /// sentinel to express "effectively unbounded" on that side, since vdirsyncer requires both
 /// `start_date` and `end_date` to be present whenever either is specified.
 ///
@@ -197,23 +197,23 @@ impl SyncTimeSpan {
     /// Returns the vdirsyncer Python expression for `start_date`.
     ///
     /// When the start bound is `Infinite`, a sentinel expression equivalent to approximately
-    /// 9999 years in the past is returned so that the vdirsyncer requirement of providing both
+    /// 100 years in the past is returned so that the vdirsyncer requirement of providing both
     /// dates together is satisfied.
     pub fn start_expr(&self) -> String {
         match self.start {
             SyncTimeBound::Years(n) => format!("datetime.now() - timedelta(days=365*{})", n),
-            SyncTimeBound::Infinite => "datetime.now() - timedelta(days=365*9999)".to_string(),
+            SyncTimeBound::Infinite => "datetime.now() - timedelta(days=365*100)".to_string(),
         }
     }
 
     /// Returns the vdirsyncer Python expression for `end_date`.
     ///
     /// When the end bound is `Infinite`, a sentinel expression equivalent to approximately
-    /// 9999 years in the future is returned for the same reason as `start_expr`.
+    /// 100 years in the future is returned for the same reason as `start_expr`.
     pub fn end_expr(&self) -> String {
         match self.end {
             SyncTimeBound::Years(n) => format!("datetime.now() + timedelta(days=365*{})", n),
-            SyncTimeBound::Infinite => "datetime.now() + timedelta(days=365*9999)".to_string(),
+            SyncTimeBound::Infinite => "datetime.now() + timedelta(days=365*100)".to_string(),
         }
     }
 }
@@ -538,8 +538,8 @@ mod tests {
 
         // Infinite bounds fall back to sentinel values.
         let inf = SyncTimeSpan::default();
-        assert!(inf.start_expr().contains("9999"));
-        assert!(inf.end_expr().contains("9999"));
+        assert!(inf.start_expr().contains("100"));
+        assert!(inf.end_expr().contains("100"));
     }
 
     // --- EmailAccount ---
