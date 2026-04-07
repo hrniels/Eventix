@@ -542,13 +542,14 @@ impl Syncer for VDirSyncer {
 
         // remove all non-meta files in data directory
         let data_path = dir.join(format!("{}-data", self.name)).join(folder);
-        let mut dir = fs::read_dir(data_path).await?;
-        while let Some(entry) = dir.next_entry().await? {
-            if entry.file_name() != "color" && entry.file_name() != "displayname" {
-                fs::remove_file(entry.path()).await.context(format!(
-                    "Removing {} failed",
-                    entry.path().to_str().unwrap()
-                ))?;
+        if let Ok(mut dir) = fs::read_dir(data_path).await {
+            while let Some(entry) = dir.next_entry().await? {
+                if entry.file_name() != "color" && entry.file_name() != "displayname" {
+                    fs::remove_file(entry.path()).await.context(format!(
+                        "Removing {} failed",
+                        entry.path().to_str().unwrap()
+                    ))?;
+                }
             }
         }
 
