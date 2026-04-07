@@ -6,9 +6,9 @@ use askama::Template;
 use axum::http::Uri;
 use email_address::EmailAddress;
 use eventix_locale::Locale;
-use eventix_state::{EmailAccount, SyncerType};
+use eventix_state::{EmailAccount, SyncTimeBound, SyncTimeSpan, SyncerType};
 use formatx::formatx;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 use std::fmt::{self, Display};
 use std::path::Path;
 use std::sync::Arc;
@@ -59,7 +59,13 @@ impl Syncer {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
+const DEFAULT_TIME_SPAN_YEARS: u32 = 5;
+
+fn default_time_span_years() -> u32 {
+    DEFAULT_TIME_SPAN_YEARS
+}
+
+#[derive(Debug, Deserialize)]
 pub struct SyncerRequest {
     #[serde(deserialize_with = "Syncer::deserialize")]
     syncer: Option<Syncer>,
@@ -69,11 +75,46 @@ pub struct SyncerRequest {
     vdir_readonly: Option<String>,
     vdir_username: String,
     vdir_pw_cmd: String,
+    vdir_time_span: String,
+    #[serde(
+        deserialize_with = "SyncerRequest::deserialize_years",
+        default = "default_time_span_years"
+    )]
+    vdir_time_span_years: u32,
     o365_name: String,
     o365_email: String,
     o365_readonly: Option<String>,
     o365_pw_cmd: String,
+    o365_time_span: String,
+    #[serde(
+        deserialize_with = "SyncerRequest::deserialize_years",
+        default = "default_time_span_years"
+    )]
+    o365_time_span_years: u32,
     fs_path: String,
+}
+
+impl Default for SyncerRequest {
+    fn default() -> Self {
+        Self {
+            syncer: None,
+            vdir_name: String::new(),
+            vdir_email: String::new(),
+            vdir_url: String::new(),
+            vdir_readonly: None,
+            vdir_username: String::new(),
+            vdir_pw_cmd: String::new(),
+            vdir_time_span: String::new(),
+            vdir_time_span_years: DEFAULT_TIME_SPAN_YEARS,
+            o365_name: String::new(),
+            o365_email: String::new(),
+            o365_readonly: None,
+            o365_pw_cmd: String::new(),
+            o365_time_span: String::new(),
+            o365_time_span_years: DEFAULT_TIME_SPAN_YEARS,
+            fs_path: String::new(),
+        }
+    }
 }
 
 impl SyncerRequest {
@@ -97,7 +138,7 @@ impl SyncerRequest {
                 read_only,
                 username,
                 password_cmd,
-                ..
+                time_span,
             } => {
                 sync.vdir_name = email.name().clone();
                 sync.vdir_email = email.org_address().clone();
@@ -111,13 +152,15 @@ impl SyncerRequest {
                     .as_ref()
                     .map(|vec| vec.join(" "))
                     .unwrap_or_default();
+                (sync.vdir_time_span, sync.vdir_time_span_years) =
+                    Self::time_span_to_fields(time_span);
             }
 
             SyncerType::O365 {
                 email,
                 read_only,
                 password_cmd,
-                ..
+                time_span,
             } => {
                 sync.o365_name = email.name().clone();
                 sync.o365_email = email.org_address().clone();
@@ -126,6 +169,8 @@ impl SyncerRequest {
                     false => None,
                 };
                 sync.o365_pw_cmd = password_cmd.join(" ");
+                (sync.o365_time_span, sync.o365_time_span_years) =
+                    Self::time_span_to_fields(time_span);
             }
 
             SyncerType::FileSystem { path } => {
@@ -199,13 +244,19 @@ impl SyncerRequest {
                     _ => None,
                 },
                 password_cmd: Self::make_pw_cmd(&self.vdir_pw_cmd),
-                time_span: Default::default(),
+                time_span: Self::fields_to_time_span(
+                    &self.vdir_time_span,
+                    self.vdir_time_span_years,
+                ),
             },
             Syncer::O365 => SyncerType::O365 {
                 email: EmailAccount::new(self.o365_name.clone(), self.o365_email.clone()),
                 read_only: self.o365_readonly.is_some(),
                 password_cmd: Self::make_pw_cmd(&self.o365_pw_cmd).unwrap(),
-                time_span: Default::default(),
+                time_span: Self::fields_to_time_span(
+                    &self.o365_time_span,
+                    self.o365_time_span_years,
+                ),
             },
             Syncer::FileSystem => SyncerType::FileSystem {
                 path: self.fs_path.clone(),
@@ -222,6 +273,43 @@ impl SyncerRequest {
         {
             vec if !vec.is_empty() => Some(vec),
             _ => None,
+        }
+    }
+
+    /// Deserializes the years spinner value, accepting both plain integers and string-encoded
+    /// integers as submitted by HTML form fields.
+    fn deserialize_years<'de, D>(deserializer: D) -> Result<u32, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse::<u32>().map_err(de::Error::custom)
+    }
+
+    /// Converts a `SyncTimeSpan` to the `(mode, years)` pair used in the form.
+    ///
+    /// Returns `("years", n)` when the start bound is `Years(n)`, and `("infinite", 5)` (the
+    /// default spinner value) when the start bound is `Infinite`.
+    fn time_span_to_fields(time_span: &SyncTimeSpan) -> (String, u32) {
+        match time_span.start {
+            SyncTimeBound::Years(n) => ("years".to_string(), n),
+            SyncTimeBound::Infinite => ("infinite".to_string(), DEFAULT_TIME_SPAN_YEARS),
+        }
+    }
+
+    /// Builds a `SyncTimeSpan` from the form's `(mode, years)` pair.
+    ///
+    /// When `mode` is `"years"`, the start bound is set to `Years(years)`; otherwise both bounds
+    /// are `Infinite`. The end bound is always `Infinite`.
+    fn fields_to_time_span(mode: &str, years: u32) -> SyncTimeSpan {
+        let start = if mode == "years" {
+            SyncTimeBound::Years(years)
+        } else {
+            SyncTimeBound::Infinite
+        };
+        SyncTimeSpan {
+            start,
+            end: SyncTimeBound::Infinite,
         }
     }
 }
