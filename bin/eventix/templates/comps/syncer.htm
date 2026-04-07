@@ -101,6 +101,38 @@
                     <div>{{ "info.user_pw_cmd"|t(locale) }}</div>
                 </dd>
             </dl>
+            <dl>
+                <dt>{{ "Sync window"|t(locale) }}:</dt>
+                <dd>
+                    <input
+                        type="radio"
+                        id="{{ id }}_vdir_time_span_infinite"
+                        name="{{ name }}[vdir_time_span]"
+                        value="infinite"
+                        {% if value.vdir_time_span != "years" %}checked="checked"{% endif %}
+                    />
+                    <label for="{{ id }}_vdir_time_span_infinite">
+                        {{- "Unlimited"|t(locale) -}} </label
+                    ><br />
+                    <input
+                        type="radio"
+                        id="{{ id }}_vdir_time_span_years"
+                        name="{{ name }}[vdir_time_span]"
+                        value="years"
+                        {% if value.vdir_time_span == "years" %}checked="checked"{% endif %}
+                    />
+                    <label for="{{ id }}_vdir_time_span_years">
+                        {{- "Last N years"|t(locale) -}}
+                    </label>
+                    <input
+                        id="{{ id }}_vdir_time_span_years_val"
+                        name="{{ name }}[vdir_time_span_years]"
+                        size="4"
+                        value="{{ value.vdir_time_span_years }}"
+                    />
+                    {{ "year(s)"|t(locale) }}
+                </dd>
+            </dl>
         </fieldset>
     </div>
     <div
@@ -154,6 +186,38 @@
                         value="{{ value.o365_pw_cmd }}"
                     />
                     <div>{{ "info.user_pw_cmd"|t(locale) }}</div>
+                </dd>
+            </dl>
+            <dl>
+                <dt>{{ "Sync window"|t(locale) }}:</dt>
+                <dd>
+                    <input
+                        type="radio"
+                        id="{{ id }}_o365_time_span_infinite"
+                        name="{{ name }}[o365_time_span]"
+                        value="infinite"
+                        {% if value.o365_time_span != "years" %}checked="checked"{% endif %}
+                    />
+                    <label for="{{ id }}_o365_time_span_infinite">
+                        {{- "Unlimited"|t(locale) -}} </label
+                    ><br />
+                    <input
+                        type="radio"
+                        id="{{ id }}_o365_time_span_years"
+                        name="{{ name }}[o365_time_span]"
+                        value="years"
+                        {% if value.o365_time_span == "years" %}checked="checked"{% endif %}
+                    />
+                    <label for="{{ id }}_o365_time_span_years">
+                        {{- "Last N years"|t(locale) -}}
+                    </label>
+                    <input
+                        id="{{ id }}_o365_time_span_years_val"
+                        name="{{ name }}[o365_time_span_years]"
+                        size="4"
+                        value="{{ value.o365_time_span_years }}"
+                    />
+                    {{ "year(s)"|t(locale) }}
                 </dd>
             </dl>
         </fieldset>
@@ -215,6 +279,9 @@
             $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
         }
         {% endif %}
+
+        $("#{{ id }}_vdir_time_span_years_val").spinner({ min: 1, max: 100 });
+        $("#{{ id }}_o365_time_span_years_val").spinner({ min: 1, max: 100 });
     });
 </script>
 <!-- prettier-ignore-end -->
