@@ -97,6 +97,7 @@ impl SyncerRequest {
                 read_only,
                 username,
                 password_cmd,
+                ..
             } => {
                 sync.vdir_name = email.name().clone();
                 sync.vdir_email = email.org_address().clone();
@@ -116,6 +117,7 @@ impl SyncerRequest {
                 email,
                 read_only,
                 password_cmd,
+                ..
             } => {
                 sync.o365_name = email.name().clone();
                 sync.o365_email = email.org_address().clone();
@@ -197,11 +199,13 @@ impl SyncerRequest {
                     _ => None,
                 },
                 password_cmd: Self::make_pw_cmd(&self.vdir_pw_cmd),
+                time_span: Default::default(),
             },
             Syncer::O365 => SyncerType::O365 {
                 email: EmailAccount::new(self.o365_name.clone(), self.o365_email.clone()),
                 read_only: self.o365_readonly.is_some(),
                 password_cmd: Self::make_pw_cmd(&self.o365_pw_cmd).unwrap(),
+                time_span: Default::default(),
             },
             Syncer::FileSystem => SyncerType::FileSystem {
                 path: self.fs_path.clone(),

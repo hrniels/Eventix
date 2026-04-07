@@ -17,6 +17,7 @@ use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::State;
+use crate::settings::SyncTimeSpan;
 use crate::sync::vdirsyncer::VDirSyncer;
 use crate::sync::{SyncColResult, Syncer, SyncerAuth, log_line};
 
@@ -183,6 +184,7 @@ impl O365 {
         auth: SyncerAuth,
         auth_url: Option<&String>,
         token: Option<String>,
+        time_span: &SyncTimeSpan,
         log: Arc<Mutex<File>>,
     ) -> anyhow::Result<Self> {
         let port = PORT_BASE + idx as u16;
@@ -203,6 +205,7 @@ impl O365 {
             url,
             read_only,
             Some(auth),
+            time_span,
             log.clone(),
         )
         .await?;
@@ -669,6 +672,7 @@ mod tests {
             "http://localhost:25000/users/user/mycol/".to_string(),
             false,
             Some(auth),
+            &crate::settings::SyncTimeSpan::default(),
             log.clone(),
             vdir_runner,
         )

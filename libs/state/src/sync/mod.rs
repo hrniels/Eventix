@@ -342,7 +342,12 @@ async fn get_sync(
     let log = Arc::new(Mutex::new(log));
 
     let syncer: Box<dyn Syncer> = match col.syncer() {
-        SyncerType::VDirSyncer { url, read_only, .. } => Box::new(
+        SyncerType::VDirSyncer {
+            url,
+            read_only,
+            time_span,
+            ..
+        } => Box::new(
             VDirSyncer::new(
                 xdg,
                 id.clone(),
@@ -350,11 +355,16 @@ async fn get_sync(
                 url.clone(),
                 *read_only,
                 auth,
+                time_span,
                 log,
             )
             .await?,
         ),
-        SyncerType::O365 { read_only, .. } => Box::new(
+        SyncerType::O365 {
+            read_only,
+            time_span,
+            ..
+        } => Box::new(
             O365::new(
                 xdg,
                 idx,
@@ -364,6 +374,7 @@ async fn get_sync(
                 auth.unwrap(),
                 auth_url,
                 misc.collection_token(id).cloned(),
+                time_span,
                 log,
             )
             .await?,

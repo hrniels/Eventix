@@ -156,6 +156,68 @@ pub enum CalendarAlarmType {
     },
 }
 
+/// One bound of a sync time span.
+///
+/// Used to configure how far back or forward in time vdirsyncer should request calendar items
+/// from the CalDAV server.
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub enum SyncTimeBound {
+    /// Sync up to N years before/after the current time.
+    Years(u32),
+    /// No bound in this direction; sync everything on this side.
+    #[default]
+    Infinite,
+}
+
+/// The time range to request from the CalDAV server during synchronisation.
+///
+/// When at least one bound is `Years`, both `start_date` and `end_date` are emitted in the
+/// generated vdirsyncer configuration. An `Infinite` bound uses `timedelta(days=365*9999)` as a
+/// sentinel to express "effectively unbounded" on that side, since vdirsyncer requires both
+/// `start_date` and `end_date` to be present whenever either is specified.
+///
+/// When both bounds are `Infinite` (the default), no date filter is emitted and vdirsyncer
+/// synchronises the full calendar.
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct SyncTimeSpan {
+    /// Lower bound of the sync window relative to now.
+    #[serde(default)]
+    pub start: SyncTimeBound,
+    /// Upper bound of the sync window relative to now.
+    #[serde(default)]
+    pub end: SyncTimeBound,
+}
+
+impl SyncTimeSpan {
+    /// Returns `true` when at least one bound is finite and date filter lines should be emitted.
+    pub fn needs_date_filter(&self) -> bool {
+        matches!(self.start, SyncTimeBound::Years(_)) || matches!(self.end, SyncTimeBound::Years(_))
+    }
+
+    /// Returns the vdirsyncer Python expression for `start_date`.
+    ///
+    /// When the start bound is `Infinite`, a sentinel expression equivalent to approximately
+    /// 9999 years in the past is returned so that the vdirsyncer requirement of providing both
+    /// dates together is satisfied.
+    pub fn start_expr(&self) -> String {
+        match self.start {
+            SyncTimeBound::Years(n) => format!("datetime.now() - timedelta(days=365*{})", n),
+            SyncTimeBound::Infinite => "datetime.now() - timedelta(days=365*9999)".to_string(),
+        }
+    }
+
+    /// Returns the vdirsyncer Python expression for `end_date`.
+    ///
+    /// When the end bound is `Infinite`, a sentinel expression equivalent to approximately
+    /// 9999 years in the future is returned for the same reason as `start_expr`.
+    pub fn end_expr(&self) -> String {
+        match self.end {
+            SyncTimeBound::Years(n) => format!("datetime.now() + timedelta(days=365*{})", n),
+            SyncTimeBound::Infinite => "datetime.now() + timedelta(days=365*9999)".to_string(),
+        }
+    }
+}
+
 /// The backend used to synchronise and provide calendar data for a collection.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SyncerType {
@@ -176,6 +238,11 @@ pub enum SyncerType {
         username: Option<String>,
         /// Shell command and arguments used to retrieve the password at runtime, if any.
         password_cmd: Option<Vec<String>>,
+        /// The time range to synchronise from the CalDAV server.
+        ///
+        /// Defaults to both bounds being `Infinite`, which synchronises everything.
+        #[serde(default)]
+        time_span: SyncTimeSpan,
     },
     /// Synchronises a Microsoft 365 account via DavMail as a local CalDAV gateway.
     O365 {
@@ -185,6 +252,11 @@ pub enum SyncerType {
         read_only: bool,
         /// Shell command and arguments used to retrieve the OAuth password/token at runtime.
         password_cmd: Vec<String>,
+        /// The time range to synchronise from the CalDAV server.
+        ///
+        /// Defaults to both bounds being `Infinite`, which synchronises everything.
+        #[serde(default)]
+        time_span: SyncTimeSpan,
     },
 }
 
@@ -196,6 +268,16 @@ impl SyncerType {
         match self {
             Self::VDirSyncer { email, .. } => Some(email),
             Self::O365 { email, .. } => Some(email),
+            _ => None,
+        }
+    }
+
+    /// Returns the configured time span for this syncer, if any.
+    ///
+    /// `FileSystem` syncers do not use a time span and return `None`.
+    pub fn time_span(&self) -> Option<&SyncTimeSpan> {
+        match self {
+            Self::VDirSyncer { time_span, .. } | Self::O365 { time_span, .. } => Some(time_span),
             _ => None,
         }
     }
@@ -378,7 +460,8 @@ mod tests {
     use eventix_ical::objects::CalCompType;
 
     use super::{
-        CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings, SyncerType,
+        CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings,
+        SyncTimeBound, SyncTimeSpan, SyncerType,
     };
 
     // --- helpers ---
@@ -400,6 +483,7 @@ mod tests {
             read_only: false,
             username: Some("alice".to_string()),
             password_cmd: None,
+            time_span: Default::default(),
         }
     }
 
@@ -410,6 +494,52 @@ mod tests {
         cal.set_folder(folder.to_string());
         cal.set_name(name.to_string());
         cal
+    }
+
+    // --- SyncTimeSpan ---
+
+    #[test]
+    fn sync_time_span_needs_date_filter() {
+        // Both infinite → no filter needed.
+        let both_inf = SyncTimeSpan::default();
+        assert!(!both_inf.needs_date_filter());
+
+        // Start finite, end infinite → filter needed.
+        let start_only = SyncTimeSpan {
+            start: SyncTimeBound::Years(2),
+            end: SyncTimeBound::Infinite,
+        };
+        assert!(start_only.needs_date_filter());
+
+        // Start infinite, end finite → filter needed.
+        let end_only = SyncTimeSpan {
+            start: SyncTimeBound::Infinite,
+            end: SyncTimeBound::Years(1),
+        };
+        assert!(end_only.needs_date_filter());
+
+        // Both finite → filter needed.
+        let both_finite = SyncTimeSpan {
+            start: SyncTimeBound::Years(2),
+            end: SyncTimeBound::Years(1),
+        };
+        assert!(both_finite.needs_date_filter());
+    }
+
+    #[test]
+    fn sync_time_span_expressions() {
+        // Finite start bound.
+        let span = SyncTimeSpan {
+            start: SyncTimeBound::Years(3),
+            end: SyncTimeBound::Years(1),
+        };
+        assert_eq!(span.start_expr(), "datetime.now() - timedelta(days=365*3)");
+        assert_eq!(span.end_expr(), "datetime.now() + timedelta(days=365*1)");
+
+        // Infinite bounds fall back to sentinel values.
+        let inf = SyncTimeSpan::default();
+        assert!(inf.start_expr().contains("9999"));
+        assert!(inf.end_expr().contains("9999"));
     }
 
     // --- EmailAccount ---

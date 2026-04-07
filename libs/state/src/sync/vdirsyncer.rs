@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::State;
+use crate::settings::SyncTimeSpan;
 use crate::sync::{SyncColResult, Syncer, SyncerAuth, log_line};
 
 // --- CommandRunner trait and implementations ---
@@ -231,6 +232,7 @@ impl VDirSyncer {
     ///
     /// `folder_id` maps vdirsyncer folder names to calendar IDs. Returns an error if the
     /// configuration file cannot be written.
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         xdg: &BaseDirectories,
         name: String,
@@ -238,6 +240,7 @@ impl VDirSyncer {
         url: String,
         read_only: bool,
         auth: Option<SyncerAuth>,
+        time_span: &SyncTimeSpan,
         log: Arc<Mutex<File>>,
     ) -> anyhow::Result<Self> {
         Self::new_with_runner(
@@ -247,6 +250,7 @@ impl VDirSyncer {
             url,
             read_only,
             auth,
+            time_span,
             log,
             Arc::new(RealCommandRunner),
         )
@@ -262,10 +266,11 @@ impl VDirSyncer {
         url: String,
         read_only: bool,
         auth: Option<SyncerAuth>,
+        time_span: &SyncTimeSpan,
         log: Arc<Mutex<File>>,
         runner: Arc<dyn CommandRunner>,
     ) -> anyhow::Result<Self> {
-        let cfg = Self::generate_config(xdg, &name, url, read_only, auth).await?;
+        let cfg = Self::generate_config(xdg, &name, url, read_only, auth, time_span).await?;
         Ok(Self {
             name,
             folder_id,
@@ -285,6 +290,7 @@ impl VDirSyncer {
         url: String,
         read_only: bool,
         auth: Option<SyncerAuth>,
+        time_span: &SyncTimeSpan,
     ) -> anyhow::Result<PathBuf> {
         let dir = xdg.get_data_file("vdirsyncer").unwrap();
         let status_path = dir.join(format!("{}-status", name));
@@ -333,6 +339,12 @@ impl VDirSyncer {
             .await?;
         cfg.write_all(format!("read_only = {}\n", read_only).as_bytes())
             .await?;
+        if time_span.needs_date_filter() {
+            cfg.write_all(format!("start_date = \"{}\"\n", time_span.start_expr()).as_bytes())
+                .await?;
+            cfg.write_all(format!("end_date = \"{}\"\n", time_span.end_expr()).as_bytes())
+                .await?;
+        }
         if let Some(auth) = auth {
             cfg.write_all(
                 format!("username = \"{}\"\n", Self::escape_value(&auth.user)).as_bytes(),
@@ -822,6 +834,7 @@ mod tests {
             "http://localhost/".to_string(),
             false,
             None,
+            &crate::settings::SyncTimeSpan::default(),
             log,
             runner,
         )
@@ -947,6 +960,7 @@ mod tests {
             "http://localhost/".to_string(),
             true,
             Some(auth),
+            &crate::settings::SyncTimeSpan::default(),
             log,
             FakeCommandRunner::new(vec![], vec![]),
         )
@@ -957,6 +971,56 @@ mod tests {
         assert!(content.contains("username = \"user@example.com\""));
         assert!(content.contains("password.fetch = [\"command\", \"pass\", \"show\", \"work\"]"));
         assert!(content.contains("read_only = true"));
+    }
+
+    #[tokio::test]
+    async fn generate_config_writes_date_filter() {
+        use crate::settings::{SyncTimeBound, SyncTimeSpan};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = crate::with_test_xdg(&tmp.path().join("data"), &tmp.path().join("config"));
+        let vdir: PathBuf = xdg.get_data_file("vdirsyncer").unwrap();
+        tokio::fs::create_dir_all(&vdir).await.unwrap();
+
+        let log_path = vdir.join("span.log");
+        let log_file = tokio::fs::File::options()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .await
+            .unwrap();
+        let log = Arc::new(Mutex::new(log_file));
+
+        let time_span = SyncTimeSpan {
+            start: SyncTimeBound::Years(2),
+            end: SyncTimeBound::Years(1),
+        };
+
+        let syncer = VDirSyncer::new_with_runner(
+            &xdg,
+            "spancol".to_string(),
+            HashMap::new(),
+            "http://localhost/".to_string(),
+            false,
+            None,
+            &time_span,
+            log,
+            FakeCommandRunner::new(vec![], vec![]),
+        )
+        .await
+        .unwrap();
+
+        let content = tokio::fs::read_to_string(&syncer.cfg).await.unwrap();
+        assert!(
+            content.contains("start_date = \"datetime.now() - timedelta(days=365*2)\""),
+            "expected start_date expression; got:\n{}",
+            content
+        );
+        assert!(
+            content.contains("end_date = \"datetime.now() + timedelta(days=365*1)\""),
+            "expected end_date expression; got:\n{}",
+            content
+        );
     }
 
     // --- run_sync retry-loop tests ---
