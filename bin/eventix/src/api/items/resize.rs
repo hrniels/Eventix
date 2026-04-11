@@ -7,7 +7,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use chrono::{NaiveDateTime, NaiveTime};
+use chrono::{Days, NaiveDateTime, NaiveTime};
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
@@ -43,6 +43,22 @@ fn ensure_half_hour(min: u32, name: &str) -> anyhow::Result<()> {
     }
 }
 
+/// Converts a (hour, minute) pair on a 30-minute grid to a `NaiveTime`.
+///
+/// The special value hour=24, minute=0 represents end-of-day midnight and is translated to
+/// `NaiveTime::from_hms_opt(0, 0, 0)` — the caller is responsible for advancing the date by
+/// one day in that case.  All other inputs are passed to `NaiveTime::from_hms_opt` directly.
+fn half_hour_to_time(hour: u32, minute: u32) -> anyhow::Result<(NaiveTime, bool)> {
+    if hour == 24 && minute == 0 {
+        let t = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        Ok((t, true))
+    } else {
+        let t = NaiveTime::from_hms_opt(hour, minute, 0)
+            .ok_or_else(|| anyhow!("Invalid time {:02}:{:02}", hour, minute))?;
+        Ok((t, false))
+    }
+}
+
 pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
@@ -60,12 +76,14 @@ pub async fn handler(
     // Validate that the provided hour/minute pair is complete and the minute is 0 or 30.
     if resize_start {
         let _ = req.start_hour.unwrap();
-        let min = req.start_minute.unwrap();
-        ensure_half_hour(min, "start_minute")?;
+        ensure_half_hour(req.start_minute.unwrap(), "start_minute")?;
     } else {
-        let _ = req.end_hour.unwrap();
+        let hour = req.end_hour.unwrap();
         let min = req.end_minute.unwrap();
-        ensure_half_hour(min, "end_minute")?;
+        // hour=24, minute=0 is the special sentinel for end-of-day midnight.
+        if !(hour == 24 && min == 0) {
+            ensure_half_hour(min, "end_minute")?;
+        }
     }
 
     let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address());
@@ -90,9 +108,8 @@ pub async fn handler(
             .ok_or_else(|| anyhow!("Event has no end time"))?;
 
         if resize_start {
-            let new_time =
-                NaiveTime::from_hms_opt(req.start_hour.unwrap(), req.start_minute.unwrap(), 0)
-                    .ok_or_else(|| anyhow!("Invalid start time"))?;
+            let (new_time, _) =
+                half_hour_to_time(req.start_hour.unwrap(), req.start_minute.unwrap())?;
             let new_start = NaiveDateTime::new(old_start.date_naive(), new_time);
             if new_start >= old_end.naive_local() {
                 return Err(anyhow!("New start must be before existing end"));
@@ -105,10 +122,29 @@ pub async fn handler(
                 )),
             ))
         } else {
-            let new_time =
-                NaiveTime::from_hms_opt(req.end_hour.unwrap(), req.end_minute.unwrap(), 0)
-                    .ok_or_else(|| anyhow!("Invalid end time"))?;
-            let new_end = NaiveDateTime::new(old_end.date_naive(), new_time);
+            let (new_time, next_day) =
+                half_hour_to_time(req.end_hour.unwrap(), req.end_minute.unwrap())?;
+            // Determine the logical end date: the day the event visually "ends on".  An end of
+            // 00:00:00 on day X+1 is treated as end-of-day on X (matching occurrence_ends_on),
+            // so we subtract one day in that case before applying the new time.
+            let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+            let logical_end_date =
+                if old_end.time() == midnight && old_end.date_naive() > old_start.date_naive() {
+                    old_end
+                        .date_naive()
+                        .checked_sub_days(Days::new(1))
+                        .ok_or_else(|| anyhow!("End date underflow"))?
+                } else {
+                    old_end.date_naive()
+                };
+            let end_date = if next_day {
+                logical_end_date
+                    .checked_add_days(Days::new(1))
+                    .ok_or_else(|| anyhow!("End date overflow"))?
+            } else {
+                logical_end_date
+            };
+            let new_end = NaiveDateTime::new(end_date, new_time);
             if new_end <= old_start.naive_local() {
                 return Err(anyhow!("New end must be after existing start"));
             }

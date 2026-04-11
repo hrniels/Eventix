@@ -240,7 +240,10 @@ impl<'a> DayOccurrence<'a> {
             }
         } else {
             let end = self.inner.occurrence_end().unwrap();
-            end.hour() as u64 * 60 + end.minute() as u64
+            let mins = end.hour() as u64 * 60 + end.minute() as u64;
+            // An end of 00:00 on the next day is stored as midnight but logically means
+            // "end of this day" — render it as a full 1440-minute block.
+            if mins == 0 { 1440 } else { mins }
         }
     }
 }

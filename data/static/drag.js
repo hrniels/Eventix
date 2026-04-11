@@ -192,6 +192,11 @@ class ResizeOperation {
         this._startTotalMin =
             parseInt(el.dataset.startHour, 10) * 60 + parseInt(el.dataset.startMin, 10);
         this._endTotalMin = parseInt(el.dataset.endHour, 10) * 60 + parseInt(el.dataset.endMin, 10);
+        // Actual rendered position of the box on this day column (pixels = minutes). Used as the
+        // fixed anchor for the edge that is NOT being dragged, so multi-day events that start
+        // before or end after this day are handled correctly.
+        this._boxTop = el.offsetTop - 1; // subtract the +1px offset added in the template
+        this._boxBottom = el.offsetTop - 1 + el.offsetHeight + 4; // undo the -4px calc offset
 
         setResizeCursor(edge === "top" ? "n-resize" : "s-resize");
 
@@ -208,22 +213,27 @@ class ResizeOperation {
         const snapped = Math.max(0, Math.min(1440, this._snapToGrid(rawMinutes)));
 
         if (this._edge === "top") {
-            // New start must be at least 30 min before the existing end.
-            const newStart = Math.min(snapped, this._endTotalMin - 30);
+            // New start must be at least 30 min before the box's rendered bottom edge.
+            const newStart = Math.min(snapped, this._boxBottom - 30);
             this._el.style.top = newStart + 1 + "px";
-            this._el.style.height = "calc(" + (this._endTotalMin - newStart) + "px - 4px)";
-            // Keep the inner content div height in sync.
+            // Use the box's original rendered bottom as the fixed anchor so that multi-day
+            // events (whose box ends at 1440 px, not at _endTotalMin) stay correct.
+            const visHeight = this._boxBottom - newStart;
+            this._el.style.height = "calc(" + visHeight + "px - 4px)";
             const inner = this._el.querySelector("div[style*='height: calc']");
             if (inner) {
-                inner.style.height = "calc(" + (this._endTotalMin - newStart) + "px - 8px)";
+                inner.style.height = "calc(" + visHeight + "px - 8px)";
             }
         } else {
-            // New end must be at least 30 min after the existing start.
-            const newEnd = Math.max(snapped, this._startTotalMin + 30);
-            this._el.style.height = "calc(" + (newEnd - this._startTotalMin) + "px - 4px)";
+            // New end must be at least 30 min after the box's rendered top edge.
+            const newEnd = Math.max(snapped, this._boxTop + 30);
+            // Use the box's original rendered top as the fixed anchor so that multi-day
+            // events (whose box starts at 0 px, not at _startTotalMin) stay correct.
+            const visHeight = newEnd - this._boxTop;
+            this._el.style.height = "calc(" + visHeight + "px - 4px)";
             const inner = this._el.querySelector("div[style*='height: calc']");
             if (inner) {
-                inner.style.height = "calc(" + (newEnd - this._startTotalMin) + "px - 8px)";
+                inner.style.height = "calc(" + visHeight + "px - 8px)";
             }
         }
     }
@@ -237,12 +247,12 @@ class ResizeOperation {
         const snapped = Math.max(0, Math.min(1440, this._snapToGrid(rawMinutes)));
 
         if (this._edge === "top") {
-            const newStart = Math.min(snapped, this._endTotalMin - 30);
+            const newStart = Math.min(snapped, this._boxBottom - 30);
             const hour = Math.floor(newStart / 60);
             const minute = newStart % 60;
             resizeEvent(this.uid, this.rid, hour, minute, null, null, reloadContent);
         } else {
-            const newEnd = Math.max(snapped, this._startTotalMin + 30);
+            const newEnd = Math.max(snapped, this._boxTop + 30);
             const hour = Math.floor(newEnd / 60);
             const minute = newEnd % 60;
             resizeEvent(this.uid, this.rid, null, null, hour, minute, reloadContent);
