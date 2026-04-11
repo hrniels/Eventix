@@ -27,7 +27,7 @@ use crate::extract::MultiQuery;
 use crate::html::{self, filters, to_id};
 use crate::pages::error::HTMLError;
 
-const PER_PAGE: usize = 15;
+const PER_PAGE: usize = 12;
 
 #[derive(Clone, Copy, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 enum Conjunction {
