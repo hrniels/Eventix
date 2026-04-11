@@ -61,6 +61,16 @@ function moveEvent(uid, rid, date, hour, onsuccess) {
     });
 }
 
+function resizeEvent(uid, rid, startHour, startMinute, endHour, endMinute, onsuccess) {
+    let url = "/api/items/resize?uid=" + uid;
+    if (rid) url += "&rid=" + rid;
+    if (startHour != null) url += "&start_hour=" + startHour + "&start_minute=" + startMinute;
+    if (endHour != null) url += "&end_hour=" + endHour + "&end_minute=" + endMinute;
+    postRequest(url, function (data) {
+        onsuccess(data);
+    });
+}
+
 function copyEvent(uid, date, hour, onsuccess) {
     let url = "/api/items/copy?uid=" + uid + "&date=" + date;
     if (hour) url += "&hour=" + hour;

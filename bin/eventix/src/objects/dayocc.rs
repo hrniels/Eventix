@@ -192,6 +192,29 @@ impl<'a> DayOccurrence<'a> {
         }
     }
 
+    /// Returns the hour component of this occurrence's start time, or 0 if the start is unknown.
+    pub fn occurrence_start_hour(&self) -> u32 {
+        self.inner.occurrence_start().map(|s| s.hour()).unwrap_or(0)
+    }
+
+    /// Returns the minute component of this occurrence's start time, or 0 if the start is unknown.
+    pub fn occurrence_start_min(&self) -> u32 {
+        self.inner
+            .occurrence_start()
+            .map(|s| s.minute())
+            .unwrap_or(0)
+    }
+
+    /// Returns the hour component of this occurrence's end time, or 0 if the end is unknown.
+    pub fn occurrence_end_hour(&self) -> u32 {
+        self.inner.occurrence_end().map(|e| e.hour()).unwrap_or(0)
+    }
+
+    /// Returns the minute component of this occurrence's end time, or 0 if the end is unknown.
+    pub fn occurrence_end_min(&self) -> u32 {
+        self.inner.occurrence_end().map(|e| e.minute()).unwrap_or(0)
+    }
+
     pub fn minute_off(&self, date: NaiveDate) -> u64 {
         if let Some(start) = self.inner.occurrence_start()
             && self.inner.occurrence_starts_on(date)
@@ -217,7 +240,10 @@ impl<'a> DayOccurrence<'a> {
             }
         } else {
             let end = self.inner.occurrence_end().unwrap();
-            end.hour() as u64 * 60 + end.minute() as u64
+            let mins = end.hour() as u64 * 60 + end.minute() as u64;
+            // An end of 00:00 on the next day is stored as midnight but logically means
+            // "end of this day" — render it as a full 1440-minute block.
+            if mins == 0 { 1440 } else { mins }
         }
     }
 }

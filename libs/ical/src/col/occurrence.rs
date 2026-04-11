@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, Duration, NaiveDate};
+use chrono::{DateTime, Duration, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
 
 use crate::objects::{
@@ -305,22 +305,43 @@ impl<'c> Occurrence<'c> {
         }
     }
 
-    // Returns whether this occurrence ends on that given date.
+    /// Returns whether this occurrence ends on that given date.
+    ///
+    /// An end time of midnight (00:00:00) on day D is treated as ending on day D-1, matching the
+    /// convention used throughout the codebase. A non-midnight end is considered to end on the
+    /// calendar day of its timestamp.
     pub fn occurrence_ends_on(&self, date: NaiveDate) -> bool {
         self.occurrence_end()
-            .map(|end| end.date_naive() == date)
+            .map(|end| {
+                let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+                if end.time() == midnight {
+                    // Midnight end belongs to the previous day.
+                    end.date_naive() == date.succ_opt().unwrap()
+                } else {
+                    end.date_naive() == date
+                }
+            })
             .unwrap_or(false)
     }
 
     /// Returns whether this occurrence lasts the complete day on the given date.
+    ///
+    /// A date is considered a full-span (all-day) day only when it falls strictly between the
+    /// start day and the logical end day (both exclusive). The logical end day follows the same
+    /// midnight convention as `occurrence_ends_on`: an end time of 00:00:00 on day D is treated
+    /// as ending on day D-1, so D-1 is the logical end day and is itself not a full-span day.
     pub fn is_all_day_on(&self, date: NaiveDate) -> bool {
-        let end = self
-            .occurrence_end()
-            .map(|e| e.date_naive())
-            .unwrap_or(date);
-        match self.occurrence_start() {
-            Some(start) => date > start.date_naive() && date < end,
-            None => false,
+        let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let logical_end_day = self.occurrence_end().map(|e| {
+            if e.time() == midnight {
+                e.date_naive().pred_opt().unwrap()
+            } else {
+                e.date_naive()
+            }
+        });
+        match (self.occurrence_start(), logical_end_day) {
+            (Some(start), Some(end)) => date > start.date_naive() && date < end,
+            _ => false,
         }
     }
 
@@ -672,53 +693,119 @@ mod tests {
     /// Verifies `occurrence_starts_on` and `occurrence_ends_on` for hit, miss, and None-start cases.
     #[test]
     fn occurrence_starts_on_and_ends_on() {
-        let start = utc(2024, 9, 10, 8, 0, 0);
-        let end = utc(2024, 9, 10, 9, 0, 0);
         let ev = CalEvent::new("uid-on");
         let comp = CalComponent::Event(ev);
 
+        // --- same-day event ---
+        let start = utc(2024, 9, 10, 8, 0, 0);
+        let end = utc(2024, 9, 10, 9, 0, 0);
         let occ = Occurrence::new(dir(), &comp, Some(start), Some(end), false);
-
         let on_day = NaiveDate::from_ymd_opt(2024, 9, 10).unwrap();
         let other_day = NaiveDate::from_ymd_opt(2024, 9, 11).unwrap();
-
         assert!(occ.occurrence_starts_on(on_day));
         assert!(!occ.occurrence_starts_on(other_day));
         assert!(occ.occurrence_ends_on(on_day));
         assert!(!occ.occurrence_ends_on(other_day));
 
-        // No start: occurrence_starts_on must return false
+        // --- event ending exactly at midnight of the next day ---
+        // Stored as Apr 11 00:00:00; logically ends on Apr 10.
+        let start2 = utc(2024, 4, 10, 15, 0, 0);
+        let end2 = utc(2024, 4, 11, 0, 0, 0);
+        let occ2 = Occurrence::new(dir(), &comp, Some(start2), Some(end2), false);
+        let apr10 = NaiveDate::from_ymd_opt(2024, 4, 10).unwrap();
+        let apr11 = NaiveDate::from_ymd_opt(2024, 4, 11).unwrap();
+        assert!(
+            occ2.occurrence_ends_on(apr10),
+            "midnight end treated as ending on previous day"
+        );
+        assert!(
+            !occ2.occurrence_ends_on(apr11),
+            "not considered ending on the midnight day itself"
+        );
+
+        // --- multi-day event ending mid-day ---
+        // Ends Apr 11 at 15:00 — ends on Apr 11, not Apr 10.
+        let end3 = utc(2024, 4, 11, 15, 0, 0);
+        let occ3 = Occurrence::new(dir(), &comp, Some(start2), Some(end3), false);
+        assert!(!occ3.occurrence_ends_on(apr10));
+        assert!(occ3.occurrence_ends_on(apr11));
+
+        // --- no start/end ---
         let no_start = Occurrence::new(dir(), &comp, None, None, false);
         assert!(!no_start.occurrence_starts_on(on_day));
-        // No end (and no duration): occurrence_ends_on must return false
         assert!(!no_start.occurrence_ends_on(on_day));
     }
 
     /// Verifies `is_all_day_on` for mid-span, boundary, and None-start cases.
     #[test]
     fn is_all_day_on() {
-        // Multi-day event: starts 2024-10-01, ends 2024-10-04
-        let start = UTC.with_ymd_and_hms(2024, 10, 1, 0, 0, 0).unwrap();
-        let end = UTC.with_ymd_and_hms(2024, 10, 4, 0, 0, 0).unwrap();
         let ev = CalEvent::new("uid-span");
         let comp = CalComponent::Event(ev);
-        let occ = Occurrence::new(dir(), &comp, Some(start), Some(end), false);
 
-        // Mid-span date: the occurrence spans fully over this day
-        let mid = NaiveDate::from_ymd_opt(2024, 10, 2).unwrap();
-        assert!(occ.is_all_day_on(mid));
+        // --- midnight end: Oct 1 00:00 → Oct 4 00:00 ---
+        // Logical end day = Oct 3. Only Oct 2 is a genuine middle day.
+        let occ = Occurrence::new(
+            dir(),
+            &comp,
+            Some(UTC.with_ymd_and_hms(2024, 10, 1, 0, 0, 0).unwrap()),
+            Some(UTC.with_ymd_and_hms(2024, 10, 4, 0, 0, 0).unwrap()),
+            false,
+        );
+        let oct1 = NaiveDate::from_ymd_opt(2024, 10, 1).unwrap();
+        let oct2 = NaiveDate::from_ymd_opt(2024, 10, 2).unwrap();
+        let oct3 = NaiveDate::from_ymd_opt(2024, 10, 3).unwrap();
+        let oct4 = NaiveDate::from_ymd_opt(2024, 10, 4).unwrap();
+        assert!(!occ.is_all_day_on(oct1), "start day is not a full span day");
+        assert!(occ.is_all_day_on(oct2), "middle day is a full span day");
+        assert!(
+            !occ.is_all_day_on(oct3),
+            "logical end day (midnight sentinel) is not a full span day"
+        );
+        assert!(
+            !occ.is_all_day_on(oct4),
+            "stored midnight date is not a full span day"
+        );
 
-        // Start date: not strictly after start — returns false
-        let start_day = NaiveDate::from_ymd_opt(2024, 10, 1).unwrap();
-        assert!(!occ.is_all_day_on(start_day));
+        // --- non-midnight end: Oct 1 00:00 → Oct 3 15:00 ---
+        // Logical end day = Oct 3 (non-midnight, so end_date itself). Only Oct 2 is a middle day.
+        let occ2 = Occurrence::new(
+            dir(),
+            &comp,
+            Some(UTC.with_ymd_and_hms(2024, 10, 1, 0, 0, 0).unwrap()),
+            Some(UTC.with_ymd_and_hms(2024, 10, 3, 15, 0, 0).unwrap()),
+            false,
+        );
+        assert!(
+            !occ2.is_all_day_on(oct1),
+            "start day is not a full span day"
+        );
+        assert!(occ2.is_all_day_on(oct2), "middle day is a full span day");
+        assert!(
+            !occ2.is_all_day_on(oct3),
+            "end day with non-midnight time is not a full span day"
+        );
 
-        // End date boundary: not strictly before end — returns false
-        let end_day = NaiveDate::from_ymd_opt(2024, 10, 4).unwrap();
-        assert!(!occ.is_all_day_on(end_day));
+        // --- 2-day event: Oct 1 → Oct 2 00:00 (midnight end) ---
+        // No middle days at all: logical end = Oct 1, which equals start day.
+        let occ3 = Occurrence::new(
+            dir(),
+            &comp,
+            Some(UTC.with_ymd_and_hms(2024, 10, 1, 15, 0, 0).unwrap()),
+            Some(UTC.with_ymd_and_hms(2024, 10, 2, 0, 0, 0).unwrap()),
+            false,
+        );
+        assert!(
+            !occ3.is_all_day_on(oct1),
+            "start/end day of 2-day midnight event is not a full span day"
+        );
+        assert!(
+            !occ3.is_all_day_on(oct2),
+            "stored midnight date of 2-day event is not a full span day"
+        );
 
-        // No start: always returns false
+        // --- no start ---
         let no_start = Occurrence::new(dir(), &comp, None, None, false);
-        assert!(!no_start.is_all_day_on(mid));
+        assert!(!no_start.is_all_day_on(oct2));
     }
 
     /// Verifies all three branches of `overlaps`: has-start, end-only, and neither.
