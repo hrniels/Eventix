@@ -6,7 +6,9 @@ use anyhow::anyhow;
 use askama::Template;
 use chrono::Weekday;
 use chrono_tz::Tz;
-use eventix_ical::objects::{CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
+use eventix_ical::objects::{
+    CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DayDesc,
+};
 use eventix_ical::parser::ParseError;
 use eventix_locale::Locale;
 use serde::{Deserialize, Deserializer};
@@ -184,6 +186,43 @@ fn parse_by_day(wdays: &str) -> Option<Vec<CalWDayDesc>> {
     if days.is_empty() { None } else { Some(days) }
 }
 
+#[derive(Default, Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+pub enum YearlyType {
+    #[default]
+    None,
+    ByMonthDay,
+    ByWeekday,
+}
+
+impl Display for YearlyType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+/// Determines the [`YearlyType`] for the given rrule.
+///
+/// Returns `ByMonthDay` when BYMONTH + BYMONTHDAY are set, `ByWeekday` when BYMONTH + BYDAY are
+/// set (with an nth component), and `None` otherwise.
+fn yearly_type_from_rrule(rrule: Option<&CalRRule>) -> YearlyType {
+    let Some(r) = rrule else {
+        return YearlyType::None;
+    };
+    if r.by_month().is_none() {
+        return YearlyType::None;
+    }
+    if r.by_mon_day().is_some_and(|d| !d.is_empty()) {
+        YearlyType::ByMonthDay
+    } else if r
+        .by_day()
+        .is_some_and(|d| !d.is_empty() && d[0].nth().is_some())
+    {
+        YearlyType::ByWeekday
+    } else {
+        YearlyType::None
+    }
+}
+
 #[derive(Default, Debug, Deserialize, PartialEq, Eq)]
 pub enum RecurEnd {
     #[default]
@@ -203,12 +242,92 @@ pub enum MonthlyType {
     #[default]
     None,
     ByDay,
+    ByMonthDay,
 }
 
 impl Display for MonthlyType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
+}
+
+#[derive(Clone, Copy, Debug, EnumIter, Eq, PartialEq, Deserialize)]
+enum IterMonth {
+    January,
+    February,
+    March,
+    April,
+    May,
+    June,
+    July,
+    August,
+    September,
+    October,
+    November,
+    December,
+}
+
+impl IterMonth {
+    fn as_num(self) -> u8 {
+        match self {
+            Self::January => 1,
+            Self::February => 2,
+            Self::March => 3,
+            Self::April => 4,
+            Self::May => 5,
+            Self::June => 6,
+            Self::July => 7,
+            Self::August => 8,
+            Self::September => 9,
+            Self::October => 10,
+            Self::November => 11,
+            Self::December => 12,
+        }
+    }
+
+    fn from_num(n: u8) -> Option<Self> {
+        match n {
+            1 => Some(Self::January),
+            2 => Some(Self::February),
+            3 => Some(Self::March),
+            4 => Some(Self::April),
+            5 => Some(Self::May),
+            6 => Some(Self::June),
+            7 => Some(Self::July),
+            8 => Some(Self::August),
+            9 => Some(Self::September),
+            10 => Some(Self::October),
+            11 => Some(Self::November),
+            12 => Some(Self::December),
+            _ => None,
+        }
+    }
+}
+
+impl Named for IterMonth {
+    fn name(&self, locale: &dyn Locale) -> String {
+        locale.translate(&format!("{self:?}")).to_string()
+    }
+}
+
+impl fmt::Display for IterMonth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+/// Extracts the single month number from an rrule's BYMONTH list, if exactly one is present.
+fn yearly_month_from_rrule(rrule: Option<&CalRRule>) -> Option<IterMonth> {
+    rrule
+        .and_then(|r| r.by_month())
+        .and_then(|months| {
+            if months.len() == 1 {
+                Some(months[0])
+            } else {
+                None
+            }
+        })
+        .and_then(IterMonth::from_num)
 }
 
 #[derive(Debug, Deserialize)]
@@ -223,6 +342,13 @@ pub struct RecurRequest {
     monthly_type: MonthlyType,
     monthly_nth: Option<Nth>,
     monthly_wday: Option<IterWeekday>,
+    monthly_day: Option<u8>,
+    yearly_type: YearlyType,
+    yearly_day: Option<u8>,
+    yearly_month_bymonthday: Option<IterMonth>,
+    yearly_nth: Option<Nth>,
+    yearly_wday: Option<IterWeekday>,
+    yearly_month_byweekday: Option<IterMonth>,
 }
 
 impl Default for RecurRequest {
@@ -237,12 +363,23 @@ impl Default for RecurRequest {
             monthly_type: MonthlyType::None,
             monthly_nth: None,
             monthly_wday: None,
+            monthly_day: None,
+            yearly_type: YearlyType::None,
+            yearly_day: None,
+            yearly_month_bymonthday: None,
+            yearly_nth: None,
+            yearly_wday: None,
+            yearly_month_byweekday: None,
         }
     }
 }
 
 impl RecurRequest {
     pub fn from_rrule(rrule: Option<&CalRRule>) -> Self {
+        let yearly_type = match rrule.map(|r| r.frequency()) {
+            Some(CalRRuleFreq::Yearly) => yearly_type_from_rrule(rrule),
+            _ => YearlyType::None,
+        };
         Self {
             freq: rrule.and_then(|r| Frequency::try_from(r.frequency()).ok()),
             interval: rrule.and_then(|r| r.interval()).unwrap_or(1),
@@ -256,7 +393,7 @@ impl RecurRequest {
                 .and_then(|r| r.until())
                 .map(|d| Date::new(Some(d.as_naive_date()))),
             weekly_days: match rrule {
-                Some(r) if r.by_day().is_some() => {
+                Some(r) if r.by_day().is_some() && r.frequency() == CalRRuleFreq::Weekly => {
                     let mut wdays = String::new();
                     for wd in r.by_day().as_ref().unwrap().iter() {
                         wdays.push_str(&format!("{},", CalWDayDesc::to_weekday_str(wd.day())));
@@ -266,19 +403,78 @@ impl RecurRequest {
                 _ => "".to_string(),
             },
             monthly_type: match rrule {
-                Some(r) if r.by_day().is_some() => MonthlyType::ByDay,
+                Some(r) if r.by_day().is_some() && r.frequency() == CalRRuleFreq::Monthly => {
+                    MonthlyType::ByDay
+                }
+                Some(r)
+                    if r.by_mon_day().is_some_and(|d| !d.is_empty())
+                        && r.frequency() == CalRRuleFreq::Monthly =>
+                {
+                    MonthlyType::ByMonthDay
+                }
                 _ => MonthlyType::None,
             },
-            monthly_nth: monthly_nth_from_rrule(rrule),
-            monthly_wday: rrule.and_then(|r| {
-                r.by_day().and_then(|d| {
+            monthly_nth: match rrule.map(|r| r.frequency()) {
+                Some(CalRRuleFreq::Monthly) => monthly_nth_from_rrule(rrule),
+                _ => None,
+            },
+            monthly_wday: match rrule.map(|r| r.frequency()) {
+                Some(CalRRuleFreq::Monthly) => rrule.and_then(|r| {
+                    r.by_day().and_then(|d| {
+                        if d.is_empty() {
+                            None
+                        } else {
+                            Some(d[0].day().into())
+                        }
+                    })
+                }),
+                _ => None,
+            },
+            monthly_day: match rrule.map(|r| r.frequency()) {
+                Some(CalRRuleFreq::Monthly) => rrule.and_then(|r| r.by_mon_day()).and_then(|d| {
                     if d.is_empty() {
                         None
                     } else {
-                        Some(d[0].day().into())
+                        Some(d[0].num() as u8)
                     }
-                })
-            }),
+                }),
+                _ => None,
+            },
+            yearly_type,
+            yearly_day: match yearly_type {
+                YearlyType::ByMonthDay => rrule.and_then(|r| r.by_mon_day()).and_then(|d| {
+                    if d.is_empty() {
+                        None
+                    } else {
+                        Some(d[0].num() as u8)
+                    }
+                }),
+                _ => None,
+            },
+            yearly_month_bymonthday: match yearly_type {
+                YearlyType::ByMonthDay => yearly_month_from_rrule(rrule),
+                _ => None,
+            },
+            yearly_nth: match yearly_type {
+                YearlyType::ByWeekday => monthly_nth_from_rrule(rrule),
+                _ => None,
+            },
+            yearly_wday: match yearly_type {
+                YearlyType::ByWeekday => rrule.and_then(|r| {
+                    r.by_day().and_then(|d| {
+                        if d.is_empty() {
+                            None
+                        } else {
+                            Some(d[0].day().into())
+                        }
+                    })
+                }),
+                _ => None,
+            },
+            yearly_month_byweekday: match yearly_type {
+                YearlyType::ByWeekday => yearly_month_from_rrule(rrule),
+                _ => None,
+            },
         }
     }
 
@@ -293,8 +489,8 @@ impl RecurRequest {
                     let byday = parse_by_day(&self.weekly_days);
                     rrule.set_by_day(byday);
                 }
-                Frequency::Monthly => {
-                    if self.monthly_type == MonthlyType::ByDay {
+                Frequency::Monthly => match self.monthly_type {
+                    MonthlyType::ByDay => {
                         let nth = match self.monthly_nth.as_ref().unwrap() {
                             Nth::First => Some((1, CalRRuleSide::Start)),
                             Nth::Second => Some((2, CalRRuleSide::Start)),
@@ -306,7 +502,53 @@ impl RecurRequest {
                             nth,
                         )]));
                     }
-                }
+                    MonthlyType::ByMonthDay => {
+                        let day = self
+                            .monthly_day
+                            .ok_or_else(|| anyhow!("Please specify a day of the month"))?;
+                        rrule.set_by_mon_day(Some(vec![DayDesc::new(
+                            day as u16,
+                            CalRRuleSide::Start,
+                        )]));
+                    }
+                    MonthlyType::None => {}
+                },
+                Frequency::Yearly => match self.yearly_type {
+                    YearlyType::ByMonthDay => {
+                        let month = self
+                            .yearly_month_bymonthday
+                            .ok_or_else(|| anyhow!("Please select a month"))?;
+                        let day = self
+                            .yearly_day
+                            .ok_or_else(|| anyhow!("Please specify a day of the month"))?;
+                        rrule.set_by_month(Some(vec![month.as_num()]));
+                        rrule.set_by_mon_day(Some(vec![DayDesc::new(
+                            day as u16,
+                            CalRRuleSide::Start,
+                        )]));
+                    }
+                    YearlyType::ByWeekday => {
+                        let month = self
+                            .yearly_month_byweekday
+                            .ok_or_else(|| anyhow!("Please select a month"))?;
+                        let nth = match self
+                            .yearly_nth
+                            .as_ref()
+                            .ok_or_else(|| anyhow!("Please select a position"))?
+                        {
+                            Nth::First => Some((1, CalRRuleSide::Start)),
+                            Nth::Second => Some((2, CalRRuleSide::Start)),
+                            Nth::Third => Some((3, CalRRuleSide::Start)),
+                            Nth::Last => Some((1, CalRRuleSide::End)),
+                        };
+                        let wday = self
+                            .yearly_wday
+                            .ok_or_else(|| anyhow!("Please select a weekday"))?;
+                        rrule.set_by_month(Some(vec![month.as_num()]));
+                        rrule.set_by_day(Some(vec![CalWDayDesc::new(wday.into(), nth)]));
+                    }
+                    YearlyType::None => {}
+                },
                 _ => {}
             }
 
@@ -364,6 +606,13 @@ pub struct RecurTemplate<'a> {
     monthly_type: MonthlyType,
     monthly_wday: ComboboxTemplate<IterWeekday>,
     monthly_nth: ComboboxTemplate<Nth>,
+    monthly_day: u8,
+    yearly_type: YearlyType,
+    yearly_month_bymonthday: ComboboxTemplate<IterMonth>,
+    yearly_day: u8,
+    yearly_nth: ComboboxTemplate<Nth>,
+    yearly_month_byweekday: ComboboxTemplate<IterMonth>,
+    yearly_wday: ComboboxTemplate<IterWeekday>,
 }
 
 impl<'a> RecurTemplate<'a> {
@@ -390,6 +639,35 @@ impl<'a> RecurTemplate<'a> {
                 locale.clone(),
                 format!("{name}[monthly_wday]"),
                 value.monthly_wday,
+            ),
+            monthly_day: value.monthly_day.unwrap_or(1),
+            yearly_type: value.yearly_type,
+            yearly_month_bymonthday: ComboboxTemplate::new(
+                locale.clone(),
+                format!("{name}[yearly_month_bymonthday]"),
+                match value.yearly_type {
+                    YearlyType::ByMonthDay => value.yearly_month_bymonthday,
+                    _ => None,
+                },
+            ),
+            yearly_day: value.yearly_day.unwrap_or(1),
+            yearly_nth: ComboboxTemplate::new(
+                locale.clone(),
+                format!("{name}[yearly_nth]"),
+                value.yearly_nth,
+            ),
+            yearly_month_byweekday: ComboboxTemplate::new(
+                locale.clone(),
+                format!("{name}[yearly_month_byweekday]"),
+                match value.yearly_type {
+                    YearlyType::ByWeekday => value.yearly_month_byweekday,
+                    _ => None,
+                },
+            ),
+            yearly_wday: ComboboxTemplate::new(
+                locale.clone(),
+                format!("{name}[yearly_wday]"),
+                value.yearly_wday,
             ),
             locale,
         }

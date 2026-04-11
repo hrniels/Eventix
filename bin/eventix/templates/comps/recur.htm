@@ -62,6 +62,26 @@
                     class="radio"
                     type="radio"
                     name="{{ name }}[monthly_type]"
+                    id="{{ id }}-monthly-bymonthday"
+                    value="ByMonthDay"
+                    {% if monthly_type == MonthlyType::ByMonthDay %}checked="checked"{% endif %}
+                />
+                <label for="{{ id }}-monthly-bymonthday">
+                    {{ "Day"|t(locale) }}
+                    <input
+                        id="{{ id }}_monthly_day"
+                        name="{{ name }}[monthly_day]"
+                        size="3"
+                        value="{{ monthly_day }}"
+                    />
+                    {{ "of the month"|t(locale) }}
+                </label>
+            </div>
+            <div style="padding-top: .4em">
+                <input
+                    class="radio"
+                    type="radio"
+                    name="{{ name }}[monthly_type]"
                     id="{{ id }}-monthly-type"
                     value="ByDay"
                     {% if monthly_type == MonthlyType::ByDay %}checked="checked"{% endif %}
@@ -73,7 +93,53 @@
             </div>
         </div>
     </div>
-    <div id="{{ id }}-tabs-YEARLY"></div>
+    <div id="{{ id }}-tabs-YEARLY" style="display: flex; gap: .4em">
+        <div style="padding: .4em">{{ "On"|t(locale) }}:</div>
+        <div>
+            <div style="padding-top: .4em">
+                <input
+                    class="radio"
+                    type="radio"
+                    name="{{ name }}[yearly_type]"
+                    id="{{ id }}-yearly-none"
+                    value="None"
+                    {% if yearly_type == YearlyType::None %}checked="checked"{% endif %}
+                />
+                <label for="{{ id }}-yearly-none">{{ "Same day"|t(locale) }}</label>
+            </div>
+            <div style="padding-top: .4em">
+                <input
+                    class="radio"
+                    type="radio"
+                    name="{{ name }}[yearly_type]"
+                    id="{{ id }}-yearly-bymonthday"
+                    value="ByMonthDay"
+                    {% if yearly_type == YearlyType::ByMonthDay %}checked="checked"{% endif %}
+                />
+                {{ yearly_month_bymonthday|safe }}
+                <input
+                    id="{{ id }}_yearly_day"
+                    name="{{ name }}[yearly_day]"
+                    size="3"
+                    value="{{ yearly_day }}"
+                />
+            </div>
+            <div style="padding-top: .4em">
+                <input
+                    class="radio"
+                    type="radio"
+                    name="{{ name }}[yearly_type]"
+                    id="{{ id }}-yearly-byweekday"
+                    value="ByWeekday"
+                    {% if yearly_type == YearlyType::ByWeekday %}checked="checked"{% endif %}
+                />
+                {{ yearly_nth|safe }}
+                {{ yearly_wday|safe }}
+                <label for="{{ id }}-yearly-byweekday"> {{ "in"|t(locale) }} </label>
+                {{ yearly_month_byweekday|safe }}
+            </div>
+        </div>
+    </div>
     <div id="{{ id }}-tabs-end" style="display: none; padding: .4em">
         <div style="padding-top: .3em">
             {{ "Every"|t(locale) }}
@@ -150,6 +216,14 @@
         });
         $("#{{ id }}_count").spinner({
             min: 1,
+        });
+        $("#{{ id }}_yearly_day").spinner({
+            min: 1,
+            max: 31,
+        });
+        $("#{{ id }}_monthly_day").spinner({
+            min: 1,
+            max: 31,
         });
 
         const weekdays = $("#{{ id }}_weekdays").attr("value");

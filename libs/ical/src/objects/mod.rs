@@ -40,6 +40,6 @@ pub use event::CalEvent;
 pub use evlike::{EventLike, UpdatableEventLike};
 pub use locale::{CalLocale, CalLocaleEn};
 pub use organizer::CalOrganizer;
-pub use recur::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, WeekdayHuman};
+pub use recur::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DayDesc, WeekdayHuman};
 pub use status::{CalEventStatus, CalTodoStatus};
 pub use todo::CalTodo;
