@@ -60,6 +60,7 @@
 "{} minutes" = "{} Minute(n)"
 "{} seconds" = "{} Sekunde(n)"
 
+"in" = "im"
 "in {}" = "im {}"
 "on {}" = "am {}"
 "on the {} day of the month" = "am {} Tag des Monats"

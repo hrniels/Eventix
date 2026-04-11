@@ -287,16 +287,30 @@ impl fmt::Display for WeekdayHuman<'_, '_> {
     }
 }
 
+/// Represents a day number within a month or year.
+///
+/// The `num` field holds a 1-based ordinal (e.g. 1 for the first day), and `side` indicates
+/// whether the ordinal counts from the start or the end of the period.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct DayDesc {
+pub struct DayDesc {
     num: u16,
     side: CalRRuleSide,
 }
 
 impl DayDesc {
-    #[cfg(test)]
+    /// Creates a new [`DayDesc`] with the given ordinal number and side.
     pub fn new(num: u16, side: CalRRuleSide) -> Self {
         Self { num, side }
+    }
+
+    /// Returns the ordinal number.
+    pub fn num(&self) -> u16 {
+        self.num
+    }
+
+    /// Returns the side (start or end of the period).
+    pub fn side(&self) -> CalRRuleSide {
+        self.side
     }
 
     pub fn human<'l>(&self, locale: &'l dyn CalLocale) -> DayDescHuman<'_, 'l> {
@@ -607,6 +621,34 @@ impl CalRRule {
     /// can also happen on multiple of such weekday descriptions, it is specified as a `Vec`.
     pub fn set_by_day(&mut self, by_day: Option<Vec<CalWDayDesc>>) {
         self.by_day = by_day;
+    }
+
+    /// Returns the by-month-day specification (BYMONTHDAY).
+    ///
+    /// Each entry is a day-of-month ordinal that can count from the start or end of the month.
+    /// For example, `DayDesc::new(1, CalRRuleSide::Start)` means the 1st of the month, and
+    /// `DayDesc::new(1, CalRRuleSide::End)` means the last day.
+    pub fn by_mon_day(&self) -> Option<&Vec<DayDesc>> {
+        self.by_mon_day.as_ref()
+    }
+
+    /// Sets the by-month-day specification (BYMONTHDAY).
+    pub fn set_by_mon_day(&mut self, by_mon_day: Option<Vec<DayDesc>>) {
+        self.by_mon_day = by_mon_day;
+    }
+
+    /// Returns the by-month specification (BYMONTH).
+    ///
+    /// Each entry is a month number in the range 1–12 (January = 1, December = 12).
+    pub fn by_month(&self) -> Option<&Vec<u8>> {
+        self.by_month.as_ref()
+    }
+
+    /// Sets the by-month specification (BYMONTH).
+    ///
+    /// Each entry must be a month number in the range 1–12.
+    pub fn set_by_month(&mut self, by_month: Option<Vec<u8>>) {
+        self.by_month = by_month;
     }
 
     /// Returns an iterator with all recurrences between `start` and `end`.
