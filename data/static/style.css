@@ -669,6 +669,22 @@ span.ev_msg_error span.ev_msg_info {
     outline-offset: -1px;
 }
 
+.ev_resize_handle {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    z-index: 10;
+}
+.ev_resize_top {
+    top: 0;
+    cursor: n-resize;
+}
+.ev_resize_bottom {
+    bottom: 0;
+    cursor: s-resize;
+}
+
 /* ------------ ADD ICON -------------- */
 
 .ev_add_icon {

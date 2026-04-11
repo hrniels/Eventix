@@ -229,6 +229,10 @@
                                         id="{{ occ.id() }}"
                                         data-uid="{{ occ.uid() }}"
                                         data-rid="{{ occ.rid_str() }}"
+                                        data-start-hour="{{ occ.occurrence_start_hour() }}"
+                                        data-start-min="{{ occ.occurrence_start_min() }}"
+                                        data-end-hour="{{ occ.occurrence_end_hour() }}"
+                                        data-end-min="{{ occ.occurrence_end_min() }}"
                                         class="
                                                ev_event_occurrence
                                                ev_week_event
@@ -241,6 +245,12 @@
                                         {% endmatch %}
                                               "
                                     >
+                                        {% if occ.is_owner() && occ.occurrence_starts_on(day.date.clone()) %}
+                                            <div class="ev_resize_handle ev_resize_top"></div>
+                                        {% endif %}
+                                        {% if occ.is_owner() && occ.occurrence_ends_on(day.date.clone()) %}
+                                            <div class="ev_resize_handle ev_resize_bottom"></div>
+                                        {% endif %}
                                         {% if !occ.is_owner() %}
                                             <div
                                                 class="ev_vertbar
@@ -312,6 +322,30 @@
                                         });
                                     </script>
                                     <!-- prettier-ignore-end -->
+                                    {% if occ.is_owner() %}
+                                        <script type="text/javascript">
+                                            $(function () {
+                                                const rop = new ResizeOperation(
+                                                    "{{ occ.uid() }}",
+                                                    "{{ occ.rid_str() }}",
+                                                );
+                                                const $el = $("#{{ occ.id() }}");
+                                                $el.data("resize", rop);
+                                                $el.find(".ev_resize_top").on(
+                                                    "mousedown",
+                                                    function (e) {
+                                                        rop.start(e, $el[0], "top");
+                                                    },
+                                                );
+                                                $el.find(".ev_resize_bottom").on(
+                                                    "mousedown",
+                                                    function (e) {
+                                                        rop.start(e, $el[0], "bottom");
+                                                    },
+                                                );
+                                            });
+                                        </script>
+                                    {% endif %}
                                 {% endfor %}
                                 {% if day.date == today %}
                                     <div
