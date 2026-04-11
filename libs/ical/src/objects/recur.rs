@@ -273,6 +273,7 @@ pub struct WeekdayHuman<'a, 'l> {
 impl fmt::Display for WeekdayHuman<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let wday = format!("{}", self.wday.day);
+        let wday = self.locale.translate(&wday);
         if let Some((num, side)) = self.wday.nth {
             write!(
                 f,
@@ -281,7 +282,7 @@ impl fmt::Display for WeekdayHuman<'_, '_> {
                 wday
             )
         } else {
-            write!(f, "{}", self.locale.translate(&wday))
+            write!(f, "{}", wday)
         }
     }
 }
