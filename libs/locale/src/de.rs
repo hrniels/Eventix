@@ -105,16 +105,17 @@ impl CalLocale for LocaleDe {
 
     fn nth_day(&self, nth: u64, start: bool) -> String {
         match start {
-            true => {
-                format!("{nth}er")
-            }
-            false => {
-                if nth == 1 {
-                    String::from("Letzter")
-                } else {
-                    format!("{nth}t letzter")
-                }
-            }
+            true => match nth {
+                1 => String::from("ersten"),
+                2 => String::from("zweiten"),
+                3 => String::from("dritten"),
+                n => format!("{n}en"),
+            },
+            false => match nth {
+                1 => String::from("letzten"),
+                2 => String::from("vorletzten"),
+                n => format!("{n}t letzten"),
+            },
         }
     }
 
@@ -160,17 +161,17 @@ mod tests {
     #[test]
     fn nth_day_start() {
         let l = LocaleDe::default();
-        assert_eq!(l.nth_day(1, true), "1er");
-        assert_eq!(l.nth_day(2, true), "2er");
-        assert_eq!(l.nth_day(10, true), "10er");
+        assert_eq!(l.nth_day(1, true), "ersten");
+        assert_eq!(l.nth_day(2, true), "zweiten");
+        assert_eq!(l.nth_day(10, true), "10en");
     }
 
     #[test]
     fn nth_day_end_last() {
         let l = LocaleDe::default();
-        assert_eq!(l.nth_day(1, false), "Letzter");
-        assert_eq!(l.nth_day(2, false), "2t letzter");
-        assert_eq!(l.nth_day(3, false), "3t letzter");
+        assert_eq!(l.nth_day(1, false), "letzten");
+        assert_eq!(l.nth_day(2, false), "vorletzten");
+        assert_eq!(l.nth_day(3, false), "3t letzten");
     }
 
     // --- fmt_naive_date ---

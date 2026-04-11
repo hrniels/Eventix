@@ -273,6 +273,7 @@ pub struct WeekdayHuman<'a, 'l> {
 impl fmt::Display for WeekdayHuman<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let wday = format!("{}", self.wday.day);
+        let wday = self.locale.translate(&wday);
         if let Some((num, side)) = self.wday.nth {
             write!(
                 f,
@@ -281,7 +282,7 @@ impl fmt::Display for WeekdayHuman<'_, '_> {
                 wday
             )
         } else {
-            write!(f, "{}", self.locale.translate(&wday))
+            write!(f, "{}", wday)
         }
     }
 }
@@ -974,7 +975,21 @@ impl CalRRule {
             || self.by_month.is_some()
     }
 
-    /// Returns a human-readable representation of this recurrence rule.
+    /// Returns a human-readable representation of the repeat interval of this recurrence rule,
+    /// without the termination information (UNTIL/COUNT).
+    ///
+    /// For example, it could say "Weekly, on Thursday".
+    pub fn human_interval<'l>(&self, locale: &'l dyn CalLocale) -> RRuleHumanInterval<'_, 'l> {
+        RRuleHumanInterval {
+            rrule: self,
+            locale,
+        }
+    }
+
+    /// Returns a human-readable representation of this recurrence rule, including termination
+    /// information (UNTIL/COUNT) on a second line when present.
+    ///
+    /// For example, it could say "Every 2 years\nRepeats 5 times".
     pub fn human<'l>(&self, locale: &'l dyn CalLocale) -> RRuleHuman<'_, 'l> {
         RRuleHuman {
             rrule: self,
@@ -983,16 +998,16 @@ impl CalRRule {
     }
 }
 
-/// Implements [`Display`](fmt::Display) to create a human-readable representation of a
-/// [`CalRRule`].
+/// Implements [`Display`](fmt::Display) to render the repeat interval phrase of a [`CalRRule`],
+/// without any termination information (UNTIL/COUNT).
 ///
-/// For example, it could say "Every 2 years".
-pub struct RRuleHuman<'r, 'l> {
+/// For example, it could say "Weekly, on Thursday" or "Every 2 years".
+pub struct RRuleHumanInterval<'r, 'l> {
     rrule: &'r CalRRule,
     locale: &'l dyn CalLocale,
 }
 
-impl fmt::Display for RRuleHuman<'_, '_> {
+impl fmt::Display for RRuleHumanInterval<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.rrule.interval {
             Some(interval) if interval > 1 => {
@@ -1147,6 +1162,23 @@ impl fmt::Display for RRuleHuman<'_, '_> {
                 .unwrap()
             )?;
         }
+
+        Ok(())
+    }
+}
+
+/// Implements [`Display`](fmt::Display) to create a human-readable representation of a
+/// [`CalRRule`], including termination information (UNTIL/COUNT) on a second line when present.
+///
+/// For example, it could say "Every 2 years\nRepeats 5 times".
+pub struct RRuleHuman<'r, 'l> {
+    rrule: &'r CalRRule,
+    locale: &'l dyn CalLocale,
+}
+
+impl fmt::Display for RRuleHuman<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.rrule.human_interval(self.locale))?;
 
         if let Some(until) = &self.rrule.until {
             write!(
