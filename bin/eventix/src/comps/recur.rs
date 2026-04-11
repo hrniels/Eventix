@@ -242,6 +242,7 @@ pub enum MonthlyType {
     #[default]
     None,
     ByDay,
+    ByMonthDay,
 }
 
 impl Display for MonthlyType {
@@ -341,6 +342,7 @@ pub struct RecurRequest {
     monthly_type: MonthlyType,
     monthly_nth: Option<Nth>,
     monthly_wday: Option<IterWeekday>,
+    monthly_day: Option<u8>,
     yearly_type: YearlyType,
     yearly_day: Option<u8>,
     yearly_month_bymonthday: Option<IterMonth>,
@@ -361,6 +363,7 @@ impl Default for RecurRequest {
             monthly_type: MonthlyType::None,
             monthly_nth: None,
             monthly_wday: None,
+            monthly_day: None,
             yearly_type: YearlyType::None,
             yearly_day: None,
             yearly_month_bymonthday: None,
@@ -403,6 +406,12 @@ impl RecurRequest {
                 Some(r) if r.by_day().is_some() && r.frequency() == CalRRuleFreq::Monthly => {
                     MonthlyType::ByDay
                 }
+                Some(r)
+                    if r.by_mon_day().is_some_and(|d| !d.is_empty())
+                        && r.frequency() == CalRRuleFreq::Monthly =>
+                {
+                    MonthlyType::ByMonthDay
+                }
                 _ => MonthlyType::None,
             },
             monthly_nth: match rrule.map(|r| r.frequency()) {
@@ -418,6 +427,16 @@ impl RecurRequest {
                             Some(d[0].day().into())
                         }
                     })
+                }),
+                _ => None,
+            },
+            monthly_day: match rrule.map(|r| r.frequency()) {
+                Some(CalRRuleFreq::Monthly) => rrule.and_then(|r| r.by_mon_day()).and_then(|d| {
+                    if d.is_empty() {
+                        None
+                    } else {
+                        Some(d[0].num() as u8)
+                    }
                 }),
                 _ => None,
             },
@@ -470,8 +489,8 @@ impl RecurRequest {
                     let byday = parse_by_day(&self.weekly_days);
                     rrule.set_by_day(byday);
                 }
-                Frequency::Monthly => {
-                    if self.monthly_type == MonthlyType::ByDay {
+                Frequency::Monthly => match self.monthly_type {
+                    MonthlyType::ByDay => {
                         let nth = match self.monthly_nth.as_ref().unwrap() {
                             Nth::First => Some((1, CalRRuleSide::Start)),
                             Nth::Second => Some((2, CalRRuleSide::Start)),
@@ -483,7 +502,17 @@ impl RecurRequest {
                             nth,
                         )]));
                     }
-                }
+                    MonthlyType::ByMonthDay => {
+                        let day = self
+                            .monthly_day
+                            .ok_or_else(|| anyhow!("Please specify a day of the month"))?;
+                        rrule.set_by_mon_day(Some(vec![DayDesc::new(
+                            day as u16,
+                            CalRRuleSide::Start,
+                        )]));
+                    }
+                    MonthlyType::None => {}
+                },
                 Frequency::Yearly => match self.yearly_type {
                     YearlyType::ByMonthDay => {
                         let month = self
@@ -577,6 +606,7 @@ pub struct RecurTemplate<'a> {
     monthly_type: MonthlyType,
     monthly_wday: ComboboxTemplate<IterWeekday>,
     monthly_nth: ComboboxTemplate<Nth>,
+    monthly_day: u8,
     yearly_type: YearlyType,
     yearly_month_bymonthday: ComboboxTemplate<IterMonth>,
     yearly_day: u8,
@@ -610,6 +640,7 @@ impl<'a> RecurTemplate<'a> {
                 format!("{name}[monthly_wday]"),
                 value.monthly_wday,
             ),
+            monthly_day: value.monthly_day.unwrap_or(1),
             yearly_type: value.yearly_type,
             yearly_month_bymonthday: ComboboxTemplate::new(
                 locale.clone(),

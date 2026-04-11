@@ -62,6 +62,26 @@
                     class="radio"
                     type="radio"
                     name="{{ name }}[monthly_type]"
+                    id="{{ id }}-monthly-bymonthday"
+                    value="ByMonthDay"
+                    {% if monthly_type == MonthlyType::ByMonthDay %}checked="checked"{% endif %}
+                />
+                <label for="{{ id }}-monthly-bymonthday">
+                    {{ "Day"|t(locale) }}
+                    <input
+                        id="{{ id }}_monthly_day"
+                        name="{{ name }}[monthly_day]"
+                        size="3"
+                        value="{{ monthly_day }}"
+                    />
+                    {{ "of the month"|t(locale) }}
+                </label>
+            </div>
+            <div style="padding-top: .4em">
+                <input
+                    class="radio"
+                    type="radio"
+                    name="{{ name }}[monthly_type]"
                     id="{{ id }}-monthly-type"
                     value="ByDay"
                     {% if monthly_type == MonthlyType::ByDay %}checked="checked"{% endif %}
@@ -115,9 +135,7 @@
                 />
                 {{ yearly_nth|safe }}
                 {{ yearly_wday|safe }}
-                <label for="{{ id }}-yearly-byweekday">
-                    {{ "in"|t(locale) }}
-                </label>
+                <label for="{{ id }}-yearly-byweekday"> {{ "in"|t(locale) }} </label>
                 {{ yearly_month_byweekday|safe }}
             </div>
         </div>
@@ -200,6 +218,10 @@
             min: 1,
         });
         $("#{{ id }}_yearly_day").spinner({
+            min: 1,
+            max: 31,
+        });
+        $("#{{ id }}_monthly_day").spinner({
             min: 1,
             max: 31,
         });
