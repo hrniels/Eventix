@@ -109,7 +109,7 @@ impl CalLocale for LocaleDe {
                 1 => String::from("ersten"),
                 2 => String::from("zweiten"),
                 3 => String::from("dritten"),
-                n => format!("{n}en"),
+                n => format!("{n}ten"),
             },
             false => match nth {
                 1 => String::from("letzten"),
@@ -163,7 +163,7 @@ mod tests {
         let l = LocaleDe::default();
         assert_eq!(l.nth_day(1, true), "ersten");
         assert_eq!(l.nth_day(2, true), "zweiten");
-        assert_eq!(l.nth_day(10, true), "10en");
+        assert_eq!(l.nth_day(10, true), "10ten");
     }
 
     #[test]
