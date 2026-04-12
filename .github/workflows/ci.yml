@@ -108,7 +108,6 @@ jobs:
           cargo llvm-cov \
             --all-features \
             --workspace \
-            --exclude eventix \
             --exclude eventix-import \
             --exclude eventix-app \
             --exclude evlist \
