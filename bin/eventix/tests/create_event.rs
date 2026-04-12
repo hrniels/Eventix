@@ -861,3 +861,197 @@ async fn event_with_two_attendees() {
     let attendees = comp.attendees().expect("expected two ATTENDEEs");
     assert_eq!(attendees.len(), 2, "expected exactly 2 attendees");
 }
+
+// --- Validation: missing start ---
+
+/// An event with the end enabled but start absent. The handler must reject it with
+/// `error.start_datetime`.
+#[tokio::test]
+async fn timed_event_missing_start() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "No start event"),
+            // from_enabled intentionally absent → start is disabled
+            ("start_end[to][date]", "2026-04-20"),
+            ("start_end[to][time]", "10:00"),
+            ("start_end[to_enabled]", "true"),
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+/// A recurring event with no start date. The handler must reject it with
+/// `error.repeating_event_start`.
+#[tokio::test]
+async fn recurring_event_missing_start() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Recurring without start"),
+            // No from_enabled → no start date
+            ("rrule[freq]", "DAILY"),
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+/// Until end with no until date provided: the handler must return an error.
+#[tokio::test]
+async fn recurring_with_until_missing_date() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Until without date"),
+            ("start_end[from][date]", "2026-04-20"),
+            ("start_end[from][time]", "10:00"),
+            ("start_end[to][date]", "2026-04-20"),
+            ("start_end[to][time]", "11:00"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            ("rrule[freq]", "DAILY"),
+            ("rrule[end]", "Until"),
+            // until date intentionally absent
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+/// Yearly ByMonthDay without specifying a month: the handler returns an error.
+#[tokio::test]
+async fn recurring_yearly_bymonthday_missing_month() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Yearly no month"),
+            ("start_end[from][date]", "2026-04-20"),
+            ("start_end[from][time]", "10:00"),
+            ("start_end[to][date]", "2026-04-20"),
+            ("start_end[to][time]", "11:00"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            ("rrule[freq]", "YEARLY"),
+            ("rrule[yearly_type]", "ByMonthDay"),
+            ("rrule[yearly_day]", "15"),
+            // yearly_month_bymonthday intentionally absent
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+/// Yearly ByMonthDay without specifying a day: the handler returns an error.
+#[tokio::test]
+async fn recurring_yearly_bymonthday_missing_day() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Yearly no day"),
+            ("start_end[from][date]", "2026-04-20"),
+            ("start_end[from][time]", "10:00"),
+            ("start_end[to][date]", "2026-04-20"),
+            ("start_end[to][time]", "11:00"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            ("rrule[freq]", "YEARLY"),
+            ("rrule[yearly_type]", "ByMonthDay"),
+            ("rrule[yearly_month_bymonthday]", "June"),
+            // yearly_day intentionally absent
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+/// Yearly ByWeekday without specifying a weekday: the handler returns an error.
+#[tokio::test]
+async fn recurring_yearly_byweekday_missing_weekday() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Yearly no weekday"),
+            ("start_end[from][date]", "2026-04-20"),
+            ("start_end[from][time]", "10:00"),
+            ("start_end[to][date]", "2026-04-20"),
+            ("start_end[to][time]", "11:00"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            ("rrule[freq]", "YEARLY"),
+            ("rrule[yearly_type]", "ByWeekday"),
+            ("rrule[yearly_month_byweekday]", "May"),
+            ("rrule[yearly_nth]", "First"),
+            // yearly_wday intentionally absent
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
