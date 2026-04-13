@@ -114,7 +114,6 @@ def cmd_coverage(args):
     subprocess.run([
         "cargo", "llvm-cov",
         "--workspace",
-        "--exclude", "eventix",
         "--exclude", "eventix-import",
         "--exclude", "eventix-app",
         "--exclude", "evlist"
