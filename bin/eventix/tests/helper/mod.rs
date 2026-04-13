@@ -21,6 +21,8 @@ use tower::ServiceExt;
 /// Calendar and collection IDs used across all tests.
 pub const COL_ID: &str = "col1";
 pub const CAL_ID: &str = "cal1";
+#[allow(dead_code)]
+pub const CAL2_ID: &str = "cal2";
 
 /// Creates an `EventixState` backed by a temporary `FileSystem` calendar directory.
 ///
@@ -34,6 +36,60 @@ pub const CAL_ID: &str = "cal1";
 ///
 /// Returns the state. The caller must keep the `TempDir` alive for the duration of the test.
 pub fn make_state(cal_dir: &Path) -> EventixState {
+    let col_path = cal_dir.parent().unwrap();
+    let mut col = CollectionSettings::new(SyncerType::FileSystem {
+        path: col_path.to_string_lossy().into_owned(),
+    });
+
+    let mut cal = CalendarSettings::default();
+    cal.set_enabled(true);
+    // folder is the last component of cal_dir (e.g. "cal1"), which State::new joins onto the
+    // collection path to produce the full calendar directory.
+    cal.set_folder(cal_dir.file_name().unwrap().to_string_lossy().into_owned());
+    cal.set_name("Test Calendar".to_string());
+    col.all_calendars_mut().insert(CAL_ID.to_string(), cal);
+
+    make_state_from_col(col)
+}
+
+/// Creates an `EventixState` backed by two calendar directories under the same collection.
+///
+/// `cal_dir` is the directory for `CAL_ID` (the source calendar); a sibling directory named
+/// `CAL2_ID` is created next to it for the second calendar. Both are registered under `COL_ID`.
+///
+/// Returns the state and the path to the second calendar directory.
+/// The caller must keep the `TempDir` that owns both directories alive for the duration of the
+/// test.
+#[allow(dead_code)]
+pub fn make_state_two_cals(cal_dir: &Path) -> (EventixState, std::path::PathBuf) {
+    let col_path = cal_dir.parent().unwrap();
+    let mut col = CollectionSettings::new(SyncerType::FileSystem {
+        path: col_path.to_string_lossy().into_owned(),
+    });
+
+    let mut cal1 = CalendarSettings::default();
+    cal1.set_enabled(true);
+    cal1.set_folder(cal_dir.file_name().unwrap().to_string_lossy().into_owned());
+    cal1.set_name("Test Calendar".to_string());
+    col.all_calendars_mut().insert(CAL_ID.to_string(), cal1);
+
+    let cal2_dir = col_path.join(CAL2_ID);
+    std::fs::create_dir_all(&cal2_dir).unwrap();
+    let mut cal2 = CalendarSettings::default();
+    cal2.set_enabled(true);
+    cal2.set_folder(CAL2_ID.to_string());
+    cal2.set_name("Other Calendar".to_string());
+    col.all_calendars_mut().insert(CAL2_ID.to_string(), cal2);
+
+    (make_state_from_col(col), cal2_dir)
+}
+
+/// Writes locale files and constructs an `EventixState` from the given collection settings.
+///
+/// Both the config directory and the data directory are placed in fresh temporary directories.
+/// The temporary directories are dropped after `State::new` returns; the state only needs the
+/// locale files during construction (they are loaded once into memory).
+fn make_state_from_col(col: CollectionSettings) -> EventixState {
     let config_tmp = TempDir::new().unwrap();
     let data_tmp = TempDir::new().unwrap();
 
@@ -55,27 +111,10 @@ pub fn make_state(cal_dir: &Path) -> EventixState {
         config_tmp.path(),
     ));
 
-    let mut cal = CalendarSettings::default();
-    cal.set_enabled(true);
-    // folder is the last component of cal_dir (e.g. "cal1"), which State::new joins onto the
-    // collection path to produce the full calendar directory.
-    cal.set_folder(cal_dir.file_name().unwrap().to_string_lossy().into_owned());
-    cal.set_name("Test Calendar".to_string());
-
-    // The FileSystem collection path is the *parent* of cal_dir so that
-    //   col_path.join(cal.folder()) == cal_dir
-    let col_path = cal_dir.parent().unwrap();
-    let mut col = CollectionSettings::new(SyncerType::FileSystem {
-        path: col_path.to_string_lossy().into_owned(),
-    });
-    col.all_calendars_mut().insert(CAL_ID.to_string(), cal);
-
     let mut settings = Settings::new(xdg.get_config_home().unwrap().join("settings.toml"));
     settings.collections_mut().insert(COL_ID.to_string(), col);
     settings.write_to_file().expect("write settings");
 
-    // Keep the TempDirs alive until the state is created, then let them drop; the state only needs
-    // the files during construction (locale is loaded once into memory by State::new).
     let state = eventix_state::State::new(xdg).expect("State::new");
     Arc::new(tokio::sync::Mutex::new(state))
 }

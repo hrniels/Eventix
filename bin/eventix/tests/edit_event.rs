@@ -10,8 +10,8 @@ use tempfile::TempDir;
 
 use helper::edit::{assert_success, mtime_nanos, read_ics_by_uid};
 use helper::{
-    CAL_ID, assert_error, assert_no_ics, encode_form, first_component, make_router, make_state,
-    merge_fields, post,
+    CAL_ID, CAL2_ID, assert_error, assert_no_ics, encode_form, first_component, make_router,
+    make_state, make_state_two_cals, merge_fields, post,
 };
 
 // --- Helpers specific to edit-event tests ---
@@ -223,6 +223,62 @@ async fn series_edit_add_rrule() {
     let comp = first_component(&ics);
     let rrule = comp.rrule().expect("expected RRULE");
     assert_eq!(rrule.count(), Some(4));
+}
+
+// --- Cross-calendar edit ---
+
+/// Editing an event and changing its calendar (Series mode). Verifies that the ICS file is moved
+/// to the target calendar directory and no longer exists in the source directory.
+#[tokio::test]
+async fn series_edit_moves_to_different_calendar() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+
+    let uid = "edit-event-move-cal";
+    let ics_path = write_event_ics(&cal_dir, uid, "Move me");
+    let edit_start = mtime_nanos(&ics_path).to_string();
+
+    let (state, cal2_dir) = make_state_two_cals(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_edit_fields(&edit_start),
+        &[
+            ("calendar", CAL2_ID),
+            ("summary", "Move me"),
+            ("start_end[from][date]", "2026-04-15"),
+            ("start_end[from][time]", "09:00"),
+            ("start_end[to][date]", "2026-04-15"),
+            ("start_end[to][time]", "10:00"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+        ],
+    );
+    let body = encode_form(&fields);
+    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+
+    let (status, resp_body) = post(router, &uri, &body).await;
+    assert_eq!(status, 200);
+    assert_success(&resp_body);
+
+    // The file must no longer exist in the source calendar.
+    assert!(
+        !ics_path.exists(),
+        "ICS file must be removed from source calendar after move"
+    );
+
+    // The file must now exist in the target calendar directory.
+    let new_ics_path = cal2_dir.join(format!("{uid}.ics"));
+    assert!(
+        new_ics_path.exists(),
+        "ICS file must be present in target calendar after move"
+    );
+
+    // The moved file must retain the event's content.
+    let ics = read_ics_by_uid(&cal2_dir, uid);
+    let comp = first_component(&ics);
+    assert_eq!(comp.summary(), Some(&"Move me".to_string()));
 }
 
 // --- Occurrence edit ---
