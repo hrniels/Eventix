@@ -43,5 +43,13 @@ uuid = { version = "1.23.0", features = ["v4"] }
 tempfile.workspace = true
 tower = { version = "0.5.3", features = ["util"] }
 
+[[test]]
+name = "pages_collections_add"
+path = "tests/pages/collections/add.rs"
+
+[[test]]
+name = "pages_collections_edit"
+path = "tests/pages/collections/edit.rs"
+
 [build-dependencies]
 askama = "0.15.6"

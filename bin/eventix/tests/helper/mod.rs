@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #[allow(dead_code)]
+pub mod collections;
+#[allow(dead_code)]
 pub mod create;
 #[allow(dead_code)]
 pub mod edit;
@@ -35,6 +37,7 @@ pub const CAL2_ID: &str = "cal2";
 /// the full calendar path as `parent(cal_dir) / CAL_ID`, matching `cal_dir` exactly.
 ///
 /// Returns the state. The caller must keep the `TempDir` alive for the duration of the test.
+#[allow(dead_code)]
 pub fn make_state(cal_dir: &Path) -> EventixState {
     let col_path = cal_dir.parent().unwrap();
     let mut col = CollectionSettings::new(SyncerType::FileSystem {
@@ -49,7 +52,8 @@ pub fn make_state(cal_dir: &Path) -> EventixState {
     cal.set_name("Test Calendar".to_string());
     col.all_calendars_mut().insert(CAL_ID.to_string(), cal);
 
-    make_state_from_col(col)
+    // Discard the config TempDir: item tests never write settings back to disk.
+    make_state_from_col(col).0
 }
 
 /// Creates an `EventixState` backed by two calendar directories under the same collection.
@@ -81,15 +85,17 @@ pub fn make_state_two_cals(cal_dir: &Path) -> (EventixState, std::path::PathBuf)
     cal2.set_name("Other Calendar".to_string());
     col.all_calendars_mut().insert(CAL2_ID.to_string(), cal2);
 
-    (make_state_from_col(col), cal2_dir)
+    // Discard the config TempDir: item tests never write settings back to disk.
+    (make_state_from_col(col).0, cal2_dir)
 }
 
 /// Writes locale files and constructs an `EventixState` from the given collection settings.
 ///
 /// Both the config directory and the data directory are placed in fresh temporary directories.
-/// The temporary directories are dropped after `State::new` returns; the state only needs the
-/// locale files during construction (they are loaded once into memory).
-fn make_state_from_col(col: CollectionSettings) -> EventixState {
+/// Returns the state together with the config `TempDir`. The caller must keep the `TempDir` alive
+/// for as long as the state may write settings back to disk (e.g. in collections add/edit tests).
+/// Tests that never write settings may discard the returned `TempDir` immediately.
+pub fn make_state_from_col(col: CollectionSettings) -> (EventixState, TempDir) {
     let config_tmp = TempDir::new().unwrap();
     let data_tmp = TempDir::new().unwrap();
 
@@ -116,17 +122,44 @@ fn make_state_from_col(col: CollectionSettings) -> EventixState {
     settings.write_to_file().expect("write settings");
 
     let state = eventix_state::State::new(xdg).expect("State::new");
-    Arc::new(tokio::sync::Mutex::new(state))
+    (Arc::new(tokio::sync::Mutex::new(state)), config_tmp)
 }
 
 /// Builds a minimal axum `Router` wiring only the add-item endpoints.
 ///
 /// This is sufficient for create-event and create-todo tests. The pages router is mounted at
 /// `/pages/items/add` and the API items router at `/api/items`.
+#[allow(dead_code)]
 pub fn make_router(state: EventixState) -> Router {
     Router::new()
         .nest("/pages/items", eventix::pages::items::router(state.clone()))
         .nest("/api/items", eventix::api::items::router(state))
+}
+
+/// Builds an axum `Router` wiring only the collections page endpoints.
+///
+/// Routes are mounted at `/collections`, matching the path used by the real application.
+#[allow(dead_code)]
+pub fn make_collections_router(state: EventixState) -> Router {
+    Router::new().nest("/collections", eventix::pages::collections::router(state))
+}
+
+/// Sends a GET to `uri` and returns the status code and response body text.
+#[allow(dead_code)]
+pub async fn get(router: Router, uri: &str) -> (StatusCode, String) {
+    let req = Request::builder()
+        .method("GET")
+        .uri(uri)
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = router.oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8_lossy(&bytes).into_owned();
+    (status, body)
 }
 
 /// Sends a POST to `uri` with the given `application/x-www-form-urlencoded` body and returns the
@@ -172,6 +205,7 @@ pub fn assert_error(body: &str) {
 /// Returns the first component from `cal_file`.
 ///
 /// Panics if the file contains no components.
+#[allow(dead_code)]
 pub fn first_component(cal_file: &CalFile) -> &eventix_ical::objects::CalComponent {
     let comps = cal_file.components();
     assert!(
