@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#[allow(dead_code)]
+pub mod create;
+#[allow(dead_code)]
+pub mod edit;
+
 use std::path::Path;
 use std::sync::Arc;
 
@@ -104,36 +109,8 @@ pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, String)
     (status, body)
 }
 
-/// Reads the single `.ics` file written to `cal_dir` and returns it as a `CalFile`.
-///
-/// Panics if there is not exactly one `.ics` file in the directory.
-pub fn read_created_ics(cal_dir: &Path) -> CalFile {
-    let entries: Vec<_> = std::fs::read_dir(cal_dir)
-        .unwrap()
-        .filter_map(|e| {
-            let e = e.unwrap();
-            let p = e.path();
-            if p.extension().and_then(|s| s.to_str()) == Some("ics") {
-                Some(p)
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    assert_eq!(
-        entries.len(),
-        1,
-        "expected exactly 1 .ics file, found {}: {:?}",
-        entries.len(),
-        entries
-    );
-
-    let tz = chrono_tz::UTC;
-    CalFile::new_from_file(Arc::new(CAL_ID.to_string()), entries[0].clone(), &tz).unwrap()
-}
-
 /// Asserts that no `.ics` file was created in `cal_dir`.
+#[allow(unused)]
 pub fn assert_no_ics(cal_dir: &Path) {
     let count = std::fs::read_dir(cal_dir)
         .unwrap()
@@ -143,18 +120,6 @@ pub fn assert_no_ics(cal_dir: &Path) {
         })
         .count();
     assert_eq!(count, 0, "expected no .ics files but found {count}");
-}
-
-/// Asserts that the HTML response body contains a success info banner and no error banner.
-pub fn assert_success(body: &str) {
-    assert!(
-        body.contains("ev_msg_info") || body.contains("info.event_added"),
-        "expected success info banner in response, got:\n{body}"
-    );
-    assert!(
-        !body.contains("ev_msg_error"),
-        "expected no error banner in response, got:\n{body}"
-    );
 }
 
 /// Asserts that the HTML response body contains an error banner and no success info banner.

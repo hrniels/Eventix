@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-mod common;
+mod helper;
 
 use chrono::NaiveDate;
 use eventix_ical::objects::{CalDate, CalTodoStatus, EventLike};
 use tempfile::TempDir;
 
-use common::{
-    CAL_ID, assert_error, assert_no_ics, assert_success, encode_form, first_component, make_router,
-    make_state, merge_fields, post, read_created_ics,
+use helper::create::{assert_success, read_created_ics};
+use helper::{
+    CAL_ID, assert_error, assert_no_ics, encode_form, first_component, make_router, make_state,
+    merge_fields, post,
 };
 
 // --- Helpers specific to create-todo tests ---
