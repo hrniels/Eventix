@@ -4,7 +4,10 @@
 
 mod common;
 
-use eventix_ical::objects::{CalDate, CalRRuleFreq, CalRelated, CalRole, CalTrigger, EventLike};
+use chrono::NaiveDateTime;
+use eventix_ical::objects::{
+    CalDate, CalDateTime, CalRRuleFreq, CalRelated, CalRole, CalTrigger, EventLike,
+};
 use tempfile::TempDir;
 
 use common::{
@@ -1046,6 +1049,163 @@ async fn recurring_yearly_byweekday_missing_weekday() {
             ("rrule[yearly_month_byweekday]", "May"),
             ("rrule[yearly_nth]", "First"),
             // yearly_wday intentionally absent
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+// --- Absolute alarms ---
+
+/// An absolute alarm with a specific datetime. Verifies that TRIGGER;VALUE=DATE-TIME is stored as
+/// a UTC datetime in the produced VALARM.
+#[tokio::test]
+async fn timed_event_alarm_absolute() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Dentist"),
+            ("start_end[from][date]", "2026-06-10"),
+            ("start_end[from][time]", "11:00"),
+            ("start_end[to][date]", "2026-06-10"),
+            ("start_end[to][time]", "12:00"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            // Absolute alarm at 2026-06-10 09:00 Europe/Berlin = 07:00 UTC (UTC+2 in summer)
+            ("alarm[calendar][trigger]", "ABSOLUTE"),
+            ("alarm[calendar][datetime][date]", "2026-06-10"),
+            ("alarm[calendar][datetime][time]", "09:00"),
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_success(&resp_body);
+
+    let ics = read_created_ics(&cal_dir);
+    let comp = first_component(&ics);
+    let alarms = comp.alarms().expect("expected VALARM");
+    assert_eq!(alarms.len(), 1);
+
+    match alarms[0].trigger() {
+        CalTrigger::Absolute(CalDate::DateTime(CalDateTime::Utc(dt))) => {
+            let expected =
+                NaiveDateTime::parse_from_str("2026-06-10 07:00:00", "%Y-%m-%d %H:%M:%S")
+                    .unwrap()
+                    .and_utc();
+            assert_eq!(
+                *dt, expected,
+                "expected alarm trigger at 2026-06-10T07:00:00Z"
+            );
+        }
+        other => panic!("expected absolute UTC trigger, got {:?}", other),
+    }
+}
+
+/// An absolute alarm with no datetime specified: the handler returns an error.
+#[tokio::test]
+async fn timed_event_alarm_absolute_missing_datetime() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Meeting"),
+            ("start_end[from][date]", "2026-06-10"),
+            ("start_end[from][time]", "11:00"),
+            ("start_end[to][date]", "2026-06-10"),
+            ("start_end[to][time]", "12:00"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            ("alarm[calendar][trigger]", "ABSOLUTE"),
+            // datetime fields intentionally absent → error.valid_date_time
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+// --- Timezone DST errors ---
+
+/// Start datetime falls in the Europe/Berlin spring-forward gap (2026-03-29 02:30 does not exist).
+/// The handler must reject the event with an error.
+#[tokio::test]
+async fn timed_event_start_in_dst_gap() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Gap event"),
+            // Europe/Berlin: clocks spring forward at 02:00 → 03:00 on 2026-03-29;
+            // 02:30 is a non-existent local time.
+            ("start_end[from][date]", "2026-03-29"),
+            ("start_end[from][time]", "02:30"),
+            ("start_end[to][date]", "2026-03-29"),
+            ("start_end[to][time]", "03:30"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            ("start_end[timezone]", "Europe/Berlin"),
+        ],
+    );
+    let body = encode_form(&fields);
+
+    let (status, resp_body) = post(router, "/pages/items/add?ctype=Event", &body).await;
+    assert_eq!(status, 200);
+    assert_error(&resp_body);
+    assert_no_ics(&cal_dir);
+}
+
+/// End datetime falls in the Europe/Berlin autumn fold (2026-10-25 02:30 is ambiguous).
+/// The handler must reject the event with an error.
+#[tokio::test]
+async fn timed_event_end_in_dst_fold() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let fields = merge_fields(
+        base_event_fields(),
+        &[
+            ("calendar", CAL_ID),
+            ("summary", "Fold event"),
+            // Europe/Berlin: clocks fall back at 03:00 → 02:00 on 2026-10-25;
+            // 02:30 occurs twice and is ambiguous.
+            ("start_end[from][date]", "2026-10-25"),
+            ("start_end[from][time]", "01:30"),
+            ("start_end[to][date]", "2026-10-25"),
+            ("start_end[to][time]", "02:30"),
+            ("start_end[from_enabled]", "true"),
+            ("start_end[to_enabled]", "true"),
+            ("start_end[timezone]", "Europe/Berlin"),
         ],
     );
     let body = encode_form(&fields);
