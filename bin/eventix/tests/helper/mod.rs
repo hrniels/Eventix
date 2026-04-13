@@ -9,14 +9,16 @@ pub mod create;
 #[allow(dead_code)]
 pub mod edit;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use eventix_ical::col::CalFile;
-use eventix_state::{CalendarSettings, CollectionSettings, EventixState, Settings, SyncerType};
+use eventix_state::{
+    CalendarSettings, CollectionSettings, EmailAccount, EventixState, Settings, SyncerType,
+};
 use tempfile::TempDir;
 use tower::ServiceExt;
 
@@ -28,13 +30,13 @@ pub const CAL2_ID: &str = "cal2";
 
 /// Creates an `EventixState` backed by a temporary `FileSystem` calendar directory.
 ///
-/// Both the config directory and the data directory (used for locale files) are placed in
-/// temporary directories so that tests are fully self-contained and do not read from the project
-/// source tree.
+/// Both the config directory and the data directory (used for locale files and personal alarms)
+/// are placed under the parent of `cal_dir` so that they remain alive as long as the caller's
+/// `TempDir` is alive. This is required for endpoints that write to the personal alarms store.
 ///
 /// The calendar directory `cal_dir` is used directly as the folder for the test calendar entry.
-/// The parent of `cal_dir` is set as the `FileSystem` collection path so that the state constructs
-/// the full calendar path as `parent(cal_dir) / CAL_ID`, matching `cal_dir` exactly.
+/// The parent of `cal_dir` is set as both the `FileSystem` collection path and the XDG data home,
+/// so that `State::new` finds locale files and the alarms directory at that location.
 ///
 /// Returns the state. The caller must keep the `TempDir` alive for the duration of the test.
 #[allow(dead_code)]
@@ -52,8 +54,9 @@ pub fn make_state(cal_dir: &Path) -> EventixState {
     cal.set_name("Test Calendar".to_string());
     col.all_calendars_mut().insert(CAL_ID.to_string(), cal);
 
-    // Discard the config TempDir: item tests never write settings back to disk.
-    make_state_from_col(col).0
+    // Use col_path as the XDG data home so that locale files and the alarms directory persist
+    // for the duration of the test (the caller's TempDir owns col_path).
+    make_state_from_col_in(col, col_path)
 }
 
 /// Creates an `EventixState` backed by two calendar directories under the same collection.
@@ -85,16 +88,103 @@ pub fn make_state_two_cals(cal_dir: &Path) -> (EventixState, std::path::PathBuf)
     cal2.set_name("Other Calendar".to_string());
     col.all_calendars_mut().insert(CAL2_ID.to_string(), cal2);
 
-    // Discard the config TempDir: item tests never write settings back to disk.
-    (make_state_from_col(col).0, cal2_dir)
+    (make_state_from_col_in(col, col_path), cal2_dir)
 }
 
-/// Writes locale files and constructs an `EventixState` from the given collection settings.
+/// Creates an `EventixState` backed by a VDirSyncer collection that carries a test email account.
 ///
-/// Both the config directory and the data directory are placed in fresh temporary directories.
+/// Returns the state and the path to the calendar directory (`cal_dir`). The caller must keep the
+/// provided `TempDir` alive for the duration of the test.
+///
+/// The email account is `test@example.com`. Using a VDirSyncer syncer is necessary because
+/// `FileSystem` syncers never carry an email; endpoints that require `util::user_for_uid` to
+/// return a non-`None` account (e.g. `respond`) need this variant.
+///
+/// The directory layout matches VDirSyncer's path resolution:
+/// `{xdg_data_home}/vdirsyncer/{COL_ID}-data/{CAL_ID}`.
+#[allow(dead_code)]
+pub fn make_state_with_email(tmp: &TempDir) -> (EventixState, PathBuf) {
+    // VDirSyncer resolves its collection path as:
+    //   xdg.get_data_file("vdirsyncer").join("{col_id}-data")
+    // i.e. {xdg_data_home}/vdirsyncer/{col_id}-data/{cal_folder}
+    let data_home = tmp.path().to_path_buf();
+    let cal_dir = data_home
+        .join("vdirsyncer")
+        .join(format!("{COL_ID}-data"))
+        .join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+
+    let syncer = SyncerType::VDirSyncer {
+        email: EmailAccount::new("Test User".to_string(), "test@example.com".to_string()),
+        url: "http://localhost".to_string(),
+        read_only: false,
+        username: None,
+        password_cmd: None,
+        time_span: Default::default(),
+    };
+    let mut col = CollectionSettings::new(syncer);
+    let mut cal = CalendarSettings::default();
+    cal.set_enabled(true);
+    cal.set_folder(CAL_ID.to_string());
+    cal.set_name("Test Calendar".to_string());
+    col.all_calendars_mut().insert(CAL_ID.to_string(), cal);
+
+    let config_tmp = TempDir::new().unwrap();
+    let locale_dir = data_home.join("locale");
+    std::fs::create_dir_all(&locale_dir).unwrap();
+    std::fs::write(
+        locale_dir.join("English.toml"),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/locale/English.toml"
+        )),
+    )
+    .unwrap();
+
+    let xdg = Arc::new(eventix_state::with_test_xdg(&data_home, config_tmp.path()));
+    let mut settings = Settings::new(xdg.get_config_home().unwrap().join("settings.toml"));
+    settings.collections_mut().insert(COL_ID.to_string(), col);
+    settings.write_to_file().expect("write settings");
+
+    let state = eventix_state::State::new(xdg).expect("State::new");
+    (Arc::new(tokio::sync::Mutex::new(state)), cal_dir)
+}
+
+/// Constructs an `EventixState` from the given collection settings, placing XDG data under
+/// `data_home` (which must remain alive for the duration of the test).
+///
+/// Using a caller-owned directory for the data home allows the personal alarms store to write
+/// files back to disk during tests that exercise save paths.
+fn make_state_from_col_in(col: CollectionSettings, data_home: &Path) -> EventixState {
+    let config_tmp = TempDir::new().unwrap();
+
+    let locale_dir = data_home.join("locale");
+    std::fs::create_dir_all(&locale_dir).unwrap();
+    std::fs::write(
+        locale_dir.join("English.toml"),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/locale/English.toml"
+        )),
+    )
+    .unwrap();
+
+    let xdg = Arc::new(eventix_state::with_test_xdg(data_home, config_tmp.path()));
+
+    let mut settings = Settings::new(xdg.get_config_home().unwrap().join("settings.toml"));
+    settings.collections_mut().insert(COL_ID.to_string(), col);
+    settings.write_to_file().expect("write settings");
+
+    let state = eventix_state::State::new(xdg).expect("State::new");
+    Arc::new(tokio::sync::Mutex::new(state))
+}
+
+/// Constructs an `EventixState` from the given collection settings.
+///
 /// Returns the state together with the config `TempDir`. The caller must keep the `TempDir` alive
 /// for as long as the state may write settings back to disk (e.g. in collections add/edit tests).
 /// Tests that never write settings may discard the returned `TempDir` immediately.
+#[allow(dead_code)]
 pub fn make_state_from_col(col: CollectionSettings) -> (EventixState, TempDir) {
     let config_tmp = TempDir::new().unwrap();
     let data_tmp = TempDir::new().unwrap();
@@ -144,11 +234,34 @@ pub fn make_collections_router(state: EventixState) -> Router {
     Router::new().nest("/collections", eventix::pages::collections::router(state))
 }
 
-/// Sends a GET to `uri` and returns the status code and response body text.
-#[allow(dead_code)]
-pub async fn get(router: Router, uri: &str) -> (StatusCode, String) {
+/// Sends a POST to `uri` with the given `application/x-www-form-urlencoded` body and returns the
+/// status code and response body text.
+pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, String) {
     let req = Request::builder()
-        .method("GET")
+        .method("POST")
+        .uri(uri)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(Body::from(body.to_owned()))
+        .unwrap();
+
+    let resp = router.oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = String::from_utf8_lossy(&bytes).into_owned();
+    (status, body)
+}
+
+/// Sends a POST to `uri` (which may include query parameters) with an empty body and returns the
+/// status code and response body text.
+///
+/// Use this for endpoints that read parameters from the query string (`Query<T>` extractor) rather
+/// than the request body.
+#[allow(dead_code)]
+pub async fn post_query(router: Router, uri: &str) -> (StatusCode, String) {
+    let req = Request::builder()
+        .method("POST")
         .uri(uri)
         .body(Body::empty())
         .unwrap();
@@ -162,14 +275,13 @@ pub async fn get(router: Router, uri: &str) -> (StatusCode, String) {
     (status, body)
 }
 
-/// Sends a POST to `uri` with the given `application/x-www-form-urlencoded` body and returns the
-/// status code and response body text.
-pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, String) {
+/// Sends a GET to `uri` and returns the status code and response body text.
+#[allow(dead_code)]
+pub async fn get(router: Router, uri: &str) -> (StatusCode, String) {
     let req = Request::builder()
-        .method("POST")
+        .method("GET")
         .uri(uri)
-        .header("content-type", "application/x-www-form-urlencoded")
-        .body(Body::from(body.to_owned()))
+        .body(Body::empty())
         .unwrap();
 
     let resp = router.oneshot(req).await.unwrap();
@@ -195,6 +307,7 @@ pub fn assert_no_ics(cal_dir: &Path) {
 }
 
 /// Asserts that the HTML response body contains an error banner and no success info banner.
+#[allow(dead_code)]
 pub fn assert_error(body: &str) {
     assert!(
         body.contains("ev_msg_error"),
@@ -217,6 +330,7 @@ pub fn first_component(cal_file: &CalFile) -> &eventix_ical::objects::CalCompone
 
 /// Merges two slices of form fields, with entries in `overrides` replacing entries in `base` that
 /// share the same key. Entries in `overrides` not present in `base` are appended.
+#[allow(dead_code)]
 pub fn merge_fields<'a>(
     base: Vec<(&'a str, &'a str)>,
     overrides: &[(&'a str, &'a str)],

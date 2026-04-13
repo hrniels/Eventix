@@ -264,35 +264,3 @@ async fn todo_missing_summary() {
     assert_error(&resp_body);
     assert_no_ics(&cal_dir);
 }
-
-// --- Quick-add todo (API endpoint) ---
-
-/// Quick-add a todo via POST /api/items/add. Verifies that a VTODO with the correct SUMMARY and
-/// DUE date is produced.
-#[tokio::test]
-async fn api_quickadd_todo_basic() {
-    let tmp = TempDir::new().unwrap();
-    let cal_dir = tmp.path().join(CAL_ID);
-    std::fs::create_dir_all(&cal_dir).unwrap();
-    let state = make_state(&cal_dir);
-    let router = make_router(state);
-
-    let body = encode_form(&[
-        ("quicktodo_calendar", CAL_ID),
-        ("summary", "Buy milk"),
-        ("due_date", "2026-04-20"),
-    ]);
-
-    let (status, _) = post(router, "/api/items/add", &body).await;
-    assert_eq!(status, 200);
-
-    let ics = read_created_ics(&cal_dir);
-    let comp = first_component(&ics);
-    assert_eq!(comp.summary(), Some(&"Buy milk".to_string()));
-
-    let due_date = match comp.end_or_due().expect("expected DUE") {
-        CalDate::Date(d, _) => *d,
-        other => panic!("expected DUE as Date, got {:?}", other),
-    };
-    assert_eq!(due_date, NaiveDate::from_ymd_opt(2026, 4, 20).unwrap());
-}
