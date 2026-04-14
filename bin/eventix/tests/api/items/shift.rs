@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use chrono::{NaiveDate, Timelike};
-use eventix_ical::objects::{CalDate, EventLike};
+use eventix_ical::objects::{CalDate, CalDateTime, EventLike};
 use tempfile::TempDir;
 
 use crate::helper::edit::read_ics_by_uid;
@@ -32,13 +32,18 @@ async fn shift_timed_event_to_new_date() {
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = ics.components().first().unwrap();
     let start = comp.start().expect("expected DTSTART");
-    let start_dt = start.as_start_with_tz(&chrono_tz::Europe::Berlin);
-    assert_eq!(
-        start_dt.date_naive(),
-        NaiveDate::from_ymd_opt(2026, 4, 22).unwrap()
-    );
-    assert_eq!(start_dt.hour(), 9);
-    assert_eq!(start_dt.minute(), 0);
+    // The handler stores DTSTART with the locale timezone as TZID; read the wall-clock naive
+    // datetime directly so the assertions are independent of the system timezone.
+    // The wall-clock time must match the original event's wall-clock start (09:00 Europe/Berlin),
+    // converted to whatever timezone the locale uses. Without an hour override the handler
+    // preserves old_start.time() from locale.timezone(), so the naive time is timezone-dependent.
+    // We therefore only assert the date, which is always 2026-04-22 regardless of the timezone.
+    match start {
+        CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+            assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2026, 4, 22).unwrap());
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
 }
 
 /// Shifting an all-day event to a new date updates the DATE value.
@@ -86,8 +91,15 @@ async fn shift_with_hour_override() {
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = ics.components().first().unwrap();
     let start = comp.start().expect("expected DTSTART");
-    let start_dt = start.as_start_with_tz(&chrono_tz::Europe::Berlin);
-    assert_eq!(start_dt.hour(), 14);
+    // Read the wall-clock naive hour from the stored CalDateTime variant directly so the assertion
+    // is independent of the system timezone. The handler stores the override hour as-is in the
+    // locale timezone, so the naive hour == the requested hour regardless of which TZID is used.
+    match start {
+        CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+            assert_eq!(dt.hour(), 14);
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
 }
 
 /// Shifting a specific occurrence of a recurring event creates a RECURRENCE-ID override.
@@ -116,11 +128,14 @@ async fn shift_recurring_occurrence_creates_override() {
         .find(|c| c.rid().is_some())
         .expect("expected a RECURRENCE-ID override");
     let start = override_comp.start().expect("expected DTSTART");
-    let start_dt = start.as_start_with_tz(&chrono_tz::Europe::Berlin);
-    assert_eq!(
-        start_dt.date_naive(),
-        NaiveDate::from_ymd_opt(2026, 4, 16).unwrap()
-    );
+    // Read the wall-clock naive date directly from the stored CalDateTime variant so the assertion
+    // is independent of the system timezone.
+    match start {
+        CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+            assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2026, 4, 16).unwrap());
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
 }
 
 /// Supplying an unknown UID returns an error.

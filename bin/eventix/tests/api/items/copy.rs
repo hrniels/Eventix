@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use chrono::{NaiveDate, Timelike};
-use eventix_ical::objects::{CalDate, EventLike};
+use eventix_ical::objects::{CalDate, CalDateTime, EventLike};
 use tempfile::TempDir;
 
 use crate::helper::{CAL_ID, encode_form, first_component, make_router, make_state, post_query};
@@ -56,13 +56,15 @@ async fn copy_timed_event_to_new_date() {
     let comp = first_component(&copy_ics);
     assert_eq!(comp.summary(), Some(&"Team meeting".to_string()));
 
-    // Verify that start is on 2026-04-22.
+    // Verify that start is on 2026-04-22. Read the wall-clock naive date from the stored
+    // CalDateTime variant directly so the assertion is independent of the system timezone.
     let start = comp.start().expect("copy must have DTSTART");
-    let start_dt = start.as_start_with_tz(&chrono_tz::Europe::Berlin);
-    assert_eq!(
-        start_dt.date_naive(),
-        NaiveDate::from_ymd_opt(2026, 4, 22).unwrap()
-    );
+    match start {
+        CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+            assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2026, 4, 22).unwrap());
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
 }
 
 /// Copying a timed event with an explicit hour override changes the start hour of the copy while
@@ -106,8 +108,14 @@ async fn copy_with_hour_override() {
     .unwrap();
     let comp = first_component(&copy_ics);
     let start = comp.start().expect("copy must have DTSTART");
-    let start_dt = start.as_start_with_tz(&chrono_tz::Europe::Berlin);
-    assert_eq!(start_dt.hour(), 14);
+    // The handler stores DTSTART with the locale timezone as TZID; read the wall-clock naive time
+    // directly from the CalDateTime variant so the assertion is independent of the system timezone.
+    match start {
+        CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+            assert_eq!(dt.hour(), 14);
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
 }
 
 /// Attempting to copy a recurrent event returns an error.
