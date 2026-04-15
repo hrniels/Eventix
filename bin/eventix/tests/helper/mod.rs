@@ -234,8 +234,15 @@ pub fn make_collections_router(state: EventixState) -> Router {
     Router::new().nest("/collections", eventix::pages::collections::router(state))
 }
 
+/// Builds an axum `Router` wiring only the calendars API endpoints.
+#[allow(dead_code)]
+pub fn make_calendars_api_router(state: EventixState) -> Router {
+    Router::new().nest("/api", eventix::api::router(state))
+}
+
 /// Sends a POST to `uri` with the given `application/x-www-form-urlencoded` body and returns the
 /// status code and response body text.
+#[allow(dead_code)]
 pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, String) {
     let req = Request::builder()
         .method("POST")
@@ -347,6 +354,7 @@ pub fn merge_fields<'a>(
 }
 
 /// Percent-encodes all non-alphanumeric characters except `-`, `_`, `.`, and `~` as per RFC 3986.
+#[allow(dead_code)]
 pub fn encode_form(fields: &[(&str, &str)]) -> String {
     fn encode(s: &str) -> String {
         let mut out = String::with_capacity(s.len());

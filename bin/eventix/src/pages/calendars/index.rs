@@ -14,10 +14,16 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 use tokio::{fs, io::AsyncReadExt};
 use xdg::BaseDirectories;
 
-use crate::{comps::calbox::CalendarBoxTemplate, pages::error::HTMLError};
 use crate::{
     comps::calbox::{CalendarBox, CalendarBoxMode},
     html::filters,
+};
+use crate::{
+    comps::{
+        calbox::CalendarBoxTemplate,
+        combobox::{ComboOption, ComboboxTemplate},
+    },
+    pages::error::HTMLError,
 };
 
 /// Fragment-only template for the calendars list, rendered by the AJAX content endpoint.
@@ -27,6 +33,7 @@ struct CalendarsTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
     collections: &'a BTreeMap<String, CollectionSettings>,
     calendars: BTreeMap<&'a String, Vec<CalendarBoxTemplate<'a>>>,
+    collection_select: ComboboxTemplate<String>,
 }
 
 async fn metadata_or_default(dir: &Path, folder: &str, filename: &str, def: &str) -> String {
@@ -122,10 +129,23 @@ pub async fn content(State(state): State<EventixState>) -> Result<impl IntoRespo
         calendars.insert(col_id, cals);
     }
 
+    let collection_options = state
+        .settings()
+        .collections()
+        .keys()
+        .map(|col_id| ComboOption::new(col_id, col_id.clone()))
+        .collect();
+
     let html = CalendarsTemplate {
         locale,
         collections: state.settings().collections(),
         calendars,
+        collection_select: ComboboxTemplate::new_with_options(
+            state.locale(),
+            "new_calendar_collection",
+            state.settings().collections().keys().next().cloned(),
+            collection_options,
+        ),
     }
     .render()
     .context("calendars content template")?;
