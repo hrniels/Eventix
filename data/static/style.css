@@ -933,6 +933,14 @@ span.ev_cal_src_disabled {
 .ui-state-active {
     margin: 0px !important;
 }
+.ui-selectmenu-menu .ui-menu .ui-menu-item-wrapper {
+    border: 1px solid transparent;
+    box-sizing: border-box;
+}
+.ui-selectmenu-menu .ui-menu .ui-state-focus,
+.ui-selectmenu-menu .ui-menu .ui-state-active {
+    margin: 0 !important;
+}
 .ui-corner-all {
     border-radius: 3px 3px 0px 0px !important;
 }
