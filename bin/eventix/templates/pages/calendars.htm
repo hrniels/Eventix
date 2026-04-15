@@ -154,7 +154,7 @@
 </style>
 <script type="text/javascript">
     function reloadContentIfPossible() {
-        requestReload("out-of-sync", false);
+        requestReload("out-of-sync", !popupOrFormsOpen());
         reloadCalList();
     }
 
