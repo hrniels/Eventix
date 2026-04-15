@@ -25,9 +25,7 @@
         "env": {
             "CARGO_HOME": "/run/build/eventix/cargo"
         },
-        "build-args": [
-            "--share=network"
-        ]
+        "build-args": ["--share=network"]
     },
     "modules": [
         {
@@ -86,9 +84,7 @@
         {
             "name": "vdirsyncer",
             "buildsystem": "simple",
-            "build-commands": [
-                "pip3 install --prefix=/app ."
-            ],
+            "build-commands": ["pip3 install --prefix=/app ."],
             "sources": [
                 {
                     "type": "archive",

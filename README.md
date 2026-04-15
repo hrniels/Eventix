@@ -73,12 +73,12 @@ configuration and other files are stored in XDG-standard locations under the app
 `com.github.hrniels.Eventix`. With flatpak, the base directory will be under
 `$HOME/.var/app/com.github.hrniels.Eventix`. The relevant files and directories are:
 
-| File | Purpose |
-|---|---|
-| `<base>/config/com.github.hrniels.Eventix/settings.toml` | Collection and calendar settings |
-| `<base>/data/com.github.hrniels.Eventix/misc.toml` | Runtime state: last alarm check, disabled calendars, etc. |
-| `<base>/data/com.github.hrniels.Eventix/alarms` | Personal alarms |
-| `<base>/data/com.github.hrniels.Eventix/vdirsyncer` | Calendar files from remote servers |
+| File                                                     | Purpose                                                   |
+| -------------------------------------------------------- | --------------------------------------------------------- |
+| `<base>/config/com.github.hrniels.Eventix/settings.toml` | Collection and calendar settings                          |
+| `<base>/data/com.github.hrniels.Eventix/misc.toml`       | Runtime state: last alarm check, disabled calendars, etc. |
+| `<base>/data/com.github.hrniels.Eventix/alarms`          | Personal alarms                                           |
+| `<base>/data/com.github.hrniels.Eventix/vdirsyncer`      | Calendar files from remote servers                        |
 
 ## Architecture
 
