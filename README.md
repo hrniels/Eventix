@@ -97,7 +97,8 @@ eventix/
 │   └── cmd/            # IPC protocol over a Unix domain socket
 ├── data/               # Runtime assets: icons, locale files, static web files
 ├── flatpak/            # Flatpak build manifests and .desktop files
-└── contrib/davmail/    # DavMail submodule for Microsoft 365 CalDAV bridging
+├── contrib/davmail/    # DavMail submodule for Microsoft 365 CalDAV bridging
+└── contrib/vdirsyncer/ # vdirsyncer submodule bundled with Eventix
 ```
 
 ## Tipps
@@ -118,4 +119,4 @@ Eventix is licensed under the [GNU General Public License v3.0 or later](LICENSE
 Bundled third-party components retain their own licenses:
 
 - [DavMail](http://davmail.sourceforge.net/) (`contrib/davmail/`) — GPL-2.0
-- [vdirsyncer](https://github.com/pimutils/vdirsyncer) — BSD-3-Clause
+- [vdirsyncer](https://github.com/pimutils/vdirsyncer) (`contrib/vdirsyncer/`) — BSD-3-Clause

@@ -91,9 +91,9 @@
             ],
             "sources": [
                 {
-                    "type": "git",
-                    "url": "https://github.com/pimutils/vdirsyncer.git",
-                    "tag": "v0.20.0"
+                    "type": "archive",
+                    "path": "../flatpak/source.tar.gz",
+                    "strip-components": 0
                 }
             ]
         },
