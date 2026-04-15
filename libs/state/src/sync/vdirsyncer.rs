@@ -430,6 +430,63 @@ impl VDirSyncer {
         }
     }
 
+    async fn run_force_delete_sync(&self, names: Vec<String>) -> anyhow::Result<()> {
+        let mut args = vec![
+            "--config",
+            self.cfg.to_str().unwrap(),
+            "sync",
+            "--force-delete",
+        ];
+        let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+        args.extend_from_slice(&name_refs);
+
+        let output = self.runner.run("vdirsyncer", &args, None).await?;
+        let stderr = String::from_utf8(output.stderr)?;
+        for line in stderr.lines() {
+            log_line(&self.log, &self.name, line).await?;
+        }
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(anyhow!("exited with {}", output.status))
+        }
+    }
+
+    async fn remove_local_folder_data(
+        &self,
+        folder: &str,
+        remove_meta: bool,
+    ) -> anyhow::Result<()> {
+        let dir = self.cfg.parent().unwrap();
+
+        let status_path = dir.join(format!("{}-status", self.name)).join(&self.name);
+        for ext in [".items", ".metadata"] {
+            let path = status_path.join(format!("{}{}", folder, ext));
+            if path.exists() {
+                fs::remove_file(&path)
+                    .await
+                    .context(format!("Removing {} failed", path.to_str().unwrap()))?;
+            }
+        }
+
+        let data_path = dir.join(format!("{}-data", self.name)).join(folder);
+        if let Ok(mut dir) = fs::read_dir(data_path).await {
+            while let Some(entry) = dir.next_entry().await? {
+                if remove_meta
+                    || (entry.file_name() != "color" && entry.file_name() != "displayname")
+                {
+                    fs::remove_file(entry.path()).await.context(format!(
+                        "Removing {} failed",
+                        entry.path().to_str().unwrap()
+                    ))?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn post_process(&self, state: &mut State, output: Output) -> anyhow::Result<SyncResult> {
         let stderr = String::from_utf8(output.stderr)?;
         let (result, changes) = parse_output(&stderr, &self.folder_id);
@@ -529,8 +586,6 @@ impl Syncer for VDirSyncer {
     }
 
     async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()> {
-        let dir = self.cfg.parent().unwrap();
-
         let folder = state
             .settings()
             .collections()
@@ -538,34 +593,19 @@ impl Syncer for VDirSyncer {
             .unwrap()
             .all_calendars()
             .get(cal_id)
-            .unwrap()
-            .folder();
+            .map(|cal| cal.folder().as_str())
+            .ok_or_else(|| anyhow!("No calendar with id {}", cal_id))?;
+        self.remove_local_folder_data(folder, false).await
+    }
 
-        // remove item in status directory
-        let status_path = dir.join(format!("{}-status", self.name)).join(&self.name);
-        for ext in [".items", ".metadata"] {
-            let path = status_path.join(format!("{}{}", folder, ext));
-            if path.exists() {
-                fs::remove_file(&path)
-                    .await
-                    .context(format!("Removing {} failed", path.to_str().unwrap()))?;
-            }
-        }
-
-        // remove all non-meta files in data directory
-        let data_path = dir.join(format!("{}-data", self.name)).join(folder);
-        if let Ok(mut dir) = fs::read_dir(data_path).await {
-            while let Some(entry) = dir.next_entry().await? {
-                if entry.file_name() != "color" && entry.file_name() != "displayname" {
-                    fs::remove_file(entry.path()).await.context(format!(
-                        "Removing {} failed",
-                        entry.path().to_str().unwrap()
-                    ))?;
-                }
-            }
-        }
-
-        Ok(())
+    async fn delete_cal_by_folder(
+        &mut self,
+        _state: &mut State,
+        folder: &String,
+    ) -> anyhow::Result<()> {
+        self.run_force_delete_sync(vec![format!("{}/{}", self.name, folder)])
+            .await?;
+        self.remove_local_folder_data(folder, true).await
     }
 
     async fn delete(&mut self, _state: &mut State, config: bool) -> anyhow::Result<()> {
@@ -1352,6 +1392,59 @@ mod tests {
         assert!(
             cfg_dir.join("testcol-data/work/displayname").exists(),
             "displayname file should be kept"
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_cal_by_folder_runs_force_delete_and_removes_local_data() {
+        let runner_ref = FakeCommandRunner::new(
+            vec![CannedOutput::success(b"Deleting item uid-1\n")],
+            vec![],
+        );
+        let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref.clone()).await;
+
+        let cfg_dir = syncer.cfg.parent().unwrap().to_path_buf();
+        create_sync_layout(&cfg_dir, "testcol", "work").await;
+
+        let mut state = crate::State::new_for_test(
+            CalStore::default(),
+            crate::misc::Misc::new(std::path::PathBuf::default()),
+        );
+        syncer
+            .delete_cal_by_folder(&mut state, &"work".to_string())
+            .await
+            .unwrap();
+
+        assert!(
+            !cfg_dir.join("testcol-status/testcol/work.items").exists(),
+            "status .items should be removed"
+        );
+        assert!(
+            !cfg_dir
+                .join("testcol-status/testcol/work.metadata")
+                .exists(),
+            "status .metadata should be removed"
+        );
+        assert!(
+            !cfg_dir.join("testcol-data/work").exists(),
+            "calendar data directory should be removed"
+        );
+
+        let calls = runner_ref.calls();
+        assert!(
+            calls.iter().any(|call| matches!(call,
+                RunCall::Run { program, args }
+                    if program == "vdirsyncer"
+                        && args == &vec![
+                            "--config".to_string(),
+                            syncer.cfg.to_str().unwrap().to_string(),
+                            "sync".to_string(),
+                            "--force-delete".to_string(),
+                            "testcol/work".to_string(),
+                        ]
+            )),
+            "expected vdirsyncer sync --force-delete call, got: {:?}",
+            calls
         );
     }
 }

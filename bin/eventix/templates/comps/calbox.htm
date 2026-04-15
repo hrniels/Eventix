@@ -68,8 +68,8 @@
                         <div class="ev_cal_box_right_item">
                             <a
                                 href="javascript:reloadCalendar('{{ col_id }}', '{{ cal_id }}',
-                                                                'reload_calendar_{{ cal_id }}',
-                                                                 reloadContentIfPossible)"
+                                                                    'reload_calendar_{{ cal_id }}',
+                                                                     reloadContentIfPossible)"
                                 {% if let SyncerType::FileSystem { .. } = col.syncer() %}
                                     class="ev_button ev_button_normal"
                                 {% else %}
@@ -87,14 +87,26 @@
                         <div class="ev_cal_box_right_item">
                             <a
                                 href="javascript:calendarOperation('{{ col_id }}', '{{ cal_id }}',
-                                                                   'Delete',
-                                                                   reloadContentIfPossible)"
+                                                                       'Delete',
+                                                                       reloadContentIfPossible)"
                                 {% if let SyncerType::FileSystem { .. } = col.syncer() %}
                                     class="ev_button ev_button_normal"
                                 {% else %}
                                     class="ev_button ev_button_warn"
                                     title="{{ "warning.delete_calendar"|t(locale) }}"
                                 {% endif %}
+                            >
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    {% else if remote_collection() %}
+                        <div class="ev_cal_box_right_item">
+                            <a
+                                class="ev_button ev_button_critical"
+                                title="{{ "warning.delete_calendar_remote_folder"|t(locale) }}"
+                                href="javascript:deleteRemoteCalendar('{{ col_id }}',
+                                                                         '{{ cal.folder() }}',
+                                                                         reloadContentIfPossible)"
                             >
                                 <i class="bi bi-trash"></i>
                             </a>

@@ -151,4 +151,11 @@ impl<'a> CalendarBoxTemplate<'a> {
     pub fn cal(&self) -> &CalendarBox<'a> {
         &self.cal
     }
+
+    pub fn remote_collection(&self) -> bool {
+        matches!(
+            self.col.syncer(),
+            SyncerType::VDirSyncer { .. } | SyncerType::O365 { .. }
+        )
+    }
 }

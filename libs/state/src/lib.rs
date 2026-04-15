@@ -325,6 +325,15 @@ impl State {
         Ok(())
     }
 
+    /// Deletes the remote calendar identified by `folder` and removes its local synced files.
+    pub async fn delete_calendar_by_folder(
+        state: &mut State,
+        col_id: &String,
+        folder: &String,
+    ) -> anyhow::Result<()> {
+        sync::delete_calendar_by_folder(state, col_id, folder).await
+    }
+
     /// Reloads a single calendar from its remote source and refreshes the local file.
     ///
     /// Discards local files for the calendar identified by `cal_id`, re-fetches from the remote

@@ -16,7 +16,8 @@
 "warning.reload_calendar" = "Warnung: entfernt alle lokalen Elemente und vergisst die Kalendereinstellungen. Lokale Änderungen werden überschrieben."
 "warning.reload_collection" = "Warnung: entfernt alle lokalen Elemente und lädt sie erneut von der Serverseite. Lokale Änderungen werden überschrieben."
 "warning.delete_collection" = "Löscht diese Gruppe inklusive aller Kalender."
-"warning.delete_calendar" = "Löscht diesen Kalender."
+"warning.delete_calendar" = "Entfernt diesen Kalender aus der Gruppe und löscht die Daten und Einstellungen."
+"warning.delete_calendar_remote_folder" = "Löscht diesen entfernten Kalender dauerhaft und entfernt seine lokalen Dateien und Verzeichnisse."
 "warning.delete_item" = "Löscht dieses Element."
 "warning.delete_series" = "Löscht diese Serie."
 

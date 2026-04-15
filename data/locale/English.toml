@@ -16,7 +16,8 @@
 "warning.reload_calendar" = "Warning: removes all local items and forgets the calendar settings. Local changes will be lost."
 "warning.reload_collection" = "Warning: removes all local items and reloads them from the server side. Local changes will be lost."
 "warning.delete_collection" = "This will permanently delete this collection including all calendars."
-"warning.delete_calendar" = "This will permanently delete this calendar."
+"warning.delete_calendar" = "Removes this calendar from the collection and deletes local data and settings."
+"warning.delete_calendar_remote_folder" = "This will permanently delete this remote calendar and remove its local files and folders."
 "warning.delete_item" = "This will permanently delete this item."
 "warning.delete_series" = "This will permanently delete this series."
 
