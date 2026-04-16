@@ -188,15 +188,15 @@ impl PropertyProducer for Calendar {
         let mut props = vec![];
         props.extend(self.props.iter().cloned());
         for tz in &self.timezones {
-            props.extend(tz.to_props().into_iter());
+            props.extend(tz.to_props());
         }
         for comp in &self.comps {
-            props.extend(comp.to_props().into_iter());
+            props.extend(comp.to_props());
         }
         // since we also store duplicate components (same UID without RID, see above) in here, they
         // have to go last
         for other in &self.unknown {
-            props.extend(other.to_props().into_iter());
+            props.extend(other.to_props());
         }
         props
     }

@@ -266,7 +266,7 @@ impl PropertyProducer for EventLikeComponent {
         }
         if let Some(ref alarms) = self.alarms {
             for a in alarms {
-                props.extend(a.to_props().into_iter());
+                props.extend(a.to_props());
             }
         }
         props.extend(self.props.iter().cloned());
