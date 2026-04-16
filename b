@@ -38,7 +38,10 @@ def dev_env():
     davmail_bin = os.path.abspath("contrib/davmail/dist")
     if not os.path.isfile(davmail_bin + "/davmail"):
         sys.exit("Please install davmail first via ./b davmail")
-    env["PATH"] = os.pathsep.join([davmail_bin, env.get("PATH", "")])
+    vdirsyncer_bin = os.path.abspath("run/venv/bin")
+    if not os.path.isfile(vdirsyncer_bin + "/vdirsyncer"):
+        sys.exit("Please install vdirsyncer first via ./b vdirsyncer")
+    env["PATH"] = os.pathsep.join([davmail_bin, vdirsyncer_bin, env.get("PATH", "")])
     # use a project-local directory for data and config
     env["XDG_DATA_HOME"] = str(run_dir.absolute())
     env["XDG_CONFIG_HOME"] = str(run_dir.absolute())
@@ -107,6 +110,12 @@ def cmd_davmail(args):
     """Builds Davmail using Maven and Ant."""
     subprocess.run(["mvn", "install"], cwd='contrib/davmail', check=True)
     subprocess.run(["ant", "dist"], cwd='contrib/davmail', check=True)
+
+
+def cmd_vdirsyncer(args):
+    """Builds vdirsyncer using venv and pip."""
+    subprocess.run(["python", "-m", "venv", "run/venv"])
+    subprocess.run(["run/venv/bin/pip", "install", "-e", "contrib/vdirsyncer"])
 
 
 def cmd_coverage(args):
@@ -235,6 +244,10 @@ def main():
     davmail_parser = subparsers.add_parser(
         "davmail", parents=[parent_parser], help="Build davmail")
     davmail_parser.set_defaults(func=cmd_davmail)
+
+    vdirsyncer_parser = subparsers.add_parser(
+        "vdirsyncer", parents=[parent_parser], help="Build vdirsyncer")
+    vdirsyncer_parser.set_defaults(func=cmd_vdirsyncer)
 
     coverage_parser = subparsers.add_parser(
         "coverage", parents=[parent_parser], help="Generate code coverage information")
