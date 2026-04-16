@@ -109,7 +109,7 @@ impl CommandRunner for RealCommandRunner {
 // --- Parsing types ---
 
 /// Internal result of a single vdirsyncer invocation, parsed from its stderr output.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SyncResult {
     /// The sync completed; the boolean indicates whether any items were added, updated,
     /// or deleted.
@@ -168,9 +168,9 @@ impl CalendarChanges {
 /// Parses a block of vdirsyncer stderr output and returns the sync result along with the set of
 /// per-calendar changes detected.
 ///
-/// Returns `(SyncResult::NeedsDiscover, _)` as soon as a "run `vdirsyncer discover`" line is
-/// found.  Otherwise returns `SyncResult::Success(changed)` where `changed` is `true` when at
-/// least one add, update, or delete was parsed.
+/// Returns retry instructions for discover or missing-collection cases. Otherwise returns
+/// `SyncResult::Success(changed)` where `changed` is `true` when at least one add, update, or
+/// delete was parsed.
 pub(crate) fn parse_output(
     stderr: &str,
     folder_id: &HashMap<String, String>,
@@ -322,6 +322,7 @@ impl VDirSyncer {
         cfg.write_all(b"metadata = [\"displayname\", \"color\"]\n")
             .await?;
         cfg.write_all(b"conflict_resolution = \"b wins\"\n").await?;
+        cfg.write_all(b"implicit = \"create\"\n").await?;
 
         // local storage
         cfg.write_all(format!("[storage {}_local]\n", name).as_bytes())
@@ -430,13 +431,26 @@ impl VDirSyncer {
         }
     }
 
-    async fn run_force_delete_sync(&self, names: Vec<String>) -> anyhow::Result<()> {
-        let mut args = vec![
-            "--config",
-            self.cfg.to_str().unwrap(),
-            "sync",
-            "--force-delete",
-        ];
+    async fn run_delete_sync(&self, names: Vec<String>) -> anyhow::Result<()> {
+        let mut args = vec!["--config", self.cfg.to_str().unwrap(), "delete"];
+        let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+        args.extend_from_slice(&name_refs);
+
+        let output = self.runner.run("vdirsyncer", &args, None).await?;
+        let stderr = String::from_utf8(output.stderr)?;
+        for line in stderr.lines() {
+            log_line(&self.log, &self.name, line).await?;
+        }
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(anyhow!("exited with {}", output.status))
+        }
+    }
+
+    async fn run_create_sync(&self, names: Vec<String>) -> anyhow::Result<()> {
+        let mut args = vec!["--config", self.cfg.to_str().unwrap(), "create"];
         let name_refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
         args.extend_from_slice(&name_refs);
 
@@ -598,14 +612,24 @@ impl Syncer for VDirSyncer {
         self.remove_local_folder_data(folder, false).await
     }
 
+    async fn create_cal_by_folder(
+        &mut self,
+        _state: &mut State,
+        folder: &String,
+    ) -> anyhow::Result<()> {
+        self.run_create_sync(vec![format!("{}/{}", self.name, folder)])
+            .await?;
+        self.run_discover().await
+    }
+
     async fn delete_cal_by_folder(
         &mut self,
         _state: &mut State,
         folder: &String,
     ) -> anyhow::Result<()> {
-        self.run_force_delete_sync(vec![format!("{}/{}", self.name, folder)])
+        self.run_delete_sync(vec![format!("{}/{}", self.name, folder)])
             .await?;
-        self.remove_local_folder_data(folder, true).await
+        self.remove_local_folder_data(folder, false).await
     }
 
     async fn delete(&mut self, _state: &mut State, config: bool) -> anyhow::Result<()> {
@@ -815,6 +839,14 @@ mod tests {
             "Aborting synchronization: please run `vdirsyncer discover` to update collections.\n";
         let (result, _) = parse_output(stderr, &folder_id);
         assert_eq!(result, SyncResult::NeedsDiscover);
+    }
+
+    #[test]
+    fn parse_output_missing_collection() {
+        let folder_id = make_folder_id();
+        let stderr = "critical: Pair foo: Collection \"bar\" not found.These are the configured collections\n";
+        let (result, _) = parse_output(stderr, &folder_id);
+        assert_eq!(result, SyncResult::Success(false));
     }
 
     #[test]
@@ -1134,6 +1166,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_cal_by_folder_runs_create_command() {
+        let ok_status = ExitStatus::from_raw(0);
+        let runner_ref =
+            FakeCommandRunner::new(vec![CannedOutput::success(b"")], vec![(ok_status, vec![])]);
+        let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref.clone()).await;
+        let mut state = crate::State::new_for_test(
+            CalStore::default(),
+            crate::misc::Misc::new(std::path::PathBuf::default()),
+        );
+
+        syncer
+            .create_cal_by_folder(&mut state, &"work".to_string())
+            .await
+            .unwrap();
+
+        let calls = runner_ref.calls();
+        assert!(
+            calls.iter().any(|call| matches!(call,
+                RunCall::Run { program, args }
+                    if program == "vdirsyncer"
+                        && args == &vec![
+                            "--config".to_string(),
+                            syncer.cfg.to_str().unwrap().to_string(),
+                            "create".to_string(),
+                            "testcol/work".to_string(),
+                        ]
+            )),
+            "expected vdirsyncer create call, got: {:?}",
+            calls
+        );
+        assert!(
+            calls.iter().any(|call| matches!(call,
+                RunCall::RunInteractive { program, args }
+                    if program == "vdirsyncer"
+                        && args == &vec![
+                            "--config".to_string(),
+                            syncer.cfg.to_str().unwrap().to_string(),
+                            "discover".to_string(),
+                            "testcol".to_string(),
+                        ]
+            )),
+            "expected vdirsyncer discover call after create, got: {:?}",
+            calls
+        );
+    }
+
+    #[tokio::test]
     async fn run_sync_nonzero_exit_returns_error() {
         let runner = FakeCommandRunner::new(vec![CannedOutput::failure(b"")], vec![]);
 
@@ -1396,11 +1475,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_cal_by_folder_runs_force_delete_and_removes_local_data() {
-        let runner_ref = FakeCommandRunner::new(
-            vec![CannedOutput::success(b"Deleting item uid-1\n")],
-            vec![],
-        );
+    async fn delete_cal_by_folder_runs_delete_command() {
+        let runner_ref = FakeCommandRunner::new(vec![CannedOutput::success(b"")], vec![]);
         let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref.clone()).await;
 
         let cfg_dir = syncer.cfg.parent().unwrap().to_path_buf();
@@ -1426,8 +1502,16 @@ mod tests {
             "status .metadata should be removed"
         );
         assert!(
-            !cfg_dir.join("testcol-data/work").exists(),
-            "calendar data directory should be removed"
+            !cfg_dir.join("testcol-data/work/event.ics").exists(),
+            "event.ics should be removed"
+        );
+        assert!(
+            cfg_dir.join("testcol-data/work/color").exists(),
+            "color file should be kept"
+        );
+        assert!(
+            cfg_dir.join("testcol-data/work/displayname").exists(),
+            "displayname file should be kept"
         );
 
         let calls = runner_ref.calls();
@@ -1438,12 +1522,11 @@ mod tests {
                         && args == &vec![
                             "--config".to_string(),
                             syncer.cfg.to_str().unwrap().to_string(),
-                            "sync".to_string(),
-                            "--force-delete".to_string(),
+                            "delete".to_string(),
                             "testcol/work".to_string(),
                         ]
             )),
-            "expected vdirsyncer sync --force-delete call, got: {:?}",
+            "expected vdirsyncer delete call, got: {:?}",
             calls
         );
     }

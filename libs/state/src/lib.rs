@@ -34,7 +34,7 @@ pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings, SyncTimeBound,
     SyncTimeSpan, SyncerType,
 };
-pub use sync::{SyncColResult, SyncResult, Syncer, log_file};
+pub use sync::{SyncColResult, SyncResult, Syncer, create_calendar_by_folder, log_file};
 
 /// Shared, async-safe handle to the global application state.
 ///

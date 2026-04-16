@@ -7,7 +7,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use eventix_state::{CalendarSettings, EventixState};
+use eventix_state::{CalendarSettings, EventixState, create_calendar_by_folder};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -132,6 +132,8 @@ pub async fn handler(
             e
         );
     }
+
+    create_calendar_by_folder(&mut state, &req.col_id, &folder).await?;
 
     if let Err(e) = state.settings().write_to_file() {
         tracing::warn!("Unable to save settings: {}", e);

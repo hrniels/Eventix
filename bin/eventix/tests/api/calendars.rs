@@ -6,29 +6,29 @@
 mod helper;
 
 use axum::http::StatusCode;
-use eventix_state::{CollectionSettings, EmailAccount, SyncerType};
+use eventix_state::{CollectionSettings, SyncerType};
+use tempfile::TempDir;
 
 use helper::{COL_ID, make_calendars_api_router, make_state_from_col, post_query};
 
-fn make_vdirsyncer_collection() -> CollectionSettings {
-    CollectionSettings::new(SyncerType::VDirSyncer {
-        email: EmailAccount::new("Test User".to_string(), "test@example.com".to_string()),
-        url: "https://dav.example.com".to_string(),
-        read_only: false,
-        username: None,
-        password_cmd: None,
-        time_span: Default::default(),
+fn make_filesystem_collection(tmp: &TempDir) -> CollectionSettings {
+    let calendars_path = tmp.path().join("calendars");
+    std::fs::create_dir_all(&calendars_path).expect("create calendars dir");
+
+    CollectionSettings::new(SyncerType::FileSystem {
+        path: calendars_path.to_string_lossy().into_owned(),
     })
 }
 
 #[tokio::test]
-async fn add_calendar_creates_calendar_for_non_filesystem_collection() {
-    let (state, _config) = make_state_from_col(make_vdirsyncer_collection());
+async fn add_calendar_creates_calendar() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (state, _config) = make_state_from_col(make_filesystem_collection(&tmp));
 
     let router = make_calendars_api_router(state.clone());
     let (status, resp) = post_query(
         router,
-        "/api/calendars/addcal?col_id=col1&name=Remote%20Team",
+        "/api/calendars/addcal?col_id=col1&name=Local%20Team",
     )
     .await;
 
@@ -45,14 +45,16 @@ async fn add_calendar_creates_calendar_for_non_filesystem_collection() {
         .values()
         .next()
         .expect("expected inserted calendar");
-    assert_eq!(added.name(), "Remote Team");
-    assert_eq!(added.folder(), "remote-team");
+    assert_eq!(added.name(), "Local Team");
+    assert_eq!(added.folder(), "local-team");
     assert!(added.enabled());
+    assert!(tmp.path().join("calendars/local-team").exists());
 }
 
 #[tokio::test]
 async fn add_calendar_sanitizes_and_deduplicates_folder_name() {
-    let (state, _config) = make_state_from_col(make_vdirsyncer_collection());
+    let tmp = TempDir::new().expect("tempdir");
+    let (state, _config) = make_state_from_col(make_filesystem_collection(&tmp));
 
     let router1 = make_calendars_api_router(state.clone());
     let (status1, resp1) = post_query(
@@ -83,11 +85,14 @@ async fn add_calendar_sanitizes_and_deduplicates_folder_name() {
         folders,
         vec!["team-ops".to_string(), "team-ops-2".to_string()]
     );
+    assert!(tmp.path().join("calendars/team-ops").exists());
+    assert!(tmp.path().join("calendars/team-ops-2").exists());
 }
 
 #[tokio::test]
 async fn add_calendar_rejects_empty_name() {
-    let (state, _config) = make_state_from_col(make_vdirsyncer_collection());
+    let tmp = TempDir::new().expect("tempdir");
+    let (state, _config) = make_state_from_col(make_filesystem_collection(&tmp));
 
     let router = make_calendars_api_router(state);
     let (status, resp) = post_query(router, "/api/calendars/addcal?col_id=col1&name=%20%20").await;

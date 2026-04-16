@@ -409,6 +409,14 @@ impl Syncer for O365 {
         self.vdirsyncer.delete_cal(state, cal_id).await
     }
 
+    async fn create_cal_by_folder(
+        &mut self,
+        state: &mut State,
+        folder: &String,
+    ) -> anyhow::Result<()> {
+        self.vdirsyncer.create_cal_by_folder(state, folder).await
+    }
+
     async fn delete_cal_by_folder(
         &mut self,
         state: &mut State,
