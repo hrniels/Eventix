@@ -114,7 +114,7 @@
                 <input id="new_calendar_name" type="text" name="name" size="20" />
                 {{ collection_select|safe }}
                 <a class="ev_button ev_button_normal" href="javascript:addCalendar()">
-                    <i class="bi bi-plus-square"></i>
+                    <i id="add_calendar_spinner" class="bi bi-plus-square"></i>
                     <span>{{ "Add"|t(locale) }}</span>
                 </a>
             </div>
@@ -188,7 +188,9 @@
             encodeURIComponent(col_id) +
             "&name=" +
             encodeURIComponent(name);
-        postRequest(url, reloadContentIfPossible);
+        postWithSpinner("add_calendar_spinner", url, function (data, auth_success) {
+            if (auth_success) reloadContentIfPossible(data);
+        });
     }
 
     $("#new_calendar_name").keypress(function (e) {

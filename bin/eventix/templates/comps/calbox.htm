@@ -106,9 +106,13 @@
                                 title="{{ "warning.delete_calendar_remote_folder"|t(locale) }}"
                                 href="javascript:deleteRemoteCalendar('{{ col_id }}',
                                                                          '{{ cal.folder() }}',
+                                                                         'delete_remote_calendar_{{ cal.id() }}',
                                                                          reloadContentIfPossible)"
                             >
-                                <i class="bi bi-trash"></i>
+                                <i
+                                    id="delete_remote_calendar_{{ cal.id() }}"
+                                    class="bi bi-trash"
+                                ></i>
                             </a>
                         </div>
                     {% endif %}
