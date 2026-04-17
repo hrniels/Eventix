@@ -100,7 +100,11 @@ impl Calendar {
 
     /// Populates missing VTIMEZONE entries for all used TZIDs.
     pub fn populate_timezones(&mut self) {
-        for tzid in self.used_tzids() {
+        let tzids = self.used_tzids();
+        let used: HashSet<_> = tzids.iter().map(String::as_str).collect();
+        self.timezones.retain(|tz| used.contains(tz.tzid()));
+
+        for tzid in tzids {
             if self.timezones.iter().any(|tz| tz.tzid() == tzid) {
                 continue;
             }
@@ -646,6 +650,68 @@ END:VCALENDAR\n";
         assert_eq!(
             cal.timezones()[0].observances()[0].tzname(),
             ["CUSTOM".to_string()].as_slice()
+        );
+    }
+
+    #[test]
+    fn populate_timezones_removes_unused_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19701025T030000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.timezones().len(), 1);
+
+        cal.populate_timezones();
+
+        assert!(cal.timezones().is_empty());
+    }
+
+    #[test]
+    fn populate_timezones_prunes_unused_and_keeps_used_existing_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19701025T030000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+TZNAME:BERLIN\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VTIMEZONE\n\
+TZID:America/New_York\n\
+BEGIN:STANDARD\n\
+DTSTART:19701101T020000\n\
+TZOFFSETFROM:-0400\n\
+TZOFFSETTO:-0500\n\
+TZNAME:NEWYORK\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.timezones().len(), 2);
+
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
+        assert_eq!(
+            cal.timezones()[0].observances()[0].tzname(),
+            ["BERLIN".to_string()].as_slice()
         );
     }
 
