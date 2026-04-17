@@ -6,10 +6,12 @@ use std::fmt;
 use std::io::BufRead;
 use std::str::FromStr;
 
-use chrono::{FixedOffset, NaiveDateTime};
+use chrono::{Datelike, Duration, FixedOffset, NaiveDateTime, Offset, TimeZone, Utc, Weekday};
+use chrono_tz::{OffsetComponents, OffsetName, Tz};
 
-use crate::objects::{CalDate, CalDateTime, CalRRule};
+use crate::objects::{CalDate, CalDateTime, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc};
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
+use crate::util;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CalTimeZone {
@@ -71,6 +73,11 @@ impl CalTimeZone {
     pub fn add_daylight(&mut self, observance: CalTimeZoneObservance) {
         assert_eq!(observance.kind(), CalTimeZoneObservanceKind::Daylight);
         self.add_observance(observance);
+    }
+
+    pub fn from_chrono_tz(tzid: &str) -> Option<Self> {
+        let tz = tzid.parse::<Tz>().ok()?;
+        generate_timezone(tz)
     }
 
     fn validate(&self) -> Result<(), ParseError> {
@@ -471,6 +478,171 @@ impl FromStr for CalUtcOffset {
     }
 }
 
+fn generate_timezone(tz: Tz) -> Option<CalTimeZone> {
+    let transitions = detect_recent_transitions(tz)?;
+
+    let mut timezone = CalTimeZone::new(tz.name().to_string());
+    timezone.set_last_modified(Some(CalDate::DateTime(CalDateTime::Utc(Utc::now()))));
+
+    if transitions.is_empty() {
+        let sample = tz
+            .with_ymd_and_hms(2025, 1, 1, 0, 0, 0)
+            .single()
+            .or_else(|| tz.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).single())?;
+        timezone.add_standard(build_single_observance(sample));
+        return Some(timezone);
+    }
+
+    let standard = build_rrule_observance(&transitions, false)?;
+    timezone.add_standard(standard);
+
+    if let Some(daylight) = build_rrule_observance(&transitions, true) {
+        timezone.add_daylight(daylight);
+    }
+
+    Some(timezone)
+}
+
+fn build_single_observance(sample: chrono::DateTime<Tz>) -> CalTimeZoneObservance {
+    let offset = sample.offset();
+    let total = CalUtcOffset::from_seconds(offset.fix().local_minus_utc()).unwrap();
+    let mut obs = CalTimeZoneObservance::new(
+        CalTimeZoneObservanceKind::Standard,
+        sample.naive_local(),
+        total,
+        total,
+    );
+    if let Some(name) = offset.abbreviation() {
+        obs.add_tzname(name.to_string());
+    }
+    obs
+}
+
+#[derive(Clone)]
+struct TransitionInfo {
+    year: i32,
+    month: u8,
+    weekday: Weekday,
+    nth: u8,
+    kind: CalTimeZoneObservanceKind,
+    start: NaiveDateTime,
+    offset_from: CalUtcOffset,
+    offset_to: CalUtcOffset,
+    tzname: Option<String>,
+}
+
+fn build_rrule_observance(
+    transitions: &[TransitionInfo],
+    dst: bool,
+) -> Option<CalTimeZoneObservance> {
+    let filtered: Vec<_> = transitions
+        .iter()
+        .filter(|t| (t.kind == CalTimeZoneObservanceKind::Daylight) == dst)
+        .cloned()
+        .collect();
+    if filtered.is_empty() {
+        return None;
+    }
+
+    // if any transition is different than the first, we give up here
+    let first = filtered.first()?;
+    if filtered.iter().any(|t| {
+        t.month != first.month
+            || t.weekday != first.weekday
+            || t.nth != first.nth
+            || t.start.time() != first.start.time()
+            || t.offset_from != first.offset_from
+            || t.offset_to != first.offset_to
+    }) {
+        return None;
+    }
+
+    let mut obs =
+        CalTimeZoneObservance::new(first.kind, first.start, first.offset_from, first.offset_to);
+    if let Some(name) = &first.tzname {
+        obs.add_tzname(name.clone());
+    }
+
+    let mut rule = CalRRule::default();
+    rule.set_frequency(CalRRuleFreq::Yearly);
+    rule.set_by_month(Some(vec![first.month]));
+    rule.set_by_day(Some(vec![CalWDayDesc::new(
+        first.weekday,
+        Some((first.nth, CalRRuleSide::End)),
+    )]));
+    obs.set_rrule(Some(rule));
+    Some(obs)
+}
+
+fn detect_recent_transitions(tz: Tz) -> Option<Vec<TransitionInfo>> {
+    let start_year = Utc::now().year() - 2;
+    let end_year = Utc::now().year() + 3;
+    let start = Utc.with_ymd_and_hms(start_year, 1, 1, 0, 0, 0).single()?;
+    let end = Utc.with_ymd_and_hms(end_year, 1, 1, 0, 0, 0).single()?;
+
+    let mut current = start;
+    let mut current_offset = current.with_timezone(&tz).offset().fix().local_minus_utc();
+    let mut transitions = Vec::new();
+
+    while current < end {
+        let next = (current + Duration::days(7)).min(end);
+        let next_offset = next.with_timezone(&tz).offset().fix().local_minus_utc();
+        if next_offset != current_offset {
+            let transition = find_transition(tz, current, next)?;
+            let before = (transition - Duration::minutes(1)).with_timezone(&tz);
+            let after = transition.with_timezone(&tz);
+            let local = after.naive_local();
+            let day = local.date();
+            let nth_from_end =
+                ((util::month_days(day.year(), day.month()) - day.day()) / 7 + 1) as u8;
+            transitions.push(TransitionInfo {
+                year: day.year(),
+                month: day.month() as u8,
+                weekday: day.weekday(),
+                nth: nth_from_end,
+                kind: if after.offset().dst_offset() > Duration::zero() {
+                    CalTimeZoneObservanceKind::Daylight
+                } else {
+                    CalTimeZoneObservanceKind::Standard
+                },
+                start: local,
+                offset_from: CalUtcOffset::from_seconds(before.offset().fix().local_minus_utc())
+                    .ok()?,
+                offset_to: CalUtcOffset::from_seconds(after.offset().fix().local_minus_utc())
+                    .ok()?,
+                tzname: after.offset().abbreviation().map(ToString::to_string),
+            });
+            current_offset = next_offset;
+        }
+        current = next;
+    }
+
+    Some(
+        transitions
+            .into_iter()
+            .filter(|t| t.year > start_year)
+            .collect(),
+    )
+}
+
+fn find_transition(
+    tz: Tz,
+    mut start: chrono::DateTime<Utc>,
+    mut end: chrono::DateTime<Utc>,
+) -> Option<chrono::DateTime<Utc>> {
+    let start_offset = start.with_timezone(&tz).offset().fix().local_minus_utc();
+    while (end - start) > Duration::minutes(1) {
+        let mid = start + Duration::seconds((end - start).num_seconds() / 2);
+        let mid_offset = mid.with_timezone(&tz).offset().fix().local_minus_utc();
+        if mid_offset == start_offset {
+            start = mid;
+        } else {
+            end = mid;
+        }
+    }
+    Some(end)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
@@ -767,5 +939,73 @@ END:VCALENDAR\n";
             "+2400".parse::<CalUtcOffset>().unwrap_err(),
             ParseError::InvalidUtcOffset("+2400".to_string())
         );
+    }
+
+    #[test]
+    fn from_chrono_tz_generates_single_standard_for_fixed_offset_zone() {
+        let tz = CalTimeZone::from_chrono_tz("Asia/Kathmandu").unwrap();
+
+        assert_eq!(tz.tzid(), "Asia/Kathmandu");
+        assert_eq!(tz.observances().len(), 1);
+
+        let standard = &tz.observances()[0];
+        assert_eq!(standard.kind(), CalTimeZoneObservanceKind::Standard);
+        assert_eq!(standard.tzoffset_from(), "+0545".parse().unwrap());
+        assert_eq!(standard.tzoffset_to(), "+0545".parse().unwrap());
+        assert!(standard.rrule().is_none());
+        assert!(
+            standard.tzname().is_empty() || standard.tzname() == ["+0545".to_string()].as_slice()
+        );
+    }
+
+    #[test]
+    fn populate_timezones_skips_irregular_half_hour_dst_zone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Australia/Lord_Howe:20250401T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        cal.populate_timezones();
+
+        assert!(cal.timezones().is_empty());
+    }
+
+    #[test]
+    fn populate_timezones_leaves_unparsable_custom_tzid_uncovered() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=My/Custom-TZ:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        cal.populate_timezones();
+
+        assert!(cal.timezones().is_empty());
+    }
+
+    #[test]
+    fn populate_timezones_handles_fixed_offset_zone_without_rrule() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Asia/Kathmandu:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        let timezone = &cal.timezones()[0];
+        assert_eq!(timezone.observances().len(), 1);
+        assert!(timezone.observances()[0].rrule().is_none());
     }
 }

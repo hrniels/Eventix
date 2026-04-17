@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
@@ -10,7 +10,8 @@ use chrono_tz::Tz;
 use tracing::warn;
 
 use crate::objects::{
-    CalCompType, CalComponent, CalDate, CalEvent, CalTimeZone, CalTodo, CalTrigger, EventLike,
+    CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTimeZone, CalTodo, CalTrigger,
+    EventLike,
 };
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
@@ -97,6 +98,20 @@ impl Calendar {
         Ok(())
     }
 
+    /// Populates missing VTIMEZONE entries for all used TZIDs.
+    pub fn populate_timezones(&mut self) {
+        for tzid in self.used_tzids() {
+            if self.timezones.iter().any(|tz| tz.tzid() == tzid) {
+                continue;
+            }
+
+            match CalTimeZone::from_chrono_tz(&tzid) {
+                Some(tz) => self.timezones.push(tz),
+                None => warn!("failed to populate VTIMEZONE for {}", tzid),
+            }
+        }
+    }
+
     fn checked_add(&mut self, comp: CalComponent) {
         // if it's a base component and we already have the same UID, just pretend we don't know it
         if comp.rid().is_none() && self.comps.iter().any(|c| c.uid() == comp.uid()) {
@@ -180,6 +195,45 @@ impl Calendar {
             d.validate(local_tz)?;
         }
         Ok(())
+    }
+
+    fn used_tzids(&self) -> Vec<String> {
+        let mut tzids = HashSet::new();
+
+        for comp in &self.comps {
+            Self::add_date_tzid(comp.start(), &mut tzids);
+            Self::add_date_tzid(comp.created(), &mut tzids);
+            Self::add_date_tzid(comp.last_modified(), &mut tzids);
+            Self::add_date_tzid(Some(comp.stamp()), &mut tzids);
+            Self::add_date_tzid(comp.rid(), &mut tzids);
+            Self::add_date_tzid(comp.end_or_due(), &mut tzids);
+
+            for exdate in comp.exdates() {
+                Self::add_date_tzid(Some(exdate), &mut tzids);
+            }
+
+            if let Some(alarms) = comp.alarms() {
+                for alarm in alarms {
+                    if let CalTrigger::Absolute(date) = alarm.trigger() {
+                        Self::add_date_tzid(Some(date), &mut tzids);
+                    }
+                }
+            }
+
+            if let CalComponent::Todo(td) = comp {
+                Self::add_date_tzid(td.completed(), &mut tzids);
+            }
+        }
+
+        let mut tzids: Vec<_> = tzids.into_iter().collect();
+        tzids.sort();
+        tzids
+    }
+
+    fn add_date_tzid(date: Option<&CalDate>, tzids: &mut HashSet<String>) {
+        if let Some(CalDate::DateTime(CalDateTime::Timezone(_, tzid))) = date {
+            tzids.insert(tzid.clone());
+        }
     }
 }
 
@@ -464,6 +518,75 @@ END:VCALENDAR\n"
         let tzs = cal.timezones();
         assert_eq!(tzs.len(), 1);
         assert_eq!(tzs[0].tzid(), "Asia/Tokyo");
+    }
+
+    #[test]
+    fn populate_timezones_adds_missing_used_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
+
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
+        assert!(!cal.timezones()[0].observances().is_empty());
+    }
+
+    #[test]
+    fn populate_timezones_does_not_replace_existing_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19701025T030000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+TZNAME:CUSTOM\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(
+            cal.timezones()[0].observances()[0].tzname(),
+            ["CUSTOM".to_string()].as_slice()
+        );
+    }
+
+    #[test]
+    fn malformed_timezone_is_fatal() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let err = input.parse::<Calendar>().unwrap_err();
+        assert_eq!(
+            err,
+            ParseError::MissingRequiredProp("STANDARD/DAYLIGHT".to_string())
+        );
     }
 
     #[test]
