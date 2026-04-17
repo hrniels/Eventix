@@ -42,6 +42,8 @@ pub enum ParseError {
     UnexpectedEnd(String),
     #[error("Unexpected BEGIN:{0}")]
     UnexpectedBegin(String),
+    #[error("Duplicate property: {0}")]
+    DuplicateProp(String),
     #[error("Invalid weekday description end")]
     UnexpectedWDayEnd,
     #[error("Unexpected rrule {0}")]
@@ -72,6 +74,10 @@ pub enum ParseError {
     InvalidAction(String),
     #[error("Invalid duration: {0}")]
     InvalidDuration(String),
+    #[error("Invalid UTC offset: {0}")]
+    InvalidUtcOffset(String),
+    #[error("Missing required property: {0}")]
+    MissingRequiredProp(String),
     #[error("Non-existent local time: {0}")]
     NonExistentTime(String),
     #[error("Ambiguous local time: {0}")]
