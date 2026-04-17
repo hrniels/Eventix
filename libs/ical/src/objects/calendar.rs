@@ -265,13 +265,37 @@ impl PropertyConsumer for Calendar {
         Self: Sized,
     {
         let mut cal = Self::default();
+        let mut pending = None;
         loop {
-            let Some(line) = lines.next() else {
-                break Ok(cal);
+            let line = if let Some(line) = pending.take() {
+                line
+            } else {
+                let Some(line) = lines.next() else {
+                    break Ok(cal);
+                };
+                line
             };
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
+                "BEGIN" if prop.value() == "VTIMEZONE" => {
+                    let buffered = buffer_timezone(lines);
+                    pending = buffered.pending;
+
+                    if !buffered.complete {
+                        warn!("ignoring malformed timezone: unterminated VTIMEZONE");
+                        continue;
+                    }
+
+                    let mut timezone_lines = buffered.lines.join("\n");
+                    timezone_lines.push('\n');
+                    let mut timezone_reader = LineReader::new(timezone_lines.as_bytes());
+
+                    match CalTimeZone::from_lines(&mut timezone_reader, prop) {
+                        Ok(tz) => cal.timezones.push(tz),
+                        Err(e) => warn!("ignoring malformed timezone: {}", e),
+                    }
+                }
                 "BEGIN" if prop.value() == "VTODO" => match CalTodo::from_lines(lines, prop) {
                     Ok(todo) => cal.checked_add(CalComponent::Todo(todo)),
                     Err(e @ ParseError::UnexpectedEOF) | Err(e @ ParseError::UnexpectedEnd(_)) => {
@@ -286,12 +310,6 @@ impl PropertyConsumer for Calendar {
                     }
                     Err(e) => warn!("ignoring malformed event: {}", e),
                 },
-                "BEGIN" if prop.value() == "VTIMEZONE" => {
-                    match CalTimeZone::from_lines(lines, prop) {
-                        Ok(tz) => cal.timezones.push(tz),
-                        Err(e) => return Err(e),
-                    }
-                }
                 "BEGIN" => match Unknown::from_lines(lines, prop) {
                     Ok(other) => cal.unknown.push(other),
                     Err(e @ ParseError::UnexpectedEOF) | Err(e @ ParseError::UnexpectedEnd(_)) => {
@@ -309,6 +327,68 @@ impl PropertyConsumer for Calendar {
                     cal.props.push(prop);
                 }
             }
+        }
+    }
+}
+
+struct BufferedTimeZone {
+    lines: Vec<String>,
+    pending: Option<String>,
+    complete: bool,
+}
+
+fn buffer_timezone<R: BufRead>(lines: &mut LineReader<R>) -> BufferedTimeZone {
+    let mut buffered = Vec::new();
+    let mut depth = 0usize;
+
+    loop {
+        let Some(line) = lines.next() else {
+            return BufferedTimeZone {
+                lines: buffered,
+                pending: None,
+                complete: false,
+            };
+        };
+
+        match line.parse::<Property>() {
+            Ok(prop) if depth == 0 => match prop.name().as_str() {
+                "END" if prop.value() == "VTIMEZONE" => {
+                    buffered.push(line);
+                    return BufferedTimeZone {
+                        lines: buffered,
+                        pending: None,
+                        complete: true,
+                    };
+                }
+                "BEGIN" if prop.value() == "STANDARD" || prop.value() == "DAYLIGHT" => {
+                    depth = 1;
+                    buffered.push(line);
+                }
+                "BEGIN" => {
+                    return BufferedTimeZone {
+                        lines: buffered,
+                        pending: Some(line),
+                        complete: false,
+                    };
+                }
+                "END" if prop.value() == "VCALENDAR" => {
+                    return BufferedTimeZone {
+                        lines: buffered,
+                        pending: Some(line),
+                        complete: false,
+                    };
+                }
+                _ => buffered.push(line),
+            },
+            Ok(prop) => {
+                if prop.name() == "BEGIN" {
+                    depth += 1;
+                } else if prop.name() == "END" {
+                    depth = depth.saturating_sub(1);
+                }
+                buffered.push(line);
+            }
+            Err(_) => buffered.push(line),
         }
     }
 }
@@ -570,7 +650,7 @@ END:VCALENDAR\n";
     }
 
     #[test]
-    fn malformed_timezone_is_fatal() {
+    fn malformed_timezone_is_ignored_and_can_be_repopulated() {
         let input = "BEGIN:VCALENDAR\n\
 BEGIN:VTIMEZONE\n\
 TZID:Europe/Berlin\n\
@@ -582,11 +662,13 @@ DTSTART;TZID=Europe/Berlin:20250330T100000\n\
 END:VEVENT\n\
 END:VCALENDAR\n";
 
-        let err = input.parse::<Calendar>().unwrap_err();
-        assert_eq!(
-            err,
-            ParseError::MissingRequiredProp("STANDARD/DAYLIGHT".to_string())
-        );
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
+
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
     }
 
     #[test]
@@ -755,31 +837,25 @@ END:VCALENDAR\n";
     }
 
     #[test]
-    fn vtimezone_unexpected_eof_is_fatal() {
+    fn vtimezone_unexpected_eof_is_ignored() {
         let input = "BEGIN:VCALENDAR\n\
 BEGIN:VTIMEZONE\n\
 TZID:Europe/Berlin\n";
 
-        let res = input.parse::<Calendar>();
-        assert!(
-            matches!(res, Err(ParseError::UnexpectedEOF)),
-            "Expected UnexpectedEOF for incomplete VTIMEZONE"
-        );
+        let cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
     }
 
     #[test]
-    fn vtimezone_wrong_end_is_fatal() {
+    fn vtimezone_wrong_end_is_ignored() {
         let input = "BEGIN:VCALENDAR\n\
 BEGIN:VTIMEZONE\n\
 TZID:Europe/Berlin\n\
 END:VEVENT\n\
 END:VCALENDAR\n";
 
-        let res = input.parse::<Calendar>();
-        assert!(
-            matches!(res, Err(ParseError::UnexpectedEOF)),
-            "Expected UnexpectedEOF for wrong VTIMEZONE end"
-        );
+        let cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
     }
 
     #[test]

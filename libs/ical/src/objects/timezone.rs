@@ -645,18 +645,25 @@ fn find_transition(
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use chrono::NaiveDate;
 
     use crate::objects::{
         CalDate, CalDateTime, CalTimeZone, CalTimeZoneObservance, CalTimeZoneObservanceKind,
         CalUtcOffset, Calendar,
     };
-    use crate::parser::ParseError;
+    use crate::parser::{LineReader, ParseError, Property, PropertyConsumer};
 
     fn minimal_observance(kind: &str, dtstart: &str, from: &str, to: &str) -> String {
         format!(
             "BEGIN:{kind}\nDTSTART:{dtstart}\nTZOFFSETFROM:{from}\nTZOFFSETTO:{to}\nEND:{kind}\n"
         )
+    }
+
+    fn parse_timezone(input: &str) -> Result<CalTimeZone, ParseError> {
+        let mut reader = LineReader::new(Cursor::new(input.as_bytes()));
+        CalTimeZone::from_lines(&mut reader, Property::new("BEGIN", vec![], "VTIMEZONE"))
     }
 
     #[test]
@@ -813,13 +820,9 @@ END:VCALENDAR\n";
 
     #[test]
     fn timezone_requires_observance() {
-        let input = "BEGIN:VCALENDAR\n\
-BEGIN:VTIMEZONE\n\
-TZID:Europe/Berlin\n\
-END:VTIMEZONE\n\
-END:VCALENDAR\n";
+        let input = "TZID:Europe/Berlin\nEND:VTIMEZONE\n";
 
-        let err = input.parse::<Calendar>().unwrap_err();
+        let err = parse_timezone(input).unwrap_err();
         assert_eq!(
             err,
             ParseError::MissingRequiredProp("STANDARD/DAYLIGHT".to_string())
@@ -829,27 +832,24 @@ END:VCALENDAR\n";
     #[test]
     fn timezone_requires_tzid() {
         let input = format!(
-            "BEGIN:VCALENDAR\nBEGIN:VTIMEZONE\n{}END:VTIMEZONE\nEND:VCALENDAR\n",
+            "{}END:VTIMEZONE\n",
             minimal_observance("STANDARD", "19701025T030000", "+0200", "+0100")
         );
 
-        let err = input.parse::<Calendar>().unwrap_err();
+        let err = parse_timezone(&input).unwrap_err();
         assert_eq!(err, ParseError::MissingRequiredProp("TZID".to_string()));
     }
 
     #[test]
     fn observance_requires_required_properties() {
-        let input = "BEGIN:VCALENDAR\n\
-BEGIN:VTIMEZONE\n\
-TZID:Europe/Berlin\n\
+        let input = "TZID:Europe/Berlin\n\
 BEGIN:STANDARD\n\
 DTSTART:19701025T030000\n\
 TZOFFSETTO:+0100\n\
 END:STANDARD\n\
-END:VTIMEZONE\n\
-END:VCALENDAR\n";
+END:VTIMEZONE\n";
 
-        let err = input.parse::<Calendar>().unwrap_err();
+        let err = parse_timezone(input).unwrap_err();
         assert_eq!(
             err,
             ParseError::MissingRequiredProp("TZOFFSETFROM".to_string())
@@ -858,18 +858,15 @@ END:VCALENDAR\n";
 
     #[test]
     fn observance_dtstart_must_be_local_datetime() {
-        let input = "BEGIN:VCALENDAR\n\
-BEGIN:VTIMEZONE\n\
-TZID:Europe/Berlin\n\
+        let input = "TZID:Europe/Berlin\n\
 BEGIN:STANDARD\n\
 DTSTART;TZID=Europe/Berlin:19701025T030000\n\
 TZOFFSETFROM:+0200\n\
 TZOFFSETTO:+0100\n\
 END:STANDARD\n\
-END:VTIMEZONE\n\
-END:VCALENDAR\n";
+END:VTIMEZONE\n";
 
-        let err = input.parse::<Calendar>().unwrap_err();
+        let err = parse_timezone(input).unwrap_err();
         assert_eq!(
             err,
             ParseError::InvalidDate(
@@ -880,19 +877,16 @@ END:VCALENDAR\n";
 
     #[test]
     fn observance_rdate_must_be_local_datetime() {
-        let input = "BEGIN:VCALENDAR\n\
-BEGIN:VTIMEZONE\n\
-TZID:Europe/Berlin\n\
+        let input = "TZID:Europe/Berlin\n\
 BEGIN:STANDARD\n\
 DTSTART:19701025T030000\n\
 TZOFFSETFROM:+0200\n\
 TZOFFSETTO:+0100\n\
 RDATE:19701025\n\
 END:STANDARD\n\
-END:VTIMEZONE\n\
-END:VCALENDAR\n";
+END:VTIMEZONE\n";
 
-        let err = input.parse::<Calendar>().unwrap_err();
+        let err = parse_timezone(input).unwrap_err();
         assert_eq!(
             err,
             ParseError::InvalidDate("RDATE in VTIMEZONE must be local DATE-TIME".to_string())
@@ -902,11 +896,11 @@ END:VCALENDAR\n";
     #[test]
     fn timezone_rejects_duplicate_singleton_properties() {
         let input = format!(
-            "BEGIN:VCALENDAR\nBEGIN:VTIMEZONE\nTZID:Europe/Berlin\nTZID:Europe/Paris\n{}END:VTIMEZONE\nEND:VCALENDAR\n",
+            "TZID:Europe/Berlin\nTZID:Europe/Paris\n{}END:VTIMEZONE\n",
             minimal_observance("STANDARD", "19701025T030000", "+0200", "+0100")
         );
 
-        let err = input.parse::<Calendar>().unwrap_err();
+        let err = parse_timezone(&input).unwrap_err();
         assert_eq!(err, ParseError::DuplicateProp("TZID".to_string()));
     }
 
