@@ -523,7 +523,8 @@ struct TransitionInfo {
     year: i32,
     month: u8,
     weekday: Weekday,
-    nth: u8,
+    nth_from_start: u8,
+    nth_from_end: u8,
     kind: CalTimeZoneObservanceKind,
     start: NaiveDateTime,
     offset_from: CalUtcOffset,
@@ -549,13 +550,26 @@ fn build_rrule_observance(
     if filtered.iter().any(|t| {
         t.month != first.month
             || t.weekday != first.weekday
-            || t.nth != first.nth
             || t.start.time() != first.start.time()
             || t.offset_from != first.offset_from
             || t.offset_to != first.offset_to
     }) {
         return None;
     }
+
+    let side = if filtered
+        .iter()
+        .all(|t| t.nth_from_start == first.nth_from_start)
+    {
+        (first.nth_from_start, CalRRuleSide::Start)
+    } else if filtered
+        .iter()
+        .all(|t| t.nth_from_end == first.nth_from_end)
+    {
+        (first.nth_from_end, CalRRuleSide::End)
+    } else {
+        return None;
+    };
 
     let mut obs =
         CalTimeZoneObservance::new(first.kind, first.start, first.offset_from, first.offset_to);
@@ -566,10 +580,7 @@ fn build_rrule_observance(
     let mut rule = CalRRule::default();
     rule.set_frequency(CalRRuleFreq::Yearly);
     rule.set_by_month(Some(vec![first.month]));
-    rule.set_by_day(Some(vec![CalWDayDesc::new(
-        first.weekday,
-        Some((first.nth, CalRRuleSide::End)),
-    )]));
+    rule.set_by_day(Some(vec![CalWDayDesc::new(first.weekday, Some(side))]));
     obs.set_rrule(Some(rule));
     Some(obs)
 }
@@ -593,13 +604,15 @@ fn detect_recent_transitions(tz: Tz) -> Option<Vec<TransitionInfo>> {
             let after = transition.with_timezone(&tz);
             let local = after.naive_local();
             let day = local.date();
+            let nth_from_start = ((day.day() - 1) / 7 + 1) as u8;
             let nth_from_end =
                 ((util::month_days(day.year(), day.month()) - day.day()) / 7 + 1) as u8;
             transitions.push(TransitionInfo {
                 year: day.year(),
                 month: day.month() as u8,
                 weekday: day.weekday(),
-                nth: nth_from_end,
+                nth_from_start,
+                nth_from_end,
                 kind: if after.offset().dst_offset() > Duration::zero() {
                     CalTimeZoneObservanceKind::Daylight
                 } else {
@@ -953,7 +966,33 @@ END:VTIMEZONE\n";
     }
 
     #[test]
-    fn populate_timezones_skips_irregular_half_hour_dst_zone() {
+    fn from_chrono_tz_generates_america_new_york() {
+        let tz = CalTimeZone::from_chrono_tz("America/New_York").unwrap();
+
+        assert_eq!(tz.tzid(), "America/New_York");
+        assert!(!tz.observances().is_empty());
+
+        let daylight = tz
+            .observances()
+            .iter()
+            .find(|o| o.kind() == CalTimeZoneObservanceKind::Daylight)
+            .unwrap();
+        let standard = tz
+            .observances()
+            .iter()
+            .find(|o| o.kind() == CalTimeZoneObservanceKind::Standard)
+            .unwrap();
+
+        assert_eq!(daylight.tzoffset_from(), "-0500".parse().unwrap());
+        assert_eq!(daylight.tzoffset_to(), "-0400".parse().unwrap());
+        assert_eq!(standard.tzoffset_from(), "-0400".parse().unwrap());
+        assert_eq!(standard.tzoffset_to(), "-0500".parse().unwrap());
+        assert!(daylight.rrule().is_some());
+        assert!(standard.rrule().is_some());
+    }
+
+    #[test]
+    fn populate_timezones_handles_irregular_half_hour_dst_zone() {
         let input = "BEGIN:VCALENDAR\n\
 BEGIN:VEVENT\n\
 UID:test\n\
@@ -965,7 +1004,9 @@ END:VCALENDAR\n";
         let mut cal = input.parse::<Calendar>().unwrap();
         cal.populate_timezones();
 
-        assert!(cal.timezones().is_empty());
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(cal.timezones()[0].tzid(), "Australia/Lord_Howe");
+        assert!(!cal.timezones()[0].observances().is_empty());
     }
 
     #[test]
