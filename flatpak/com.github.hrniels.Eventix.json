@@ -84,7 +84,7 @@
         {
             "name": "vdirsyncer",
             "buildsystem": "simple",
-            "build-commands": ["pip3 install --prefix=/app ."],
+            "build-commands": ["pip3 install --prefix=/app contrib/vdirsyncer"],
             "sources": [
                 {
                     "type": "archive",

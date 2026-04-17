@@ -177,8 +177,7 @@ def cmd_flatpak(args):
     subprocess.run([
         "tar", "czf", "flatpak/source.tar.gz",
         "--exclude=contrib/davmail/dist",
-        "--exclude=.git/modules",
-        # include .git for GIT_HASH
+        # include .git for GIT_HASH and submodule version metadata
         ".git", "bin", "contrib", "data", "libs", "Cargo.toml", "Cargo.lock"
     ])
 
