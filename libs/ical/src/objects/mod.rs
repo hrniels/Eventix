@@ -25,11 +25,12 @@ mod locale;
 mod organizer;
 mod recur;
 mod status;
+mod timezone;
 mod todo;
 
 pub use alarm::{AlarmOverlay, CalAction, CalAlarm, CalRelated, CalTrigger, DefaultAlarmOverlay};
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
-pub use calendar::{CalTimeZone, Calendar};
+pub use calendar::Calendar;
 pub use component::{
     CalCompType, CalComponent, CompDateIterator, CompDateType, EventLikeComponent, PRIORITY_HIGH,
     PRIORITY_LOW, PRIORITY_MEDIUM,
@@ -42,4 +43,5 @@ pub use locale::{CalLocale, CalLocaleEn};
 pub use organizer::CalOrganizer;
 pub use recur::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DayDesc, WeekdayHuman};
 pub use status::{CalEventStatus, CalTodoStatus};
+pub use timezone::{CalTimeZone, CalTimeZoneObservance, CalTimeZoneObservanceKind, CalUtcOffset};
 pub use todo::CalTodo;

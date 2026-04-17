@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
@@ -10,7 +10,8 @@ use chrono_tz::Tz;
 use tracing::warn;
 
 use crate::objects::{
-    CalCompType, CalComponent, CalDate, CalEvent, CalTodo, CalTrigger, EventLike,
+    CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTimeZone, CalTodo, CalTrigger,
+    EventLike,
 };
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
@@ -97,6 +98,24 @@ impl Calendar {
         Ok(())
     }
 
+    /// Populates missing VTIMEZONE entries for all used TZIDs.
+    pub fn populate_timezones(&mut self) {
+        let tzids = self.used_tzids();
+        let used: HashSet<_> = tzids.iter().map(String::as_str).collect();
+        self.timezones.retain(|tz| used.contains(tz.tzid()));
+
+        for tzid in tzids {
+            if self.timezones.iter().any(|tz| tz.tzid() == tzid) {
+                continue;
+            }
+
+            match CalTimeZone::from_chrono_tz(&tzid) {
+                Some(tz) => self.timezones.push(tz),
+                None => warn!("failed to populate VTIMEZONE for {}", tzid),
+            }
+        }
+    }
+
     fn checked_add(&mut self, comp: CalComponent) {
         // if it's a base component and we already have the same UID, just pretend we don't know it
         if comp.rid().is_none() && self.comps.iter().any(|c| c.uid() == comp.uid()) {
@@ -181,6 +200,45 @@ impl Calendar {
         }
         Ok(())
     }
+
+    fn used_tzids(&self) -> Vec<String> {
+        let mut tzids = HashSet::new();
+
+        for comp in &self.comps {
+            Self::add_date_tzid(comp.start(), &mut tzids);
+            Self::add_date_tzid(comp.created(), &mut tzids);
+            Self::add_date_tzid(comp.last_modified(), &mut tzids);
+            Self::add_date_tzid(Some(comp.stamp()), &mut tzids);
+            Self::add_date_tzid(comp.rid(), &mut tzids);
+            Self::add_date_tzid(comp.end_or_due(), &mut tzids);
+
+            for exdate in comp.exdates() {
+                Self::add_date_tzid(Some(exdate), &mut tzids);
+            }
+
+            if let Some(alarms) = comp.alarms() {
+                for alarm in alarms {
+                    if let CalTrigger::Absolute(date) = alarm.trigger() {
+                        Self::add_date_tzid(Some(date), &mut tzids);
+                    }
+                }
+            }
+
+            if let CalComponent::Todo(td) = comp {
+                Self::add_date_tzid(td.completed(), &mut tzids);
+            }
+        }
+
+        let mut tzids: Vec<_> = tzids.into_iter().collect();
+        tzids.sort();
+        tzids
+    }
+
+    fn add_date_tzid(date: Option<&CalDate>, tzids: &mut HashSet<String>) {
+        if let Some(CalDate::DateTime(CalDateTime::Timezone(_, tzid))) = date {
+            tzids.insert(tzid.clone());
+        }
+    }
 }
 
 impl PropertyProducer for Calendar {
@@ -211,13 +269,37 @@ impl PropertyConsumer for Calendar {
         Self: Sized,
     {
         let mut cal = Self::default();
+        let mut pending = None;
         loop {
-            let Some(line) = lines.next() else {
-                break Ok(cal);
+            let line = if let Some(line) = pending.take() {
+                line
+            } else {
+                let Some(line) = lines.next() else {
+                    break Ok(cal);
+                };
+                line
             };
 
             let prop = line.parse::<Property>()?;
             match prop.name().as_str() {
+                "BEGIN" if prop.value() == "VTIMEZONE" => {
+                    let buffered = buffer_timezone(lines);
+                    pending = buffered.pending;
+
+                    if !buffered.complete {
+                        warn!("ignoring malformed timezone: unterminated VTIMEZONE");
+                        continue;
+                    }
+
+                    let mut timezone_lines = buffered.lines.join("\n");
+                    timezone_lines.push('\n');
+                    let mut timezone_reader = LineReader::new(timezone_lines.as_bytes());
+
+                    match CalTimeZone::from_lines(&mut timezone_reader, prop) {
+                        Ok(tz) => cal.timezones.push(tz),
+                        Err(e) => warn!("ignoring malformed timezone: {}", e),
+                    }
+                }
                 "BEGIN" if prop.value() == "VTODO" => match CalTodo::from_lines(lines, prop) {
                     Ok(todo) => cal.checked_add(CalComponent::Todo(todo)),
                     Err(e @ ParseError::UnexpectedEOF) | Err(e @ ParseError::UnexpectedEnd(_)) => {
@@ -232,14 +314,6 @@ impl PropertyConsumer for Calendar {
                     }
                     Err(e) => warn!("ignoring malformed event: {}", e),
                 },
-                "BEGIN" if prop.value() == "VTIMEZONE" => {
-                    match CalTimeZone::from_lines(lines, prop) {
-                        Ok(tz) => cal.timezones.push(tz),
-                        Err(e @ ParseError::UnexpectedEOF)
-                        | Err(e @ ParseError::UnexpectedEnd(_)) => return Err(e),
-                        Err(e) => warn!("ignoring malformed timezone: {}", e),
-                    }
-                }
                 "BEGIN" => match Unknown::from_lines(lines, prop) {
                     Ok(other) => cal.unknown.push(other),
                     Err(e @ ParseError::UnexpectedEOF) | Err(e @ ParseError::UnexpectedEnd(_)) => {
@@ -261,6 +335,68 @@ impl PropertyConsumer for Calendar {
     }
 }
 
+struct BufferedTimeZone {
+    lines: Vec<String>,
+    pending: Option<String>,
+    complete: bool,
+}
+
+fn buffer_timezone<R: BufRead>(lines: &mut LineReader<R>) -> BufferedTimeZone {
+    let mut buffered = Vec::new();
+    let mut depth = 0usize;
+
+    loop {
+        let Some(line) = lines.next() else {
+            return BufferedTimeZone {
+                lines: buffered,
+                pending: None,
+                complete: false,
+            };
+        };
+
+        match line.parse::<Property>() {
+            Ok(prop) if depth == 0 => match prop.name().as_str() {
+                "END" if prop.value() == "VTIMEZONE" => {
+                    buffered.push(line);
+                    return BufferedTimeZone {
+                        lines: buffered,
+                        pending: None,
+                        complete: true,
+                    };
+                }
+                "BEGIN" if prop.value() == "STANDARD" || prop.value() == "DAYLIGHT" => {
+                    depth = 1;
+                    buffered.push(line);
+                }
+                "BEGIN" => {
+                    return BufferedTimeZone {
+                        lines: buffered,
+                        pending: Some(line),
+                        complete: false,
+                    };
+                }
+                "END" if prop.value() == "VCALENDAR" => {
+                    return BufferedTimeZone {
+                        lines: buffered,
+                        pending: Some(line),
+                        complete: false,
+                    };
+                }
+                _ => buffered.push(line),
+            },
+            Ok(prop) => {
+                if prop.name() == "BEGIN" {
+                    depth += 1;
+                } else if prop.name() == "END" {
+                    depth = depth.saturating_sub(1);
+                }
+                buffered.push(line);
+            }
+            Err(_) => buffered.push(line),
+        }
+    }
+}
+
 impl FromStr for Calendar {
     type Err = ParseError;
 
@@ -277,56 +413,6 @@ impl FromStr for Calendar {
                 Ok(cal)
             }
             _ => Err(ParseError::UnexpectedProp(prop.name().to_string())),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CalTimeZone {
-    tzid: String,
-    props: Vec<Property>,
-}
-
-impl CalTimeZone {
-    pub fn new(tzid: String) -> Self {
-        Self {
-            tzid,
-            props: vec![],
-        }
-    }
-}
-
-impl PropertyProducer for CalTimeZone {
-    fn to_props(&self) -> Vec<Property> {
-        let mut props = vec![Property::new("BEGIN", vec![], "VTIMEZONE")];
-        props.push(Property::new("TZID", vec![], self.tzid.clone()));
-        props.extend(self.props.iter().cloned());
-        props.push(Property::new("END", vec![], "VTIMEZONE"));
-        props
-    }
-}
-
-impl PropertyConsumer for CalTimeZone {
-    fn from_lines<R: BufRead>(lines: &mut LineReader<R>, _: Property) -> Result<Self, ParseError>
-    where
-        Self: Sized,
-    {
-        let mut tz = CalTimeZone::new("".into());
-        loop {
-            let Some(line) = lines.next() else {
-                break Err(ParseError::UnexpectedEOF);
-            };
-
-            let prop = line.parse::<Property>()?;
-            match prop.name().as_str() {
-                "END" if prop.value() == "VTIMEZONE" => {
-                    break Ok(tz);
-                }
-                "TZID" => tz.tzid = prop.take_value(),
-                _ => {
-                    tz.props.push(prop);
-                }
-            }
         }
     }
 }
@@ -392,7 +478,7 @@ mod tests {
     use chrono_tz::Tz;
 
     use crate::{
-        objects::{CalComponent, CalDate, CalDateTime, CalTimeZone, Calendar, EventLike},
+        objects::{CalComponent, CalDate, CalDateTime, Calendar, EventLike},
         parser::{ParseError, Property},
     };
 
@@ -420,6 +506,12 @@ TEST;FOO=bar;A=B:\"value\"
 END:VTODO
 BEGIN:VTIMEZONE
 TZID:Europe/Berlin
+BEGIN:STANDARD
+DTSTART:19701025T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+END:STANDARD
 END:VTIMEZONE
 END:VCALENDAR";
 
@@ -457,6 +549,12 @@ END:VCALENDAR";
 VERSION:2.0\r
 BEGIN:VTIMEZONE\r
 TZID:Europe/Berlin\r
+BEGIN:STANDARD\r
+DTSTART:19701025T030000\r
+TZOFFSETFROM:+0200\r
+TZOFFSETTO:+0100\r
+TZNAME:CET\r
+END:STANDARD\r
 END:VTIMEZONE\r
 BEGIN:VTODO\r
 UID:1234-5678\r
@@ -476,6 +574,167 @@ END:VTODO\r
 END:VCALENDAR\r
 "
         );
+    }
+
+    #[test]
+    fn add_timezone_adds_timezone_to_calendar() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
+
+        let parsed = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Asia/Tokyo\n\
+BEGIN:STANDARD\n\
+DTSTART:19700101T000000\n\
+TZOFFSETFROM:+0900\n\
+TZOFFSETTO:+0900\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+END:VCALENDAR\n"
+            .parse::<Calendar>()
+            .unwrap();
+        cal.add_timezone(parsed.timezones()[0].clone());
+
+        let tzs = cal.timezones();
+        assert_eq!(tzs.len(), 1);
+        assert_eq!(tzs[0].tzid(), "Asia/Tokyo");
+    }
+
+    #[test]
+    fn populate_timezones_adds_missing_used_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
+
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
+        assert!(!cal.timezones()[0].observances().is_empty());
+    }
+
+    #[test]
+    fn populate_timezones_does_not_replace_existing_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19701025T030000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+TZNAME:CUSTOM\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(
+            cal.timezones()[0].observances()[0].tzname(),
+            ["CUSTOM".to_string()].as_slice()
+        );
+    }
+
+    #[test]
+    fn populate_timezones_removes_unused_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19701025T030000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.timezones().len(), 1);
+
+        cal.populate_timezones();
+
+        assert!(cal.timezones().is_empty());
+    }
+
+    #[test]
+    fn populate_timezones_prunes_unused_and_keeps_used_existing_timezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19701025T030000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+TZNAME:BERLIN\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VTIMEZONE\n\
+TZID:America/New_York\n\
+BEGIN:STANDARD\n\
+DTSTART:19701101T020000\n\
+TZOFFSETFROM:-0400\n\
+TZOFFSETTO:-0500\n\
+TZNAME:NEWYORK\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert_eq!(cal.timezones().len(), 2);
+
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
+        assert_eq!(
+            cal.timezones()[0].observances()[0].tzname(),
+            ["BERLIN".to_string()].as_slice()
+        );
+    }
+
+    #[test]
+    fn malformed_timezone_is_ignored_and_can_be_repopulated() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
+
+        cal.populate_timezones();
+
+        assert_eq!(cal.timezones().len(), 1);
+        assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
     }
 
     #[test]
@@ -644,31 +903,25 @@ END:VCALENDAR\n";
     }
 
     #[test]
-    fn vtimezone_unexpected_eof_is_fatal() {
+    fn vtimezone_unexpected_eof_is_ignored() {
         let input = "BEGIN:VCALENDAR\n\
 BEGIN:VTIMEZONE\n\
 TZID:Europe/Berlin\n";
 
-        let res = input.parse::<Calendar>();
-        assert!(
-            matches!(res, Err(ParseError::UnexpectedEOF)),
-            "Expected UnexpectedEOF for incomplete VTIMEZONE"
-        );
+        let cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
     }
 
     #[test]
-    fn vtimezone_wrong_end_is_fatal() {
+    fn vtimezone_wrong_end_is_ignored() {
         let input = "BEGIN:VCALENDAR\n\
 BEGIN:VTIMEZONE\n\
 TZID:Europe/Berlin\n\
 END:VEVENT\n\
 END:VCALENDAR\n";
 
-        let res = input.parse::<Calendar>();
-        assert!(
-            matches!(res, Err(ParseError::UnexpectedEOF)),
-            "Expected UnexpectedEOF for wrong VTIMEZONE end"
-        );
+        let cal = input.parse::<Calendar>().unwrap();
+        assert!(cal.timezones().is_empty());
     }
 
     #[test]
@@ -737,42 +990,6 @@ END:VCALENDAR\n";
     }
 
     #[test]
-    fn timezones_returns_timezone_components() {
-        let input = "BEGIN:VCALENDAR\n\
-VERSION:2.0\n\
-BEGIN:VTIMEZONE\n\
-TZID:America/New_York\n\
-END:VTIMEZONE\n\
-BEGIN:VTIMEZONE\n\
-TZID:Europe/London\n\
-END:VTIMEZONE\n\
-END:VCALENDAR\n";
-
-        let cal = input.parse::<Calendar>().unwrap();
-        let tzs = cal.timezones();
-        assert_eq!(tzs.len(), 2);
-        assert_eq!(tzs[0].tzid, "America/New_York");
-        assert_eq!(tzs[1].tzid, "Europe/London");
-    }
-
-    #[test]
-    fn add_timezone_adds_timezone_to_calendar() {
-        let input = "BEGIN:VCALENDAR\n\
-VERSION:2.0\n\
-END:VCALENDAR\n";
-
-        let mut cal = input.parse::<Calendar>().unwrap();
-        assert!(cal.timezones().is_empty());
-
-        let tz = CalTimeZone::new("Asia/Tokyo".to_string());
-        cal.add_timezone(tz.clone());
-
-        let tzs = cal.timezones();
-        assert_eq!(tzs.len(), 1);
-        assert_eq!(tzs[0].tzid, "Asia/Tokyo");
-    }
-
-    #[test]
     fn delete_components_removes_matching_components() {
         let input = "BEGIN:VCALENDAR\n\
 VERSION:2.0\n\
@@ -832,6 +1049,11 @@ SUMMARY:Todo 2\n\
 END:VTODO\n\
 BEGIN:VTIMEZONE\n\
 TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19701025T030000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+END:STANDARD\n\
 END:VTIMEZONE\n\
 END:VCALENDAR\n";
 
@@ -923,36 +1145,6 @@ END:VCALENDAR\n";
         assert!(output.contains("BEGIN:X-CUSTOM"));
         assert!(output.contains("X-PROP:custom-value"));
         assert!(output.contains("END:X-CUSTOM"));
-    }
-
-    #[test]
-    fn timezone_serialization_includes_props() {
-        let input = "BEGIN:VCALENDAR\n\
-VERSION:2.0\n\
-BEGIN:VTIMEZONE\n\
-TZID:America/Chicago\n\
-X-CUSTOM-PROP:custom-value\n\
-END:VTIMEZONE\n\
-END:VCALENDAR\n";
-
-        let cal = input.parse::<Calendar>().unwrap();
-        let tz = &cal.timezones()[0];
-        assert_eq!(tz.tzid, "America/Chicago");
-        assert_eq!(tz.props.len(), 1);
-        assert_eq!(tz.props[0].name(), "X-CUSTOM-PROP");
-
-        let mut buf = Vec::new();
-        cal.write(&mut buf).unwrap();
-        let output = String::from_utf8(buf).unwrap();
-
-        let expected = "BEGIN:VCALENDAR\r\n\
-VERSION:2.0\r\n\
-BEGIN:VTIMEZONE\r\n\
-TZID:America/Chicago\r\n\
-X-CUSTOM-PROP:custom-value\r\n\
-END:VTIMEZONE\r\n\
-END:VCALENDAR\r\n";
-        assert_eq!(output, expected);
     }
 
     // --- validate_times ---

@@ -9,7 +9,7 @@ mod dayocc;
 use anyhow::anyhow;
 use eventix_ical::{
     col::CalFile,
-    objects::{CalCompType, CalComponent, CalEvent, CalOrganizer, CalTimeZone, CalTodo},
+    objects::{CalCompType, CalComponent, CalEvent, CalOrganizer, CalTodo},
 };
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, PersonalAlarms};
@@ -26,7 +26,6 @@ pub fn create_component<F>(
     locale: &Arc<dyn Locale + Send + Sync>,
     calendar: &str,
     ctype: CalCompType,
-    event_tz: &str,
     populate: F,
 ) -> anyhow::Result<()>
 where
@@ -69,23 +68,12 @@ where
     path.push(format!("{uid}.ics"));
 
     let mut cal = eventix_ical::objects::Calendar::default();
-    // add a VTIMEZONE entry to the calendar with just the name of the timezone to work around a
-    // problem in the interaction of davmail and MS exchange. davmail translates the timezones to
-    // in ICS files to different names for compatibility reasons (I guess) by taking the timezone
-    // from the VTIMEZONE entries and setting the same timezone in all DTSTART, DTEND, etc.
-    // properties. If there is no VTIMEZONE entry, this translation isn't done, but davmail inserts
-    // a new VTIMEZONE entry, which then has a different timezone name than in DTSTART etc.. This
-    // apparently is only a problem when updating ICS files, not when creating them. Therefore, it
-    // worked often fine so far, because MS exchange added the VTIMEZONE entry for us. This however
-    // does not always happen, so that we run into this issue.
-    //
-    // A working fix is to add a VTIMEZONE entry with just the timezone name and let davmail/MS
-    // exchange add the daylight/standard information for us.
-    cal.add_timezone(CalTimeZone::new(event_tz.to_string()));
+    // Populate generated VTIMEZONE entries for all TZIDs referenced by the component so saved
+    // files remain self-contained for consumers that depend on timezone components.
+    cal.add_component(comp);
+    cal.populate_timezones();
 
-    let mut file = CalFile::new(calendar.clone(), path, cal);
-
-    file.add_component(comp);
+    let file = CalFile::new(calendar.clone(), path, cal);
     file.save()?;
 
     dir.add_file(file);

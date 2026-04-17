@@ -38,7 +38,6 @@ pub async fn handler(
         &locale,
         &req.calendar,
         CalCompType::Todo,
-        locale.timezone().name(),
         |_cal, _alarm_type, comp, _persalarms, _organizer, _locale| {
             comp.set_summary(Some(req.summary));
             if let Some(due_date) = req.due_date.to_caldate(CalDateType::Inclusive, true) {

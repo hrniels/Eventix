@@ -9,9 +9,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use chrono::{NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use eventix_ical::col::CalFile;
-use eventix_ical::objects::{
-    CalDate, CalDateTime, CalTimeZone, Calendar, EventLike, UpdatableEventLike,
-};
+use eventix_ical::objects::{CalDate, CalDateTime, Calendar, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -95,7 +93,6 @@ pub async fn handler(
     };
 
     let dir = file.directory().clone();
-    let tz_name = tz.name().to_string();
 
     // Clone the source component, then assign a fresh UID and updated dates/timestamps.
     let mut new_comp = comp.clone();
@@ -119,9 +116,9 @@ pub async fn handler(
     path.push(format!("{new_uid}.ics"));
 
     let mut cal = Calendar::default();
-    cal.add_timezone(CalTimeZone::new(tz_name));
-    let mut new_file = CalFile::new(dir.clone(), path, cal);
-    new_file.add_component(new_comp);
+    cal.add_component(new_comp);
+    cal.populate_timezones();
+    let new_file = CalFile::new(dir.clone(), path, cal);
     new_file
         .save()
         .context(format!("Save copy of {} as {}", req.uid, new_uid))?;

@@ -8,8 +8,8 @@ use axum::response::IntoResponse;
 use chrono_tz::Tz;
 use eventix_ical::col::CalFile;
 use eventix_ical::objects::{
-    CalCompType, CalComponent, CalDate, CalDateType, CalEvent, CalTimeZone, CalTodo, Calendar,
-    EventLike, UpdatableEventLike,
+    CalCompType, CalComponent, CalDate, CalDateType, CalEvent, CalTodo, Calendar, EventLike,
+    UpdatableEventLike,
 };
 use eventix_locale::Locale;
 use eventix_state::EventixState;
@@ -184,10 +184,10 @@ fn action_update(
         path.push(format!("{uid}.ics"));
 
         let mut cal = Calendar::default();
-        cal.add_timezone(CalTimeZone::new(event_tz.clone()));
+        cal.add_component(comp);
+        cal.populate_timezones();
 
-        let mut new_file = CalFile::new(calendar, path, cal);
-        new_file.add_component(comp);
+        let new_file = CalFile::new(calendar, path, cal);
         new_file.save()?;
 
         dir.add_file(new_file);
@@ -240,12 +240,7 @@ fn action_update(
             .context("Creating overwrite failed")?;
         }
 
-        // add "empty" timezone information as a workaround for davmail/exchange
-        // see comment in new/save.rs for details.
-        let ctz = CalTimeZone::new(event_tz);
-        if !file.calendar().timezones().contains(&ctz) {
-            file.calendar_mut().add_timezone(ctz);
-        }
+        file.calendar_mut().populate_timezones();
 
         // should we move the file to a different directory?
         if req.rid.is_none() {
