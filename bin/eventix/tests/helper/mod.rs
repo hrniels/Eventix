@@ -181,17 +181,18 @@ fn make_state_from_col_in(col: CollectionSettings, data_home: &Path) -> EventixS
 
 /// Constructs an `EventixState` from the given collection settings.
 ///
-/// Returns the state together with the config `TempDir`. The caller must keep the `TempDir` alive
-/// for as long as the state may write settings back to disk (e.g. in collections add/edit tests).
+/// Returns the state together with the backing `TempDir`. The caller must keep the `TempDir` alive
+/// for as long as the state may write settings or XDG data back to disk (e.g. in collections
+/// add/edit tests).
 /// Tests that never write settings may discard the returned `TempDir` immediately.
 #[allow(dead_code)]
 pub fn make_state_from_col(col: CollectionSettings) -> (EventixState, TempDir) {
     let config_tmp = TempDir::new().unwrap();
-    let data_tmp = TempDir::new().unwrap();
+    let data_home = config_tmp.path().join("data");
 
     // Write the locale files into the temp data directory so that State::new can find them via
     // XDG_DATA_HOME without reading from the project source tree.
-    let locale_dir = data_tmp.path().join("locale");
+    let locale_dir = data_home.join("locale");
     std::fs::create_dir_all(&locale_dir).unwrap();
     std::fs::write(
         locale_dir.join("English.toml"),
@@ -202,10 +203,7 @@ pub fn make_state_from_col(col: CollectionSettings) -> (EventixState, TempDir) {
     )
     .unwrap();
 
-    let xdg = Arc::new(eventix_state::with_test_xdg(
-        data_tmp.path(),
-        config_tmp.path(),
-    ));
+    let xdg = Arc::new(eventix_state::with_test_xdg(&data_home, config_tmp.path()));
 
     let mut settings = Settings::new(xdg.get_config_home().unwrap().join("settings.toml"));
     settings.collections_mut().insert(COL_ID.to_string(), col);
@@ -234,8 +232,15 @@ pub fn make_collections_router(state: EventixState) -> Router {
     Router::new().nest("/collections", eventix::pages::collections::router(state))
 }
 
+/// Builds an axum `Router` wiring only the calendars API endpoints.
+#[allow(dead_code)]
+pub fn make_calendars_api_router(state: EventixState) -> Router {
+    Router::new().nest("/api", eventix::api::router(state))
+}
+
 /// Sends a POST to `uri` with the given `application/x-www-form-urlencoded` body and returns the
 /// status code and response body text.
+#[allow(dead_code)]
 pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, String) {
     let req = Request::builder()
         .method("POST")
@@ -347,6 +352,7 @@ pub fn merge_fields<'a>(
 }
 
 /// Percent-encodes all non-alphanumeric characters except `-`, `_`, `.`, and `~` as per RFC 3986.
+#[allow(dead_code)]
 pub fn encode_form(fields: &[(&str, &str)]) -> String {
     fn encode(s: &str) -> String {
         let mut out = String::with_capacity(s.len());

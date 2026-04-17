@@ -25,9 +25,7 @@
         "env": {
             "CARGO_HOME": "/run/build/eventix/cargo"
         },
-        "build-args": [
-            "--share=network"
-        ]
+        "build-args": ["--share=network"]
     },
     "modules": [
         {
@@ -86,14 +84,12 @@
         {
             "name": "vdirsyncer",
             "buildsystem": "simple",
-            "build-commands": [
-                "pip3 install --prefix=/app ."
-            ],
+            "build-commands": ["pip3 install --prefix=/app contrib/vdirsyncer"],
             "sources": [
                 {
-                    "type": "git",
-                    "url": "https://github.com/pimutils/vdirsyncer.git",
-                    "tag": "v0.20.0"
+                    "type": "archive",
+                    "path": "../flatpak/source.tar.gz",
+                    "strip-components": 0
                 }
             ]
         },

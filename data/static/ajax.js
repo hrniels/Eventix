@@ -109,6 +109,18 @@ function calendarOperation(col_id, cal_id, op, onsuccess) {
     postRequest(url, onsuccess);
 }
 
+function deleteRemoteCalendar(col_id, folder, spinnerId, onsuccess) {
+    const url =
+        "/api/calendars/calop?col_id=" +
+        encodeURIComponent(col_id) +
+        "&folder=" +
+        encodeURIComponent(folder) +
+        "&op=Delete";
+    postWithSpinner(spinnerId, url, function (data, auth_success) {
+        if (auth_success) onsuccess(data);
+    });
+}
+
 function deleteCollection(col_id, onDeleted) {
     postRequest("/api/collections/delete?col_id=" + col_id, onDeleted);
 }

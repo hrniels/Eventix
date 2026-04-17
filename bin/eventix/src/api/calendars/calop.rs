@@ -21,7 +21,8 @@ pub enum Operation {
 #[derive(Debug, Deserialize)]
 pub struct Params {
     col_id: String,
-    cal_id: String,
+    cal_id: Option<String>,
+    folder: Option<String>,
     op: Operation,
 }
 
@@ -39,18 +40,39 @@ pub async fn handler(
 
     match req.op {
         Operation::Delete => {
-            eventix_state::State::delete_calendar(&mut state, &req.col_id, &req.cal_id)
-                .await
-                .context(format!(
-                    "Unable to delete calendar {}:{}",
-                    req.col_id, req.cal_id
-                ))?;
+            match (&req.cal_id, &req.folder) {
+                (Some(cal_id), _) => {
+                    eventix_state::State::delete_calendar(&mut state, &req.col_id, cal_id)
+                        .await
+                        .context(format!(
+                            "Unable to delete calendar {}:{}",
+                            req.col_id, cal_id
+                        ))?;
+                }
+                (None, Some(folder)) => {
+                    eventix_state::State::delete_calendar_by_folder(
+                        &mut state,
+                        &req.col_id,
+                        folder,
+                    )
+                    .await
+                    .context(format!(
+                        "Unable to delete remote calendar by folder {}:{}",
+                        req.col_id, folder
+                    ))?;
+                }
+                (None, None) => return Err(anyhow!("Missing calendar id or folder").into()),
+            }
 
             if let Err(e) = state.settings().write_to_file() {
                 tracing::warn!("Unable to save settings: {}", e);
             }
         }
         Operation::Toggle => {
+            let cal_id = req
+                .cal_id
+                .as_ref()
+                .ok_or_else(|| anyhow!("Missing calendar id"))?;
             let col = state
                 .settings_mut()
                 .collections_mut()
@@ -59,8 +81,8 @@ pub async fn handler(
 
             let cal = col
                 .all_calendars_mut()
-                .get_mut(&req.cal_id)
-                .ok_or_else(|| anyhow!("No calendar '{}'", &req.cal_id))?;
+                .get_mut(cal_id)
+                .ok_or_else(|| anyhow!("No calendar '{}'", cal_id))?;
             cal.set_enabled(!cal.enabled());
 
             if let Err(e) = state.settings().write_to_file() {

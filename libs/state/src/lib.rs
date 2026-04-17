@@ -34,7 +34,7 @@ pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings, SyncTimeBound,
     SyncTimeSpan, SyncerType,
 };
-pub use sync::{SyncColResult, SyncResult, Syncer, log_file};
+pub use sync::{SyncColResult, SyncResult, Syncer, create_calendar_by_folder, log_file};
 
 /// Shared, async-safe handle to the global application state.
 ///
@@ -323,6 +323,15 @@ impl State {
             .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
         col.all_calendars_mut().remove(cal_id);
         Ok(())
+    }
+
+    /// Deletes the remote calendar identified by `folder` and removes its local synced files.
+    pub async fn delete_calendar_by_folder(
+        state: &mut State,
+        col_id: &String,
+        folder: &String,
+    ) -> anyhow::Result<()> {
+        sync::delete_calendar_by_folder(state, col_id, folder).await
     }
 
     /// Reloads a single calendar from its remote source and refreshes the local file.

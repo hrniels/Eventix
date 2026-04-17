@@ -7,8 +7,12 @@ function userOnForm() {
     return formPage || openForms > 0;
 }
 
+function popupOrFormsOpen() {
+    return popupOpen || userOnForm();
+}
+
 function userIsActive() {
-    return keyMouse || popupOpen || userOnForm();
+    return keyMouse || popupOrFormsOpen();
 }
 
 function setFormPage(val) {

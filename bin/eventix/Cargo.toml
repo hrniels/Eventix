@@ -49,6 +49,10 @@ name = "api_items"
 path = "tests/api/items.rs"
 
 [[test]]
+name = "api_calendars"
+path = "tests/api/calendars.rs"
+
+[[test]]
 name = "pages_collections_add"
 path = "tests/pages/collections/add.rs"
 

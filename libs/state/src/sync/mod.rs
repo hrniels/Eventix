@@ -47,6 +47,22 @@ pub trait Syncer: Send {
     #[allow(clippy::ptr_arg)]
     async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()>;
 
+    /// Creates the remote calendar identified by `folder` and prepares local synced files.
+    #[allow(clippy::ptr_arg)]
+    async fn create_cal_by_folder(
+        &mut self,
+        state: &mut State,
+        folder: &String,
+    ) -> anyhow::Result<()>;
+
+    /// Deletes the remote calendar identified by `folder` and removes its local synced files.
+    #[allow(clippy::ptr_arg)]
+    async fn delete_cal_by_folder(
+        &mut self,
+        state: &mut State,
+        folder: &String,
+    ) -> anyhow::Result<()>;
+
     /// Removes locally cached data for the entire collection.
     ///
     /// If `config` is `true`, configuration-related state is also removed.
@@ -199,6 +215,26 @@ pub(crate) async fn delete_calendar(
 ) -> anyhow::Result<()> {
     let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
     cal_sync.syncer.delete_cal(state, cal_id).await
+}
+
+/// Creates the remote calendar identified by `folder` within `col_id`.
+pub async fn create_calendar_by_folder(
+    state: &mut State,
+    col_id: &String,
+    folder: &String,
+) -> anyhow::Result<()> {
+    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
+    cal_sync.syncer.create_cal_by_folder(state, folder).await
+}
+
+/// Deletes the remote calendar identified by `folder` and removes its local synced files.
+pub(crate) async fn delete_calendar_by_folder(
+    state: &mut State,
+    col_id: &String,
+    folder: &String,
+) -> anyhow::Result<()> {
+    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
+    cal_sync.syncer.delete_cal_by_folder(state, folder).await
 }
 
 /// Synchronises all calendars across all configured collections.

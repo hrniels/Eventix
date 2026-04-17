@@ -3,14 +3,24 @@ let syncing = false;
 let outOfSync = false;
 
 function startSpinning(spinnerId) {
-    $("#" + spinnerId).addClass("ev_spin");
+    const spinner = $("#" + spinnerId);
+    if (!spinner.data("originalClass")) {
+        spinner.data("originalClass", spinner.attr("class") || "");
+    }
+    spinner.attr("class", "bi bi-arrow-clockwise ev_spin");
     $("#" + spinnerId)
         .parent()
         .removeClass("ev_button_error");
 }
 
 function stopSpinning(spinnerId, error) {
-    $("#" + spinnerId).removeClass("ev_spin");
+    const spinner = $("#" + spinnerId);
+    const originalClass = spinner.data("originalClass");
+    if (originalClass) {
+        spinner.attr("class", originalClass);
+    } else {
+        spinner.removeClass("ev_spin");
+    }
     if (error) {
         $("#" + spinnerId)
             .parent()
@@ -31,6 +41,7 @@ function postWithSpinner(spinnerId, url, onresponse) {
 
 function handleAuthErrors(data, op_url, spinnerId) {
     var error = false;
+    if (!data || !data.collections) return false;
     for (var cal in data.collections) {
         // auth problem? Then show auth popup
         if (data.collections[cal].AuthFailed) {
@@ -43,6 +54,7 @@ function handleAuthErrors(data, op_url, spinnerId) {
 
 function handleCalErrors(data) {
     var error = false;
+    if (!data || !data.calendars) return false;
     for (var cal in data.calendars) {
         let btn = $("#ev_cal_src_button_" + cal);
         if (data.calendars[cal]) {
