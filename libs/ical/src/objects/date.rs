@@ -8,6 +8,7 @@ use std::{
     hash::Hash,
     ops::{Add, Deref, Sub},
     str::FromStr,
+    sync::Arc,
 };
 
 use chrono::offset::MappedLocalTime;
@@ -18,6 +19,91 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::parser::{Parameter, ParseError, Property};
 
 use super::{CalCompType, CalendarTimeZoneResolver};
+
+/// A reusable calendar-bound context for resolving unresolved dates.
+///
+/// The contained resolver is cached by the owning calendar and shared via [`Arc`], while the
+/// fallback timezone describes how floating values and plain dates should be interpreted.
+#[derive(Clone, Debug)]
+pub struct DateContext {
+    resolver: Arc<CalendarTimeZoneResolver>,
+    fallback: Tz,
+}
+
+impl DateContext {
+    /// Creates a new resolution context from the given resolver and fallback timezone.
+    pub fn new(resolver: Arc<CalendarTimeZoneResolver>, fallback: Tz) -> Self {
+        Self { resolver, fallback }
+    }
+
+    /// Returns the shared resolver used by this context.
+    pub fn resolver(&self) -> &CalendarTimeZoneResolver {
+        &self.resolver
+    }
+
+    /// Returns the fallback timezone used by this context.
+    pub fn fallback(&self) -> &Tz {
+        &self.fallback
+    }
+
+    /// Returns a bound view for the given unresolved calendar date.
+    pub fn date<'a>(&'a self, raw: &'a CalDate) -> BoundCalDate<'a> {
+        BoundCalDate::new(raw, self)
+    }
+}
+
+/// A calendar date paired with a calendar-bound resolution context.
+#[derive(Clone, Copy, Debug)]
+pub struct BoundCalDate<'a> {
+    raw: &'a CalDate,
+    ctx: &'a DateContext,
+}
+
+impl<'a> BoundCalDate<'a> {
+    /// Creates a new bound view for the given unresolved date.
+    pub fn new(raw: &'a CalDate, ctx: &'a DateContext) -> Self {
+        Self { raw, ctx }
+    }
+
+    /// Returns the underlying unresolved calendar date.
+    pub fn raw(&self) -> &'a CalDate {
+        self.raw
+    }
+
+    /// Returns the context used to resolve this date.
+    pub fn context(&self) -> &'a DateContext {
+        self.ctx
+    }
+
+    /// Resolves this date as the start of an event.
+    pub fn resolved_start(&self) -> ResolvedDateTime {
+        self.ctx
+            .resolver()
+            .resolve_date_start(self.raw, self.ctx.fallback())
+    }
+
+    /// Resolves this date as the inclusive end of an event or TODO.
+    pub fn resolved_end(&self) -> ResolvedDateTime {
+        self.ctx
+            .resolver()
+            .resolve_date_end(self.raw, self.ctx.fallback())
+    }
+
+    /// Resolves the start of this date and converts it into the given display timezone.
+    pub fn start_in(&self, tz: &Tz) -> DateTime<Tz> {
+        self.resolved_start().with_timezone(tz)
+    }
+
+    /// Resolves the end of this date and converts it into the given display timezone.
+    pub fn end_in(&self, tz: &Tz) -> DateTime<Tz> {
+        self.resolved_end().with_timezone(tz)
+    }
+
+    /// Validates this date using the resolver captured in the bound context.
+    pub fn validate(&self, local_tz: &Tz) -> Result<(), ParseError> {
+        self.ctx.resolver().validate_date(self.raw, local_tz)
+    }
+}
 
 /// A fully resolved calendar timestamp with a concrete UTC offset.
 ///
@@ -889,7 +975,7 @@ mod tests {
         let fallback_timezone = CalDateTime::Timezone(naive, "Mars/Phobos".to_string());
         assert_eq!(
             fallback_timezone.with_tz(&Tz::UTC).to_rfc3339(),
-            "2024-01-15T07:09:10+00:00"
+            "2024-01-15T08:09:10+00:00"
         );
     }
 

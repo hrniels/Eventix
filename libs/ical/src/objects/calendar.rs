@@ -5,14 +5,14 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use chrono_tz::Tz;
 use tracing::warn;
 
 use crate::objects::{
     CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTimeZone, CalTodo, CalTrigger,
-    CalendarTimeZoneResolver, EventLike,
+    CalendarTimeZoneResolver, DateContext, EventLike,
 };
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
@@ -30,7 +30,7 @@ pub struct Calendar {
     timezones: Vec<CalTimeZone>,
     props: Vec<Property>,
     unknown: Vec<Unknown>,
-    tzresolver: OnceLock<CalendarTimeZoneResolver>,
+    tzresolver: OnceLock<Arc<CalendarTimeZoneResolver>>,
 }
 
 impl Calendar {
@@ -67,7 +67,20 @@ impl Calendar {
 
     pub fn timezone_resolver(&self) -> &CalendarTimeZoneResolver {
         self.tzresolver
-            .get_or_init(|| CalendarTimeZoneResolver::new(self))
+            .get_or_init(|| Arc::new(CalendarTimeZoneResolver::new(self)))
+            .as_ref()
+    }
+
+    /// Returns the cached timezone resolver as a shared handle.
+    pub fn timezone_resolver_arc(&self) -> Arc<CalendarTimeZoneResolver> {
+        self.tzresolver
+            .get_or_init(|| Arc::new(CalendarTimeZoneResolver::new(self)))
+            .clone()
+    }
+
+    /// Builds a reusable date resolution context for the given fallback timezone.
+    pub fn date_context(&self, fallback: Tz) -> DateContext {
+        DateContext::new(self.timezone_resolver_arc(), fallback)
     }
 
     /// Adds the given component to the calendar.

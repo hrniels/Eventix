@@ -11,8 +11,9 @@ use std::io::BufRead;
 use tracing::warn;
 
 use crate::objects::{
-    CalAlarm, CalAttendee, CalDate, CalDuration, CalEvent, CalOrganizer, CalRRule, CalTodo,
-    CalendarTimeZoneResolver, EventLike, ResolvedDateTime, UpdatableEventLike,
+    BoundCalDate, CalAlarm, CalAttendee, CalDate, CalDuration, CalEvent, CalOrganizer, CalRRule,
+    CalTodo, CalendarTimeZoneResolver, DateContext, EventLike, ResolvedDateTime,
+    UpdatableEventLike,
 };
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 use crate::util;
@@ -23,6 +24,136 @@ pub const PRIORITY_LOW: u8 = 9;
 pub const PRIORITY_MEDIUM: u8 = 5;
 /// Represents the high priority (1)
 pub const PRIORITY_HIGH: u8 = 1;
+
+/// A read-only component view that resolves date properties through a calendar-bound context.
+#[derive(Clone, Debug)]
+pub struct BoundComponent<'a> {
+    raw: &'a CalComponent,
+    ctx: DateContext,
+}
+
+impl<'a> BoundComponent<'a> {
+    /// Creates a new bound view for the given component.
+    pub fn new(raw: &'a CalComponent, ctx: DateContext) -> Self {
+        Self { raw, ctx }
+    }
+
+    /// Returns the underlying unresolved component.
+    pub fn raw(&self) -> &'a CalComponent {
+        self.raw
+    }
+
+    /// Returns the resolution context used by this bound view.
+    pub fn context(&self) -> &DateContext {
+        &self.ctx
+    }
+
+    /// Returns the component type.
+    pub fn ctype(&self) -> CalCompType {
+        self.raw.ctype()
+    }
+
+    /// Returns the component UID.
+    pub fn uid(&self) -> &String {
+        self.raw.uid()
+    }
+
+    /// Returns the stamp as a bound date.
+    pub fn stamp(&self) -> BoundCalDate<'_> {
+        BoundCalDate::new(self.raw.stamp(), &self.ctx)
+    }
+
+    /// Returns the created timestamp as a bound date.
+    pub fn created(&self) -> Option<BoundCalDate<'_>> {
+        self.raw.created().map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the last-modified timestamp as a bound date.
+    pub fn last_modified(&self) -> Option<BoundCalDate<'_>> {
+        self.raw
+            .last_modified()
+            .map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the start date as a bound date.
+    pub fn start(&self) -> Option<BoundCalDate<'_>> {
+        self.raw.start().map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the end or due date as a bound date.
+    pub fn end_or_due(&self) -> Option<BoundCalDate<'_>> {
+        self.raw
+            .end_or_due()
+            .map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the recurrence id as a bound date.
+    pub fn rid(&self) -> Option<BoundCalDate<'_>> {
+        self.raw.rid().map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the exclusion dates as bound dates.
+    pub fn exdates(&self) -> impl Iterator<Item = BoundCalDate<'_>> {
+        self.raw
+            .exdates()
+            .iter()
+            .map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+}
+
+/// A mutable component view that still resolves date properties through a calendar-bound context.
+#[derive(Debug)]
+pub struct BoundComponentMut<'a> {
+    raw: &'a mut CalComponent,
+    ctx: DateContext,
+}
+
+impl<'a> BoundComponentMut<'a> {
+    /// Creates a new mutable bound view for the given component.
+    pub fn new(raw: &'a mut CalComponent, ctx: DateContext) -> Self {
+        Self { raw, ctx }
+    }
+
+    /// Returns the underlying unresolved component.
+    pub fn raw(&self) -> &CalComponent {
+        self.raw
+    }
+
+    /// Returns the underlying unresolved component mutably.
+    pub fn raw_mut(&mut self) -> &mut CalComponent {
+        self.raw
+    }
+
+    /// Returns the resolution context used by this bound view.
+    pub fn context(&self) -> &DateContext {
+        &self.ctx
+    }
+
+    /// Returns the start date as a bound date.
+    pub fn start(&self) -> Option<BoundCalDate<'_>> {
+        self.raw.start().map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the end or due date as a bound date.
+    pub fn end_or_due(&self) -> Option<BoundCalDate<'_>> {
+        self.raw
+            .end_or_due()
+            .map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the recurrence id as a bound date.
+    pub fn rid(&self) -> Option<BoundCalDate<'_>> {
+        self.raw.rid().map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+
+    /// Returns the exclusion dates as bound dates.
+    pub fn exdates(&self) -> impl Iterator<Item = BoundCalDate<'_>> {
+        self.raw
+            .exdates()
+            .iter()
+            .map(|d| BoundCalDate::new(d, &self.ctx))
+    }
+}
 
 /// Common parts of events and TODOs.
 ///
@@ -851,12 +982,26 @@ impl UpdatableEventLike for CalComponent {
     }
 }
 
+impl CalComponent {
+    /// Creates a read-only bound view that resolves date properties via the given context.
+    pub fn resolve(&self, ctx: DateContext) -> BoundComponent<'_> {
+        BoundComponent::new(self, ctx)
+    }
+
+    /// Creates a mutable bound view that resolves date properties via the given context.
+    pub fn resolve_mut(&mut self, ctx: DateContext) -> BoundComponentMut<'_> {
+        BoundComponentMut::new(self, ctx)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use chrono_tz::UTC;
+    use chrono_tz::{Tz, UTC};
 
-    use crate::objects::{CalComponent, CalEvent, Calendar, CompDateType};
+    use crate::objects::{
+        CalComponent, CalDate, CalDateTime, CalEvent, Calendar, CompDateType, UpdatableEventLike,
+    };
     use crate::parser::{LineReader, ParseError, Property, PropertyProducer};
 
     use super::{CalCompType, EventLikeComponent};
@@ -1032,6 +1177,70 @@ mod tests {
     fn component_type_display_is_exact() {
         assert_eq!(format!("{}", CalCompType::Event), "Event");
         assert_eq!(format!("{}", CalCompType::Todo), "Todo");
+    }
+
+    #[test]
+    fn resolve_wrapper_exposes_resolved_dates() {
+        let cal: Calendar = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:ev-1\nDTSTAMP:20250101T000000Z\nDTSTART;TZID=Europe/Berlin:20250102T090000\nDTEND;TZID=Europe/Berlin:20250102T100000\nEND:VEVENT\nEND:VCALENDAR"
+            .parse()
+            .unwrap();
+
+        let ctx = cal.date_context(Tz::UTC);
+        let comp = cal.components()[0].resolve(ctx);
+
+        assert_eq!(
+            comp.start()
+                .unwrap()
+                .resolved_start()
+                .with_timezone(&chrono::Utc)
+                .to_rfc3339(),
+            "2025-01-02T08:00:00+00:00"
+        );
+        assert_eq!(
+            comp.end_or_due()
+                .unwrap()
+                .resolved_end()
+                .with_timezone(&chrono::Utc)
+                .to_rfc3339(),
+            "2025-01-02T09:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn resolve_mut_allows_read_write_flow() {
+        let mut cal: Calendar = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:ev-2\nDTSTAMP:20250101T000000Z\nDTSTART;TZID=Europe/Berlin:20250102T090000\nEND:VEVENT\nEND:VCALENDAR"
+            .parse()
+            .unwrap();
+
+        let ctx = cal.date_context(Tz::UTC);
+        let comp = &mut cal.components_mut()[0];
+        let mut bound = comp.resolve_mut(ctx);
+
+        assert_eq!(
+            bound
+                .start()
+                .unwrap()
+                .resolved_start()
+                .with_timezone(&chrono::Utc)
+                .to_rfc3339(),
+            "2025-01-02T08:00:00+00:00"
+        );
+
+        bound
+            .raw_mut()
+            .set_start(Some(CalDate::DateTime(CalDateTime::Utc(
+                chrono::Utc.with_ymd_and_hms(2025, 1, 2, 12, 0, 0).unwrap(),
+            ))));
+
+        assert_eq!(
+            bound
+                .start()
+                .unwrap()
+                .resolved_start()
+                .with_timezone(&chrono::Utc)
+                .to_rfc3339(),
+            "2025-01-02T12:00:00+00:00"
+        );
     }
 
     // --- checked setters ---

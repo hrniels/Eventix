@@ -16,7 +16,8 @@ use tracing::info;
 use crate::col::{AlarmOccurrence, ColError, Occurrence};
 use crate::objects::{
     AlarmOverlay, CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger,
-    Calendar, CompDateIterator, CompDateType, EventLike, ResolvedDateTime, UpdatableEventLike,
+    Calendar, CompDateIterator, CompDateType, DateContext, EventLike, ResolvedDateTime,
+    UpdatableEventLike,
 };
 use crate::util;
 
@@ -657,9 +658,10 @@ impl CalFile {
         } else {
             CalComponent::Todo(CalTodo::new(base.uid()))
         };
+        let ctx = DateContext::new(self.cal.timezone_resolver_arc(), *tz);
 
         let start = CalDate::DateTime(CalDateTime::Timezone(
-            rid.as_start_with_tz(tz).naive_local(),
+            ctx.date(&rid).start_in(tz).naive_local(),
             tz.name().to_string(),
         ));
         comp.set_start(Some(start));
@@ -710,10 +712,11 @@ impl CalFile {
         if let Some(ref e) = new_end_or_due {
             e.validate(local_tz)?;
         }
+        let ctx = self.cal.date_context(chrono_tz::UTC);
 
         // Compute the UTC delta between old and new DTSTART.
-        let delta: Duration = new_start.as_start_with_tz(&chrono_tz::UTC)
-            - old_start.as_start_with_tz(&chrono_tz::UTC);
+        let delta: Duration =
+            ctx.date(&new_start).resolved_start() - ctx.date(&old_start).resolved_start();
 
         // Collect per-overwrite update info so we can abort before any mutation if any
         // shifted RID (or DTSTART/end) falls in a DST gap or fold.
@@ -1088,24 +1091,26 @@ mod tests {
         assert_eq!(
             all[0].occurrence_end(),
             Some(
-                CalDate::Date(
-                    NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
-                    CalCompType::Event.into()
-                )
-                .as_end_with_tz(tz)
-                .with_timezone(tz)
+                Calendar::default()
+                    .date_context(*tz)
+                    .date(&CalDate::Date(
+                        NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
+                        CalCompType::Event.into()
+                    ))
+                    .end_in(tz)
             )
         );
         assert_eq!(all[1].occurrence_start(), None);
         assert_eq!(
             all[1].occurrence_end(),
             Some(
-                CalDate::Date(
-                    NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
-                    CalCompType::Event.into()
-                )
-                .as_end_with_tz(tz)
-                .with_timezone(tz)
+                Calendar::default()
+                    .date_context(*tz)
+                    .date(&CalDate::Date(
+                        NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
+                        CalCompType::Event.into()
+                    ))
+                    .end_in(tz)
             )
         );
         assert_eq!(
