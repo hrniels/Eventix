@@ -9,14 +9,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use chrono::{DateTime, Duration};
+use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use tracing::info;
 
 use crate::col::{AlarmOccurrence, ColError, Occurrence};
 use crate::objects::{
     AlarmOverlay, CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger,
-    Calendar, CompDateIterator, CompDateType, EventLike, UpdatableEventLike,
+    Calendar, CompDateIterator, CompDateType, EventLike, ResolvedDateTime, UpdatableEventLike,
 };
 use crate::util;
 
@@ -132,12 +132,21 @@ impl<'a> OccurrenceIterator<'a> {
     fn is_in_range(occ: &Occurrence, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
         let occ_start = occ.occurrence_start().unwrap();
         util::date_ranges_overlap(
-            occ_start,
-            occ.occurrence_end().unwrap_or(occ_start),
+            occ_start.with_timezone(&Utc),
+            occ.occurrence_end()
+                .unwrap_or(occ_start)
+                .with_timezone(&Utc),
             start,
             end,
         )
     }
+}
+
+fn resolved_in_range(resolved: ResolvedDateTime, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
+    let resolved = resolved.with_timezone(&Utc);
+    let start = start.with_timezone(&Utc);
+    let end = end.with_timezone(&Utc);
+    resolved >= start && resolved < end
 }
 
 impl<'a> Iterator for OccurrenceIterator<'a> {
@@ -317,7 +326,9 @@ impl CalFile {
                             .filter_map(|occ| {
                                 let aocc = AlarmOccurrence::new(occ, alarm.clone());
                                 match (aocc.occurrence().is_excluded(), aocc.alarm_date()) {
-                                    (false, Some(adate)) if adate >= start && adate < end => {
+                                    (false, Some(adate))
+                                        if resolved_in_range(adate, start, end) =>
+                                    {
                                         Some(aocc)
                                     }
                                     _ => None,
@@ -327,7 +338,7 @@ impl CalFile {
                     }
                     CalTrigger::Absolute(date) => {
                         let alarm_date = date.as_start_with_resolver(&start.timezone(), &resolver);
-                        if alarm_date >= start && alarm_date < end {
+                        if resolved_in_range(alarm_date, start, end) {
                             let fstart = first
                                 .start()
                                 .map(|d| d.as_start_with_resolver(&start.timezone(), &resolver));
@@ -392,7 +403,7 @@ impl CalFile {
                         rid_occ.tz_offset(),
                     );
                     match trigger_date {
-                        Some(alarm) if alarm >= start && alarm < end => {
+                        Some(alarm) if resolved_in_range(alarm, start, end) => {
                             alarms.push(AlarmOccurrence::new(rid_occ.clone(), rid_alarm));
                         }
                         _ => {}
@@ -878,7 +889,7 @@ impl CalFile {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, TimeDelta, TimeZone};
+    use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeDelta, TimeZone};
 
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -962,7 +973,7 @@ mod tests {
             .unwrap()
     }
 
-    fn new_occ_date(year: i32, month: u32, day: u32) -> DateTime<FixedOffset> {
+    fn new_occ_date(year: i32, month: u32, day: u32) -> ResolvedDateTime {
         new_occ_datetime(year, month, day, 0, 0, 0)
     }
 
@@ -973,11 +984,12 @@ mod tests {
         hour: u32,
         min: u32,
         sec: u32,
-    ) -> DateTime<FixedOffset> {
+    ) -> ResolvedDateTime {
         chrono_tz::Europe::Berlin
             .with_ymd_and_hms(year, month, day, hour, min, sec)
             .unwrap()
             .fixed_offset()
+            .into()
     }
 
     fn new_allday_event(date: NaiveDate, uid: &str) -> EventBuilder {
@@ -1079,6 +1091,7 @@ mod tests {
                 )
                 .as_end_with_tz(tz)
                 .fixed_offset()
+                .into()
             )
         );
         assert_eq!(all[1].occurrence_start(), None);
@@ -1091,6 +1104,7 @@ mod tests {
                 )
                 .as_end_with_tz(tz)
                 .fixed_offset()
+                .into()
             )
         );
         assert_eq!(

@@ -36,7 +36,7 @@ pub use component::{
     CalCompType, CalComponent, CompDateIterator, CompDateType, EventLikeComponent, PRIORITY_HIGH,
     PRIORITY_LOW, PRIORITY_MEDIUM,
 };
-pub use date::{CalDate, CalDateTime, CalDateType};
+pub use date::{CalDate, CalDateTime, CalDateType, ResolvedDateTime};
 pub use duration::CalDuration;
 pub use event::CalEvent;
 pub use evlike::{EventLike, UpdatableEventLike};

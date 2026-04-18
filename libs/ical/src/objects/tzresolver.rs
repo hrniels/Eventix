@@ -10,6 +10,7 @@ use chrono_tz::Tz;
 
 use crate::objects::{
     CalDate, CalDateTime, CalRRule, CalRRuleSide, CalTimeZone, CalWDayDesc, Calendar,
+    ResolvedDateTime,
 };
 use crate::parser::ParseError;
 use crate::util;
@@ -39,7 +40,7 @@ impl CalendarTimeZoneResolver {
         &self,
         tzid: &str,
         local: NaiveDateTime,
-    ) -> MappedLocalTime<DateTime<FixedOffset>> {
+    ) -> MappedLocalTime<ResolvedDateTime> {
         if let Some(tz) = self.embedded.get(tzid) {
             return tz.resolve_local(local);
         }
@@ -51,11 +52,7 @@ impl CalendarTimeZoneResolver {
         map_system_time(Tz::Europe__Berlin, local)
     }
 
-    pub fn resolve_local_or_earlier(
-        &self,
-        tzid: &str,
-        local: NaiveDateTime,
-    ) -> DateTime<FixedOffset> {
+    pub fn resolve_local_or_earlier(&self, tzid: &str, local: NaiveDateTime) -> ResolvedDateTime {
         match self.resolve_local(tzid, local) {
             MappedLocalTime::Single(dt) => dt,
             MappedLocalTime::Ambiguous(early, _) => early,
@@ -63,7 +60,7 @@ impl CalendarTimeZoneResolver {
         }
     }
 
-    pub fn resolve_date_start(&self, date: &CalDate, fallback: &Tz) -> DateTime<FixedOffset> {
+    pub fn resolve_date_start(&self, date: &CalDate, fallback: &Tz) -> ResolvedDateTime {
         match date {
             CalDate::Date(day, _) => {
                 fixed_from_fallback(fallback, day.and_hms_opt(0, 0, 0).unwrap())
@@ -72,7 +69,7 @@ impl CalendarTimeZoneResolver {
         }
     }
 
-    pub fn resolve_date_end(&self, date: &CalDate, fallback: &Tz) -> DateTime<FixedOffset> {
+    pub fn resolve_date_end(&self, date: &CalDate, fallback: &Tz) -> ResolvedDateTime {
         match date {
             CalDate::Date(day, crate::objects::CalDateType::Exclusive) => {
                 let next_day = fixed_from_fallback(fallback, day.and_hms_opt(0, 0, 0).unwrap());
@@ -85,9 +82,9 @@ impl CalendarTimeZoneResolver {
         }
     }
 
-    pub fn resolve_datetime(&self, dt: &CalDateTime, fallback: &Tz) -> DateTime<FixedOffset> {
+    pub fn resolve_datetime(&self, dt: &CalDateTime, fallback: &Tz) -> ResolvedDateTime {
         match dt {
-            CalDateTime::Utc(dt) => dt.fixed_offset(),
+            CalDateTime::Utc(dt) => dt.fixed_offset().into(),
             CalDateTime::Floating(local) => fixed_from_fallback(fallback, *local),
             CalDateTime::Timezone(local, tzid) => self.resolve_local_or_earlier(tzid, *local),
         }
@@ -165,7 +162,7 @@ impl CalendarTimeZoneResolver {
         pseudo: DateTime<Utc>,
         tzid: Option<&str>,
         fallback: &Tz,
-    ) -> DateTime<FixedOffset> {
+    ) -> ResolvedDateTime {
         let local = pseudo.naive_utc();
         match tzid {
             Some(tzid) => self.resolve_local_or_earlier(tzid, local),
@@ -173,7 +170,7 @@ impl CalendarTimeZoneResolver {
         }
     }
 
-    pub fn fixed_to_tz(dt: DateTime<FixedOffset>, tz: &Tz) -> chrono::DateTime<Tz> {
+    pub fn fixed_to_tz(dt: ResolvedDateTime, tz: &Tz) -> chrono::DateTime<Tz> {
         dt.with_timezone(tz)
     }
 }
@@ -188,19 +185,19 @@ fn validate_system_time(tz: &Tz, local: NaiveDateTime) -> Result<(), ParseError>
     }
 }
 
-fn fixed_from_fallback(tz: &Tz, local: NaiveDateTime) -> DateTime<FixedOffset> {
+fn fixed_from_fallback(tz: &Tz, local: NaiveDateTime) -> ResolvedDateTime {
     match tz.from_local_datetime(&local) {
-        MappedLocalTime::Single(dt) => dt.fixed_offset(),
-        MappedLocalTime::Ambiguous(early, _) => early.fixed_offset(),
+        MappedLocalTime::Single(dt) => dt.fixed_offset().into(),
+        MappedLocalTime::Ambiguous(early, _) => early.fixed_offset().into(),
         MappedLocalTime::None => panic!("non-existent local time {local} in {tz}"),
     }
 }
 
-fn map_system_time(tz: Tz, local: NaiveDateTime) -> MappedLocalTime<DateTime<FixedOffset>> {
+fn map_system_time(tz: Tz, local: NaiveDateTime) -> MappedLocalTime<ResolvedDateTime> {
     match tz.from_local_datetime(&local) {
-        MappedLocalTime::Single(dt) => MappedLocalTime::Single(dt.fixed_offset()),
+        MappedLocalTime::Single(dt) => MappedLocalTime::Single(dt.fixed_offset().into()),
         MappedLocalTime::Ambiguous(early, late) => {
-            MappedLocalTime::Ambiguous(early.fixed_offset(), late.fixed_offset())
+            MappedLocalTime::Ambiguous(early.fixed_offset().into(), late.fixed_offset().into())
         }
         MappedLocalTime::None => MappedLocalTime::None,
     }
@@ -237,7 +234,7 @@ impl EmbeddedTimeZone {
         })
     }
 
-    fn resolve_local(&self, local: NaiveDateTime) -> MappedLocalTime<DateTime<FixedOffset>> {
+    fn resolve_local(&self, local: NaiveDateTime) -> MappedLocalTime<ResolvedDateTime> {
         let Some(base_offset) = self.base_offset_before(local) else {
             return MappedLocalTime::None;
         };
@@ -265,7 +262,7 @@ impl EmbeddedTimeZone {
                         local,
                         FixedOffset::east_opt(transition.offset_to.as_seconds()).unwrap(),
                     );
-                    return MappedLocalTime::Ambiguous(early, late);
+                    return MappedLocalTime::Ambiguous(early.into(), late.into());
                 }
             }
 
@@ -274,7 +271,7 @@ impl EmbeddedTimeZone {
             }
         }
 
-        MappedLocalTime::Single(fixed_datetime(local, *candidates.last().unwrap()))
+        MappedLocalTime::Single(fixed_datetime(local, *candidates.last().unwrap()).into())
     }
 
     fn base_offset_before(&self, local: NaiveDateTime) -> Option<FixedOffset> {

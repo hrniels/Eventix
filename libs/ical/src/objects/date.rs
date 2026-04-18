@@ -2,7 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cmp::Ordering, fmt, hash::Hash, str::FromStr};
+use std::{
+    cmp::Ordering,
+    fmt,
+    hash::Hash,
+    ops::{Add, Deref, Sub},
+    str::FromStr,
+};
 
 use chrono::offset::MappedLocalTime;
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
@@ -12,6 +18,82 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::parser::{Parameter, ParseError, Property};
 
 use super::{CalCompType, CalendarTimeZoneResolver};
+
+/// A fully resolved calendar timestamp with a concrete UTC offset.
+///
+/// Unlike [`CalDate`] and [`CalDateTime`], this type no longer carries unresolved calendar-local
+/// semantics. It represents the concrete instant produced after resolving a local date/time
+/// through a timezone definition.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct ResolvedDateTime(DateTime<FixedOffset>);
+
+impl ResolvedDateTime {
+    /// Creates a resolved timestamp from a concrete fixed-offset datetime.
+    pub fn new(dt: DateTime<FixedOffset>) -> Self {
+        Self(dt)
+    }
+
+    /// Returns the wrapped fixed-offset datetime.
+    pub fn into_inner(self) -> DateTime<FixedOffset> {
+        self.0
+    }
+}
+
+impl Deref for ResolvedDateTime {
+    type Target = DateTime<FixedOffset>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<DateTime<FixedOffset>> for ResolvedDateTime {
+    fn from(value: DateTime<FixedOffset>) -> Self {
+        Self(value)
+    }
+}
+
+impl From<ResolvedDateTime> for DateTime<FixedOffset> {
+    fn from(value: ResolvedDateTime) -> Self {
+        value.0
+    }
+}
+
+impl Add<Duration> for ResolvedDateTime {
+    type Output = Self;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl Sub<Duration> for ResolvedDateTime {
+    type Output = Self;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        Self(self.0 - rhs)
+    }
+}
+
+impl Sub for ResolvedDateTime {
+    type Output = Duration;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.0 - rhs.0
+    }
+}
+
+impl<Tz: TimeZone> PartialEq<DateTime<Tz>> for ResolvedDateTime {
+    fn eq(&self, other: &DateTime<Tz>) -> bool {
+        self.0.with_timezone(&Utc) == other.with_timezone(&Utc)
+    }
+}
+
+impl<Tz: TimeZone> PartialEq<ResolvedDateTime> for DateTime<Tz> {
+    fn eq(&self, other: &ResolvedDateTime) -> bool {
+        other == self
+    }
+}
 
 /// The type of date.
 ///
@@ -253,7 +335,7 @@ impl CalDate {
         &self,
         fallback: &Tz,
         resolver: &CalendarTimeZoneResolver,
-    ) -> DateTime<FixedOffset> {
+    ) -> ResolvedDateTime {
         resolver.resolve_date_start(self, fallback)
     }
 
@@ -261,7 +343,7 @@ impl CalDate {
         &self,
         fallback: &Tz,
         resolver: &CalendarTimeZoneResolver,
-    ) -> DateTime<FixedOffset> {
+    ) -> ResolvedDateTime {
         resolver.resolve_date_end(self, fallback)
     }
 
@@ -269,7 +351,7 @@ impl CalDate {
         &self,
         fallback: &Tz,
         resolver: &CalendarTimeZoneResolver,
-    ) -> DateTime<FixedOffset> {
+    ) -> ResolvedDateTime {
         resolver.resolve_date_start(self, fallback)
     }
 }
@@ -286,6 +368,12 @@ impl From<DateTime<Tz>> for CalDate {
 impl From<DateTime<FixedOffset>> for CalDate {
     fn from(date: DateTime<FixedOffset>) -> Self {
         Self::DateTime(CalDateTime::Utc(date.with_timezone(&Utc)))
+    }
+}
+
+impl From<ResolvedDateTime> for CalDate {
+    fn from(date: ResolvedDateTime) -> Self {
+        Self::from(date.into_inner())
     }
 }
 
@@ -481,7 +569,7 @@ impl CalDateTime {
         &self,
         fallback: &Tz,
         resolver: &CalendarTimeZoneResolver,
-    ) -> DateTime<FixedOffset> {
+    ) -> ResolvedDateTime {
         resolver.resolve_datetime(self, fallback)
     }
 }

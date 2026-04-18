@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use tracing::warn;
 
 use crate::objects::{
     CalAlarm, CalAttendee, CalDate, CalDuration, CalEvent, CalOrganizer, CalRRule, CalTodo,
-    CalendarTimeZoneResolver, EventLike, UpdatableEventLike,
+    CalendarTimeZoneResolver, EventLike, ResolvedDateTime, UpdatableEventLike,
 };
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 use crate::util;
@@ -445,15 +445,15 @@ pub enum CompDateType {
 /// a certain time period.
 #[derive(Default)]
 pub struct CompDateIterator<'a> {
-    recur: Option<Box<dyn Iterator<Item = DateTime<FixedOffset>> + 'a>>,
-    exdates: Vec<DateTime<FixedOffset>>,
-    single: Option<(CompDateType, DateTime<FixedOffset>)>,
+    recur: Option<Box<dyn Iterator<Item = ResolvedDateTime> + 'a>>,
+    exdates: Vec<ResolvedDateTime>,
+    single: Option<(CompDateType, ResolvedDateTime)>,
 }
 
 impl<'a> CompDateIterator<'a> {
     fn new_recur(
-        iter: impl Iterator<Item = DateTime<FixedOffset>> + 'a,
-        exdates: Vec<DateTime<FixedOffset>>,
+        iter: impl Iterator<Item = ResolvedDateTime> + 'a,
+        exdates: Vec<ResolvedDateTime>,
     ) -> Self {
         Self {
             recur: Some(Box::new(iter)),
@@ -462,7 +462,7 @@ impl<'a> CompDateIterator<'a> {
         }
     }
 
-    fn new_single(ty: CompDateType, single: DateTime<FixedOffset>) -> Self {
+    fn new_single(ty: CompDateType, single: ResolvedDateTime) -> Self {
         Self {
             recur: None,
             exdates: vec![],
@@ -472,7 +472,7 @@ impl<'a> CompDateIterator<'a> {
 }
 
 impl Iterator for CompDateIterator<'_> {
-    type Item = (CompDateType, DateTime<FixedOffset>, bool);
+    type Item = (CompDateType, ResolvedDateTime, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(recur) = &mut self.recur {
@@ -531,7 +531,7 @@ impl CalComponent {
         &self,
         tz: &Tz,
         resolver: &CalendarTimeZoneResolver,
-    ) -> Vec<DateTime<FixedOffset>> {
+    ) -> Vec<ResolvedDateTime> {
         self.exdates()
             .iter()
             .map(|d| d.as_start_with_resolver(tz, resolver))
@@ -577,14 +577,14 @@ impl CalComponent {
 
         if let Some(ev_start) = self.start() {
             let ev_start = ev_start.as_start_with_resolver(&start.timezone(), resolver);
-            if ev_start > end {
+            if ev_start.with_timezone(&Utc) > end.with_timezone(&Utc) {
                 return CompDateIterator::default();
             }
         }
 
         if let Some(ev_end) = self.end_or_due() {
             let tzend = ev_end.as_end_with_resolver(&start.timezone(), resolver);
-            if tzend < start {
+            if tzend.with_timezone(&Utc) < start.with_timezone(&Utc) {
                 return CompDateIterator::default();
             }
         }
@@ -987,7 +987,8 @@ mod tests {
                 CompDateType::EndOrDue,
                 UTC.with_ymd_and_hms(2025, 1, 3, 9, 0, 0)
                     .unwrap()
-                    .fixed_offset(),
+                    .fixed_offset()
+                    .into(),
                 false,
             ))
         );
