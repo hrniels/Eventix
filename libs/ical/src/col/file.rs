@@ -26,11 +26,11 @@ use crate::util;
 /// the overwrites that are present in the used [`CalFile`]. In particular, it ignores occurrences
 /// that overwrite the date to be outside of the desired time period and adds occurrences where the
 /// overwrite changes the date to be inside of the desired time period.
-pub struct OccurrenceIterator<'a> {
+pub struct OccurrenceIterator<'a, 'r> {
     file: &'a CalFile,
     start: DateTime<Tz>,
     end: DateTime<Tz>,
-    dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
+    dates: Option<(&'a CalComponent, CompDateIterator<'a, 'r>)>,
     seen_rids: Vec<CalDate>,
     // overwritten components and the current index
     sorted_overwritten: Vec<&'a CalComponent>,
@@ -40,12 +40,12 @@ pub struct OccurrenceIterator<'a> {
     next_overwritten: Option<Occurrence<'a>>,
 }
 
-impl<'a> OccurrenceIterator<'a> {
+impl<'a, 'r> OccurrenceIterator<'a, 'r> {
     fn new(
         file: &'a CalFile,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-        dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
+        dates: Option<(&'a CalComponent, CompDateIterator<'a, 'r>)>,
     ) -> Self {
         let mut sorted_overwritten: Vec<&CalComponent> = file.components().iter().collect();
         sorted_overwritten.sort_by_key(|comp| comp.start());
@@ -157,7 +157,7 @@ fn resolved_in_range(resolved: ResolvedDateTime, start: DateTime<Tz>, end: DateT
     resolved >= start && resolved < end
 }
 
-impl<'a> Iterator for OccurrenceIterator<'a> {
+impl<'a, 'r> Iterator for OccurrenceIterator<'a, 'r> {
     type Item = Occurrence<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -504,12 +504,12 @@ impl CalFile {
     ///
     /// Note also that excluded occurrences will be delivered by the iterator, but can be
     /// identified via [`Occurrence::is_excluded`].
-    pub fn occurrences_between<F>(
-        &self,
+    pub fn occurrences_between<'s, F>(
+        &'s self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
         filter: F,
-    ) -> OccurrenceIterator<'_>
+    ) -> OccurrenceIterator<'s, 's>
     where
         F: Fn(&CalComponent) -> bool,
     {
@@ -526,7 +526,7 @@ impl CalFile {
             end,
             Some((
                 first,
-                first.dates_between(start, end, &self.cal.timezone_resolver()),
+                first.dates_between(start, end, self.cal.timezone_resolver()),
             )),
         )
     }

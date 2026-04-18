@@ -5,6 +5,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
+use std::sync::OnceLock;
 
 use chrono_tz::Tz;
 use tracing::warn;
@@ -23,15 +24,20 @@ use crate::parser::{
 /// Additionally, the calendar itself can have properties such as the version or product id.
 ///
 /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.4>.
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Calendar {
     comps: Vec<CalComponent>,
     timezones: Vec<CalTimeZone>,
     props: Vec<Property>,
     unknown: Vec<Unknown>,
+    tzresolver: OnceLock<CalendarTimeZoneResolver>,
 }
 
 impl Calendar {
+    fn invalidate_timezone_resolver(&mut self) {
+        self.tzresolver = OnceLock::new();
+    }
+
     /// Returns a slice of the calendar properties.
     pub fn properties(&self) -> &[Property] {
         &self.props
@@ -45,6 +51,7 @@ impl Calendar {
     /// Adds the given timezone to the calendar.
     pub fn add_timezone(&mut self, tz: CalTimeZone) {
         self.timezones.push(tz);
+        self.invalidate_timezone_resolver();
     }
 
     /// Returns a slice of the calendar components.
@@ -54,16 +61,19 @@ impl Calendar {
 
     /// Returns a mutable slice of the calendar properties.
     pub fn components_mut(&mut self) -> &mut [CalComponent] {
+        self.invalidate_timezone_resolver();
         &mut self.comps
     }
 
-    pub fn timezone_resolver(&self) -> CalendarTimeZoneResolver {
-        CalendarTimeZoneResolver::new(self)
+    pub fn timezone_resolver(&self) -> &CalendarTimeZoneResolver {
+        self.tzresolver
+            .get_or_init(|| CalendarTimeZoneResolver::new(self))
     }
 
     /// Adds the given component to the calendar.
     pub fn add_component(&mut self, comp: CalComponent) {
         self.comps.push(comp);
+        self.invalidate_timezone_resolver();
     }
 
     /// Deletes the components that match the given predicate.
@@ -72,6 +82,7 @@ impl Calendar {
         P: Fn(&CalComponent) -> bool,
     {
         self.comps.retain(|c| !predicate(c));
+        self.invalidate_timezone_resolver();
     }
 
     /// Splits this calendar into multiple calendars, one per UID
@@ -87,6 +98,7 @@ impl Calendar {
                 timezones: self.timezones.clone(),
                 props: self.props.clone(),
                 unknown: self.unknown.clone(),
+                tzresolver: OnceLock::new(),
             })
             .collect()
     }
@@ -118,6 +130,8 @@ impl Calendar {
                 None => warn!("failed to populate VTIMEZONE for {}", tzid),
             }
         }
+
+        self.invalidate_timezone_resolver();
     }
 
     fn checked_add(&mut self, comp: CalComponent) {
@@ -137,6 +151,7 @@ impl Calendar {
         } else {
             self.comps.push(comp);
         }
+        self.invalidate_timezone_resolver();
     }
 
     /// Validates all component dates against the given local timezone.
@@ -146,20 +161,24 @@ impl Calendar {
     ///
     /// Returns true if no components were removed.
     pub fn validate_times(&mut self, local_tz: &Tz) -> bool {
-        let resolver = self.timezone_resolver();
         let len = self.comps.len();
-        self.comps.retain(|comp| {
-            if let Err(e) = Self::validate_component(comp, local_tz, &resolver) {
-                warn!(
-                    "ignoring component {} (uid {}): {}",
-                    comp.ctype(),
-                    comp.uid(),
-                    e
-                );
-                return false;
-            }
-            true
-        });
+        let comps = std::mem::take(&mut self.comps);
+        let resolver = self.timezone_resolver();
+        self.comps = comps
+            .into_iter()
+            .filter(|comp| {
+                if let Err(e) = Self::validate_component(comp, local_tz, resolver) {
+                    warn!(
+                        "ignoring component {} (uid {}): {}",
+                        comp.ctype(),
+                        comp.uid(),
+                        e
+                    );
+                    return false;
+                }
+                true
+            })
+            .collect();
         self.comps.len() == len
     }
 
@@ -257,6 +276,29 @@ impl Calendar {
         }
     }
 }
+
+impl Default for Calendar {
+    fn default() -> Self {
+        Self {
+            comps: Vec::new(),
+            timezones: Vec::new(),
+            props: Vec::new(),
+            unknown: Vec::new(),
+            tzresolver: OnceLock::new(),
+        }
+    }
+}
+
+impl PartialEq for Calendar {
+    fn eq(&self, other: &Self) -> bool {
+        self.comps == other.comps
+            && self.timezones == other.timezones
+            && self.props == other.props
+            && self.unknown == other.unknown
+    }
+}
+
+impl Eq for Calendar {}
 
 impl PropertyProducer for Calendar {
     fn to_props(&self) -> Vec<Property> {

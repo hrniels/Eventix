@@ -443,44 +443,59 @@ pub enum CompDateType {
 /// components, it delivers its occurrences, sorted by dates ascendingly. Typically, this iterator
 /// is created by methods like [`CalComponent::dates_between`], which deliver all occurrences in
 /// a certain time period.
-#[derive(Default)]
-pub struct CompDateIterator<'a> {
-    recur: Option<Box<dyn Iterator<Item = ResolvedDateTime> + 'a>>,
-    exdates: Vec<ResolvedDateTime>,
-    single: Option<(CompDateType, ResolvedDateTime)>,
+pub enum CompDateIterator<'a, 'r> {
+    Single(Option<(CompDateType, ResolvedDateTime)>),
+    Multi {
+        recur: Box<dyn Iterator<Item = DateTime<Utc>> + 'a>,
+        exdates: Vec<ResolvedDateTime>,
+        resolver: &'r CalendarTimeZoneResolver,
+        tzid: Option<String>,
+        fallback: Tz,
+    },
 }
 
-impl<'a> CompDateIterator<'a> {
+impl<'a, 'r> CompDateIterator<'a, 'r> {
+    fn new_empty() -> Self {
+        Self::Single(None)
+    }
+
     fn new_recur(
-        iter: impl Iterator<Item = ResolvedDateTime> + 'a,
+        iter: impl Iterator<Item = DateTime<Utc>> + 'a,
         exdates: Vec<ResolvedDateTime>,
+        resolver: &'r CalendarTimeZoneResolver,
+        tzid: Option<String>,
+        fallback: Tz,
     ) -> Self {
-        Self {
-            recur: Some(Box::new(iter)),
+        Self::Multi {
+            recur: Box::new(iter),
             exdates,
-            single: None,
+            resolver,
+            tzid,
+            fallback,
         }
     }
 
     fn new_single(ty: CompDateType, single: ResolvedDateTime) -> Self {
-        Self {
-            recur: None,
-            exdates: vec![],
-            single: Some((ty, single)),
-        }
+        Self::Single(Some((ty, single)))
     }
 }
 
-impl Iterator for CompDateIterator<'_> {
+impl Iterator for CompDateIterator<'_, '_> {
     type Item = (CompDateType, ResolvedDateTime, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(recur) = &mut self.recur {
-            recur
-                .next()
-                .map(|date| (CompDateType::Start, date, self.exdates.contains(&date)))
-        } else {
-            self.single.take().map(|(ty, date)| (ty, date, false))
+        match self {
+            Self::Multi {
+                recur,
+                exdates,
+                resolver,
+                tzid,
+                fallback,
+            } => recur.next().map(|date| {
+                let date = resolver.resolve_pseudo_local(date, tzid.as_deref(), &fallback);
+                (CompDateType::Start, date, exdates.contains(&date))
+            }),
+            Self::Single(single) => single.take().map(|(ty, date)| (ty, date, false)),
         }
     }
 }
@@ -549,43 +564,42 @@ impl CalComponent {
     ///
     /// Note that the iterator returns excluded occurrences as well and requires the caller to
     /// ignore these, if desired.
-    pub fn dates_between(
-        &self,
+    pub fn dates_between<'s, 'r>(
+        &'s self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-        resolver: &CalendarTimeZoneResolver,
-    ) -> CompDateIterator<'_> {
+        resolver: &'r CalendarTimeZoneResolver,
+    ) -> CompDateIterator<'s, 'r> {
         if let Some(rrule) = self.rrule() {
             let Some(dtstart) = self.start() else {
-                return CompDateIterator::default();
+                return CompDateIterator::new_empty();
             };
 
             let dtstart = resolver.pseudo_local_date_start(dtstart, &start.timezone());
             let dates = rrule.dates_between(dtstart, self.time_duration(), start, end);
             let tzid = self.start().and_then(|date| match date {
                 CalDate::DateTime(crate::objects::CalDateTime::Timezone(_, tzid)) => {
-                    Some(tzid.as_str())
+                    Some(tzid.clone())
                 }
                 _ => None,
             });
-            let resolver = resolver.clone();
             let fallback = start.timezone();
-            let exdates = self.exdates_as_datetime(&start.timezone(), &resolver);
-            let dates = dates.map(move |date| resolver.resolve_pseudo_local(date, tzid, &fallback));
-            return CompDateIterator::new_recur(dates, exdates);
+            let exdates = self.exdates_as_datetime(&start.timezone(), resolver);
+            // let dates = dates.map(move |date| resolver.resolve_pseudo_local(date, tzid, &fallback));
+            return CompDateIterator::new_recur(dates, exdates, resolver, tzid, fallback);
         }
 
         if let Some(ev_start) = self.start() {
             let ev_start = ev_start.as_start_with_resolver(&start.timezone(), resolver);
             if ev_start.with_timezone(&Utc) > end.with_timezone(&Utc) {
-                return CompDateIterator::default();
+                return CompDateIterator::new_empty();
             }
         }
 
         if let Some(ev_end) = self.end_or_due() {
             let tzend = ev_end.as_end_with_resolver(&start.timezone(), resolver);
             if tzend.with_timezone(&Utc) < start.with_timezone(&Utc) {
-                return CompDateIterator::default();
+                return CompDateIterator::new_empty();
             }
         }
 
@@ -598,7 +612,7 @@ impl CalComponent {
                 CompDateType::EndOrDue,
                 ev_end.as_end_with_resolver(&start.timezone(), resolver),
             ),
-            (None, None) => CompDateIterator::default(),
+            (None, None) => CompDateIterator::new_empty(),
         }
     }
 
@@ -970,7 +984,7 @@ mod tests {
         let missing_start_resolver = missing_start.timezone_resolver();
         assert_eq!(
             missing_start.components()[0]
-                .dates_between(start, end, &missing_start_resolver)
+                .dates_between(start, end, missing_start_resolver)
                 .next(),
             None
         );
@@ -980,7 +994,7 @@ mod tests {
             .unwrap();
         let due_only_resolver = due_only.timezone_resolver();
         let mut due_only_dates =
-            due_only.components()[0].dates_between(start, end, &due_only_resolver);
+            due_only.components()[0].dates_between(start, end, due_only_resolver);
         assert_eq!(
             due_only_dates.next(),
             Some((
@@ -1000,15 +1014,16 @@ mod tests {
         let due_before_range_resolver = due_before_range.timezone_resolver();
         assert_eq!(
             due_before_range.components()[0]
-                .dates_between(start, end, &due_before_range_resolver)
+                .dates_between(start, end, due_before_range_resolver)
                 .next(),
             None
         );
 
         let no_dates = CalComponent::Event(CalEvent::new("e-no-dates"));
-        let empty_resolver = Calendar::default().timezone_resolver();
+        let empty = Calendar::default();
+        let empty_resolver = empty.timezone_resolver();
         assert_eq!(
-            no_dates.dates_between(start, end, &empty_resolver).next(),
+            no_dates.dates_between(start, end, empty_resolver).next(),
             None
         );
     }
