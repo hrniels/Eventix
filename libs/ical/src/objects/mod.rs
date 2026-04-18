@@ -27,6 +27,7 @@ mod recur;
 mod status;
 mod timezone;
 mod todo;
+mod tzresolver;
 
 pub use alarm::{AlarmOverlay, CalAction, CalAlarm, CalRelated, CalTrigger, DefaultAlarmOverlay};
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
@@ -45,3 +46,4 @@ pub use recur::{CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DayDesc, Week
 pub use status::{CalEventStatus, CalTodoStatus};
 pub use timezone::{CalTimeZone, CalTimeZoneObservance, CalTimeZoneObservanceKind, CalUtcOffset};
 pub use todo::CalTodo;
+pub use tzresolver::CalendarTimeZoneResolver;

@@ -7,16 +7,14 @@ use std::{collections::HashMap, fmt::Display, io::BufRead, str::FromStr};
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
 
-use chrono::{DateTime, Duration};
-use chrono_tz::Tz;
+use chrono::{DateTime, Duration, FixedOffset, TimeZone};
 
 use formatx::formatx;
 
-use crate::objects::CalDuration;
 use crate::objects::locale::CalLocale;
-use crate::{
-    objects::{CalComponent, CalDate, EventLike},
-    parser::{LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer},
+use crate::objects::{CalComponent, CalDate, CalDateTime, CalDuration, EventLike};
+use crate::parser::{
+    LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer,
 };
 
 /// The action for VALARM components.
@@ -197,16 +195,27 @@ impl CalAlarm {
     /// start and the start is `None`, the result will be `None` as well.
     pub fn trigger_date(
         &self,
-        start: Option<DateTime<Tz>>,
-        end: Option<DateTime<Tz>>,
-        tz: Option<Tz>,
-    ) -> Option<DateTime<Tz>> {
+        start: Option<DateTime<FixedOffset>>,
+        end: Option<DateTime<FixedOffset>>,
+        tz: Option<FixedOffset>,
+    ) -> Option<DateTime<FixedOffset>> {
         match &self.trigger {
             CalTrigger::Relative { related, duration } => match related {
                 CalRelated::Start => start.map(|s| s + **duration),
                 CalRelated::End => end.map(|e| e + **duration),
             },
-            CalTrigger::Absolute(date) => tz.map(|tz| date.as_start_with_tz(&tz)),
+            // TODO why is there no method for that in CalDate?
+            CalTrigger::Absolute(date) => tz.map(|tz| match date {
+                CalDate::Date(day, _) => tz
+                    .from_local_datetime(&day.and_hms_opt(0, 0, 0).unwrap())
+                    .single()
+                    .unwrap(),
+                CalDate::DateTime(CalDateTime::Utc(dt)) => dt.fixed_offset(),
+                CalDate::DateTime(CalDateTime::Floating(dt))
+                | CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+                    tz.from_local_datetime(dt).single().unwrap()
+                }
+            }),
         }
     }
 

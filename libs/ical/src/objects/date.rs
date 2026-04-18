@@ -5,13 +5,13 @@
 use std::{cmp::Ordering, fmt, hash::Hash, str::FromStr};
 
 use chrono::offset::MappedLocalTime;
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use chrono_tz::{Europe, Tz};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::parser::{Parameter, ParseError, Property};
 
-use super::CalCompType;
+use super::{CalCompType, CalendarTimeZoneResolver};
 
 /// The type of date.
 ///
@@ -163,6 +163,13 @@ impl CalDate {
         }
     }
 
+    pub fn to_utc_with(self, fallback: &Tz, resolver: &CalendarTimeZoneResolver) -> CalDate {
+        match self {
+            Self::Date(date, ty) => Self::Date(date, ty),
+            Self::DateTime(datetime) => Self::DateTime(datetime.to_utc_with(fallback, resolver)),
+        }
+    }
+
     /// Returns the corresponding [`DateTime`] instance when using this date as the start of an
     /// event.
     ///
@@ -233,6 +240,38 @@ impl CalDate {
             Self::DateTime(dt) => dt.validate(local_tz),
         }
     }
+
+    pub fn validate_with(
+        &self,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
+        resolver.validate_date(self, local_tz)
+    }
+
+    pub fn as_start_with_resolver(
+        &self,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> DateTime<FixedOffset> {
+        resolver.resolve_date_start(self, fallback)
+    }
+
+    pub fn as_end_with_resolver(
+        &self,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> DateTime<FixedOffset> {
+        resolver.resolve_date_end(self, fallback)
+    }
+
+    pub fn as_datetime_with_resolver(
+        &self,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> DateTime<FixedOffset> {
+        resolver.resolve_date_start(self, fallback)
+    }
 }
 
 impl From<DateTime<Tz>> for CalDate {
@@ -241,6 +280,12 @@ impl From<DateTime<Tz>> for CalDate {
             date.naive_local(),
             date.timezone().name().to_string(),
         ))
+    }
+}
+
+impl From<DateTime<FixedOffset>> for CalDate {
+    fn from(date: DateTime<FixedOffset>) -> Self {
+        Self::DateTime(CalDateTime::Utc(date.with_timezone(&Utc)))
     }
 }
 
@@ -384,6 +429,13 @@ impl CalDateTime {
         Self::Utc(dt.to_utc())
     }
 
+    pub fn to_utc_with(self, fallback: &Tz, resolver: &CalendarTimeZoneResolver) -> CalDateTime {
+        let dt = resolver
+            .resolve_datetime(&self, fallback)
+            .with_timezone(&Utc);
+        Self::Utc(dt)
+    }
+
     /// Builds and returns a [`Property`] for this datetime.
     pub fn to_prop<N: ToString>(&self, name: N) -> Property {
         let (params, date) = match self {
@@ -415,6 +467,22 @@ impl CalDateTime {
                 Ok(())
             }
         }
+    }
+
+    pub fn validate_with(
+        &self,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
+        resolver.validate_datetime(self, local_tz)
+    }
+
+    pub fn as_datetime_with_resolver(
+        &self,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> DateTime<FixedOffset> {
+        resolver.resolve_datetime(self, fallback)
     }
 }
 

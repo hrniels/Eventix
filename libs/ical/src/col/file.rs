@@ -65,6 +65,7 @@ impl<'a> OccurrenceIterator<'a> {
     fn fetch_next_recurrence(&mut self) -> Option<Occurrence<'a>> {
         // unwrap the base component and the recurring date iterator.
         let (base, date_iter) = self.dates.as_mut()?;
+        let resolver = self.file.cal.timezone_resolver();
         for (ty, d, excluded) in date_iter {
             let mut occ = Occurrence::new_single(self.file.dir.clone(), base, ty, d, excluded);
             // check if an overwritten event exists for this occurrence.
@@ -72,7 +73,7 @@ impl<'a> OccurrenceIterator<'a> {
                 matches!(c.rid(),
                 Some(rid)
                     if occ.occurrence_start()
-                        == Some(rid.as_start_with_tz(&self.start.timezone())))
+                        == Some(rid.as_start_with_resolver(&self.start.timezone(), &resolver)))
             }) {
                 let rid = overwritten.rid().unwrap().clone();
                 // skip this in case we had it already within the overwritten iterator
@@ -81,7 +82,7 @@ impl<'a> OccurrenceIterator<'a> {
                 }
                 self.seen_rids.push(rid);
 
-                occ.set_overwrite(overwritten);
+                occ.set_overwrite(overwritten, &self.start.timezone(), &resolver);
                 // if it isn't in the range anymore, do not consider it
                 if !Self::is_in_range(&occ, self.start, self.end) {
                     continue;
@@ -95,6 +96,7 @@ impl<'a> OccurrenceIterator<'a> {
     fn fetch_next_overwritten(&mut self) -> Option<Occurrence<'a>> {
         let base = self.dates.as_ref()?.0;
         let timezone = self.start.timezone();
+        let resolver = self.file.cal.timezone_resolver();
         while self.overwritten_index < self.sorted_overwritten.len() {
             let overwritten = self.sorted_overwritten[self.overwritten_index];
             self.overwritten_index += 1;
@@ -104,7 +106,10 @@ impl<'a> OccurrenceIterator<'a> {
                 }
                 self.seen_rids.push(rid.clone());
 
-                let start_date = overwritten.start().unwrap().as_start_with_tz(&timezone);
+                let start_date = overwritten
+                    .start()
+                    .unwrap()
+                    .as_start_with_resolver(&timezone, &resolver);
                 let mut occ = Occurrence::new_single(
                     self.file.dir.clone(),
                     base,
@@ -112,10 +117,10 @@ impl<'a> OccurrenceIterator<'a> {
                     start_date,
                     base.exdates()
                         .iter()
-                        .map(|d| d.as_start_with_tz(&timezone))
-                        .any(|d| d == rid.as_start_with_tz(&timezone)),
+                        .map(|d| d.as_start_with_resolver(&timezone, &resolver))
+                        .any(|d| d == rid.as_start_with_resolver(&timezone, &resolver)),
                 );
-                occ.set_overwrite(overwritten);
+                occ.set_overwrite(overwritten, &timezone, &resolver);
                 if Self::is_in_range(&occ, self.start, self.end) {
                     return Some(occ);
                 }
@@ -290,6 +295,7 @@ impl CalFile {
         end: DateTime<Tz>,
         overlay: &dyn AlarmOverlay,
     ) -> Vec<AlarmOccurrence<'o>> {
+        let resolver = self.cal.timezone_resolver();
         // this should never happen, but if there is no base component, we're done here
         let Some(first) = self.component_with(|c| c.rid().is_none()) else {
             return vec![];
@@ -320,13 +326,14 @@ impl CalFile {
                         );
                     }
                     CalTrigger::Absolute(date) => {
-                        let alarm_date = date.as_start_with_tz(&start.timezone());
+                        let alarm_date = date.as_start_with_resolver(&start.timezone(), &resolver);
                         if alarm_date >= start && alarm_date < end {
-                            let fstart =
-                                first.start().map(|d| d.as_start_with_tz(&start.timezone()));
+                            let fstart = first
+                                .start()
+                                .map(|d| d.as_start_with_resolver(&start.timezone(), &resolver));
                             let fend = first
                                 .end_or_due()
-                                .map(|d| d.as_end_with_tz(&start.timezone()));
+                                .map(|d| d.as_end_with_resolver(&start.timezone(), &resolver));
                             alarms.push(AlarmOccurrence::new(
                                 Occurrence::new(self.dir.clone(), first, fstart, fend, false),
                                 alarm,
@@ -344,12 +351,14 @@ impl CalFile {
             for overwrite in self.cal.components().iter().filter(|c| c.rid().is_some()) {
                 // set the overwrite to get the correct summary etc.
                 let rid = overwrite.rid().unwrap().clone();
-                let rid_tz = rid.as_start_with_tz(&start.timezone());
+                let rid_tz = rid.as_start_with_resolver(&start.timezone(), &resolver);
                 if let Some(alarm) = alarms
                     .iter_mut()
                     .find(|a| a.occurrence().occurrence_start() == Some(rid_tz))
                 {
-                    alarm.occurrence_mut().set_overwrite(overwrite);
+                    alarm
+                        .occurrence_mut()
+                        .set_overwrite(overwrite, &start.timezone(), &resolver);
                 }
 
                 if let Some(alarms) = overwrite.alarms() {
@@ -362,14 +371,14 @@ impl CalFile {
 
             for (rid, rid_alarms) in alarm_overwrites {
                 // construct a new occurrence
-                let rid_tz = rid.as_start_with_tz(&start.timezone());
+                let rid_tz = rid.as_start_with_resolver(&start.timezone(), &resolver);
                 let fend = first.time_duration().map(|d| rid_tz + d);
                 let mut rid_occ =
                     Occurrence::new(self.dir.clone(), first, Some(rid_tz), fend, false);
                 if let Some(overwrite) =
                     self.cal.components().iter().find(|c| c.rid() == Some(&rid))
                 {
-                    rid_occ.set_overwrite(overwrite);
+                    rid_occ.set_overwrite(overwrite, &start.timezone(), &resolver);
                 }
 
                 // remove all alarms we already had for this occurrence
@@ -380,7 +389,7 @@ impl CalFile {
                     let trigger_date = rid_alarm.trigger_date(
                         rid_occ.occurrence_start(),
                         rid_occ.occurrence_end(),
-                        rid_occ.tz(),
+                        rid_occ.tz_offset(),
                     );
                     match trigger_date {
                         Some(alarm) if alarm >= start && alarm < end => {
@@ -408,16 +417,21 @@ impl CalFile {
         rid: Option<&CalDate>,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
+        let resolver = self.cal.timezone_resolver();
         let first = self.component_with(|c| c.rid().is_none() && c.uid() == uid.as_ref())?;
         let (fstart, fend, excluded) = match rid {
             Some(rid) => (
-                Some(rid.as_start_with_tz(tz)),
+                Some(rid.as_start_with_resolver(tz, &resolver)),
                 None,
                 first.exdates().contains(rid),
             ),
             None => (
-                first.start().map(|d| d.as_start_with_tz(tz)),
-                first.end_or_due().map(|d| d.as_end_with_tz(tz)),
+                first
+                    .start()
+                    .map(|d| d.as_start_with_resolver(tz, &resolver)),
+                first
+                    .end_or_due()
+                    .map(|d| d.as_end_with_resolver(tz, &resolver)),
                 false,
             ),
         };
@@ -430,7 +444,7 @@ impl CalFile {
                 .iter()
                 .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid));
             if let Some(occ) = occ {
-                res.set_overwrite(occ);
+                res.set_overwrite(occ, tz, &resolver);
             }
         }
         Some(res)
@@ -477,7 +491,10 @@ impl CalFile {
             self,
             start,
             end,
-            Some((first, first.dates_between(start, end))),
+            Some((
+                first,
+                first.dates_between(start, end, &self.cal.timezone_resolver()),
+            )),
         )
     }
 
@@ -861,7 +878,7 @@ impl CalFile {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Datelike, Duration, NaiveDate, TimeDelta, TimeZone};
+    use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, TimeDelta, TimeZone};
 
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -943,6 +960,24 @@ mod tests {
         chrono_tz::America::New_York
             .with_ymd_and_hms(year, month, day, hour, min, sec)
             .unwrap()
+    }
+
+    fn new_occ_date(year: i32, month: u32, day: u32) -> DateTime<FixedOffset> {
+        new_occ_datetime(year, month, day, 0, 0, 0)
+    }
+
+    fn new_occ_datetime(
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        min: u32,
+        sec: u32,
+    ) -> DateTime<FixedOffset> {
+        chrono_tz::Europe::Berlin
+            .with_ymd_and_hms(year, month, day, hour, min, sec)
+            .unwrap()
+            .fixed_offset()
     }
 
     fn new_allday_event(date: NaiveDate, uid: &str) -> EventBuilder {
@@ -1043,6 +1078,7 @@ mod tests {
                     CalCompType::Event.into()
                 )
                 .as_end_with_tz(tz)
+                .fixed_offset()
             )
         );
         assert_eq!(all[1].occurrence_start(), None);
@@ -1054,6 +1090,7 @@ mod tests {
                     CalCompType::Event.into()
                 )
                 .as_end_with_tz(tz)
+                .fixed_offset()
             )
         );
         assert_eq!(
@@ -1141,11 +1178,11 @@ mod tests {
             .filter(|o| !o.is_excluded())
             .collect::<Vec<_>>();
         assert_eq!(occs[0].uid(), "yes");
-        assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 5)));
-        assert_eq!(occs[1].occurrence_start(), Some(new_date(1990, 1, 6)));
-        assert_eq!(occs[2].occurrence_start(), Some(new_date(1990, 1, 8)));
-        assert_eq!(occs[3].occurrence_start(), Some(new_date(1990, 1, 10)));
-        assert_eq!(occs[4].occurrence_start(), Some(new_date(1990, 1, 11)));
+        assert_eq!(occs[0].occurrence_start(), Some(new_occ_date(1990, 1, 5)));
+        assert_eq!(occs[1].occurrence_start(), Some(new_occ_date(1990, 1, 6)));
+        assert_eq!(occs[2].occurrence_start(), Some(new_occ_date(1990, 1, 8)));
+        assert_eq!(occs[3].occurrence_start(), Some(new_occ_date(1990, 1, 10)));
+        assert_eq!(occs[4].occurrence_start(), Some(new_occ_date(1990, 1, 11)));
     }
 
     #[test]
@@ -1191,18 +1228,18 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(alarms.len(), 1);
         assert_eq!(alarms[0].occurrence().uid(), "id1");
-        assert_eq!(alarms[0].alarm_date(), Some(new_date(1990, 1, 1)));
+        assert_eq!(alarms[0].alarm_date(), Some(new_occ_date(1990, 1, 1)));
 
         let alarms = dir
             .due_alarms_between(new_date(1990, 1, 5), new_date(1990, 1, 8), &overlay)
             .collect::<Vec<_>>();
         assert_eq!(alarms.len(), 2);
         assert_eq!(alarms[0].occurrence().uid(), "id2");
-        assert_eq!(alarms[0].alarm_date(), Some(new_date(1990, 1, 7)));
+        assert_eq!(alarms[0].alarm_date(), Some(new_occ_date(1990, 1, 7)));
         assert_eq!(alarms[1].occurrence().uid(), "id3");
         assert_eq!(
             alarms[1].alarm_date(),
-            Some(new_datetime(1990, 1, 6, 23, 59, 59))
+            Some(new_occ_datetime(1990, 1, 6, 23, 59, 59))
         );
     }
 
@@ -1246,11 +1283,11 @@ mod tests {
         assert_eq!(alarms[0].occurrence().uid(), "id1");
         assert_eq!(
             alarms[0].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 6))
+            Some(new_occ_date(1990, 1, 6))
         );
         assert_eq!(
             alarms[0].alarm_date(),
-            Some(new_datetime(1990, 1, 5, 23, 50, 0))
+            Some(new_occ_datetime(1990, 1, 5, 23, 50, 0))
         );
 
         let alarms = dir
@@ -1260,20 +1297,20 @@ mod tests {
         assert_eq!(alarms[0].occurrence().uid(), "id1");
         assert_eq!(
             alarms[0].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 2))
+            Some(new_occ_date(1990, 1, 2))
         );
         assert_eq!(
             alarms[0].alarm_date(),
-            Some(new_datetime(1990, 1, 1, 23, 50, 0))
+            Some(new_occ_datetime(1990, 1, 1, 23, 50, 0))
         );
         assert_eq!(alarms[1].occurrence().uid(), "id1");
         assert_eq!(
             alarms[1].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 6))
+            Some(new_occ_date(1990, 1, 6))
         );
         assert_eq!(
             alarms[1].alarm_date(),
-            Some(new_datetime(1990, 1, 5, 23, 50, 0))
+            Some(new_occ_datetime(1990, 1, 5, 23, 50, 0))
         );
 
         let alarms = dir
@@ -1283,20 +1320,20 @@ mod tests {
         assert_eq!(alarms[0].occurrence().uid(), "id2");
         assert_eq!(
             alarms[0].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 8))
+            Some(new_occ_date(1990, 1, 8))
         );
         assert_eq!(
             alarms[0].alarm_date(),
-            Some(new_datetime(1990, 1, 7, 23, 59, 59))
+            Some(new_occ_datetime(1990, 1, 7, 23, 59, 59))
         );
         assert_eq!(alarms[1].occurrence().uid(), "id2");
         assert_eq!(
             alarms[1].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 15))
+            Some(new_occ_date(1990, 1, 15))
         );
         assert_eq!(
             alarms[1].alarm_date(),
-            Some(new_datetime(1990, 1, 14, 23, 59, 59))
+            Some(new_occ_datetime(1990, 1, 14, 23, 59, 59))
         );
     }
 
@@ -1356,20 +1393,20 @@ mod tests {
         assert_eq!(alarms[0].occurrence().uid(), "id1");
         assert_eq!(
             alarms[0].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 2))
+            Some(new_occ_date(1990, 1, 2))
         );
         assert_eq!(
             alarms[0].alarm_date(),
-            Some(new_datetime(1990, 1, 1, 23, 50, 0))
+            Some(new_occ_datetime(1990, 1, 1, 23, 50, 0))
         );
         assert_eq!(alarms[1].occurrence().uid(), "id1");
         assert_eq!(
             alarms[1].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 6))
+            Some(new_occ_date(1990, 1, 6))
         );
         assert_eq!(
             alarms[1].alarm_date(),
-            Some(new_datetime(1990, 1, 6, 1, 0, 0))
+            Some(new_occ_datetime(1990, 1, 6, 1, 0, 0))
         );
 
         struct MyOverlay;
@@ -1420,11 +1457,11 @@ mod tests {
         assert_eq!(alarms[0].occurrence().uid(), "id1");
         assert_eq!(
             alarms[0].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 2))
+            Some(new_occ_date(1990, 1, 2))
         );
         assert_eq!(
             alarms[0].alarm_date(),
-            Some(new_datetime(1990, 1, 2, 1, 0, 0))
+            Some(new_occ_datetime(1990, 1, 2, 1, 0, 0))
         );
         // we don't get the alarm for Jan 6, because we disabled it above
         // instead we get the alarm for Jan 10, because we changed it to one day before, so that it
@@ -1432,11 +1469,11 @@ mod tests {
         assert_eq!(alarms[1].occurrence().uid(), "id1");
         assert_eq!(
             alarms[1].occurrence().occurrence_start(),
-            Some(new_date(1990, 1, 10))
+            Some(new_occ_date(1990, 1, 10))
         );
         assert_eq!(
             alarms[1].alarm_date(),
-            Some(new_datetime(1990, 1, 9, 0, 0, 0))
+            Some(new_occ_datetime(1990, 1, 9, 0, 0, 0))
         );
     }
 
@@ -1481,9 +1518,9 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(occs.len(), 2);
         assert_eq!(occs[0].uid(), "id1");
-        assert_eq!(occs[0].occurrence_start(), Some(new_date(1990, 1, 4)));
+        assert_eq!(occs[0].occurrence_start(), Some(new_occ_date(1990, 1, 4)));
         assert_eq!(occs[1].uid(), "id1");
-        assert_eq!(occs[1].occurrence_start(), Some(new_date(1990, 1, 8)));
+        assert_eq!(occs[1].occurrence_start(), Some(new_occ_date(1990, 1, 8)));
     }
 
     #[test]

@@ -11,7 +11,7 @@ use tracing::warn;
 
 use crate::objects::{
     CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTimeZone, CalTodo, CalTrigger,
-    EventLike,
+    CalendarTimeZoneResolver, EventLike,
 };
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
@@ -55,6 +55,10 @@ impl Calendar {
     /// Returns a mutable slice of the calendar properties.
     pub fn components_mut(&mut self) -> &mut [CalComponent] {
         &mut self.comps
+    }
+
+    pub fn timezone_resolver(&self) -> CalendarTimeZoneResolver {
+        CalendarTimeZoneResolver::new(self)
     }
 
     /// Adds the given component to the calendar.
@@ -142,9 +146,10 @@ impl Calendar {
     ///
     /// Returns true if no components were removed.
     pub fn validate_times(&mut self, local_tz: &Tz) -> bool {
+        let resolver = self.timezone_resolver();
         let len = self.comps.len();
         self.comps.retain(|comp| {
-            if let Err(e) = Self::validate_component(comp, local_tz) {
+            if let Err(e) = Self::validate_component(comp, local_tz, &resolver) {
                 warn!(
                     "ignoring component {} (uid {}): {}",
                     comp.ctype(),
@@ -158,45 +163,57 @@ impl Calendar {
         self.comps.len() == len
     }
 
-    fn validate_component(comp: &CalComponent, local_tz: &Tz) -> Result<(), ParseError> {
-        Self::validate_eventlike_dates(comp, local_tz)?;
+    fn validate_component(
+        comp: &CalComponent,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
+        Self::validate_eventlike_dates(comp, local_tz, resolver)?;
         match comp {
             CalComponent::Event(ev) => {
-                Self::validate_opt_date(ev.end(), local_tz)?;
+                Self::validate_opt_date(ev.end(), local_tz, resolver)?;
             }
             CalComponent::Todo(td) => {
-                Self::validate_opt_date(td.due(), local_tz)?;
-                Self::validate_opt_date(td.completed(), local_tz)?;
+                Self::validate_opt_date(td.due(), local_tz, resolver)?;
+                Self::validate_opt_date(td.completed(), local_tz, resolver)?;
             }
         }
         Ok(())
     }
 
-    fn validate_eventlike_dates(comp: &CalComponent, local_tz: &Tz) -> Result<(), ParseError> {
-        Self::validate_opt_date(comp.start(), local_tz)?;
-        Self::validate_opt_date(comp.created(), local_tz)?;
-        Self::validate_opt_date(comp.last_modified(), local_tz)?;
-        comp.stamp().validate(local_tz)?;
-        Self::validate_opt_date(comp.rid(), local_tz)?;
+    fn validate_eventlike_dates(
+        comp: &CalComponent,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
+        Self::validate_opt_date(comp.start(), local_tz, resolver)?;
+        Self::validate_opt_date(comp.created(), local_tz, resolver)?;
+        Self::validate_opt_date(comp.last_modified(), local_tz, resolver)?;
+        comp.stamp().validate_with(local_tz, resolver)?;
+        Self::validate_opt_date(comp.rid(), local_tz, resolver)?;
         for exdate in comp.exdates() {
-            exdate.validate(local_tz)?;
+            exdate.validate_with(local_tz, resolver)?;
         }
         if let Some(alarms) = comp.alarms() {
             for alarm in alarms {
                 if let CalTrigger::Absolute(date) = alarm.trigger() {
-                    date.validate(local_tz)?;
+                    date.validate_with(local_tz, resolver)?;
                 }
             }
         }
         if let Some(rrule) = comp.rrule() {
-            Self::validate_opt_date(rrule.until(), local_tz)?;
+            Self::validate_opt_date(rrule.until(), local_tz, resolver)?;
         }
         Ok(())
     }
 
-    fn validate_opt_date(date: Option<&CalDate>, local_tz: &Tz) -> Result<(), ParseError> {
+    fn validate_opt_date(
+        date: Option<&CalDate>,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
         if let Some(d) = date {
-            d.validate(local_tz)?;
+            d.validate_with(local_tz, resolver)?;
         }
         Ok(())
     }
@@ -735,6 +752,59 @@ END:VCALENDAR\n";
 
         assert_eq!(cal.timezones().len(), 1);
         assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
+    }
+
+    #[test]
+    fn timezone_resolver_prefers_embedded_vtimezone_over_system_tzdb() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19700101T000000\n\
+TZOFFSETFROM:+0300\n\
+TZOFFSETTO:+0300\n\
+TZNAME:CUSTOM\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let resolver = cal.timezone_resolver();
+        let start = cal.components()[0].start().unwrap();
+        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, &resolver);
+
+        assert_eq!(
+            resolved.naive_local(),
+            "2025-03-30T10:00:00".parse().unwrap()
+        );
+        assert_eq!(resolved.offset().local_minus_utc(), 3 * 3600);
+    }
+
+    #[test]
+    fn timezone_resolver_falls_back_to_system_tzdb_without_embedded_vtimezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let resolver = cal.timezone_resolver();
+        let start = cal.components()[0].start().unwrap();
+        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, &resolver);
+
+        assert_eq!(
+            resolved.naive_local(),
+            "2025-03-30T10:00:00".parse().unwrap()
+        );
+        assert_eq!(resolved.offset().local_minus_utc(), 2 * 3600);
     }
 
     #[test]
