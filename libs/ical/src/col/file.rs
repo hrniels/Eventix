@@ -422,7 +422,7 @@ impl CalFile {
                     let trigger_date = rid_alarm.trigger_date(
                         rid_occ.resolved_occurrence_start(),
                         rid_occ.resolved_occurrence_end(),
-                        rid_occ.tz_offset(),
+                        rid_occ.resolved_tz_offset(),
                     );
                     match trigger_date {
                         Some(alarm) if resolved_in_range(alarm, start, end) => {

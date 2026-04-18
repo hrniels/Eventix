@@ -9,18 +9,28 @@ use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveDateTime
 use chrono_tz::Tz;
 
 use crate::objects::{
-    CalDate, CalDateTime, CalRRule, CalRRuleSide, CalTimeZone, CalWDayDesc, Calendar,
+    CalDate, CalDateTime, CalDateType, CalRRule, CalRRuleSide, CalTimeZone, CalWDayDesc, Calendar,
     ResolvedDateTime,
 };
 use crate::parser::ParseError;
 use crate::util;
 
+/// Resolves calendar dates and datetimes using embedded `VTIMEZONE` data when available.
+///
+/// This type is the boundary between unresolved calendar values and concrete instants. It prefers
+/// valid embedded timezone definitions from the calendar itself and falls back to the system
+/// timezone database only when no usable embedded definition exists for a TZID.
 #[derive(Clone, Debug)]
 pub struct CalendarTimeZoneResolver {
     embedded: HashMap<String, EmbeddedTimeZone>,
 }
 
 impl CalendarTimeZoneResolver {
+    /// Builds a resolver for the given calendar.
+    ///
+    /// Embedded `VTIMEZONE` definitions are compiled once and cached in the returned resolver.
+    /// When a timezone is not available as an embedded definition, resolution falls back to the
+    /// system `chrono_tz` database.
     pub fn new(calendar: &Calendar) -> Self {
         let embedded = calendar
             .timezones()
@@ -32,34 +42,11 @@ impl CalendarTimeZoneResolver {
         Self { embedded }
     }
 
-    pub fn has_embedded_timezone(&self, tzid: &str) -> bool {
-        self.embedded.contains_key(tzid)
-    }
-
-    pub fn resolve_local(
-        &self,
-        tzid: &str,
-        local: NaiveDateTime,
-    ) -> MappedLocalTime<ResolvedDateTime> {
-        if let Some(tz) = self.embedded.get(tzid) {
-            return tz.resolve_local(local);
-        }
-
-        if let Ok(tz) = tzid.parse::<Tz>() {
-            return map_system_time(tz, local);
-        }
-
-        map_system_time(Tz::Europe__Berlin, local)
-    }
-
-    pub fn resolve_local_or_earlier(&self, tzid: &str, local: NaiveDateTime) -> ResolvedDateTime {
-        match self.resolve_local(tzid, local) {
-            MappedLocalTime::Single(dt) => dt,
-            MappedLocalTime::Ambiguous(early, _) => early,
-            MappedLocalTime::None => panic!("non-existent local time {local} in {tzid}"),
-        }
-    }
-
+    /// Resolves the start instant represented by the given calendar date.
+    ///
+    /// `DATE` values are interpreted at local midnight in the fallback timezone. `DATE-TIME`
+    /// values are resolved according to their own timezone semantics, using the fallback timezone
+    /// for floating values.
     pub fn resolve_date_start(&self, date: &CalDate, fallback: &Tz) -> ResolvedDateTime {
         match date {
             CalDate::Date(day, _) => {
@@ -69,19 +56,29 @@ impl CalendarTimeZoneResolver {
         }
     }
 
+    /// Resolves the end instant represented by the given calendar date.
+    ///
+    /// Exclusive `DATE` values resolve to the last second of the previous day, inclusive `DATE`
+    /// values resolve to `23:59:59`, and `DATE-TIME` values are resolved according to their own
+    /// timezone semantics.
     pub fn resolve_date_end(&self, date: &CalDate, fallback: &Tz) -> ResolvedDateTime {
         match date {
-            CalDate::Date(day, crate::objects::CalDateType::Exclusive) => {
+            CalDate::Date(day, CalDateType::Exclusive) => {
                 let next_day = fixed_from_fallback(fallback, day.and_hms_opt(0, 0, 0).unwrap());
                 next_day - Duration::seconds(1)
             }
-            CalDate::Date(day, crate::objects::CalDateType::Inclusive) => {
+            CalDate::Date(day, CalDateType::Inclusive) => {
                 fixed_from_fallback(fallback, day.and_hms_opt(23, 59, 59).unwrap())
             }
             CalDate::DateTime(dt) => self.resolve_datetime(dt, fallback),
         }
     }
 
+    /// Resolves a calendar datetime into a concrete instant.
+    ///
+    /// UTC values keep their original instant, floating values are interpreted in the fallback
+    /// timezone, and `TZID` values are resolved against embedded `VTIMEZONE` data or the system
+    /// timezone database when no embedded definition exists.
     pub fn resolve_datetime(&self, dt: &CalDateTime, fallback: &Tz) -> ResolvedDateTime {
         match dt {
             CalDateTime::Utc(dt) => dt.fixed_offset().into(),
@@ -90,6 +87,32 @@ impl CalendarTimeZoneResolver {
         }
     }
 
+    fn resolve_local_or_earlier(&self, tzid: &str, local: NaiveDateTime) -> ResolvedDateTime {
+        match self.resolve_local(tzid, local) {
+            MappedLocalTime::Single(dt) => dt,
+            MappedLocalTime::Ambiguous(early, _) => early,
+            MappedLocalTime::None => panic!("non-existent local time {local} in {tzid}"),
+        }
+    }
+
+    fn resolve_local(&self, tzid: &str, local: NaiveDateTime) -> MappedLocalTime<ResolvedDateTime> {
+        if let Some(tz) = self.embedded.get(tzid) {
+            return tz.resolve_local(local);
+        }
+
+        if let Ok(tz) = tzid.parse::<Tz>() {
+            return map_system_time(tz, local);
+        }
+
+        // fall back to UTC as a last resort
+        map_system_time(Tz::UTC, local)
+    }
+
+    /// Validates that the given calendar datetime is representable in both its declared timezone
+    /// semantics and the caller's local timezone.
+    ///
+    /// This rejects datetimes that fall into DST gaps or folds for floating values, and for
+    /// timezone-qualified values it additionally rejects invalid local times in the declared TZID.
     pub fn validate_datetime(&self, dt: &CalDateTime, local_tz: &Tz) -> Result<(), ParseError> {
         match dt {
             CalDateTime::Utc(_) => Ok(()),
@@ -112,6 +135,10 @@ impl CalendarTimeZoneResolver {
         }
     }
 
+    /// Validates that the given calendar date is representable in the caller's local timezone.
+    ///
+    /// `DATE` values validate both their start and end-of-day boundaries. `DATE-TIME` values are
+    /// delegated to [`Self::validate_datetime`].
     pub fn validate_date(&self, date: &CalDate, local_tz: &Tz) -> Result<(), ParseError> {
         match date {
             CalDate::Date(day, _) => {
@@ -123,7 +150,7 @@ impl CalendarTimeZoneResolver {
         }
     }
 
-    pub fn pseudo_local(&self, dt: &CalDateTime, fallback: &Tz) -> DateTime<Utc> {
+    fn pseudo_local(&self, dt: &CalDateTime, fallback: &Tz) -> DateTime<Utc> {
         match dt {
             CalDateTime::Utc(dt) => *dt,
             CalDateTime::Floating(local) | CalDateTime::Timezone(local, _) => {
@@ -133,6 +160,11 @@ impl CalendarTimeZoneResolver {
         }
     }
 
+    /// Converts the start of a calendar date into a pseudo-local recurrence seed.
+    ///
+    /// The returned `DateTime<Utc>` does not represent a real UTC instant. It is a timezone-neutral
+    /// carrier of local wall-clock fields used by the recurrence engine before a later resolution
+    /// step applies timezone rules.
     pub fn pseudo_local_date_start(&self, date: &CalDate, fallback: &Tz) -> DateTime<Utc> {
         match date {
             CalDate::Date(day, _) => {
@@ -143,20 +175,11 @@ impl CalendarTimeZoneResolver {
         }
     }
 
-    pub fn pseudo_local_date_end(&self, date: &CalDate, fallback: &Tz) -> DateTime<Utc> {
-        match date {
-            CalDate::Date(day, crate::objects::CalDateType::Exclusive) => {
-                let _ = fallback;
-                day.and_hms_opt(0, 0, 0).unwrap().and_utc() - Duration::seconds(1)
-            }
-            CalDate::Date(day, crate::objects::CalDateType::Inclusive) => {
-                let _ = fallback;
-                day.and_hms_opt(23, 59, 59).unwrap().and_utc()
-            }
-            CalDate::DateTime(dt) => self.pseudo_local(dt, fallback),
-        }
-    }
-
+    /// Resolves a pseudo-local recurrence datetime into a concrete instant.
+    ///
+    /// This is the inverse of the pseudo-local recurrence carrier used in `recur.rs`: the date and
+    /// time fields are interpreted as local wall-clock values and resolved through the given TZID or
+    /// fallback timezone.
     pub fn resolve_pseudo_local(
         &self,
         pseudo: DateTime<Utc>,
@@ -168,10 +191,6 @@ impl CalendarTimeZoneResolver {
             Some(tzid) => self.resolve_local_or_earlier(tzid, local),
             None => fixed_from_fallback(fallback, local),
         }
-    }
-
-    pub fn fixed_to_tz(dt: ResolvedDateTime, tz: &Tz) -> chrono::DateTime<Tz> {
-        dt.with_timezone(tz)
     }
 }
 
@@ -218,6 +237,9 @@ impl EmbeddedTimeZone {
             let fixed = FixedObservance::compile(observance)?;
             let starts = fixed.transition_starts(1970, 2100);
             if starts.is_empty() {
+                // Some embedded definitions only provide a fixed offset without explicit recurring
+                // transition starts. Keep that as the fallback base offset for times outside the
+                // generated transition window.
                 base_observance = Some(fixed.clone());
             }
             transitions.extend(starts.into_iter().map(|start| Transition {
@@ -239,6 +261,8 @@ impl EmbeddedTimeZone {
             return MappedLocalTime::None;
         };
 
+        // Start with the best known offset before this local time, then walk nearby transitions to
+        // detect gaps/folds and update the active offset when a transition has already started.
         let mut candidates = vec![base_offset];
         for transition in &self.transitions {
             if transition.local_start > local + Duration::hours(3) {
@@ -254,6 +278,8 @@ impl EmbeddedTimeZone {
             } else if gap < 0 {
                 let overlap_start = transition.local_start + Duration::seconds(gap as i64);
                 if local >= overlap_start && local < transition.local_start {
+                    // During a fold both the pre-transition and post-transition offsets map the same
+                    // wall-clock value to distinct instants, so return both possibilities.
                     let early = fixed_datetime(
                         local,
                         FixedOffset::east_opt(transition.offset_from.as_seconds()).unwrap(),
@@ -281,6 +307,9 @@ impl EmbeddedTimeZone {
             }
         }
 
+        // Prefer the most recent generated transition before this local time. If there is none,
+        // fall back to a fixed observance when the embedded timezone did not yield recurring
+        // transition starts.
         self.transitions
             .iter()
             .rev()
@@ -338,6 +367,9 @@ impl FixedObservance {
         starts.extend(self.rdate.iter().copied());
 
         if let Some(rrule) = &self.rrule {
+            // Embedded observance rules are expanded as local wall-clock transition starts. The
+            // resolver later interprets these starts together with offset_from/offset_to to detect
+            // gaps and folds.
             for year in start_year..=end_year {
                 starts.extend(expand_observance_rrule(self.dtstart, rrule, year));
             }

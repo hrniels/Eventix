@@ -260,13 +260,6 @@ impl CalDate {
         }
     }
 
-    pub fn to_utc_with(self, fallback: &Tz, resolver: &CalendarTimeZoneResolver) -> CalDate {
-        match self {
-            Self::Date(date, ty) => Self::Date(date, ty),
-            Self::DateTime(datetime) => Self::DateTime(datetime.to_utc_with(fallback, resolver)),
-        }
-    }
-
     /// Returns the corresponding [`DateTime`] instance when using this date as the start of an
     /// event.
     ///
@@ -338,6 +331,10 @@ impl CalDate {
         }
     }
 
+    /// Validates this date using the given timezone resolver.
+    ///
+    /// This behaves like [`Self::validate`], but resolves `TZID` values through the provided
+    /// resolver so embedded `VTIMEZONE` definitions are taken into account.
     pub fn validate_with(
         &self,
         local_tz: &Tz,
@@ -346,6 +343,11 @@ impl CalDate {
         resolver.validate_date(self, local_tz)
     }
 
+    /// Resolves this date as the start of an event using the given timezone resolver.
+    ///
+    /// Floating values and plain dates use `fallback` when they need a timezone context. `TZID`
+    /// values are resolved through `resolver`, which may prefer embedded `VTIMEZONE` data over the
+    /// system timezone database.
     pub fn as_start_with_resolver(
         &self,
         fallback: &Tz,
@@ -354,20 +356,16 @@ impl CalDate {
         resolver.resolve_date_start(self, fallback)
     }
 
+    /// Resolves this date as the end of an event using the given timezone resolver.
+    ///
+    /// This uses the same inclusive end semantics as [`Self::as_end_with_tz`], but returns a
+    /// concrete resolved instant that preserves the final fixed offset chosen by the resolver.
     pub fn as_end_with_resolver(
         &self,
         fallback: &Tz,
         resolver: &CalendarTimeZoneResolver,
     ) -> ResolvedDateTime {
         resolver.resolve_date_end(self, fallback)
-    }
-
-    pub fn as_datetime_with_resolver(
-        &self,
-        fallback: &Tz,
-        resolver: &CalendarTimeZoneResolver,
-    ) -> ResolvedDateTime {
-        resolver.resolve_date_start(self, fallback)
     }
 }
 
@@ -519,9 +517,8 @@ impl CalDateTime {
         let date_tz = if let Ok(date_tz) = tzid.parse::<Tz>() {
             date_tz
         } else {
-            // we fall back to Europe/Berlin for all weird values that we see
-            // TODO this is temporary
-            Europe::Berlin
+            // we fall back to UTC for unknown timezones
+            Tz::UTC
         };
         date_tz.from_local_datetime(&dt).unwrap()
     }
@@ -530,13 +527,6 @@ impl CalDateTime {
     pub fn to_utc(self) -> CalDateTime {
         let dt = self.with_tz(&Tz::UTC);
         Self::Utc(dt.to_utc())
-    }
-
-    pub fn to_utc_with(self, fallback: &Tz, resolver: &CalendarTimeZoneResolver) -> CalDateTime {
-        let dt = resolver
-            .resolve_datetime(&self, fallback)
-            .with_timezone(&Utc);
-        Self::Utc(dt)
     }
 
     /// Builds and returns a [`Property`] for this datetime.
@@ -570,22 +560,6 @@ impl CalDateTime {
                 Ok(())
             }
         }
-    }
-
-    pub fn validate_with(
-        &self,
-        local_tz: &Tz,
-        resolver: &CalendarTimeZoneResolver,
-    ) -> Result<(), ParseError> {
-        resolver.validate_datetime(self, local_tz)
-    }
-
-    pub fn as_datetime_with_resolver(
-        &self,
-        fallback: &Tz,
-        resolver: &CalendarTimeZoneResolver,
-    ) -> ResolvedDateTime {
-        resolver.resolve_datetime(self, fallback)
     }
 }
 

@@ -165,10 +165,22 @@ impl<'c> Occurrence<'c> {
         )
     }
 
+    /// Returns the name of the timezone set for the start of the calendar item
+    ///
+    /// If no timezone has been set and it's not UTC, return result is None. Note also that the name
+    /// might be a custom name used in the ICS file and defined via VTIMEZONE.
+    pub fn tz_name(&self) -> Option<String> {
+        match self.start() {
+            Some(CalDate::DateTime(CalDateTime::Timezone(_, tzid))) => Some(tzid.to_string()),
+            Some(CalDate::DateTime(CalDateTime::Utc(_))) => Some("UTC".to_string()),
+            _ => None,
+        }
+    }
+
     /// Returns the timezone used for this occurrence.
     ///
     /// Note that may be None in case neither the start or the end of the occurrence is known.
-    pub fn tz_offset(&self) -> Option<FixedOffset> {
+    pub fn resolved_tz_offset(&self) -> Option<FixedOffset> {
         self.start
             .map(|start| start.offset().clone())
             .or_else(|| self.end.map(|end| end.offset().clone()))
@@ -600,7 +612,7 @@ impl<'o> AlarmOccurrence<'o> {
         self.alarm.trigger_date(
             self.occ.resolved_occurrence_start(),
             self.occ.resolved_occurrence_end(),
-            self.occ.tz_offset(),
+            self.occ.resolved_tz_offset(),
         )
     }
 
