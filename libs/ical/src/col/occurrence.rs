@@ -46,6 +46,7 @@ macro_rules! ctype_method {
 #[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
     dir: Arc<String>,
+    display_tz: Tz,
     start: Option<ResolvedDateTime>,
     end: Option<ResolvedDateTime>,
     base: &'c CalComponent,
@@ -76,8 +77,8 @@ impl EventTzRange {
     }
 
     /// Returns the event's timezone.
-    pub fn tz(&self) -> &str {
-        &self.tz
+    pub fn tz(&self) -> chrono_tz::Tz {
+        self.tz.parse().unwrap_or(chrono_tz::Tz::Europe__Berlin)
     }
 
     /// Returns the IANA timezone name (e.g. `"Europe/Berlin"`).
@@ -99,8 +100,21 @@ impl<'c> Occurrence<'c> {
         end: Option<ResolvedDateTime>,
         excluded: bool,
     ) -> Self {
+        Self::new_in_tz(dir, base, start, end, excluded, chrono_tz::UTC)
+    }
+
+    /// Creates a new occurrence at given start/end date for the given display timezone.
+    pub fn new_in_tz(
+        dir: Arc<String>,
+        base: &'c CalComponent,
+        start: Option<ResolvedDateTime>,
+        end: Option<ResolvedDateTime>,
+        excluded: bool,
+        display_tz: Tz,
+    ) -> Self {
         Self {
             dir,
+            display_tz,
             start,
             end,
             base,
@@ -121,7 +135,19 @@ impl<'c> Occurrence<'c> {
         date: ResolvedDateTime,
         excluded: bool,
     ) -> Self {
-        Self::new(
+        Self::new_single_in_tz(dir, base, ty, date, excluded, chrono_tz::UTC)
+    }
+
+    /// Creates a new single-date occurrence for the given display timezone.
+    pub fn new_single_in_tz(
+        dir: Arc<String>,
+        base: &'c CalComponent,
+        ty: CompDateType,
+        date: ResolvedDateTime,
+        excluded: bool,
+        display_tz: Tz,
+    ) -> Self {
+        Self::new_in_tz(
             dir,
             base,
             if ty == CompDateType::Start {
@@ -135,6 +161,7 @@ impl<'c> Occurrence<'c> {
                 None
             },
             excluded,
+            display_tz,
         )
     }
 
@@ -227,9 +254,15 @@ impl<'c> Occurrence<'c> {
         ctype_method!(self, as_todo, completed)
     }
 
-    /// Returns the start of this occurrence (if known).
-    pub fn occurrence_start(&self) -> Option<ResolvedDateTime> {
+    /// Returns the resolved start of this occurrence (if known).
+    pub fn resolved_occurrence_start(&self) -> Option<ResolvedDateTime> {
         self.start
+    }
+
+    /// Returns the start of this occurrence in the display timezone (if known).
+    pub fn occurrence_start(&self) -> Option<DateTime<Tz>> {
+        self.start
+            .map(|start| start.with_timezone(&self.display_tz))
     }
 
     /// Returns the start of this occurrence (if known) as a [`CalDate`].
@@ -238,13 +271,16 @@ impl<'c> Occurrence<'c> {
             if self.is_all_day() {
                 CalDate::Date(start.date_naive(), self.ctype().into())
             } else {
-                start.into()
+                CalDate::DateTime(CalDateTime::Timezone(
+                    start.naive_local(),
+                    self.display_tz.name().to_string(),
+                ))
             }
         })
     }
 
-    /// Returns the end of this occurrence (if known).
-    pub fn occurrence_end(&self) -> Option<ResolvedDateTime> {
+    /// Returns the resolved end of this occurrence (if known).
+    pub fn resolved_occurrence_end(&self) -> Option<ResolvedDateTime> {
         match self.end {
             Some(end) => Some(end),
             None => self.time_duration().map(|d| {
@@ -265,6 +301,12 @@ impl<'c> Occurrence<'c> {
         }
     }
 
+    /// Returns the end of this occurrence in the display timezone (if known).
+    pub fn occurrence_end(&self) -> Option<DateTime<Tz>> {
+        self.resolved_occurrence_end()
+            .map(|end| end.with_timezone(&self.display_tz))
+    }
+
     /// Returns the end of this occurrence (if known) as a [`CalDate`].
     pub fn occurrence_enddate(&self) -> Option<CalDate> {
         self.occurrence_end().and_then(|e| {
@@ -275,7 +317,10 @@ impl<'c> Occurrence<'c> {
                 };
                 Some(CalDate::Date(date, self.ctype().into()))
             } else {
-                Some(e.into())
+                Some(CalDate::DateTime(CalDateTime::Timezone(
+                    e.naive_local(),
+                    self.display_tz.name().to_string(),
+                )))
             }
         })
     }
@@ -367,14 +412,16 @@ impl<'c> Occurrence<'c> {
         Tz1::Offset: Copy,
         Tz2::Offset: Copy,
     {
-        if let Some(ostart) = self.start {
+        if let Some(ostart) = self.resolved_occurrence_start() {
             util::date_ranges_overlap(
                 ostart.with_timezone(&Utc),
-                self.occurrence_end().unwrap_or(ostart).with_timezone(&Utc),
+                self.resolved_occurrence_end()
+                    .unwrap_or(ostart)
+                    .with_timezone(&Utc),
                 start.with_timezone(&Utc),
                 end.with_timezone(&Utc),
             )
-        } else if let Some(oend) = self.occurrence_end() {
+        } else if let Some(oend) = self.resolved_occurrence_end() {
             let oend = oend.with_timezone(&Utc);
             let start = start.with_timezone(&Utc);
             let end = end.with_timezone(&Utc);
@@ -548,13 +595,19 @@ impl<'o> AlarmOccurrence<'o> {
         &self.alarm
     }
 
-    /// Returns the first alarm date of this occurrence, if it has an alarm.
-    pub fn alarm_date(&self) -> Option<ResolvedDateTime> {
+    /// Returns the first resolved alarm date of this occurrence, if it has an alarm.
+    pub fn resolved_alarm_date(&self) -> Option<ResolvedDateTime> {
         self.alarm.trigger_date(
-            self.occ.occurrence_start(),
-            self.occ.occurrence_end(),
+            self.occ.resolved_occurrence_start(),
+            self.occ.resolved_occurrence_end(),
             self.occ.tz_offset(),
         )
+    }
+
+    /// Returns the first alarm date of this occurrence in the display timezone, if it has an alarm.
+    pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
+        self.resolved_alarm_date()
+            .map(|date| date.with_timezone(&self.occ.display_tz))
     }
 }
 
@@ -629,7 +682,7 @@ mod tests {
         assert_eq!(occ.base().uid(), "uid-simple");
         assert!(!occ.is_overwritten());
         assert!(!occ.is_excluded());
-        assert_eq!(occ.occurrence_start(), Some(start));
+        assert_eq!(occ.resolved_occurrence_start(), Some(start));
         // is_excluded = true path
         let occ_excl = Occurrence::new(dir(), &comp, Some(start), None, true);
         assert!(occ_excl.is_excluded());
@@ -661,11 +714,15 @@ mod tests {
         let occ = Occurrence::new(dir(), &comp, Some(start), Some(end), false);
 
         let startdate = occ.occurrence_startdate().unwrap();
-        let expected_start = CalDate::DateTime(CalDateTime::Utc(start.with_timezone(&Utc)));
+        let expected_start = CalDate::DateTime(CalDateTime::Timezone(
+            start.naive_local(),
+            "UTC".to_string(),
+        ));
         assert_eq!(startdate, expected_start);
 
         let enddate = occ.occurrence_enddate().unwrap();
-        let expected_end = CalDate::DateTime(CalDateTime::Utc(end.with_timezone(&Utc)));
+        let expected_end =
+            CalDate::DateTime(CalDateTime::Timezone(end.naive_local(), "UTC".to_string()));
         assert_eq!(enddate, expected_end);
     }
 
@@ -949,7 +1006,7 @@ mod tests {
         let occ = Occurrence::new(dir(), &comp, Some(start_dt), None, false);
         // end must be derived from start + duration
         let expected_end = start_dt + Duration::hours(2);
-        assert_eq!(occ.occurrence_end(), Some(expected_end));
+        assert_eq!(occ.resolved_occurrence_end(), Some(expected_end));
     }
 
     /// Verifies that `occurrence_end` preserves wall-clock time when a DST spring-forward
@@ -1312,7 +1369,7 @@ mod tests {
 
         // alarm fires 15 minutes before start
         let expected = start - Duration::minutes(15);
-        assert_eq!(alarm_occ.alarm_date(), Some(expected));
+        assert_eq!(alarm_occ.resolved_alarm_date(), Some(expected));
     }
 
     // --- occurrence_range_in_tz ---

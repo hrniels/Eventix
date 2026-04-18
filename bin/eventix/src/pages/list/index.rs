@@ -99,9 +99,10 @@ impl<'a> ListComponent<'a> {
         let occ = Occurrence::new(
             file.directory().clone(),
             c,
-            c.start().map(|d| d.as_start_with_tz(locale.timezone())),
+            c.start()
+                .map(|d| d.as_start_with_tz(locale.timezone()).fixed_offset().into()),
             c.end_or_due()
-                .map(|d| d.as_start_with_tz(locale.timezone())),
+                .map(|d| d.as_start_with_tz(locale.timezone()).fixed_offset().into()),
             false,
         );
 

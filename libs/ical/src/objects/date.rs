@@ -95,6 +95,21 @@ impl<Tz: TimeZone> PartialEq<ResolvedDateTime> for DateTime<Tz> {
     }
 }
 
+impl<Tz: TimeZone> PartialOrd<DateTime<Tz>> for ResolvedDateTime {
+    fn partial_cmp(&self, other: &DateTime<Tz>) -> Option<Ordering> {
+        self.0
+            .with_timezone(&Utc)
+            .partial_cmp(&other.with_timezone(&Utc))
+    }
+}
+
+impl<Tz: TimeZone> PartialOrd<ResolvedDateTime> for DateTime<Tz> {
+    fn partial_cmp(&self, other: &ResolvedDateTime) -> Option<Ordering> {
+        self.with_timezone(&Utc)
+            .partial_cmp(&other.0.with_timezone(&Utc))
+    }
+}
+
 /// The type of date.
 ///
 /// The iCalendar format has interestingly two different ways to interpret dates of type

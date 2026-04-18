@@ -87,7 +87,8 @@ impl<'a> Tasks<'a> {
                 Occurrence::new(
                     dir.clone(),
                     c,
-                    c.start().map(|d| d.as_start_with_tz(timezone)),
+                    c.start()
+                        .map(|d| d.as_start_with_tz(timezone).fixed_offset().into()),
                     None,
                     // non-recurrent occurrences are never excluded
                     false,
