@@ -267,7 +267,7 @@ impl<'c> Occurrence<'c> {
 
     /// Returns the start of this occurrence (if known) as a [`CalDate`].
     pub fn occurrence_startdate(&self) -> Option<CalDate> {
-        self.start.map(|start| {
+        self.occurrence_start().map(|start| {
             if self.is_all_day() {
                 CalDate::Date(start.date_naive(), self.ctype().into())
             } else {
