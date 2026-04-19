@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776622470290,
+  "lastUpdate": 1776622504170,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -456,6 +456,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 22517278.36,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "acd58b90dfbf1fcc32cbc4a24158d31333c717ea",
+          "message": "Make use of VTIMEZONE as required by RFC 5545",
+          "timestamp": "2026-04-19T16:22:43Z",
+          "url": "https://github.com/hrniels/Eventix/pull/23/commits/acd58b90dfbf1fcc32cbc4a24158d31333c717ea"
+        },
+        "date": 1776622503402,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 43708541.26666669,
             "unit": "ns"
           }
         ]
