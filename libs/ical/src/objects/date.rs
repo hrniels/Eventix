@@ -305,6 +305,11 @@ impl From<CalCompType> for CalDateType {
 ///
 /// Dates in iCalendar objects come in two forms: date and datetime. The former specifies a day,
 /// whereas the latter specifies a day and a time.
+///
+/// This is intentionally an unresolved calendar value. Equality, hashing, and ordering are
+/// structural and preserve the original iCalendar representation rather than comparing resolved
+/// instants. Code that needs calendar-aware timezone resolution must go through [`DateContext`] or
+/// [`BoundCalDate`].
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum CalDate {
     /// Specifies a date.
@@ -785,6 +790,56 @@ mod tests {
             CalDateType::Exclusive,
         );
         assert_eq!(berlin_ctx.date_to_utc(&plain_date), plain_date);
+    }
+
+    #[test]
+    fn caldate_equality_and_ordering_are_structural() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let utc = CalDate::DateTime(CalDateTime::Utc(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(8, 0, 0))
+                .unwrap()
+                .and_utc(),
+        ));
+        let berlin = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(9, 0, 0))
+                .unwrap(),
+            "Europe/Berlin".to_string(),
+        ));
+
+        let mut utc_hash = DefaultHasher::new();
+        utc.hash(&mut utc_hash);
+        let mut berlin_hash = DefaultHasher::new();
+        berlin.hash(&mut berlin_hash);
+
+        assert_ne!(utc, berlin);
+        assert_ne!(utc_hash.finish(), berlin_hash.finish());
+        assert!(utc < berlin || berlin < utc);
+    }
+
+    #[test]
+    fn bound_dates_compare_by_resolved_instant() {
+        let utc = CalDate::DateTime(CalDateTime::Utc(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(8, 0, 0))
+                .unwrap()
+                .and_utc(),
+        ));
+        let berlin = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(9, 0, 0))
+                .unwrap(),
+            "Europe/Berlin".to_string(),
+        ));
+        let ctx = DateContext::local(Tz::UTC);
+
+        assert_eq!(
+            ctx.date(&utc).resolved_start(),
+            ctx.date(&berlin).resolved_start()
+        );
     }
 
     #[test]

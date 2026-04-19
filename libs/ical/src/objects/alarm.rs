@@ -394,10 +394,11 @@ pub trait AlarmOverlay {
     /// This method will be called for every recurrent component. It receives the overwritten
     /// alarms for its occurrences and allows to customize these.
     ///
-    /// This method returns a [`BTreeMap`] with the recurrence-id (CalDate in UTC) as the key and a
-    /// [`Vec`] of [`CalAlarm`] as the vaues. If the map does not have an entry for a specific
-    /// occurrence, the alarms from the base component will be taken. Otherwise the set alarms will
-    /// be taken (which can be none).
+    /// This method returns a map keyed by the raw recurrence-id [`CalDate`] values used by the
+    /// surrounding occurrence pipeline. These keys are structural calendar values, not normalized
+    /// UTC instants. If the map does not have an entry for a specific occurrence, the alarms from
+    /// the base component will be taken. Otherwise the set alarms will be taken (which can be
+    /// none).
     fn alarm_overwrites(
         &self,
         comp: &CalComponent,
