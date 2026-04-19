@@ -300,7 +300,10 @@ impl EmbeddedTimeZone {
         // Start with the best known offset before this local time, then walk nearby transitions to
         // detect gaps/folds and update the active offset when a transition has already started.
         let mut candidates = vec![base_offset];
-        for transition in &self.transitions {
+        let upper_bound = self
+            .transitions
+            .partition_point(|transition| transition.local_start <= local + Duration::hours(3));
+        for transition in &self.transitions[..upper_bound] {
             if transition.local_start > local + Duration::hours(3) {
                 break;
             }
@@ -346,11 +349,13 @@ impl EmbeddedTimeZone {
         // Prefer the most recent generated transition before this local time. If there is none,
         // fall back to a fixed observance when the embedded timezone did not yield recurring
         // transition starts.
+        let transition_idx = self
+            .transitions
+            .partition_point(|transition| transition.local_start <= local);
+
         self.transitions
-            .iter()
-            .rev()
-            .find(|t| t.local_start <= local)
-            .and_then(|t| FixedOffset::east_opt(t.offset_to.as_seconds()))
+            .get(transition_idx.checked_sub(1)?)
+            .and_then(|transition| FixedOffset::east_opt(transition.offset_to.as_seconds()))
             .or_else(|| {
                 self.base_observance
                     .as_ref()
