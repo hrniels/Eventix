@@ -293,50 +293,50 @@ impl EmbeddedTimeZone {
     }
 
     fn resolve_local(&self, local: NaiveDateTime) -> MappedLocalTime<ResolvedDateTime> {
+        let insertion_idx = self
+            .transitions
+            .partition_point(|transition| transition.local_start <= local);
+
         let Some(base_offset) = self.base_offset_before(local) else {
             return MappedLocalTime::None;
         };
 
-        // Start with the best known offset before this local time, then walk nearby transitions to
-        // detect gaps/folds and update the active offset when a transition has already started.
-        let mut active_offset = base_offset;
-        let upper_bound = self
-            .transitions
-            .partition_point(|transition| transition.local_start <= local + Duration::hours(3));
-        for transition in &self.transitions[..upper_bound] {
-            if transition.local_start > local + Duration::hours(3) {
-                break;
-            }
-
-            let gap = transition.offset_to.as_seconds() - transition.offset_from.as_seconds();
+        if let Some(prev_transition) = insertion_idx
+            .checked_sub(1)
+            .and_then(|idx| self.transitions.get(idx))
+        {
+            let gap =
+                prev_transition.offset_to.as_seconds() - prev_transition.offset_from.as_seconds();
             if gap > 0 {
-                let gap_end = transition.local_start + Duration::seconds(gap as i64);
-                if local >= transition.local_start && local < gap_end {
+                let gap_end = prev_transition.local_start + Duration::seconds(gap as i64);
+                if local >= prev_transition.local_start && local < gap_end {
                     return MappedLocalTime::None;
                 }
-            } else if gap < 0 {
-                let overlap_start = transition.local_start + Duration::seconds(gap as i64);
-                if local >= overlap_start && local < transition.local_start {
+            }
+        }
+
+        if let Some(next_transition) = self.transitions.get(insertion_idx) {
+            let gap =
+                next_transition.offset_to.as_seconds() - next_transition.offset_from.as_seconds();
+            if gap < 0 {
+                let overlap_start = next_transition.local_start + Duration::seconds(gap as i64);
+                if local >= overlap_start && local < next_transition.local_start {
                     // During a fold both the pre-transition and post-transition offsets map the same
                     // wall-clock value to distinct instants, so return both possibilities.
                     let early = fixed_datetime(
                         local,
-                        FixedOffset::east_opt(transition.offset_from.as_seconds()).unwrap(),
+                        FixedOffset::east_opt(next_transition.offset_from.as_seconds()).unwrap(),
                     );
                     let late = fixed_datetime(
                         local,
-                        FixedOffset::east_opt(transition.offset_to.as_seconds()).unwrap(),
+                        FixedOffset::east_opt(next_transition.offset_to.as_seconds()).unwrap(),
                     );
                     return MappedLocalTime::Ambiguous(early.into(), late.into());
                 }
             }
-
-            if transition.local_start <= local {
-                active_offset = FixedOffset::east_opt(transition.offset_to.as_seconds()).unwrap();
-            }
         }
 
-        MappedLocalTime::Single(fixed_datetime(local, active_offset).into())
+        MappedLocalTime::Single(fixed_datetime(local, base_offset).into())
     }
 
     fn base_offset_before(&self, local: NaiveDateTime) -> Option<FixedOffset> {
