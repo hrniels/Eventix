@@ -182,8 +182,8 @@ impl<'c> Occurrence<'c> {
     /// Note that may be None in case neither the start or the end of the occurrence is known.
     pub fn resolved_tz_offset(&self) -> Option<FixedOffset> {
         self.start
-            .map(|start| start.offset().clone())
-            .or_else(|| self.end.map(|end| end.offset().clone()))
+            .map(|start| *start.offset())
+            .or_else(|| self.end.map(|end| *end.offset()))
     }
 
     /// Returns the directory in which the underlying component lives.

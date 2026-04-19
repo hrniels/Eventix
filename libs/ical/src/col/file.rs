@@ -80,7 +80,7 @@ impl<'a, 'r> OccurrenceIterator<'a, 'r> {
                 matches!(c.rid(),
                 Some(rid)
                     if occ.resolved_occurrence_start()
-                        == Some(rid.as_start_with_resolver(&self.start.timezone(), &resolver)))
+                        == Some(rid.as_start_with_resolver(&self.start.timezone(), resolver)))
             }) {
                 let rid = overwritten.rid().unwrap().clone();
                 // skip this in case we had it already within the overwritten iterator
@@ -89,7 +89,7 @@ impl<'a, 'r> OccurrenceIterator<'a, 'r> {
                 }
                 self.seen_rids.push(rid);
 
-                occ.set_overwrite(overwritten, &self.start.timezone(), &resolver);
+                occ.set_overwrite(overwritten, &self.start.timezone(), resolver);
                 // if it isn't in the range anymore, do not consider it
                 if !Self::is_in_range(&occ, self.start, self.end) {
                     continue;
@@ -116,7 +116,7 @@ impl<'a, 'r> OccurrenceIterator<'a, 'r> {
                 let start_date = overwritten
                     .start()
                     .unwrap()
-                    .as_start_with_resolver(&timezone, &resolver);
+                    .as_start_with_resolver(&timezone, resolver);
                 let mut occ = Occurrence::new_single_in_tz(
                     self.file.dir.clone(),
                     base,
@@ -124,11 +124,11 @@ impl<'a, 'r> OccurrenceIterator<'a, 'r> {
                     start_date,
                     base.exdates()
                         .iter()
-                        .map(|d| d.as_start_with_resolver(&timezone, &resolver))
-                        .any(|d| d == rid.as_start_with_resolver(&timezone, &resolver)),
+                        .map(|d| d.as_start_with_resolver(&timezone, resolver))
+                        .any(|d| d == rid.as_start_with_resolver(&timezone, resolver)),
                     timezone,
                 );
-                occ.set_overwrite(overwritten, &timezone, &resolver);
+                occ.set_overwrite(overwritten, &timezone, resolver);
                 if Self::is_in_range(&occ, self.start, self.end) {
                     return Some(occ);
                 }
@@ -346,14 +346,14 @@ impl CalFile {
                         );
                     }
                     CalTrigger::Absolute(date) => {
-                        let alarm_date = date.as_start_with_resolver(&start.timezone(), &resolver);
+                        let alarm_date = date.as_start_with_resolver(&start.timezone(), resolver);
                         if resolved_in_range(alarm_date, start, end) {
                             let fstart = first
                                 .start()
-                                .map(|d| d.as_start_with_resolver(&start.timezone(), &resolver));
+                                .map(|d| d.as_start_with_resolver(&start.timezone(), resolver));
                             let fend = first
                                 .end_or_due()
-                                .map(|d| d.as_end_with_resolver(&start.timezone(), &resolver));
+                                .map(|d| d.as_end_with_resolver(&start.timezone(), resolver));
                             alarms.push(AlarmOccurrence::new(
                                 Occurrence::new_in_tz(
                                     self.dir.clone(),
@@ -378,14 +378,14 @@ impl CalFile {
             for overwrite in self.cal.components().iter().filter(|c| c.rid().is_some()) {
                 // set the overwrite to get the correct summary etc.
                 let rid = overwrite.rid().unwrap().clone();
-                let rid_tz = rid.as_start_with_resolver(&start.timezone(), &resolver);
+                let rid_tz = rid.as_start_with_resolver(&start.timezone(), resolver);
                 if let Some(alarm) = alarms
                     .iter_mut()
                     .find(|a| a.occurrence().resolved_occurrence_start() == Some(rid_tz))
                 {
                     alarm
                         .occurrence_mut()
-                        .set_overwrite(overwrite, &start.timezone(), &resolver);
+                        .set_overwrite(overwrite, &start.timezone(), resolver);
                 }
 
                 if let Some(alarms) = overwrite.alarms() {
@@ -398,7 +398,7 @@ impl CalFile {
 
             for (rid, rid_alarms) in alarm_overwrites {
                 // construct a new occurrence
-                let rid_tz = rid.as_start_with_resolver(&start.timezone(), &resolver);
+                let rid_tz = rid.as_start_with_resolver(&start.timezone(), resolver);
                 let fend = first.time_duration().map(|d| rid_tz + d);
                 let mut rid_occ = Occurrence::new_in_tz(
                     self.dir.clone(),
@@ -411,7 +411,7 @@ impl CalFile {
                 if let Some(overwrite) =
                     self.cal.components().iter().find(|c| c.rid() == Some(&rid))
                 {
-                    rid_occ.set_overwrite(overwrite, &start.timezone(), &resolver);
+                    rid_occ.set_overwrite(overwrite, &start.timezone(), resolver);
                 }
 
                 // remove all alarms we already had for this occurrence
@@ -454,17 +454,17 @@ impl CalFile {
         let first = self.component_with(|c| c.rid().is_none() && c.uid() == uid.as_ref())?;
         let (fstart, fend, excluded) = match rid {
             Some(rid) => (
-                Some(rid.as_start_with_resolver(tz, &resolver)),
+                Some(rid.as_start_with_resolver(tz, resolver)),
                 None,
                 first.exdates().contains(rid),
             ),
             None => (
                 first
                     .start()
-                    .map(|d| d.as_start_with_resolver(tz, &resolver)),
+                    .map(|d| d.as_start_with_resolver(tz, resolver)),
                 first
                     .end_or_due()
-                    .map(|d| d.as_end_with_resolver(tz, &resolver)),
+                    .map(|d| d.as_end_with_resolver(tz, resolver)),
                 false,
             ),
         };
@@ -477,7 +477,7 @@ impl CalFile {
                 .iter()
                 .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid));
             if let Some(occ) = occ {
-                res.set_overwrite(occ, tz, &resolver);
+                res.set_overwrite(occ, tz, resolver);
             }
         }
         Some(res)

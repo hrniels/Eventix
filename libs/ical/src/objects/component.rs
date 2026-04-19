@@ -492,7 +492,7 @@ impl Iterator for CompDateIterator<'_, '_> {
                 tzid,
                 fallback,
             } => recur.next().map(|date| {
-                let date = resolver.resolve_pseudo_local(date, tzid.as_deref(), &fallback);
+                let date = resolver.resolve_pseudo_local(date, tzid.as_deref(), fallback);
                 (CompDateType::Start, date, exdates.contains(&date))
             }),
             Self::Single(single) => single.take().map(|(ty, date)| (ty, date, false)),

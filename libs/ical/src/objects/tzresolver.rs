@@ -20,17 +20,9 @@ use crate::util;
 /// This type is the boundary between unresolved calendar values and concrete instants. It prefers
 /// valid embedded timezone definitions from the calendar itself and falls back to the system
 /// timezone database only when no usable embedded definition exists for a TZID.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CalendarTimeZoneResolver {
     embedded: HashMap<String, EmbeddedTimeZone>,
-}
-
-impl Default for CalendarTimeZoneResolver {
-    fn default() -> Self {
-        Self {
-            embedded: HashMap::new(),
-        }
-    }
 }
 
 impl CalendarTimeZoneResolver {
@@ -340,10 +332,10 @@ impl EmbeddedTimeZone {
     }
 
     fn base_offset_before(&self, local: NaiveDateTime) -> Option<FixedOffset> {
-        if let Some(first) = self.transitions.first() {
-            if local < first.local_start {
-                return FixedOffset::east_opt(first.offset_from.as_seconds());
-            }
+        if let Some(first) = self.transitions.first()
+            && local < first.local_start
+        {
+            return FixedOffset::east_opt(first.offset_from.as_seconds());
         }
 
         // Prefer the most recent generated transition before this local time. If there is none,

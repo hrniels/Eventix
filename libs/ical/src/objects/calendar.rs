@@ -828,7 +828,7 @@ END:VCALENDAR\n";
         let cal = input.parse::<Calendar>().unwrap();
         let resolver = cal.timezone_resolver();
         let start = cal.components()[0].start().unwrap();
-        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, &resolver);
+        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, resolver);
 
         assert_eq!(
             resolved.naive_local(),
@@ -850,7 +850,7 @@ END:VCALENDAR\n";
         let cal = input.parse::<Calendar>().unwrap();
         let resolver = cal.timezone_resolver();
         let start = cal.components()[0].start().unwrap();
-        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, &resolver);
+        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, resolver);
 
         assert_eq!(
             resolved.naive_local(),

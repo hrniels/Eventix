@@ -128,6 +128,7 @@ pub trait CompAction {
         if val.is_empty() { None } else { Some(val) }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn update(
         &self,
         calendar: &String,
