@@ -253,29 +253,29 @@ pub async fn content_results(
         state
             .store()
             .files()
-            .flat_map(|i| {
-                i.components()
+            .flat_map(|file| {
+                file.components()
                     .iter()
                     .filter(|c| c.rid().is_none())
-                    .map(|c| ListComponent::new(c, i, locale.clone(), settings, pers_alarms))
+                    .map(move |comp| (file, comp))
             })
-            .filter(|l| {
-                if !filter.dirs.contains(l.dir) {
+            .filter(|(file, comp)| {
+                if !filter.dirs.contains(file.directory()) {
                     return false;
                 }
                 if keywords.is_empty() {
                     return true;
                 }
-                if matches_keywords(l.comp.summary(), &keywords) {
+                if matches_keywords(comp.summary(), &keywords) {
                     return true;
                 }
-                if matches_keywords(l.comp.description(), &keywords) {
+                if matches_keywords(comp.description(), &keywords) {
                     return true;
                 }
-                if matches_keywords(l.comp.location(), &keywords) {
+                if matches_keywords(comp.location(), &keywords) {
                     return true;
                 }
-                if matches_keywords(Some(l.comp.uid()), &keywords) {
+                if matches_keywords(Some(comp.uid()), &keywords) {
                     return true;
                 }
                 false
@@ -284,15 +284,15 @@ pub async fn content_results(
     let total = iter().count();
 
     let comps = iter()
-        .sorted_by_key(|c| {
-            c.comp
-                .last_modified()
-                .or_else(|| c.comp.created())
-                .unwrap_or_else(|| c.comp.stamp())
+        .sorted_by_key(|(_, comp)| {
+            comp.last_modified()
+                .or_else(|| comp.created())
+                .unwrap_or_else(|| comp.stamp())
         })
         .rev()
         .skip((filter.page - 1) * PER_PAGE)
         .take(PER_PAGE)
+        .map(|(file, comp)| ListComponent::new(comp, file, locale.clone(), settings, pers_alarms))
         .collect::<Vec<_>>();
 
     let pagination = PaginationTemplate::new(
