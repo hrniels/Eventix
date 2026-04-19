@@ -40,9 +40,26 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.23.0", features = ["v4"] }
 
 [dev-dependencies]
+criterion = { version = "0.7.0", features = ["async_tokio"] }
 iana-time-zone = "0.1.65"
 tempfile.workspace = true
 tower = { version = "0.5.3", features = ["util"] }
+
+[[bench]]
+name = "list"
+harness = false
+
+[[bench]]
+name = "monthly"
+harness = false
+
+[[bench]]
+name = "weekly"
+harness = false
+
+[[bench]]
+name = "parse"
+harness = false
 
 [[test]]
 name = "api_items"
