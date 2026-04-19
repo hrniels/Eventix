@@ -708,9 +708,9 @@ impl CalRRule {
         // something else, which might indeed be in the range.
         let beyond_end = next_date(end, self.freq, interval).unwrap_or(end);
         let until = if let Some(ref until) = self.until {
-            DateContext::local(Tz::UTC)
+            DateContext::system()
                 .date(until)
-                .resolved_end()
+                .resolved_end(&Tz::UTC)
                 .with_timezone(&Utc)
                 .min(beyond_end)
         } else {

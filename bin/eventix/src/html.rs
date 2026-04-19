@@ -73,26 +73,6 @@ pub mod filters {
     }
 
     #[askama::filter_fn]
-    pub fn date(
-        date: &dyn DateLike,
-        _values: &dyn ::askama::Values,
-        locale: &Arc<dyn Locale + Send + Sync>,
-        flags: DateFlags,
-    ) -> ::askama::Result<String> {
-        Ok(locale.fmt_date(date, flags))
-    }
-
-    #[askama::filter_fn]
-    pub fn datetime(
-        date: &dyn DateLike,
-        _values: &dyn ::askama::Values,
-        locale: &Arc<dyn Locale + Send + Sync>,
-        flags: DateFlags,
-    ) -> ::askama::Result<String> {
-        Ok(locale.fmt_datetime(date, flags))
-    }
-
-    #[askama::filter_fn]
     pub fn to_id<S: AsRef<str>>(id: S, _values: &dyn ::askama::Values) -> ::askama::Result<String> {
         Ok(super::to_id(id))
     }

@@ -33,8 +33,8 @@ pub use alarm::{AlarmOverlay, CalAction, CalAlarm, CalRelated, CalTrigger, Defau
 pub use attendee::{CalAttendee, CalPartStat, CalRole};
 pub use calendar::Calendar;
 pub use component::{
-    BoundComponent, BoundComponentMut, CalCompType, CalComponent, CompDateIterator, CompDateType,
-    EventLikeComponent, PRIORITY_HIGH, PRIORITY_LOW, PRIORITY_MEDIUM,
+    CalCompType, CalComponent, CompDateIterator, CompDateType, EventLikeComponent, PRIORITY_HIGH,
+    PRIORITY_LOW, PRIORITY_MEDIUM,
 };
 pub use date::{BoundCalDate, CalDate, CalDateTime, CalDateType, DateContext, ResolvedDateTime};
 pub use duration::CalDuration;

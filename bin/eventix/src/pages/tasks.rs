@@ -84,11 +84,11 @@ impl<'a> Tasks<'a> {
                         != CalTodoStatus::Completed
             })
             .map(|(file, dir, c)| {
-                let ctx = file.calendar().date_context(*timezone);
+                let ctx = file.calendar().date_context();
                 Occurrence::new(
                     dir.clone(),
                     c,
-                    c.start().map(|d| ctx.date(d).resolved_start()),
+                    c.start().map(|d| ctx.date(d).resolved_start(timezone)),
                     None,
                     // non-recurrent occurrences are never excluded
                     false,

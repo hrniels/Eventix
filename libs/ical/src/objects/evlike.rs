@@ -98,9 +98,10 @@ pub trait EventLike: PropertyProducer {
             start.clone()
         };
 
-        let ctx = DateContext::local(Tz::UTC);
-        self.end_or_due()
-            .map(|end| ctx.date(end).resolved_end() - ctx.date(&start).resolved_start())
+        let ctx = DateContext::system();
+        self.end_or_due().map(|end| {
+            ctx.date(end).resolved_end(&Tz::UTC) - ctx.date(&start).resolved_start(&Tz::UTC)
+        })
     }
 
     /// Returns the summary of the calendar object (SUMMARY).

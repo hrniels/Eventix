@@ -2,15 +2,15 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use eventix_ical::objects::CalCompType;
+use eventix_ical::objects::{CalCompType, DateContext};
 use eventix_locale::Locale;
 use gtk::gdk::RGBA;
 use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::gio;
 use gtk::glib;
 use gtk::{
-    prelude::*, Align, Box as GtkBox, Button, DropDown, Image, Label, ListItem, Orientation,
-    SignalListItemFactory, StringObject, Window,
+    Align, Box as GtkBox, Button, DropDown, Image, Label, ListItem, Orientation,
+    SignalListItemFactory, StringObject, Window, prelude::*,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -95,7 +95,12 @@ impl ImportView {
             if let Some(sum) = c.summary.as_ref() {
                 label.push_str(&format!("{sum}\n"));
             }
-            label.push_str(&locale.date_range(c.start.clone(), c.end.clone(), locale.timezone()));
+            label.push_str(&locale.date_range(
+                c.start.clone(),
+                c.end.clone(),
+                &DateContext::system(),
+                locale.timezone(),
+            ));
             if let Some(rrule) = c.rrule.as_ref() {
                 label.push_str(&format!("\n{}", rrule.human(locale)));
             }

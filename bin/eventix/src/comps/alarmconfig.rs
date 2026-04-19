@@ -201,8 +201,8 @@ impl AlarmConfig {
                     return false;
                 }
                 Some(cal_date) => {
-                    if let Err(e) = DateContext::local(*locale.timezone())
-                        .validate_date(&cal_date, locale.timezone())
+                    if let Err(e) =
+                        DateContext::system().validate_date(&cal_date, locale.timezone())
                     {
                         page.add_error(match &e {
                             ParseError::AmbiguousTime(_) => locale.translate("error.dst_ambiguous"),
@@ -243,7 +243,7 @@ impl AlarmConfig {
                     let tz: Tz = event_tz
                         .parse()
                         .map_err(|_| anyhow!("Invalid timezone: {}", event_tz))?;
-                    DateContext::local(tz).date_to_utc(&date)
+                    DateContext::system().date_to_utc(&date, &tz)
                 }),
             };
             let alarm = CalAlarm::new(CalAction::Display, trigger);

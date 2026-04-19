@@ -16,8 +16,7 @@ use tracing::info;
 use crate::col::{AlarmOccurrence, ColError, Occurrence};
 use crate::objects::{
     AlarmOverlay, CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger,
-    Calendar, CompDateIterator, CompDateType, DateContext, EventLike, ResolvedDateTime,
-    UpdatableEventLike,
+    Calendar, CompDateIterator, CompDateType, EventLike, ResolvedDateTime, UpdatableEventLike,
 };
 use crate::util;
 
@@ -658,7 +657,7 @@ impl CalFile {
         } else {
             CalComponent::Todo(CalTodo::new(base.uid()))
         };
-        let ctx = DateContext::new(self.cal.timezone_resolver_arc(), *tz);
+        let ctx = self.cal.date_context();
 
         let start = CalDate::DateTime(CalDateTime::Timezone(
             ctx.date(&rid).start_in(tz).naive_local(),
@@ -708,15 +707,15 @@ impl CalFile {
             .ok_or_else(|| ColError::ComponentNotFound(uid.to_string()))?;
 
         // Validate the new base dates before touching anything.
-        DateContext::local(*local_tz).validate_date(&new_start, local_tz)?;
+        let ctx = self.cal.date_context();
+        ctx.validate_date(&new_start, local_tz)?;
         if let Some(ref e) = new_end_or_due {
-            DateContext::local(*local_tz).validate_date(e, local_tz)?;
+            ctx.validate_date(e, local_tz)?;
         }
-        let ctx = self.cal.date_context(chrono_tz::UTC);
 
         // Compute the UTC delta between old and new DTSTART.
-        let delta: Duration =
-            ctx.date(&new_start).resolved_start() - ctx.date(&old_start).resolved_start();
+        let delta: Duration = ctx.date(&new_start).resolved_start(&chrono_tz::UTC)
+            - ctx.date(&old_start).resolved_start(&chrono_tz::UTC);
 
         // Collect per-overwrite update info so we can abort before any mutation if any
         // shifted RID (or DTSTART/end) falls in a DST gap or fold.
@@ -746,12 +745,12 @@ impl CalFile {
                 // date by `delta`. This handles all-day ↔ timed conversions as well as
                 // same-type shifts.
                 let new_rid = Self::convert_rid(rid, delta, &new_start);
-                DateContext::local(*local_tz).validate_date(&new_rid, local_tz)?;
+                ctx.validate_date(&new_rid, local_tz)?;
 
                 // Shift DTSTART only when it currently matches the RID (no custom time set).
                 let (new_ow_start, new_ow_end) = if c.start() == Some(rid) {
                     let shifted_start = Self::convert_rid(rid, delta, &new_start);
-                    DateContext::local(*local_tz).validate_date(&shifted_start, local_tz)?;
+                    ctx.validate_date(&shifted_start, local_tz)?;
                     let shifted_end = c.end_or_due().map(|e| {
                         Self::convert_rid(e, delta, new_end_or_due.as_ref().unwrap_or(&new_start))
                     });
@@ -781,8 +780,12 @@ impl CalFile {
                 comp.set_start(Some(s));
             }
             match (comp.ctype(), upd.new_end) {
-                (CalCompType::Event, Some(e)) => comp.set_end_checked(Some(e), local_tz).unwrap(),
-                (CalCompType::Todo, Some(d)) => comp.set_due_checked(Some(d), local_tz).unwrap(),
+                (CalCompType::Event, Some(e)) => {
+                    comp.set_end_checked(Some(e), &ctx, local_tz).unwrap()
+                }
+                (CalCompType::Todo, Some(d)) => {
+                    comp.set_due_checked(Some(d), &ctx, local_tz).unwrap()
+                }
                 _ => {}
             }
             comp.set_last_modified(now.clone());
@@ -798,10 +801,15 @@ impl CalFile {
             .unwrap(); // we already confirmed it exists above
 
         // we validated the dates above and have already changed the state
-        base.set_start_checked(Some(new_start), local_tz).unwrap();
+        base.set_start_checked(Some(new_start), &ctx, local_tz)
+            .unwrap();
         match (base.ctype(), new_end_or_due) {
-            (CalCompType::Event, Some(end)) => base.set_end_checked(Some(end), local_tz).unwrap(),
-            (CalCompType::Todo, Some(due)) => base.set_due_checked(Some(due), local_tz).unwrap(),
+            (CalCompType::Event, Some(end)) => {
+                base.set_end_checked(Some(end), &ctx, local_tz).unwrap()
+            }
+            (CalCompType::Todo, Some(due)) => {
+                base.set_due_checked(Some(due), &ctx, local_tz).unwrap()
+            }
             _ => {}
         }
         base.set_last_modified(now.clone());
@@ -1092,7 +1100,7 @@ mod tests {
             all[0].occurrence_end(),
             Some(
                 Calendar::default()
-                    .date_context(*tz)
+                    .date_context()
                     .date(&CalDate::Date(
                         NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
                         CalCompType::Event.into()
@@ -1105,7 +1113,7 @@ mod tests {
             all[1].occurrence_end(),
             Some(
                 Calendar::default()
-                    .date_context(*tz)
+                    .date_context()
                     .date(&CalDate::Date(
                         NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
                         CalCompType::Event.into()

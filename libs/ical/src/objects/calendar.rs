@@ -65,22 +65,19 @@ impl Calendar {
         &mut self.comps
     }
 
+    /// Returns the cached timezone resolver
     pub fn timezone_resolver(&self) -> &CalendarTimeZoneResolver {
-        self.tzresolver
-            .get_or_init(|| Arc::new(CalendarTimeZoneResolver::new(self)))
-            .as_ref()
+        self.timezone_resolver_arc().as_ref()
     }
 
-    /// Returns the cached timezone resolver as a shared handle.
-    pub fn timezone_resolver_arc(&self) -> Arc<CalendarTimeZoneResolver> {
+    fn timezone_resolver_arc(&self) -> &Arc<CalendarTimeZoneResolver> {
         self.tzresolver
             .get_or_init(|| Arc::new(CalendarTimeZoneResolver::new(self)))
-            .clone()
     }
 
-    /// Builds a reusable date resolution context for the given fallback timezone.
-    pub fn date_context(&self, fallback: Tz) -> DateContext {
-        DateContext::new(self.timezone_resolver_arc(), fallback)
+    /// Builds a reusable date resolution context backed by this calendar's resolver.
+    pub fn date_context(&self) -> DateContext {
+        DateContext::new(self.timezone_resolver_arc().clone())
     }
 
     /// Adds the given component to the calendar.

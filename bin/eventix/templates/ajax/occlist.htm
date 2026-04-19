@@ -29,7 +29,8 @@
             {% endif %}
         </td>
         <td align="center">
-            {{ locale.date_range(occ.occurrence_startdate(), occ.occurrence_enddate(), locale.timezone())|safe }}
+            {{ locale.date_range(occ.occurrence_startdate(), occ.occurrence_enddate(),
+                                 ctx, locale.timezone())|safe }}
         </td>
         <td>
             {% if occ.owner %}

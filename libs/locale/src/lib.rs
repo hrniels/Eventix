@@ -305,10 +305,15 @@ pub trait Locale: CalLocale + Debug {
     /// - DateTime-only start or end → formatted with [`Locale::fmt_datetime`].
     ///
     /// All dates are formatted in the short style using the given timezone.
-    fn date_range(&self, start: Option<CalDate>, end: Option<CalDate>, tz: &Tz) -> String {
+    fn date_range(
+        &self,
+        start: Option<CalDate>,
+        end: Option<CalDate>,
+        ctx: &DateContext,
+        tz: &Tz,
+    ) -> String {
         let date_flags = DateFlags::Short;
         let time_flags = TimeFlags::Short;
-        let ctx = DateContext::local(*tz);
         match (start, end) {
             (Some(CalDate::Date(start, ..)), Some(CalDate::Date(end, ..)))
                 if start.succ_opt() == Some(end) =>
@@ -389,7 +394,7 @@ pub fn new(
 mod tests {
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
     use chrono_tz::Tz;
-    use eventix_ical::objects::{CalDate, CalDateTime, CalDateType, CalLocale};
+    use eventix_ical::objects::{CalDate, CalDateTime, CalDateType, CalLocale, DateContext};
 
     use crate::{DateFlags, DateLike, LocaleEn, LocaleType, TimeFlags, Translations};
 
@@ -569,7 +574,7 @@ mod tests {
     fn date_range_none_none() {
         let locale = make_locale_en();
         let tz = locale.timezone();
-        let result = locale.date_range(None, None, tz);
+        let result = locale.date_range(None, None, &DateContext::system(), tz);
         assert_eq!(result, "-");
     }
 
@@ -578,7 +583,7 @@ mod tests {
         let locale = make_locale_en();
         let tz = locale.timezone();
         let d = CalDate::new_date(fixed_date(), CalDateType::Exclusive);
-        let result = locale.date_range(Some(d), None, tz);
+        let result = locale.date_range(Some(d), None, &DateContext::system(), tz);
         assert_eq!(result, "Jun 15, 2024");
     }
 
@@ -587,7 +592,7 @@ mod tests {
         let locale = make_locale_en();
         let tz = locale.timezone();
         let d = CalDate::new_date(fixed_date(), CalDateType::Exclusive);
-        let result = locale.date_range(None, Some(d), tz);
+        let result = locale.date_range(None, Some(d), &DateContext::system(), tz);
         assert_eq!(result, "Jun 15, 2024");
     }
 
@@ -598,7 +603,7 @@ mod tests {
         let tz = locale.timezone();
         let start = CalDate::new_date(fixed_date(), CalDateType::Exclusive);
         let end = CalDate::new_date(fixed_date().succ_opt().unwrap(), CalDateType::Exclusive);
-        let result = locale.date_range(Some(start), Some(end), tz);
+        let result = locale.date_range(Some(start), Some(end), &DateContext::system(), tz);
         assert_eq!(result, "Jun 15, 2024");
     }
 
@@ -612,7 +617,7 @@ mod tests {
             NaiveDate::from_ymd_opt(2024, 6, 17).unwrap(),
             CalDateType::Exclusive,
         );
-        let result = locale.date_range(Some(start), Some(end), tz);
+        let result = locale.date_range(Some(start), Some(end), &DateContext::system(), tz);
         // End with Exclusive type: as_end_with_tz returns midnight-1s, i.e. June 16 23:59:59.
         // The formatted date of that is Jun 16.
         assert_eq!(result, "Jun 15, 2024 &#x2012; Jun 16, 2024");
@@ -624,7 +629,7 @@ mod tests {
         let tz = locale.timezone();
         let naive = NaiveDateTime::new(fixed_date(), NaiveTime::from_hms_opt(10, 0, 0).unwrap());
         let start = CalDate::DateTime(CalDateTime::Utc(naive.and_utc()));
-        let result = locale.date_range(Some(start), None, tz);
+        let result = locale.date_range(Some(start), None, &DateContext::system(), tz);
         assert_eq!(result, "Jun 15, 2024, 10:00");
     }
 
@@ -634,7 +639,7 @@ mod tests {
         let tz = locale.timezone();
         let naive = NaiveDateTime::new(fixed_date(), NaiveTime::from_hms_opt(10, 0, 0).unwrap());
         let end = CalDate::DateTime(CalDateTime::Utc(naive.and_utc()));
-        let result = locale.date_range(None, Some(end), tz);
+        let result = locale.date_range(None, Some(end), &DateContext::system(), tz);
         assert_eq!(result, "Jun 15, 2024, 10:00");
     }
 
@@ -649,7 +654,7 @@ mod tests {
         let end = CalDate::DateTime(CalDateTime::Utc(
             NaiveDateTime::new(d, NaiveTime::from_hms_opt(17, 30, 0).unwrap()).and_utc(),
         ));
-        let result = locale.date_range(Some(start), Some(end), tz);
+        let result = locale.date_range(Some(start), Some(end), &DateContext::system(), tz);
         // Expects: "<date>, <start_time> &#x2012; <end_time>"
         assert_eq!(result, "Jun 15, 2024, 09:00 &#x2012; 17:30");
     }
@@ -668,7 +673,7 @@ mod tests {
             )
             .and_utc(),
         ));
-        let result = locale.date_range(Some(start), Some(end), tz);
+        let result = locale.date_range(Some(start), Some(end), &DateContext::system(), tz);
         assert_eq!(result, "Jun 15, 2024, 09:00 &#x2012; Jun 16, 2024, 17:00");
     }
 

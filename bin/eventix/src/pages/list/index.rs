@@ -99,12 +99,14 @@ impl<'a> ListComponent<'a> {
         settings: &'_ Settings,
         pers_alarms: &'_ PersonalAlarms,
     ) -> ListComponent<'a> {
-        let ctx = file.calendar().date_context(*locale.timezone());
+        let ctx = file.calendar().date_context();
         let occ = Occurrence::new(
             file.directory().clone(),
             c,
-            c.start().map(|d| ctx.date(d).resolved_start()),
-            c.end_or_due().map(|d| ctx.date(d).resolved_end()),
+            c.start()
+                .map(|d| ctx.date(d).resolved_start(locale.timezone())),
+            c.end_or_due()
+                .map(|d| ctx.date(d).resolved_end(locale.timezone())),
             false,
         );
 
@@ -118,6 +120,7 @@ impl<'a> ListComponent<'a> {
         let date_range = locale.date_range(
             c.start().cloned(),
             c.end_or_due().cloned(),
+            &ctx,
             locale.timezone(),
         );
         let start_display = c.start().map(|start| {

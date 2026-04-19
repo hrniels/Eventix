@@ -114,6 +114,7 @@ impl<'a> Deref for ListOccurrence<'a> {
 #[template(path = "ajax/occlist.htm")]
 struct OccListTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
+    ctx: DateContext,
     occs: Vec<ListOccurrence<'a>>,
     personal_alarms: bool,
 }
@@ -145,7 +146,7 @@ pub async fn handler(
     let state = state.lock().await;
     let locale = state.locale();
 
-    let date = DateContext::local(*locale.timezone())
+    let date = DateContext::system()
         .date(&req.date)
         .start_in(locale.timezone());
 
@@ -153,6 +154,7 @@ pub async fn handler(
         .store()
         .file_by_id(&req.uid)
         .context(format!("Unable to find file with uid {}", req.uid))?;
+    let ctx = file.calendar().date_context();
 
     let occs: Vec<_> = match req.dir {
         Direction::Forward | Direction::ForwardFrom => {
@@ -231,6 +233,7 @@ pub async fn handler(
 
     let html = OccListTemplate {
         locale,
+        ctx,
         occs,
         personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
     }

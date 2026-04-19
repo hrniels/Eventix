@@ -585,7 +585,7 @@ impl RecurRequest {
                 .as_ref()
                 .and_then(|d| d.to_caldate(CalDateType::Inclusive, false))
         {
-            DateContext::local(*local_tz).validate_date(&cal_date, local_tz)?;
+            DateContext::system().validate_date(&cal_date, local_tz)?;
         }
         Ok(())
     }

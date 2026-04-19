@@ -261,7 +261,7 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
                 )
             }
             CalTrigger::Absolute(dt) => {
-                let ctx = DateContext::local(*self.locale.timezone());
+                let ctx = DateContext::system();
                 let buf = formatx!(
                     self.locale.translate("On {}"),
                     ctx.date(dt).fmt_start_in(self.locale.timezone())

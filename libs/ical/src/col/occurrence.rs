@@ -575,8 +575,10 @@ impl EventLike for Occurrence<'_> {
             start.clone()
         };
 
-        let ctx = DateContext::local(Tz::UTC);
-        end.map(|end| ctx.date(&end).resolved_end() - ctx.date(&start).resolved_start())
+        let ctx = DateContext::system();
+        end.map(|end| {
+            ctx.date(&end).resolved_end(&Tz::UTC) - ctx.date(&start).resolved_start(&Tz::UTC)
+        })
     }
 }
 
@@ -1418,7 +1420,7 @@ mod tests {
         assert_eq!(range.tz_name(), "Europe/Berlin");
 
         // The returned CalDates should be in Europe/Berlin
-        let ctx = DateContext::local(berlin);
+        let ctx = DateContext::system();
         let start_dt = ctx.date(range.start().unwrap()).start_in(&berlin);
         assert_eq!(start_dt, berlin_start);
         let end_dt = ctx.date(range.end().unwrap()).end_in(&berlin);

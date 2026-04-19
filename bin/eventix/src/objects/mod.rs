@@ -9,7 +9,7 @@ mod dayocc;
 use anyhow::anyhow;
 use eventix_ical::{
     col::CalFile,
-    objects::{CalCompType, CalComponent, CalEvent, CalOrganizer, CalTodo},
+    objects::{CalCompType, CalComponent, CalEvent, CalOrganizer, CalTodo, DateContext},
 };
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, PersonalAlarms};
@@ -35,6 +35,7 @@ where
         &mut CalComponent,
         &mut PersonalAlarms,
         Option<CalOrganizer>,
+        &DateContext,
         &Arc<dyn Locale + Send + Sync>,
     ) -> anyhow::Result<()>,
 {
@@ -50,12 +51,15 @@ where
         CalComponent::Todo(CalTodo::new(uid))
     };
 
+    let ctx = DateContext::system();
+
     populate(
         &calendar,
         &alarm_type,
         &mut comp,
         state.personal_alarms_mut(),
         organizer,
+        &ctx,
         locale,
     )?;
 

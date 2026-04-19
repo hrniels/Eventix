@@ -64,13 +64,13 @@ pub trait CompAction {
         // validate start/end before using it afterwards (e.g. testing start > end)
         let local_tz = locale.timezone();
         if let Some(ref d) = start
-            && let Err(e) = DateContext::local(*local_tz).validate_date(d, local_tz)
+            && let Err(e) = DateContext::system().validate_date(d, local_tz)
         {
             page.add_error(dst_error_msg(locale.as_ref(), &e));
             return false;
         }
         if let Some(ref d) = end
-            && let Err(e) = DateContext::local(*local_tz).validate_date(d, local_tz)
+            && let Err(e) = DateContext::system().validate_date(d, local_tz)
         {
             page.add_error(dst_error_msg(locale.as_ref(), &e));
             return false;
@@ -94,7 +94,7 @@ pub trait CompAction {
             && let Some(completed) = st
                 .completed()
                 .and_then(|d| d.to_caldate(ctype.into(), false))
-            && let Err(e) = DateContext::local(*local_tz).validate_date(&completed, local_tz)
+            && let Err(e) = DateContext::system().validate_date(&completed, local_tz)
         {
             page.add_error(dst_error_msg(locale.as_ref(), &e));
             return false;
@@ -135,6 +135,7 @@ pub trait CompAction {
         comp: &mut CalComponent,
         personal_alarms: &mut PersonalAlarms,
         organizer: Option<CalOrganizer>,
+        ctx: &DateContext,
         locale: &Arc<dyn Locale + Send + Sync>,
     ) -> anyhow::Result<()> {
         let dtype = comp.ctype().into();
@@ -145,11 +146,11 @@ pub trait CompAction {
         comp.set_summary(Self::nonempty_or_none(self.summary().clone()));
         comp.set_location(Self::nonempty_or_none(self.location().clone()));
         comp.set_description(Self::nonempty_or_none(self.description().clone()));
-        comp.set_start_checked(start, local_tz)?;
+        comp.set_start_checked(start, ctx, local_tz)?;
         if comp.as_event().is_some() {
-            comp.set_end_checked(end, local_tz)?;
+            comp.set_end_checked(end, ctx, local_tz)?;
         } else {
-            comp.set_due_checked(end, local_tz)?;
+            comp.set_due_checked(end, ctx, local_tz)?;
         }
 
         let (cal_alarms, pers_alarms) = self.alarm().to_alarms(&event_tz).unwrap();
@@ -188,7 +189,7 @@ pub trait CompAction {
                 if st.status() == CalTodoStatus::Completed {
                     td.set_percent(Some(100));
                     let completed = st.completed().and_then(|d| d.to_caldate(dtype, false));
-                    comp.set_completed_checked(completed, local_tz)?;
+                    comp.set_completed_checked(completed, ctx, local_tz)?;
                 } else if st.status() == CalTodoStatus::InProcess {
                     td.set_percent(st.percent());
                 } else {

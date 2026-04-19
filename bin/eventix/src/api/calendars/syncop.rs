@@ -85,7 +85,7 @@ async fn handler(
         collections: sync_res.collections,
         calendars: sync_res.calendars,
         date: locale.fmt_time(
-            &DateContext::local(*locale.timezone())
+            &DateContext::system()
                 .date(&CalDate::now())
                 .start_in(locale.timezone()),
             TimeFlags::None,

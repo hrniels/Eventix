@@ -9,7 +9,9 @@ use axum::routing::post;
 use axum::{Json, Router};
 use chrono::{NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use eventix_ical::col::CalFile;
-use eventix_ical::objects::{CalDate, CalDateTime, Calendar, EventLike, UpdatableEventLike};
+use eventix_ical::objects::{
+    CalDate, CalDateTime, Calendar, DateContext, EventLike, UpdatableEventLike,
+};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -63,7 +65,7 @@ pub async fn handler(
     let duration = comp
         .time_duration()
         .ok_or_else(|| anyhow!("Event has no duration"))?;
-    let ctx = file.calendar().date_context(*tz);
+    let ctx = file.calendar().date_context();
     let old_start = comp
         .start()
         .ok_or_else(|| anyhow!("Event has no start date"))?
@@ -95,16 +97,17 @@ pub async fn handler(
     };
 
     let dir = file.directory().clone();
+    let ctx = DateContext::system();
 
     // Clone the source component, then assign a fresh UID and updated dates/timestamps.
     let mut new_comp = comp.clone();
     let new_uid = Uuid::new_v4().to_string();
     new_comp.set_uid(new_uid.clone());
     new_comp
-        .set_start_checked(Some(new_start), tz)
+        .set_start_checked(Some(new_start), &ctx, tz)
         .map_err(anyhow::Error::from)?;
     new_comp
-        .set_end_checked(Some(new_end), tz)
+        .set_end_checked(Some(new_end), &ctx, tz)
         .map_err(anyhow::Error::from)?;
     new_comp.set_last_modified(CalDate::now());
     new_comp.set_stamp(CalDate::now());

@@ -38,7 +38,7 @@ pub struct DateTime {
 
 impl DateTime {
     pub fn from_caldate(date: &CalDate, timezone: &Tz) -> Self {
-        let dt = DateContext::local(*timezone).date(date).start_in(timezone);
+        let dt = DateContext::system().date(date).start_in(timezone);
         Self::new(Date::new(Some(dt.date_naive())), Some(Time::new(dt.time())))
     }
 

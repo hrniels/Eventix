@@ -92,6 +92,7 @@ pub async fn handler(
         .store_mut()
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
+    let ctx = file.calendar().date_context();
 
     let get_timespan = |c: &Occurrence<'_>| -> anyhow::Result<(CalDate, CalDate)> {
         if !c.is_owned_by(user_mail.as_ref()) {
@@ -160,8 +161,8 @@ pub async fn handler(
 
     let complete = |start: CalDate, end: CalDate, c: &mut CalComponent| -> anyhow::Result<()> {
         let local_tz = locale.timezone();
-        c.set_start_checked(Some(start), local_tz)?;
-        c.set_end_checked(Some(end), local_tz)?;
+        c.set_start_checked(Some(start), &ctx, local_tz)?;
+        c.set_end_checked(Some(end), &ctx, local_tz)?;
         c.set_last_modified(CalDate::now());
         c.set_stamp(CalDate::now());
         Ok(())

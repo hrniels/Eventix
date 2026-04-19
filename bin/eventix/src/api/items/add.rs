@@ -38,10 +38,10 @@ pub async fn handler(
         &locale,
         &req.calendar,
         CalCompType::Todo,
-        |_cal, _alarm_type, comp, _persalarms, _organizer, _locale| {
+        |_cal, _alarm_type, comp, _persalarms, _organizer, ctx, _locale| {
             comp.set_summary(Some(req.summary));
             if let Some(due_date) = req.due_date.to_caldate(CalDateType::Inclusive, true) {
-                comp.set_due_checked(Some(due_date), locale.timezone())?;
+                comp.set_due_checked(Some(due_date), ctx, locale.timezone())?;
             }
             Ok(())
         },

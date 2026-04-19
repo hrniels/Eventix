@@ -74,7 +74,7 @@ pub async fn handler(
         // if that's an override, also set the end date
         if let Some(base) = base {
             let dur = base.time_duration().unwrap();
-            let start = DateContext::local(*locale.timezone())
+            let start = DateContext::system()
                 .date(c.start().unwrap())
                 .start_in(locale.timezone());
             let end = start + dur;
