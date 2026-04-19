@@ -1,0 +1,46 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Eventix Bench//List Results//EN
+BEGIN:VTIMEZONE
+TZID:Asia/Tokyo
+BEGIN:STANDARD
+TZOFFSETFROM:+0900
+TZOFFSETTO:+0900
+TZNAME:JST
+DTSTART:19700101T000000
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:bench-dense-event
+DTSTAMP:20260101T080000Z
+CREATED:20251201T070000Z
+LAST-MODIFIED:20260112T103000Z
+DTSTART;TZID=Asia/Tokyo:20260604T090000
+DTEND;TZID=Asia/Tokyo:20260604T113000
+SUMMARY:Global timezone summit
+DESCRIPTION:Dense event that bundles attendees, alarm, recurrence language, and a lot of searchable text.\nKeywords include project, review, timezone, summit, migration, and rendering.\nThis fixture is meant to look like a realistic heavy record rather than synthetic noise.
+LOCATION:Tokyo Hub
+ORGANIZER;CN=Jordan Lead:mailto:jordan.lead@example.com
+ATTENDEE;CN=Aki Tanaka;PARTSTAT=ACCEPTED:mailto:aki.tanaka@example.com
+ATTENDEE;CN=Max Weber;PARTSTAT=ACCEPTED:mailto:max.weber@example.com
+ATTENDEE;CN=Taylor Smith;PARTSTAT=TENTATIVE:mailto:taylor.smith@example.com
+ATTENDEE;CN=Robin Chen;PARTSTAT=NEEDS-ACTION:mailto:robin.chen@example.com
+BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-PT45M
+DESCRIPTION:Join the summit call
+END:VALARM
+END:VEVENT
+BEGIN:VTODO
+UID:bench-dense-todo
+DTSTAMP:20260101T080000Z
+CREATED:20251202T070000Z
+LAST-MODIFIED:20260112T090000Z
+DTSTART;TZID=Asia/Tokyo:20260605T090000
+DUE;TZID=Asia/Tokyo:20260605T180000
+SUMMARY:Compile summit follow-up review
+DESCRIPTION:Task linked to the summit with enough content for keyword and sort coverage.
+STATUS:IN-PROCESS
+LOCATION:Tokyo Hub
+END:VTODO
+END:VCALENDAR
