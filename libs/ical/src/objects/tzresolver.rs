@@ -299,7 +299,7 @@ impl EmbeddedTimeZone {
 
         // Start with the best known offset before this local time, then walk nearby transitions to
         // detect gaps/folds and update the active offset when a transition has already started.
-        let mut candidates = vec![base_offset];
+        let mut active_offset = base_offset;
         let upper_bound = self
             .transitions
             .partition_point(|transition| transition.local_start <= local + Duration::hours(3));
@@ -332,11 +332,11 @@ impl EmbeddedTimeZone {
             }
 
             if transition.local_start <= local {
-                candidates.push(FixedOffset::east_opt(transition.offset_to.as_seconds()).unwrap());
+                active_offset = FixedOffset::east_opt(transition.offset_to.as_seconds()).unwrap();
             }
         }
 
-        MappedLocalTime::Single(fixed_datetime(local, *candidates.last().unwrap()).into())
+        MappedLocalTime::Single(fixed_datetime(local, active_offset).into())
     }
 
     fn base_offset_before(&self, local: NaiveDateTime) -> Option<FixedOffset> {
