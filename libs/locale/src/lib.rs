@@ -51,7 +51,7 @@ mod en;
 use bitflags::bitflags;
 use chrono::{DateTime, NaiveDate, Utc};
 use chrono_tz::Tz;
-use eventix_ical::objects::{CalDate, CalLocale};
+use eventix_ical::objects::{CalDate, CalLocale, DateContext};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -308,6 +308,7 @@ pub trait Locale: CalLocale + Debug {
     fn date_range(&self, start: Option<CalDate>, end: Option<CalDate>, tz: &Tz) -> String {
         let date_flags = DateFlags::Short;
         let time_flags = TimeFlags::Short;
+        let ctx = DateContext::local(*tz);
         match (start, end) {
             (Some(CalDate::Date(start, ..)), Some(CalDate::Date(end, ..)))
                 if start.succ_opt() == Some(end) =>
@@ -318,31 +319,31 @@ pub trait Locale: CalLocale + Debug {
                 format!(
                     "{} &#x2012; {}",
                     self.fmt_date(&start, date_flags),
-                    self.fmt_date(&end.as_end_with_tz(tz), date_flags)
+                    self.fmt_date(&ctx.date(&end).end_in(tz), date_flags)
                 )
             }
             (Some(start), Some(end)) if start.as_naive_date() == end.as_naive_date() => {
                 format!(
                     "{}, {} &#x2012; {}",
                     self.fmt_date(&start.as_naive_date(), date_flags),
-                    self.fmt_time(&start.as_start_with_tz(tz), time_flags),
-                    self.fmt_time(&end.as_end_with_tz(tz), time_flags)
+                    self.fmt_time(&ctx.date(&start).start_in(tz), time_flags),
+                    self.fmt_time(&ctx.date(&end).end_in(tz), time_flags)
                 )
             }
             (Some(start), Some(end)) => {
                 format!(
                     "{} &#x2012; {}",
-                    self.fmt_datetime(&start.as_start_with_tz(tz), date_flags),
-                    self.fmt_datetime(&end.as_end_with_tz(tz), date_flags)
+                    self.fmt_datetime(&ctx.date(&start).start_in(tz), date_flags),
+                    self.fmt_datetime(&ctx.date(&end).end_in(tz), date_flags)
                 )
             }
             (Some(CalDate::Date(start, ..)), None) => self.fmt_date(&start, date_flags),
             (Some(start @ CalDate::DateTime(_)), None) => {
-                self.fmt_datetime(&start.as_start_with_tz(tz), date_flags)
+                self.fmt_datetime(&ctx.date(&start).start_in(tz), date_flags)
             }
             (None, Some(CalDate::Date(end, ..))) => self.fmt_date(&end, date_flags),
             (None, Some(end @ CalDate::DateTime(_))) => {
-                self.fmt_datetime(&end.as_end_with_tz(tz), date_flags)
+                self.fmt_datetime(&ctx.date(&end).end_in(tz), date_flags)
             }
             (None, None) => String::from("-"),
         }

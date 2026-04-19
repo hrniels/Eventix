@@ -708,9 +708,9 @@ impl CalFile {
             .ok_or_else(|| ColError::ComponentNotFound(uid.to_string()))?;
 
         // Validate the new base dates before touching anything.
-        new_start.validate(local_tz)?;
+        DateContext::local(*local_tz).validate_date(&new_start, local_tz)?;
         if let Some(ref e) = new_end_or_due {
-            e.validate(local_tz)?;
+            DateContext::local(*local_tz).validate_date(e, local_tz)?;
         }
         let ctx = self.cal.date_context(chrono_tz::UTC);
 
@@ -746,12 +746,12 @@ impl CalFile {
                 // date by `delta`. This handles all-day ↔ timed conversions as well as
                 // same-type shifts.
                 let new_rid = Self::convert_rid(rid, delta, &new_start);
-                new_rid.validate(local_tz)?;
+                DateContext::local(*local_tz).validate_date(&new_rid, local_tz)?;
 
                 // Shift DTSTART only when it currently matches the RID (no custom time set).
                 let (new_ow_start, new_ow_end) = if c.start() == Some(rid) {
                     let shifted_start = Self::convert_rid(rid, delta, &new_start);
-                    shifted_start.validate(local_tz)?;
+                    DateContext::local(*local_tz).validate_date(&shifted_start, local_tz)?;
                     let shifted_end = c.end_or_due().map(|e| {
                         Self::convert_rid(e, delta, new_end_or_due.as_ref().unwrap_or(&new_start))
                     });

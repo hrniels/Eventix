@@ -757,7 +757,7 @@ impl CalComponent {
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = start {
-            d.validate(local_tz)?;
+            DateContext::local(*local_tz).validate_date(d, local_tz)?;
         }
         self.set_start(start);
         Ok(())
@@ -773,7 +773,7 @@ impl CalComponent {
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = end {
-            d.validate(local_tz)?;
+            DateContext::local(*local_tz).validate_date(d, local_tz)?;
         }
         self.as_event_mut().unwrap().set_end(end);
         Ok(())
@@ -789,7 +789,7 @@ impl CalComponent {
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = due {
-            d.validate(local_tz)?;
+            DateContext::local(*local_tz).validate_date(d, local_tz)?;
         }
         self.as_todo_mut().unwrap().set_due(due);
         Ok(())
@@ -806,7 +806,7 @@ impl CalComponent {
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = completed {
-            d.validate(local_tz)?;
+            DateContext::local(*local_tz).validate_date(d, local_tz)?;
         }
         self.as_todo_mut().unwrap().set_completed(completed);
         Ok(())

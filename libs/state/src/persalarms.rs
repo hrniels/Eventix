@@ -226,7 +226,7 @@ impl PersonalCalendarAlarms {
         // if there is no overwrite, we have no rid and thus have to use the start date (which also
         // cannot have been changed here).
         else {
-            occ.occurrence_startdate().map(|d| d.to_utc())
+            occ.occurrence_startdate()
         }
     }
 

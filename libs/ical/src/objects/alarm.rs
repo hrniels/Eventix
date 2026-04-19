@@ -13,7 +13,7 @@ use formatx::formatx;
 
 use crate::objects::locale::CalLocale;
 use crate::objects::{
-    CalComponent, CalDate, CalDateTime, CalDuration, EventLike, ResolvedDateTime,
+    CalComponent, CalDate, CalDateTime, CalDuration, DateContext, EventLike, ResolvedDateTime,
 };
 use crate::parser::{
     LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer,
@@ -261,9 +261,10 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
                 )
             }
             CalTrigger::Absolute(dt) => {
+                let ctx = DateContext::local(*self.locale.timezone());
                 let buf = formatx!(
                     self.locale.translate("On {}"),
-                    dt.fmt_start_with_tz(self.locale.timezone())
+                    ctx.date(dt).fmt_start_in(self.locale.timezone())
                 )
                 .unwrap();
                 write!(f, "{}", buf)

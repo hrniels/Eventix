@@ -4,7 +4,7 @@
 
 use anyhow::Context;
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
-use eventix_ical::objects::CalDate;
+use eventix_ical::objects::{CalDate, DateContext};
 use eventix_locale::TimeFlags;
 use eventix_state::{EventixState, SyncColResult};
 use serde::{Deserialize, Serialize};
@@ -85,7 +85,9 @@ async fn handler(
         collections: sync_res.collections,
         calendars: sync_res.calendars,
         date: locale.fmt_time(
-            &CalDate::now().as_start_with_tz(locale.timezone()),
+            &DateContext::local(*locale.timezone())
+                .date(&CalDate::now())
+                .start_in(locale.timezone()),
             TimeFlags::None,
         ),
     }))

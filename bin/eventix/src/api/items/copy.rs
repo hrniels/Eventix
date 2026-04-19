@@ -63,10 +63,12 @@ pub async fn handler(
     let duration = comp
         .time_duration()
         .ok_or_else(|| anyhow!("Event has no duration"))?;
+    let ctx = file.calendar().date_context(*tz);
     let old_start = comp
         .start()
         .ok_or_else(|| anyhow!("Event has no start date"))?
-        .as_start_with_tz(tz);
+        .as_start_with_resolver(tz, ctx.resolver())
+        .with_timezone(tz);
     let new_date = req.date.date().ok_or_else(|| anyhow!("Invalid date"))?;
 
     let (new_start, new_end) = if comp.is_all_day() {

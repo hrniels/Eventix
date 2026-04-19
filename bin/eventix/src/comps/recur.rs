@@ -7,7 +7,7 @@ use askama::Template;
 use chrono::Weekday;
 use chrono_tz::Tz;
 use eventix_ical::objects::{
-    CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DayDesc,
+    CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DateContext, DayDesc,
 };
 use eventix_ical::parser::ParseError;
 use eventix_locale::Locale;
@@ -585,7 +585,7 @@ impl RecurRequest {
                 .as_ref()
                 .and_then(|d| d.to_caldate(CalDateType::Inclusive, false))
         {
-            cal_date.validate(local_tz)?;
+            DateContext::local(*local_tz).validate_date(&cal_date, local_tz)?;
         }
         Ok(())
     }

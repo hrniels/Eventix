@@ -25,6 +25,14 @@ pub struct CalendarTimeZoneResolver {
     embedded: HashMap<String, EmbeddedTimeZone>,
 }
 
+impl Default for CalendarTimeZoneResolver {
+    fn default() -> Self {
+        Self {
+            embedded: HashMap::new(),
+        }
+    }
+}
+
 impl CalendarTimeZoneResolver {
     /// Builds a resolver for the given calendar.
     ///

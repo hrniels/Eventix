@@ -5,7 +5,7 @@
 use askama::Template;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
-use eventix_ical::objects::{CalDate, CalDateTime, CalDateType};
+use eventix_ical::objects::{CalDate, CalDateTime, CalDateType, DateContext};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::comps::date::{Date, DateTemplate};
@@ -38,7 +38,7 @@ pub struct DateTime {
 
 impl DateTime {
     pub fn from_caldate(date: &CalDate, timezone: &Tz) -> Self {
-        let dt = date.as_start_with_tz(timezone);
+        let dt = DateContext::local(*timezone).date(date).start_in(timezone);
         Self::new(Date::new(Some(dt.date_naive())), Some(Time::new(dt.time())))
     }
 

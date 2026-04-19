@@ -10,7 +10,7 @@ use chrono_tz::Tz;
 use crate::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalDateTime, CalDuration,
     CalEventStatus, CalOrganizer, CalRRule, CalTodoStatus, CalendarTimeZoneResolver, CompDateType,
-    EventLike, ResolvedDateTime,
+    DateContext, EventLike, ResolvedDateTime,
 };
 use crate::parser::{Property, PropertyProducer};
 use crate::util;
@@ -575,8 +575,8 @@ impl EventLike for Occurrence<'_> {
             start.clone()
         };
 
-        let tz = Tz::UTC;
-        end.map(|end| end.as_end_with_tz(&tz) - start.as_start_with_tz(&tz))
+        let ctx = DateContext::local(Tz::UTC);
+        end.map(|end| ctx.date(&end).resolved_end() - ctx.date(&start).resolved_start())
     }
 }
 
@@ -633,7 +633,8 @@ mod tests {
     use crate::objects::{
         CalAction, CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalDateTime,
         CalDateType, CalEvent, CalEventStatus, CalOrganizer, CalRRule, CalRelated, CalTodo,
-        CalTodoStatus, CalTrigger, CompDateType, EventLike, ResolvedDateTime, UpdatableEventLike,
+        CalTodoStatus, CalTrigger, CompDateType, DateContext, EventLike, ResolvedDateTime,
+        UpdatableEventLike,
     };
     use crate::parser::{LineReader, Property, PropertyProducer};
 
@@ -1417,9 +1418,10 @@ mod tests {
         assert_eq!(range.tz_name(), "Europe/Berlin");
 
         // The returned CalDates should be in Europe/Berlin
-        let start_dt = range.start().unwrap().as_start_with_tz(&berlin);
+        let ctx = DateContext::local(berlin);
+        let start_dt = ctx.date(range.start().unwrap()).start_in(&berlin);
         assert_eq!(start_dt, berlin_start);
-        let end_dt = range.end().unwrap().as_end_with_tz(&berlin);
+        let end_dt = ctx.date(range.end().unwrap()).end_in(&berlin);
         assert_eq!(end_dt, berlin_end);
     }
 

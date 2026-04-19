@@ -12,7 +12,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::objects::{CalDate, CalLocale};
+use crate::objects::{CalDate, CalLocale, DateContext};
 use crate::parser::{ParseError, Property};
 use crate::util;
 
@@ -708,8 +708,9 @@ impl CalRRule {
         // something else, which might indeed be in the range.
         let beyond_end = next_date(end, self.freq, interval).unwrap_or(end);
         let until = if let Some(ref until) = self.until {
-            until
-                .as_end_with_tz(&Tz::UTC)
+            DateContext::local(Tz::UTC)
+                .date(until)
+                .resolved_end()
                 .with_timezone(&Utc)
                 .min(beyond_end)
         } else {

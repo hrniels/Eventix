@@ -8,7 +8,9 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use chrono::{NaiveDateTime, NaiveTime, TimeDelta, Timelike};
-use eventix_ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, UpdatableEventLike};
+use eventix_ical::objects::{
+    CalComponent, CalDate, CalDateTime, DateContext, EventLike, UpdatableEventLike,
+};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
@@ -54,7 +56,9 @@ pub async fn handler(
 
         let tz = locale.timezone();
         let duration = c.time_duration().unwrap();
-        let old_start = c.start().unwrap().as_start_with_tz(tz);
+        let old_start = DateContext::local(*tz)
+            .date(c.start().unwrap())
+            .start_in(tz);
         let new_date = req.date.date().ok_or_else(|| anyhow!("Invalid date"))?;
 
         if c.is_all_day() {

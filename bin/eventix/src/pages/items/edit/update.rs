@@ -155,8 +155,9 @@ fn action_update(
         )?;
 
         // update old event/TODO; check if there are no occurrences left
-        let start = old_start.as_start_with_tz(locale.timezone());
-        let end = rid.as_end_with_tz(locale.timezone());
+        let ctx = file.calendar().date_context(*locale.timezone());
+        let start = ctx.date(&old_start).start_in(locale.timezone());
+        let end = ctx.date(&rid).end_in(locale.timezone());
         if file
             .occurrences_between(start, end, |_| true)
             .next()
