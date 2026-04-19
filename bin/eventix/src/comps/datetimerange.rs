@@ -4,8 +4,8 @@
 
 use askama::Template;
 use chrono::NaiveDate;
-use chrono_tz::Tz;
-use eventix_ical::objects::{CalCompType, CalDate, CalDateTime, CalDateType};
+use eventix_ical::col::Occurrence;
+use eventix_ical::objects::{CalCompType, CalDate, CalDateType};
 use eventix_locale::Locale;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -36,43 +36,28 @@ impl DateTimeRange {
         }
     }
 
-    pub fn new_from_caldate(from: Option<CalDate>, to: Option<CalDate>, tz: &Tz) -> Self {
-        // Use the event's own timezone for conversion when available so that
-        // the form fields show the time in the timezone the event was created
-        // in, falling back to the locale timezone otherwise.
-        let (event_tz_name, conv_tz) = from
-            .as_ref()
-            .and_then(|f| match f {
-                CalDate::DateTime(CalDateTime::Timezone(_, tzid)) => {
-                    tzid.parse::<Tz>().ok().map(|t| (tzid.clone(), t))
-                }
-                CalDate::DateTime(CalDateTime::Utc(_)) => Some(("UTC".to_string(), chrono_tz::UTC)),
-                _ => None,
-            })
-            .unzip();
-        let conv_tz = conv_tz.as_ref().unwrap_or(tz);
+    pub fn new_from_occurrence(occ: &Occurrence<'_>) -> Self {
+        let from = occ.resolved_occurrence_start();
+        let to = occ.resolved_occurrence_end();
 
         Self {
             from: DateTime::new(
-                Date::new(
-                    from.as_ref()
-                        .map(|f| f.as_start_with_tz(conv_tz).date_naive()),
-                ),
-                from.as_ref().and_then(|f| match f {
-                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(conv_tz).time())),
+                Date::new(from.as_ref().map(|f| f.date_naive())),
+                occ.occurrence_startdate().and_then(|f| match f {
+                    CalDate::DateTime(_) => Some(Time::new(from.as_ref().unwrap().time())),
                     CalDate::Date(..) => None,
                 }),
             ),
             to: DateTime::new(
-                Date::new(to.as_ref().map(|t| t.as_end_with_tz(conv_tz).date_naive())),
-                to.as_ref().and_then(|t| match t {
-                    CalDate::DateTime(dt) => Some(Time::new(dt.with_tz(conv_tz).time())),
+                Date::new(to.as_ref().map(|t| t.date_naive())),
+                occ.occurrence_enddate().and_then(|t| match t {
+                    CalDate::DateTime(_) => Some(Time::new(to.as_ref().unwrap().time())),
                     CalDate::Date(..) => None,
                 }),
             ),
             from_enabled: from.map(|_| true),
             to_enabled: to.map(|_| true),
-            timezone: event_tz_name,
+            timezone: occ.tz_name(),
         }
     }
 

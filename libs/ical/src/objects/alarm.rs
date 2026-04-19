@@ -7,16 +7,16 @@ use std::{collections::HashMap, fmt::Display, io::BufRead, str::FromStr};
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, Serializer};
 
-use chrono::{DateTime, Duration};
-use chrono_tz::Tz;
+use chrono::{Duration, FixedOffset, TimeZone};
 
 use formatx::formatx;
 
-use crate::objects::CalDuration;
 use crate::objects::locale::CalLocale;
-use crate::{
-    objects::{CalComponent, CalDate, EventLike},
-    parser::{LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer},
+use crate::objects::{
+    CalComponent, CalDate, CalDateTime, CalDuration, DateContext, EventLike, ResolvedDateTime,
+};
+use crate::parser::{
+    LineReader, Parameter, ParseError, Property, PropertyConsumer, PropertyProducer,
 };
 
 /// The action for VALARM components.
@@ -197,16 +197,28 @@ impl CalAlarm {
     /// start and the start is `None`, the result will be `None` as well.
     pub fn trigger_date(
         &self,
-        start: Option<DateTime<Tz>>,
-        end: Option<DateTime<Tz>>,
-        tz: Option<Tz>,
-    ) -> Option<DateTime<Tz>> {
+        start: Option<ResolvedDateTime>,
+        end: Option<ResolvedDateTime>,
+        tz: Option<FixedOffset>,
+    ) -> Option<ResolvedDateTime> {
         match &self.trigger {
             CalTrigger::Relative { related, duration } => match related {
                 CalRelated::Start => start.map(|s| s + **duration),
                 CalRelated::End => end.map(|e| e + **duration),
             },
-            CalTrigger::Absolute(date) => tz.map(|tz| date.as_start_with_tz(&tz)),
+            // TODO why is there no method for that in CalDate?
+            CalTrigger::Absolute(date) => tz.map(|tz| match date {
+                CalDate::Date(day, _) => tz
+                    .from_local_datetime(&day.and_hms_opt(0, 0, 0).unwrap())
+                    .single()
+                    .unwrap()
+                    .into(),
+                CalDate::DateTime(CalDateTime::Utc(dt)) => dt.fixed_offset().into(),
+                CalDate::DateTime(CalDateTime::Floating(dt))
+                | CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+                    tz.from_local_datetime(dt).single().unwrap().into()
+                }
+            }),
         }
     }
 
@@ -249,9 +261,10 @@ impl std::fmt::Display for AlarmHuman<'_, '_> {
                 )
             }
             CalTrigger::Absolute(dt) => {
+                let ctx = DateContext::system();
                 let buf = formatx!(
                     self.locale.translate("On {}"),
-                    dt.fmt_start_with_tz(self.locale.timezone())
+                    ctx.date(dt).fmt_start_in(self.locale.timezone())
                 )
                 .unwrap();
                 write!(f, "{}", buf)
@@ -381,10 +394,11 @@ pub trait AlarmOverlay {
     /// This method will be called for every recurrent component. It receives the overwritten
     /// alarms for its occurrences and allows to customize these.
     ///
-    /// This method returns a [`BTreeMap`] with the recurrence-id (CalDate in UTC) as the key and a
-    /// [`Vec`] of [`CalAlarm`] as the vaues. If the map does not have an entry for a specific
-    /// occurrence, the alarms from the base component will be taken. Otherwise the set alarms will
-    /// be taken (which can be none).
+    /// This method returns a map keyed by the raw recurrence-id [`CalDate`] values used by the
+    /// surrounding occurrence pipeline. These keys are structural calendar values, not normalized
+    /// UTC instants. If the map does not have an entry for a specific occurrence, the alarms from
+    /// the base component will be taken. Otherwise the set alarms will be taken (which can be
+    /// none).
     fn alarm_overwrites(
         &self,
         comp: &CalComponent,

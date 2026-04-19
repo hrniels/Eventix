@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use chrono::offset::LocalResult;
 use chrono::{
-    DateTime, Datelike, Duration, Month, Months, NaiveDate, NaiveDateTime, TimeDelta, Timelike,
-    Weekday,
+    DateTime, Datelike, Duration, Month, Months, NaiveDate, NaiveDateTime, TimeDelta, TimeZone,
+    Timelike, Utc, Weekday,
 };
 use chrono_tz::Tz;
 use formatx::formatx;
@@ -13,7 +12,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::objects::{CalDate, CalLocale};
+use crate::objects::{CalDate, CalLocale, DateContext};
 use crate::parser::{ParseError, Property};
 use crate::util;
 
@@ -175,7 +174,7 @@ impl CalWDayDesc {
     ///
     /// For example, if `rrule` repeats monthly and `self` specifies that it occurs on every second
     /// Wednesday, this method returns true if `date` is the second Wednesday of any month.
-    pub fn matches(&self, date: DateTime<Tz>, rrule: &CalRRule) -> bool {
+    pub fn matches(&self, date: DateTime<Utc>, rrule: &CalRRule) -> bool {
         match self.nth {
             None => self.day == date.weekday(),
             Some((n, side)) => {
@@ -184,8 +183,23 @@ impl CalWDayDesc {
                     || (rrule.freq == CalRRuleFreq::Yearly && rrule.by_month.is_some())
                 {
                     match side {
-                        CalRRuleSide::Start => util::nth_weekday_of_month_front(date, self.day, n),
-                        CalRRuleSide::End => util::nth_weekday_of_month_back(date, self.day, n),
+                        CalRRuleSide::Start => NaiveDate::from_weekday_of_month_opt(
+                            date.year(),
+                            date.month(),
+                            self.day,
+                            n,
+                        ),
+                        CalRRuleSide::End => {
+                            let (year, month) = util::next_month(date.year(), date.month());
+                            let next_month = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+                            let last = next_month.pred_opt().unwrap();
+                            let last_weekday = last.weekday();
+                            let first_to_dow = (7 + last_weekday.number_from_monday()
+                                - self.day.number_from_monday())
+                                % 7;
+                            let day = last.day() - ((n - 1) as u32 * 7 + first_to_dow);
+                            NaiveDate::from_ymd_opt(date.year(), date.month(), day)
+                        }
                     }
                     .map(|d| d == date.date_naive())
                     .unwrap_or(false)
@@ -193,8 +207,28 @@ impl CalWDayDesc {
                 // offset within the year
                 else if rrule.freq == CalRRuleFreq::Yearly {
                     match side {
-                        CalRRuleSide::Start => util::nth_weekday_of_year_front(date, self.day, n),
-                        CalRRuleSide::End => util::nth_weekday_of_year_back(date, self.day, n),
+                        CalRRuleSide::Start => {
+                            let year_start = NaiveDate::from_ymd_opt(date.year(), 1, 1).unwrap();
+                            let first_weekday = year_start.weekday();
+                            let first_to_dow = (7 + self.day.number_from_monday()
+                                - first_weekday.number_from_monday())
+                                % 7;
+                            Some(
+                                year_start
+                                    + Duration::days(((n - 1) as u32 * 7 + first_to_dow) as i64),
+                            )
+                        }
+                        CalRRuleSide::End => {
+                            let year_end = NaiveDate::from_ymd_opt(date.year(), 12, 31).unwrap();
+                            let last_weekday = year_end.weekday();
+                            let first_to_dow = (7 + last_weekday.number_from_monday()
+                                - self.day.number_from_monday())
+                                % 7;
+                            Some(
+                                year_end
+                                    - Duration::days(((n - 1) as u32 * 7 + first_to_dow) as i64),
+                            )
+                        }
                     }
                     .map(|d| d == date.date_naive())
                     .unwrap_or(false)
@@ -383,19 +417,9 @@ pub struct CalRRule {
     week_start: Option<Weekday>,
 }
 
-fn next_date(date: DateTime<Tz>, freq: CalRRuleFreq, interval: u32) -> Option<DateTime<Tz>> {
-    // we basically want to ignore DST here, in the sense that all recurrences of an event
-    // that started at 9:00 AM should always be at 9:00 AM as well, regardless of whether
-    // DST is on or off. For that reason, we build a NaiveDateTime from the date in the
-    // selected timezone, advance it accordingly, and turn it back into a DateTime.
-    for i in 1.. {
-        let next = freq.advance(date.naive_local(), interval * i)?;
-        // if the date is not representable in our timezone, just skip it
-        if let LocalResult::Single(localdate) = next.and_local_timezone(date.timezone()) {
-            return Some(localdate);
-        }
-    }
-    unreachable!();
+fn next_date(date: DateTime<Utc>, freq: CalRRuleFreq, interval: u32) -> Option<DateTime<Utc>> {
+    freq.advance(date.naive_utc(), interval)
+        .map(|next| next.and_utc())
 }
 
 fn week_start_for_year(year: i32, week_start: Weekday) -> NaiveDate {
@@ -407,18 +431,18 @@ fn week_start_for_year(year: i32, week_start: Weekday) -> NaiveDate {
 }
 
 /// Converts ordinal day rules into concrete dates so later filters can stay uniform.
-fn base_dates_from_by_year_day(date: DateTime<Tz>, by_year_day: &[DayDesc]) -> Vec<DateTime<Tz>> {
+fn base_dates_from_by_year_day(date: DateTime<Utc>, by_year_day: &[DayDesc]) -> Vec<DateTime<Utc>> {
     let year = date.year();
     let days_in_year = util::year_days(year) as i32;
     let mut base_dates = Vec::new();
 
     for yd in by_year_day {
-        if yd.num == 0 {
+        if yd.num() == 0 {
             continue;
         }
-        let ordinal = match yd.side {
-            CalRRuleSide::Start => yd.num as i32,
-            CalRRuleSide::End => days_in_year - (yd.num as i32 - 1),
+        let ordinal = match yd.side() {
+            CalRRuleSide::Start => yd.num() as i32,
+            CalRRuleSide::End => days_in_year - (yd.num() as i32 - 1),
         };
         if ordinal < 1 || ordinal > days_in_year {
             continue;
@@ -436,10 +460,10 @@ fn base_dates_from_by_year_day(date: DateTime<Tz>, by_year_day: &[DayDesc]) -> V
 
 /// Expands week numbers into actual dates before applying BYDAY or time-of-day filters.
 fn base_dates_from_by_week_no(
-    date: DateTime<Tz>,
+    date: DateTime<Utc>,
     by_week_no: &[DayDesc],
     week_start: Option<Weekday>,
-) -> Vec<DateTime<Tz>> {
+) -> Vec<DateTime<Utc>> {
     let year = date.year();
     let wkst = week_start.unwrap_or(Weekday::Mon);
     let week1_start = week_start_for_year(year, wkst);
@@ -448,12 +472,12 @@ fn base_dates_from_by_week_no(
     let mut base_dates = Vec::new();
 
     for wn in by_week_no {
-        if wn.num == 0 {
+        if wn.num() == 0 {
             continue;
         }
-        let week_start = match wn.side {
-            CalRRuleSide::Start => week1_start + Duration::weeks(wn.num as i64 - 1),
-            CalRRuleSide::End => last_week_start - Duration::weeks(wn.num as i64 - 1),
+        let week_start = match wn.side() {
+            CalRRuleSide::Start => week1_start + Duration::weeks(wn.num() as i64 - 1),
+            CalRRuleSide::End => last_week_start - Duration::weeks(wn.num() as i64 - 1),
         };
         for day_offset in 0..7 {
             let naive = week_start + Duration::days(day_offset);
@@ -472,7 +496,7 @@ fn base_dates_from_by_week_no(
 }
 
 /// Keeps BYMONTH filtering isolated so year-based paths align with the main expansion flow.
-fn passes_by_month(date: DateTime<Tz>, by_month: Option<&Vec<u8>>) -> bool {
+fn passes_by_month(date: DateTime<Utc>, by_month: Option<&Vec<u8>>) -> bool {
     match by_month {
         Some(list) => list.contains(&(date.month() as u8)),
         None => true,
@@ -480,21 +504,21 @@ fn passes_by_month(date: DateTime<Tz>, by_month: Option<&Vec<u8>>) -> bool {
 }
 
 /// Uses the same month-day semantics for year-based candidates as elsewhere.
-fn passes_by_month_day(date: DateTime<Tz>, by_mon_day: Option<&Vec<DayDesc>>) -> bool {
+fn passes_by_month_day(date: DateTime<Utc>, by_mon_day: Option<&Vec<DayDesc>>) -> bool {
     let Some(list) = by_mon_day else {
         return true;
     };
-    list.iter().any(|md| match md.side {
-        CalRRuleSide::Start => md.num as u32 == date.day(),
+    list.iter().any(|md| match md.side() {
+        CalRRuleSide::Start => md.num() as u32 == date.day(),
         CalRRuleSide::End => {
             let days = util::month_days(date.year(), date.month());
-            days - (md.num - 1) as u32 == date.day()
+            days - (md.num() - 1) as u32 == date.day()
         }
     })
 }
 
 /// Centralizes weekday matching so BYWEEKNO/BYYEARDAY stay consistent with other paths.
-fn passes_by_day(date: DateTime<Tz>, by_day: Option<&Vec<CalWDayDesc>>, rrule: &CalRRule) -> bool {
+fn passes_by_day(date: DateTime<Utc>, by_day: Option<&Vec<CalWDayDesc>>, rrule: &CalRRule) -> bool {
     match by_day {
         Some(list) => list.iter().any(|d| d.matches(date, rrule)),
         None => true,
@@ -504,20 +528,20 @@ fn passes_by_day(date: DateTime<Tz>, by_day: Option<&Vec<CalWDayDesc>>, rrule: &
 /// Iterator for [`CalRRule`].
 pub struct RecurIterator<'a> {
     rrule: &'a CalRRule,
-    start: DateTime<Tz>,
-    end: DateTime<Tz>,
-    dtstart: DateTime<Tz>,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    dtstart: DateTime<Utc>,
     dtdur: Option<Duration>,
-    date: DateTime<Tz>,
-    until: DateTime<Tz>,
+    date: DateTime<Utc>,
+    until: DateTime<Utc>,
     count: usize,
     interval: u32,
-    last: Vec<DateTime<Tz>>,
+    last: Vec<DateTime<Utc>>,
     last_pos: usize,
 }
 
 impl Iterator for RecurIterator<'_> {
-    type Item = DateTime<Tz>;
+    type Item = DateTime<Utc>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.last_pos >= self.last.len() {
@@ -661,13 +685,21 @@ impl CalRRule {
     /// in this interval. Note that an overlap of the recurrences with this interval is sufficient.
     /// For example, if an recurrence starts before `end`, but ends after `end`, it will still be
     /// delivered by the iterator.
-    pub fn dates_between(
+    pub fn dates_between<Tz1: TimeZone, Tz2: TimeZone, Tz3: TimeZone>(
         &self,
-        dtstart: DateTime<Tz>,
+        dtstart: DateTime<Tz1>,
         dtdur: Option<Duration>,
-        start: DateTime<Tz>,
-        end: DateTime<Tz>,
-    ) -> RecurIterator<'_> {
+        start: DateTime<Tz2>,
+        end: DateTime<Tz3>,
+    ) -> RecurIterator<'_>
+    where
+        Tz1::Offset: Copy,
+        Tz2::Offset: Copy,
+        Tz3::Offset: Copy,
+    {
+        let dtstart = dtstart.naive_local().and_utc();
+        let start = start.naive_local().and_utc();
+        let end = end.naive_local().and_utc();
         let interval = self.interval.unwrap_or(1) as u32;
         // go one interval further to ensure that we do not miss an occurrence. for example, if we
         // want to see all occurrences until December 20th of a monthly event starting at 25th of
@@ -676,7 +708,11 @@ impl CalRRule {
         // something else, which might indeed be in the range.
         let beyond_end = next_date(end, self.freq, interval).unwrap_or(end);
         let until = if let Some(ref until) = self.until {
-            until.as_end_with_tz(&start.timezone()).min(beyond_end)
+            DateContext::system()
+                .date(until)
+                .resolved_end(&Tz::UTC)
+                .with_timezone(&Utc)
+                .min(beyond_end)
         } else {
             beyond_end
         };
@@ -696,7 +732,7 @@ impl CalRRule {
         }
     }
 
-    fn limited(&self, date: DateTime<Tz>) -> bool {
+    fn limited(&self, date: DateTime<Utc>) -> bool {
         if let Some(by_month) = &self.by_month
             && self.freq <= CalRRuleFreq::Monthly
             && !by_month.contains(&(date.month() as u8))
@@ -707,10 +743,10 @@ impl CalRRule {
         if let Some(by_yday) = &self.by_year_day
             && self.freq <= CalRRuleFreq::Hourly
             && !by_yday.iter().any(|yd| match yd.side {
-                CalRRuleSide::Start => yd.num as u32 == util::year_day(date),
+                CalRRuleSide::Start => yd.num as u32 == date.ordinal(),
                 CalRRuleSide::End => {
                     let days = util::year_days(date.year());
-                    days - (yd.num - 1) as u32 == util::year_day(date)
+                    days - (yd.num - 1) as u32 == date.ordinal()
                 }
             })
         {
@@ -762,13 +798,13 @@ impl CalRRule {
 
     fn expand(
         &self,
-        dtstart: DateTime<Tz>,
+        dtstart: DateTime<Utc>,
         dtdur: Option<Duration>,
-        start: DateTime<Tz>,
-        end: DateTime<Tz>,
-        date: DateTime<Tz>,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        date: DateTime<Utc>,
         count: &mut usize,
-    ) -> Option<Vec<DateTime<Tz>>> {
+    ) -> Option<Vec<DateTime<Utc>>> {
         let months = [date.month() as u8];
         let mut months = months.as_slice();
         let mut mon_days = vec![date.day() as u16];
@@ -828,7 +864,7 @@ impl CalRRule {
                                 && let Some(ndate) = ndate.with_minute(*m as u32)
                                 && let Some(ndate) = ndate.with_second(*s as u32)
                             {
-                                candidates.push(ndate.with_timezone(&start.timezone()));
+                                candidates.push(ndate.with_timezone(&Utc));
                             }
                         }
                     }
@@ -863,7 +899,13 @@ impl CalRRule {
         {
             // Define a unified period window: [period_start, next_period_start)
             let period_start = match self.freq {
-                CalRRuleFreq::Weekly => util::week_start(date, self.week_start),
+                CalRRuleFreq::Weekly => {
+                    let day_of_week = match self.week_start {
+                        Some(wkst) => date.weekday().days_since(wkst),
+                        None => date.weekday().num_days_from_monday(),
+                    };
+                    (date.naive_utc() - Duration::days(day_of_week as i64)).and_utc()
+                }
                 CalRRuleFreq::Monthly => date.with_day(1)?,
                 _ => {
                     // Yearly
@@ -873,7 +915,7 @@ impl CalRRule {
 
             let period_end = match self.freq {
                 CalRRuleFreq::Weekly => {
-                    // Advance exactly one week using recurrence-aware logic (DST-safe)
+                    // Advance exactly one week while preserving wall-clock date/time fields.
                     next_date(period_start, CalRRuleFreq::Weekly, 1)?
                 }
                 CalRRuleFreq::Monthly => {
@@ -906,7 +948,7 @@ impl CalRRule {
                                     && let Some(ndate) = ndate.with_minute(*m as u32)
                                     && let Some(ndate) = ndate.with_second(*s as u32)
                                 {
-                                    candidates.push(ndate.with_timezone(&start.timezone()));
+                                    candidates.push(ndate.with_timezone(&Utc));
                                 }
                             }
                         }
@@ -929,7 +971,7 @@ impl CalRRule {
                                 && let Some(ndate) = ndate.with_minute(*m as u32)
                                 && let Some(ndate) = ndate.with_second(*s as u32)
                             {
-                                candidates.push(ndate.with_timezone(&start.timezone()));
+                                candidates.push(ndate.with_timezone(&Utc));
                             }
                         }
                     }
@@ -941,13 +983,13 @@ impl CalRRule {
 
     fn finalize_candidates(
         &self,
-        candidates: Vec<DateTime<Tz>>,
-        dtstart: DateTime<Tz>,
+        candidates: Vec<DateTime<Utc>>,
+        dtstart: DateTime<Utc>,
         dtdur: Option<Duration>,
-        start: DateTime<Tz>,
-        end: DateTime<Tz>,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
         count: &mut usize,
-    ) -> Option<Vec<DateTime<Tz>>> {
+    ) -> Option<Vec<DateTime<Utc>>> {
         let selected = self.apply_by_set_pos(candidates);
         let mut res = Vec::new();
         for ndate in selected {
@@ -957,10 +999,7 @@ impl CalRRule {
             // Compute the effective end of this candidate occurrence in wall-clock time so
             // that a DST transition between the candidate start and its end does not shift
             // the end by the DST delta.
-            let nend = dtdur.map_or(ndate, |d| {
-                let naive_end = ndate.naive_local() + d;
-                util::resolve_local_time(ndate.timezone(), naive_end)
-            });
+            let nend = dtdur.map_or(ndate, |d| ndate + d);
             if util::date_ranges_overlap(ndate, nend, start, end) {
                 res.push(ndate);
             }
@@ -978,7 +1017,7 @@ impl CalRRule {
         Some(res)
     }
 
-    fn apply_by_set_pos(&self, mut res: Vec<DateTime<Tz>>) -> Vec<DateTime<Tz>> {
+    fn apply_by_set_pos(&self, mut res: Vec<DateTime<Utc>>) -> Vec<DateTime<Utc>> {
         let Some(by_set_pos) = self.by_set_pos.as_ref() else {
             return res;
         };
@@ -1485,7 +1524,9 @@ mod tests {
         };
         let date = chrono_tz::America::New_York
             .with_ymd_and_hms(2024, 9, 2, 9, 0, 0)
-            .unwrap();
+            .unwrap()
+            .naive_local()
+            .and_utc();
         assert!(!desc.matches(date, &rrule));
     }
 
@@ -2040,10 +2081,19 @@ mod tests {
         );
     }
 
-    fn ny_datetime(year: i32, month: u32, day: u32, hour: u32, min: u32, sec: u32) -> DateTime<Tz> {
+    fn ny_datetime(
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        min: u32,
+        sec: u32,
+    ) -> DateTime<Utc> {
         chrono_tz::America::New_York
             .with_ymd_and_hms(year, month, day, hour, min, sec)
             .unwrap()
+            .naive_local()
+            .and_utc()
     }
 
     fn berlin_datetime(
@@ -2053,10 +2103,12 @@ mod tests {
         hour: u32,
         min: u32,
         sec: u32,
-    ) -> DateTime<Tz> {
+    ) -> DateTime<Utc> {
         chrono_tz::Europe::Berlin
             .with_ymd_and_hms(year, month, day, hour, min, sec)
             .unwrap()
+            .naive_local()
+            .and_utc()
     }
 
     #[test]
@@ -2656,7 +2708,9 @@ mod tests {
 
     #[test]
     fn range_by_day_dst_change() {
-        let start = berlin_datetime(2025, 3, 24, 10, 0, 0);
+        let start = chrono_tz::Europe::Berlin
+            .with_ymd_and_hms(2025, 3, 24, 10, 0, 0)
+            .unwrap();
         let rrule = "FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;WKST=MO"
             .parse::<CalRRule>()
             .unwrap();
@@ -2692,11 +2746,11 @@ mod tests {
 
     fn collect_instances(
         rrule: &CalRRule,
-        dtstart: DateTime<Tz>,
-        start: DateTime<Tz>,
-        end: DateTime<Tz>,
+        dtstart: DateTime<Utc>,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
         limit: usize,
-    ) -> Vec<DateTime<Tz>> {
+    ) -> Vec<DateTime<Utc>> {
         let mut iter = rrule.dates_between(dtstart, Some(Duration::hours(1)), start, end);
         let mut res = Vec::new();
         while res.len() < limit {

@@ -30,6 +30,34 @@ fn write_event_ics(cal_dir: &Path, uid: &str, summary: &str) -> PathBuf {
     path
 }
 
+/// Writes a minimal timed VEVENT ICS file for `uid` in the given `tzid` and local hour range.
+fn write_event_ics_in_tz(
+    cal_dir: &Path,
+    uid: &str,
+    summary: &str,
+    tzid: &str,
+    start_hour: u32,
+    end_hour: u32,
+) -> PathBuf {
+    let path = cal_dir.join(format!("{uid}.ics"));
+    std::fs::write(
+        &path,
+        format!(
+            "BEGIN:VCALENDAR\r\n\
+             BEGIN:VEVENT\r\n\
+             UID:{uid}\r\n\
+             DTSTAMP:20260101T000000Z\r\n\
+             DTSTART;TZID={tzid}:20260415T{start_hour:02}0000\r\n\
+             DTEND;TZID={tzid}:20260415T{end_hour:02}0000\r\n\
+             SUMMARY:{summary}\r\n\
+             END:VEVENT\r\n\
+             END:VCALENDAR\r\n"
+        ),
+    )
+    .unwrap();
+    path
+}
+
 /// Writes a minimal weekly recurring VEVENT ICS file for `uid` into `cal_dir` and returns the
 /// path.
 ///

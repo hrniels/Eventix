@@ -86,6 +86,9 @@ struct ListComponent<'a> {
     alarms: Option<Vec<CalAlarm>>,
     part_stat: Option<CalPartStat>,
     part_stat_btns: Option<PartStatTemplate>,
+    date_range: String,
+    start_display: Option<String>,
+    end_display: Option<String>,
 }
 
 impl<'a> ListComponent<'a> {
@@ -96,12 +99,14 @@ impl<'a> ListComponent<'a> {
         settings: &'_ Settings,
         pers_alarms: &'_ PersonalAlarms,
     ) -> ListComponent<'a> {
+        let ctx = file.calendar().date_context();
         let occ = Occurrence::new(
             file.directory().clone(),
             c,
-            c.start().map(|d| d.as_start_with_tz(locale.timezone())),
+            c.start()
+                .map(|d| ctx.date(d).resolved_start(locale.timezone())),
             c.end_or_due()
-                .map(|d| d.as_start_with_tz(locale.timezone())),
+                .map(|d| ctx.date(d).resolved_end(locale.timezone())),
             false,
         );
 
@@ -112,6 +117,40 @@ impl<'a> ListComponent<'a> {
             (Some(user_mail), false) => occ.base().attendee_status(user_mail),
             _ => None,
         };
+        let date_range = locale.date_range(
+            c.start().cloned(),
+            c.end_or_due().cloned(),
+            &ctx,
+            locale.timezone(),
+        );
+        let start_display = c.start().map(|start| {
+            if c.is_all_day() {
+                locale
+                    .fmt_date(
+                        &ctx.date(start).start_in(locale.timezone()),
+                        DateFlags::None,
+                    )
+                    .to_string()
+            } else {
+                locale
+                    .fmt_datetime(
+                        &ctx.date(start).start_in(locale.timezone()),
+                        DateFlags::None,
+                    )
+                    .to_string()
+            }
+        });
+        let end_display = c.end_or_due().map(|end| {
+            if c.is_all_day() {
+                locale
+                    .fmt_date(&ctx.date(end).end_in(locale.timezone()), DateFlags::None)
+                    .to_string()
+            } else {
+                locale
+                    .fmt_datetime(&ctx.date(end).end_in(locale.timezone()), DateFlags::None)
+                    .to_string()
+            }
+        });
 
         ListComponent {
             dir: file.directory(),
@@ -133,6 +172,9 @@ impl<'a> ListComponent<'a> {
                 )
             }),
             part_stat,
+            date_range,
+            start_display,
+            end_display,
         }
     }
 }

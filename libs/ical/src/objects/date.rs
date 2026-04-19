@@ -2,16 +2,258 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cmp::Ordering, fmt, hash::Hash, str::FromStr};
+use std::{
+    cmp::Ordering,
+    fmt,
+    ops::{Add, Deref, Sub},
+    str::FromStr,
+    sync::Arc,
+};
 
-use chrono::offset::MappedLocalTime;
-use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
-use chrono_tz::{Europe, Tz};
+use chrono::{
+    DateTime, Duration, FixedOffset, MappedLocalTime, NaiveDate, NaiveDateTime, NaiveTime,
+    TimeZone, Utc,
+};
+use chrono_tz::Tz;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::parser::{Parameter, ParseError, Property};
 
-use super::CalCompType;
+use super::{CalCompType, CalendarTimeZoneResolver};
+
+/// A reusable calendar-bound context for resolving unresolved dates.
+///
+/// The contained resolver is cached by the owning calendar and shared via [`Arc`]. Methods that
+/// resolve floating values or plain dates accept an explicit fallback timezone when needed.
+#[derive(Clone, Debug)]
+pub struct DateContext {
+    resolver: Arc<CalendarTimeZoneResolver>,
+}
+
+impl DateContext {
+    /// Creates a new resolution context from the given resolver.
+    pub fn new(resolver: Arc<CalendarTimeZoneResolver>) -> Self {
+        Self { resolver }
+    }
+
+    /// Creates a context that uses only the system timezone database.
+    pub fn system() -> Self {
+        Self::new(Arc::new(CalendarTimeZoneResolver::default()))
+    }
+
+    /// Returns the shared resolver used by this context.
+    pub fn resolver(&self) -> &CalendarTimeZoneResolver {
+        &self.resolver
+    }
+
+    /// Returns a bound view for the given unresolved calendar date.
+    pub fn date<'a>(&'a self, raw: &'a CalDate) -> BoundCalDate<'a> {
+        BoundCalDate::new(raw, self)
+    }
+
+    /// Resolves the given calendar date as the start of an event.
+    pub fn resolve_date_start(&self, date: &CalDate, fallback: &Tz) -> ResolvedDateTime {
+        self.resolver.resolve_date_start(date, fallback)
+    }
+
+    /// Resolves the given calendar date as the inclusive end of an event or TODO.
+    pub fn resolve_date_end(&self, date: &CalDate, fallback: &Tz) -> ResolvedDateTime {
+        self.resolver.resolve_date_end(date, fallback)
+    }
+
+    /// Resolves the given calendar datetime into a concrete instant.
+    pub fn resolve_datetime(&self, dt: &CalDateTime, fallback: &Tz) -> ResolvedDateTime {
+        self.resolver.resolve_datetime(dt, fallback)
+    }
+
+    /// Validates the given calendar date using this context.
+    pub fn validate_date(&self, date: &CalDate, local_tz: &Tz) -> Result<(), ParseError> {
+        self.resolver.validate_date(date, local_tz)
+    }
+
+    /// Validates the given calendar datetime using this context.
+    pub fn validate_datetime(&self, dt: &CalDateTime, local_tz: &Tz) -> Result<(), ParseError> {
+        self.resolver.validate_datetime(dt, local_tz)
+    }
+
+    /// Converts the given calendar date into a UTC-normalized form.
+    ///
+    /// Plain `DATE` values keep their calendar-day semantics. `DATE-TIME` values are resolved via
+    /// this context and returned as UTC datetimes.
+    pub fn date_to_utc(&self, date: &CalDate, fallback: &Tz) -> CalDate {
+        match date {
+            CalDate::Date(day, ty) => CalDate::Date(*day, *ty),
+            CalDate::DateTime(_) => CalDate::from(self.resolve_date_start(date, fallback)),
+        }
+    }
+
+    /// Converts the given calendar datetime into a UTC datetime using this context.
+    pub fn datetime_to_utc(&self, dt: &CalDateTime, fallback: &Tz) -> CalDateTime {
+        CalDateTime::Utc(self.resolve_datetime(dt, fallback).with_timezone(&Utc))
+    }
+}
+
+/// A calendar date paired with a calendar-bound resolution context.
+#[derive(Clone, Copy, Debug)]
+pub struct BoundCalDate<'a> {
+    raw: &'a CalDate,
+    ctx: &'a DateContext,
+}
+
+impl<'a> BoundCalDate<'a> {
+    /// Creates a new bound view for the given unresolved date.
+    pub fn new(raw: &'a CalDate, ctx: &'a DateContext) -> Self {
+        Self { raw, ctx }
+    }
+
+    /// Returns the underlying unresolved calendar date.
+    pub fn raw(&self) -> &'a CalDate {
+        self.raw
+    }
+
+    /// Returns the context used to resolve this date.
+    pub fn context(&self) -> &'a DateContext {
+        self.ctx
+    }
+
+    /// Resolves this date as the start of an event.
+    pub fn resolved_start(&self, fallback: &Tz) -> ResolvedDateTime {
+        self.ctx.resolve_date_start(self.raw, fallback)
+    }
+
+    /// Resolves this date as the inclusive end of an event or TODO.
+    pub fn resolved_end(&self, fallback: &Tz) -> ResolvedDateTime {
+        self.ctx.resolve_date_end(self.raw, fallback)
+    }
+
+    /// Resolves the start of this date and converts it into the given display timezone.
+    pub fn start_in(&self, tz: &Tz) -> DateTime<Tz> {
+        self.resolved_start(tz).with_timezone(tz)
+    }
+
+    /// Resolves the end of this date and converts it into the given display timezone.
+    pub fn end_in(&self, tz: &Tz) -> DateTime<Tz> {
+        self.resolved_end(tz).with_timezone(tz)
+    }
+
+    /// Validates this date using the resolver captured in the bound context.
+    pub fn validate(&self, local_tz: &Tz) -> Result<(), ParseError> {
+        self.ctx.validate_date(self.raw, local_tz)
+    }
+
+    /// Formats this date when interpreted as the start of an event.
+    pub fn fmt_start_in(&self, tz: &Tz) -> String {
+        self.fmt_date(self.start_in(tz))
+    }
+
+    /// Formats this date when interpreted as the inclusive end of an event or TODO.
+    pub fn fmt_end_in(&self, tz: &Tz) -> String {
+        self.fmt_date(self.end_in(tz))
+    }
+
+    /// Converts this bound date into a UTC-normalized calendar date.
+    pub fn to_utc_date(&self, fallback: &Tz) -> CalDate {
+        self.ctx.date_to_utc(self.raw, fallback)
+    }
+
+    fn fmt_date(&self, dt: DateTime<Tz>) -> String {
+        match self.raw {
+            CalDate::Date(..) => dt.format("%B %d, %Y").to_string(),
+            CalDate::DateTime(_) => dt.format("%A, %B %d, %Y %H:%M").to_string(),
+        }
+    }
+}
+
+/// A fully resolved calendar timestamp with a concrete UTC offset.
+///
+/// Unlike [`CalDate`] and [`CalDateTime`], this type no longer carries unresolved calendar-local
+/// semantics. It represents the concrete instant produced after resolving a local date/time
+/// through a timezone definition.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct ResolvedDateTime(DateTime<FixedOffset>);
+
+impl ResolvedDateTime {
+    /// Creates a resolved timestamp from a concrete fixed-offset datetime.
+    pub fn new(dt: DateTime<FixedOffset>) -> Self {
+        Self(dt)
+    }
+
+    /// Returns the wrapped fixed-offset datetime.
+    pub fn into_inner(self) -> DateTime<FixedOffset> {
+        self.0
+    }
+}
+
+impl Deref for ResolvedDateTime {
+    type Target = DateTime<FixedOffset>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<DateTime<FixedOffset>> for ResolvedDateTime {
+    fn from(value: DateTime<FixedOffset>) -> Self {
+        Self(value)
+    }
+}
+
+impl From<ResolvedDateTime> for DateTime<FixedOffset> {
+    fn from(value: ResolvedDateTime) -> Self {
+        value.0
+    }
+}
+
+impl Add<Duration> for ResolvedDateTime {
+    type Output = Self;
+
+    fn add(self, rhs: Duration) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl Sub<Duration> for ResolvedDateTime {
+    type Output = Self;
+
+    fn sub(self, rhs: Duration) -> Self::Output {
+        Self(self.0 - rhs)
+    }
+}
+
+impl Sub for ResolvedDateTime {
+    type Output = Duration;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.0 - rhs.0
+    }
+}
+
+impl<Tz: TimeZone> PartialEq<DateTime<Tz>> for ResolvedDateTime {
+    fn eq(&self, other: &DateTime<Tz>) -> bool {
+        self.0.with_timezone(&Utc) == other.with_timezone(&Utc)
+    }
+}
+
+impl<Tz: TimeZone> PartialEq<ResolvedDateTime> for DateTime<Tz> {
+    fn eq(&self, other: &ResolvedDateTime) -> bool {
+        other == self
+    }
+}
+
+impl<Tz: TimeZone> PartialOrd<DateTime<Tz>> for ResolvedDateTime {
+    fn partial_cmp(&self, other: &DateTime<Tz>) -> Option<Ordering> {
+        self.0
+            .with_timezone(&Utc)
+            .partial_cmp(&other.with_timezone(&Utc))
+    }
+}
+
+impl<Tz: TimeZone> PartialOrd<ResolvedDateTime> for DateTime<Tz> {
+    fn partial_cmp(&self, other: &ResolvedDateTime) -> Option<Ordering> {
+        self.with_timezone(&Utc)
+            .partial_cmp(&other.0.with_timezone(&Utc))
+    }
+}
 
 /// The type of date.
 ///
@@ -21,7 +263,7 @@ use super::CalCompType;
 /// 2025-02-23) and ends at the start of 2025-02-24. For TODOs however, the due date is
 /// "inclusive". For example, if the due date is 2025-02-23, the TODO is due until the *end* of
 /// that day.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum CalDateType {
     /// The date is inclusive, meaning that the event ends *after* that date.
     Inclusive,
@@ -60,7 +302,12 @@ impl From<CalCompType> for CalDateType {
 ///
 /// Dates in iCalendar objects come in two forms: date and datetime. The former specifies a day,
 /// whereas the latter specifies a day and a time.
-#[derive(Debug, Clone)]
+///
+/// This is intentionally an unresolved calendar value. Equality, hashing, and ordering are
+/// structural and preserve the original iCalendar representation rather than comparing resolved
+/// instants. Code that needs calendar-aware timezone resolution must go through [`DateContext`] or
+/// [`BoundCalDate`].
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum CalDate {
     /// Specifies a date.
     ///
@@ -108,99 +355,11 @@ impl CalDate {
         CalDate::DateTime(CalDateTime::Utc(Utc::now()))
     }
 
-    /// Returns a string representation when using this date as the start of an event.
-    ///
-    /// Note that start/end makes a difference when this date is of variant [`CalDate::Date`],
-    /// because its interpretation of the end is different depending on the context. See
-    /// [`Self::as_end_with_tz`] for a detailed description.
-    pub fn fmt_start_with_tz(&self, tz: &Tz) -> String {
-        self.fmt_date(self.as_start_with_tz(tz))
-    }
-
-    /// Returns a string representation when using this date as the end of an event.
-    ///
-    /// Note that start/end makes a difference when this date is of variant [`CalDate::Date`],
-    /// because its interpretation of the end is different depending on the context. See
-    /// [`Self::as_end_with_tz`] for a detailed description.
-    pub fn fmt_end_with_tz(&self, tz: &Tz) -> String {
-        self.fmt_date(self.as_end_with_tz(tz))
-    }
-
-    fn fmt_date(&self, dt: DateTime<Tz>) -> String {
-        match self {
-            Self::Date(..) => dt.format("%B %d, %Y").to_string(),
-            Self::DateTime(_) => dt.format("%A, %B %d, %Y %H:%M").to_string(),
-        }
-    }
-
     /// Returns the [`NaiveDate`] instance corresponding to this [`CalDate`].
     pub fn as_naive_date(&self) -> NaiveDate {
         match self {
             Self::Date(date, _) => *date,
             Self::DateTime(datetime) => datetime.as_naive_date(),
-        }
-    }
-
-    /// Returns a [`DateTime`] instance for this [`CalDate`].
-    ///
-    /// If this calendar date has specified a timezone (or is in UTC), this timezone will be used.
-    /// If this calendar date is floating, the given timezone will be used. Furthermore, if this
-    /// calendar date is not a [`CalDate::DateTime`], the given timezone will be used.
-    pub fn as_datetime(&self, local: &Tz) -> DateTime<Tz> {
-        match self {
-            Self::Date(date, _ty) => local
-                .from_local_datetime(&date.and_hms_opt(0, 0, 0).expect("valid hms"))
-                .unwrap(),
-            Self::DateTime(datetime) => datetime.as_datetime(local),
-        }
-    }
-
-    /// Returns a [`CalDate`] instance with UTC time.
-    pub fn to_utc(self) -> CalDate {
-        match self {
-            Self::Date(date, ty) => Self::Date(date, ty),
-            Self::DateTime(datetime) => Self::DateTime(datetime.to_utc()),
-        }
-    }
-
-    /// Returns the corresponding [`DateTime`] instance when using this date as the start of an
-    /// event.
-    ///
-    /// Note that start/end makes a difference when this date is of variant [`CalDate::Date`],
-    /// because its interpretation of the end is different depending on the context. See
-    /// [`Self::as_end_with_tz`] for a detailed description.
-    pub fn as_start_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
-        match self {
-            Self::Date(date, _) => tz
-                .from_local_datetime(&date.and_hms_opt(0, 0, 0).expect("valid hms"))
-                .unwrap(),
-            Self::DateTime(datetime) => datetime.with_tz(tz),
-        }
-    }
-
-    /// Returns the corresponding [`DateTime`] instance when using this date as the end of an
-    /// event.
-    ///
-    /// In contrast to the iCalendar format, which interpretes dates sometimes inclusive and
-    /// sometimes exclusive, we define the end of an event (or the due date of a TODO) always in an
-    /// inclusive sense. That is, an event that starts on 2025-02-23 and and is one day long ends
-    /// on 2025-02-23.
-    ///
-    /// As this method requests the [`DateTime`] for this date as the end of an event, this method
-    /// returns the end of the last day. In the above example that would be 2025-02-23 23:59:59.
-    /// Conversely, [`Self::as_start_with_tz`] would return 2025-02-23 00:00:00.
-    pub fn as_end_with_tz(&self, tz: &Tz) -> DateTime<Tz> {
-        match self {
-            Self::Date(date, CalDateType::Exclusive) => {
-                let next_day = tz
-                    .from_local_datetime(&date.and_hms_opt(0, 0, 0).expect("valid hms"))
-                    .unwrap();
-                next_day - Duration::seconds(1)
-            }
-            Self::Date(date, CalDateType::Inclusive) => tz
-                .from_local_datetime(&date.and_hms_opt(23, 59, 59).expect("valid hms"))
-                .unwrap(),
-            Self::DateTime(datetime) => datetime.with_tz(tz),
         }
     }
 
@@ -216,21 +375,77 @@ impl CalDate {
         }
     }
 
-    /// Validates that this date is representable and unambiguous in the given local timezone.
+    /// Validates this date using the given timezone resolver.
     ///
-    /// For [`CalDate::Date`], both midnight and 23:59:59 are checked against `local_tz`.
-    /// For [`CalDate::DateTime`], the check is delegated to [`CalDateTime::validate`].
+    /// This behaves like [`Self::validate`], but resolves `TZID` values through the provided
+    /// resolver so embedded `VTIMEZONE` definitions are taken into account.
+    pub fn validate_with(
+        &self,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
+        resolver.validate_date(self, local_tz)
+    }
+
+    /// Resolves this date as the start of an event using the given timezone resolver.
     ///
-    /// Returns an error if any checked time falls in a DST gap (non-existent) or a DST fold
-    /// (ambiguous).
-    pub fn validate(&self, local_tz: &Tz) -> Result<(), ParseError> {
+    /// Floating values and plain dates use `fallback` when they need a timezone context. `TZID`
+    /// values are resolved through `resolver`, which may prefer embedded `VTIMEZONE` data over the
+    /// system timezone database.
+    pub fn as_start_with_resolver(
+        &self,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> ResolvedDateTime {
+        resolver.resolve_date_start(self, fallback)
+    }
+
+    /// Resolves this date as the end of an event using the given timezone resolver.
+    ///
+    /// This uses the same inclusive end semantics as [`Self::as_end_with_tz`], but returns a
+    /// concrete resolved instant that preserves the final fixed offset chosen by the resolver.
+    pub fn as_end_with_resolver(
+        &self,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> ResolvedDateTime {
+        resolver.resolve_date_end(self, fallback)
+    }
+
+    /// Rebuilds a timed date from a concrete instant while preserving its representation.
+    pub fn from_resolved_in_tz(
+        &self,
+        instant: ResolvedDateTime,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<Self, ParseError> {
         match self {
-            Self::Date(date, _) => {
-                check_local_time(local_tz, &date.and_hms_opt(0, 0, 0).expect("valid hms"))?;
-                check_local_time(local_tz, &date.and_hms_opt(23, 59, 59).expect("valid hms"))?;
-                Ok(())
+            Self::DateTime(CalDateTime::Timezone(_, tzid)) => {
+                Ok(Self::DateTime(CalDateTime::Timezone(
+                    resolver.instant_to_local(instant, Some(tzid), fallback),
+                    tzid.clone(),
+                )))
             }
-            Self::DateTime(dt) => dt.validate(local_tz),
+            Self::DateTime(CalDateTime::Utc(_)) => Ok(Self::DateTime(CalDateTime::Utc(
+                instant.with_timezone(&Utc),
+            ))),
+            Self::DateTime(CalDateTime::Floating(_)) => Ok(Self::DateTime(CalDateTime::Floating(
+                instant.with_timezone(fallback).naive_local(),
+            ))),
+            Self::Date(..) => Err(ParseError::InvalidDate(
+                "timed conversion requires DATE-TIME source".to_string(),
+            )),
+        }
+    }
+
+    /// Resolves a user-local wall-clock datetime into a concrete instant in `tz`.
+    pub fn resolve_local_datetime(
+        local: NaiveDateTime,
+        tz: &Tz,
+    ) -> Result<ResolvedDateTime, ParseError> {
+        match CalDateTime::from_local_as_utc(local, tz)? {
+            CalDateTime::Utc(dt) => Ok(dt.fixed_offset().into()),
+            _ => unreachable!("local UTC conversion must produce a UTC datetime"),
         }
     }
 }
@@ -241,6 +456,18 @@ impl From<DateTime<Tz>> for CalDate {
             date.naive_local(),
             date.timezone().name().to_string(),
         ))
+    }
+}
+
+impl From<DateTime<FixedOffset>> for CalDate {
+    fn from(date: DateTime<FixedOffset>) -> Self {
+        Self::DateTime(CalDateTime::Utc(date.with_timezone(&Utc)))
+    }
+}
+
+impl From<ResolvedDateTime> for CalDate {
+    fn from(date: ResolvedDateTime) -> Self {
+        Self::from(date.into_inner())
     }
 }
 
@@ -282,38 +509,8 @@ impl fmt::Display for CalDate {
     }
 }
 
-impl Hash for CalDate {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.as_start_with_tz(&chrono_tz::UTC).hash(state);
-    }
-}
-
-impl PartialEq for CalDate {
-    fn eq(&self, other: &Self) -> bool {
-        let a = self.as_start_with_tz(&chrono_tz::UTC);
-        let b = other.as_start_with_tz(&chrono_tz::UTC);
-        a == b
-    }
-}
-
-impl Eq for CalDate {}
-
-impl PartialOrd for CalDate {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for CalDate {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let a = self.as_start_with_tz(&chrono_tz::UTC);
-        let b = other.as_start_with_tz(&chrono_tz::UTC);
-        a.cmp(&b)
-    }
-}
-
 /// An iCalendar date in datetime format.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum CalDateTime {
     /// The datetime is floating in the sense that the date/time is always the same, independent of
     /// the timezone of the user. For example, if it was created for 8 AM by a user in UTC, it will
@@ -346,42 +543,18 @@ impl CalDateTime {
         }
     }
 
-    /// Returns the corresponding [`DateTime`] instance with the given timezone.
-    pub fn with_tz(&self, tz: &Tz) -> DateTime<Tz> {
-        match self {
-            Self::Utc(dt) => dt.with_timezone(tz),
-            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, tzid).with_timezone(tz),
-            Self::Floating(dt) => tz.from_local_datetime(dt).unwrap(),
+    /// Attempts to interpret the given date in the given timezone and returns a `Self::Utc`
+    /// instance for that date.
+    fn from_local_as_utc(local: NaiveDateTime, tz: &Tz) -> Result<Self, ParseError> {
+        match tz.from_local_datetime(&local) {
+            MappedLocalTime::Single(dt) => Ok(Self::Utc(dt.with_timezone(&Utc))),
+            MappedLocalTime::Ambiguous(_, _) => {
+                Err(ParseError::AmbiguousTime(format!("{} in {}", local, tz)))
+            }
+            MappedLocalTime::None => {
+                Err(ParseError::NonExistentTime(format!("{} in {}", local, tz)))
+            }
         }
-    }
-
-    /// Returns a [`DateTime`] instance for this [`CalDate`].
-    ///
-    /// If this calendar date has specified a timezone (or is in UTC), this timezone will be used.
-    /// If this calendar date is floating, the given timezone will be used.
-    pub fn as_datetime(&self, local: &Tz) -> DateTime<Tz> {
-        match self {
-            Self::Utc(dt) => dt.with_timezone(&Tz::UTC),
-            Self::Timezone(dt, tzid) => Self::resolve_timezone(*dt, tzid),
-            Self::Floating(dt) => local.from_local_datetime(dt).unwrap(),
-        }
-    }
-
-    fn resolve_timezone(dt: NaiveDateTime, tzid: &str) -> DateTime<Tz> {
-        let date_tz = if let Ok(date_tz) = tzid.parse::<Tz>() {
-            date_tz
-        } else {
-            // we fall back to Europe/Berlin for all weird values that we see
-            // TODO this is temporary
-            Europe::Berlin
-        };
-        date_tz.from_local_datetime(&dt).unwrap()
-    }
-
-    /// Returns a [`CalDateTime`] instance with UTC time.
-    pub fn to_utc(self) -> CalDateTime {
-        let dt = self.with_tz(&Tz::UTC);
-        Self::Utc(dt.to_utc())
     }
 
     /// Builds and returns a [`Property`] for this datetime.
@@ -394,40 +567,6 @@ impl CalDateTime {
             }
         };
         Property::new(name, params, date.to_string())
-    }
-
-    /// Validates that this datetime is representable and unambiguous in the relevant timezones.
-    ///
-    /// For [`CalDateTime::Utc`], validation always succeeds. For [`CalDateTime::Floating`], the
-    /// datetime is checked against `local_tz`. For [`CalDateTime::Timezone`], the datetime is
-    /// checked against both the declared timezone and `local_tz`.
-    ///
-    /// Returns an error if the datetime falls in a DST gap (non-existent time) or a DST fold
-    /// (ambiguous time) in any of the relevant timezones.
-    pub fn validate(&self, local_tz: &Tz) -> Result<(), ParseError> {
-        match self {
-            Self::Utc(_) => Ok(()),
-            Self::Floating(dt) => check_local_time(local_tz, dt),
-            Self::Timezone(dt, tzid) => {
-                let tz = tzid.parse::<Tz>().unwrap_or(Europe::Berlin);
-                check_local_time(&tz, dt)?;
-                check_local_time(local_tz, dt)?;
-                Ok(())
-            }
-        }
-    }
-}
-
-/// Checks whether the given naive datetime is representable and unambiguous in the given timezone.
-///
-/// Returns an error if the local time falls in a DST gap or fold.
-fn check_local_time(tz: &Tz, dt: &NaiveDateTime) -> Result<(), ParseError> {
-    match tz.from_local_datetime(dt) {
-        MappedLocalTime::None => Err(ParseError::NonExistentTime(format!("{} in {}", dt, tz))),
-        MappedLocalTime::Ambiguous(_, _) => {
-            Err(ParseError::AmbiguousTime(format!("{} in {}", dt, tz)))
-        }
-        MappedLocalTime::Single(_) => Ok(()),
     }
 }
 
@@ -662,11 +801,12 @@ mod tests {
             NaiveDate::from_ymd_opt(2024, 2, 3).unwrap(),
             CalDateType::Inclusive,
         );
+        let ctx = DateContext::system();
 
-        assert_eq!(date.fmt_start_with_tz(&Tz::UTC), "February 03, 2024");
-        assert_eq!(date.fmt_end_with_tz(&Tz::UTC), "February 03, 2024");
+        assert_eq!(ctx.date(&date).fmt_start_in(&Tz::UTC), "February 03, 2024");
+        assert_eq!(ctx.date(&date).fmt_end_in(&Tz::UTC), "February 03, 2024");
         assert_eq!(
-            date.as_end_with_tz(&Tz::UTC).to_rfc3339(),
+            ctx.date(&date).end_in(&Tz::UTC).to_rfc3339(),
             "2024-02-03T23:59:59+00:00"
         );
 
@@ -683,12 +823,15 @@ mod tests {
             .single()
             .unwrap();
         let from_datetime = CalDate::from(berlin);
+        let berlin_ctx = DateContext::system();
         assert_eq!(
             from_datetime.to_string(),
             "TTEurope/Berlin;2024-01-02T03:04:05"
         );
         assert_eq!(
-            from_datetime.clone().to_utc().to_string(),
+            berlin_ctx
+                .date_to_utc(&from_datetime, &Tz::Europe__Berlin)
+                .to_string(),
             "TU2024-01-02T02:04:05"
         );
 
@@ -696,7 +839,60 @@ mod tests {
             NaiveDate::from_ymd_opt(2024, 1, 2).unwrap(),
             CalDateType::Exclusive,
         );
-        assert_eq!(plain_date.clone().to_utc(), plain_date);
+        assert_eq!(
+            berlin_ctx.date_to_utc(&plain_date, &Tz::Europe__Berlin),
+            plain_date
+        );
+    }
+
+    #[test]
+    fn caldate_equality_and_ordering_are_structural() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let utc = CalDate::DateTime(CalDateTime::Utc(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(8, 0, 0))
+                .unwrap()
+                .and_utc(),
+        ));
+        let berlin = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(9, 0, 0))
+                .unwrap(),
+            "Europe/Berlin".to_string(),
+        ));
+
+        let mut utc_hash = DefaultHasher::new();
+        utc.hash(&mut utc_hash);
+        let mut berlin_hash = DefaultHasher::new();
+        berlin.hash(&mut berlin_hash);
+
+        assert_ne!(utc, berlin);
+        assert_ne!(utc_hash.finish(), berlin_hash.finish());
+        assert!(utc < berlin || berlin < utc);
+    }
+
+    #[test]
+    fn bound_dates_compare_by_resolved_instant() {
+        let utc = CalDate::DateTime(CalDateTime::Utc(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(8, 0, 0))
+                .unwrap()
+                .and_utc(),
+        ));
+        let berlin = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2024, 1, 2)
+                .and_then(|d| d.and_hms_opt(9, 0, 0))
+                .unwrap(),
+            "Europe/Berlin".to_string(),
+        ));
+        let ctx = DateContext::system();
+
+        assert_eq!(
+            ctx.date(&utc).resolved_start(&Tz::UTC),
+            ctx.date(&berlin).resolved_start(&Tz::UTC)
+        );
     }
 
     #[test]
@@ -736,15 +932,24 @@ mod tests {
         assert_eq!(timezone.as_naive_time().to_string(), "08:09:10");
         assert_eq!(floating.as_naive_time().to_string(), "08:09:10");
 
+        let berlin_ctx = DateContext::system();
+        let utc_ctx = DateContext::system();
+
         assert_eq!(
-            utc.as_datetime(&Tz::Europe__Berlin).to_rfc3339(),
+            berlin_ctx
+                .resolve_datetime(&utc, &Tz::Europe__Berlin)
+                .with_timezone(&Tz::UTC)
+                .to_rfc3339(),
             "2024-01-15T08:09:10+00:00"
         );
 
         let fallback_timezone = CalDateTime::Timezone(naive, "Mars/Phobos".to_string());
         assert_eq!(
-            fallback_timezone.with_tz(&Tz::UTC).to_rfc3339(),
-            "2024-01-15T07:09:10+00:00"
+            utc_ctx
+                .resolve_datetime(&fallback_timezone, &Tz::UTC)
+                .with_timezone(&Tz::UTC)
+                .to_rfc3339(),
+            "2024-01-15T08:09:10+00:00"
         );
     }
 
@@ -760,7 +965,12 @@ mod tests {
             floating.to_prop("DTSTART"),
             Property::new("DTSTART", vec![], "20240203T040506")
         );
-        assert_eq!(floating.to_utc().to_string(), "U2024-02-03T04:05:06");
+        assert_eq!(
+            DateContext::system()
+                .datetime_to_utc(&floating, &Tz::UTC)
+                .to_string(),
+            "U2024-02-03T04:05:06"
+        );
 
         assert_eq!(
             "X2024-02-03T04:05:06".parse::<CalDateTime>().unwrap_err(),
@@ -848,7 +1058,11 @@ mod tests {
                 .and_utc(),
         );
         // 2:30 AM doesn't exist in Europe/Berlin on 2025-03-30, but UTC is always valid.
-        assert!(dt.validate(&Tz::Europe__Berlin).is_ok());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::Europe__Berlin)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -859,7 +1073,11 @@ mod tests {
                 .unwrap(),
         );
         // 2:30 AM doesn't exist in Europe/Berlin on 2025-03-30 (spring forward).
-        assert!(dt.validate(&Tz::Europe__Berlin).is_err());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::Europe__Berlin)
+                .is_err()
+        );
     }
 
     #[test]
@@ -869,7 +1087,11 @@ mod tests {
                 .and_then(|d| d.and_hms_opt(10, 0, 0))
                 .unwrap(),
         );
-        assert!(dt.validate(&Tz::Europe__Berlin).is_ok());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::Europe__Berlin)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -882,20 +1104,28 @@ mod tests {
             "Europe/Berlin".to_string(),
         );
         // Even if local_tz is UTC (where it's fine), the declared tz rejects it.
-        assert!(dt.validate(&Tz::UTC).is_err());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::UTC)
+                .is_err()
+        );
     }
 
     #[test]
-    fn validate_timezone_rejects_local_tz_gap() {
-        // 2:00 AM doesn't exist in America/New_York on 2025-03-09 (spring forward).
-        // Use a time that's valid in Europe/Berlin but not in America/New_York.
+    fn validate_timezone_ignores_unrelated_local_tz_gap() {
+        // A timezone-qualified value should validate against its declared TZID semantics rather than
+        // the caller's unrelated local timezone.
         let dt = CalDateTime::Timezone(
             NaiveDate::from_ymd_opt(2025, 3, 9)
                 .and_then(|d| d.and_hms_opt(2, 30, 0))
                 .unwrap(),
             "Europe/Berlin".to_string(),
         );
-        assert!(dt.validate(&Tz::America__New_York).is_err());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::America__New_York)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -906,7 +1136,11 @@ mod tests {
                 .unwrap(),
             "Europe/Berlin".to_string(),
         );
-        assert!(dt.validate(&Tz::Europe__Berlin).is_ok());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::Europe__Berlin)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -917,7 +1151,11 @@ mod tests {
                 .unwrap(),
         );
         // 2:30 AM on 2025-10-26 is ambiguous in Europe/Berlin (fall back).
-        assert!(dt.validate(&Tz::Europe__Berlin).is_err());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::Europe__Berlin)
+                .is_err()
+        );
     }
 
     #[test]
@@ -930,20 +1168,28 @@ mod tests {
             "Europe/Berlin".to_string(),
         );
         // Even if local_tz is UTC (where it's unambiguous), the declared tz rejects it.
-        assert!(dt.validate(&Tz::UTC).is_err());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::UTC)
+                .is_err()
+        );
     }
 
     #[test]
-    fn validate_timezone_rejects_local_tz_fold() {
-        // 1:30 AM on 2025-11-02 is ambiguous in America/New_York (fall back).
-        // Use a naive time that is valid in Europe/Berlin but ambiguous in New York.
+    fn validate_timezone_ignores_unrelated_local_tz_fold() {
+        // A timezone-qualified value should validate against its declared TZID semantics rather than
+        // the caller's unrelated local timezone.
         let dt = CalDateTime::Timezone(
             NaiveDate::from_ymd_opt(2025, 11, 2)
                 .and_then(|d| d.and_hms_opt(1, 30, 0))
                 .unwrap(),
             "Europe/Berlin".to_string(),
         );
-        assert!(dt.validate(&Tz::America__New_York).is_err());
+        assert!(
+            DateContext::system()
+                .validate_datetime(&dt, &Tz::America__New_York)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -954,7 +1200,7 @@ mod tests {
             NaiveDate::from_ymd_opt(2007, 3, 11).unwrap(),
             CalDateType::Inclusive,
         );
-        let result = date.validate(&Tz::America__Havana);
+        let result = DateContext::system().validate_date(&date, &Tz::America__Havana);
         // Midnight doesn't exist on this date in Havana.
         assert!(result.is_err());
     }
@@ -965,6 +1211,10 @@ mod tests {
             NaiveDate::from_ymd_opt(2025, 6, 15).unwrap(),
             CalDateType::Exclusive,
         );
-        assert!(date.validate(&Tz::Europe__Berlin).is_ok());
+        assert!(
+            DateContext::system()
+                .validate_date(&date, &Tz::Europe__Berlin)
+                .is_ok()
+        );
     }
 }

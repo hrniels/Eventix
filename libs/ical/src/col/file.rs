@@ -9,14 +9,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use chrono::{DateTime, Duration};
+use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use tracing::info;
 
 use crate::col::{AlarmOccurrence, ColError, Occurrence};
 use crate::objects::{
     AlarmOverlay, CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTodo, CalTrigger,
-    Calendar, CompDateIterator, CompDateType, EventLike, UpdatableEventLike,
+    Calendar, CompDateIterator, CompDateType, EventLike, ResolvedDateTime, UpdatableEventLike,
 };
 use crate::util;
 
@@ -26,11 +26,11 @@ use crate::util;
 /// the overwrites that are present in the used [`CalFile`]. In particular, it ignores occurrences
 /// that overwrite the date to be outside of the desired time period and adds occurrences where the
 /// overwrite changes the date to be inside of the desired time period.
-pub struct OccurrenceIterator<'a> {
+pub struct OccurrenceIterator<'a, 'r> {
     file: &'a CalFile,
     start: DateTime<Tz>,
     end: DateTime<Tz>,
-    dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
+    dates: Option<(&'a CalComponent, CompDateIterator<'a, 'r>)>,
     seen_rids: Vec<CalDate>,
     // overwritten components and the current index
     sorted_overwritten: Vec<&'a CalComponent>,
@@ -40,12 +40,12 @@ pub struct OccurrenceIterator<'a> {
     next_overwritten: Option<Occurrence<'a>>,
 }
 
-impl<'a> OccurrenceIterator<'a> {
+impl<'a, 'r> OccurrenceIterator<'a, 'r> {
     fn new(
         file: &'a CalFile,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
-        dates: Option<(&'a CalComponent, CompDateIterator<'a>)>,
+        dates: Option<(&'a CalComponent, CompDateIterator<'a, 'r>)>,
     ) -> Self {
         let mut sorted_overwritten: Vec<&CalComponent> = file.components().iter().collect();
         sorted_overwritten.sort_by_key(|comp| comp.start());
@@ -65,14 +65,22 @@ impl<'a> OccurrenceIterator<'a> {
     fn fetch_next_recurrence(&mut self) -> Option<Occurrence<'a>> {
         // unwrap the base component and the recurring date iterator.
         let (base, date_iter) = self.dates.as_mut()?;
+        let resolver = self.file.cal.timezone_resolver();
         for (ty, d, excluded) in date_iter {
-            let mut occ = Occurrence::new_single(self.file.dir.clone(), base, ty, d, excluded);
+            let mut occ = Occurrence::new_single_in_tz(
+                self.file.dir.clone(),
+                base,
+                ty,
+                d,
+                excluded,
+                self.start.timezone(),
+            );
             // check if an overwritten event exists for this occurrence.
             if let Some(overwritten) = self.file.cal.components().iter().find(|c| {
                 matches!(c.rid(),
                 Some(rid)
-                    if occ.occurrence_start()
-                        == Some(rid.as_start_with_tz(&self.start.timezone())))
+                    if occ.resolved_occurrence_start()
+                        == Some(rid.as_start_with_resolver(&self.start.timezone(), resolver)))
             }) {
                 let rid = overwritten.rid().unwrap().clone();
                 // skip this in case we had it already within the overwritten iterator
@@ -81,7 +89,7 @@ impl<'a> OccurrenceIterator<'a> {
                 }
                 self.seen_rids.push(rid);
 
-                occ.set_overwrite(overwritten);
+                occ.set_overwrite(overwritten, &self.start.timezone(), resolver);
                 // if it isn't in the range anymore, do not consider it
                 if !Self::is_in_range(&occ, self.start, self.end) {
                     continue;
@@ -95,6 +103,7 @@ impl<'a> OccurrenceIterator<'a> {
     fn fetch_next_overwritten(&mut self) -> Option<Occurrence<'a>> {
         let base = self.dates.as_ref()?.0;
         let timezone = self.start.timezone();
+        let resolver = self.file.cal.timezone_resolver();
         while self.overwritten_index < self.sorted_overwritten.len() {
             let overwritten = self.sorted_overwritten[self.overwritten_index];
             self.overwritten_index += 1;
@@ -104,18 +113,22 @@ impl<'a> OccurrenceIterator<'a> {
                 }
                 self.seen_rids.push(rid.clone());
 
-                let start_date = overwritten.start().unwrap().as_start_with_tz(&timezone);
-                let mut occ = Occurrence::new_single(
+                let start_date = overwritten
+                    .start()
+                    .unwrap()
+                    .as_start_with_resolver(&timezone, resolver);
+                let mut occ = Occurrence::new_single_in_tz(
                     self.file.dir.clone(),
                     base,
                     CompDateType::Start,
                     start_date,
                     base.exdates()
                         .iter()
-                        .map(|d| d.as_start_with_tz(&timezone))
-                        .any(|d| d == rid.as_start_with_tz(&timezone)),
+                        .map(|d| d.as_start_with_resolver(&timezone, resolver))
+                        .any(|d| d == rid.as_start_with_resolver(&timezone, resolver)),
+                    timezone,
                 );
-                occ.set_overwrite(overwritten);
+                occ.set_overwrite(overwritten, &timezone, resolver);
                 if Self::is_in_range(&occ, self.start, self.end) {
                     return Some(occ);
                 }
@@ -127,15 +140,24 @@ impl<'a> OccurrenceIterator<'a> {
     fn is_in_range(occ: &Occurrence, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
         let occ_start = occ.occurrence_start().unwrap();
         util::date_ranges_overlap(
-            occ_start,
-            occ.occurrence_end().unwrap_or(occ_start),
+            occ_start.with_timezone(&Utc),
+            occ.occurrence_end()
+                .unwrap_or(occ_start)
+                .with_timezone(&Utc),
             start,
             end,
         )
     }
 }
 
-impl<'a> Iterator for OccurrenceIterator<'a> {
+fn resolved_in_range(resolved: ResolvedDateTime, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
+    let resolved = resolved.with_timezone(&Utc);
+    let start = start.with_timezone(&Utc);
+    let end = end.with_timezone(&Utc);
+    resolved >= start && resolved < end
+}
+
+impl<'a, 'r> Iterator for OccurrenceIterator<'a, 'r> {
     type Item = Occurrence<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -153,8 +175,8 @@ impl<'a> Iterator for OccurrenceIterator<'a> {
             (Some(_), None) => self.next_recurrence.take(),
             (None, Some(_)) => self.next_overwritten.take(),
             (Some(recurrence), Some(overwritten)) => {
-                let rec_start = recurrence.occurrence_start().unwrap();
-                let over_start = overwritten.occurrence_start().unwrap();
+                let rec_start = recurrence.resolved_occurrence_start().unwrap();
+                let over_start = overwritten.resolved_occurrence_start().unwrap();
                 if rec_start <= over_start {
                     self.next_recurrence.take()
                 } else {
@@ -290,6 +312,7 @@ impl CalFile {
         end: DateTime<Tz>,
         overlay: &dyn AlarmOverlay,
     ) -> Vec<AlarmOccurrence<'o>> {
+        let resolver = self.cal.timezone_resolver();
         // this should never happen, but if there is no base component, we're done here
         let Some(first) = self.component_with(|c| c.rid().is_none()) else {
             return vec![];
@@ -310,8 +333,11 @@ impl CalFile {
                             })
                             .filter_map(|occ| {
                                 let aocc = AlarmOccurrence::new(occ, alarm.clone());
-                                match (aocc.occurrence().is_excluded(), aocc.alarm_date()) {
-                                    (false, Some(adate)) if adate >= start && adate < end => {
+                                match (aocc.occurrence().is_excluded(), aocc.resolved_alarm_date())
+                                {
+                                    (false, Some(adate))
+                                        if resolved_in_range(adate, start, end) =>
+                                    {
                                         Some(aocc)
                                     }
                                     _ => None,
@@ -320,15 +346,23 @@ impl CalFile {
                         );
                     }
                     CalTrigger::Absolute(date) => {
-                        let alarm_date = date.as_start_with_tz(&start.timezone());
-                        if alarm_date >= start && alarm_date < end {
-                            let fstart =
-                                first.start().map(|d| d.as_start_with_tz(&start.timezone()));
+                        let alarm_date = date.as_start_with_resolver(&start.timezone(), resolver);
+                        if resolved_in_range(alarm_date, start, end) {
+                            let fstart = first
+                                .start()
+                                .map(|d| d.as_start_with_resolver(&start.timezone(), resolver));
                             let fend = first
                                 .end_or_due()
-                                .map(|d| d.as_end_with_tz(&start.timezone()));
+                                .map(|d| d.as_end_with_resolver(&start.timezone(), resolver));
                             alarms.push(AlarmOccurrence::new(
-                                Occurrence::new(self.dir.clone(), first, fstart, fend, false),
+                                Occurrence::new_in_tz(
+                                    self.dir.clone(),
+                                    first,
+                                    fstart,
+                                    fend,
+                                    false,
+                                    start.timezone(),
+                                ),
                                 alarm,
                             ))
                         }
@@ -344,12 +378,14 @@ impl CalFile {
             for overwrite in self.cal.components().iter().filter(|c| c.rid().is_some()) {
                 // set the overwrite to get the correct summary etc.
                 let rid = overwrite.rid().unwrap().clone();
-                let rid_tz = rid.as_start_with_tz(&start.timezone());
+                let rid_tz = rid.as_start_with_resolver(&start.timezone(), resolver);
                 if let Some(alarm) = alarms
                     .iter_mut()
-                    .find(|a| a.occurrence().occurrence_start() == Some(rid_tz))
+                    .find(|a| a.occurrence().resolved_occurrence_start() == Some(rid_tz))
                 {
-                    alarm.occurrence_mut().set_overwrite(overwrite);
+                    alarm
+                        .occurrence_mut()
+                        .set_overwrite(overwrite, &start.timezone(), resolver);
                 }
 
                 if let Some(alarms) = overwrite.alarms() {
@@ -362,28 +398,34 @@ impl CalFile {
 
             for (rid, rid_alarms) in alarm_overwrites {
                 // construct a new occurrence
-                let rid_tz = rid.as_start_with_tz(&start.timezone());
+                let rid_tz = rid.as_start_with_resolver(&start.timezone(), resolver);
                 let fend = first.time_duration().map(|d| rid_tz + d);
-                let mut rid_occ =
-                    Occurrence::new(self.dir.clone(), first, Some(rid_tz), fend, false);
+                let mut rid_occ = Occurrence::new_in_tz(
+                    self.dir.clone(),
+                    first,
+                    Some(rid_tz),
+                    fend,
+                    false,
+                    start.timezone(),
+                );
                 if let Some(overwrite) =
                     self.cal.components().iter().find(|c| c.rid() == Some(&rid))
                 {
-                    rid_occ.set_overwrite(overwrite);
+                    rid_occ.set_overwrite(overwrite, &start.timezone(), resolver);
                 }
 
                 // remove all alarms we already had for this occurrence
-                alarms.retain(|a| a.occurrence().occurrence_start() != Some(rid_tz));
+                alarms.retain(|a| a.occurrence().resolved_occurrence_start() != Some(rid_tz));
 
                 // add the desired ones (if they are in the specified time frame)
                 for rid_alarm in rid_alarms {
                     let trigger_date = rid_alarm.trigger_date(
-                        rid_occ.occurrence_start(),
-                        rid_occ.occurrence_end(),
-                        rid_occ.tz(),
+                        rid_occ.resolved_occurrence_start(),
+                        rid_occ.resolved_occurrence_end(),
+                        rid_occ.resolved_tz_offset(),
                     );
                     match trigger_date {
-                        Some(alarm) if alarm >= start && alarm < end => {
+                        Some(alarm) if resolved_in_range(alarm, start, end) => {
                             alarms.push(AlarmOccurrence::new(rid_occ.clone(), rid_alarm));
                         }
                         _ => {}
@@ -408,20 +450,25 @@ impl CalFile {
         rid: Option<&CalDate>,
         tz: &Tz,
     ) -> Option<Occurrence<'_>> {
+        let resolver = self.cal.timezone_resolver();
         let first = self.component_with(|c| c.rid().is_none() && c.uid() == uid.as_ref())?;
         let (fstart, fend, excluded) = match rid {
             Some(rid) => (
-                Some(rid.as_start_with_tz(tz)),
+                Some(rid.as_start_with_resolver(tz, resolver)),
                 None,
                 first.exdates().contains(rid),
             ),
             None => (
-                first.start().map(|d| d.as_start_with_tz(tz)),
-                first.end_or_due().map(|d| d.as_end_with_tz(tz)),
+                first
+                    .start()
+                    .map(|d| d.as_start_with_resolver(tz, resolver)),
+                first
+                    .end_or_due()
+                    .map(|d| d.as_end_with_resolver(tz, resolver)),
                 false,
             ),
         };
-        let mut res = Occurrence::new(self.dir.clone(), first, fstart, fend, excluded);
+        let mut res = Occurrence::new_in_tz(self.dir.clone(), first, fstart, fend, excluded, *tz);
 
         if let Some(rid) = rid {
             let occ = self
@@ -430,7 +477,7 @@ impl CalFile {
                 .iter()
                 .find(|c| c.uid() == uid.as_ref() && c.rid() == Some(rid));
             if let Some(occ) = occ {
-                res.set_overwrite(occ);
+                res.set_overwrite(occ, tz, resolver);
             }
         }
         Some(res)
@@ -457,12 +504,12 @@ impl CalFile {
     ///
     /// Note also that excluded occurrences will be delivered by the iterator, but can be
     /// identified via [`Occurrence::is_excluded`].
-    pub fn occurrences_between<F>(
-        &self,
+    pub fn occurrences_between<'s, F>(
+        &'s self,
         start: DateTime<Tz>,
         end: DateTime<Tz>,
         filter: F,
-    ) -> OccurrenceIterator<'_>
+    ) -> OccurrenceIterator<'s, 's>
     where
         F: Fn(&CalComponent) -> bool,
     {
@@ -477,7 +524,10 @@ impl CalFile {
             self,
             start,
             end,
-            Some((first, first.dates_between(start, end))),
+            Some((
+                first,
+                first.dates_between(start, end, self.cal.timezone_resolver()),
+            )),
         )
     }
 
@@ -607,11 +657,19 @@ impl CalFile {
         } else {
             CalComponent::Todo(CalTodo::new(base.uid()))
         };
-
-        let start = CalDate::DateTime(CalDateTime::Timezone(
-            rid.as_start_with_tz(tz).naive_local(),
-            tz.name().to_string(),
-        ));
+        let start = match &rid {
+            CalDate::DateTime(CalDateTime::Timezone(naive, tzid)) => {
+                CalDate::DateTime(CalDateTime::Timezone(*naive, tzid.clone()))
+            }
+            _ => CalDate::DateTime(CalDateTime::Timezone(
+                self.cal
+                    .date_context()
+                    .date(&rid)
+                    .start_in(tz)
+                    .naive_local(),
+                tz.name().to_string(),
+            )),
+        };
         comp.set_start(Some(start));
         comp.set_rid(Some(rid.clone()));
         comp.set_last_modified(CalDate::now());
@@ -656,14 +714,15 @@ impl CalFile {
             .ok_or_else(|| ColError::ComponentNotFound(uid.to_string()))?;
 
         // Validate the new base dates before touching anything.
-        new_start.validate(local_tz)?;
+        let ctx = self.cal.date_context();
+        ctx.validate_date(&new_start, local_tz)?;
         if let Some(ref e) = new_end_or_due {
-            e.validate(local_tz)?;
+            ctx.validate_date(e, local_tz)?;
         }
 
         // Compute the UTC delta between old and new DTSTART.
-        let delta: Duration = new_start.as_start_with_tz(&chrono_tz::UTC)
-            - old_start.as_start_with_tz(&chrono_tz::UTC);
+        let delta: Duration = ctx.date(&new_start).resolved_start(&chrono_tz::UTC)
+            - ctx.date(&old_start).resolved_start(&chrono_tz::UTC);
 
         // Collect per-overwrite update info so we can abort before any mutation if any
         // shifted RID (or DTSTART/end) falls in a DST gap or fold.
@@ -693,12 +752,12 @@ impl CalFile {
                 // date by `delta`. This handles all-day ↔ timed conversions as well as
                 // same-type shifts.
                 let new_rid = Self::convert_rid(rid, delta, &new_start);
-                new_rid.validate(local_tz)?;
+                ctx.validate_date(&new_rid, local_tz)?;
 
                 // Shift DTSTART only when it currently matches the RID (no custom time set).
                 let (new_ow_start, new_ow_end) = if c.start() == Some(rid) {
                     let shifted_start = Self::convert_rid(rid, delta, &new_start);
-                    shifted_start.validate(local_tz)?;
+                    ctx.validate_date(&shifted_start, local_tz)?;
                     let shifted_end = c.end_or_due().map(|e| {
                         Self::convert_rid(e, delta, new_end_or_due.as_ref().unwrap_or(&new_start))
                     });
@@ -728,8 +787,12 @@ impl CalFile {
                 comp.set_start(Some(s));
             }
             match (comp.ctype(), upd.new_end) {
-                (CalCompType::Event, Some(e)) => comp.set_end_checked(Some(e), local_tz).unwrap(),
-                (CalCompType::Todo, Some(d)) => comp.set_due_checked(Some(d), local_tz).unwrap(),
+                (CalCompType::Event, Some(e)) => {
+                    comp.set_end_checked(Some(e), &ctx, local_tz).unwrap()
+                }
+                (CalCompType::Todo, Some(d)) => {
+                    comp.set_due_checked(Some(d), &ctx, local_tz).unwrap()
+                }
                 _ => {}
             }
             comp.set_last_modified(now.clone());
@@ -745,10 +808,15 @@ impl CalFile {
             .unwrap(); // we already confirmed it exists above
 
         // we validated the dates above and have already changed the state
-        base.set_start_checked(Some(new_start), local_tz).unwrap();
+        base.set_start_checked(Some(new_start), &ctx, local_tz)
+            .unwrap();
         match (base.ctype(), new_end_or_due) {
-            (CalCompType::Event, Some(end)) => base.set_end_checked(Some(end), local_tz).unwrap(),
-            (CalCompType::Todo, Some(due)) => base.set_due_checked(Some(due), local_tz).unwrap(),
+            (CalCompType::Event, Some(end)) => {
+                base.set_end_checked(Some(end), &ctx, local_tz).unwrap()
+            }
+            (CalCompType::Todo, Some(due)) => {
+                base.set_due_checked(Some(due), &ctx, local_tz).unwrap()
+            }
             _ => {}
         }
         base.set_last_modified(now.clone());
@@ -861,7 +929,7 @@ impl CalFile {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{Datelike, Duration, NaiveDate, TimeDelta, TimeZone};
+    use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeDelta, TimeZone};
 
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -1038,22 +1106,26 @@ mod tests {
         assert_eq!(
             all[0].occurrence_end(),
             Some(
-                CalDate::Date(
-                    NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
-                    CalCompType::Event.into()
-                )
-                .as_end_with_tz(tz)
+                Calendar::default()
+                    .date_context()
+                    .date(&CalDate::Date(
+                        NaiveDate::from_ymd_opt(1990, 1, 6).unwrap(),
+                        CalCompType::Event.into()
+                    ))
+                    .end_in(tz)
             )
         );
         assert_eq!(all[1].occurrence_start(), None);
         assert_eq!(
             all[1].occurrence_end(),
             Some(
-                CalDate::Date(
-                    NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
-                    CalCompType::Event.into()
-                )
-                .as_end_with_tz(tz)
+                Calendar::default()
+                    .date_context()
+                    .date(&CalDate::Date(
+                        NaiveDate::from_ymd_opt(1990, 1, 7).unwrap(),
+                        CalCompType::Event.into()
+                    ))
+                    .end_in(tz)
             )
         );
         assert_eq!(
@@ -2685,6 +2757,61 @@ mod tests {
                 "Europe/Berlin".to_string(),
             )))
         );
+    }
+
+    #[test]
+    fn change_start_uses_embedded_vtimezone_rules_for_validation() {
+        let tz = &chrono_tz::Europe::Berlin;
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:X-CUSTOM-DST\n\
+BEGIN:STANDARD\n\
+DTSTART:19700101T000000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+TZNAME:CST\n\
+END:STANDARD\n\
+BEGIN:DAYLIGHT\n\
+DTSTART:20250330T040000\n\
+TZOFFSETFROM:+0100\n\
+TZOFFSETTO:+0200\n\
+TZNAME:CDT\n\
+END:DAYLIGHT\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:custom-dst\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=X-CUSTOM-DST:20250329T090000\n\
+DTEND;TZID=X-CUSTOM-DST:20250329T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal: Calendar = input.parse().unwrap();
+        let mut file = CalFile::new_simple(cal);
+
+        let new_start = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2025, 3, 30)
+                .unwrap()
+                .and_hms_opt(2, 30, 0)
+                .unwrap(),
+            "X-CUSTOM-DST".to_string(),
+        ));
+        let new_end = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2025, 3, 30)
+                .unwrap()
+                .and_hms_opt(3, 30, 0)
+                .unwrap(),
+            "X-CUSTOM-DST".to_string(),
+        ));
+
+        file.change_start("custom-dst", new_start.clone(), Some(new_end.clone()), tz)
+            .unwrap();
+
+        let base = file
+            .component_with(|c| c.uid() == "custom-dst" && c.rid().is_none())
+            .unwrap();
+        assert_eq!(base.start(), Some(&new_start));
+        assert_eq!(base.end_or_due(), Some(&new_end));
     }
 
     #[test]

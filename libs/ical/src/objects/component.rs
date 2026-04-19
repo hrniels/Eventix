@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -12,12 +12,10 @@ use tracing::warn;
 
 use crate::objects::{
     CalAlarm, CalAttendee, CalDate, CalDuration, CalEvent, CalOrganizer, CalRRule, CalTodo,
-    EventLike, UpdatableEventLike,
+    CalendarTimeZoneResolver, DateContext, EventLike, ResolvedDateTime, UpdatableEventLike,
 };
 use crate::parser::{LineReader, ParseError, Property, PropertyConsumer, PropertyProducer};
 use crate::util;
-
-use super::recur::RecurIterator;
 
 /// Represents the low priority (9)
 pub const PRIORITY_LOW: u8 = 9;
@@ -445,41 +443,59 @@ pub enum CompDateType {
 /// components, it delivers its occurrences, sorted by dates ascendingly. Typically, this iterator
 /// is created by methods like [`CalComponent::dates_between`], which deliver all occurrences in
 /// a certain time period.
-#[derive(Default)]
-pub struct CompDateIterator<'a> {
-    recur: Option<RecurIterator<'a>>,
-    exdates: Vec<DateTime<Tz>>,
-    single: Option<(CompDateType, DateTime<Tz>)>,
+pub enum CompDateIterator<'a, 'r> {
+    Single(Option<(CompDateType, ResolvedDateTime)>),
+    Multi {
+        recur: Box<dyn Iterator<Item = DateTime<Utc>> + 'a>,
+        exdates: Vec<ResolvedDateTime>,
+        resolver: &'r CalendarTimeZoneResolver,
+        tzid: Option<String>,
+        fallback: Tz,
+    },
 }
 
-impl<'a> CompDateIterator<'a> {
-    fn new_recur(iter: RecurIterator<'a>, exdates: Vec<DateTime<Tz>>) -> Self {
-        Self {
-            recur: Some(iter),
+impl<'a, 'r> CompDateIterator<'a, 'r> {
+    fn new_empty() -> Self {
+        Self::Single(None)
+    }
+
+    fn new_recur(
+        iter: impl Iterator<Item = DateTime<Utc>> + 'a,
+        exdates: Vec<ResolvedDateTime>,
+        resolver: &'r CalendarTimeZoneResolver,
+        tzid: Option<String>,
+        fallback: Tz,
+    ) -> Self {
+        Self::Multi {
+            recur: Box::new(iter),
             exdates,
-            single: None,
+            resolver,
+            tzid,
+            fallback,
         }
     }
 
-    fn new_single(ty: CompDateType, single: DateTime<Tz>) -> Self {
-        Self {
-            recur: None,
-            exdates: vec![],
-            single: Some((ty, single)),
-        }
+    fn new_single(ty: CompDateType, single: ResolvedDateTime) -> Self {
+        Self::Single(Some((ty, single)))
     }
 }
 
-impl Iterator for CompDateIterator<'_> {
-    type Item = (CompDateType, DateTime<Tz>, bool);
+impl Iterator for CompDateIterator<'_, '_> {
+    type Item = (CompDateType, ResolvedDateTime, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(recur) = &mut self.recur {
-            recur
-                .next()
-                .map(|date| (CompDateType::Start, date, self.exdates.contains(&date)))
-        } else {
-            self.single.take().map(|(ty, date)| (ty, date, false))
+        match self {
+            Self::Multi {
+                recur,
+                exdates,
+                resolver,
+                tzid,
+                fallback,
+            } => recur.next().map(|date| {
+                let date = resolver.resolve_pseudo_local(date, tzid.as_deref(), fallback);
+                (CompDateType::Start, date, exdates.contains(&date))
+            }),
+            Self::Single(single) => single.take().map(|(ty, date)| (ty, date, false)),
         }
     }
 }
@@ -526,10 +542,14 @@ impl CalComponent {
         }
     }
 
-    fn exdates_as_datetime(&self, tz: &Tz) -> Vec<DateTime<Tz>> {
+    fn exdates_as_datetime(
+        &self,
+        tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Vec<ResolvedDateTime> {
         self.exdates()
             .iter()
-            .map(|d| d.as_start_with_tz(tz))
+            .map(|d| d.as_start_with_resolver(tz, resolver))
             .collect::<Vec<_>>()
     }
 
@@ -544,42 +564,55 @@ impl CalComponent {
     ///
     /// Note that the iterator returns excluded occurrences as well and requires the caller to
     /// ignore these, if desired.
-    pub fn dates_between(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> CompDateIterator<'_> {
+    pub fn dates_between<'s, 'r>(
+        &'s self,
+        start: DateTime<Tz>,
+        end: DateTime<Tz>,
+        resolver: &'r CalendarTimeZoneResolver,
+    ) -> CompDateIterator<'s, 'r> {
         if let Some(rrule) = self.rrule() {
             let Some(dtstart) = self.start() else {
-                return CompDateIterator::default();
+                return CompDateIterator::new_empty();
             };
 
-            let dtstart = dtstart.as_datetime(&start.timezone());
+            let dtstart = resolver.pseudo_local_date_start(dtstart, &start.timezone());
             let dates = rrule.dates_between(dtstart, self.time_duration(), start, end);
-            let exdates = self.exdates_as_datetime(&start.timezone());
-            return CompDateIterator::new_recur(dates, exdates);
+            let tzid = self.start().and_then(|date| match date {
+                CalDate::DateTime(crate::objects::CalDateTime::Timezone(_, tzid)) => {
+                    Some(tzid.clone())
+                }
+                _ => None,
+            });
+            let fallback = start.timezone();
+            let exdates = self.exdates_as_datetime(&start.timezone(), resolver);
+            // let dates = dates.map(move |date| resolver.resolve_pseudo_local(date, tzid, &fallback));
+            return CompDateIterator::new_recur(dates, exdates, resolver, tzid, fallback);
         }
 
         if let Some(ev_start) = self.start() {
-            let ev_start = ev_start.as_start_with_tz(&start.timezone());
-            if ev_start > end {
-                return CompDateIterator::default();
+            let ev_start = ev_start.as_start_with_resolver(&start.timezone(), resolver);
+            if ev_start.with_timezone(&Utc) > end.with_timezone(&Utc) {
+                return CompDateIterator::new_empty();
             }
         }
 
         if let Some(ev_end) = self.end_or_due() {
-            let tzend = ev_end.as_end_with_tz(&start.timezone());
-            if tzend < start {
-                return CompDateIterator::default();
+            let tzend = ev_end.as_end_with_resolver(&start.timezone(), resolver);
+            if tzend.with_timezone(&Utc) < start.with_timezone(&Utc) {
+                return CompDateIterator::new_empty();
             }
         }
 
         match (self.start(), self.end_or_due()) {
             (Some(ev_start), _) => CompDateIterator::new_single(
                 CompDateType::Start,
-                ev_start.as_start_with_tz(&start.timezone()),
+                ev_start.as_start_with_resolver(&start.timezone(), resolver),
             ),
             (None, Some(ev_end)) => CompDateIterator::new_single(
                 CompDateType::EndOrDue,
-                ev_end.as_end_with_tz(&start.timezone()),
+                ev_end.as_end_with_resolver(&start.timezone(), resolver),
             ),
-            (None, None) => CompDateIterator::default(),
+            (None, None) => CompDateIterator::new_empty(),
         }
     }
 
@@ -590,10 +623,11 @@ impl CalComponent {
     pub fn set_start_checked(
         &mut self,
         start: Option<CalDate>,
+        ctx: &DateContext,
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = start {
-            d.validate(local_tz)?;
+            ctx.validate_date(d, local_tz)?;
         }
         self.set_start(start);
         Ok(())
@@ -606,10 +640,11 @@ impl CalComponent {
     pub fn set_end_checked(
         &mut self,
         end: Option<CalDate>,
+        ctx: &DateContext,
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = end {
-            d.validate(local_tz)?;
+            ctx.validate_date(d, local_tz)?;
         }
         self.as_event_mut().unwrap().set_end(end);
         Ok(())
@@ -622,10 +657,11 @@ impl CalComponent {
     pub fn set_due_checked(
         &mut self,
         due: Option<CalDate>,
+        ctx: &DateContext,
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = due {
-            d.validate(local_tz)?;
+            ctx.validate_date(d, local_tz)?;
         }
         self.as_todo_mut().unwrap().set_due(due);
         Ok(())
@@ -639,10 +675,11 @@ impl CalComponent {
     pub fn set_completed_checked(
         &mut self,
         completed: Option<CalDate>,
+        ctx: &DateContext,
         local_tz: &Tz,
     ) -> Result<(), ParseError> {
         if let Some(ref d) = completed {
-            d.validate(local_tz)?;
+            ctx.validate_date(d, local_tz)?;
         }
         self.as_todo_mut().unwrap().set_completed(completed);
         Ok(())
@@ -823,7 +860,7 @@ mod tests {
     use chrono::TimeZone;
     use chrono_tz::UTC;
 
-    use crate::objects::{CalComponent, CalEvent, Calendar, CompDateType};
+    use crate::objects::{CalComponent, CalEvent, Calendar, CompDateType, DateContext};
     use crate::parser::{LineReader, ParseError, Property, PropertyProducer};
 
     use super::{CalCompType, EventLikeComponent};
@@ -948,9 +985,10 @@ mod tests {
         let missing_start: Calendar = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:r-1\nDTSTAMP:20250101T000000Z\nRRULE:FREQ=DAILY;COUNT=2\nEND:VEVENT\nEND:VCALENDAR"
             .parse()
             .unwrap();
+        let missing_start_resolver = missing_start.timezone_resolver();
         assert_eq!(
             missing_start.components()[0]
-                .dates_between(start, end)
+                .dates_between(start, end, missing_start_resolver)
                 .next(),
             None
         );
@@ -958,12 +996,17 @@ mod tests {
         let due_only: Calendar = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:t-1\nDTSTAMP:20250101T000000Z\nDUE:20250103T090000Z\nEND:VTODO\nEND:VCALENDAR"
             .parse()
             .unwrap();
-        let mut due_only_dates = due_only.components()[0].dates_between(start, end);
+        let due_only_resolver = due_only.timezone_resolver();
+        let mut due_only_dates =
+            due_only.components()[0].dates_between(start, end, due_only_resolver);
         assert_eq!(
             due_only_dates.next(),
             Some((
                 CompDateType::EndOrDue,
-                UTC.with_ymd_and_hms(2025, 1, 3, 9, 0, 0).unwrap(),
+                UTC.with_ymd_and_hms(2025, 1, 3, 9, 0, 0)
+                    .unwrap()
+                    .fixed_offset()
+                    .into(),
                 false,
             ))
         );
@@ -972,15 +1015,21 @@ mod tests {
         let due_before_range: Calendar = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:t-2\nDTSTAMP:20250101T000000Z\nDUE:20241231T230000Z\nEND:VTODO\nEND:VCALENDAR"
             .parse()
             .unwrap();
+        let due_before_range_resolver = due_before_range.timezone_resolver();
         assert_eq!(
             due_before_range.components()[0]
-                .dates_between(start, end)
+                .dates_between(start, end, due_before_range_resolver)
                 .next(),
             None
         );
 
         let no_dates = CalComponent::Event(CalEvent::new("e-no-dates"));
-        assert_eq!(no_dates.dates_between(start, end).next(), None);
+        let empty = Calendar::default();
+        let empty_resolver = empty.timezone_resolver();
+        assert_eq!(
+            no_dates.dates_between(start, end, empty_resolver).next(),
+            None
+        );
     }
 
     #[test]
@@ -1011,16 +1060,17 @@ mod tests {
         let gap = floating(2025, 3, 30, 2, 30);
         // 2:30 AM on 2025-10-26 is ambiguous in Europe/Berlin (fall back / fold).
         let fold = floating(2025, 10, 26, 2, 30);
+        let ctx = DateContext::system();
 
         // set_start_checked: both gap and fold must be rejected, leaving start None.
         let mut ev = CalComponent::Event(CalEvent::new("ev-1"));
         assert!(
-            ev.set_start_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+            ev.set_start_checked(Some(gap.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(ev.start().is_none());
         assert!(
-            ev.set_start_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+            ev.set_start_checked(Some(fold.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(ev.start().is_none());
@@ -1028,12 +1078,12 @@ mod tests {
         // set_end_checked: both gap and fold must be rejected, leaving end None.
         let mut ev = CalComponent::Event(CalEvent::new("ev-2"));
         assert!(
-            ev.set_end_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+            ev.set_end_checked(Some(gap.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(ev.as_event().unwrap().end().is_none());
         assert!(
-            ev.set_end_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+            ev.set_end_checked(Some(fold.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(ev.as_event().unwrap().end().is_none());
@@ -1041,12 +1091,12 @@ mod tests {
         // set_due_checked: both gap and fold must be rejected, leaving due None.
         let mut td = CalComponent::Todo(CalTodo::new("td-1"));
         assert!(
-            td.set_due_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+            td.set_due_checked(Some(gap.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(td.as_todo().unwrap().due().is_none());
         assert!(
-            td.set_due_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+            td.set_due_checked(Some(fold.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(td.as_todo().unwrap().due().is_none());
@@ -1054,12 +1104,12 @@ mod tests {
         // set_completed_checked: both gap and fold must be rejected, leaving completed None.
         let mut td = CalComponent::Todo(CalTodo::new("td-2"));
         assert!(
-            td.set_completed_checked(Some(gap.clone()), &Tz::Europe__Berlin)
+            td.set_completed_checked(Some(gap.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(td.as_todo().unwrap().completed().is_none());
         assert!(
-            td.set_completed_checked(Some(fold.clone()), &Tz::Europe__Berlin)
+            td.set_completed_checked(Some(fold.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_err()
         );
         assert!(td.as_todo().unwrap().completed().is_none());
@@ -1078,21 +1128,28 @@ mod tests {
                 .and_then(|d| d.and_hms_opt(10, 0, 0))
                 .unwrap(),
         ));
+        let ctx = DateContext::system();
 
         let mut ev = CalComponent::Event(CalEvent::new("ev-v"));
         assert!(
-            ev.set_start_checked(Some(valid.clone()), &Tz::Europe__Berlin)
+            ev.set_start_checked(Some(valid.clone()), &ctx, &Tz::Europe__Berlin)
                 .is_ok()
         );
         assert!(ev.start().is_some());
 
         // None is always accepted (clears the field).
         let mut ev = CalComponent::Event(CalEvent::new("ev-n"));
-        assert!(ev.set_start_checked(None, &Tz::Europe__Berlin).is_ok());
-        assert!(ev.set_end_checked(None, &Tz::Europe__Berlin).is_ok());
+        assert!(
+            ev.set_start_checked(None, &ctx, &Tz::Europe__Berlin)
+                .is_ok()
+        );
+        assert!(ev.set_end_checked(None, &ctx, &Tz::Europe__Berlin).is_ok());
 
         let mut td = CalComponent::Todo(CalTodo::new("td-n"));
-        assert!(td.set_due_checked(None, &Tz::Europe__Berlin).is_ok());
-        assert!(td.set_completed_checked(None, &Tz::Europe__Berlin).is_ok());
+        assert!(td.set_due_checked(None, &ctx, &Tz::Europe__Berlin).is_ok());
+        assert!(
+            td.set_completed_checked(None, &ctx, &Tz::Europe__Berlin)
+                .is_ok()
+        );
     }
 }

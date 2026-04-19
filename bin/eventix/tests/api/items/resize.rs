@@ -9,7 +9,7 @@ use eventix_ical::objects::{CalDate, CalDateTime, EventLike};
 use tempfile::TempDir;
 
 use crate::helper::edit::read_ics_by_uid;
-use crate::helper::{CAL_ID, encode_form, make_router, make_state, post_query};
+use crate::helper::{CAL_ID, encode_form, make_router, make_state_in_tz, post_query};
 
 use super::write_allday_event_ics;
 
@@ -63,16 +63,12 @@ fn in_tz(hour: u32, minute: u32, tzid: &str) -> CalDate {
     ))
 }
 
-/// Returns the system timezone name as reported by the OS.
-fn locale_tz() -> String {
-    iana_time_zone::get_timezone().unwrap()
-}
+const TEST_LOCALE_TZ: &str = "Europe/Berlin";
 
 /// Resizing the end time of an event stored in the **locale timezone** writes the new DTEND to
 /// disk.
 #[tokio::test]
 async fn resize_end_time() {
-    let locale_tz = locale_tz();
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
@@ -81,11 +77,11 @@ async fn resize_end_time() {
         &cal_dir,
         uid,
         "Meeting",
-        &in_tz(9, 0, &locale_tz),
-        &in_tz(10, 0, &locale_tz),
+        &in_tz(9, 0, TEST_LOCALE_TZ),
+        &in_tz(10, 0, TEST_LOCALE_TZ),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     // Original: 09:00–10:00. New end: 11:30.
@@ -143,15 +139,10 @@ async fn resize_start_time() {
         &CalDate::DateTime(CalDateTime::Utc(end_utc)),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
-    // Determine the new start hour from the locale timezone at runtime so the resize request
-    // is always valid regardless of the system timezone.
-    let locale_tz: chrono_tz::Tz = iana_time_zone::get_timezone()
-        .unwrap()
-        .parse()
-        .unwrap_or(chrono_tz::UTC);
+    let locale_tz: chrono_tz::Tz = TEST_LOCALE_TZ.parse().unwrap();
     let old_start_local = locale_tz.from_utc_datetime(&start_utc.naive_utc());
     let new_h = old_start_local.hour().saturating_sub(1);
 
@@ -166,15 +157,115 @@ async fn resize_start_time() {
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = ics.components().first().unwrap();
     let start = comp.start().expect("expected DTSTART");
-    // The handler rewrites DTSTART as CalDateTime::Timezone with the locale TZID and the
-    // requested wall-clock naive time. Read the naive time directly so the assertion is
-    // independent of which timezone the locale is.
+    // Read the stored wall-clock time directly so the assertion is independent of the locale.
     match start {
         CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
             assert_eq!(dt.hour(), new_h);
             assert_eq!(dt.minute(), 30);
         }
         other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
+}
+
+/// Resizing a recurring occurrence that uses an embedded custom `VTIMEZONE` keeps the original
+/// `TZID` on the override and accepts wall-clock times defined by the embedded rule.
+#[tokio::test]
+async fn resize_uses_embedded_vtimezone_rules() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "resize-custom-dst";
+    std::fs::write(
+        cal_dir.join(format!("{uid}.ics")),
+        format!(
+            "BEGIN:VCALENDAR\r\n\
+             BEGIN:VTIMEZONE\r\n\
+             TZID:X-CUSTOM-DST\r\n\
+             BEGIN:STANDARD\r\n\
+             DTSTART:19700101T000000\r\n\
+             TZOFFSETFROM:+0200\r\n\
+             TZOFFSETTO:+0100\r\n\
+             TZNAME:CST\r\n\
+             END:STANDARD\r\n\
+             BEGIN:DAYLIGHT\r\n\
+             DTSTART:20250330T040000\r\n\
+             TZOFFSETFROM:+0100\r\n\
+             TZOFFSETTO:+0200\r\n\
+             TZNAME:CDT\r\n\
+             END:DAYLIGHT\r\n\
+             END:VTIMEZONE\r\n\
+             BEGIN:VEVENT\r\n\
+             UID:{uid}\r\n\
+             DTSTAMP:20250101T000000Z\r\n\
+             DTSTART;TZID=X-CUSTOM-DST:20250323T013000\r\n\
+             DTEND;TZID=X-CUSTOM-DST:20250323T033000\r\n\
+             RRULE:FREQ=WEEKLY;BYDAY=SU\r\n\
+             SUMMARY:Custom DST resize\r\n\
+             END:VEVENT\r\n\
+             END:VCALENDAR\r\n"
+        ),
+    )
+    .unwrap();
+
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
+    let router = make_router(state);
+
+    let qs = encode_form(&[
+        ("uid", uid),
+        ("rid", "TTX-CUSTOM-DST;2025-03-30T01:30:00"),
+        ("end_hour", "2"),
+        ("end_minute", "30"),
+    ]);
+    let (status, _) = post_query(router, &format!("/api/items/resize?{qs}")).await;
+    assert_eq!(status, 200);
+
+    let ics = read_ics_by_uid(&cal_dir, uid);
+    let override_comp = ics
+        .components()
+        .iter()
+        .find(|c| c.rid().is_some())
+        .expect("expected a RECURRENCE-ID override");
+
+    match override_comp.rid().expect("expected RECURRENCE-ID") {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "X-CUSTOM-DST");
+            assert_eq!(
+                *dt,
+                NaiveDate::from_ymd_opt(2025, 3, 30)
+                    .unwrap()
+                    .and_hms_opt(1, 30, 0)
+                    .unwrap()
+            );
+        }
+        other => panic!("expected Timezone RECURRENCE-ID, got {other:?}"),
+    }
+
+    match override_comp.start().expect("expected DTSTART") {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "X-CUSTOM-DST");
+            assert_eq!(
+                *dt,
+                NaiveDate::from_ymd_opt(2025, 3, 30)
+                    .unwrap()
+                    .and_hms_opt(1, 30, 0)
+                    .unwrap()
+            );
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
+
+    match override_comp.end_or_due().expect("expected DTEND") {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "X-CUSTOM-DST");
+            assert_eq!(
+                *dt,
+                NaiveDate::from_ymd_opt(2025, 3, 30)
+                    .unwrap()
+                    .and_hms_opt(2, 30, 0)
+                    .unwrap()
+            );
+        }
+        other => panic!("expected Timezone DTEND, got {other:?}"),
     }
 }
 
@@ -197,7 +288,7 @@ async fn resize_recurring_occurrence_creates_override() {
         &in_tz(10, 0, "Europe/Berlin"),
         Some("FREQ=WEEKLY;BYDAY=WE"),
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     let qs = encode_form(&[
@@ -233,7 +324,6 @@ async fn resize_recurring_occurrence_creates_override() {
 /// Supplying both start and end parameters at the same time returns an error.
 #[tokio::test]
 async fn both_start_and_end_returns_error() {
-    let locale_tz = locale_tz();
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
@@ -242,11 +332,11 @@ async fn both_start_and_end_returns_error() {
         &cal_dir,
         uid,
         "Event",
-        &in_tz(9, 0, &locale_tz),
-        &in_tz(10, 0, &locale_tz),
+        &in_tz(9, 0, TEST_LOCALE_TZ),
+        &in_tz(10, 0, TEST_LOCALE_TZ),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     let qs = encode_form(&[
@@ -263,7 +353,6 @@ async fn both_start_and_end_returns_error() {
 /// Supplying neither start nor end parameters returns an error.
 #[tokio::test]
 async fn neither_start_nor_end_returns_error() {
-    let locale_tz = locale_tz();
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
@@ -272,11 +361,11 @@ async fn neither_start_nor_end_returns_error() {
         &cal_dir,
         uid,
         "Event",
-        &in_tz(9, 0, &locale_tz),
-        &in_tz(10, 0, &locale_tz),
+        &in_tz(9, 0, TEST_LOCALE_TZ),
+        &in_tz(10, 0, TEST_LOCALE_TZ),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     let qs = encode_form(&[("uid", uid)]);
@@ -287,7 +376,6 @@ async fn neither_start_nor_end_returns_error() {
 /// Supplying an invalid minute (not 0 or 30) returns an error.
 #[tokio::test]
 async fn invalid_minute_returns_error() {
-    let locale_tz = locale_tz();
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
@@ -296,11 +384,11 @@ async fn invalid_minute_returns_error() {
         &cal_dir,
         uid,
         "Event",
-        &in_tz(9, 0, &locale_tz),
-        &in_tz(10, 0, &locale_tz),
+        &in_tz(9, 0, TEST_LOCALE_TZ),
+        &in_tz(10, 0, TEST_LOCALE_TZ),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     let qs = encode_form(&[("uid", uid), ("end_hour", "11"), ("end_minute", "15")]);
@@ -316,7 +404,7 @@ async fn all_day_event_rejected() {
     std::fs::create_dir_all(&cal_dir).unwrap();
     let uid = "resize-allday";
     write_allday_event_ics(&cal_dir, uid, "All-day event");
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     let qs = encode_form(&[("uid", uid), ("end_hour", "11"), ("end_minute", "0")]);
@@ -328,7 +416,6 @@ async fn all_day_event_rejected() {
 /// midnight of the next day.
 #[tokio::test]
 async fn resize_end_midnight_sentinel() {
-    let locale_tz = locale_tz();
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
@@ -337,11 +424,11 @@ async fn resize_end_midnight_sentinel() {
         &cal_dir,
         uid,
         "Late meeting",
-        &in_tz(9, 0, &locale_tz),
-        &in_tz(10, 0, &locale_tz),
+        &in_tz(9, 0, TEST_LOCALE_TZ),
+        &in_tz(10, 0, TEST_LOCALE_TZ),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     // hour=24, minute=0 is the special sentinel for end-of-day midnight (next day).
@@ -371,7 +458,6 @@ async fn resize_end_midnight_sentinel() {
 /// Resizing the start to a time after the existing end returns an error.
 #[tokio::test]
 async fn resize_start_after_end_returns_error() {
-    let locale_tz = locale_tz();
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
@@ -380,11 +466,11 @@ async fn resize_start_after_end_returns_error() {
         &cal_dir,
         uid,
         "Meeting",
-        &in_tz(9, 0, &locale_tz),
-        &in_tz(10, 0, &locale_tz),
+        &in_tz(9, 0, TEST_LOCALE_TZ),
+        &in_tz(10, 0, TEST_LOCALE_TZ),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     // New start 11:00 is after the end (10:00 wall clock) in every timezone.
@@ -396,7 +482,6 @@ async fn resize_start_after_end_returns_error() {
 /// Resizing the end to a time before the existing start returns an error.
 #[tokio::test]
 async fn resize_end_before_start_returns_error() {
-    let locale_tz = locale_tz();
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
@@ -405,11 +490,11 @@ async fn resize_end_before_start_returns_error() {
         &cal_dir,
         uid,
         "Meeting",
-        &in_tz(9, 0, &locale_tz),
-        &in_tz(10, 0, &locale_tz),
+        &in_tz(9, 0, TEST_LOCALE_TZ),
+        &in_tz(10, 0, TEST_LOCALE_TZ),
         None,
     );
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, TEST_LOCALE_TZ);
     let router = make_router(state);
 
     // New end 08:30 is before the start (09:00 wall clock) in every timezone.

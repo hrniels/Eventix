@@ -226,7 +226,7 @@ impl PersonalCalendarAlarms {
         // if there is no overwrite, we have no rid and thus have to use the start date (which also
         // cannot have been changed here).
         else {
-            occ.occurrence_startdate().map(|d| d.to_utc())
+            occ.occurrence_startdate()
         }
     }
 
@@ -349,7 +349,13 @@ mod tests {
     /// which is what `PersonalCalendarAlarms::occurrence_rid` uses for non-overwritten occurrences.
     fn make_occurrence<'c>(dir_id: &Arc<String>, comp: &'c CalComponent) -> Occurrence<'c> {
         let start = UTC.with_ymd_and_hms(2024, 6, 1, 9, 0, 0).unwrap();
-        Occurrence::new(dir_id.clone(), comp, Some(start), None, false)
+        Occurrence::new(
+            dir_id.clone(),
+            comp,
+            Some(start.fixed_offset().into()),
+            None,
+            false,
+        )
     }
 
     /// Builds a `CalComponent::Event` with the given `uid` and no alarms set.
@@ -797,8 +803,20 @@ mod tests {
 
         // Create a timed occurrence and attach the overwrite.
         let start = UTC.with_ymd_and_hms(2024, 9, 15, 9, 0, 0).unwrap();
-        let mut occ = Occurrence::new(dir_id.clone(), &comp_base, Some(start), None, false);
-        occ.set_overwrite(&comp_ow);
+        let mut occ = Occurrence::new(
+            dir_id.clone(),
+            &comp_base,
+            Some(start.fixed_offset().into()),
+            None,
+            false,
+        );
+        occ.set_overwrite(
+            &comp_ow,
+            &chrono_tz::Tz::UTC,
+            &eventix_ical::objects::CalendarTimeZoneResolver::new(
+                &eventix_ical::objects::Calendar::default(),
+            ),
+        );
 
         // Store an alarm override keyed by the overwrite's rid.
         let mut cal_alarms = PersonalCalendarAlarms::new_empty("".into());

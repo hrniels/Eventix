@@ -72,8 +72,8 @@ impl<'a> Tasks<'a> {
             .store()
             .files()
             .filter(|s| !state.misc().calendar_disabled(s.directory()))
-            .flat_map(|i| i.components().iter().map(|c| (i.directory(), c)))
-            .filter(|(_dir, c)| {
+            .flat_map(|i| i.components().iter().map(move |c| (i, i.directory(), c)))
+            .filter(|(_file, _dir, c)| {
                 c.ctype() == CalCompType::Todo
                     && !c.is_recurrent()
                     && c.end_or_due().is_none()
@@ -83,11 +83,12 @@ impl<'a> Tasks<'a> {
                         .unwrap_or(CalTodoStatus::NeedsAction)
                         != CalTodoStatus::Completed
             })
-            .map(|(dir, c)| {
+            .map(|(file, dir, c)| {
+                let ctx = file.calendar().date_context();
                 Occurrence::new(
                     dir.clone(),
                     c,
-                    c.start().map(|d| d.as_start_with_tz(timezone)),
+                    c.start().map(|d| ctx.date(d).resolved_start(timezone)),
                     None,
                     // non-recurrent occurrences are never excluded
                     false,

@@ -12,7 +12,7 @@ use chrono::offset::LocalResult;
 use chrono::{DateTime, Duration, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
 use eventix_ical::col::Occurrence;
-use eventix_ical::objects::{CalCompType, CalDate, CalTodoStatus, EventLike};
+use eventix_ical::objects::{CalCompType, CalDate, CalTodoStatus, DateContext, EventLike};
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms};
 use serde::{Deserialize, Serialize};
@@ -114,6 +114,7 @@ impl<'a> Deref for ListOccurrence<'a> {
 #[template(path = "ajax/occlist.htm")]
 struct OccListTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
+    ctx: DateContext,
     occs: Vec<ListOccurrence<'a>>,
     personal_alarms: bool,
 }
@@ -145,12 +146,15 @@ pub async fn handler(
     let state = state.lock().await;
     let locale = state.locale();
 
-    let date = req.date.as_start_with_tz(locale.timezone());
+    let date = DateContext::system()
+        .date(&req.date)
+        .start_in(locale.timezone());
 
     let file = state
         .store()
         .file_by_id(&req.uid)
         .context(format!("Unable to find file with uid {}", req.uid))?;
+    let ctx = file.calendar().date_context();
 
     let occs: Vec<_> = match req.dir {
         Direction::Forward | Direction::ForwardFrom => {
@@ -229,6 +233,7 @@ pub async fn handler(
 
     let html = OccListTemplate {
         locale,
+        ctx,
         occs,
         personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
     }

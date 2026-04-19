@@ -64,12 +64,23 @@ impl State {
     /// Loads settings, personal alarms, misc state, and constructs the calendar store from all
     /// configured collections. Returns an error if any of the underlying loads fail.
     pub fn new(xdg: Arc<BaseDirectories>) -> anyhow::Result<Self> {
+        Self::new_with_timezone(xdg, None)
+    }
+
+    /// Creates a new in-memory application `State`, optionally overriding the locale timezone.
+    pub fn new_with_timezone(
+        xdg: Arc<BaseDirectories>,
+        tz_override: Option<Tz>,
+    ) -> anyhow::Result<Self> {
         let settings = settings::Settings::load_from_file(&xdg).context("load settings")?;
 
         let personal_alarms = PersonalAlarms::new_from_dir(&xdg).context("load personal alarms")?;
 
         let misc = misc::Misc::load_from_file(&xdg).context("load misc state")?;
-        let locale = eventix_locale::new(&xdg, misc.locale_type())?;
+        let locale = match tz_override {
+            Some(tz) => eventix_locale::new_with_timezone(&xdg, misc.locale_type(), tz)?,
+            None => eventix_locale::new(&xdg, misc.locale_type())?,
+        };
 
         let mut store = CalStore::default();
         let local_tz = locale.timezone();
@@ -137,7 +148,15 @@ impl State {
     /// translations are updated without restarting the application. Returns an error if creating
     /// the locale fails.
     pub fn reload_locale(&mut self) -> anyhow::Result<()> {
-        self.locale = eventix_locale::new(&self.xdg, self.misc.locale_type())?;
+        self.reload_locale_with_timezone(None)
+    }
+
+    /// Reloads the locale, optionally overriding the timezone used for formatting.
+    pub fn reload_locale_with_timezone(&mut self, tz_override: Option<Tz>) -> anyhow::Result<()> {
+        self.locale = match tz_override {
+            Some(tz) => eventix_locale::new_with_timezone(&self.xdg, self.misc.locale_type(), tz)?,
+            None => eventix_locale::new(&self.xdg, self.misc.locale_type())?,
+        };
         Ok(())
     }
 

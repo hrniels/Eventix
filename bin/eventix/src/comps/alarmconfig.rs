@@ -6,7 +6,9 @@ use anyhow::anyhow;
 use askama::Template;
 use chrono::Duration;
 use chrono_tz::Tz;
-use eventix_ical::objects::{CalAction, CalAlarm, CalDateType, CalRelated, CalTrigger};
+use eventix_ical::objects::{
+    CalAction, CalAlarm, CalDateType, CalRelated, CalTrigger, DateContext,
+};
 use eventix_ical::parser::ParseError;
 use eventix_locale::Locale;
 use serde::{Deserialize, Deserializer};
@@ -199,7 +201,9 @@ impl AlarmConfig {
                     return false;
                 }
                 Some(cal_date) => {
-                    if let Err(e) = cal_date.validate(locale.timezone()) {
+                    if let Err(e) =
+                        DateContext::system().validate_date(&cal_date, locale.timezone())
+                    {
                         page.add_error(match &e {
                             ParseError::AmbiguousTime(_) => locale.translate("error.dst_ambiguous"),
                             _ => locale.translate("error.dst_nonexistent"),
@@ -230,14 +234,17 @@ impl AlarmConfig {
                         DurUnit::Minutes => Duration::minutes(duration).into(),
                     },
                 },
-                Trigger::Absolute => CalTrigger::Absolute(
-                    match self.datetime {
+                Trigger::Absolute => CalTrigger::Absolute({
+                    let date = match self.datetime {
                         Some(ref dt) => dt.to_caldate(event_tz, CalDateType::Inclusive, false),
                         None => None,
                     }
-                    .ok_or_else(|| anyhow!("Invalid datetime"))?
-                    .to_utc(),
-                ),
+                    .ok_or_else(|| anyhow!("Invalid datetime"))?;
+                    let tz: Tz = event_tz
+                        .parse()
+                        .map_err(|_| anyhow!("Invalid timezone: {}", event_tz))?;
+                    DateContext::system().date_to_utc(&date, &tz)
+                }),
             };
             let alarm = CalAlarm::new(CalAction::Display, trigger);
             Ok(Some(vec![alarm]))

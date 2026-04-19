@@ -6,7 +6,10 @@ use chrono::Duration;
 use chrono_tz::Tz;
 
 use crate::{
-    objects::{CalAlarm, CalAttendee, CalDate, CalDuration, CalOrganizer, CalPartStat, CalRRule},
+    objects::{
+        CalAlarm, CalAttendee, CalDate, CalDuration, CalOrganizer, CalPartStat, CalRRule,
+        DateContext,
+    },
     parser::PropertyProducer,
 };
 
@@ -95,9 +98,10 @@ pub trait EventLike: PropertyProducer {
             start.clone()
         };
 
-        let tz = Tz::UTC;
-        self.end_or_due()
-            .map(|end| end.as_end_with_tz(&tz) - start.as_start_with_tz(&tz))
+        let ctx = DateContext::system();
+        self.end_or_due().map(|end| {
+            ctx.date(end).resolved_end(&Tz::UTC) - ctx.date(&start).resolved_start(&Tz::UTC)
+        })
     }
 
     /// Returns the summary of the calendar object (SUMMARY).

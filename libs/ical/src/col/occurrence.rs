@@ -4,12 +4,13 @@
 
 use std::sync::Arc;
 
-use chrono::{DateTime, Duration, NaiveDate, NaiveTime};
+use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveTime, Utc};
 use chrono_tz::Tz;
 
 use crate::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalDateTime, CalDuration,
-    CalEventStatus, CalOrganizer, CalRRule, CalTodoStatus, CompDateType, EventLike,
+    CalEventStatus, CalOrganizer, CalRRule, CalTodoStatus, CalendarTimeZoneResolver, CompDateType,
+    DateContext, EventLike, ResolvedDateTime,
 };
 use crate::parser::{Property, PropertyProducer};
 use crate::util;
@@ -45,8 +46,9 @@ macro_rules! ctype_method {
 #[derive(Debug, Clone)]
 pub struct Occurrence<'c> {
     dir: Arc<String>,
-    start: Option<DateTime<Tz>>,
-    end: Option<DateTime<Tz>>,
+    display_tz: Tz,
+    start: Option<ResolvedDateTime>,
+    end: Option<ResolvedDateTime>,
     base: &'c CalComponent,
     overwrite: Option<&'c CalComponent>,
     excluded: bool,
@@ -60,7 +62,7 @@ pub struct Occurrence<'c> {
 pub struct EventTzRange {
     start: Option<CalDate>,
     end: Option<CalDate>,
-    tz: Tz,
+    tz: String,
 }
 
 impl EventTzRange {
@@ -75,13 +77,13 @@ impl EventTzRange {
     }
 
     /// Returns the event's timezone.
-    pub fn tz(&self) -> &Tz {
-        &self.tz
+    pub fn tz(&self) -> chrono_tz::Tz {
+        self.tz.parse().unwrap_or(chrono_tz::Tz::Europe__Berlin)
     }
 
     /// Returns the IANA timezone name (e.g. `"Europe/Berlin"`).
     pub fn tz_name(&self) -> &str {
-        self.tz.name()
+        &self.tz
     }
 }
 
@@ -94,12 +96,25 @@ impl<'c> Occurrence<'c> {
     pub fn new(
         dir: Arc<String>,
         base: &'c CalComponent,
-        start: Option<DateTime<Tz>>,
-        end: Option<DateTime<Tz>>,
+        start: Option<ResolvedDateTime>,
+        end: Option<ResolvedDateTime>,
         excluded: bool,
+    ) -> Self {
+        Self::new_in_tz(dir, base, start, end, excluded, chrono_tz::UTC)
+    }
+
+    /// Creates a new occurrence at given start/end date for the given display timezone.
+    pub fn new_in_tz(
+        dir: Arc<String>,
+        base: &'c CalComponent,
+        start: Option<ResolvedDateTime>,
+        end: Option<ResolvedDateTime>,
+        excluded: bool,
+        display_tz: Tz,
     ) -> Self {
         Self {
             dir,
+            display_tz,
             start,
             end,
             base,
@@ -117,10 +132,22 @@ impl<'c> Occurrence<'c> {
         dir: Arc<String>,
         base: &'c CalComponent,
         ty: CompDateType,
-        date: DateTime<Tz>,
+        date: ResolvedDateTime,
         excluded: bool,
     ) -> Self {
-        Self::new(
+        Self::new_single_in_tz(dir, base, ty, date, excluded, chrono_tz::UTC)
+    }
+
+    /// Creates a new single-date occurrence for the given display timezone.
+    pub fn new_single_in_tz(
+        dir: Arc<String>,
+        base: &'c CalComponent,
+        ty: CompDateType,
+        date: ResolvedDateTime,
+        excluded: bool,
+        display_tz: Tz,
+    ) -> Self {
+        Self::new_in_tz(
             dir,
             base,
             if ty == CompDateType::Start {
@@ -134,17 +161,29 @@ impl<'c> Occurrence<'c> {
                 None
             },
             excluded,
+            display_tz,
         )
+    }
+
+    /// Returns the name of the timezone set for the start of the calendar item
+    ///
+    /// If no timezone has been set and it's not UTC, return result is None. Note also that the name
+    /// might be a custom name used in the ICS file and defined via VTIMEZONE.
+    pub fn tz_name(&self) -> Option<String> {
+        match self.start() {
+            Some(CalDate::DateTime(CalDateTime::Timezone(_, tzid))) => Some(tzid.to_string()),
+            Some(CalDate::DateTime(CalDateTime::Utc(_))) => Some("UTC".to_string()),
+            _ => None,
+        }
     }
 
     /// Returns the timezone used for this occurrence.
     ///
     /// Note that may be None in case neither the start or the end of the occurrence is known.
-    pub fn tz(&self) -> Option<Tz> {
-        match self.start {
-            Some(start) => Some(start.timezone()),
-            None => self.end.map(|end| end.timezone()),
-        }
+    pub fn resolved_tz_offset(&self) -> Option<FixedOffset> {
+        self.start
+            .map(|start| *start.offset())
+            .or_else(|| self.end.map(|end| *end.offset()))
     }
 
     /// Returns the directory in which the underlying component lives.
@@ -174,13 +213,18 @@ impl<'c> Occurrence<'c> {
     ///
     /// Note also that the start of this occurrence will be taken from the overwrite in case it has
     /// specified a start date.
-    pub fn set_overwrite(&mut self, overwrite: &'c CalComponent) {
+    pub fn set_overwrite(
+        &mut self,
+        overwrite: &'c CalComponent,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) {
         self.overwrite = Some(overwrite);
         if let Some(ostart) = overwrite.start() {
-            self.start = Some(ostart.as_start_with_tz(&self.tz().unwrap()));
+            self.start = Some(ostart.as_start_with_resolver(fallback, resolver));
         }
         if let Some(oend) = overwrite.end_or_due() {
-            self.end = Some(oend.as_end_with_tz(&self.tz().unwrap()));
+            self.end = Some(oend.as_end_with_resolver(fallback, resolver));
         }
     }
 
@@ -222,35 +266,57 @@ impl<'c> Occurrence<'c> {
         ctype_method!(self, as_todo, completed)
     }
 
-    /// Returns the start of this occurrence (if known).
+    /// Returns the resolved start of this occurrence (if known).
+    pub fn resolved_occurrence_start(&self) -> Option<ResolvedDateTime> {
+        self.start
+    }
+
+    /// Returns the start of this occurrence in the display timezone (if known).
     pub fn occurrence_start(&self) -> Option<DateTime<Tz>> {
         self.start
+            .map(|start| start.with_timezone(&self.display_tz))
     }
 
     /// Returns the start of this occurrence (if known) as a [`CalDate`].
     pub fn occurrence_startdate(&self) -> Option<CalDate> {
-        self.start.map(|start| {
+        self.occurrence_start().map(|start| {
             if self.is_all_day() {
                 CalDate::Date(start.date_naive(), self.ctype().into())
             } else {
-                start.into()
+                CalDate::DateTime(CalDateTime::Timezone(
+                    start.naive_local(),
+                    self.display_tz.name().to_string(),
+                ))
             }
         })
     }
 
-    /// Returns the end of this occurrence (if known).
-    pub fn occurrence_end(&self) -> Option<DateTime<Tz>> {
+    /// Returns the resolved end of this occurrence (if known).
+    pub fn resolved_occurrence_end(&self) -> Option<ResolvedDateTime> {
         match self.end {
             Some(end) => Some(end),
             None => self.time_duration().map(|d| {
                 let start = self.start.unwrap();
-                // Add the duration in naive (wall-clock) time and re-localize so that the
-                // result stays at the correct wall-clock offset even when a DST transition
-                // falls between the occurrence start and its due/end time.
-                let naive_end = start.naive_local() + d;
-                util::resolve_local_time(start.timezone(), naive_end)
+                match self.start() {
+                    Some(CalDate::DateTime(CalDateTime::Timezone(_, tzid))) => tzid
+                        .parse::<Tz>()
+                        .map(|tz| {
+                            ResolvedDateTime::from(
+                                util::resolve_local_time(tz, start.naive_local() + d)
+                                    .fixed_offset(),
+                            )
+                        })
+                        .unwrap_or(start + d),
+                    _ => start + d,
+                }
             }),
         }
+    }
+
+    /// Returns the end of this occurrence in the display timezone (if known).
+    pub fn occurrence_end(&self) -> Option<DateTime<Tz>> {
+        self.resolved_occurrence_end()
+            .map(|end| end.with_timezone(&self.display_tz))
     }
 
     /// Returns the end of this occurrence (if known) as a [`CalDate`].
@@ -263,7 +329,10 @@ impl<'c> Occurrence<'c> {
                 };
                 Some(CalDate::Date(date, self.ctype().into()))
             } else {
-                Some(e.into())
+                Some(CalDate::DateTime(CalDateTime::Timezone(
+                    e.naive_local(),
+                    self.display_tz.name().to_string(),
+                )))
             }
         })
     }
@@ -274,22 +343,22 @@ impl<'c> Occurrence<'c> {
     /// Returns `None` if neither start nor end specifies a timezone different
     /// from `local`, or if the event is all-day or uses floating time.
     pub fn occurrence_range_in_tz(&self, local: &Tz) -> Option<EventTzRange> {
-        fn foreign_tz(date: Option<&CalDate>, local: &Tz) -> Option<Tz> {
+        fn foreign_tz_name(date: Option<&CalDate>, local: &Tz) -> Option<String> {
             match date? {
-                CalDate::DateTime(CalDateTime::Timezone(_, tzid)) => {
-                    tzid.parse::<Tz>().ok().filter(|tz| tz != local)
-                }
+                CalDate::DateTime(CalDateTime::Timezone(_, tzid)) => match tzid.parse::<Tz>() {
+                    Ok(tz) if &tz != local => Some(tzid.clone()),
+                    Err(_) => Some(tzid.clone()),
+                    _ => None,
+                },
                 _ => None,
             }
         }
 
-        let event_tz =
-            foreign_tz(self.start(), local).or_else(|| foreign_tz(self.end_or_due(), local))?;
+        let event_tz = foreign_tz_name(self.start(), local)
+            .or_else(|| foreign_tz_name(self.end_or_due(), local))?;
 
-        let start = self.start.map(|s| s.with_timezone(&event_tz).into());
-        let end = self
-            .occurrence_end()
-            .map(|e| e.with_timezone(&event_tz).into());
+        let start = self.start().cloned();
+        let end = self.end_or_due().cloned();
         Some(EventTzRange {
             start,
             end,
@@ -346,10 +415,28 @@ impl<'c> Occurrence<'c> {
     }
 
     /// Returns whether this occurrence overlaps with given time period.
-    pub fn overlaps(&self, start: DateTime<Tz>, end: DateTime<Tz>) -> bool {
-        if let Some(ostart) = self.start {
-            util::date_ranges_overlap(ostart, self.occurrence_end().unwrap_or(ostart), start, end)
-        } else if let Some(oend) = self.occurrence_end() {
+    pub fn overlaps<Tz1: chrono::TimeZone, Tz2: chrono::TimeZone>(
+        &self,
+        start: DateTime<Tz1>,
+        end: DateTime<Tz2>,
+    ) -> bool
+    where
+        Tz1::Offset: Copy,
+        Tz2::Offset: Copy,
+    {
+        if let Some(ostart) = self.resolved_occurrence_start() {
+            util::date_ranges_overlap(
+                ostart.with_timezone(&Utc),
+                self.resolved_occurrence_end()
+                    .unwrap_or(ostart)
+                    .with_timezone(&Utc),
+                start.with_timezone(&Utc),
+                end.with_timezone(&Utc),
+            )
+        } else if let Some(oend) = self.resolved_occurrence_end() {
+            let oend = oend.with_timezone(&Utc);
+            let start = start.with_timezone(&Utc);
+            let end = end.with_timezone(&Utc);
             oend >= start && oend < end
         } else {
             false
@@ -488,8 +575,10 @@ impl EventLike for Occurrence<'_> {
             start.clone()
         };
 
-        let tz = Tz::UTC;
-        end.map(|end| end.as_end_with_tz(&tz) - start.as_start_with_tz(&tz))
+        let ctx = DateContext::system();
+        end.map(|end| {
+            ctx.date(&end).resolved_end(&Tz::UTC) - ctx.date(&start).resolved_start(&Tz::UTC)
+        })
     }
 }
 
@@ -520,13 +609,19 @@ impl<'o> AlarmOccurrence<'o> {
         &self.alarm
     }
 
-    /// Returns the first alarm date of this occurrence, if it has an alarm.
-    pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
+    /// Returns the first resolved alarm date of this occurrence, if it has an alarm.
+    pub fn resolved_alarm_date(&self) -> Option<ResolvedDateTime> {
         self.alarm.trigger_date(
-            self.occ.occurrence_start(),
-            self.occ.occurrence_end(),
-            self.occ.tz(),
+            self.occ.resolved_occurrence_start(),
+            self.occ.resolved_occurrence_end(),
+            self.occ.resolved_tz_offset(),
         )
+    }
+
+    /// Returns the first alarm date of this occurrence in the display timezone, if it has an alarm.
+    pub fn alarm_date(&self) -> Option<DateTime<Tz>> {
+        self.resolved_alarm_date()
+            .map(|date| date.with_timezone(&self.occ.display_tz))
     }
 }
 
@@ -540,7 +635,8 @@ mod tests {
     use crate::objects::{
         CalAction, CalAlarm, CalAttendee, CalCompType, CalComponent, CalDate, CalDateTime,
         CalDateType, CalEvent, CalEventStatus, CalOrganizer, CalRRule, CalRelated, CalTodo,
-        CalTodoStatus, CalTrigger, CompDateType, EventLike, UpdatableEventLike,
+        CalTodoStatus, CalTrigger, CompDateType, DateContext, EventLike, ResolvedDateTime,
+        UpdatableEventLike,
     };
     use crate::parser::{LineReader, Property, PropertyProducer};
 
@@ -550,8 +646,15 @@ mod tests {
         Arc::new("test-dir".to_string())
     }
 
-    fn utc(year: i32, month: u32, day: u32, h: u32, m: u32, s: u32) -> chrono::DateTime<Tz> {
-        UTC.with_ymd_and_hms(year, month, day, h, m, s).unwrap()
+    fn resolver() -> crate::objects::CalendarTimeZoneResolver {
+        crate::objects::CalendarTimeZoneResolver::new(&crate::objects::Calendar::default())
+    }
+
+    fn utc(year: i32, month: u32, day: u32, h: u32, m: u32, s: u32) -> ResolvedDateTime {
+        UTC.with_ymd_and_hms(year, month, day, h, m, s)
+            .unwrap()
+            .fixed_offset()
+            .into()
     }
 
     fn allday_event(uid: &str, date: NaiveDate) -> CalEvent {
@@ -571,15 +674,15 @@ mod tests {
         td
     }
 
-    fn timed_event(uid: &str, start_dt: chrono::DateTime<Tz>) -> CalEvent {
+    fn timed_event(uid: &str, start_dt: ResolvedDateTime) -> CalEvent {
         let mut ev = CalEvent::new(uid);
         ev.set_start(Some(start_dt.into()));
         ev.set_end(Some((start_dt + Duration::hours(1)).into()));
         ev
     }
 
-    /// Verifies `directory`, `ctype`, `base`, `is_overwritten`, `is_excluded`,
-    /// `occurrence_start`, and the `start`-branch of `tz` in a single test.
+    /// Verifies `directory`, `ctype`, `base`, `is_overwritten`, `is_excluded`, and
+    /// `occurrence_start` in a single test.
     #[test]
     fn simple_getters() {
         let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
@@ -594,9 +697,7 @@ mod tests {
         assert_eq!(occ.base().uid(), "uid-simple");
         assert!(!occ.is_overwritten());
         assert!(!occ.is_excluded());
-        assert_eq!(occ.occurrence_start(), Some(start));
-        assert_eq!(occ.tz(), Some(UTC));
-
+        assert_eq!(occ.resolved_occurrence_start(), Some(start));
         // is_excluded = true path
         let occ_excl = Occurrence::new(dir(), &comp, Some(start), None, true);
         assert!(occ_excl.is_excluded());
@@ -605,7 +706,7 @@ mod tests {
         let _ = date;
     }
 
-    /// Verifies `tz()` returns the end timezone when `start` is `None`.
+    /// Verifies end-only occurrences keep `start` absent.
     #[test]
     fn tz_from_end_when_no_start() {
         let ev = CalEvent::new("uid-tz");
@@ -614,8 +715,6 @@ mod tests {
 
         let occ = Occurrence::new_single(dir(), &comp, CompDateType::EndOrDue, end, false);
 
-        // start is None, end is Some — tz() must come from end
-        assert_eq!(occ.tz(), Some(UTC));
         assert_eq!(occ.occurrence_start(), None);
     }
 
@@ -632,15 +731,13 @@ mod tests {
         let startdate = occ.occurrence_startdate().unwrap();
         let expected_start = CalDate::DateTime(CalDateTime::Timezone(
             start.naive_local(),
-            start.timezone().name().to_string(),
+            "UTC".to_string(),
         ));
         assert_eq!(startdate, expected_start);
 
         let enddate = occ.occurrence_enddate().unwrap();
-        let expected_end = CalDate::DateTime(CalDateTime::Timezone(
-            end.naive_local(),
-            end.timezone().name().to_string(),
-        ));
+        let expected_end =
+            CalDate::DateTime(CalDateTime::Timezone(end.naive_local(), "UTC".to_string()));
         assert_eq!(enddate, expected_end);
     }
 
@@ -652,8 +749,16 @@ mod tests {
         let comp = CalComponent::Event(ev);
 
         // For all-day events the start is stored as UTC midnight of that date
-        let start_dt = UTC.with_ymd_and_hms(2024, 7, 4, 0, 0, 0).unwrap();
-        let end_dt = UTC.with_ymd_and_hms(2024, 7, 5, 0, 0, 0).unwrap();
+        let start_dt = UTC
+            .with_ymd_and_hms(2024, 7, 4, 0, 0, 0)
+            .unwrap()
+            .fixed_offset()
+            .into();
+        let end_dt = UTC
+            .with_ymd_and_hms(2024, 7, 5, 0, 0, 0)
+            .unwrap()
+            .fixed_offset()
+            .into();
         let occ = Occurrence::new(dir(), &comp, Some(start_dt), Some(end_dt), false);
 
         let startdate = occ.occurrence_startdate().unwrap();
@@ -678,8 +783,16 @@ mod tests {
         let td = allday_todo("uid-todo", date);
         let comp = CalComponent::Todo(td);
 
-        let start_dt = UTC.with_ymd_and_hms(2024, 8, 1, 0, 0, 0).unwrap();
-        let end_dt = UTC.with_ymd_and_hms(2024, 8, 1, 0, 0, 0).unwrap();
+        let start_dt = UTC
+            .with_ymd_and_hms(2024, 8, 1, 0, 0, 0)
+            .unwrap()
+            .fixed_offset()
+            .into();
+        let end_dt = UTC
+            .with_ymd_and_hms(2024, 8, 1, 0, 0, 0)
+            .unwrap()
+            .fixed_offset()
+            .into();
         let occ = Occurrence::new(dir(), &comp, Some(start_dt), Some(end_dt), false);
 
         let enddate = occ.occurrence_enddate().unwrap();
@@ -747,8 +860,18 @@ mod tests {
         let occ = Occurrence::new(
             dir(),
             &comp,
-            Some(UTC.with_ymd_and_hms(2024, 10, 1, 0, 0, 0).unwrap()),
-            Some(UTC.with_ymd_and_hms(2024, 10, 4, 0, 0, 0).unwrap()),
+            Some(
+                UTC.with_ymd_and_hms(2024, 10, 1, 0, 0, 0)
+                    .unwrap()
+                    .fixed_offset()
+                    .into(),
+            ),
+            Some(
+                UTC.with_ymd_and_hms(2024, 10, 4, 0, 0, 0)
+                    .unwrap()
+                    .fixed_offset()
+                    .into(),
+            ),
             false,
         );
         let oct1 = NaiveDate::from_ymd_opt(2024, 10, 1).unwrap();
@@ -771,8 +894,18 @@ mod tests {
         let occ2 = Occurrence::new(
             dir(),
             &comp,
-            Some(UTC.with_ymd_and_hms(2024, 10, 1, 0, 0, 0).unwrap()),
-            Some(UTC.with_ymd_and_hms(2024, 10, 3, 15, 0, 0).unwrap()),
+            Some(
+                UTC.with_ymd_and_hms(2024, 10, 1, 0, 0, 0)
+                    .unwrap()
+                    .fixed_offset()
+                    .into(),
+            ),
+            Some(
+                UTC.with_ymd_and_hms(2024, 10, 3, 15, 0, 0)
+                    .unwrap()
+                    .fixed_offset()
+                    .into(),
+            ),
             false,
         );
         assert!(
@@ -790,8 +923,18 @@ mod tests {
         let occ3 = Occurrence::new(
             dir(),
             &comp,
-            Some(UTC.with_ymd_and_hms(2024, 10, 1, 15, 0, 0).unwrap()),
-            Some(UTC.with_ymd_and_hms(2024, 10, 2, 0, 0, 0).unwrap()),
+            Some(
+                UTC.with_ymd_and_hms(2024, 10, 1, 15, 0, 0)
+                    .unwrap()
+                    .fixed_offset()
+                    .into(),
+            ),
+            Some(
+                UTC.with_ymd_and_hms(2024, 10, 2, 0, 0, 0)
+                    .unwrap()
+                    .fixed_offset()
+                    .into(),
+            ),
             false,
         );
         assert!(
@@ -820,26 +963,47 @@ mod tests {
         let occ = Occurrence::new(dir(), &comp, Some(occ_start), Some(occ_end), false);
 
         // overlapping window
-        assert!(occ.overlaps(utc(2024, 11, 5, 9, 0, 0), utc(2024, 11, 5, 10, 30, 0)));
+        assert!(occ.overlaps(
+            utc(2024, 11, 5, 9, 0, 0).into(),
+            utc(2024, 11, 5, 10, 30, 0).into(),
+        ));
         // non-overlapping window (entirely before)
-        assert!(!occ.overlaps(utc(2024, 11, 5, 7, 0, 0), utc(2024, 11, 5, 9, 0, 0)));
+        assert!(!occ.overlaps(
+            utc(2024, 11, 5, 7, 0, 0).into(),
+            utc(2024, 11, 5, 9, 0, 0).into(),
+        ));
 
         // Branch 2: no start but has end (EndOrDue-only occurrence)
         let end_dt = utc(2024, 11, 6, 15, 0, 0);
         let occ_end_only =
             Occurrence::new_single(dir(), &comp, CompDateType::EndOrDue, end_dt, false);
         // end falls inside window
-        assert!(occ_end_only.overlaps(utc(2024, 11, 6, 14, 0, 0), utc(2024, 11, 6, 16, 0, 0)));
+        assert!(occ_end_only.overlaps(
+            utc(2024, 11, 6, 14, 0, 0).into(),
+            utc(2024, 11, 6, 16, 0, 0).into(),
+        ));
         // end equals window start (oend >= start is true, oend < end is true) → overlaps
-        assert!(occ_end_only.overlaps(utc(2024, 11, 6, 15, 0, 0), utc(2024, 11, 6, 16, 0, 0)));
+        assert!(occ_end_only.overlaps(
+            utc(2024, 11, 6, 15, 0, 0).into(),
+            utc(2024, 11, 6, 16, 0, 0).into(),
+        ));
         // end equals window end (oend < end is false) → no overlap
-        assert!(!occ_end_only.overlaps(utc(2024, 11, 6, 15, 0, 0), utc(2024, 11, 6, 15, 0, 0)));
+        assert!(!occ_end_only.overlaps(
+            utc(2024, 11, 6, 15, 0, 0).into(),
+            utc(2024, 11, 6, 15, 0, 0).into(),
+        ));
         // end falls outside window
-        assert!(!occ_end_only.overlaps(utc(2024, 11, 6, 16, 0, 0), utc(2024, 11, 6, 17, 0, 0)));
+        assert!(!occ_end_only.overlaps(
+            utc(2024, 11, 6, 16, 0, 0).into(),
+            utc(2024, 11, 6, 17, 0, 0).into(),
+        ));
 
         // Branch 3: neither start nor end — always false
         let occ_none = Occurrence::new(dir(), &comp, None, None, false);
-        assert!(!occ_none.overlaps(utc(2024, 11, 5, 9, 0, 0), utc(2024, 11, 5, 11, 0, 0)));
+        assert!(!occ_none.overlaps(
+            utc(2024, 11, 5, 9, 0, 0).into(),
+            utc(2024, 11, 5, 11, 0, 0).into(),
+        ));
     }
 
     /// Verifies `occurrence_end` falls back to start + time_duration when `end` is None.
@@ -857,7 +1021,7 @@ mod tests {
         let occ = Occurrence::new(dir(), &comp, Some(start_dt), None, false);
         // end must be derived from start + duration
         let expected_end = start_dt + Duration::hours(2);
-        assert_eq!(occ.occurrence_end(), Some(expected_end));
+        assert_eq!(occ.resolved_occurrence_end(), Some(expected_end));
     }
 
     /// Verifies that `occurrence_end` preserves wall-clock time when a DST spring-forward
@@ -878,11 +1042,20 @@ mod tests {
         td.parse_prop(&mut lr, Property::new("DURATION", vec![], "PT3H"))
             .unwrap();
         let comp = CalComponent::Todo(td);
-        let occ = Occurrence::new(dir(), &comp, Some(start_dt), None, false);
+        let occ = Occurrence::new(
+            dir(),
+            &comp,
+            Some(start_dt.fixed_offset().into()),
+            None,
+            false,
+        );
 
         let end = occ.occurrence_end().unwrap();
         // Wall-clock: 01:00 + 3h = 04:00; in CEST (UTC+2) that is 04:00 CEST.
-        let expected = berlin.with_ymd_and_hms(2025, 3, 30, 4, 0, 0).unwrap();
+        let expected = berlin
+            .with_ymd_and_hms(2025, 3, 30, 4, 0, 0)
+            .unwrap()
+            .fixed_offset();
         assert_eq!(
             end, expected,
             "due date should be 04:00 CEST, not 05:00 CEST"
@@ -970,7 +1143,7 @@ mod tests {
 
         let start = utc(2025, 3, 1, 10, 0, 0);
         let mut occ = Occurrence::new(dir(), &comp_base, Some(start), None, false);
-        occ.set_overwrite(&comp_overwrite);
+        occ.set_overwrite(&comp_overwrite, &Tz::UTC, &resolver());
 
         // The overwrite's Cancelled status must win
         assert_eq!(occ.event_status(), Some(CalEventStatus::Cancelled));
@@ -986,7 +1159,7 @@ mod tests {
         let comp_overwrite2 = CalComponent::Event(ev_overwrite2_no_status);
 
         let mut occ2 = Occurrence::new(dir(), &comp_base2, Some(start), None, false);
-        occ2.set_overwrite(&comp_overwrite2);
+        occ2.set_overwrite(&comp_overwrite2, &Tz::UTC, &resolver());
         // overwrite has no status → falls back to base's Confirmed
         assert_eq!(occ2.event_status(), Some(CalEventStatus::Confirmed));
     }
@@ -1038,7 +1211,13 @@ mod tests {
         )));
 
         let comp_base = CalComponent::Event(ev_base);
-        let occ = Occurrence::new(dir(), &comp_base, Some(start), Some(end), false);
+        let occ = Occurrence::new(
+            dir(),
+            &comp_base,
+            Some(start.fixed_offset().into()),
+            Some(end.fixed_offset().into()),
+            false,
+        );
 
         // EventLike::ctype (the impl on Occurrence, distinct from Occurrence::ctype)
         assert_eq!(EventLike::ctype(&occ), CalCompType::Event);
@@ -1070,8 +1249,14 @@ mod tests {
         ev_overwrite.set_summary(Some("Overwrite Summary".to_string()));
         let comp_overwrite = CalComponent::Event(ev_overwrite);
 
-        let mut occ_ow = Occurrence::new(dir(), &comp_base, Some(start), Some(end), false);
-        occ_ow.set_overwrite(&comp_overwrite);
+        let mut occ_ow = Occurrence::new(
+            dir(),
+            &comp_base,
+            Some(start.fixed_offset().into()),
+            Some(end.fixed_offset().into()),
+            false,
+        );
+        occ_ow.set_overwrite(&comp_overwrite, tz, &resolver());
 
         assert_eq!(occ_ow.summary(), Some(&"Overwrite Summary".to_string()));
 
@@ -1112,7 +1297,7 @@ mod tests {
             .parse_prop(&mut lr2, Property::new("DURATION", vec![], "PT5H"))
             .unwrap();
         let comp_ow_dur = CalComponent::Event(ev_ow_dur);
-        occ_dur.set_overwrite(&comp_ow_dur);
+        occ_dur.set_overwrite(&comp_ow_dur, &Tz::UTC, &resolver());
         assert_eq!(occ_dur.time_duration(), Some(Duration::hours(5)));
 
         // Branch: overwrite has both start and end (overwrite-derived duration)
@@ -1129,7 +1314,7 @@ mod tests {
         let comp_ow = CalComponent::Event(ev_ow);
 
         let mut occ_both = Occurrence::new(dir(), &comp_base, Some(ostart), Some(oend), false);
-        occ_both.set_overwrite(&comp_ow);
+        occ_both.set_overwrite(&comp_ow, &Tz::UTC, &resolver());
         assert_eq!(occ_both.time_duration(), Some(Duration::hours(2)));
 
         // Branch: base has both start and end, overwrite has neither fully overridden
@@ -1139,7 +1324,7 @@ mod tests {
         let comp_ow_partial = CalComponent::Event(ev_ow_partial);
 
         let mut occ_partial = Occurrence::new(dir(), &comp_base, Some(ostart), None, false);
-        occ_partial.set_overwrite(&comp_ow_partial);
+        occ_partial.set_overwrite(&comp_ow_partial, &Tz::UTC, &resolver());
         // base has start + end → 2 hours
         assert_eq!(occ_partial.time_duration(), Some(Duration::hours(2)));
 
@@ -1151,7 +1336,7 @@ mod tests {
         let comp_ow_no_start = CalComponent::Event(ev_ow_no_start);
 
         let mut occ_no_start = Occurrence::new(dir(), &comp_no_start, Some(start), None, false);
-        occ_no_start.set_overwrite(&comp_ow_no_start);
+        occ_no_start.set_overwrite(&comp_ow_no_start, &Tz::UTC, &resolver());
         assert_eq!(occ_no_start.time_duration(), None);
 
         // Branch: no overwrite, all-day base where start is not CalDate::Date
@@ -1165,7 +1350,11 @@ mod tests {
             CalCompType::Event.into(),
         )));
         let comp_allday = CalComponent::Event(ev_allday_mixed);
-        let start_allday = UTC.with_ymd_and_hms(2025, 6, 3, 0, 0, 0).unwrap();
+        let start_allday = UTC
+            .with_ymd_and_hms(2025, 6, 3, 0, 0, 0)
+            .unwrap()
+            .fixed_offset()
+            .into();
         let occ_allday = Occurrence::new(dir(), &comp_allday, Some(start_allday), None, false);
         // The end is stored as DATE(2025-06-04, Exclusive), which as_end_with_tz resolves to
         // 2025-06-03T23:59:59. Subtracting the start (00:00:00) gives 86399 seconds.
@@ -1195,7 +1384,7 @@ mod tests {
 
         // alarm fires 15 minutes before start
         let expected = start - Duration::minutes(15);
-        assert_eq!(alarm_occ.alarm_date(), Some(expected));
+        assert_eq!(alarm_occ.resolved_alarm_date(), Some(expected));
     }
 
     // --- occurrence_range_in_tz ---
@@ -1217,7 +1406,13 @@ mod tests {
         // Occurrence stored in local (NY) timezone
         let ny_start = berlin_start.with_timezone(&ny);
         let ny_end = berlin_end.with_timezone(&ny);
-        let occ = Occurrence::new(dir(), &comp, Some(ny_start), Some(ny_end), false);
+        let occ = Occurrence::new(
+            dir(),
+            &comp,
+            Some(ny_start.fixed_offset().into()),
+            Some(ny_end.fixed_offset().into()),
+            false,
+        );
 
         let result = occ.occurrence_range_in_tz(&ny);
         assert!(result.is_some());
@@ -1225,9 +1420,10 @@ mod tests {
         assert_eq!(range.tz_name(), "Europe/Berlin");
 
         // The returned CalDates should be in Europe/Berlin
-        let start_dt = range.start().unwrap().as_start_with_tz(&berlin);
+        let ctx = DateContext::system();
+        let start_dt = ctx.date(range.start().unwrap()).start_in(&berlin);
         assert_eq!(start_dt, berlin_start);
-        let end_dt = range.end().unwrap().as_end_with_tz(&berlin);
+        let end_dt = ctx.date(range.end().unwrap()).end_in(&berlin);
         assert_eq!(end_dt, berlin_end);
     }
 
@@ -1243,7 +1439,13 @@ mod tests {
         ev.set_end(Some(end.into()));
         let comp = CalComponent::Event(ev);
 
-        let occ = Occurrence::new(dir(), &comp, Some(start), Some(end), false);
+        let occ = Occurrence::new(
+            dir(),
+            &comp,
+            Some(start.fixed_offset().into()),
+            Some(end.fixed_offset().into()),
+            false,
+        );
 
         assert!(occ.occurrence_range_in_tz(&berlin).is_none());
     }
@@ -1256,9 +1458,15 @@ mod tests {
         let ev = allday_event("uid-tz-allday", date);
         let comp = CalComponent::Event(ev);
 
-        let start = UTC.with_ymd_and_hms(2025, 6, 15, 0, 0, 0).unwrap();
-        let end = UTC.with_ymd_and_hms(2025, 6, 16, 0, 0, 0).unwrap();
-        let occ = Occurrence::new(dir(), &comp, Some(start), Some(end), false);
+        let start = UTC
+            .with_ymd_and_hms(2025, 6, 15, 0, 0, 0)
+            .unwrap()
+            .fixed_offset();
+        let end = UTC
+            .with_ymd_and_hms(2025, 6, 16, 0, 0, 0)
+            .unwrap()
+            .fixed_offset();
+        let occ = Occurrence::new(dir(), &comp, Some(start.into()), Some(end.into()), false);
 
         assert!(occ.occurrence_range_in_tz(&berlin).is_none());
     }
@@ -1276,7 +1484,7 @@ mod tests {
         let comp = CalComponent::Event(ev);
 
         let start = berlin.with_ymd_and_hms(2025, 6, 15, 10, 0, 0).unwrap();
-        let occ = Occurrence::new(dir(), &comp, Some(start), None, false);
+        let occ = Occurrence::new(dir(), &comp, Some(start.fixed_offset().into()), None, false);
 
         assert!(occ.occurrence_range_in_tz(&berlin).is_none());
     }
@@ -1290,7 +1498,7 @@ mod tests {
         ev.set_start(Some(CalDate::DateTime(CalDateTime::Utc(utc_dt))));
         let comp = CalComponent::Event(ev);
 
-        let start = utc_dt.with_timezone(&berlin);
+        let start: ResolvedDateTime = utc_dt.with_timezone(&berlin).fixed_offset().into();
         let occ = Occurrence::new(dir(), &comp, Some(start), None, false);
 
         // UTC is stored as CalDateTime::Utc, not Timezone, so returns None
@@ -1309,7 +1517,13 @@ mod tests {
         let comp = CalComponent::Todo(td);
 
         let ny_due = berlin_due.with_timezone(&ny);
-        let occ = Occurrence::new_single(dir(), &comp, CompDateType::EndOrDue, ny_due, false);
+        let occ = Occurrence::new_single(
+            dir(),
+            &comp,
+            CompDateType::EndOrDue,
+            ny_due.fixed_offset().into(),
+            false,
+        );
 
         let result = occ.occurrence_range_in_tz(&ny);
         assert!(result.is_some());

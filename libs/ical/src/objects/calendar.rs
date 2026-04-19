@@ -5,13 +5,14 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{self, BufRead, Write};
 use std::str::FromStr;
+use std::sync::{Arc, OnceLock};
 
 use chrono_tz::Tz;
 use tracing::warn;
 
 use crate::objects::{
     CalCompType, CalComponent, CalDate, CalDateTime, CalEvent, CalTimeZone, CalTodo, CalTrigger,
-    EventLike,
+    CalendarTimeZoneResolver, DateContext, EventLike,
 };
 use crate::parser::{
     LineReader, LineWriter, ParseError, Property, PropertyConsumer, PropertyProducer,
@@ -23,15 +24,20 @@ use crate::parser::{
 /// Additionally, the calendar itself can have properties such as the version or product id.
 ///
 /// See <https://datatracker.ietf.org/doc/html/rfc5545#section-3.4>.
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Calendar {
     comps: Vec<CalComponent>,
     timezones: Vec<CalTimeZone>,
     props: Vec<Property>,
     unknown: Vec<Unknown>,
+    tzresolver: OnceLock<Arc<CalendarTimeZoneResolver>>,
 }
 
 impl Calendar {
+    fn invalidate_timezone_resolver(&mut self) {
+        self.tzresolver = OnceLock::new();
+    }
+
     /// Returns a slice of the calendar properties.
     pub fn properties(&self) -> &[Property] {
         &self.props
@@ -45,6 +51,7 @@ impl Calendar {
     /// Adds the given timezone to the calendar.
     pub fn add_timezone(&mut self, tz: CalTimeZone) {
         self.timezones.push(tz);
+        self.invalidate_timezone_resolver();
     }
 
     /// Returns a slice of the calendar components.
@@ -54,12 +61,29 @@ impl Calendar {
 
     /// Returns a mutable slice of the calendar properties.
     pub fn components_mut(&mut self) -> &mut [CalComponent] {
+        self.invalidate_timezone_resolver();
         &mut self.comps
+    }
+
+    /// Returns the cached timezone resolver
+    pub fn timezone_resolver(&self) -> &CalendarTimeZoneResolver {
+        self.timezone_resolver_arc().as_ref()
+    }
+
+    fn timezone_resolver_arc(&self) -> &Arc<CalendarTimeZoneResolver> {
+        self.tzresolver
+            .get_or_init(|| Arc::new(CalendarTimeZoneResolver::new(self)))
+    }
+
+    /// Builds a reusable date resolution context backed by this calendar's resolver.
+    pub fn date_context(&self) -> DateContext {
+        DateContext::new(self.timezone_resolver_arc().clone())
     }
 
     /// Adds the given component to the calendar.
     pub fn add_component(&mut self, comp: CalComponent) {
         self.comps.push(comp);
+        self.invalidate_timezone_resolver();
     }
 
     /// Deletes the components that match the given predicate.
@@ -68,6 +92,7 @@ impl Calendar {
         P: Fn(&CalComponent) -> bool,
     {
         self.comps.retain(|c| !predicate(c));
+        self.invalidate_timezone_resolver();
     }
 
     /// Splits this calendar into multiple calendars, one per UID
@@ -83,6 +108,7 @@ impl Calendar {
                 timezones: self.timezones.clone(),
                 props: self.props.clone(),
                 unknown: self.unknown.clone(),
+                tzresolver: OnceLock::new(),
             })
             .collect()
     }
@@ -114,6 +140,8 @@ impl Calendar {
                 None => warn!("failed to populate VTIMEZONE for {}", tzid),
             }
         }
+
+        self.invalidate_timezone_resolver();
     }
 
     fn checked_add(&mut self, comp: CalComponent) {
@@ -133,6 +161,7 @@ impl Calendar {
         } else {
             self.comps.push(comp);
         }
+        self.invalidate_timezone_resolver();
     }
 
     /// Validates all component dates against the given local timezone.
@@ -143,60 +172,77 @@ impl Calendar {
     /// Returns true if no components were removed.
     pub fn validate_times(&mut self, local_tz: &Tz) -> bool {
         let len = self.comps.len();
-        self.comps.retain(|comp| {
-            if let Err(e) = Self::validate_component(comp, local_tz) {
-                warn!(
-                    "ignoring component {} (uid {}): {}",
-                    comp.ctype(),
-                    comp.uid(),
-                    e
-                );
-                return false;
-            }
-            true
-        });
+        let comps = std::mem::take(&mut self.comps);
+        let resolver = self.timezone_resolver();
+        self.comps = comps
+            .into_iter()
+            .filter(|comp| {
+                if let Err(e) = Self::validate_component(comp, local_tz, resolver) {
+                    warn!(
+                        "ignoring component {} (uid {}): {}",
+                        comp.ctype(),
+                        comp.uid(),
+                        e
+                    );
+                    return false;
+                }
+                true
+            })
+            .collect();
         self.comps.len() == len
     }
 
-    fn validate_component(comp: &CalComponent, local_tz: &Tz) -> Result<(), ParseError> {
-        Self::validate_eventlike_dates(comp, local_tz)?;
+    fn validate_component(
+        comp: &CalComponent,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
+        Self::validate_eventlike_dates(comp, local_tz, resolver)?;
         match comp {
             CalComponent::Event(ev) => {
-                Self::validate_opt_date(ev.end(), local_tz)?;
+                Self::validate_opt_date(ev.end(), local_tz, resolver)?;
             }
             CalComponent::Todo(td) => {
-                Self::validate_opt_date(td.due(), local_tz)?;
-                Self::validate_opt_date(td.completed(), local_tz)?;
+                Self::validate_opt_date(td.due(), local_tz, resolver)?;
+                Self::validate_opt_date(td.completed(), local_tz, resolver)?;
             }
         }
         Ok(())
     }
 
-    fn validate_eventlike_dates(comp: &CalComponent, local_tz: &Tz) -> Result<(), ParseError> {
-        Self::validate_opt_date(comp.start(), local_tz)?;
-        Self::validate_opt_date(comp.created(), local_tz)?;
-        Self::validate_opt_date(comp.last_modified(), local_tz)?;
-        comp.stamp().validate(local_tz)?;
-        Self::validate_opt_date(comp.rid(), local_tz)?;
+    fn validate_eventlike_dates(
+        comp: &CalComponent,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
+        Self::validate_opt_date(comp.start(), local_tz, resolver)?;
+        Self::validate_opt_date(comp.created(), local_tz, resolver)?;
+        Self::validate_opt_date(comp.last_modified(), local_tz, resolver)?;
+        comp.stamp().validate_with(local_tz, resolver)?;
+        Self::validate_opt_date(comp.rid(), local_tz, resolver)?;
         for exdate in comp.exdates() {
-            exdate.validate(local_tz)?;
+            exdate.validate_with(local_tz, resolver)?;
         }
         if let Some(alarms) = comp.alarms() {
             for alarm in alarms {
                 if let CalTrigger::Absolute(date) = alarm.trigger() {
-                    date.validate(local_tz)?;
+                    date.validate_with(local_tz, resolver)?;
                 }
             }
         }
         if let Some(rrule) = comp.rrule() {
-            Self::validate_opt_date(rrule.until(), local_tz)?;
+            Self::validate_opt_date(rrule.until(), local_tz, resolver)?;
         }
         Ok(())
     }
 
-    fn validate_opt_date(date: Option<&CalDate>, local_tz: &Tz) -> Result<(), ParseError> {
+    fn validate_opt_date(
+        date: Option<&CalDate>,
+        local_tz: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<(), ParseError> {
         if let Some(d) = date {
-            d.validate(local_tz)?;
+            d.validate_with(local_tz, resolver)?;
         }
         Ok(())
     }
@@ -240,6 +286,29 @@ impl Calendar {
         }
     }
 }
+
+impl Default for Calendar {
+    fn default() -> Self {
+        Self {
+            comps: Vec::new(),
+            timezones: Vec::new(),
+            props: Vec::new(),
+            unknown: Vec::new(),
+            tzresolver: OnceLock::new(),
+        }
+    }
+}
+
+impl PartialEq for Calendar {
+    fn eq(&self, other: &Self) -> bool {
+        self.comps == other.comps
+            && self.timezones == other.timezones
+            && self.props == other.props
+            && self.unknown == other.unknown
+    }
+}
+
+impl Eq for Calendar {}
 
 impl PropertyProducer for Calendar {
     fn to_props(&self) -> Vec<Property> {
@@ -735,6 +804,59 @@ END:VCALENDAR\n";
 
         assert_eq!(cal.timezones().len(), 1);
         assert_eq!(cal.timezones()[0].tzid(), "Europe/Berlin");
+    }
+
+    #[test]
+    fn timezone_resolver_prefers_embedded_vtimezone_over_system_tzdb() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:Europe/Berlin\n\
+BEGIN:STANDARD\n\
+DTSTART:19700101T000000\n\
+TZOFFSETFROM:+0300\n\
+TZOFFSETTO:+0300\n\
+TZNAME:CUSTOM\n\
+END:STANDARD\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let resolver = cal.timezone_resolver();
+        let start = cal.components()[0].start().unwrap();
+        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, resolver);
+
+        assert_eq!(
+            resolved.naive_local(),
+            "2025-03-30T10:00:00".parse().unwrap()
+        );
+        assert_eq!(resolved.offset().local_minus_utc(), 3 * 3600);
+    }
+
+    #[test]
+    fn timezone_resolver_falls_back_to_system_tzdb_without_embedded_vtimezone() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:test\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20250330T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let resolver = cal.timezone_resolver();
+        let start = cal.components()[0].start().unwrap();
+        let resolved = start.as_start_with_resolver(&chrono_tz::UTC, resolver);
+
+        assert_eq!(
+            resolved.naive_local(),
+            "2025-03-30T10:00:00".parse().unwrap()
+        );
+        assert_eq!(resolved.offset().local_minus_utc(), 2 * 3600);
     }
 
     #[test]

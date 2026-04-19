@@ -7,8 +7,7 @@ use regex::{Captures, Regex};
 
 pub mod filters {
     use askama::filters::Safe;
-    use chrono::{DateTime, NaiveDate, NaiveTime};
-    use chrono_tz::Tz;
+    use chrono::{NaiveDate, NaiveTime};
     use std::{fmt::Display, sync::Arc};
 
     use eventix_locale::{DateFlags, DateLike, Locale, TimeFlags};
@@ -55,7 +54,7 @@ pub mod filters {
 
     #[askama::filter_fn]
     pub fn time(
-        date: &DateTime<Tz>,
+        date: &dyn DateLike,
         _values: &dyn ::askama::Values,
         locale: &Arc<dyn Locale + Send + Sync>,
         flags: TimeFlags,
@@ -71,26 +70,6 @@ pub mod filters {
         flags: DateFlags,
     ) -> ::askama::Result<String> {
         Ok(locale.fmt_weekdate(date, flags))
-    }
-
-    #[askama::filter_fn]
-    pub fn date(
-        date: &dyn DateLike,
-        _values: &dyn ::askama::Values,
-        locale: &Arc<dyn Locale + Send + Sync>,
-        flags: DateFlags,
-    ) -> ::askama::Result<String> {
-        Ok(locale.fmt_date(date, flags))
-    }
-
-    #[askama::filter_fn]
-    pub fn datetime(
-        date: &dyn DateLike,
-        _values: &dyn ::askama::Values,
-        locale: &Arc<dyn Locale + Send + Sync>,
-        flags: DateFlags,
-    ) -> ::askama::Result<String> {
-        Ok(locale.fmt_datetime(date, flags))
     }
 
     #[askama::filter_fn]

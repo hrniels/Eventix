@@ -10,7 +10,7 @@ use axum::{
     response::{Html, IntoResponse},
     routing::get,
 };
-use eventix_ical::objects::{CalDate, CalPartStat, EventLike};
+use eventix_ical::objects::{CalPartStat, EventLike};
 use eventix_locale::{DateFlags, Locale, TimeFlags};
 use eventix_state::EventixState;
 use std::sync::Arc;

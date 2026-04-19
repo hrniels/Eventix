@@ -203,17 +203,8 @@
                                 </div>
                             {% endif %}
                         </span>
-                        {% if let Some(due) = occ.occurrence_enddate() %}
-                            {% match due %}
-                                {% when CalDate::DateTime with (due_date) %}
-                                    <span><b>
-                                        {{
-                                            &due_date.with_tz(locale.timezone())
-                                            |time(locale, TimeFlags::Short)
-                                        }}
-                                    </b></span>
-                                {% when _ %}
-                            {% endmatch %}
+                        {% if let Some(due) = occ.occurrence_end() %}
+                            <span><b>{{ due|time(locale, TimeFlags::Short) }}</b></span>
                         {% endif %}
                         <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                     </div>

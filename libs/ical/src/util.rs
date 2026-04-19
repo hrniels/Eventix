@@ -41,12 +41,16 @@ pub fn resolve_local_time(tz: Tz, naive: chrono::NaiveDateTime) -> DateTime<Tz> 
 }
 
 /// Returns true if the given date ranges overlap.
-pub fn date_ranges_overlap(
-    start1: DateTime<Tz>,
-    end1: DateTime<Tz>,
-    start2: DateTime<Tz>,
-    end2: DateTime<Tz>,
-) -> bool {
+pub fn date_ranges_overlap<Tz1: TimeZone, Tz2: TimeZone>(
+    start1: DateTime<Tz1>,
+    end1: DateTime<Tz1>,
+    start2: DateTime<Tz2>,
+    end2: DateTime<Tz2>,
+) -> bool
+where
+    Tz1::Offset: Copy,
+    Tz2::Offset: Copy,
+{
     if start1 >= start2 && start1 < end2 {
         return true;
     }

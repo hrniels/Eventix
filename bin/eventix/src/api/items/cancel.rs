@@ -8,7 +8,7 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use eventix_ical::objects::{
-    CalComponent, CalDate, CalDateTime, CalEventStatus, EventLike, UpdatableEventLike,
+    CalComponent, CalDate, CalDateTime, CalEventStatus, DateContext, EventLike, UpdatableEventLike,
 };
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
@@ -74,7 +74,9 @@ pub async fn handler(
         // if that's an override, also set the end date
         if let Some(base) = base {
             let dur = base.time_duration().unwrap();
-            let start = c.start().unwrap().as_start_with_tz(locale.timezone());
+            let start = DateContext::system()
+                .date(c.start().unwrap())
+                .start_in(locale.timezone());
             let end = start + dur;
             c.as_event_mut()
                 .unwrap()

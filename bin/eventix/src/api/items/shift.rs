@@ -8,7 +8,7 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use chrono::{NaiveDateTime, NaiveTime, TimeDelta, Timelike};
-use eventix_ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, UpdatableEventLike};
+use eventix_ical::objects::{CalComponent, CalDate, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +46,7 @@ pub async fn handler(
         .store_mut()
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
+    let ctx = file.calendar().date_context();
 
     let get_timespan = |c: &CalComponent| -> anyhow::Result<(CalDate, CalDate)> {
         if !c.is_owned_by(user_mail.as_ref()) {
@@ -54,7 +55,7 @@ pub async fn handler(
 
         let tz = locale.timezone();
         let duration = c.time_duration().unwrap();
-        let old_start = c.start().unwrap().as_start_with_tz(tz);
+        let old_start = ctx.date(c.start().unwrap()).start_in(tz);
         let new_date = req.date.date().ok_or_else(|| anyhow!("Invalid date"))?;
 
         if c.is_all_day() {
@@ -66,6 +67,8 @@ pub async fn handler(
                 CalDate::Date(end, c.ctype().into()),
             ))
         } else {
+            let source_start = c.start().unwrap();
+            let source_end = c.end_or_due().unwrap();
             let new_time = if let Some(hour) = req.hour {
                 NaiveTime::from_hms_opt(hour, old_start.minute(), old_start.second())
                     .ok_or_else(|| anyhow!("Invalid hour"))?
@@ -74,18 +77,26 @@ pub async fn handler(
             };
 
             let start = NaiveDateTime::new(new_date, new_time);
-            let end = NaiveDateTime::new(new_date, new_time) + duration;
+            let end = start + duration;
+            let start_instant =
+                CalDate::resolve_local_datetime(start, tz).map_err(anyhow::Error::from)?;
+            let end_instant =
+                CalDate::resolve_local_datetime(end, tz).map_err(anyhow::Error::from)?;
             Ok((
-                CalDate::DateTime(CalDateTime::Timezone(start, tz.name().to_string())),
-                CalDate::DateTime(CalDateTime::Timezone(end, tz.name().to_string())),
+                source_start
+                    .from_resolved_in_tz(start_instant, tz, ctx.resolver())
+                    .map_err(anyhow::Error::from)?,
+                source_end
+                    .from_resolved_in_tz(end_instant, tz, ctx.resolver())
+                    .map_err(anyhow::Error::from)?,
             ))
         }
     };
 
     let complete = |start: CalDate, end: CalDate, c: &mut CalComponent| -> anyhow::Result<()> {
         let local_tz = locale.timezone();
-        c.set_start_checked(Some(start), local_tz)?;
-        c.set_end_checked(Some(end), local_tz)?;
+        c.set_start_checked(Some(start), &ctx, local_tz)?;
+        c.set_end_checked(Some(end), &ctx, local_tz)?;
 
         c.set_last_modified(CalDate::now());
         c.set_stamp(CalDate::now());

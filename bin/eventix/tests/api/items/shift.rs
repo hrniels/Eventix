@@ -7,9 +7,11 @@ use eventix_ical::objects::{CalDate, CalDateTime, EventLike};
 use tempfile::TempDir;
 
 use crate::helper::edit::read_ics_by_uid;
-use crate::helper::{CAL_ID, encode_form, make_router, make_state, post_query};
+use crate::helper::{CAL_ID, encode_form, make_router, make_state, make_state_in_tz, post_query};
 
-use super::{write_allday_event_ics, write_event_ics, write_recurring_event_ics};
+use super::{
+    write_allday_event_ics, write_event_ics, write_event_ics_in_tz, write_recurring_event_ics,
+};
 
 // --- POST /api/items/shift ---
 
@@ -21,7 +23,7 @@ async fn shift_timed_event_to_new_date() {
     std::fs::create_dir_all(&cal_dir).unwrap();
     let uid = "shift-timed";
     write_event_ics(&cal_dir, uid, "Meeting");
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
     // Shift to 2026-04-22; start time should remain 09:00.
@@ -72,7 +74,8 @@ async fn shift_all_day_event() {
     }
 }
 
-/// Shifting a timed event with an explicit hour override changes the start hour.
+/// Shifting a timed event with an explicit hour override updates the stored wall-clock time when the
+/// item already uses the user's timezone.
 #[tokio::test]
 async fn shift_with_hour_override() {
     let tmp = TempDir::new().unwrap();
@@ -80,7 +83,7 @@ async fn shift_with_hour_override() {
     std::fs::create_dir_all(&cal_dir).unwrap();
     let uid = "shift-hour";
     write_event_ics(&cal_dir, uid, "Standup");
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
     // Shift to same date but change start hour to 14.
@@ -90,16 +93,69 @@ async fn shift_with_hour_override() {
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = ics.components().first().unwrap();
-    let start = comp.start().expect("expected DTSTART");
-    // Read the wall-clock naive hour from the stored CalDateTime variant directly so the assertion
-    // is independent of the system timezone. The handler stores the override hour as-is in the
-    // locale timezone, so the naive hour == the requested hour regardless of which TZID is used.
-    match start {
-        CalDate::DateTime(CalDateTime::Timezone(dt, _)) => {
+    match comp.start().expect("expected DTSTART") {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "Europe/Berlin");
             assert_eq!(dt.hour(), 14);
         }
         other => panic!("expected Timezone DTSTART, got {other:?}"),
     }
+}
+
+/// Shifting a timed event in a different timezone succeeds as long as the requested user-local time
+/// is representable.
+#[tokio::test]
+async fn shift_allows_event_in_different_timezone() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "shift-cross-tz";
+    write_event_ics_in_tz(&cal_dir, uid, "NY meeting", "America/New_York", 9, 10);
+    let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
+    let router = make_router(state);
+
+    let qs = encode_form(&[("uid", uid), ("date", "2026-04-22"), ("hour", "14")]);
+    let (status, _) = post_query(router, &format!("/api/items/shift?{qs}")).await;
+    assert_eq!(status, 200);
+
+    let ics = read_ics_by_uid(&cal_dir, uid);
+    match ics
+        .components()
+        .first()
+        .unwrap()
+        .start()
+        .expect("expected DTSTART")
+    {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "America/New_York");
+            assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2026, 4, 22).unwrap());
+            assert_eq!(dt.hour(), 8);
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
+
+    match ics
+        .components()
+        .first()
+        .unwrap()
+        .end_or_due()
+        .expect("expected DTEND")
+    {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "America/New_York");
+            assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2026, 4, 22).unwrap());
+            assert_eq!(dt.hour(), 9);
+        }
+        other => panic!("expected Timezone DTEND, got {other:?}"),
+    }
+
+    let berlin = chrono_tz::Europe::Berlin;
+    let localized = ics
+        .calendar()
+        .date_context()
+        .date(ics.components().first().unwrap().start().unwrap())
+        .start_in(&berlin);
+    assert_eq!(localized.hour(), 14);
 }
 
 /// Shifting a specific occurrence of a recurring event creates a RECURRENCE-ID override.
@@ -110,7 +166,7 @@ async fn shift_recurring_occurrence_creates_override() {
     std::fs::create_dir_all(&cal_dir).unwrap();
     let uid = "shift-recurring";
     write_recurring_event_ics(&cal_dir, uid);
-    let state = make_state(&cal_dir);
+    let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
     let qs = encode_form(&[
@@ -174,4 +230,101 @@ async fn shift_non_recurrent_with_rid_returns_error() {
     ]);
     let (status, _) = post_query(router, &format!("/api/items/shift?{qs}")).await;
     assert_eq!(status.as_u16(), 100);
+}
+
+/// Shifting an event that uses an embedded custom `VTIMEZONE` still fails when the requested
+/// user-local time falls into the local DST gap.
+#[tokio::test]
+async fn shift_rejects_embedded_vtimezone_in_user_local_dst_gap() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "shift-custom-dst";
+    let path = cal_dir.join(format!("{uid}.ics"));
+    std::fs::write(
+        &path,
+        format!(
+            "BEGIN:VCALENDAR\r\n\
+             BEGIN:VTIMEZONE\r\n\
+             TZID:X-CUSTOM-DST\r\n\
+             BEGIN:STANDARD\r\n\
+             DTSTART:19700101T000000\r\n\
+             TZOFFSETFROM:+0200\r\n\
+             TZOFFSETTO:+0100\r\n\
+             TZNAME:CST\r\n\
+             END:STANDARD\r\n\
+             BEGIN:DAYLIGHT\r\n\
+             DTSTART:20250330T040000\r\n\
+             TZOFFSETFROM:+0100\r\n\
+             TZOFFSETTO:+0200\r\n\
+             TZNAME:CDT\r\n\
+             END:DAYLIGHT\r\n\
+             END:VTIMEZONE\r\n\
+             BEGIN:VEVENT\r\n\
+             UID:{uid}\r\n\
+             DTSTAMP:20250101T000000Z\r\n\
+             DTSTART;TZID=X-CUSTOM-DST:20250329T090000\r\n\
+             DTEND;TZID=X-CUSTOM-DST:20250329T100000\r\n\
+             SUMMARY:Custom DST shift\r\n\
+             END:VEVENT\r\n\
+             END:VCALENDAR\r\n"
+        ),
+    )
+    .unwrap();
+
+    let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
+    let router = make_router(state);
+
+    let qs = encode_form(&[("uid", uid), ("date", "2025-03-30"), ("hour", "2")]);
+    let (status, _) = post_query(router, &format!("/api/items/shift?{qs}")).await;
+    assert_eq!(status.as_u16(), 100);
+
+    let ics = read_ics_by_uid(&cal_dir, uid);
+    match ics
+        .components()
+        .first()
+        .unwrap()
+        .start()
+        .expect("expected DTSTART")
+    {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "X-CUSTOM-DST");
+            assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2025, 3, 29).unwrap());
+            assert_eq!(dt.hour(), 9);
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
+}
+
+/// Shifting to a user-local time that falls into a DST gap fails because the updated item would not
+/// be representable in the user's calendar view.
+#[tokio::test]
+async fn shift_rejects_user_local_dst_gap() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "shift-dst-gap";
+    write_event_ics_in_tz(&cal_dir, uid, "NY meeting", "America/New_York", 9, 10);
+    let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
+    let router = make_router(state);
+
+    let qs = encode_form(&[("uid", uid), ("date", "2026-03-29"), ("hour", "2")]);
+    let (status, _) = post_query(router, &format!("/api/items/shift?{qs}")).await;
+    assert_eq!(status.as_u16(), 100);
+
+    let ics = read_ics_by_uid(&cal_dir, uid);
+    match ics
+        .components()
+        .first()
+        .unwrap()
+        .start()
+        .expect("expected DTSTART")
+    {
+        CalDate::DateTime(CalDateTime::Timezone(dt, tzid)) => {
+            assert_eq!(tzid, "America/New_York");
+            assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2026, 4, 15).unwrap());
+            assert_eq!(dt.hour(), 9);
+        }
+        other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
 }

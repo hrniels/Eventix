@@ -90,19 +90,7 @@ impl CompEdit {
                 None
             },
             alarm: AlarmRequest::from_alarms(occ.alarms().unwrap_or_default(), pers_alarms, tz),
-            start_end: DateTimeRange::new_from_caldate(
-                if occ.is_recurrent() {
-                    occ.occurrence_startdate()
-                } else {
-                    occ.start().cloned()
-                },
-                if occ.is_recurrent() {
-                    occ.occurrence_enddate()
-                } else {
-                    occ.end_or_due().cloned()
-                },
-                tz,
-            ),
+            start_end: DateTimeRange::new_from_occurrence(occ),
             status: if !occ.is_recurrent() || req.rid.is_some() {
                 TodoStatus::new_from_occurrence(occ)
             } else {

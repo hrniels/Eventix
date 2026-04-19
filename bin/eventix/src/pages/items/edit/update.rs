@@ -46,6 +46,7 @@ fn action_update(
     let file = store
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
+    let ctx = file.calendar().date_context();
 
     let last_modified = util::system_time_stamp(file.last_modified()?);
     if last_modified > form.edit_start {
@@ -151,12 +152,13 @@ fn action_update(
             &mut comp,
             personal_alarms,
             organizer,
+            &ctx,
             locale,
         )?;
 
         // update old event/TODO; check if there are no occurrences left
-        let start = old_start.as_start_with_tz(locale.timezone());
-        let end = rid.as_end_with_tz(locale.timezone());
+        let start = ctx.date(&old_start).start_in(locale.timezone());
+        let end = ctx.date(&rid).end_in(locale.timezone());
         if file
             .occurrences_between(start, end, |_| true)
             .next()
@@ -220,6 +222,7 @@ fn action_update(
                 comp,
                 personal_alarms,
                 organizer,
+                &ctx,
                 locale,
             )?;
             if rid.is_none() {
@@ -235,7 +238,15 @@ fn action_update(
                 .parse()
                 .map_err(|_| anyhow!("Invalid timezone: {}", event_tz))?;
             file.create_overwrite(&req.uid, rid.unwrap(), &tz, |_, c| {
-                form.update(&new_cal, &alarm_type, c, personal_alarms, organizer, locale)
+                form.update(
+                    &new_cal,
+                    &alarm_type,
+                    c,
+                    personal_alarms,
+                    organizer,
+                    &ctx,
+                    locale,
+                )
             })
             .context("Creating overwrite failed")?;
         }
