@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776622444691,
+  "lastUpdate": 1776622470290,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -254,6 +254,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 61393449.583333336,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "001a18ed80b74875535070133d91080a1a35f732",
+          "message": "Make use of VTIMEZONE as required by RFC 5545",
+          "timestamp": "2026-04-19T16:22:43Z",
+          "url": "https://github.com/hrniels/Eventix/pull/23/commits/001a18ed80b74875535070133d91080a1a35f732"
+        },
+        "date": 1776622469581,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 5254803.120495079,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 3187503.9032344767,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 60697885.88333333,
             "unit": "ns"
           }
         ]
