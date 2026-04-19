@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776623149556,
+  "lastUpdate": 1776623222945,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -513,6 +513,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 94699019.85,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3ccab6102e57578c10519885b690c85179abece3",
+          "message": "Merge pull request #23 from hrniels/use-vtimezone\n\nMake use of VTIMEZONE as required by RFC 5545",
+          "timestamp": "2026-04-19T20:22:25+02:00",
+          "tree_id": "a5e02ddef5ee73582138d5ef1728cccd0a2df8f0",
+          "url": "https://github.com/hrniels/Eventix/commit/3ccab6102e57578c10519885b690c85179abece3"
+        },
+        "date": 1776623222575,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 6912381.397027909,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 6577118.139611986,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 93734578.3,
             "unit": "ns"
           }
         ]
