@@ -107,6 +107,7 @@ pub async fn handler(
         let old_end = c
             .occurrence_end()
             .ok_or_else(|| anyhow!("Event has no end time"))?;
+        let tzid = c.tz_name().unwrap_or_else(|| tz.name().to_string());
 
         if resize_start {
             let (new_time, _) =
@@ -116,11 +117,8 @@ pub async fn handler(
                 return Err(anyhow!("New start must be before existing end"));
             }
             Ok((
-                CalDate::DateTime(CalDateTime::Timezone(new_start, tz.name().to_string())),
-                CalDate::DateTime(CalDateTime::Timezone(
-                    old_end.naive_local(),
-                    tz.name().to_string(),
-                )),
+                CalDate::DateTime(CalDateTime::Timezone(new_start, tzid.clone())),
+                CalDate::DateTime(CalDateTime::Timezone(old_end.naive_local(), tzid)),
             ))
         } else {
             let (new_time, next_day) =
@@ -150,11 +148,8 @@ pub async fn handler(
                 return Err(anyhow!("New end must be after existing start"));
             }
             Ok((
-                CalDate::DateTime(CalDateTime::Timezone(
-                    old_start.naive_local(),
-                    tz.name().to_string(),
-                )),
-                CalDate::DateTime(CalDateTime::Timezone(new_end, tz.name().to_string())),
+                CalDate::DateTime(CalDateTime::Timezone(old_start.naive_local(), tzid.clone())),
+                CalDate::DateTime(CalDateTime::Timezone(new_end, tzid)),
             ))
         }
     };

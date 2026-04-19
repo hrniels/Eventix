@@ -370,15 +370,25 @@ pub fn new(
     xdg: &BaseDirectories,
     lang: LocaleType,
 ) -> Result<Arc<dyn Locale + Send + Sync>, LocaleError> {
-    let trans_file = format!("locale/{:?}.toml", lang);
-    let translations = xdg
-        .find_data_file(&trans_file)
-        .ok_or(LocaleError::LocaleFile(trans_file))?;
-
     let tz_str = iana_time_zone::get_timezone().map_err(|_| LocaleError::SysTimezone)?;
     let tz: chrono_tz::Tz = tz_str
         .parse()
         .map_err(|_| LocaleError::ParseTimezone(tz_str))?;
+
+    new_with_timezone(xdg, lang, tz)
+}
+
+/// Creates a locale of the given `lang` type, loading translations from the XDG data directory
+/// and using the explicitly supplied timezone.
+pub fn new_with_timezone(
+    xdg: &BaseDirectories,
+    lang: LocaleType,
+    tz: Tz,
+) -> Result<Arc<dyn Locale + Send + Sync>, LocaleError> {
+    let trans_file = format!("locale/{:?}.toml", lang);
+    let translations = xdg
+        .find_data_file(&trans_file)
+        .ok_or(LocaleError::LocaleFile(trans_file))?;
 
     Ok(match lang {
         LocaleType::German => {

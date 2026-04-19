@@ -657,12 +657,19 @@ impl CalFile {
         } else {
             CalComponent::Todo(CalTodo::new(base.uid()))
         };
-        let ctx = self.cal.date_context();
-
-        let start = CalDate::DateTime(CalDateTime::Timezone(
-            ctx.date(&rid).start_in(tz).naive_local(),
-            tz.name().to_string(),
-        ));
+        let start = match &rid {
+            CalDate::DateTime(CalDateTime::Timezone(naive, tzid)) => {
+                CalDate::DateTime(CalDateTime::Timezone(*naive, tzid.clone()))
+            }
+            _ => CalDate::DateTime(CalDateTime::Timezone(
+                self.cal
+                    .date_context()
+                    .date(&rid)
+                    .start_in(tz)
+                    .naive_local(),
+                tz.name().to_string(),
+            )),
+        };
         comp.set_start(Some(start));
         comp.set_rid(Some(rid.clone()));
         comp.set_last_modified(CalDate::now());
@@ -2750,6 +2757,61 @@ mod tests {
                 "Europe/Berlin".to_string(),
             )))
         );
+    }
+
+    #[test]
+    fn change_start_uses_embedded_vtimezone_rules_for_validation() {
+        let tz = &chrono_tz::Europe::Berlin;
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VTIMEZONE\n\
+TZID:X-CUSTOM-DST\n\
+BEGIN:STANDARD\n\
+DTSTART:19700101T000000\n\
+TZOFFSETFROM:+0200\n\
+TZOFFSETTO:+0100\n\
+TZNAME:CST\n\
+END:STANDARD\n\
+BEGIN:DAYLIGHT\n\
+DTSTART:20250330T040000\n\
+TZOFFSETFROM:+0100\n\
+TZOFFSETTO:+0200\n\
+TZNAME:CDT\n\
+END:DAYLIGHT\n\
+END:VTIMEZONE\n\
+BEGIN:VEVENT\n\
+UID:custom-dst\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=X-CUSTOM-DST:20250329T090000\n\
+DTEND;TZID=X-CUSTOM-DST:20250329T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal: Calendar = input.parse().unwrap();
+        let mut file = CalFile::new_simple(cal);
+
+        let new_start = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2025, 3, 30)
+                .unwrap()
+                .and_hms_opt(2, 30, 0)
+                .unwrap(),
+            "X-CUSTOM-DST".to_string(),
+        ));
+        let new_end = CalDate::DateTime(CalDateTime::Timezone(
+            NaiveDate::from_ymd_opt(2025, 3, 30)
+                .unwrap()
+                .and_hms_opt(3, 30, 0)
+                .unwrap(),
+            "X-CUSTOM-DST".to_string(),
+        ));
+
+        file.change_start("custom-dst", new_start.clone(), Some(new_end.clone()), tz)
+            .unwrap();
+
+        let base = file
+            .component_with(|c| c.uid() == "custom-dst" && c.rid().is_none())
+            .unwrap();
+        assert_eq!(base.start(), Some(&new_start));
+        assert_eq!(base.end_or_due(), Some(&new_end));
     }
 
     #[test]

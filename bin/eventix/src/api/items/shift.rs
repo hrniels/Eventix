@@ -8,7 +8,7 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use chrono::{NaiveDateTime, NaiveTime, TimeDelta, Timelike};
-use eventix_ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, UpdatableEventLike};
+use eventix_ical::objects::{CalComponent, CalDate, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +67,8 @@ pub async fn handler(
                 CalDate::Date(end, c.ctype().into()),
             ))
         } else {
+            let source_start = c.start().unwrap();
+            let source_end = c.end_or_due().unwrap();
             let new_time = if let Some(hour) = req.hour {
                 NaiveTime::from_hms_opt(hour, old_start.minute(), old_start.second())
                     .ok_or_else(|| anyhow!("Invalid hour"))?
@@ -75,10 +77,18 @@ pub async fn handler(
             };
 
             let start = NaiveDateTime::new(new_date, new_time);
-            let end = NaiveDateTime::new(new_date, new_time) + duration;
+            let end = start + duration;
+            let start_instant =
+                CalDate::resolve_local_datetime(start, tz).map_err(anyhow::Error::from)?;
+            let end_instant =
+                CalDate::resolve_local_datetime(end, tz).map_err(anyhow::Error::from)?;
             Ok((
-                CalDate::DateTime(CalDateTime::Timezone(start, tz.name().to_string())),
-                CalDate::DateTime(CalDateTime::Timezone(end, tz.name().to_string())),
+                source_start
+                    .from_resolved_in_tz(start_instant, tz, ctx.resolver())
+                    .map_err(anyhow::Error::from)?,
+                source_end
+                    .from_resolved_in_tz(end_instant, tz, ctx.resolver())
+                    .map_err(anyhow::Error::from)?,
             ))
         }
     };

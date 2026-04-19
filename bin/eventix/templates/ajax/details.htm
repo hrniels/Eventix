@@ -36,12 +36,14 @@
                 <td width="70%">
                     {{
                         locale.date_range(occ.occurrence_startdate(), occ.occurrence_enddate(),
-                                          &DateContext::system(), locale.timezone())|safe
+                        &DateContext::system(), locale.timezone())|safe
                     }}
                     {% if let Some(tz_range) = occ.occurrence_range_in_tz(locale.timezone()) %}
                         <br />
-                        {{ locale.date_range(tz_range.start().cloned(), tz_range.end().cloned(),
-                                             &DateContext::system(), &tz_range.tz())|safe }}
+                        {{
+                            locale.date_range(tz_range.start().cloned(), tz_range.end().cloned(),
+                            &DateContext::system(), &tz_range.tz())|safe
+                        }}
                         ({{ tz_range.tz_name() }})
                     {% endif %}
                 </td>

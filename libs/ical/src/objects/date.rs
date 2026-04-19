@@ -10,7 +10,10 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{
+    DateTime, Duration, FixedOffset, MappedLocalTime, NaiveDate, NaiveDateTime, NaiveTime,
+    TimeZone, Utc,
+};
 use chrono_tz::Tz;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -408,6 +411,43 @@ impl CalDate {
     ) -> ResolvedDateTime {
         resolver.resolve_date_end(self, fallback)
     }
+
+    /// Rebuilds a timed date from a concrete instant while preserving its representation.
+    pub fn from_resolved_in_tz(
+        &self,
+        instant: ResolvedDateTime,
+        fallback: &Tz,
+        resolver: &CalendarTimeZoneResolver,
+    ) -> Result<Self, ParseError> {
+        match self {
+            Self::DateTime(CalDateTime::Timezone(_, tzid)) => {
+                Ok(Self::DateTime(CalDateTime::Timezone(
+                    resolver.instant_to_local(instant, Some(tzid), fallback),
+                    tzid.clone(),
+                )))
+            }
+            Self::DateTime(CalDateTime::Utc(_)) => Ok(Self::DateTime(CalDateTime::Utc(
+                instant.with_timezone(&Utc),
+            ))),
+            Self::DateTime(CalDateTime::Floating(_)) => Ok(Self::DateTime(CalDateTime::Floating(
+                instant.with_timezone(fallback).naive_local(),
+            ))),
+            Self::Date(..) => Err(ParseError::InvalidDate(
+                "timed conversion requires DATE-TIME source".to_string(),
+            )),
+        }
+    }
+
+    /// Resolves a user-local wall-clock datetime into a concrete instant in `tz`.
+    pub fn resolve_local_datetime(
+        local: NaiveDateTime,
+        tz: &Tz,
+    ) -> Result<ResolvedDateTime, ParseError> {
+        match CalDateTime::from_local_as_utc(local, tz)? {
+            CalDateTime::Utc(dt) => Ok(dt.fixed_offset().into()),
+            _ => unreachable!("local UTC conversion must produce a UTC datetime"),
+        }
+    }
 }
 
 impl From<DateTime<Tz>> for CalDate {
@@ -500,6 +540,20 @@ impl CalDateTime {
             Self::Utc(dt) => dt.naive_local().time(),
             Self::Timezone(dt, _tzid) => dt.time(),
             Self::Floating(dt) => dt.time(),
+        }
+    }
+
+    /// Attempts to interpret the given date in the given timezone and returns a `Self::Utc`
+    /// instance for that date.
+    fn from_local_as_utc(local: NaiveDateTime, tz: &Tz) -> Result<Self, ParseError> {
+        match tz.from_local_datetime(&local) {
+            MappedLocalTime::Single(dt) => Ok(Self::Utc(dt.with_timezone(&Utc))),
+            MappedLocalTime::Ambiguous(_, _) => {
+                Err(ParseError::AmbiguousTime(format!("{} in {}", local, tz)))
+            }
+            MappedLocalTime::None => {
+                Err(ParseError::NonExistentTime(format!("{} in {}", local, tz)))
+            }
         }
     }
 
@@ -1058,9 +1112,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_timezone_rejects_local_tz_gap() {
-        // 2:00 AM doesn't exist in America/New_York on 2025-03-09 (spring forward).
-        // Use a time that's valid in Europe/Berlin but not in America/New_York.
+    fn validate_timezone_ignores_unrelated_local_tz_gap() {
+        // A timezone-qualified value should validate against its declared TZID semantics rather than
+        // the caller's unrelated local timezone.
         let dt = CalDateTime::Timezone(
             NaiveDate::from_ymd_opt(2025, 3, 9)
                 .and_then(|d| d.and_hms_opt(2, 30, 0))
@@ -1070,7 +1124,7 @@ mod tests {
         assert!(
             DateContext::system()
                 .validate_datetime(&dt, &Tz::America__New_York)
-                .is_err()
+                .is_ok()
         );
     }
 
@@ -1122,9 +1176,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_timezone_rejects_local_tz_fold() {
-        // 1:30 AM on 2025-11-02 is ambiguous in America/New_York (fall back).
-        // Use a naive time that is valid in Europe/Berlin but ambiguous in New York.
+    fn validate_timezone_ignores_unrelated_local_tz_fold() {
+        // A timezone-qualified value should validate against its declared TZID semantics rather than
+        // the caller's unrelated local timezone.
         let dt = CalDateTime::Timezone(
             NaiveDate::from_ymd_opt(2025, 11, 2)
                 .and_then(|d| d.and_hms_opt(1, 30, 0))
@@ -1134,7 +1188,7 @@ mod tests {
         assert!(
             DateContext::system()
                 .validate_datetime(&dt, &Tz::America__New_York)
-                .is_err()
+                .is_ok()
         );
     }
 

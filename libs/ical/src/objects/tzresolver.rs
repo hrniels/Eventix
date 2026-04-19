@@ -138,7 +138,7 @@ impl CalendarTimeZoneResolver {
                     }
                     MappedLocalTime::Single(_) => {}
                 }
-                validate_system_time(local_tz, *local)
+                Ok(())
             }
         }
     }
@@ -199,6 +199,34 @@ impl CalendarTimeZoneResolver {
             Some(tzid) => self.resolve_local_or_earlier(tzid, local),
             None => fixed_from_fallback(fallback, local),
         }
+    }
+
+    /// Converts a concrete instant back into a local wall-clock datetime in the requested timezone.
+    pub fn instant_to_local(
+        &self,
+        instant: ResolvedDateTime,
+        tzid: Option<&str>,
+        fallback: &Tz,
+    ) -> NaiveDateTime {
+        match tzid {
+            Some(tzid) => self.localize_in_timezone(instant, tzid),
+            None => instant.with_timezone(fallback).naive_local(),
+        }
+    }
+
+    fn localize_in_timezone(&self, instant: ResolvedDateTime, tzid: &str) -> NaiveDateTime {
+        if let Some(tz) = self.embedded.get(tzid) {
+            // Embedded VTIMEZONE data is compiled into our own transition table, so chrono_tz
+            // cannot do this conversion for us. Reconstruct the matching local wall-clock value
+            // using the embedded offset history.
+            return tz.localize_instant(instant);
+        }
+
+        if let Ok(tz) = tzid.parse::<Tz>() {
+            return instant.with_timezone(&tz).naive_local();
+        }
+
+        instant.with_timezone(&Tz::UTC).naive_local()
     }
 }
 
@@ -328,6 +356,66 @@ impl EmbeddedTimeZone {
                     .as_ref()
                     .and_then(|obs| FixedOffset::east_opt(obs.offset_to.as_seconds()))
             })
+    }
+
+    fn localize_instant(&self, instant: ResolvedDateTime) -> NaiveDateTime {
+        let utc = instant.with_timezone(&Utc).naive_utc();
+        let mut best_local = None;
+        let mut best_seconds = i64::MIN;
+
+        for offset in self.all_offsets() {
+            // For a concrete instant, each distinct UTC offset implies exactly one possible local
+            // wall-clock value: local = utc + offset. We do not know ahead of time which embedded
+            // observance was active, so try every offset that appears in the compiled VTIMEZONE.
+            let local = utc + Duration::seconds(i64::from(offset.local_minus_utc()));
+            match self.resolve_local(local) {
+                // Found the local wall-clock value whose forward resolution maps back to the same
+                // instant. This is the inverse we were looking for.
+                MappedLocalTime::Single(candidate) if candidate == instant => return local,
+                MappedLocalTime::Ambiguous(early, late) if early == instant || late == instant => {
+                    return local;
+                }
+                _ => {
+                    // Keep the largest offset as a last-resort fallback. This should not normally
+                    // be needed for well-formed data, but it avoids producing a wildly unrelated
+                    // wall-clock time if the embedded rules are incomplete.
+                    let seconds = i64::from(offset.local_minus_utc());
+                    if seconds > best_seconds {
+                        best_seconds = seconds;
+                        best_local = Some(local);
+                    }
+                }
+            }
+        }
+
+        best_local.unwrap_or(utc)
+    }
+
+    fn all_offsets(&self) -> Vec<FixedOffset> {
+        let mut offsets: Vec<FixedOffset> = Vec::new();
+
+        let mut push_unique_offset = |offset: FixedOffset| {
+            if offsets
+                .iter()
+                .all(|existing| existing.local_minus_utc() != offset.local_minus_utc())
+            {
+                offsets.push(offset);
+            }
+        };
+
+        // Collect every distinct offset that can appear in this embedded timezone. Reverse
+        // localization only needs the set of offsets, not the full transition sequence.
+        if let Some(base) = &self.base_observance {
+            push_unique_offset(FixedOffset::east_opt(base.offset_from.as_seconds()).unwrap());
+            push_unique_offset(FixedOffset::east_opt(base.offset_to.as_seconds()).unwrap());
+        }
+
+        for transition in &self.transitions {
+            push_unique_offset(FixedOffset::east_opt(transition.offset_from.as_seconds()).unwrap());
+            push_unique_offset(FixedOffset::east_opt(transition.offset_to.as_seconds()).unwrap());
+        }
+
+        offsets
     }
 }
 

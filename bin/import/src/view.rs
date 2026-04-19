@@ -9,8 +9,8 @@ use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::gio;
 use gtk::glib;
 use gtk::{
-    Align, Box as GtkBox, Button, DropDown, Image, Label, ListItem, Orientation,
-    SignalListItemFactory, StringObject, Window, prelude::*,
+    prelude::*, Align, Box as GtkBox, Button, DropDown, Image, Label, ListItem, Orientation,
+    SignalListItemFactory, StringObject, Window,
 };
 use std::cell::RefCell;
 use std::rc::Rc;

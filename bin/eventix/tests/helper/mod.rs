@@ -59,6 +59,24 @@ pub fn make_state(cal_dir: &Path) -> EventixState {
     make_state_from_col_in(col, col_path)
 }
 
+/// Creates an `EventixState` like [`make_state`] but with a temporary `TZ` override during state
+/// construction so the loaded locale uses the requested timezone.
+#[allow(dead_code)]
+pub fn make_state_in_tz(cal_dir: &Path, tz: &str) -> EventixState {
+    let col_path = cal_dir.parent().unwrap();
+    let mut col = CollectionSettings::new(SyncerType::FileSystem {
+        path: col_path.to_string_lossy().into_owned(),
+    });
+
+    let mut cal = CalendarSettings::default();
+    cal.set_enabled(true);
+    cal.set_folder(cal_dir.file_name().unwrap().to_string_lossy().into_owned());
+    cal.set_name("Test Calendar".to_string());
+    col.all_calendars_mut().insert(CAL_ID.to_string(), cal);
+
+    make_state_from_col_in_tz(col, col_path, tz)
+}
+
 /// Creates an `EventixState` backed by two calendar directories under the same collection.
 ///
 /// `cal_dir` is the directory for `CAL_ID` (the source calendar); a sibling directory named
@@ -176,6 +194,32 @@ fn make_state_from_col_in(col: CollectionSettings, data_home: &Path) -> EventixS
     settings.write_to_file().expect("write settings");
 
     let state = eventix_state::State::new(xdg).expect("State::new");
+    Arc::new(tokio::sync::Mutex::new(state))
+}
+
+fn make_state_from_col_in_tz(col: CollectionSettings, data_home: &Path, tz: &str) -> EventixState {
+    let config_tmp = TempDir::new().unwrap();
+
+    let locale_dir = data_home.join("locale");
+    std::fs::create_dir_all(&locale_dir).unwrap();
+    std::fs::write(
+        locale_dir.join("English.toml"),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/locale/English.toml"
+        )),
+    )
+    .unwrap();
+
+    let xdg = Arc::new(eventix_state::with_test_xdg(data_home, config_tmp.path()));
+
+    let mut settings = Settings::new(xdg.get_config_home().unwrap().join("settings.toml"));
+    settings.collections_mut().insert(COL_ID.to_string(), col);
+    settings.write_to_file().expect("write settings");
+
+    let tz: chrono_tz::Tz = tz.parse().expect("parse explicit test timezone");
+    let state =
+        eventix_state::State::new_with_timezone(xdg, Some(tz)).expect("State::new_with_timezone");
     Arc::new(tokio::sync::Mutex::new(state))
 }
 
