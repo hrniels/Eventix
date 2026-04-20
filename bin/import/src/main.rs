@@ -34,11 +34,7 @@ struct Args {
 fn format_error(summary: &str, err: &anyhow::Error) -> String {
     let mut lines = vec![summary.to_string()];
 
-    for cause in err
-        .source()
-        .into_iter()
-        .flat_map(|source| std::iter::successors(Some(source), |err| err.source()))
-    {
+    for cause in err.chain() {
         lines.push(format!("Caused by: {cause}"));
     }
 
