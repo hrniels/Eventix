@@ -31,6 +31,25 @@ struct Args {
     file: String,
 }
 
+fn format_error(summary: &str, err: &anyhow::Error) -> String {
+    let mut lines = vec![summary.to_string()];
+
+    for cause in err
+        .source()
+        .into_iter()
+        .flat_map(|source| std::iter::successors(Some(source), |err| err.source()))
+    {
+        lines.push(format!("Caused by: {cause}"));
+    }
+
+    lines.join("\n")
+}
+
+fn error_and_exit<M: AsRef<str>>(msg: M) -> ! {
+    ImportView::show_error(msg.as_ref());
+    std::process::exit(1);
+}
+
 fn read_ics_file(uri: &str) -> anyhow::Result<String> {
     let file = File::for_uri(uri);
     let stream = file
@@ -93,7 +112,10 @@ fn main() {
     ImportView::init();
 
     let xdg = Arc::new(BaseDirectories::with_prefix(APP_ID));
-    let state = eventix_state::State::new(xdg.clone()).expect("loading state");
+    let state = match eventix_state::State::new(xdg.clone()) {
+        Ok(state) => state,
+        Err(err) => error_and_exit(format_error("Unable to load state.", &err)),
+    };
     let locale = state.locale();
 
     // collect all calendars
@@ -109,12 +131,14 @@ fn main() {
         .collect();
 
     // parse items from ICS file
-    let mut ics = parse_ics_file(&args.file).unwrap();
+    let mut ics = match parse_ics_file(&args.file) {
+        Err(err) => error_and_exit(format_error("Unable to parse file.", &err)),
+        Ok(ics) => ics,
+    };
     if !ics.validate_times(state.timezone()) {
-        ImportView::show_error(
+        error_and_exit(
             "The ICS file contains dates that are not representable in the local timezone.",
         );
-        std::process::exit(1);
     }
 
     let items = ics
@@ -149,11 +173,10 @@ fn main() {
         .len()
         > 1
     {
-        ImportView::show_error(
+        error_and_exit(
             "The ICS file contains multiple components that exist \
              in different calendars and thus cannot be imported.",
         );
-        std::process::exit(1);
     }
 
     // build model and pass it to view
@@ -165,7 +188,10 @@ fn main() {
         state,
         xdg: xdg.clone(),
     };
-    let view = ImportView::new(model, &xdg, &*locale, import_state, import);
+    let view = match ImportView::new(model, &xdg, &*locale, import_state, import) {
+        Ok(view) => view,
+        Err(err) => error_and_exit(format_error("Unable to prepare import.", &err)),
+    };
 
     view.show();
 }

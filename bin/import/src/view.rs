@@ -40,7 +40,7 @@ impl ImportView {
         locale: &dyn Locale,
         data: T,
         import: fn(T, String) -> anyhow::Result<()>,
-    ) -> Self
+    ) -> anyhow::Result<Self>
     where
         T: 'static,
     {
@@ -148,6 +148,10 @@ impl ImportView {
             })
             .collect();
 
+        if filtered_cals.is_empty() {
+            anyhow::bail!("No compatible calendar is available for this import.");
+        }
+
         let (calendar_dropdown, cal_entries) =
             Self::create_color_dropdown(filtered_cals.iter().copied());
         calendar_box.append(&calendar_dropdown);
@@ -168,8 +172,10 @@ impl ImportView {
             let idx = calendar_dropdown.selected() as usize;
             let cal_id = cal_entries[idx].id.clone();
             let data = data.borrow_mut().take().unwrap();
-            import(data, cal_id).unwrap();
-            Self::quit(0);
+            match import(data, cal_id) {
+                Ok(()) => Self::quit(0),
+                Err(err) => Self::show_error(&crate::format_error("Import failed.", &err)),
+            }
         });
 
         // Connect Cancel
@@ -180,12 +186,17 @@ impl ImportView {
             Self::quit(0);
         });
 
-        Self { window }
+        Ok(Self { window })
     }
 
     pub fn show_error(message: &str) {
+        Self::show_message("Error", message, true);
+    }
+
+    fn show_message(title: &str, message: &str, quit_after_close: bool) {
+        let main_loop = glib::MainLoop::new(None, false);
         let dialog = Window::builder()
-            .title("Error")
+            .title(title)
             .modal(true)
             .default_width(300)
             .build();
@@ -204,18 +215,29 @@ impl ImportView {
         let ok_button = Button::with_label("Ok");
         ok_button.connect_clicked({
             let dialog = dialog.clone();
+            let main_loop = main_loop.clone();
             move |_| {
                 dialog.close();
-                Self::quit(0);
+                main_loop.quit();
+                if quit_after_close {
+                    Self::quit(0);
+                }
             }
         });
         vbox.append(&ok_button);
 
-        dialog.connect_close_request(|_| {
-            Self::quit(0);
+        dialog.connect_close_request({
+            let main_loop = main_loop.clone();
+            move |_| {
+                main_loop.quit();
+                if quit_after_close {
+                    Self::quit(0);
+                }
+
+                glib::Propagation::Proceed
+            }
         });
 
-        let main_loop = glib::MainLoop::new(None, false);
         dialog.present();
         main_loop.run();
     }
