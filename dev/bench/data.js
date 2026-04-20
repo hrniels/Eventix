@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776672553519,
+  "lastUpdate": 1776672610713,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -1324,6 +1324,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 43806319.14444446,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fbe167c4d578d8749a2c7187722bcce97a446326",
+          "message": "Merge pull request #25 from hrniels/misc\n\nMisc fixes and improvements",
+          "timestamp": "2026-04-20T10:04:27+02:00",
+          "tree_id": "e55099450e5527bf9ed9f7ace7d697dbece84ba1",
+          "url": "https://github.com/hrniels/Eventix/commit/fbe167c4d578d8749a2c7187722bcce97a446326"
+        },
+        "date": 1776672610070,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 45419221.0888889,
             "unit": "ns"
           }
         ]
