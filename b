@@ -102,7 +102,8 @@ def cmd_app(args):
 
 def cmd_import(args):
     """Imports an ICS file into Eventix."""
-    cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", args.file]
+    path = Path(args.file).resolve().as_uri()
+    cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", path]
     run_cmd(cmd_args)
 
 
@@ -152,6 +153,7 @@ def cmd_format(args):
     """Formats Rust, JS, CSS, and HTML template files."""
     _ensure_npm_deps()
     subprocess.run(["cargo", "fmt"])
+    subprocess.run(["yamlfmt", "-conf", ".yamlfmt.yaml", ".github"])
     subprocess.run(PRETTIER + ["--write",
                                "data/static/**/*.js",
                                "data/static/style.css",

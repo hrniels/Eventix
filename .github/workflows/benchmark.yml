@@ -1,124 +1,141 @@
 name: Benchmark
 
 on:
-    pull_request: {}
-    push:
-        branches:
-            - main
-    workflow_dispatch:
+  pull_request: {}
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
-    CARGO_TERM_COLOR: always
-    RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 permissions:
-    contents: write
-    deployments: write
+  contents: write
+  deployments: write
 
 jobs:
-    benchmark:
-        name: Page Benchmarks
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-                  fetch-depth: 0
+  benchmark:
+    name: Page Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
-            - uses: ./.github/actions/rust-setup
-              with:
-                  gtk: "true"
+      - uses: ./.github/actions/rust-setup
+        with:
+          gtk: "true"
 
-            - name: Run list benchmark
-              run: cargo bench -p eventix --bench list -- --sample-size 30 --warm-up-time 1 --measurement-time 3 | tee benchmark-list.txt
+      - name: Run list benchmark
+        run: |
+          cargo bench -p eventix --bench list -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-list.txt
 
-            - name: Export list benchmark JSON
-              run: python3 tools/export_bench.py --input-dir target/criterion/pages_list_results_content --output benchmark-list.json
+      - name: Export list benchmark JSON
+        run: |
+          python3 tools/export_bench.py \
+            --input-dir target/criterion/pages_list_results_content \
+            --output benchmark-list.json
 
-            - name: Store list benchmark result
-              uses: benchmark-action/github-action-benchmark@v1
-              with:
-                  name: Eventix List Benchmark
-                  tool: customSmallerIsBetter
-                  output-file-path: benchmark-list.json
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  auto-push: true
-                  summary-always: true
-                  alert-threshold: 150%
-                  comment-on-alert: false
-                  fail-on-alert: false
-                  max-items-in-chart: 200
+      - name: Store list benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Eventix List Benchmark
+          tool: customSmallerIsBetter
+          output-file-path: benchmark-list.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          summary-always: true
+          alert-threshold: 150%
+          comment-on-alert: false
+          fail-on-alert: false
+          max-items-in-chart: 200
 
-            - name: Run monthly benchmark
-              run: cargo bench -p eventix --bench monthly -- --sample-size 30 --warm-up-time 1 --measurement-time 3 | tee benchmark-monthly.txt
+      - name: Run monthly benchmark
+        run: |
+          cargo bench -p eventix --bench monthly -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-monthly.txt
 
-            - name: Export monthly benchmark JSON
-              run: python3 tools/export_bench.py --input-dir target/criterion/pages_monthly_content --output benchmark-monthly.json
+      - name: Export monthly benchmark JSON
+        run: |
+          python3 tools/export_bench.py \
+            --input-dir target/criterion/pages_monthly_content \
+            --output benchmark-monthly.json
 
-            - name: Store monthly benchmark result
-              uses: benchmark-action/github-action-benchmark@v1
-              with:
-                  name: Eventix Monthly Benchmark
-                  tool: customSmallerIsBetter
-                  output-file-path: benchmark-monthly.json
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  auto-push: true
-                  summary-always: true
-                  alert-threshold: 150%
-                  comment-on-alert: false
-                  fail-on-alert: false
-                  max-items-in-chart: 200
+      - name: Store monthly benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Eventix Monthly Benchmark
+          tool: customSmallerIsBetter
+          output-file-path: benchmark-monthly.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          summary-always: true
+          alert-threshold: 150%
+          comment-on-alert: false
+          fail-on-alert: false
+          max-items-in-chart: 200
 
-            - name: Run weekly benchmark
-              run: cargo bench -p eventix --bench weekly -- --sample-size 30 --warm-up-time 1 --measurement-time 3 | tee benchmark-weekly.txt
+      - name: Run weekly benchmark
+        run: |
+          cargo bench -p eventix --bench weekly -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-weekly.txt
 
-            - name: Export weekly benchmark JSON
-              run: python3 tools/export_bench.py --input-dir target/criterion/pages_weekly_content --output benchmark-weekly.json
+      - name: Export weekly benchmark JSON
+        run: |
+          python3 tools/export_bench.py \
+            --input-dir target/criterion/pages_weekly_content \
+            --output benchmark-weekly.json
 
-            - name: Store weekly benchmark result
-              uses: benchmark-action/github-action-benchmark@v1
-              with:
-                  name: Eventix Weekly Benchmark
-                  tool: customSmallerIsBetter
-                  output-file-path: benchmark-weekly.json
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  auto-push: true
-                  summary-always: true
-                  alert-threshold: 150%
-                  comment-on-alert: false
-                  fail-on-alert: false
-                  max-items-in-chart: 200
+      - name: Store weekly benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Eventix Weekly Benchmark
+          tool: customSmallerIsBetter
+          output-file-path: benchmark-weekly.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          summary-always: true
+          alert-threshold: 150%
+          comment-on-alert: false
+          fail-on-alert: false
+          max-items-in-chart: 200
 
-            - name: Run parse benchmark
-              run: cargo bench -p eventix --bench parse -- --sample-size 30 --warm-up-time 1 --measurement-time 3 | tee benchmark-parse.txt
+      - name: Run parse benchmark
+        run: |
+          cargo bench -p eventix --bench parse -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-parse.txt
 
-            - name: Export parse benchmark JSON
-              run: python3 tools/export_bench.py --input-dir target/criterion/ics_parse_directory --output benchmark-parse.json
+      - name: Export parse benchmark JSON
+        run: python3 tools/export_bench.py --input-dir target/criterion/ics_parse_directory --output benchmark-parse.json
 
-            - name: Store parse benchmark result
-              uses: benchmark-action/github-action-benchmark@v1
-              with:
-                  name: Eventix Parse Benchmark
-                  tool: customSmallerIsBetter
-                  output-file-path: benchmark-parse.json
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  auto-push: true
-                  summary-always: true
-                  alert-threshold: 150%
-                  comment-on-alert: false
-                  fail-on-alert: false
-                  max-items-in-chart: 200
+      - name: Store parse benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Eventix Parse Benchmark
+          tool: customSmallerIsBetter
+          output-file-path: benchmark-parse.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          summary-always: true
+          alert-threshold: 150%
+          comment-on-alert: false
+          fail-on-alert: false
+          max-items-in-chart: 200
 
-            - name: Upload raw benchmark output
-              uses: actions/upload-artifact@v4
-              with:
-                  name: benchmark-output
-                  path: |
-                      benchmark-list.txt
-                      benchmark-list.json
-                      benchmark-monthly.txt
-                      benchmark-monthly.json
-                      benchmark-parse.txt
-                      benchmark-parse.json
-                      benchmark-weekly.txt
-                      benchmark-weekly.json
+      - name: Upload raw benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-output
+          path: |-
+            benchmark-list.txt
+            benchmark-list.json
+            benchmark-monthly.txt
+            benchmark-monthly.json
+            benchmark-parse.txt
+            benchmark-parse.json
+            benchmark-weekly.txt
+            benchmark-weekly.json

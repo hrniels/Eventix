@@ -1,3 +1,5 @@
+const DRAG_ACTIVATION_DISTANCE = 10;
+
 let curDrag = null;
 
 // Style element injected during a copy-mode drag to override the cursor globally.
@@ -47,7 +49,7 @@ class DragOperation {
             zIndex: 100,
             addClasses: false,
             helper: "clone",
-            distance: 10,
+            distance: DRAG_ACTIVATION_DISTANCE,
             start: function (e, ui) {
                 ui.helper.css("width", $(this).css("width"));
                 ui.helper.css("height", $(this).css("height"));
@@ -170,6 +172,9 @@ class ResizeOperation {
         this._columnTop = 0;
         this._startTotalMin = 0;
         this._endTotalMin = 0;
+        this._startMouseX = 0;
+        this._startMouseY = 0;
+        this._didResize = false;
         this._boundMove = this._move.bind(this);
         this._boundStop = this._stop.bind(this);
     }
@@ -182,6 +187,9 @@ class ResizeOperation {
 
         this._edge = edge;
         this._el = el;
+        this._startMouseX = e.clientX;
+        this._startMouseY = e.clientY;
+        this._didResize = false;
 
         // The column container is the `position: relative; height: 1440px` div that is the
         // direct parent of the event element. Its top in viewport coordinates gives us the
@@ -208,7 +216,21 @@ class ResizeOperation {
         return Math.round(rawMinutes / 30) * 30;
     }
 
+    _hasExceededActivationDistance(e) {
+        return (
+            Math.hypot(e.clientX - this._startMouseX, e.clientY - this._startMouseY) >=
+            DRAG_ACTIVATION_DISTANCE
+        );
+    }
+
     _move(e) {
+        if (!this._didResize) {
+            if (!this._hasExceededActivationDistance(e)) {
+                return;
+            }
+            this._didResize = true;
+        }
+
         const rawMinutes = e.clientY - this._columnTop;
         const snapped = Math.max(0, Math.min(1440, this._snapToGrid(rawMinutes)));
 
@@ -243,6 +265,12 @@ class ResizeOperation {
         $(document).off("mouseup", this._boundStop);
         setResizeCursor(null);
 
+        if (!this._didResize) {
+            this._edge = null;
+            this._el = null;
+            return;
+        }
+
         const rawMinutes = e.clientY - this._columnTop;
         const snapped = Math.max(0, Math.min(1440, this._snapToGrid(rawMinutes)));
 
@@ -260,5 +288,6 @@ class ResizeOperation {
 
         this._edge = null;
         this._el = null;
+        this._didResize = false;
     }
 }
