@@ -1,8 +1,18 @@
 let syncForce = false;
 let syncing = false;
 let outOfSync = false;
+let lastSyncErrorButton = null;
+
+function resetLastSyncErrorButton() {
+    if (lastSyncErrorButton !== null) {
+        lastSyncErrorButton.removeClass("ev_button_error");
+        lastSyncErrorButton = null;
+    }
+}
 
 function startSpinning(spinnerId) {
+    resetLastSyncErrorButton();
+
     const spinner = $("#" + spinnerId);
     if (!spinner.data("originalClass")) {
         spinner.data("originalClass", spinner.attr("class") || "");
@@ -22,10 +32,8 @@ function stopSpinning(spinnerId, error) {
         spinner.removeClass("ev_spin");
     }
     if (error) {
-        $("#" + spinnerId)
-            .parent()
-            .addClass("ev_button_error")
-            .effect("shake");
+        lastSyncErrorButton = $("#" + spinnerId).parent();
+        lastSyncErrorButton.addClass("ev_button_error").effect("shake");
     }
 }
 
