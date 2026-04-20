@@ -102,7 +102,8 @@ def cmd_app(args):
 
 def cmd_import(args):
     """Imports an ICS file into Eventix."""
-    cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", args.file]
+    path = "file://" + str(Path(args.file).absolute())
+    cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", path]
     run_cmd(cmd_args)
 
 
