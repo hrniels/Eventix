@@ -152,6 +152,7 @@ def cmd_format(args):
     """Formats Rust, JS, CSS, and HTML template files."""
     _ensure_npm_deps()
     subprocess.run(["cargo", "fmt"])
+    subprocess.run(["yamlfmt", "-conf", ".yamlfmt.yaml", ".github"])
     subprocess.run(PRETTIER + ["--write",
                                "data/static/**/*.js",
                                "data/static/style.css",
