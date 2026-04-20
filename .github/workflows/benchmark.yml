@@ -30,12 +30,15 @@ jobs:
           gtk: "true"
 
       - name: Run list benchmark
-        run: cargo bench -p eventix --bench list -- --sample-size 30 --warm-up-time 1 --measurement-time
-          3 | tee benchmark-list.txt
+        run: |
+          cargo bench -p eventix --bench list -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-list.txt
 
       - name: Export list benchmark JSON
-        run: python3 tools/export_bench.py --input-dir target/criterion/pages_list_results_content --output
-          benchmark-list.json
+        run: |
+          python3 tools/export_bench.py \
+            --input-dir target/criterion/pages_list_results_content \
+            --output benchmark-list.json
 
       - name: Store list benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -52,12 +55,15 @@ jobs:
           max-items-in-chart: 200
 
       - name: Run monthly benchmark
-        run: cargo bench -p eventix --bench monthly -- --sample-size 30 --warm-up-time 1 --measurement-time
-          3 | tee benchmark-monthly.txt
+        run: |
+          cargo bench -p eventix --bench monthly -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-monthly.txt
 
       - name: Export monthly benchmark JSON
-        run: python3 tools/export_bench.py --input-dir target/criterion/pages_monthly_content --output
-          benchmark-monthly.json
+        run: |
+          python3 tools/export_bench.py \
+            --input-dir target/criterion/pages_monthly_content \
+            --output benchmark-monthly.json
 
       - name: Store monthly benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -74,12 +80,15 @@ jobs:
           max-items-in-chart: 200
 
       - name: Run weekly benchmark
-        run: cargo bench -p eventix --bench weekly -- --sample-size 30 --warm-up-time 1 --measurement-time
-          3 | tee benchmark-weekly.txt
+        run: |
+          cargo bench -p eventix --bench weekly -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-weekly.txt
 
       - name: Export weekly benchmark JSON
-        run: python3 tools/export_bench.py --input-dir target/criterion/pages_weekly_content --output
-          benchmark-weekly.json
+        run: |
+          python3 tools/export_bench.py \
+            --input-dir target/criterion/pages_weekly_content \
+            --output benchmark-weekly.json
 
       - name: Store weekly benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -96,8 +105,9 @@ jobs:
           max-items-in-chart: 200
 
       - name: Run parse benchmark
-        run: cargo bench -p eventix --bench parse -- --sample-size 30 --warm-up-time 1 --measurement-time
-          3 | tee benchmark-parse.txt
+        run: |
+          cargo bench -p eventix --bench parse -- --sample-size 30 --warm-up-time 1 \
+            --measurement-time 3 | tee benchmark-parse.txt
 
       - name: Export parse benchmark JSON
         run: python3 tools/export_bench.py --input-dir target/criterion/ics_parse_directory --output benchmark-parse.json
