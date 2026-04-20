@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776672406149,
+  "lastUpdate": 1776672479980,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -686,6 +686,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 60740717.9,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fbe167c4d578d8749a2c7187722bcce97a446326",
+          "message": "Merge pull request #25 from hrniels/misc\n\nMisc fixes and improvements",
+          "timestamp": "2026-04-20T10:04:27+02:00",
+          "tree_id": "e55099450e5527bf9ed9f7ace7d697dbece84ba1",
+          "url": "https://github.com/hrniels/Eventix/commit/fbe167c4d578d8749a2c7187722bcce97a446326"
+        },
+        "date": 1776672479031,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 5622350.382747215,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 3443059.9283238724,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 62815208.25,
             "unit": "ns"
           }
         ]
