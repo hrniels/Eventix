@@ -261,7 +261,8 @@ pub trait UpdatableEventLike: EventLike {
 
     /// Sets the recurrence id.
     ///
-    /// Note that the recurrence rule being `Some` requires the recurrence id to be `None`.
+    /// Note that the recurrence rule being `Some` requires the recurrence id to be `None`. The
+    /// caller is responsible to normalize the date to the date type of the start.
     fn set_rid(&mut self, rid: Option<CalDate>);
 
     /// Sets the alarms to given vector of [`CalAlarm`].
@@ -270,6 +271,7 @@ pub trait UpdatableEventLike: EventLike {
     /// Toggles the exclusion for given date.
     ///
     /// That is, if it is excluded, the exclusion will be removed. And otherwise, it will be added.
+    /// The method expects that `date` is of the same time as the start of the calendar item.
     fn toggle_exclude(&mut self, date: CalDate);
 
     /// Sets the attendees to given list.

@@ -106,6 +106,28 @@ fn write_allday_event_ics(cal_dir: &Path, uid: &str, summary: &str) -> PathBuf {
     path
 }
 
+/// Writes a minimal weekly recurring all-day VEVENT ICS file for `uid` into `cal_dir`.
+fn write_recurring_allday_event_ics(cal_dir: &Path, uid: &str) -> PathBuf {
+    let path = cal_dir.join(format!("{uid}.ics"));
+    std::fs::write(
+        &path,
+        format!(
+            "BEGIN:VCALENDAR\r\n\
+             BEGIN:VEVENT\r\n\
+             UID:{uid}\r\n\
+             DTSTAMP:20260101T000000Z\r\n\
+             DTSTART;VALUE=DATE:20260415\r\n\
+             DTEND;VALUE=DATE:20260416\r\n\
+             RRULE:FREQ=WEEKLY;BYDAY=WE\r\n\
+             SUMMARY:Weekly all-day\r\n\
+             END:VEVENT\r\n\
+             END:VCALENDAR\r\n"
+        ),
+    )
+    .unwrap();
+    path
+}
+
 #[path = "items/add.rs"]
 mod add;
 #[path = "items/cancel.rs"]

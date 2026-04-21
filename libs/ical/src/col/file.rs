@@ -642,6 +642,10 @@ impl CalFile {
             .iter()
             .find(|c| c.uid() == &uid && c.rid().is_none())
             .ok_or_else(|| E::from(ColError::ComponentNotFound(uid.clone())))?;
+        let rid = base
+            .start()
+            .map(|start| rid.normalize_to(start))
+            .unwrap_or(rid);
 
         // does the overwrite exist?
         if self

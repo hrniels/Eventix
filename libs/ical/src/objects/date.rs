@@ -363,6 +363,48 @@ impl CalDate {
         }
     }
 
+    /// Returns true of `self` and `other` are of the same date type
+    ///
+    /// If both are `CalDate::Date` or `CalDate::DateTime`, the type is considered to be the same.
+    /// That is, the type of `CalDate::DateTime` is ignored here.
+    pub fn is_same_type(&self, other: &CalDate) -> bool {
+        matches!(
+            (self, other),
+            (CalDate::Date(..), CalDate::Date(..)) | (CalDate::DateTime(_), CalDate::DateTime(_))
+        )
+    }
+
+    /// Returns this date normalized to the representation shape of `target`.
+    ///
+    /// The returned value keeps the calendar day from `self` but uses the variant and date type or
+    /// time representation of `target`.
+    pub fn normalize_to(&self, target: &CalDate) -> Self {
+        match target {
+            Self::Date(_, ty) => Self::Date(self.as_naive_date(), *ty),
+            Self::DateTime(CalDateTime::Utc(_)) => Self::DateTime(CalDateTime::Utc(
+                self.as_naive_date().and_hms_opt(0, 0, 0).unwrap().and_utc(),
+            )),
+            Self::DateTime(CalDateTime::Timezone(_, tzid)) => {
+                let naive = match self {
+                    Self::DateTime(CalDateTime::Timezone(dt, _)) => *dt,
+                    Self::DateTime(CalDateTime::Floating(dt)) => *dt,
+                    Self::DateTime(CalDateTime::Utc(dt)) => dt.naive_utc(),
+                    Self::Date(day, _) => day.and_hms_opt(0, 0, 0).unwrap(),
+                };
+                Self::DateTime(CalDateTime::Timezone(naive, tzid.clone()))
+            }
+            Self::DateTime(CalDateTime::Floating(_)) => {
+                let naive = match self {
+                    Self::DateTime(CalDateTime::Timezone(dt, _)) => *dt,
+                    Self::DateTime(CalDateTime::Floating(dt)) => *dt,
+                    Self::DateTime(CalDateTime::Utc(dt)) => dt.naive_utc(),
+                    Self::Date(day, _) => day.and_hms_opt(0, 0, 0).unwrap(),
+                };
+                Self::DateTime(CalDateTime::Floating(naive))
+            }
+        }
+    }
+
     /// Builds and returns a [`Property`] for this date.
     pub fn to_prop<N: ToString>(&self, name: N) -> Property {
         match self {

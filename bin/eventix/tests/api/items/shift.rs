@@ -10,7 +10,8 @@ use crate::helper::edit::read_ics_by_uid;
 use crate::helper::{CAL_ID, encode_form, make_router, make_state, make_state_in_tz, post_query};
 
 use super::{
-    write_allday_event_ics, write_event_ics, write_event_ics_in_tz, write_recurring_event_ics,
+    write_allday_event_ics, write_event_ics, write_event_ics_in_tz,
+    write_recurring_allday_event_ics, write_recurring_event_ics,
 };
 
 // --- POST /api/items/shift ---
@@ -191,6 +192,40 @@ async fn shift_recurring_occurrence_creates_override() {
             assert_eq!(dt.date(), NaiveDate::from_ymd_opt(2026, 4, 16).unwrap());
         }
         other => panic!("expected Timezone DTSTART, got {other:?}"),
+    }
+}
+
+/// Shifting a recurring all-day occurrence creates an override whose RECURRENCE-ID is also DATE.
+#[tokio::test]
+async fn shift_recurring_all_day_occurrence_keeps_date_rid() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "shift-recurring-allday";
+    write_recurring_allday_event_ics(&cal_dir, uid);
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    let qs = encode_form(&[
+        ("uid", uid),
+        ("rid", "TU2026-04-15T12:00:00"),
+        ("date", "2026-04-16"),
+    ]);
+    let (status, _) = post_query(router, &format!("/api/items/shift?{qs}")).await;
+    assert_eq!(status, 200);
+
+    let ics = read_ics_by_uid(&cal_dir, uid);
+    let override_comp = ics
+        .components()
+        .iter()
+        .find(|c| c.rid().is_some())
+        .expect("expected a RECURRENCE-ID override");
+
+    match override_comp.rid().expect("expected RECURRENCE-ID") {
+        CalDate::Date(d, _) => {
+            assert_eq!(*d, NaiveDate::from_ymd_opt(2026, 4, 15).unwrap());
+        }
+        other => panic!("expected DATE RECURRENCE-ID, got {other:?}"),
     }
 }
 

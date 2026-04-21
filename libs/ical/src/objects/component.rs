@@ -384,10 +384,15 @@ impl UpdatableEventLike for EventLikeComponent {
     }
 
     fn set_rid(&mut self, rid: Option<CalDate>) {
+        // RECURRENCE-ID must match the series DTSTART value type, not necessarily this
+        // component's DTSTART. Overwrite components may intentionally move DTSTART while keeping
+        // the RID anchored to the original series slot, so callers that know the base component
+        // must normalize before setting the RID.
         self.rid = rid;
     }
 
     fn toggle_exclude(&mut self, date: CalDate) {
+        assert!(self.start.as_ref().unwrap().is_same_type(&date));
         if self.exdates.contains(&date) {
             self.exdates.retain(|d| d != &date);
         } else {

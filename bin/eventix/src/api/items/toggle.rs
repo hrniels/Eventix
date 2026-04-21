@@ -47,7 +47,8 @@ pub async fn handler(
         return Err(anyhow!("No edit permission").into());
     }
 
-    base.toggle_exclude(form.rid);
+    let exdate = form.rid.normalize_to(base.start().unwrap());
+    base.toggle_exclude(exdate);
     base.set_last_modified(CalDate::now());
     base.set_stamp(CalDate::now());
     file.save()

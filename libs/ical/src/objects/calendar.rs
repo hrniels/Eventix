@@ -220,6 +220,7 @@ impl Calendar {
         Self::validate_opt_date(comp.last_modified(), local_tz, resolver)?;
         comp.stamp().validate_with(local_tz, resolver)?;
         Self::validate_opt_date(comp.rid(), local_tz, resolver)?;
+        Self::warn_exdate_type_mismatch(comp);
         for exdate in comp.exdates() {
             exdate.validate_with(local_tz, resolver)?;
         }
@@ -234,6 +235,24 @@ impl Calendar {
             Self::validate_opt_date(rrule.until(), local_tz, resolver)?;
         }
         Ok(())
+    }
+
+    fn warn_exdate_type_mismatch(comp: &CalComponent) {
+        let Some(dtstart) = comp.start() else {
+            return;
+        };
+
+        for exdate in comp.exdates() {
+            if !dtstart.is_same_type(exdate) {
+                warn!(
+                    "component {} (uid {}) has EXDATE {:?} with different value type than DTSTART {:?}",
+                    comp.ctype(),
+                    comp.uid(),
+                    exdate,
+                    dtstart
+                );
+            }
+        }
     }
 
     fn validate_opt_date(
