@@ -16,37 +16,6 @@
                     },
                 });
         }
-
-        function createConfirmDialog(id, onClick) {
-            $("#" + id).dialog({
-                resizable: false,
-                height: "auto",
-                width: 400,
-                modal: true,
-                autoOpen: false,
-                buttons: {
-                    Delete: function () {
-                        $(this).dialog("close");
-                        onClick();
-                    },
-                    Cancel: function () {
-                        $(this).dialog("close");
-                    },
-                },
-            });
-        }
-
-        function showConfirmDialog(id, onClick) {
-            createConfirmDialog(id, onClick);
-            $("#" + id).dialog("open");
-        }
-
-        function confirmDialog(id, btn, onClick) {
-            createConfirmDialog(id, onClick);
-            $("#" + btn).on("click", function () {
-                $("#" + id).dialog("open");
-            });
-        }
     </script>
 
     <div id="error-dialog" title="{{ "Error"|t(locale) }}" style="display: none"></div>

@@ -171,13 +171,18 @@
 <script>
     $(function () {
         {% if rid.is_none() %}
-        confirmDialog(
-            "delete-confirm",
-            "delete-button",
-            function () {
+        $("#delete-button")
+            .off("click")
+            .on("click", function () {
+                if (
+                    !window.confirm(
+                        "{{ "Are you sure?"|t(locale) }}\n\n{% if occ.is_recurrent() %}{{ "warning.delete_series"|t(locale) }}{% else %}{{ "warning.delete_item"|t(locale) }}{% endif %}",
+                    )
+                ) {
+                    return;
+                }
                 deleteItem("{{ uid }}", null, onDeleted);
-            },
-        );
+            });
         {% endif %}
 
         moveToTabCenter("title", "tabs", "tab-bar");
@@ -193,7 +198,4 @@
 <!-- prettier-ignore-end -->
 
 {% if rid.is_none() %}
-    <div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
-        {{ "warning.delete_series"|t(locale) }}
-    </div>
 {% endif %}
