@@ -632,7 +632,7 @@ impl Syncer for VDirSyncer {
         self.remove_local_folder_data(folder, false).await
     }
 
-    async fn delete(&mut self, _state: &mut State, config: bool) -> anyhow::Result<()> {
+    async fn delete(&mut self, _state: &mut State, all: bool) -> anyhow::Result<()> {
         let dir = self.cfg.parent().unwrap();
 
         // remove complete status and directory
@@ -645,7 +645,7 @@ impl Syncer for VDirSyncer {
             }
         }
 
-        if config {
+        if all {
             // remove generated config file
             fs::remove_file(&self.cfg)
                 .await

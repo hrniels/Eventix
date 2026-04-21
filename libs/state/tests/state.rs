@@ -13,7 +13,8 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 use eventix_state::{
-    CollectionSettings, Settings, State, SyncColResult, SyncerType, load_from_file, write_to_file,
+    CollectionSettings, Settings, State, SyncColResult, SyncerType, load_from_file, log_file,
+    write_to_file,
 };
 
 mod common;
@@ -325,10 +326,16 @@ fn state_reload_collection_reloads_store() {
 fn state_delete_collection_removes_from_settings() {
     let tmp = TempDir::new().unwrap();
     let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+    let log_path = log_file(state.xdg(), &"col1".to_string());
+    std::fs::write(&log_path, "test log\n").expect("creating sync log file must succeed");
 
     assert!(
         state.settings().collections().contains_key("col1"),
         "col1 must be in settings before delete"
+    );
+    assert!(
+        log_path.exists(),
+        "log file must exist before delete_collection"
     );
 
     tokio::runtime::Runtime::new()
@@ -339,6 +346,10 @@ fn state_delete_collection_removes_from_settings() {
     assert!(
         !state.settings().collections().contains_key("col1"),
         "col1 must be removed from settings after delete_collection"
+    );
+    assert!(
+        !log_path.exists(),
+        "log file must be removed when deleting the whole collection"
     );
 }
 
