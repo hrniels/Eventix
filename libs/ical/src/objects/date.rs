@@ -363,7 +363,7 @@ impl CalDate {
         }
     }
 
-    /// Returns true of `self` and `other` are of the same date type
+    /// Returns true if `self` and `other` are of the same date type
     ///
     /// If both are `CalDate::Date` or `CalDate::DateTime`, the type is considered to be the same.
     /// That is, the type of `CalDate::DateTime` is ignored here.
