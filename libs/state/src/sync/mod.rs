@@ -188,10 +188,12 @@ pub(crate) async fn delete_collection(state: &mut State, col_id: &String) -> any
     cal_sync.syncer.delete(state, true).await?;
 
     let log_path = log_file(state.xdg(), col_id);
-    if log_path.exists() {
-        tokio::fs::remove_file(&log_path)
-            .await
-            .context(format!("Removing {} failed", log_path.to_str().unwrap()))?;
+    match tokio::fs::remove_file(&log_path).await {
+        Ok(()) => (),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+        Err(e) => {
+            Err(anyhow!(e)).context(format!("Removing {} failed", log_path.display()))?;
+        }
     }
 
     Ok(())
