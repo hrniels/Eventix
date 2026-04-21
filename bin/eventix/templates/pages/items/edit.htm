@@ -120,7 +120,13 @@
                                     class="ev_button_big ev_button_critical"
                                     href="#"
                                 >
-                                    <span>{{ "Delete series"|t(locale) }}</span>
+                                    <span>
+                                        {% if occ.is_recurrent() %}
+                                            {{ "Delete series"|t(locale) }}
+                                        {% else %}
+                                            {{ "Delete"|t(locale) }}
+                                        {% endif %}
+                                    </span>
                                 </a>
                             {% endif %}
                         </td>
