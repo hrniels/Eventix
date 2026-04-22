@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use eventix_ical::objects::EventLike;
+use chrono::NaiveDate;
+use eventix_ical::objects::{CalDate, EventLike};
 use tempfile::TempDir;
 
 use crate::helper::edit::read_ics_by_uid;
 use crate::helper::{CAL_ID, encode_form, make_router, make_state, post_query};
 
-use super::write_recurring_event_ics;
+use super::{write_recurring_allday_event_ics, write_recurring_event_ics};
 
 // --- POST /api/items/toggle ---
 
@@ -38,6 +39,40 @@ async fn toggle_excludes_occurrence() {
     assert!(
         !exdates.is_empty(),
         "expected at least one EXDATE after toggle"
+    );
+    assert!(matches!(exdates[0], CalDate::DateTime(_)));
+}
+
+/// Toggling a recurring all-day occurrence stores EXDATE as VALUE=DATE.
+#[tokio::test]
+async fn toggle_excludes_all_day_occurrence_with_date_exdate() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "toggle-exclude-allday";
+    write_recurring_allday_event_ics(&cal_dir, uid);
+    let state = make_state(&cal_dir);
+    let router = make_router(state);
+
+    // Toggle the first all-day occurrence, but send a timed RID as the UI/API currently does.
+    let qs = encode_form(&[("uid", uid), ("rid", "TU2026-04-15T12:00:00")]);
+    let (status, _) = post_query(router, &format!("/api/items/toggle?{qs}")).await;
+    assert_eq!(status, 200);
+
+    let ics = read_ics_by_uid(&cal_dir, uid);
+    let base = ics
+        .components()
+        .iter()
+        .find(|c| c.rid().is_none())
+        .expect("expected base component");
+    let exdates = base.as_event().unwrap().exdates();
+    assert_eq!(exdates.len(), 1);
+    assert_eq!(
+        exdates[0],
+        CalDate::Date(
+            NaiveDate::from_ymd_opt(2026, 4, 15).unwrap(),
+            base.ctype().into(),
+        )
     );
 }
 
@@ -74,6 +109,35 @@ async fn toggle_twice_re_includes() {
         exdates.is_empty(),
         "expected no EXDATEs after double toggle, found: {exdates:?}"
     );
+}
+
+/// Toggling the same all-day occurrence twice removes the DATE EXDATE again.
+#[tokio::test]
+async fn toggle_all_day_twice_re_includes() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "toggle-twice-allday";
+    write_recurring_allday_event_ics(&cal_dir, uid);
+    let state = make_state(&cal_dir);
+
+    let router1 = make_router(state.clone());
+    let qs = encode_form(&[("uid", uid), ("rid", "TU2026-04-15T12:00:00")]);
+    let (status, _) = post_query(router1, &format!("/api/items/toggle?{qs}")).await;
+    assert_eq!(status, 200);
+
+    let router2 = make_router(state);
+    let qs = encode_form(&[("uid", uid), ("rid", "TU2026-04-15T12:00:00")]);
+    let (status, _) = post_query(router2, &format!("/api/items/toggle?{qs}")).await;
+    assert_eq!(status, 200);
+
+    let ics = read_ics_by_uid(&cal_dir, uid);
+    let base = ics
+        .components()
+        .iter()
+        .find(|c| c.rid().is_none())
+        .expect("expected base component");
+    assert!(base.as_event().unwrap().exdates().is_empty());
 }
 
 /// Attempting to toggle a non-existent UID returns an error.

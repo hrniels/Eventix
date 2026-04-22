@@ -425,10 +425,10 @@ impl Syncer for O365 {
         self.vdirsyncer.delete_cal_by_folder(state, folder).await
     }
 
-    async fn delete(&mut self, state: &mut State, config: bool) -> anyhow::Result<()> {
-        self.vdirsyncer.delete(state, config).await?;
+    async fn delete(&mut self, state: &mut State, all: bool) -> anyhow::Result<()> {
+        self.vdirsyncer.delete(state, all).await?;
 
-        if config {
+        if all {
             // remove generated property file
             fs::remove_file(&self.props_path).await.context(format!(
                 "Deleting {} failed",

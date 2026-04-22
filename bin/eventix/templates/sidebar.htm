@@ -204,7 +204,9 @@
                             {% endif %}
                         </span>
                         {% if let Some(due) = occ.occurrence_end() %}
-                            <span><b>{{ due|time(locale, TimeFlags::Short) }}</b></span>
+                            {% if let Some(CalDate::DateTime(..)) = occ.occurrence_enddate() %}
+                                <span><b>{{ due|time(locale, TimeFlags::Short) }}</b></span>
+                            {% endif %}
                         {% endif %}
                         <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
                     </div>

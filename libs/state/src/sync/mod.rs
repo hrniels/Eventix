@@ -65,8 +65,9 @@ pub trait Syncer: Send {
 
     /// Removes locally cached data for the entire collection.
     ///
-    /// If `config` is `true`, configuration-related state is also removed.
-    async fn delete(&mut self, state: &mut State, config: bool) -> anyhow::Result<()>;
+    /// If `all` is `true`, the collection is deleted completely, including
+    /// configuration-related state.
+    async fn delete(&mut self, state: &mut State, all: bool) -> anyhow::Result<()>;
 }
 
 /// Credentials used to authenticate with a remote syncer backend.
@@ -184,7 +185,18 @@ pub(crate) async fn reload_collection(
 /// Deletes all local data for the collection identified by `col_id`, including configuration.
 pub(crate) async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
     let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
-    cal_sync.syncer.delete(state, true).await
+    cal_sync.syncer.delete(state, true).await?;
+
+    let log_path = log_file(state.xdg(), col_id);
+    match tokio::fs::remove_file(&log_path).await {
+        Ok(()) => (),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+        Err(e) => {
+            Err(anyhow!(e)).context(format!("Removing {} failed", log_path.display()))?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Reloads a single calendar by deleting its local state, re-running discovery, and syncing.

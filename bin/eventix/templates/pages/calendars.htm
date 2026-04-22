@@ -122,10 +122,6 @@
     {% endif %}
 </div>
 
-<div id="delete-collection-confirm" title="{{ "Are you sure?"|t(locale) }}" style="display: none">
-    {{ "warning.delete_collection"|t(locale) }}
-</div>
-
 <style type="text/css">
     .ev_cal_actions {
         display: flex;
@@ -158,10 +154,15 @@
         reloadCalList();
     }
 
-    function askDeleteCollection(col_id) {
-        showConfirmDialog("delete-collection-confirm", function () {
+    async function askDeleteCollection(col_id) {
+        if (
+            await showConfirm(
+                '{{ "warning.delete_collection"|t(locale) }}',
+                '{{ "Delete"|t(locale) }}',
+            )
+        ) {
             deleteCollection(col_id, reloadContentIfPossible);
-        });
+        }
     }
 
     function reloadCalBox(col_id, cal_id, mode, folder = null, name = null, color = null) {

@@ -120,7 +120,13 @@
                                     class="ev_button_big ev_button_critical"
                                     href="#"
                                 >
-                                    <span>{{ "Delete series"|t(locale) }}</span>
+                                    <span>
+                                        {% if occ.is_recurrent() %}
+                                            {{ "Delete series"|t(locale) }}
+                                        {% else %}
+                                            {{ "Delete"|t(locale) }}
+                                        {% endif %}
+                                    </span>
                                 </a>
                             {% endif %}
                         </td>
@@ -171,13 +177,19 @@
 <script>
     $(function () {
         {% if rid.is_none() %}
-        confirmDialog(
-            "delete-confirm",
-            "delete-button",
-            function () {
+        $("#delete-button")
+            .off("click")
+            .on("click", async function () {
+                if (
+                    !(await showConfirm(
+                        "{% if occ.is_recurrent() %}{{ "warning.delete_series"|t(locale) }}{% else %}{{ "warning.delete_item"|t(locale) }}{% endif %}",
+                        "{{ "Delete"|t(locale) }}",
+                    ))
+                ) {
+                    return;
+                }
                 deleteItem("{{ uid }}", null, onDeleted);
-            },
-        );
+            });
         {% endif %}
 
         moveToTabCenter("title", "tabs", "tab-bar");
@@ -193,7 +205,4 @@
 <!-- prettier-ignore-end -->
 
 {% if rid.is_none() %}
-    <div id="delete-confirm" title="{{ "Are you sure?"|t(locale) }}">
-        {{ "warning.delete_series"|t(locale) }}
-    </div>
 {% endif %}

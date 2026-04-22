@@ -726,6 +726,48 @@ div.ev_selected {
     z-index: 50;
 }
 
+.ev_modal_layer {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.ev_modal_layer[hidden] {
+    display: none;
+}
+
+.ev_modal_backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(64, 64, 64, 0.5);
+}
+
+.ev_modal_dialog {
+    position: relative;
+    z-index: 1;
+    width: min(560px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    background-color: #ffffff;
+    box-shadow: 2px 2px 3px #555;
+}
+
+.ev_modal_message {
+    padding: 1em 1em 0.2em 1em;
+    white-space: normal;
+}
+
+.ev_modal_actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4em;
+    padding: 0.8em 0.8em 0.8em 0.8em;
+}
+
 /* ------------ TAG & FOLDER ------------ */
 
 .ev_tag,

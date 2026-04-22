@@ -143,5 +143,26 @@
         </div>
 
         <div id="popup" class="ev_popup"></div>
+        <div
+            id="modal-layer"
+            class="ev_modal_layer"
+            data-close-label="{{ "Close"|t(locale) }}"
+            data-cancel-label="{{ "Cancel"|t(locale) }}"
+            data-default-title="{{ "Are you sure?"|t(locale) }}"
+            hidden
+        >
+            <div class="ev_modal_backdrop"></div>
+            <div
+                id="modal-dialog"
+                class="ev_modal_dialog ev_border"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title"
+            >
+                <div id="modal-title" class="ev_header"></div>
+                <div id="modal-message" class="ev_modal_message"></div>
+                <div id="modal-actions" class="ev_modal_actions"></div>
+            </div>
+        </div>
     </body>
 </html>

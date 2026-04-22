@@ -84,7 +84,7 @@ impl Syncer for FSSyncer {
         Ok(())
     }
 
-    async fn delete(&mut self, _state: &mut State, _config: bool) -> anyhow::Result<()> {
+    async fn delete(&mut self, _state: &mut State, _all: bool) -> anyhow::Result<()> {
         Ok(())
     }
 }

@@ -2,54 +2,24 @@
 
 {% block content %}
     <script type="text/javascript">
-        function errorDialog(message) {
-            $("#error-dialog")
-                .html("<p>" + message + "</p>")
-                .dialog({
-                    resizable: false,
-                    draggable: false,
-                    modal: true,
-                    buttons: {
-                        '{{ "Close"|t(locale) }}': function () {
-                            $(this).dialog("close");
-                        },
-                    },
-                });
+        function decodeHtmlEntities(text) {
+            const textarea = document.createElement("textarea");
+            textarea.innerHTML = text;
+            return textarea.value;
         }
 
-        function createConfirmDialog(id, onClick) {
-            $("#" + id).dialog({
-                resizable: false,
-                height: "auto",
-                width: 400,
-                modal: true,
-                autoOpen: false,
-                buttons: {
-                    Delete: function () {
-                        $(this).dialog("close");
-                        onClick();
-                    },
-                    Cancel: function () {
-                        $(this).dialog("close");
-                    },
-                },
-            });
+        async function errorDialog(message) {
+            await showAlert(decodeHtmlEntities(message));
         }
 
-        function showConfirmDialog(id, onClick) {
-            createConfirmDialog(id, onClick);
-            $("#" + id).dialog("open");
-        }
-
-        function confirmDialog(id, btn, onClick) {
-            createConfirmDialog(id, onClick);
-            $("#" + btn).on("click", function () {
-                $("#" + id).dialog("open");
-            });
+        async function confirmDialog(header, message, confirmLabel) {
+            return await showConfirm(
+                decodeHtmlEntities(message),
+                confirmLabel,
+                decodeHtmlEntities(header),
+            );
         }
     </script>
-
-    <div id="error-dialog" title="{{ "Error"|t(locale) }}" style="display: none"></div>
 
     <div style="float: left; width: 80%">
         {% block main %}
