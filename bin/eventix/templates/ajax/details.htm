@@ -230,11 +230,12 @@
     $(function () {
         $("#delete-series-button")
             .off("click")
-            .on("click", function () {
+            .on("click", async function () {
                 if (
-                    !window.confirm(
-                        '{{ "Are you sure?"|t(locale) }}\n\n{% if occ.is_recurrent() %}{{ "warning.delete_series"|t(locale) }}{% else %}{{ "warning.delete_item"|t(locale) }}{% endif %}',
-                    )
+                    !(await showConfirm(
+                        '{% if occ.is_recurrent() %}{{ "warning.delete_series"|t(locale) }}{% else %}{{ "warning.delete_item"|t(locale) }}{% endif %}',
+                        '{{ "Delete"|t(locale) }}',
+                    ))
                 ) {
                     return;
                 }

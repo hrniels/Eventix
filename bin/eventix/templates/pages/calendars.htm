@@ -154,10 +154,11 @@
         reloadCalList();
     }
 
-    function askDeleteCollection(col_id) {
+    async function askDeleteCollection(col_id) {
         if (
-            window.confirm(
-                '{{ "Are you sure?"|t(locale) }}\n\n{{ "warning.delete_collection"|t(locale) }}',
+            await showConfirm(
+                '{{ "warning.delete_collection"|t(locale) }}',
+                '{{ "Delete"|t(locale) }}',
             )
         ) {
             deleteCollection(col_id, reloadContentIfPossible);

@@ -18,6 +18,7 @@ function clearContentHandler(namespace) {
 }
 
 function reloadPage() {
+    closeModal(false);
     window.location.reload();
 }
 
@@ -65,6 +66,7 @@ const PAGE_SLUGS = {
 // Falls back to a full navigation when `#page-content` is absent (e.g. on error
 // pages) or when the target path is not a known SPA page.
 function navigateTo(url) {
+    closeModal(false);
     const parsed = new URL(url, window.location.origin);
     const slug = PAGE_SLUGS[parsed.pathname];
     if (!slug || !document.getElementById("page-content")) {
@@ -136,6 +138,7 @@ function reloadCalList() {
 // Navigates to a new state for `pageSlug` by fetching the content fragment and
 // pushing a new history entry. Delegates rendering to `fetchContent`.
 function loadPageContent(pageSlug, containerId, queryStr, onLoaded) {
+    closeModal(false);
     // remember history
     const params = queryStr ? "?" + queryStr : "";
     history.pushState({ slug: pageSlug, query: queryStr || "" }, "", "/pages/" + pageSlug + params);

@@ -8,12 +8,16 @@
             return textarea.value;
         }
 
-        function errorDialog(message) {
-            window.alert(decodeHtmlEntities(message));
+        async function errorDialog(message) {
+            await showAlert(decodeHtmlEntities(message));
         }
 
-        function confirmDialog(message) {
-            return window.confirm(decodeHtmlEntities(message));
+        async function confirmDialog(header, message, confirmLabel) {
+            return await showConfirm(
+                decodeHtmlEntities(message),
+                confirmLabel,
+                decodeHtmlEntities(header),
+            );
         }
     </script>
 

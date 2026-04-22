@@ -292,10 +292,11 @@
         (function (i) {
             $("#delete-button-" + i)
                 .off("click")
-                .on("click", function () {
+                .on("click", async function () {
                     if (
-                        window.confirm(
-                            '{{ "Are you sure?"|t(locale) }}\n\n{{ "warning.delete_item"|t(locale) }}',
+                        await showConfirm(
+                            '{{ "warning.delete_item"|t(locale) }}',
+                            '{{ "Delete"|t(locale) }}',
                         )
                     ) {
                         deleteItem(window.ev.list.ids[i], null, reloadContent);

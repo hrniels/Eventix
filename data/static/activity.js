@@ -1,4 +1,5 @@
 let popupOpen = false;
+let modalOpen = false;
 let formPage = false;
 let keyMouse = false;
 let openForms = 0;
@@ -8,7 +9,7 @@ function userOnForm() {
 }
 
 function popupOrFormsOpen() {
-    return popupOpen || userOnForm();
+    return popupOpen || modalOpen || userOnForm();
 }
 
 function userIsActive() {
@@ -21,6 +22,10 @@ function setFormPage(val) {
 
 function setPopupOpen(val) {
     popupOpen = val;
+}
+
+function setModalOpen(val) {
+    modalOpen = val;
 }
 
 function openForm() {
