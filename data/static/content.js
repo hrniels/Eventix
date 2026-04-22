@@ -30,8 +30,13 @@ function reloadContent() {
         reloadPage();
         return;
     }
-    const slug = history.state && history.state.slug;
-    const query = (history.state && history.state.query) || "";
+    const stateSlug = history.state && history.state.slug;
+    const stateQuery = (history.state && history.state.query) || "";
+    const parsed = new URL(window.location.href);
+    const fallbackSlug = PAGE_SLUGS[parsed.pathname];
+    const fallbackQuery = parsed.search ? parsed.search.slice(1) : "";
+    const slug = stateSlug || fallbackSlug;
+    const query = stateSlug ? stateQuery : fallbackQuery;
     if (!slug) {
         reloadPage();
         return;
