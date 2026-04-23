@@ -9,7 +9,7 @@
         }
 
         async function errorDialog(message) {
-            await showAlert(decodeHtmlEntities(message));
+            await showAlert(decodeHtmlEntities(message), '{{ "Error"|t(locale) }}');
         }
 
         async function confirmDialog(header, message, confirmLabel) {
