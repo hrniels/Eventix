@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776927589396,
+  "lastUpdate": 1776927648116,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -1782,6 +1782,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 93036644.4,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "distinct": true,
+          "id": "66c9904f0e14a49bf1590767e4d1fcc3273a5e37",
+          "message": "eventix: fixed modal title for errorDialog.\n\nCo-authored-by: GitHub Copilot <copilot@github.com>",
+          "timestamp": "2026-04-23T08:55:52+02:00",
+          "tree_id": "4db611c6e81f34d5eaf9ae2e9c8feb8387c41769",
+          "url": "https://github.com/hrniels/Eventix/commit/66c9904f0e14a49bf1590767e4d1fcc3273a5e37"
+        },
+        "date": 1776927647354,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1307498.0444092075,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 5503344.388212248,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 78164450.53333333,
             "unit": "ns"
           }
         ]
