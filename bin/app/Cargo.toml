@@ -11,7 +11,7 @@ tokio.workspace = true
 xdg.workspace = true
 
 async-channel = "2.5.0"
-gtk = { version = "0.11.1", package = "gtk4" }
+gtk = { version = "0.11.2", package = "gtk4" }
 gdk-pixbuf = "0.22.0"
-ksni = { version = "0.3.3", features = ["blocking"] }
+ksni = { version = "0.3.4", features = ["blocking"] }
 webkit6 = "0.6.1"

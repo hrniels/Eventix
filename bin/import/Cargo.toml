@@ -15,4 +15,4 @@ tempfile.workspace = true
 tokio.workspace = true
 xdg.workspace = true
 
-gtk = { version = "0.11.1", package = "gtk4" }
+gtk = { version = "0.11.2", package = "gtk4" }
