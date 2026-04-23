@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776927648116,
+  "lastUpdate": 1776927663081,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -1821,6 +1821,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 78164450.53333333,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "distinct": true,
+          "id": "b3abcad6dc7ad44f277d49f2a4196e07668800f5",
+          "message": "eventix: fixed modal title for errorDialog.",
+          "timestamp": "2026-04-23T08:56:28+02:00",
+          "tree_id": "4db611c6e81f34d5eaf9ae2e9c8feb8387c41769",
+          "url": "https://github.com/hrniels/Eventix/commit/b3abcad6dc7ad44f277d49f2a4196e07668800f5"
+        },
+        "date": 1776927662791,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1722516.008344289,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 7089614.696085653,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 97560121.15,
             "unit": "ns"
           }
         ]
