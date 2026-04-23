@@ -70,6 +70,10 @@ name = "api_calendars"
 path = "tests/api/calendars.rs"
 
 [[test]]
+name = "api_collections"
+path = "tests/api/collections.rs"
+
+[[test]]
 name = "api_misc"
 path = "tests/api/misc.rs"
 
