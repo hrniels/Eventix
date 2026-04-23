@@ -6,7 +6,7 @@
 mod helper;
 
 use axum::http::StatusCode;
-use eventix_ical::objects::CalCompType;
+use eventix_ical::objects::{CalCompType, EventLike};
 use eventix_state::{CalendarAlarmType, CollectionSettings, SyncerType};
 use serde_json::Value;
 use tempfile::TempDir;
@@ -33,6 +33,24 @@ fn make_collection_with_calendar(tmp: &TempDir) -> CollectionSettings {
     col.all_calendars_mut().insert(CAL_ID.to_string(), cal);
     std::fs::create_dir_all(tmp.path().join("calendars").join(CAL_ID)).expect("create calendar");
     col
+}
+
+fn write_event_file(path: &std::path::Path, uid: &str, summary: &str) {
+    std::fs::write(
+        path,
+        format!(
+            "BEGIN:VCALENDAR\r\n\
+             BEGIN:VEVENT\r\n\
+             UID:{uid}\r\n\
+             DTSTAMP:20260101T000000Z\r\n\
+             DTSTART;TZID=Europe/Berlin:20260415T090000\r\n\
+             DTEND;TZID=Europe/Berlin:20260415T100000\r\n\
+             SUMMARY:{summary}\r\n\
+             END:VEVENT\r\n\
+             END:VCALENDAR\r\n"
+        ),
+    )
+    .unwrap();
 }
 
 fn response_json(body: &str) -> Value {
@@ -221,6 +239,33 @@ async fn calop_delete_removes_calendar_from_settings() {
 }
 
 #[tokio::test]
+async fn calop_delete_by_folder_is_a_successful_noop_for_filesystem_backend() {
+    let tmp = TempDir::new().expect("tempdir");
+    let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
+    let remote_folder = "remote-only";
+    let remote_dir = tmp.path().join("calendars").join(remote_folder);
+    std::fs::create_dir_all(&remote_dir).expect("create remote calendar dir");
+    write_event_file(
+        &remote_dir.join("remote-event.ics"),
+        "remote-event",
+        "Remote Event",
+    );
+    assert!(remote_dir.exists());
+
+    let router = make_calendars_api_router(state.clone());
+    let (status, resp) = post_query(
+        router,
+        &format!("/api/calendars/calop?col_id={COL_ID}&folder={remote_folder}&op=Delete"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected body:\n{resp}");
+    assert_eq!(resp, "null");
+
+    assert!(remote_dir.exists());
+}
+
+#[tokio::test]
 async fn savecal_updates_existing_calendar_settings() {
     let tmp = TempDir::new().expect("tempdir");
     let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
@@ -342,19 +387,11 @@ async fn syncop_sync_collection_detects_new_filesystem_event() {
     let cal_dir = calendars_path.join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).expect("create calendar");
     let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
-    std::fs::write(
-        cal_dir.join("sync-added.ics"),
-        "BEGIN:VCALENDAR\r\n\
-         BEGIN:VEVENT\r\n\
-         UID:sync-added\r\n\
-         DTSTAMP:20260101T000000Z\r\n\
-         DTSTART;TZID=Europe/Berlin:20260415T090000\r\n\
-         DTEND;TZID=Europe/Berlin:20260415T100000\r\n\
-         SUMMARY:Synced Event\r\n\
-         END:VEVENT\r\n\
-         END:VCALENDAR\r\n",
-    )
-    .unwrap();
+    write_event_file(
+        &cal_dir.join("sync-added.ics"),
+        "sync-added",
+        "Synced Event",
+    );
 
     let router = make_calendars_api_router(state.clone());
     let (status, body) = post_query(
@@ -377,6 +414,31 @@ async fn syncop_sync_collection_detects_new_filesystem_event() {
 }
 
 #[tokio::test]
+async fn syncop_sync_all_detects_new_filesystem_event() {
+    let tmp = TempDir::new().expect("tempdir");
+    let calendars_path = tmp.path().join("calendars");
+    let cal_dir = calendars_path.join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).expect("create calendar");
+    let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
+    write_event_file(&cal_dir.join("sync-all.ics"), "sync-all", "Sync All Event");
+
+    let router = make_calendars_api_router(state.clone());
+    let (status, body) = post_query(router, "/api/calendars/syncop?op[type]=SyncAll").await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+
+    let json = response_json(&body);
+    assert_eq!(json["changed"], true);
+    assert_eq!(
+        json["collections"][COL_ID],
+        serde_json::json!({"Success": true})
+    );
+
+    let locked = state.lock().await;
+    assert!(locked.store().file_by_id("sync-all").is_some());
+}
+
+#[tokio::test]
 async fn syncop_reload_collection_succeeds_for_filesystem_backend() {
     let tmp = TempDir::new().expect("tempdir");
     let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
@@ -395,5 +457,59 @@ async fn syncop_reload_collection_succeeds_for_filesystem_backend() {
     assert_eq!(
         json["collections"][COL_ID],
         serde_json::json!({"Success": false})
+    );
+}
+
+#[tokio::test]
+async fn syncop_reload_calendar_reloads_filesystem_calendar_contents() {
+    let tmp = TempDir::new().expect("tempdir");
+    let cal_dir = tmp.path().join("calendars").join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).expect("create calendar");
+    write_event_file(
+        &cal_dir.join("reload-me.ics"),
+        "reload-me",
+        "Initial Summary",
+    );
+    let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
+
+    write_event_file(
+        &cal_dir.join("reload-me.ics"),
+        "reload-me",
+        "Reloaded Summary",
+    );
+
+    let router = make_calendars_api_router(state.clone());
+    let (status, body) = post_query(
+        router,
+        &format!(
+            "/api/calendars/syncop?op[type]=ReloadCalendar&op[data][col_id]={COL_ID}&op[data][cal_id]={CAL_ID}"
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+
+    let json = response_json(&body);
+    assert_eq!(json["changed"], true);
+    assert_eq!(
+        json["collections"][COL_ID],
+        serde_json::json!({"Success": true})
+    );
+    assert_eq!(json["calendars"][CAL_ID], false);
+
+    let locked = state.lock().await;
+    let file = locked
+        .store()
+        .file_by_id("reload-me")
+        .expect("reloaded file");
+    let component = file
+        .calendar()
+        .components()
+        .iter()
+        .find(|comp| comp.rid().is_none())
+        .expect("base component present");
+    assert_eq!(
+        component.summary().map(String::as_str),
+        Some("Reloaded Summary")
     );
 }
