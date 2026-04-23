@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776961697706,
+  "lastUpdate": 1776961772633,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -2358,6 +2358,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 94349973.38333334,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9919a0507da2197a47caee304f0965df0b289aa5",
+          "message": "Merge pull request #27 from hrniels/tests\n\nAdded more tests and some other improvements",
+          "timestamp": "2026-04-23T18:24:22+02:00",
+          "tree_id": "3db0bef32f56e701ff9898b3bc34a68a59423cc5",
+          "url": "https://github.com/hrniels/Eventix/commit/9919a0507da2197a47caee304f0965df0b289aa5"
+        },
+        "date": 1776961771965,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1543281.373516317,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 6608985.763349676,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 93223166.18333334,
             "unit": "ns"
           }
         ]
