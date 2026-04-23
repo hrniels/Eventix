@@ -136,9 +136,10 @@ def cmd_coverage(args):
         subprocess.run(cmd)
         return
 
-    with tempfile.NamedTemporaryFile(suffix=".json") as f:
-        subprocess.run(cmd + ["--json", "--output-path", f.name], check=True)
-        report = json.loads(Path(f.name).read_text())
+    with tempfile.TemporaryDirectory() as tmpdir:
+        report_path = Path(tmpdir) / "coverage.json"
+        subprocess.run(cmd + ["--json", "--output-path", str(report_path)], check=True)
+        report = json.loads(report_path.read_text())
     covered_files = find_covered_files(report, args.file)
     for idx, covered_file in enumerate(covered_files):
         if idx > 0:
