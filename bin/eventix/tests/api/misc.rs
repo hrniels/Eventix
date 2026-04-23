@@ -174,7 +174,7 @@ async fn togglecal_toggles_calendar_and_persists_misc_state() {
     }
     let misc_after_disable =
         std::fs::read_to_string(xdg_tmp.path().join("data/misc.toml")).unwrap();
-    assert!(misc_after_disable.contains("disabled_calendars = [\"cal1\"]"));
+    assert!(misc_after_disable.contains(&format!("disabled_calendars = [\"{CAL_ID}\"]")));
 
     let router2 = make_calendars_api_router(state.clone());
     let (status2, body2) = post_query(router2, &format!("/api/togglecal?id={CAL_ID}")).await;
@@ -186,5 +186,5 @@ async fn togglecal_toggles_calendar_and_persists_misc_state() {
         assert!(!locked.misc().calendar_disabled(&CAL_ID.to_string()));
     }
     let misc_after_enable = std::fs::read_to_string(xdg_tmp.path().join("data/misc.toml")).unwrap();
-    assert!(!misc_after_enable.contains("cal1"));
+    assert!(!misc_after_enable.contains(CAL_ID));
 }

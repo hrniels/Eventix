@@ -198,7 +198,7 @@ async fn add_duplicate_name() {
     let fs_path = tmp.path().to_string_lossy().into_owned();
     let (state, _cfg) = make_add_state(&fs_path);
 
-    // COL_ID ("col1") is already in the state's settings, so adding it again should fail.
+    // COL_ID is already in the state's settings, so adding it again should fail.
     let fields = base_fs_fields(COL_ID, &fs_path);
     let body = encode_form(&fields);
 

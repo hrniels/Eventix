@@ -11,7 +11,9 @@ use eventix_state::{CalendarAlarmType, CollectionSettings, SyncerType};
 use serde_json::Value;
 use tempfile::TempDir;
 
-use helper::{CAL_ID, COL_ID, encode_form, make_calendars_api_router, make_state_from_col, post, post_query};
+use helper::{
+    CAL_ID, COL_ID, encode_form, make_calendars_api_router, make_state_from_col, post, post_query,
+};
 
 fn make_filesystem_collection(tmp: &TempDir) -> CollectionSettings {
     let calendars_path = tmp.path().join("calendars");
@@ -45,7 +47,7 @@ async fn add_calendar_creates_calendar() {
     let router = make_calendars_api_router(state.clone());
     let (status, resp) = post_query(
         router,
-        "/api/calendars/addcal?col_id=col1&name=Local%20Team",
+        &format!("/api/calendars/addcal?col_id={COL_ID}&name=Local%20Team"),
     )
     .await;
 
@@ -76,14 +78,17 @@ async fn add_calendar_sanitizes_and_deduplicates_folder_name() {
     let router1 = make_calendars_api_router(state.clone());
     let (status1, resp1) = post_query(
         router1,
-        "/api/calendars/addcal?col_id=col1&name=Team%20%26%20Ops",
+        &format!("/api/calendars/addcal?col_id={COL_ID}&name=Team%20%26%20Ops"),
     )
     .await;
     assert_eq!(status1, StatusCode::OK, "unexpected body:\n{resp1}");
 
     let router2 = make_calendars_api_router(state.clone());
-    let (status2, resp2) =
-        post_query(router2, "/api/calendars/addcal?col_id=col1&name=Team%20Ops").await;
+    let (status2, resp2) = post_query(
+        router2,
+        &format!("/api/calendars/addcal?col_id={COL_ID}&name=Team%20Ops"),
+    )
+    .await;
     assert_eq!(status2, StatusCode::OK, "unexpected body:\n{resp2}");
 
     let locked = state.lock().await;
@@ -112,7 +117,11 @@ async fn add_calendar_rejects_empty_name() {
     let (state, _config) = make_state_from_col(make_filesystem_collection(&tmp));
 
     let router = make_calendars_api_router(state);
-    let (status, resp) = post_query(router, "/api/calendars/addcal?col_id=col1&name=%20%20").await;
+    let (status, resp) = post_query(
+        router,
+        &format!("/api/calendars/addcal?col_id={COL_ID}&name=%20%20"),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(
@@ -142,7 +151,7 @@ async fn calop_toggle_flips_enabled_flag_back_and_forth() {
     let router1 = make_calendars_api_router(state.clone());
     let (status1, resp1) = post_query(
         router1,
-        "/api/calendars/calop?col_id=col1&cal_id=cal1&op=Toggle",
+        &format!("/api/calendars/calop?col_id={COL_ID}&cal_id={CAL_ID}&op=Toggle"),
     )
     .await;
 
@@ -165,7 +174,7 @@ async fn calop_toggle_flips_enabled_flag_back_and_forth() {
     let router2 = make_calendars_api_router(state.clone());
     let (status2, resp2) = post_query(
         router2,
-        "/api/calendars/calop?col_id=col1&cal_id=cal1&op=Toggle",
+        &format!("/api/calendars/calop?col_id={COL_ID}&cal_id={CAL_ID}&op=Toggle"),
     )
     .await;
 
@@ -192,7 +201,7 @@ async fn calop_delete_removes_calendar_from_settings() {
     let router = make_calendars_api_router(state.clone());
     let (status, resp) = post_query(
         router,
-        "/api/calendars/calop?col_id=col1&cal_id=cal1&op=Delete",
+        &format!("/api/calendars/calop?col_id={COL_ID}&cal_id={CAL_ID}&op=Delete"),
     )
     .await;
 
@@ -215,10 +224,11 @@ async fn calop_delete_removes_calendar_from_settings() {
 async fn savecal_updates_existing_calendar_settings() {
     let tmp = TempDir::new().expect("tempdir");
     let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
+    let renamed_folder = format!("{CAL_ID}-renamed");
 
     let body = encode_form(&[
         ("name", "Renamed Calendar"),
-        ("folder", "cal1-renamed"),
+        ("folder", &renamed_folder),
         ("bgcolor", "#123456"),
         ("fgcolor", "#abcdef"),
         ("ev_types[]", "Event"),
@@ -233,7 +243,7 @@ async fn savecal_updates_existing_calendar_settings() {
     let router = make_calendars_api_router(state.clone());
     let (status, resp) = post(
         router,
-        "/api/calendars/savecal?col_id=col1&cal_id=cal1",
+        &format!("/api/calendars/savecal?col_id={COL_ID}&cal_id={CAL_ID}"),
         &body,
     )
     .await;
@@ -251,7 +261,7 @@ async fn savecal_updates_existing_calendar_settings() {
         .get(CAL_ID)
         .unwrap();
     assert_eq!(cal.name(), "Renamed Calendar");
-    assert_eq!(cal.folder(), "cal1-renamed");
+    assert_eq!(cal.folder(), &renamed_folder);
     assert_eq!(cal.bgcolor(), "#123456");
     assert_eq!(cal.fgcolor(), "#abcdef");
     assert_eq!(cal.types(), &[CalCompType::Event, CalCompType::Todo]);
@@ -278,7 +288,7 @@ async fn savecal_creates_new_calendar_entry() {
     let router = make_calendars_api_router(state.clone());
     let (status, resp) = post(
         router,
-        "/api/calendars/savecal?col_id=col1&cal_id=created",
+        &format!("/api/calendars/savecal?col_id={COL_ID}&cal_id=created"),
         &body,
     )
     .await;
@@ -309,7 +319,7 @@ async fn syncop_discover_collection_succeeds_for_filesystem_backend() {
     let router = make_calendars_api_router(state);
     let (status, body) = post_query(
         router,
-        "/api/calendars/syncop?op[type]=DiscoverCollection&op[data][col_id]=col1",
+        &format!("/api/calendars/syncop?op[type]=DiscoverCollection&op[data][col_id]={COL_ID}"),
     )
     .await;
 
@@ -317,7 +327,10 @@ async fn syncop_discover_collection_succeeds_for_filesystem_backend() {
 
     let json = response_json(&body);
     assert_eq!(json["changed"], false);
-    assert_eq!(json["collections"][COL_ID], serde_json::json!({"Success": false}));
+    assert_eq!(
+        json["collections"][COL_ID],
+        serde_json::json!({"Success": false})
+    );
     assert_eq!(json["calendars"][CAL_ID], false);
     assert!(json["date"].as_str().is_some_and(|s| !s.is_empty()));
 }
@@ -346,7 +359,7 @@ async fn syncop_sync_collection_detects_new_filesystem_event() {
     let router = make_calendars_api_router(state.clone());
     let (status, body) = post_query(
         router,
-        "/api/calendars/syncop?op[type]=SyncCollection&op[data][col_id]=col1",
+        &format!("/api/calendars/syncop?op[type]=SyncCollection&op[data][col_id]={COL_ID}"),
     )
     .await;
 
@@ -354,7 +367,10 @@ async fn syncop_sync_collection_detects_new_filesystem_event() {
 
     let json = response_json(&body);
     assert_eq!(json["changed"], true);
-    assert_eq!(json["collections"][COL_ID], serde_json::json!({"Success": true}));
+    assert_eq!(
+        json["collections"][COL_ID],
+        serde_json::json!({"Success": true})
+    );
 
     let locked = state.lock().await;
     assert!(locked.store().file_by_id("sync-added").is_some());
@@ -368,7 +384,7 @@ async fn syncop_reload_collection_succeeds_for_filesystem_backend() {
     let router = make_calendars_api_router(state);
     let (status, body) = post_query(
         router,
-        "/api/calendars/syncop?op[type]=ReloadCollection&op[data][col_id]=col1",
+        &format!("/api/calendars/syncop?op[type]=ReloadCollection&op[data][col_id]={COL_ID}"),
     )
     .await;
 
@@ -376,5 +392,8 @@ async fn syncop_reload_collection_succeeds_for_filesystem_backend() {
 
     let json = response_json(&body);
     assert_eq!(json["changed"], false);
-    assert_eq!(json["collections"][COL_ID], serde_json::json!({"Success": false}));
+    assert_eq!(
+        json["collections"][COL_ID],
+        serde_json::json!({"Success": false})
+    );
 }

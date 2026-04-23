@@ -45,7 +45,8 @@ async fn delete_collection_removes_settings_store_and_log() {
     std::fs::write(&log_path, "sync log\n").unwrap();
 
     let router = make_calendars_api_router(state.clone());
-    let (status, body) = post_query(router, &format!("/api/collections/delete?col_id={COL_ID}")).await;
+    let (status, body) =
+        post_query(router, &format!("/api/collections/delete?col_id={COL_ID}")).await;
 
     assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
     assert_eq!(body, "null");
