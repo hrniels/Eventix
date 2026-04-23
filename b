@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
+import fnmatch
+import json
 import os
 from pathlib import Path
 import shutil
 import shlex
 import subprocess
 import sys
+import tempfile
 
 # Define application identifiers for normal and debug mode
 APP_ID = "com.github.hrniels.Eventix"
@@ -121,13 +124,85 @@ def cmd_vdirsyncer(args):
 
 def cmd_coverage(args):
     """Generates code coverage information for the workspace."""
-    subprocess.run([
+    cmd = [
         "cargo", "llvm-cov",
         "--workspace",
         "--exclude", "eventix-import",
         "--exclude", "eventix-app",
         "--exclude", "evlist"
-    ])
+    ]
+
+    if not args.file:
+        subprocess.run(cmd, check=True)
+        return
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        report_path = Path(tmpdir) / "coverage.json"
+        subprocess.run(cmd + ["--json", "--output-path", str(report_path)], check=True)
+        report = json.loads(report_path.read_text())
+    covered_files = find_covered_files(report, args.file)
+    for idx, covered_file in enumerate(covered_files):
+        if idx > 0:
+            print()
+        print_file_coverage(covered_file)
+
+
+def find_covered_files(report, requested_pattern):
+    """Returns coverage entries for all files whose paths contain the requested pattern."""
+    requested = requested_pattern.replace("\\", "/")
+    is_glob = any(ch in requested for ch in "*?[]")
+    matches = []
+    for data in report.get("data", []):
+        for file_data in data.get("files", []):
+            filename = file_data["filename"].replace("\\", "/")
+            if fnmatch.fnmatch(filename, requested) or (
+                not is_glob and requested in filename
+            ):
+                matches.append(file_data)
+
+    if not matches:
+        sys.exit(f"No coverage data found for pattern '{requested_pattern}'.")
+
+    return sorted(matches, key=lambda file_data: file_data["filename"])
+
+
+def build_line_coverage(file_data, line_count):
+    """Builds a line-to-execution-count map from LLVM segment coverage data."""
+    coverage = {}
+    segments = file_data.get("segments", [])
+    for idx, segment in enumerate(segments):
+        line, _col, count, has_count, _is_region_entry, is_gap_region = segment
+        if not has_count or is_gap_region or line > line_count:
+            continue
+
+        next_line = line_count + 1
+        if idx + 1 < len(segments):
+            next_line = segments[idx + 1][0]
+
+        last_line = line if next_line == line else min(next_line - 1, line_count)
+        for current in range(line, last_line + 1):
+            prev = coverage.get(current)
+            coverage[current] = count if prev is None else max(prev, count)
+
+    return coverage
+
+
+def print_file_coverage(file_data):
+    """Prints line-by-line coverage for a single source file."""
+    path = Path(file_data["filename"])
+    lines = path.read_text().splitlines()
+    coverage = build_line_coverage(file_data, len(lines))
+
+    print(f"\033[1m{path}\033[0m")
+    for idx, line in enumerate(lines, start=1):
+        count = coverage.get(idx)
+        if count is None:
+            marker = " " * 7
+        elif count == 0:
+            marker = "#####  "
+        else:
+            marker = f"{count:>7}"
+        print(f"{marker} {idx:>5} | {line}")
 
 
 NPM_PREFIX = Path("target")
@@ -252,6 +327,9 @@ def main():
 
     coverage_parser = subparsers.add_parser(
         "coverage", parents=[parent_parser], help="Generate code coverage information")
+    coverage_parser.add_argument(
+        "file", nargs="?", help="Show line-by-line coverage for a single file"
+    )
     coverage_parser.set_defaults(func=cmd_coverage)
 
     flatpak_parser = subparsers.add_parser(
