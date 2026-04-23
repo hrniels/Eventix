@@ -133,7 +133,7 @@ def cmd_coverage(args):
     ]
 
     if not args.file:
-        subprocess.run(cmd)
+        subprocess.run(cmd, check=True)
         return
 
     with tempfile.TemporaryDirectory() as tmpdir:
