@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776927696785,
+  "lastUpdate": 1776927721952,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -2282,6 +2282,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 37813359.711111106,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "distinct": true,
+          "id": "b3abcad6dc7ad44f277d49f2a4196e07668800f5",
+          "message": "eventix: fixed modal title for errorDialog.",
+          "timestamp": "2026-04-23T08:56:28+02:00",
+          "tree_id": "4db611c6e81f34d5eaf9ae2e9c8feb8387c41769",
+          "url": "https://github.com/hrniels/Eventix/commit/b3abcad6dc7ad44f277d49f2a4196e07668800f5"
+        },
+        "date": 1776927721681,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 46747372.22222222,
             "unit": "ns"
           }
         ]
