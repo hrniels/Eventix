@@ -26,21 +26,21 @@ tracing.workspace = true
 xdg.workspace = true
 
 askama = "0.15.6"
-axum = { version = "0.8.8", features = ["macros", "multipart"] }
+axum = { version = "0.8.9", features = ["macros", "multipart"] }
 email_address = "0.2.9"
 futures = "0.3.32"
 numfmt = "1.2.0"
 regex = "1.12.3"
-serde_qs = "1.1.0"
+serde_qs = "1.1.1"
 serde_urlencoded = "0.7.1"
 strum = { version = "0.28.0", features = ["derive"] }
 tower = "0.5.3"
 tower-http = { version = "0.6.8", features = ["fs", "trace", "set-header"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-uuid = { version = "1.23.0", features = ["v4"] }
+uuid = { version = "1.23.1", features = ["v4"] }
 
 [dev-dependencies]
-criterion = { version = "0.7.0", features = ["async_tokio"] }
+criterion = { version = "0.8.2", features = ["async_tokio"] }
 iana-time-zone = "0.1.65"
 tempfile.workspace = true
 tower = { version = "0.5.3", features = ["util"] }
