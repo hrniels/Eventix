@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776927583313,
+  "lastUpdate": 1776927589396,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -1200,6 +1200,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 49437293.711111106,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "committer": {
+            "email": "nils@script-solution.de",
+            "name": "Nils Asmussen",
+            "username": "hrniels"
+          },
+          "distinct": true,
+          "id": "b3abcad6dc7ad44f277d49f2a4196e07668800f5",
+          "message": "eventix: fixed modal title for errorDialog.",
+          "timestamp": "2026-04-23T08:56:28+02:00",
+          "tree_id": "4db611c6e81f34d5eaf9ae2e9c8feb8387c41769",
+          "url": "https://github.com/hrniels/Eventix/commit/b3abcad6dc7ad44f277d49f2a4196e07668800f5"
+        },
+        "date": 1776927589100,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 5679289.899241123,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 3461762.2201603097,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 64434302.75,
             "unit": "ns"
           }
         ]
