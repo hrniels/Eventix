@@ -50,6 +50,9 @@ fn main() {
         )
         .unwrap();
 
-        println!("cargo:rerun-if-changed=../../../data/{app_id}/icons/{icon}.png",);
+        println!(
+            "cargo:rerun-if-changed={}",
+            icons_path.join(format!("{icon}.png")).display()
+        );
     }
 }
