@@ -44,7 +44,7 @@ fn action_update(
     let (store, personal_alarms) = state.store_and_alarms_mut();
 
     let file = store
-        .try_files_by_id_mut(&req.uid)
+        .try_file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
     let ctx = file.calendar().date_context();
 

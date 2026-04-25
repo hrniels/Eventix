@@ -55,7 +55,7 @@ async fn run_copy(
     let (dir, mut cal, mut new_comp) = {
         let file = state
             .store_mut()
-            .try_files_by_id_mut(&req.uid)
+            .try_file_by_id_mut(&req.uid)
             .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
         let comp = file

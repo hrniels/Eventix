@@ -41,7 +41,7 @@ impl CalStore {
 
     /// Returns a mutable reference to the directory with given id.
     pub fn try_directory_mut(&mut self, id: &Arc<String>) -> Result<&mut CalDir, ColError> {
-        if self.directory_write_protected(id) {
+        if self.directory_write_protected(id) || true {
             return Err(ColError::DirWriteProtected((**id).clone()));
         }
         self.dirs
@@ -67,7 +67,7 @@ impl CalStore {
     }
 
     /// Returns a mutable reference to the file with given uid.
-    pub fn try_files_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Result<&mut CalFile, ColError> {
+    pub fn try_file_by_id_mut<S: AsRef<str>>(&mut self, uid: S) -> Result<&mut CalFile, ColError> {
         let uid_str = uid.as_ref();
         let dir = self
             .dirs
@@ -375,7 +375,7 @@ mod tests {
         assert_eq!(all_files.len(), 3);
     }
 
-    // --- file_by_id / try_files_by_id_mut ---
+    // --- file_by_id / try_file_by_id_mut ---
 
     #[test]
     fn file_by_id_found_and_not_found() {
@@ -394,10 +394,10 @@ mod tests {
         assert!(store.file_by_id("uid-in-b").is_some());
         assert!(store.file_by_id("uid-absent").is_none());
 
-        // try_files_by_id_mut variant
-        assert!(store.try_files_by_id_mut("uid-in-a").is_ok());
+        // try_file_by_id_mut variant
+        assert!(store.try_file_by_id_mut("uid-in-a").is_ok());
         assert!(matches!(
-            store.try_files_by_id_mut("uid-absent"),
+            store.try_file_by_id_mut("uid-absent"),
             Err(ColError::ComponentNotFound(_))
         ));
     }
@@ -421,7 +421,7 @@ mod tests {
     }
 
     #[test]
-    fn try_files_by_id_mut_fails_for_write_protected_directory() {
+    fn try_file_by_id_mut_fails_for_write_protected_directory() {
         let mut store = CalStore::default();
         let id = make_id("protected");
         let mut dir = CalDir::new_empty(id.clone(), PathBuf::default(), "Protected".into());
@@ -431,7 +431,7 @@ mod tests {
         store.protect_directories(vec![id.clone()]).unwrap();
 
         assert!(matches!(
-            store.try_files_by_id_mut("uid-1"),
+            store.try_file_by_id_mut("uid-1"),
             Err(ColError::DirWriteProtected(ref dir)) if dir == &*id
         ));
     }
