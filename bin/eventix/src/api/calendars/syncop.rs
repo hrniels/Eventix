@@ -6,7 +6,7 @@ use anyhow::Context;
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use eventix_ical::objects::{CalDate, DateContext};
 use eventix_locale::TimeFlags;
-use eventix_state::{EventixState, SyncColResult};
+use eventix_state::{EventixState, State as EventixAppState, SyncColResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -47,38 +47,17 @@ async fn handler(
     State(state): State<EventixState>,
     MultiQuery(req): MultiQuery<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    let sync_task = tokio::spawn({
+        let state = state.clone();
+        async move {
+            let mut state = state.lock().await;
+            let locale = state.locale();
+            let sync_res = run_operation(&mut state, req).await?;
+            Ok::<_, anyhow::Error>((locale, sync_res))
+        }
+    });
 
-    let locale = state.locale();
-
-    let sync_res = match req.op {
-        Operation::SyncAll => eventix_state::State::sync_all(&mut state, req.auth_url.as_ref())
-            .await
-            .context("Unable to reload state")?,
-        Operation::ReloadCollection { col_id } => {
-            eventix_state::State::reload_collection(&mut state, &col_id, req.auth_url.as_ref())
-                .await
-                .context(format!("Unable to reload collection {}", col_id))?
-        }
-        Operation::ReloadCalendar { col_id, cal_id } => eventix_state::State::reload_calendar(
-            &mut state,
-            &col_id,
-            &cal_id,
-            req.auth_url.as_ref(),
-        )
-        .await
-        .context(format!("Unable to reload calendar {}:{}", col_id, cal_id))?,
-        Operation::SyncCollection { col_id } => {
-            eventix_state::State::sync_collection(&mut state, &col_id, req.auth_url.as_ref())
-                .await
-                .context(format!("Unable to sync collection {}", col_id))?
-        }
-        Operation::DiscoverCollection { col_id } => {
-            eventix_state::State::discover_collection(&mut state, &col_id, req.auth_url.as_ref())
-                .await
-                .context(format!("Unable to discover collection {}", col_id))?
-        }
-    };
+    let (locale, sync_res) = sync_task.await.context("Sync task failed to complete")??;
 
     Ok(Json(Response {
         changed: sync_res.changed,
@@ -91,4 +70,35 @@ async fn handler(
             TimeFlags::None,
         ),
     }))
+}
+
+async fn run_operation(
+    state: &mut EventixAppState,
+    req: Request,
+) -> anyhow::Result<eventix_state::SyncResult> {
+    match req.op {
+        Operation::SyncAll => EventixAppState::sync_all(state, req.auth_url.as_ref())
+            .await
+            .context("Unable to reload state"),
+        Operation::ReloadCollection { col_id } => {
+            EventixAppState::reload_collection(state, &col_id, req.auth_url.as_ref())
+                .await
+                .context(format!("Unable to reload collection {}", col_id))
+        }
+        Operation::ReloadCalendar { col_id, cal_id } => {
+            EventixAppState::reload_calendar(state, &col_id, &cal_id, req.auth_url.as_ref())
+                .await
+                .context(format!("Unable to reload calendar {}:{}", col_id, cal_id))
+        }
+        Operation::SyncCollection { col_id } => {
+            EventixAppState::sync_collection(state, &col_id, req.auth_url.as_ref())
+                .await
+                .context(format!("Unable to sync collection {}", col_id))
+        }
+        Operation::DiscoverCollection { col_id } => {
+            EventixAppState::discover_collection(state, &col_id, req.auth_url.as_ref())
+                .await
+                .context(format!("Unable to discover collection {}", col_id))
+        }
+    }
 }

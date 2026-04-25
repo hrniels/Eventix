@@ -5,11 +5,16 @@
 #[path = "../helper/mod.rs"]
 mod helper;
 
-use axum::http::StatusCode;
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
 use eventix_ical::objects::{CalCompType, EventLike};
 use eventix_state::{CalendarAlarmType, CollectionSettings, SyncerType};
 use serde_json::Value;
 use tempfile::TempDir;
+use tokio::time::{Duration, sleep};
+use tower::ServiceExt;
 
 use helper::{
     CAL_ID, COL_ID, encode_form, make_calendars_api_router, make_state_from_col, post, post_query,
@@ -436,6 +441,54 @@ async fn syncop_sync_all_detects_new_filesystem_event() {
 
     let locked = state.lock().await;
     assert!(locked.store().file_by_id("sync-all").is_some());
+}
+
+#[tokio::test]
+async fn syncop_sync_all_continues_after_request_cancellation() {
+    let tmp = TempDir::new().expect("tempdir");
+    let calendars_path = tmp.path().join("calendars");
+    let cal_dir = calendars_path.join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).expect("create calendar");
+    let (state, _config) = make_state_from_col(make_collection_with_calendar(&tmp));
+    write_event_file(
+        &cal_dir.join("cancelled-sync.ics"),
+        "cancelled-sync",
+        "Cancelled Sync Event",
+    );
+
+    // grab the state lock here to prevent that the async task spawned by the POST request can
+    // proceed (but it has already started the task)
+    let state_guard = state.lock().await;
+    let router = make_calendars_api_router(state.clone());
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/calendars/syncop?op[type]=SyncAll")
+        .body(Body::empty())
+        .unwrap();
+
+    let handle = tokio::spawn(async move { router.oneshot(req).await });
+
+    // give the task some time to execute and then abort it
+    sleep(Duration::from_millis(20)).await;
+    handle.abort();
+    drop(state_guard);
+
+    // now the task can acquire the state lock and thus will complete the sync so that we'll find
+    // the new ICS file in our store at some point
+    for _ in 0..20 {
+        if state
+            .lock()
+            .await
+            .store()
+            .file_by_id("cancelled-sync")
+            .is_some()
+        {
+            return;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+
+    panic!("background sync did not finish after request cancellation");
 }
 
 #[tokio::test]
