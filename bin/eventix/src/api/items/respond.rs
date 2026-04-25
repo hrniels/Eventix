@@ -13,7 +13,7 @@ use eventix_ical::objects::{
 use eventix_state::EventixState;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::util;
 
 fn deserialize_partstat<'de, D>(deserializer: D) -> Result<CalPartStat, D::Error>
@@ -50,10 +50,16 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_respond(state, req))).await
+}
+
+async fn run_respond(
+    state: &mut eventix_state::State,
+    req: Request,
+) -> anyhow::Result<Json<Response>> {
     let locale = state.locale();
 
-    let user = util::user_for_uid(&state, &req.uid)?
+    let user = util::user_for_uid(state, &req.uid)?
         .ok_or_else(|| anyhow!("Email account not specified"))?;
 
     let file = state
@@ -87,7 +93,7 @@ pub async fn handler(
     } else {
         let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {
-            return Err(anyhow!("Component {} is not recurrent", req.uid).into());
+            return Err(anyhow!("Component {} is not recurrent", req.uid));
         }
 
         file.create_overwrite(

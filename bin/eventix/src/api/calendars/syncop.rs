@@ -5,12 +5,13 @@
 use anyhow::Context;
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
 use eventix_ical::objects::{CalDate, DateContext};
-use eventix_locale::TimeFlags;
-use eventix_state::{EventixState, State as EventixAppState, SyncColResult};
+use eventix_locale::{Locale, TimeFlags};
+use eventix_state::{EventixState, State as EventixAppState, SyncColResult, SyncResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::extract::MultiQuery;
 
 #[derive(Debug, Deserialize)]
@@ -47,17 +48,7 @@ async fn handler(
     State(state): State<EventixState>,
     MultiQuery(req): MultiQuery<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let sync_task = tokio::spawn({
-        let state = state.clone();
-        async move {
-            let mut state = state.lock().await;
-            let locale = state.locale();
-            let sync_res = run_operation(&mut state, req).await?;
-            Ok::<_, anyhow::Error>((locale, sync_res))
-        }
-    });
-
-    let (locale, sync_res) = sync_task.await.context("Sync task failed to complete")??;
+    let (locale, sync_res) = run_post(state, move |state| Box::pin(run_syncop(state, req))).await?;
 
     Ok(Json(Response {
         changed: sync_res.changed,
@@ -72,11 +63,12 @@ async fn handler(
     }))
 }
 
-async fn run_operation(
+async fn run_syncop(
     state: &mut EventixAppState,
     req: Request,
-) -> anyhow::Result<eventix_state::SyncResult> {
-    match req.op {
+) -> anyhow::Result<(Arc<dyn Locale + Send + Sync>, SyncResult)> {
+    let locale = state.locale();
+    let sync_res = match req.op {
         Operation::SyncAll => EventixAppState::sync_all(state, req.auth_url.as_ref())
             .await
             .context("Unable to reload state"),
@@ -100,5 +92,6 @@ async fn run_operation(
                 .await
                 .context(format!("Unable to discover collection {}", col_id))
         }
-    }
+    }?;
+    Ok((locale, sync_res))
 }

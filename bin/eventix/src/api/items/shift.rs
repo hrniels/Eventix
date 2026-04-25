@@ -12,7 +12,7 @@ use eventix_ical::objects::{CalComponent, CalDate, EventLike, UpdatableEventLike
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::comps::date::Date;
 use crate::util;
 
@@ -37,10 +37,16 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_shift(state, req))).await
+}
+
+async fn run_shift(
+    state: &mut eventix_state::State,
+    req: Request,
+) -> anyhow::Result<Json<Response>> {
     let locale = state.locale();
 
-    let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address());
+    let user_mail = util::user_for_uid(state, &req.uid)?.map(|a| a.address());
 
     let file = state
         .store_mut()
@@ -111,7 +117,7 @@ pub async fn handler(
     } else {
         let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {
-            return Err(anyhow!("Component {} is not recurrent", req.uid).into());
+            return Err(anyhow!("Component {} is not recurrent", req.uid));
         }
 
         let (start, end) = get_timespan(comp)?;

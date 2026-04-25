@@ -7,11 +7,16 @@ mod helper;
 
 use std::path::Path;
 
-use axum::http::StatusCode;
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
 use eventix_locale::LocaleType;
 use eventix_state::{CalendarSettings, CollectionSettings, SyncerType};
 use serde_json::from_str;
 use tempfile::TempDir;
+use tokio::time::{Duration, sleep};
+use tower::ServiceExt;
 
 use helper::{CAL_ID, get, make_calendars_api_router, make_state, make_state_from_col, post_query};
 
@@ -187,4 +192,40 @@ async fn togglecal_toggles_calendar_and_persists_misc_state() {
     }
     let misc_after_enable = std::fs::read_to_string(xdg_tmp.path().join("data/misc.toml")).unwrap();
     assert!(!misc_after_enable.contains(CAL_ID));
+}
+
+#[tokio::test]
+async fn togglecal_continues_after_request_cancellation() {
+    let source_tmp = TempDir::new().unwrap();
+    let (state, xdg_tmp) = make_state_from_col(make_collection(&source_tmp));
+
+    let state_guard = state.lock().await;
+    let router = make_calendars_api_router(state.clone());
+    let req = Request::builder()
+        .method("POST")
+        .uri(format!("/api/togglecal?id={CAL_ID}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let handle = tokio::spawn(async move { router.oneshot(req).await });
+
+    sleep(Duration::from_millis(20)).await;
+    handle.abort();
+    drop(state_guard);
+
+    for _ in 0..20 {
+        if state
+            .lock()
+            .await
+            .misc()
+            .calendar_disabled(&CAL_ID.to_string())
+        {
+            let misc = std::fs::read_to_string(xdg_tmp.path().join("data/misc.toml")).unwrap();
+            assert!(misc.contains(&format!("disabled_calendars = [\"{CAL_ID}\"]")));
+            return;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+
+    panic!("togglecal did not finish after request cancellation");
 }

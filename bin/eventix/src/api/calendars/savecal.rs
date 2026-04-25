@@ -11,7 +11,7 @@ use eventix_ical::objects::CalCompType;
 use eventix_state::{CalendarAlarmType, CalendarSettings, EventixState};
 use serde::Deserialize;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::comps::alarmconfig::AlarmConfig;
 use crate::comps::calbox::AlarmType;
 use crate::extract::MultiForm;
@@ -44,8 +44,14 @@ pub async fn handler(
     Query(req): Query<Params>,
     MultiForm(form): MultiForm<PostData>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_savecal(state, req, form))).await
+}
 
+async fn run_savecal(
+    state: &mut eventix_state::State,
+    req: Params,
+    form: PostData,
+) -> anyhow::Result<Json<()>> {
     let locale = state.locale();
 
     let col = state
@@ -55,11 +61,11 @@ pub async fn handler(
         .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
 
     let update_cal = |settings: &mut CalendarSettings| -> anyhow::Result<()> {
-        settings.set_name(form.name);
-        settings.set_fgcolor(form.fgcolor);
-        settings.set_bgcolor(form.bgcolor);
-        settings.set_folder(form.folder);
-        settings.set_types(form.ev_types.unwrap_or_default());
+        settings.set_name(form.name.clone());
+        settings.set_fgcolor(form.fgcolor.clone());
+        settings.set_bgcolor(form.bgcolor.clone());
+        settings.set_folder(form.folder.clone());
+        settings.set_types(form.ev_types.clone().unwrap_or_default());
         let alarms = match form.alarm_type {
             AlarmType::Calendar => CalendarAlarmType::Calendar,
             AlarmType::Personal => CalendarAlarmType::Personal {
@@ -87,7 +93,7 @@ pub async fn handler(
         tracing::warn!("Unable to save settings: {}", e);
     }
 
-    eventix_state::State::refresh_store(&mut state).await?;
+    eventix_state::State::refresh_store(state).await?;
 
     Ok(Json(()))
 }

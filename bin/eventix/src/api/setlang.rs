@@ -12,7 +12,7 @@ use eventix_state::EventixState;
 use serde::Deserialize;
 use tracing::warn;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::generated;
 
 #[derive(Debug, Deserialize)]
@@ -30,8 +30,10 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_setlang(state, req))).await
+}
 
+async fn run_setlang(state: &mut eventix_state::State, req: Request) -> anyhow::Result<Json<()>> {
     {
         let misc = state.misc_mut();
         misc.set_locale_type(req.lang);

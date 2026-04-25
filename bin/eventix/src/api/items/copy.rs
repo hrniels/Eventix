@@ -14,7 +14,7 @@ use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::comps::date::Date;
 use crate::util;
 
@@ -38,10 +38,16 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_copy(state, req))).await
+}
+
+async fn run_copy(
+    state: &mut eventix_state::State,
+    req: Request,
+) -> anyhow::Result<Json<Response>> {
     let locale = state.locale();
 
-    let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address());
+    let user_mail = util::user_for_uid(state, &req.uid)?.map(|a| a.address());
 
     let tz = locale.timezone();
     let new_date = req.date.date().ok_or_else(|| anyhow!("Invalid date"))?;
@@ -57,10 +63,10 @@ pub async fn handler(
             .ok_or_else(|| anyhow!("Component '{}' not found in file", req.uid))?;
 
         if !comp.is_owned_by(user_mail.as_ref()) {
-            return Err(anyhow!("No edit permission").into());
+            return Err(anyhow!("No edit permission"));
         }
         if comp.is_recurrent() {
-            return Err(anyhow!("Copying recurrent events is not supported").into());
+            return Err(anyhow!("Copying recurrent events is not supported"));
         }
 
         let duration = comp

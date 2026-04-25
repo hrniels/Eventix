@@ -2,9 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use axum::{body::Body, http::Request};
 use chrono::NaiveDate;
 use eventix_ical::objects::{CalDate, EventLike};
 use tempfile::TempDir;
+use tokio::time::{Duration, sleep};
+use tower::ServiceExt;
 
 use crate::helper::edit::read_ics_by_uid;
 use crate::helper::{CAL_ID, encode_form, make_router, make_state, post_query};
@@ -156,4 +159,44 @@ async fn unknown_uid_returns_error() {
     ]);
     let (status, _) = post_query(router, &format!("/api/items/toggle?{qs}")).await;
     assert_ne!(status.as_u16(), 200);
+}
+
+#[tokio::test]
+async fn toggle_continues_after_request_cancellation() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    let uid = "toggle-cancelled";
+    write_recurring_event_ics(&cal_dir, uid);
+    let state = make_state(&cal_dir);
+
+    let state_guard = state.lock().await;
+    let router = make_router(state.clone());
+    let qs = encode_form(&[("uid", uid), ("rid", "TTEurope/Berlin;2026-04-15T09:00:00")]);
+    let req = Request::builder()
+        .method("POST")
+        .uri(format!("/api/items/toggle?{qs}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let handle = tokio::spawn(async move { router.oneshot(req).await });
+
+    sleep(Duration::from_millis(20)).await;
+    handle.abort();
+    drop(state_guard);
+
+    for _ in 0..20 {
+        let ics = read_ics_by_uid(&cal_dir, uid);
+        let base = ics
+            .components()
+            .iter()
+            .find(|c| c.rid().is_none())
+            .expect("expected base component");
+        if !base.as_event().unwrap().exdates().is_empty() {
+            return;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+
+    panic!("item toggle did not finish after request cancellation");
 }

@@ -10,7 +10,7 @@ use axum::{Json, Router};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -30,7 +30,13 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(form): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_delete(state, form))).await
+}
+
+async fn run_delete(
+    state: &mut eventix_state::State,
+    form: Request,
+) -> anyhow::Result<Json<Response>> {
     let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 
     let src = file.directory().clone();

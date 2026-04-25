@@ -10,7 +10,7 @@ use eventix_ical::objects::{CalCompType, CalDateType, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::Deserialize;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::comps::date::Date;
 use crate::objects::create_component;
 
@@ -30,11 +30,14 @@ pub async fn handler(
     State(state): State<EventixState>,
     Form(req): Form<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_add(state, req))).await
+}
+
+async fn run_add(state: &mut eventix_state::State, req: Request) -> anyhow::Result<Json<()>> {
     let locale = state.locale();
 
     create_component(
-        &mut state,
+        state,
         &locale,
         &req.calendar,
         CalCompType::Todo,
