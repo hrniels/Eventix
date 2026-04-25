@@ -225,8 +225,10 @@ pub(crate) async fn handle_sync_result(
     match &res {
         SyncColResult::Success(cal_changed) => {
             sync_res.changed = *cal_changed;
-            if *cal_changed {
-                let _ = reload_collection_from_disk(state, col_id, Some(snapshot));
+            if *cal_changed
+                && let Err(e) = reload_collection_from_disk(state, col_id, Some(snapshot))
+            {
+                tracing::error!("{}: reload failed with {:?}", col_id, e);
             }
         }
         SyncColResult::Error(msg) => tracing::error!("{}: failed with {}", col_id, msg),
