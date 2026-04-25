@@ -14,7 +14,7 @@ use anyhow::{Context, anyhow};
 use chrono::NaiveDateTime;
 use chrono_tz::Tz;
 use eventix_ical::{
-    col::{CalDir, CalStore},
+    col::{CalDir, CalStore, DirectoryWriteGuard},
     objects::{EventLike, UpdatableEventLike},
 };
 use eventix_locale::Locale;
@@ -62,7 +62,7 @@ struct CollectionSyncPlan {
     index: usize,
     snapshot: CollectionSettings,
     token: Option<String>,
-    protected_dirs: Vec<Arc<String>>,
+    protection: Option<DirectoryWriteGuard>,
 }
 
 impl State {
@@ -83,7 +83,7 @@ impl State {
         ) -> Fut,
         Fut: std::future::Future<Output = anyhow::Result<sync::SyncExecution>>,
     {
-        let (plan, xdg) = {
+        let (mut plan, xdg) = {
             let mut state = state.lock().await;
             let plan = Self::prepare_collection_sync(&mut state, col_id)?;
             (plan, state.xdg.clone())
@@ -100,7 +100,7 @@ impl State {
         .await?;
 
         let mut state = state.lock().await;
-        Self::release_collection_sync(&mut state, &plan);
+        drop(plan.protection.take());
         let mut sync_res = sync::SyncResult::default();
         sync::handle_sync_result(
             &mut state,
@@ -307,7 +307,7 @@ impl State {
             .cloned()
             .map(Arc::new)
             .collect::<Vec<_>>();
-        state
+        let protection = state
             .store_mut()
             .protect_directories(protected_dirs.clone())
             .map_err(anyhow::Error::from)?;
@@ -316,14 +316,8 @@ impl State {
             index,
             snapshot,
             token,
-            protected_dirs,
+            protection: Some(protection),
         })
-    }
-
-    fn release_collection_sync(state: &mut State, plan: &CollectionSyncPlan) {
-        state
-            .store_mut()
-            .unprotect_directories(plan.protected_dirs.clone());
     }
 
     /// Deletes a collection remotely and remove it from local settings.
@@ -560,7 +554,7 @@ mod tests {
     use eventix_ical::col::{CalDir, CalStore};
 
     use crate::{
-        PersonalAlarms,
+        CalendarSettings, PersonalAlarms,
         misc::Misc,
         settings::{CollectionSettings, SyncerType},
     };
@@ -664,5 +658,28 @@ mod tests {
             ts >= before && ts <= after,
             "last_reload must be set at construction time"
         );
+    }
+
+    #[test]
+    fn prepare_collection_sync_releases_protection_on_drop() {
+        let mut state = make_state("cal1", "Cal");
+        let mut col = CollectionSettings::new(SyncerType::FileSystem {
+            path: "/tmp".to_string(),
+        });
+        col.all_calendars_mut()
+            .insert("cal1".to_string(), CalendarSettings::default());
+        state
+            .settings_mut()
+            .collections_mut()
+            .insert("col1".to_string(), col);
+
+        let cal_id = Arc::new("cal1".to_string());
+        let plan = State::prepare_collection_sync(&mut state, &"col1".to_string()).unwrap();
+
+        assert!(state.store().directory_write_protected(&cal_id));
+
+        drop(plan);
+
+        assert!(!state.store().directory_write_protected(&cal_id));
     }
 }

@@ -6,7 +6,7 @@ use chrono::DateTime;
 use chrono_tz::Tz;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::col::{AlarmOccurrence, CalDir, CalFile, ColError, Occurrence};
 use crate::objects::{AlarmOverlay, CalComponent, CalDate, CalEvent, CalTodo};
@@ -14,13 +14,57 @@ use crate::objects::{AlarmOverlay, CalComponent, CalDate, CalEvent, CalTodo};
 /// A container for multiple [`CalDir`]s.
 ///
 /// This container provides convenience APIs to do operations on multiple directories.
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Default)]
 pub struct CalStore {
     dirs: Vec<CalDir>,
-    write_protected: HashSet<Arc<String>>,
+    write_protected: Arc<Mutex<HashSet<Arc<String>>>>,
 }
 
+/// RAII guard for temporary directory write protection within a [`CalStore`].
+pub struct DirectoryWriteGuard {
+    write_protected: Arc<Mutex<HashSet<Arc<String>>>>,
+    ids: Vec<Arc<String>>,
+}
+
+impl Drop for DirectoryWriteGuard {
+    fn drop(&mut self) {
+        let mut write_protected = self
+            .write_protected
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for id in &self.ids {
+            write_protected.remove(id);
+        }
+    }
+}
+
+impl std::fmt::Debug for CalStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let write_protected = self.write_protected();
+        f.debug_struct("CalStore")
+            .field("dirs", &self.dirs)
+            .field("write_protected", &*write_protected)
+            .finish()
+    }
+}
+
+impl PartialEq for CalStore {
+    fn eq(&self, other: &Self) -> bool {
+        let self_write_protected = self.write_protected();
+        let other_write_protected = other.write_protected();
+        self.dirs == other.dirs && *self_write_protected == *other_write_protected
+    }
+}
+
+impl Eq for CalStore {}
+
 impl CalStore {
+    fn write_protected(&self) -> MutexGuard<'_, HashSet<Arc<String>>> {
+        self.write_protected
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     /// Adds the given directory to the store.
     pub fn add(&mut self, dir: CalDir) {
         self.dirs.push(dir);
@@ -86,33 +130,29 @@ impl CalStore {
 
     /// Returns whether the directory with the given id is write-protected.
     pub fn directory_write_protected(&self, id: &Arc<String>) -> bool {
-        self.write_protected.contains(id)
+        self.write_protected().contains(id)
     }
 
     /// Write-protects the given directories.
     ///
     /// Returns an error without modifying any protection state if one of the directories is already
     /// write-protected.
-    pub fn protect_directories<I>(&mut self, ids: I) -> Result<(), ColError>
+    pub fn protect_directories<I>(&mut self, ids: I) -> Result<DirectoryWriteGuard, ColError>
     where
         I: IntoIterator<Item = Arc<String>>,
     {
         let ids = ids.into_iter().collect::<Vec<_>>();
-        if let Some(id) = ids.iter().find(|id| self.directory_write_protected(id)) {
+        let mut write_protected = self.write_protected();
+        if let Some(id) = ids.iter().find(|id| write_protected.contains(*id)) {
             return Err(ColError::DirWriteProtected((**id).clone()));
         }
-        self.write_protected.extend(ids);
-        Ok(())
-    }
+        write_protected.extend(ids.iter().cloned());
+        drop(write_protected);
 
-    /// Removes write protection from the given directories.
-    pub fn unprotect_directories<I>(&mut self, ids: I)
-    where
-        I: IntoIterator<Item = Arc<String>>,
-    {
-        for id in ids {
-            self.write_protected.remove(&id);
-        }
+        Ok(DirectoryWriteGuard {
+            write_protected: self.write_protected.clone(),
+            ids,
+        })
     }
 
     /// Returns a vector of occurrences whose alarm is due in the given time period.
@@ -415,7 +455,7 @@ mod tests {
             "Protected".into(),
         ));
 
-        store.protect_directories(vec![id.clone()]).unwrap();
+        let _guard = store.protect_directories(vec![id.clone()]).unwrap();
 
         assert!(matches!(
             store.try_directory_mut(&id),
@@ -431,12 +471,31 @@ mod tests {
         dir.add_file(make_event_file("uid-1"));
         store.add(dir);
 
-        store.protect_directories(vec![id.clone()]).unwrap();
+        let _guard = store.protect_directories(vec![id.clone()]).unwrap();
 
         assert!(matches!(
             store.try_file_by_id_mut("uid-1"),
             Err(ColError::DirWriteProtected(ref protected_id)) if protected_id == &*id
         ));
+    }
+
+    #[test]
+    fn write_protection_guard_releases_on_drop() {
+        let mut store = CalStore::default();
+        let id = make_id("protected");
+        store.add(CalDir::new_empty(
+            id.clone(),
+            PathBuf::default(),
+            "Protected".into(),
+        ));
+
+        let guard = store.protect_directories(vec![id.clone()]).unwrap();
+        assert!(store.directory_write_protected(&id));
+
+        drop(guard);
+
+        assert!(!store.directory_write_protected(&id));
+        assert!(store.try_directory_mut(&id).is_ok());
     }
 
     // --- todos / events ---
