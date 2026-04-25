@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777105587110,
+  "lastUpdate": 1777105648916,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -3533,6 +3533,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 44519336.266666666,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "f35ebca1688cf21061c63552f832b092c62ba64e",
+          "message": "Improved handling of POST requests",
+          "timestamp": "2026-04-23T17:47:59Z",
+          "url": "https://github.com/hrniels/Eventix/pull/30/commits/f35ebca1688cf21061c63552f832b092c62ba64e"
+        },
+        "date": 1777105648224,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 42457833.57777777,
             "unit": "ns"
           }
         ]
