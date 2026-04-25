@@ -613,7 +613,6 @@ impl Syncer for VDirSyncer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eventix_ical::col::CalStore;
     use std::os::unix::process::ExitStatusExt;
     use std::sync::Mutex as StdMutex;
 
@@ -1162,36 +1161,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // --- Helper to build a State with one named calendar in a collection ---
-
-    fn make_state_with_calendar(
-        col_name: &str,
-        cal_id: &str,
-        folder: &str,
-        enabled: bool,
-    ) -> crate::State {
-        use crate::settings::{CalendarSettings, CollectionSettings, SyncerType};
-
-        let mut settings = crate::settings::Settings::new(std::path::PathBuf::default());
-        let mut col = CollectionSettings::new(SyncerType::FileSystem {
-            path: "/tmp".to_string(),
-        });
-        let mut cal = CalendarSettings::default();
-        cal.set_enabled(enabled);
-        cal.set_folder(folder.to_string());
-        cal.set_name("Test Cal".to_string());
-        col.all_calendars_mut().insert(cal_id.to_string(), cal);
-        settings.collections_mut().insert(col_name.to_string(), col);
-
-        // Build State with the settings but an empty store (no actual files on disk).
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-        *state.settings_mut() = settings;
-        state
-    }
-
     // --- sync tests ---
 
     #[tokio::test]
@@ -1225,17 +1194,6 @@ mod tests {
         let runner_ref = runner.clone();
 
         let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref).await;
-
-        // State has an empty collection (no calendars enabled).
-        let mut state = make_state_with_calendar("testcol", "cal-1", "work", false);
-        // Disable the only calendar by removing it entirely from the enabled set.
-        state
-            .settings_mut()
-            .collections_mut()
-            .get_mut("testcol")
-            .unwrap()
-            .all_calendars_mut()
-            .clear();
 
         let result = syncer.sync().await.unwrap();
         assert_eq!(result, SyncColResult::Success(false));
