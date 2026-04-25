@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777133034950,
+  "lastUpdate": 1777133113350,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -2200,6 +2200,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 60858227.95,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "e43cf3835eedba838b9c4ef713f05f4535d59ee7",
+          "message": "build(deps): bump bytes from 1.7.2 to 1.11.1",
+          "timestamp": "2026-04-25T15:23:57Z",
+          "url": "https://github.com/hrniels/Eventix/pull/32/commits/e43cf3835eedba838b9c4ef713f05f4535d59ee7"
+        },
+        "date": 1777133112863,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 5243456.793894474,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 3209851.226657829,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 60967073.9,
             "unit": "ns"
           }
         ]
