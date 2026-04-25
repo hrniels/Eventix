@@ -8,7 +8,6 @@ use chrono_tz::Tz;
 use eventix_ical::objects::EventLike;
 use eventix_state::{EmailAccount, State};
 use std::{str::FromStr, sync::Arc, time::SystemTime};
-use tokio::sync::MutexGuard;
 
 pub fn parse_human_date(date: Option<String>, timezone: &Tz) -> anyhow::Result<NaiveDate> {
     let now = Utc::now().with_timezone(timezone).naive_local().date();
@@ -62,10 +61,7 @@ pub fn system_time_stamp(systime: SystemTime) -> u128 {
     duration_since_epoch.as_nanos()
 }
 
-pub fn user_for_uid(
-    state: &MutexGuard<'_, State>,
-    uid: &String,
-) -> anyhow::Result<Option<EmailAccount>> {
+pub fn user_for_uid(state: &State, uid: &String) -> anyhow::Result<Option<EmailAccount>> {
     let file = state
         .store()
         .file_by_id(uid)
@@ -80,11 +76,7 @@ pub fn user_for_uid(
         .cloned())
 }
 
-pub fn user_is_event_owner<E: EventLike>(
-    dir: &Arc<String>,
-    state: &MutexGuard<'_, State>,
-    ev: &E,
-) -> bool {
+pub fn user_is_event_owner<E: EventLike>(dir: &Arc<String>, state: &State, ev: &E) -> bool {
     let user_mail = state
         .settings()
         .calendar(dir)

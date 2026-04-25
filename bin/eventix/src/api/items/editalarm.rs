@@ -12,7 +12,7 @@ use eventix_ical::objects::CalDate;
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};
 use crate::extract::MultiForm;
 
@@ -62,7 +62,13 @@ pub async fn post_handler(
     State(state): State<EventixState>,
     MultiForm(req): MultiForm<PostRequest>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_post_alarm(state, req))).await
+}
+
+async fn run_post_alarm(
+    state: &mut eventix_state::State,
+    req: PostRequest,
+) -> anyhow::Result<Json<()>> {
     let locale = state.locale();
 
     let occ = state

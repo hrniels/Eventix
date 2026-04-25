@@ -10,7 +10,7 @@ use axum::{Json, Router};
 use eventix_state::EventixState;
 use serde::Deserialize;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 
 #[derive(Debug, Deserialize)]
 pub enum Operation {
@@ -36,13 +36,15 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_calop(state, req))).await
+}
 
+async fn run_calop(state: &mut eventix_state::State, req: Params) -> anyhow::Result<Json<()>> {
     match req.op {
         Operation::Delete => {
             match (&req.cal_id, &req.folder) {
                 (Some(cal_id), _) => {
-                    eventix_state::State::delete_calendar(&mut state, &req.col_id, cal_id)
+                    eventix_state::State::delete_calendar(state, &req.col_id, cal_id)
                         .await
                         .context(format!(
                             "Unable to delete calendar {}:{}",
@@ -50,18 +52,14 @@ pub async fn handler(
                         ))?;
                 }
                 (None, Some(folder)) => {
-                    eventix_state::State::delete_calendar_by_folder(
-                        &mut state,
-                        &req.col_id,
-                        folder,
-                    )
-                    .await
-                    .context(format!(
-                        "Unable to delete remote calendar by folder {}:{}",
-                        req.col_id, folder
-                    ))?;
+                    eventix_state::State::delete_calendar_by_folder(state, &req.col_id, folder)
+                        .await
+                        .context(format!(
+                            "Unable to delete remote calendar by folder {}:{}",
+                            req.col_id, folder
+                        ))?;
                 }
-                (None, None) => return Err(anyhow!("Missing calendar id or folder").into()),
+                (None, None) => return Err(anyhow!("Missing calendar id or folder")),
             }
 
             if let Err(e) = state.settings().write_to_file() {
@@ -91,7 +89,7 @@ pub async fn handler(
         }
     }
 
-    eventix_state::State::refresh_store(&mut state).await?;
+    eventix_state::State::refresh_store(state).await?;
 
     Ok(Json(()))
 }

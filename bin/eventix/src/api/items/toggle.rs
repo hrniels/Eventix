@@ -11,7 +11,7 @@ use eventix_ical::objects::{CalDate, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::util;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -33,9 +33,14 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(form): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_toggle(state, form))).await
+}
 
-    let user_mail = util::user_for_uid(&state, &form.uid)?.map(|a| a.address());
+async fn run_toggle(
+    state: &mut eventix_state::State,
+    form: Request,
+) -> anyhow::Result<Json<Response>> {
+    let user_mail = util::user_for_uid(state, &form.uid)?.map(|a| a.address());
 
     let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
 
@@ -44,7 +49,7 @@ pub async fn handler(
         .ok_or_else(|| anyhow!("Unable to find base component with uid {}", form.uid))?;
 
     if !base.is_owned_by(user_mail.as_ref()) {
-        return Err(anyhow!("No edit permission").into());
+        return Err(anyhow!("No edit permission"));
     }
 
     let exdate = form.rid.normalize_to(base.start().unwrap());

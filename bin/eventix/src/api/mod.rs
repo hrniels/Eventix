@@ -21,6 +21,9 @@ use axum::{
 };
 use eventix_state::EventixState;
 use serde_json::json;
+use std::{future::Future, pin::Pin};
+
+type StateTask<'a, T> = Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send + 'a>>;
 
 #[derive(Debug)]
 pub struct JsonError {
@@ -59,6 +62,22 @@ impl IntoResponse for JsonError {
         // use a temporary and otherwise unused error code to simply keep the body below
         (StatusCode::CONTINUE, body).into_response()
     }
+}
+
+pub async fn run_post<T, F>(state: EventixState, op: F) -> Result<T, JsonError>
+where
+    T: Send + 'static,
+    F: for<'a> FnOnce(&'a mut eventix_state::State) -> StateTask<'a, T> + Send + 'static,
+{
+    let task = tokio::spawn(async move {
+        let mut state = state.lock().await;
+        op(&mut state).await
+    });
+
+    task.await
+        .map_err(anyhow::Error::from)
+        .and_then(|res| res)
+        .map_err(JsonError::from)
 }
 
 async fn json_error_middleware(req: Request<Body>, next: Next) -> Response {

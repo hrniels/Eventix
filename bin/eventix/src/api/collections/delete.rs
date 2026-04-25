@@ -10,7 +10,7 @@ use axum::{Json, Router};
 use eventix_state::EventixState;
 use serde::Deserialize;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 
 #[derive(Debug, Deserialize)]
 pub struct Params {
@@ -27,9 +27,17 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| {
+        Box::pin(run_delete_collection(state, req))
+    })
+    .await
+}
 
-    eventix_state::State::delete_collection(&mut state, &req.col_id)
+async fn run_delete_collection(
+    state: &mut eventix_state::State,
+    req: Params,
+) -> anyhow::Result<Json<()>> {
+    eventix_state::State::delete_collection(state, &req.col_id)
         .await
         .context(format!("Unable to delete collection {}", req.col_id))?;
 
@@ -37,7 +45,7 @@ pub async fn handler(
         tracing::warn!("Unable to save settings: {}", e);
     }
 
-    eventix_state::State::refresh_store(&mut state).await?;
+    eventix_state::State::refresh_store(state).await?;
 
     Ok(Json(()))
 }

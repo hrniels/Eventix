@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::sync::Arc;
+
 use anyhow::{Context, anyhow};
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
@@ -10,10 +12,11 @@ use axum::{Json, Router};
 use chrono::{Days, NaiveDateTime, NaiveTime};
 use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalComponent, CalDate, CalDateTime, EventLike, UpdatableEventLike};
+use eventix_locale::Locale;
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 use crate::util;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -59,18 +62,89 @@ fn half_hour_to_time(hour: u32, minute: u32) -> anyhow::Result<(NaiveTime, bool)
     }
 }
 
+fn get_timespan(
+    c: &Occurrence<'_>,
+    locale: &Arc<dyn Locale + Send + Sync>,
+    req: &Request,
+    user_mail: Option<String>,
+    resize_start: bool,
+) -> anyhow::Result<(CalDate, CalDate)> {
+    if !c.is_owned_by(user_mail.as_ref()) {
+        return Err(anyhow!("No edit permission"));
+    }
+    if c.is_all_day() {
+        return Err(anyhow!("Cannot resize all-day events"));
+    }
+
+    let tz = locale.timezone();
+    let old_start = c.occurrence_start().unwrap();
+    let old_end = c
+        .occurrence_end()
+        .ok_or_else(|| anyhow!("Event has no end time"))?;
+    let tzid = c.tz_name().unwrap_or_else(|| tz.name().to_string());
+
+    if resize_start {
+        let (new_time, _) = half_hour_to_time(req.start_hour.unwrap(), req.start_minute.unwrap())?;
+        let new_start = NaiveDateTime::new(old_start.date_naive(), new_time);
+        if new_start >= old_end.naive_local() {
+            return Err(anyhow!("New start must be before existing end"));
+        }
+        Ok((
+            CalDate::DateTime(CalDateTime::Timezone(new_start, tzid.clone())),
+            CalDate::DateTime(CalDateTime::Timezone(old_end.naive_local(), tzid)),
+        ))
+    } else {
+        let (new_time, next_day) =
+            half_hour_to_time(req.end_hour.unwrap(), req.end_minute.unwrap())?;
+        // Determine the logical end date: the day the event visually "ends on".  An end of
+        // 00:00:00 on day X+1 is treated as end-of-day on X (matching occurrence_ends_on),
+        // so we subtract one day in that case before applying the new time.
+        let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let logical_end_date =
+            if old_end.time() == midnight && old_end.date_naive() > old_start.date_naive() {
+                old_end
+                    .date_naive()
+                    .checked_sub_days(Days::new(1))
+                    .ok_or_else(|| anyhow!("End date underflow"))?
+            } else {
+                old_end.date_naive()
+            };
+        let end_date = if next_day {
+            logical_end_date
+                .checked_add_days(Days::new(1))
+                .ok_or_else(|| anyhow!("End date overflow"))?
+        } else {
+            logical_end_date
+        };
+        let new_end = NaiveDateTime::new(end_date, new_time);
+        if new_end <= old_start.naive_local() {
+            return Err(anyhow!("New end must be after existing start"));
+        }
+        Ok((
+            CalDate::DateTime(CalDateTime::Timezone(old_start.naive_local(), tzid.clone())),
+            CalDate::DateTime(CalDateTime::Timezone(new_end, tzid)),
+        ))
+    }
+}
+
 pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_resize(state, req))).await
+}
+
+async fn run_resize(
+    state: &mut eventix_state::State,
+    req: Request,
+) -> anyhow::Result<Json<Response>> {
     let locale = state.locale();
 
     // Validate that exactly one side (start or end) is being resized.
     let resize_start = req.start_hour.is_some() || req.start_minute.is_some();
     let resize_end = req.end_hour.is_some() || req.end_minute.is_some();
     if resize_start == resize_end {
-        return Err(anyhow!("Exactly one of start or end must be provided").into());
+        return Err(anyhow!("Exactly one of start or end must be provided"));
     }
 
     // Validate that the provided hour/minute pair is complete and the minute is 0 or 30.
@@ -86,73 +160,13 @@ pub async fn handler(
         }
     }
 
-    let user_mail = util::user_for_uid(&state, &req.uid)?.map(|a| a.address());
+    let user_mail = util::user_for_uid(state, &req.uid)?.map(|a| a.address());
 
     let file = state
         .store_mut()
         .files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
     let ctx = file.calendar().date_context();
-
-    let get_timespan = |c: &Occurrence<'_>| -> anyhow::Result<(CalDate, CalDate)> {
-        if !c.is_owned_by(user_mail.as_ref()) {
-            return Err(anyhow!("No edit permission"));
-        }
-        if c.is_all_day() {
-            return Err(anyhow!("Cannot resize all-day events"));
-        }
-
-        let tz = locale.timezone();
-        let old_start = c.occurrence_start().unwrap();
-        let old_end = c
-            .occurrence_end()
-            .ok_or_else(|| anyhow!("Event has no end time"))?;
-        let tzid = c.tz_name().unwrap_or_else(|| tz.name().to_string());
-
-        if resize_start {
-            let (new_time, _) =
-                half_hour_to_time(req.start_hour.unwrap(), req.start_minute.unwrap())?;
-            let new_start = NaiveDateTime::new(old_start.date_naive(), new_time);
-            if new_start >= old_end.naive_local() {
-                return Err(anyhow!("New start must be before existing end"));
-            }
-            Ok((
-                CalDate::DateTime(CalDateTime::Timezone(new_start, tzid.clone())),
-                CalDate::DateTime(CalDateTime::Timezone(old_end.naive_local(), tzid)),
-            ))
-        } else {
-            let (new_time, next_day) =
-                half_hour_to_time(req.end_hour.unwrap(), req.end_minute.unwrap())?;
-            // Determine the logical end date: the day the event visually "ends on".  An end of
-            // 00:00:00 on day X+1 is treated as end-of-day on X (matching occurrence_ends_on),
-            // so we subtract one day in that case before applying the new time.
-            let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-            let logical_end_date =
-                if old_end.time() == midnight && old_end.date_naive() > old_start.date_naive() {
-                    old_end
-                        .date_naive()
-                        .checked_sub_days(Days::new(1))
-                        .ok_or_else(|| anyhow!("End date underflow"))?
-                } else {
-                    old_end.date_naive()
-                };
-            let end_date = if next_day {
-                logical_end_date
-                    .checked_add_days(Days::new(1))
-                    .ok_or_else(|| anyhow!("End date overflow"))?
-            } else {
-                logical_end_date
-            };
-            let new_end = NaiveDateTime::new(end_date, new_time);
-            if new_end <= old_start.naive_local() {
-                return Err(anyhow!("New end must be after existing start"));
-            }
-            Ok((
-                CalDate::DateTime(CalDateTime::Timezone(old_start.naive_local(), tzid.clone())),
-                CalDate::DateTime(CalDateTime::Timezone(new_end, tzid)),
-            ))
-        }
-    };
 
     let complete = |start: CalDate, end: CalDate, c: &mut CalComponent| -> anyhow::Result<()> {
         let local_tz = locale.timezone();
@@ -167,7 +181,7 @@ pub async fn handler(
     let occ = file
         .occurrence_by_id(&req.uid, req.rid.as_ref(), locale.timezone())
         .ok_or_else(|| anyhow!("Occurrence for {} at {:?} not found", req.uid, req.rid))?;
-    let (start, end) = get_timespan(&occ)?;
+    let (start, end) = get_timespan(&occ, &locale, &req, user_mail, resize_start)?;
 
     if let Some(comp) =
         file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
@@ -176,7 +190,7 @@ pub async fn handler(
     } else {
         let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
         if !comp.is_recurrent() {
-            return Err(anyhow!("Component {} is not recurrent", req.uid).into());
+            return Err(anyhow!("Component {} is not recurrent", req.uid));
         }
 
         file.create_overwrite(

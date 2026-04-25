@@ -11,7 +11,7 @@ use eventix_state::{CalendarSettings, EventixState, create_calendar_by_folder};
 use serde::Deserialize;
 use std::path::Path;
 
-use crate::api::JsonError;
+use crate::api::{JsonError, run_post};
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -89,13 +89,16 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Params>,
 ) -> anyhow::Result<impl IntoResponse, JsonError> {
-    let mut state = state.lock().await;
+    run_post(state, move |state| Box::pin(run_addcal(state, req))).await
+}
+
+async fn run_addcal(state: &mut eventix_state::State, req: Params) -> anyhow::Result<Json<()>> {
     let locale = state.locale();
     let xdg = state.xdg().clone();
 
-    let name = req.name.trim();
+    let name = req.name.trim().to_string();
     if name.is_empty() {
-        return Err(anyhow!(locale.translate("error.calendar_name").to_string()).into());
+        return Err(anyhow!(locale.translate("error.calendar_name").to_string()));
     }
 
     let (folder, col_path) = {
@@ -105,7 +108,7 @@ pub async fn handler(
             .get_mut(&req.col_id)
             .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
         let col_path = col.path(&xdg, &req.col_id);
-        let folder = unique_folder_name(&col_path, col.all_calendars(), name).await;
+        let folder = unique_folder_name(&col_path, col.all_calendars(), &name).await;
         (folder, col_path)
     };
 
@@ -119,7 +122,7 @@ pub async fn handler(
     let mut cal = CalendarSettings::default();
     cal.set_enabled(true);
     cal.set_folder(folder.clone());
-    cal.set_name(name.to_string());
+    cal.set_name(name);
     cal.set_bgcolor("#555555".to_string());
     cal.set_fgcolor("#ffffff".to_string());
     col.all_calendars_mut().insert(id, cal);
@@ -133,13 +136,13 @@ pub async fn handler(
         );
     }
 
-    create_calendar_by_folder(&mut state, &req.col_id, &folder).await?;
+    create_calendar_by_folder(state, &req.col_id, &folder).await?;
 
     if let Err(e) = state.settings().write_to_file() {
         tracing::warn!("Unable to save settings: {}", e);
     }
 
-    eventix_state::State::refresh_store(&mut state).await?;
+    eventix_state::State::refresh_store(state).await?;
 
     Ok(Json(()))
 }
