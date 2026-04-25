@@ -23,6 +23,7 @@
 
 "error.collection_exists" = "A collection with that name does already exist."
 "error.calendar_name" = "Please enter a calendar name!"
+"error.calendar_write_protected" = "Calendar '{}' is temporarily write-protected as a synchronization is in progress."
 "error.collection_name_chars" = "Please specify a non-empty name that only contains the characters A-Z, a-z, 0-9, _, and -."
 "error.summary_empty" = "Summary cannot be empty."
 "error.valid_date_time" = "Please specify a valid date and time."

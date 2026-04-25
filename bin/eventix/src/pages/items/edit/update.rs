@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -286,16 +286,20 @@ pub async fn handler(
 
     let form = {
         let mut state = state.lock().await;
-        match action_update(&mut page, &locale, &mut state, &mut form, &req)? {
-            (true, Some(uid)) => {
+        match action_update(&mut page, &locale, &mut state, &mut form, &req) {
+            Ok((true, Some(uid))) => {
                 // present the user an edit form for the created series
                 req.uid = uid;
                 req.mode = EditMode::Series;
                 req.rid = None;
                 None
             }
-            (true, None) => None,
-            _ => Some(form),
+            Ok((true, None)) => None,
+            Ok((false, _)) => Some(form),
+            Err(e) => {
+                page.add_localized_error(&locale, &state, e);
+                Some(form)
+            }
         }
     };
 

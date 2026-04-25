@@ -41,13 +41,16 @@ impl CalStore {
 
     /// Returns a mutable reference to the directory with given id.
     pub fn try_directory_mut(&mut self, id: &Arc<String>) -> Result<&mut CalDir, ColError> {
-        if self.directory_write_protected(id) || true {
-            return Err(ColError::DirWriteProtected((**id).clone()));
-        }
-        self.dirs
+        let write_protected = self.directory_write_protected(id);
+        let dir = self
+            .dirs
             .iter_mut()
             .find(|s| s.id() == id)
-            .ok_or_else(|| ColError::DirNotFound((**id).clone()))
+            .ok_or_else(|| ColError::DirNotFound((**id).clone()))?;
+        if write_protected {
+            return Err(ColError::DirWriteProtected((**id).clone()));
+        }
+        Ok(dir)
     }
 
     /// Returns a slice of the contained directories.
@@ -416,7 +419,7 @@ mod tests {
 
         assert!(matches!(
             store.try_directory_mut(&id),
-            Err(ColError::DirWriteProtected(ref dir)) if dir == &*id
+            Err(ColError::DirWriteProtected(ref protected_id)) if protected_id == &*id
         ));
     }
 
@@ -432,7 +435,7 @@ mod tests {
 
         assert!(matches!(
             store.try_file_by_id_mut("uid-1"),
-            Err(ColError::DirWriteProtected(ref dir)) if dir == &*id
+            Err(ColError::DirWriteProtected(ref protected_id)) if protected_id == &*id
         ));
     }
 
