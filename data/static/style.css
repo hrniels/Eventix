@@ -435,6 +435,79 @@ a.ev_button_critical:hover {
     color: white;
 }
 
+.ev_error_center {
+    display: inline-block;
+    position: relative;
+}
+
+.ev_error_shake {
+    animation: ev_error_shake 0.42s ease-in-out;
+}
+
+@keyframes ev_error_shake {
+    0% {
+        transform: translateX(0);
+    }
+    15% {
+        transform: translateX(-8px);
+    }
+    30% {
+        transform: translateX(8px);
+    }
+    45% {
+        transform: translateX(-6px);
+    }
+    60% {
+        transform: translateX(6px);
+    }
+    75% {
+        transform: translateX(-3px);
+    }
+    90% {
+        transform: translateX(3px);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
+.ev_error_list {
+    position: absolute;
+    right: 2px;
+    top: calc(100% + 0.35em);
+    width: min(28rem, 80vw);
+    max-height: 18rem;
+    overflow-y: auto;
+    background: #fff;
+    box-shadow: 0 0.4em 1.1em rgba(0, 0, 0, 0.18);
+    z-index: 1100;
+}
+
+.ev_error_list_empty,
+.ev_error_entry {
+    padding: 0.65em 0.8em;
+}
+
+.ev_error_list_empty {
+    color: #666;
+}
+
+.ev_error_entry + .ev_error_entry {
+    border-top: 1px solid #ddd;
+}
+
+.ev_error_entry_time {
+    color: #666;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-bottom: 0.2em;
+}
+
+.ev_error_entry_message {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .ev_button_selected,
 .ev_button_selected:hover,
 .ev_button_selected:active,
