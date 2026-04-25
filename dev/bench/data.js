@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777130490101,
+  "lastUpdate": 1777130542813,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -3179,6 +3179,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 98400992.86666666,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "ea4349b73ad6c290211c5e6cb613d7e2c68f2d3a",
+          "message": "Run sync in the background and add AJAX error reporting",
+          "timestamp": "2026-04-25T08:27:55Z",
+          "url": "https://github.com/hrniels/Eventix/pull/31/commits/ea4349b73ad6c290211c5e6cb613d7e2c68f2d3a"
+        },
+        "date": 1777130542552,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1549058.9417371303,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 6644163.790851212,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 94234164.36666666,
             "unit": "ns"
           }
         ]
