@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1776965812756,
+  "lastUpdate": 1777105433337,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -941,6 +941,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/list/results/content/keyword_or",
             "value": 5850531.4013763685,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "f35ebca1688cf21061c63552f832b092c62ba64e",
+          "message": "Improved handling of POST requests",
+          "timestamp": "2026-04-23T17:47:59Z",
+          "url": "https://github.com/hrniels/Eventix/pull/30/commits/f35ebca1688cf21061c63552f832b092c62ba64e"
+        },
+        "date": 1777105432693,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/list/results/content/all_items",
+            "value": 5207757.537873125,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_and",
+            "value": 5493657.306966119,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_or",
+            "value": 5655064.761945569,
             "unit": "ns"
           }
         ]
