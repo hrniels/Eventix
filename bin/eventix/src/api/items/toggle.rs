@@ -42,7 +42,10 @@ async fn run_toggle(
 ) -> anyhow::Result<Json<Response>> {
     let user_mail = util::user_for_uid(state, &form.uid)?.map(|a| a.address());
 
-    let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
+    let file = state
+        .store_mut()
+        .try_files_by_id_mut(&form.uid)
+        .context(format!("Unable to find component with uid '{}'", form.uid))?;
 
     let base = file
         .component_with_mut(|c| c.rid().is_none() && c.uid() == &form.uid)

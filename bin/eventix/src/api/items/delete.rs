@@ -37,13 +37,16 @@ async fn run_delete(
     state: &mut eventix_state::State,
     form: Request,
 ) -> anyhow::Result<Json<Response>> {
-    let file = state.store_mut().files_by_id_mut(&form.uid).unwrap();
+    let file = state
+        .store_mut()
+        .try_files_by_id_mut(&form.uid)
+        .context(format!("Unable to find component with uid '{}'", form.uid))?;
 
     let src = file.directory().clone();
     state
         .store_mut()
-        .directory_mut(&src)
-        .unwrap()
+        .try_directory_mut(&src)
+        .map_err(anyhow::Error::from)?
         .delete_by_uid(&form.uid)
         .with_context(|| format!("Unable to delete item with uid {}", form.uid))?;
 

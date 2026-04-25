@@ -104,7 +104,7 @@ impl Settings {
 }
 
 /// An email account with a display name and address.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EmailAccount {
     name: String,
     address: String,
@@ -141,7 +141,7 @@ impl EmailAccount {
 ///
 /// `Calendar` uses the alarms embedded in the iCalendar data. `Personal` replaces them with
 /// user-managed overrides, falling back to an optional default alarm when no override exists.
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum CalendarAlarmType {
     /// Uses the alarms embedded in the iCalendar data as-is.
     #[default]
@@ -160,7 +160,7 @@ pub enum CalendarAlarmType {
 ///
 /// Used to configure how far back or forward in time vdirsyncer should request calendar items
 /// from the CalDAV server.
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SyncTimeBound {
     /// Sync up to N years before/after the current time.
     Years(u32),
@@ -178,7 +178,7 @@ pub enum SyncTimeBound {
 ///
 /// When both bounds are `Infinite` (the default), no date filter is emitted and vdirsyncer
 /// synchronises the full calendar.
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SyncTimeSpan {
     /// Lower bound of the sync window relative to now.
     #[serde(default)]
@@ -219,7 +219,7 @@ impl SyncTimeSpan {
 }
 
 /// The backend used to synchronise and provide calendar data for a collection.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SyncerType {
     /// Reads calendar data directly from a local filesystem path; no remote sync.
     FileSystem {
@@ -305,7 +305,7 @@ impl SyncerType {
 }
 
 /// Settings for a single collection, grouping a syncer backend with its associated calendars.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CollectionSettings {
     syncer: SyncerType,
     #[serde(rename = "calendar")]
@@ -372,7 +372,7 @@ impl CollectionSettings {
 }
 
 /// Settings for a single calendar entry within a collection.
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CalendarSettings {
     enabled: bool,
     folder: String,

@@ -17,7 +17,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
-use crate::misc::Misc;
 use crate::settings::SyncerType;
 use crate::sync::o365::O365;
 use crate::sync::{fs::FSSyncer, vdirsyncer::VDirSyncer};
@@ -30,44 +29,37 @@ use crate::{CollectionSettings, State};
 #[async_trait]
 pub trait Syncer: Send {
     /// Discovers available calendars from the backend and updates state accordingly.
-    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncColResult>;
+    async fn discover(&mut self) -> anyhow::Result<SyncColResult>;
 
     /// Synchronises a single calendar identified by `cal_id`.
     #[allow(clippy::ptr_arg)]
-    async fn sync_cal(
-        &mut self,
-        state: &mut State,
-        cal_id: &String,
-    ) -> anyhow::Result<SyncColResult>;
+    async fn sync_cal(&mut self, cal_id: &String) -> anyhow::Result<SyncColResult>;
 
     /// Synchronises all calendars in this collection.
-    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncColResult>;
+    async fn sync(&mut self) -> anyhow::Result<SyncColResult>;
 
     /// Removes locally cached data for the calendar identified by `cal_id`.
     #[allow(clippy::ptr_arg)]
-    async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()>;
+    async fn delete_cal(&mut self, cal_id: &String) -> anyhow::Result<()>;
 
     /// Creates the remote calendar identified by `folder` and prepares local synced files.
     #[allow(clippy::ptr_arg)]
-    async fn create_cal_by_folder(
-        &mut self,
-        state: &mut State,
-        folder: &String,
-    ) -> anyhow::Result<()>;
+    async fn create_cal_by_folder(&mut self, folder: &String) -> anyhow::Result<()>;
 
     /// Deletes the remote calendar identified by `folder` and removes its local synced files.
     #[allow(clippy::ptr_arg)]
-    async fn delete_cal_by_folder(
-        &mut self,
-        state: &mut State,
-        folder: &String,
-    ) -> anyhow::Result<()>;
+    async fn delete_cal_by_folder(&mut self, folder: &String) -> anyhow::Result<()>;
 
     /// Removes locally cached data for the entire collection.
     ///
     /// If `all` is `true`, the collection is deleted completely, including
     /// configuration-related state.
-    async fn delete(&mut self, state: &mut State, all: bool) -> anyhow::Result<()>;
+    async fn delete(&mut self, all: bool) -> anyhow::Result<()>;
+
+    /// Finalizes a sync while holding the application state lock.
+    fn finish(&mut self, _state: &mut State, _result: &mut SyncColResult) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 /// Credentials used to authenticate with a remote syncer backend.
@@ -100,24 +92,14 @@ pub struct SyncResult {
     pub calendars: HashMap<String, bool>,
 }
 
-impl SyncResult {
-    fn new_from_single(col_id: String, cal_id: String, res: SyncColResult) -> Self {
-        let changed = matches!(res, SyncColResult::Success(changed) if changed);
-        let error = matches!(res, SyncColResult::Error(_));
-        let mut collections = HashMap::new();
-        collections.insert(col_id, res);
-        let mut calendars = HashMap::new();
-        calendars.insert(cal_id, error);
-        Self {
-            changed,
-            collections,
-            calendars,
-        }
-    }
-}
+pub(crate) type SyncExecution = (
+    CollectionSettings,
+    Box<dyn Syncer + 'static>,
+    anyhow::Result<SyncColResult>,
+);
 
 struct CollectionSync {
-    id: Arc<String>,
+    snapshot: CollectionSettings,
     syncer: Box<dyn Syncer + 'static>,
 }
 
@@ -134,58 +116,11 @@ pub(crate) async fn log_line(log: &Arc<Mutex<File>>, name: &str, line: &str) -> 
         .context("log failed")
 }
 
-/// Runs calendar discovery for the collection identified by `col_id`.
-pub(crate) async fn discover_collection(
-    state: &mut State,
-    col_id: &String,
-    auth_url: Option<&String>,
-) -> anyhow::Result<SyncResult> {
-    let cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
-
-    let mut sync_res = SyncResult::default();
-    let res = cal_sync.syncer.discover(state).await;
-    handle_sync_result(state, col_id, res, &mut sync_res).await;
-    Ok(sync_res)
-}
-
-/// Synchronises all calendars in the collection identified by `col_id`.
-pub(crate) async fn sync_collection(
-    state: &mut State,
-    col_id: &String,
-    auth_url: Option<&String>,
-) -> anyhow::Result<SyncResult> {
-    let mut cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
-
-    let mut sync_res = SyncResult::default();
-    let res = cal_sync.syncer.sync(state).await;
-    handle_sync_result(state, col_id, res, &mut sync_res).await;
-
-    Ok(sync_res)
-}
-
-/// Reloads all calendars in the collection identified by `col_id` by deleting local state,
-/// re-running discovery, and then syncing.
-pub(crate) async fn reload_collection(
-    state: &mut State,
-    col_id: &String,
-    auth_url: Option<&String>,
-) -> anyhow::Result<SyncResult> {
-    let mut cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
-
-    cal_sync.syncer.delete(state, false).await?;
-    cal_sync.syncer.discover(state).await?;
-
-    let mut sync_res = SyncResult::default();
-    let res = cal_sync.syncer.sync(state).await;
-    handle_sync_result(state, col_id, res, &mut sync_res).await;
-
-    Ok(sync_res)
-}
-
 /// Deletes all local data for the collection identified by `col_id`, including configuration.
 pub(crate) async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
-    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
-    cal_sync.syncer.delete(state, true).await?;
+    let (xdg, idx, col, token) = sync_snapshot(state, col_id)?;
+    let mut cal_sync = get_sync_from_snapshot(xdg, idx, col_id.clone(), col, token, None).await?;
+    cal_sync.syncer.delete(true).await?;
 
     let log_path = log_file(state.xdg(), col_id);
     match tokio::fs::remove_file(&log_path).await {
@@ -199,34 +134,15 @@ pub(crate) async fn delete_collection(state: &mut State, col_id: &String) -> any
     Ok(())
 }
 
-/// Reloads a single calendar by deleting its local state, re-running discovery, and syncing.
-pub(crate) async fn reload_calendar(
-    state: &mut State,
-    col_id: &String,
-    cal_id: &String,
-    auth_url: Option<&String>,
-) -> anyhow::Result<SyncResult> {
-    let mut cal_sync = syncer_for_collection(state, col_id, auth_url).await?;
-
-    cal_sync.syncer.delete_cal(state, cal_id).await?;
-    cal_sync.syncer.discover(state).await?;
-    let res = cal_sync.syncer.sync_cal(state, cal_id).await?;
-
-    Ok(SyncResult::new_from_single(
-        col_id.to_string(),
-        cal_id.to_string(),
-        res,
-    ))
-}
-
 /// Deletes local cached data for the calendar identified by `cal_id` within `col_id`.
 pub(crate) async fn delete_calendar(
     state: &mut State,
     col_id: &String,
     cal_id: &String,
 ) -> anyhow::Result<()> {
-    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
-    cal_sync.syncer.delete_cal(state, cal_id).await
+    let (xdg, idx, col, token) = sync_snapshot(state, col_id)?;
+    let mut cal_sync = get_sync_from_snapshot(xdg, idx, col_id.clone(), col, token, None).await?;
+    cal_sync.syncer.delete_cal(cal_id).await
 }
 
 /// Creates the remote calendar identified by `folder` within `col_id`.
@@ -235,8 +151,9 @@ pub async fn create_calendar_by_folder(
     col_id: &String,
     folder: &String,
 ) -> anyhow::Result<()> {
-    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
-    cal_sync.syncer.create_cal_by_folder(state, folder).await
+    let (xdg, idx, col, token) = sync_snapshot(state, col_id)?;
+    let mut cal_sync = get_sync_from_snapshot(xdg, idx, col_id.clone(), col, token, None).await?;
+    cal_sync.syncer.create_cal_by_folder(folder).await
 }
 
 /// Deletes the remote calendar identified by `folder` and removes its local synced files.
@@ -245,23 +162,41 @@ pub(crate) async fn delete_calendar_by_folder(
     col_id: &String,
     folder: &String,
 ) -> anyhow::Result<()> {
-    let mut cal_sync = syncer_for_collection(state, col_id, None).await?;
-    cal_sync.syncer.delete_cal_by_folder(state, folder).await
+    let (xdg, idx, col, token) = sync_snapshot(state, col_id)?;
+    let mut cal_sync = get_sync_from_snapshot(xdg, idx, col_id.clone(), col, token, None).await?;
+    cal_sync.syncer.delete_cal_by_folder(folder).await
 }
 
-/// Synchronises all calendars across all configured collections.
-pub(crate) async fn sync_all(
-    state: &mut State,
-    auth_url: Option<&String>,
-) -> anyhow::Result<SyncResult> {
-    let mut sync_res = SyncResult::default();
+fn collection_index(state: &State, col_id: &String) -> anyhow::Result<usize> {
+    state
+        .settings()
+        .collections()
+        .keys()
+        .enumerate()
+        .find_map(|(idx, id)| (id == col_id).then_some(idx))
+        .ok_or_else(|| anyhow!("No collection with id {}", col_id))
+}
 
-    for mut cmd in get_syncs(state, auth_url).await? {
-        let res = cmd.syncer.sync(state).await;
-        handle_sync_result(state, &cmd.id, res, &mut sync_res).await;
-    }
-
-    Ok(sync_res)
+fn sync_snapshot(
+    state: &State,
+    col_id: &String,
+) -> anyhow::Result<(
+    Arc<BaseDirectories>,
+    usize,
+    CollectionSettings,
+    Option<String>,
+)> {
+    Ok((
+        state.xdg().clone().into(),
+        collection_index(state, col_id)?,
+        state
+            .settings()
+            .collections()
+            .get(col_id)
+            .cloned()
+            .ok_or_else(|| anyhow!("No collection with id {}", col_id))?,
+        state.misc().collection_token(col_id).cloned(),
+    ))
 }
 
 /// Returns the path to the sync log file for the collection identified by `col_id`.
@@ -270,19 +205,30 @@ pub fn log_file(xdg: &BaseDirectories, col_id: &String) -> PathBuf {
     dir.join(format!("{}.log", col_id))
 }
 
-async fn handle_sync_result(
+pub(crate) async fn handle_sync_result(
     state: &mut State,
     col_id: &String,
+    snapshot: &CollectionSettings,
+    syncer: &mut Box<dyn Syncer + 'static>,
     res: anyhow::Result<SyncColResult>,
     sync_res: &mut SyncResult,
 ) {
-    let res = match res {
+    let mut res = match res {
         Ok(res) => res,
         Err(e) => SyncColResult::Error(e.to_string()),
     };
 
+    if let Err(e) = syncer.finish(state, &mut res) {
+        res = SyncColResult::Error(e.to_string());
+    }
+
     match &res {
-        SyncColResult::Success(cal_changed) => sync_res.changed = *cal_changed,
+        SyncColResult::Success(cal_changed) => {
+            sync_res.changed = *cal_changed;
+            if *cal_changed {
+                let _ = reload_collection_from_disk(state, col_id, Some(snapshot));
+            }
+        }
         SyncColResult::Error(msg) => tracing::error!("{}: failed with {}", col_id, msg),
         SyncColResult::AuthFailed(_) => tracing::error!("{}: auth failed", col_id),
     }
@@ -312,39 +258,24 @@ async fn handle_sync_result(
     }
 }
 
-async fn get_syncs(
-    state: &mut State,
-    auth_url: Option<&String>,
-) -> anyhow::Result<Vec<CollectionSync>> {
-    let mut res = vec![];
-    for (idx, (id, col)) in state.settings().collections().iter().enumerate() {
-        let cal_sync = get_sync(state.xdg(), idx, id, col, state.misc(), auth_url).await?;
-        res.push(cal_sync);
-    }
-    Ok(res)
-}
-
-async fn syncer_for_collection(
-    state: &State,
-    col_id: &String,
-    auth_url: Option<&String>,
+async fn get_sync_from_snapshot(
+    xdg: Arc<BaseDirectories>,
+    idx: usize,
+    id: String,
+    col: CollectionSettings,
+    token: Option<String>,
+    auth_url: Option<String>,
 ) -> anyhow::Result<CollectionSync> {
-    let col = state
-        .settings()
-        .collections()
-        .get(col_id)
-        .ok_or_else(|| anyhow!("No collection with id {}", col_id))?;
-
-    get_sync(state.xdg(), 0, col_id, col, state.misc(), auth_url).await
+    get_sync(xdg, idx, id, col, token, auth_url).await
 }
 
 async fn get_sync(
-    xdg: &BaseDirectories,
+    xdg: Arc<BaseDirectories>,
     idx: usize,
-    id: &String,
-    col: &CollectionSettings,
-    misc: &Misc,
-    auth_url: Option<&String>,
+    id: String,
+    col: CollectionSettings,
+    token: Option<String>,
+    auth_url: Option<String>,
 ) -> anyhow::Result<CollectionSync> {
     // Phase 1: extract credentials from the syncer configuration, if any.
     let auth = match col.syncer() {
@@ -371,10 +302,9 @@ async fn get_sync(
         .calendars()
         .map(|(id, settings)| (settings.folder().clone(), id.clone()))
         .collect::<HashMap<_, _>>();
-
     // Phase 3: set up the per-collection log file (clearing any previous run) and construct the
     // appropriate Syncer implementation.
-    let log_path = log_file(xdg, id);
+    let log_path = log_file(&xdg, &id);
     let log_dir = log_path.parent().unwrap();
     if !log_dir.exists() {
         tokio::fs::create_dir(log_dir).await?;
@@ -397,7 +327,7 @@ async fn get_sync(
             ..
         } => Box::new(
             VDirSyncer::new(
-                xdg,
+                &xdg,
                 id.clone(),
                 folder_id,
                 url.clone(),
@@ -414,144 +344,188 @@ async fn get_sync(
             ..
         } => Box::new(
             O365::new(
-                xdg,
+                &xdg,
                 idx,
                 id.clone(),
                 folder_id,
                 *read_only,
                 auth.unwrap(),
-                auth_url,
-                misc.collection_token(id).cloned(),
+                auth_url.as_ref(),
+                token,
                 time_span,
                 log,
             )
             .await?,
         ),
-        SyncerType::FileSystem { path: _ } => Box::new(FSSyncer::new(folder_id)),
+        SyncerType::FileSystem { path: _ } => Box::new(FSSyncer::new(folder_id.into_values())),
     };
 
     Ok(CollectionSync {
-        id: Arc::new(id.to_string()),
+        snapshot: col,
         syncer,
     })
+}
+
+pub(crate) fn reload_collection_from_disk(
+    state: &mut State,
+    col_id: &String,
+    previous: Option<&CollectionSettings>,
+) -> anyhow::Result<()> {
+    let current = state.settings().collections().get(col_id).cloned();
+    let mut remove_ids = previous
+        .into_iter()
+        .flat_map(|col| col.all_calendars().keys().cloned())
+        .collect::<Vec<_>>();
+    if let Some(col) = &current {
+        remove_ids.extend(col.all_calendars().keys().cloned());
+    }
+
+    state
+        .store_mut()
+        .retain(|dir| !remove_ids.iter().any(|id| dir.id().as_ref() == id));
+
+    let Some(col) = current else {
+        return Ok(());
+    };
+
+    let local_tz = *state.timezone();
+    let mut dirs = vec![];
+    for (cal_id, cal) in col.calendars() {
+        let dir = State::load_calendar(state.xdg(), col_id, &col, cal_id, cal, &local_tz)?;
+        dirs.push(dir);
+    }
+    for dir in dirs {
+        state.store_mut().add(dir);
+    }
+    Ok(())
+}
+
+pub(crate) async fn run_sync_from_snapshot(
+    xdg: Arc<BaseDirectories>,
+    idx: usize,
+    id: String,
+    col: CollectionSettings,
+    token: Option<String>,
+    auth_url: Option<String>,
+) -> anyhow::Result<SyncExecution> {
+    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let snapshot = cal_sync.snapshot.clone();
+    let res = cal_sync.syncer.sync().await;
+    Ok((snapshot, cal_sync.syncer, res))
+}
+
+pub(crate) async fn run_discover_from_snapshot(
+    xdg: Arc<BaseDirectories>,
+    idx: usize,
+    id: String,
+    col: CollectionSettings,
+    token: Option<String>,
+    auth_url: Option<String>,
+) -> anyhow::Result<SyncExecution> {
+    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let snapshot = cal_sync.snapshot.clone();
+    let res = cal_sync.syncer.discover().await;
+    Ok((snapshot, cal_sync.syncer, res))
+}
+
+pub(crate) async fn run_reload_collection_from_snapshot(
+    xdg: Arc<BaseDirectories>,
+    idx: usize,
+    id: String,
+    col: CollectionSettings,
+    token: Option<String>,
+    auth_url: Option<String>,
+) -> anyhow::Result<SyncExecution> {
+    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let snapshot = cal_sync.snapshot.clone();
+    cal_sync.syncer.delete(false).await?;
+    cal_sync.syncer.discover().await?;
+    let res = cal_sync.syncer.sync().await;
+    Ok((snapshot, cal_sync.syncer, res))
+}
+
+pub(crate) async fn run_reload_calendar_from_snapshot(
+    xdg: Arc<BaseDirectories>,
+    idx: usize,
+    id: String,
+    col: CollectionSettings,
+    token: Option<String>,
+    auth_url: Option<String>,
+    cal_id: &String,
+) -> anyhow::Result<SyncExecution> {
+    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let snapshot = cal_sync.snapshot.clone();
+    cal_sync.syncer.delete_cal(cal_id).await?;
+    cal_sync.syncer.discover().await?;
+    let res = cal_sync.syncer.sync_cal(cal_id).await;
+    Ok((snapshot, cal_sync.syncer, res))
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
+    use eventix_ical::col::CalStore;
+
     use crate::{
         misc::Misc,
         settings::{CalendarSettings, CollectionSettings, Settings, SyncerType},
     };
-    use eventix_ical::col::CalStore;
 
-    use super::{SyncColResult, SyncResult, sync_all};
-
-    // --- helpers ---
-
-    /// Creates an XDG `BaseDirectories` rooted at `root`.
-    fn make_xdg(root: &std::path::Path) -> xdg::BaseDirectories {
-        crate::with_test_xdg(&root.join("data"), &root.join("config"))
-    }
-
-    // --- SyncColResult / SyncResult ---
+    use super::{SyncColResult, SyncResult, sync_snapshot};
 
     #[test]
-    fn new_from_single() {
-        let res = SyncResult::new_from_single(
-            "col".to_string(),
-            "cal".to_string(),
-            SyncColResult::Success(true),
-        );
+    fn sync_result_shape_for_single_success() {
+        let mut collections = std::collections::HashMap::new();
+        collections.insert("col".to_string(), SyncColResult::Success(true));
+        let mut calendars = std::collections::HashMap::new();
+        calendars.insert("cal".to_string(), false);
+        let res = SyncResult {
+            changed: true,
+            collections,
+            calendars,
+        };
 
-        assert!(res.changed, "changed must be true when Success(true)");
+        assert!(res.changed);
         assert_eq!(
             res.collections.get("col"),
             Some(&SyncColResult::Success(true))
         );
-        // A successful sync sets the calendar error flag to false.
         assert_eq!(res.calendars.get("cal"), Some(&false));
     }
 
-    // --- syncer_for_collection error path ---
-
-    #[tokio::test]
-    async fn discover_collection_unknown_id_returns_error() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        // XDG must point somewhere valid; the error fires before any filesystem access since the
-        // collection does not exist.
-        let _xdg = make_xdg(tmpdir.path());
-
-        let mut state =
-            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
-
-        let err = super::discover_collection(&mut state, &"nonexistent".to_string(), None)
-            .await
-            .unwrap_err();
-        assert!(
-            err.to_string().contains("nonexistent"),
-            "error must mention the missing id: {err}"
-        );
+    #[test]
+    fn sync_snapshot_unknown_collection_returns_error() {
+        let state = crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
+        let err = sync_snapshot(&state, &"missing".to_string()).unwrap_err();
+        assert!(err.to_string().contains("missing"));
     }
 
-    // --- sync_all ---
-
-    #[tokio::test]
-    async fn sync_all_empty_collections_returns_default_result() {
-        // No XDG manipulation needed – no collections means no filesystem access.
-        let mut state =
-            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
-
-        let result = sync_all(&mut state, None).await.unwrap();
-
-        assert!(!result.changed);
-        assert!(result.collections.is_empty());
-        assert!(result.calendars.is_empty());
-    }
-
-    #[tokio::test]
-    async fn sync_all_multiple_collections_all_present_in_result() {
-        let tmpdir = tempfile::tempdir().unwrap();
-        let xdg = make_xdg(tmpdir.path());
-        std::fs::create_dir_all(tmpdir.path().join("data/vdirsyncer")).unwrap();
-
-        // Build state with two FS collections.
+    #[test]
+    fn sync_snapshot_captures_collection_and_token() {
         let mut settings = Settings::new(PathBuf::default());
-        for (col, cal) in [("colA", "calA"), ("colB", "calB")] {
-            let mut col_settings = CollectionSettings::new(SyncerType::FileSystem {
-                path: "/tmp".to_string(),
-            });
-            let mut cal_settings = CalendarSettings::default();
-            cal_settings.set_enabled(true);
-            cal_settings.set_folder("folder".to_string());
-            col_settings
-                .all_calendars_mut()
-                .insert(cal.to_string(), cal_settings);
-            settings
-                .collections_mut()
-                .insert(col.to_string(), col_settings);
-        }
-        // Use the XDG snapshot built above so that the log-file directory resolves correctly
-        // regardless of what other tests do to the environment after this point.
-        let mut state = crate::State::new_for_test_with_xdg(
-            xdg,
-            CalStore::default(),
-            Misc::new(PathBuf::default()),
-        );
+        let mut col = CollectionSettings::new(SyncerType::FileSystem {
+            path: "/tmp/cals".to_string(),
+        });
+        let mut cal = CalendarSettings::default();
+        cal.set_enabled(true);
+        cal.set_folder("folder".to_string());
+        col.all_calendars_mut().insert("cal1".to_string(), cal);
+        settings
+            .collections_mut()
+            .insert("col1".to_string(), col.clone());
+
+        let mut state =
+            crate::State::new_for_test(CalStore::default(), Misc::new(PathBuf::default()));
         *state.settings_mut() = settings;
+        state
+            .misc_mut()
+            .set_collection_token(&"col1".to_string(), "tok".to_string());
 
-        let result = sync_all(&mut state, None).await.unwrap();
+        let (_xdg, idx, snapshot_col, token) = sync_snapshot(&state, &"col1".to_string()).unwrap();
 
-        assert!(result.collections.contains_key("colA"));
-        assert!(result.collections.contains_key("colB"));
-        assert_eq!(
-            result.collections.get("colA"),
-            Some(&SyncColResult::Success(false))
-        );
-        assert_eq!(
-            result.collections.get("colB"),
-            Some(&SyncColResult::Success(false))
-        );
+        assert_eq!(idx, 0);
+        assert_eq!(snapshot_col, col);
+        assert_eq!(token, Some("tok".to_string()));
     }
 }

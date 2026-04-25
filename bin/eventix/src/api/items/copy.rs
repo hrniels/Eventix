@@ -55,7 +55,7 @@ async fn run_copy(
     let (dir, mut cal, mut new_comp) = {
         let file = state
             .store_mut()
-            .files_by_id_mut(&req.uid)
+            .try_files_by_id_mut(&req.uid)
             .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
         let comp = file
@@ -133,8 +133,8 @@ async fn run_copy(
 
     let dir_arc = state
         .store_mut()
-        .directory_mut(&dir)
-        .ok_or_else(|| anyhow!("Unable to find directory with id {}", dir))?;
+        .try_directory_mut(&dir)
+        .map_err(anyhow::Error::from)?;
 
     let mut path = dir_arc.path().clone();
     path.push(format!("{new_uid}.ics"));

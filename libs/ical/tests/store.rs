@@ -239,14 +239,14 @@ fn save_persists_all_dirs() {
 
     // Mutate one event in each directory.
     store
-        .files_by_id_mut("event-a")
+        .try_files_by_id_mut("event-a")
         .unwrap()
         .component_with_mut(|c| c.uid() == "event-a")
         .unwrap()
         .set_summary(Some("Saved A".into()));
 
     store
-        .files_by_id_mut("event-b")
+        .try_files_by_id_mut("event-b")
         .unwrap()
         .component_with_mut(|c| c.uid() == "event-b")
         .unwrap()

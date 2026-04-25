@@ -50,6 +50,8 @@ pub enum ColError {
     FileType(PathBuf, io::Error),
     #[error("Unable to find directory with id {0}")]
     DirNotFound(String),
+    #[error("Directory with id {0} is write-protected")]
+    DirWriteProtected(String),
     #[error("Unable to find file with path {0}")]
     FileNotFound(PathBuf),
     #[error("Component with uid {0} not found")]

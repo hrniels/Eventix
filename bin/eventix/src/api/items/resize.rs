@@ -164,7 +164,7 @@ async fn run_resize(
 
     let file = state
         .store_mut()
-        .files_by_id_mut(&req.uid)
+        .try_files_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
     let ctx = file.calendar().date_context();
 
