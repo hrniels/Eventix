@@ -1,26 +1,13 @@
 let syncForce = false;
 let syncing = false;
 let outOfSync = false;
-let lastSyncErrorButton = null;
-
-function resetLastSyncErrorButton() {
-    if (lastSyncErrorButton !== null) {
-        lastSyncErrorButton.removeClass("ev_button_error");
-        lastSyncErrorButton = null;
-    }
-}
 
 function startSpinning(spinnerId) {
-    resetLastSyncErrorButton();
-
     const spinner = $("#" + spinnerId);
     if (!spinner.data("originalClass")) {
         spinner.data("originalClass", spinner.attr("class") || "");
     }
     spinner.attr("class", "bi bi-arrow-clockwise ev_spin");
-    $("#" + spinnerId)
-        .parent()
-        .removeClass("ev_button_error");
 }
 
 function stopSpinning(spinnerId, error) {
@@ -31,10 +18,7 @@ function stopSpinning(spinnerId, error) {
     } else {
         spinner.removeClass("ev_spin");
     }
-    if (error) {
-        lastSyncErrorButton = $("#" + spinnerId).parent();
-        lastSyncErrorButton.addClass("ev_button_error").effect("shake");
-    }
+    void error;
 }
 
 function postWithSpinner(spinnerId, url, onresponse) {
@@ -55,7 +39,10 @@ function handleAuthErrors(data, op_url, spinnerId) {
         if (data.collections[cal].AuthFailed) {
             fireEvent(createAuthEvent(cal, data.collections[cal].AuthFailed, op_url, spinnerId));
             return true;
-        } else if (data.collections[cal].Error) error = true;
+        } else if (data.collections[cal].Error) {
+            notifyAJAXError(data.collections[cal].Error);
+            error = true;
+        }
     }
     return error;
 }

@@ -22,7 +22,7 @@
 //!   request is executed in-process instead. This is the preferred entry point for CLI commands
 //!   that should work regardless of whether the daemon is running.
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use chrono::Local;
 use eventix_ical::{col::CalFile, objects::EventLike};
 use eventix_state::EventixState;
@@ -202,8 +202,8 @@ async fn handle_import(state: EventixState, req: ImportOptions) -> anyhow::Resul
     let cal = Arc::from(req.calendar.clone());
     let dir = state
         .store_mut()
-        .directory_mut(&cal)
-        .ok_or_else(|| anyhow!("Unknown calendar '{}'", req.calendar))?;
+        .try_directory_mut(&cal)
+        .map_err(anyhow::Error::from)?;
 
     let files = CalFile::new_from_external_file(
         cal.clone(),

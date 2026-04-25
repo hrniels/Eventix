@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -19,9 +19,11 @@ mod tasks;
 use axum::Router;
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use chrono_tz::Tz;
+use eventix_ical::col::ColError;
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::EventixState;
+use formatx::formatx;
 use std::sync::Arc;
 
 use crate::{
@@ -120,7 +122,6 @@ impl Page {
         self.errors.push(message.to_string());
     }
 
-    #[allow(dead_code)]
     pub fn add_detailed_error(&mut self, error: anyhow::Error) {
         let mut msg = error.to_string();
         for m in error.chain().skip(1) {
@@ -128,6 +129,29 @@ impl Page {
             msg.push_str(&m.to_string());
         }
         self.add_error(msg);
+    }
+
+    pub fn add_localized_error(
+        &mut self,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        state: &eventix_state::State,
+        error: anyhow::Error,
+    ) {
+        for cause in error.chain() {
+            if let Some(ColError::DirWriteProtected(id)) = cause.downcast_ref::<ColError>() {
+                let cal_name = state
+                    .settings()
+                    .calendar(&Arc::new(id.clone()))
+                    .map(|(_, cal)| cal.name().clone())
+                    .unwrap_or_else(|| id.clone());
+                self.add_error(
+                    formatx!(locale.translate("error.calendar_write_protected"), cal_name).unwrap(),
+                );
+                return;
+            }
+        }
+
+        self.add_detailed_error(error);
     }
 
     pub fn infos(&self) -> &[String] {

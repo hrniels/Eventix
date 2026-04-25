@@ -14,7 +14,7 @@ use anyhow::{Context, anyhow};
 use chrono::NaiveDateTime;
 use chrono_tz::Tz;
 use eventix_ical::{
-    col::{CalDir, CalStore},
+    col::{CalDir, CalStore, DirectoryWriteGuard},
     objects::{EventLike, UpdatableEventLike},
 };
 use eventix_locale::Locale;
@@ -57,7 +57,63 @@ pub struct State {
     last_reload: NaiveDateTime,
 }
 
+struct CollectionSyncPlan {
+    col_id: String,
+    index: usize,
+    snapshot: CollectionSettings,
+    token: Option<String>,
+    protection: Option<DirectoryWriteGuard>,
+}
+
 impl State {
+    async fn run_collection_sync_op<F, Fut>(
+        state: &EventixState,
+        col_id: &String,
+        auth_url: Option<&String>,
+        run: F,
+    ) -> anyhow::Result<sync::SyncResult>
+    where
+        F: FnOnce(
+            Arc<BaseDirectories>,
+            usize,
+            String,
+            CollectionSettings,
+            Option<String>,
+            Option<String>,
+        ) -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<sync::SyncExecution>>,
+    {
+        let (mut plan, xdg) = {
+            let mut state = state.lock().await;
+            let plan = Self::prepare_collection_sync(&mut state, col_id)?;
+            (plan, state.xdg.clone())
+        };
+
+        let (snapshot, mut syncer, res) = run(
+            xdg,
+            plan.index,
+            plan.col_id.clone(),
+            plan.snapshot.clone(),
+            plan.token.clone(),
+            auth_url.cloned(),
+        )
+        .await?;
+
+        let mut state = state.lock().await;
+        drop(plan.protection.take());
+        let mut sync_res = sync::SyncResult::default();
+        sync::handle_sync_result(
+            &mut state,
+            &plan.col_id,
+            &snapshot,
+            &mut syncer,
+            res,
+            &mut sync_res,
+        )
+        .await;
+        Ok(sync_res)
+    }
+
     /// Creates a new in-memory application `State` by loading persisted data from the provided XDG
     /// base directories.
     ///
@@ -120,28 +176,6 @@ impl State {
         }
     }
 
-    /// Creates a minimal in-memory `State` for use in unit tests, with an explicit XDG base.
-    ///
-    /// Like `new_for_test` but accepts a pre-built `BaseDirectories` so that tests which mutate
-    /// XDG env vars can pass in their own snapshot without relying on the ambient environment at
-    /// construction time.
-    #[cfg(test)]
-    pub(crate) fn new_for_test_with_xdg(
-        xdg: xdg::BaseDirectories,
-        store: CalStore,
-        misc: misc::Misc,
-    ) -> Self {
-        Self {
-            xdg: Arc::new(xdg),
-            store,
-            personal_alarms: PersonalAlarms::default(),
-            settings: settings::Settings::new(PathBuf::default()),
-            misc,
-            locale: eventix_locale::default(),
-            last_reload: chrono::Utc::now().naive_utc(),
-        }
-    }
-
     /// Reloads the `Locale` implementation from persisted misc state.
     ///
     /// Call this after the user changes language/locale preferences so that formatting and
@@ -177,12 +211,16 @@ impl State {
         // detect added/updated calendars
         for (col_id, col) in settings.collections().iter() {
             for (cal_id, cal) in col.calendars() {
-                match store.directory_mut(&Arc::new(cal_id.clone())) {
-                    Some(dir) => dir.set_name(cal.name().clone()),
-                    None => {
-                        let dir = Self::load_calendar(xdg, col_id, col, cal_id, cal, local_tz)?;
-                        store.add(dir);
+                let cal_id = Arc::new(cal_id.clone());
+                if store.directory(&cal_id).is_some() {
+                    match store.try_directory_mut(&cal_id) {
+                        Ok(dir) => dir.set_name(cal.name().clone()),
+                        Err(eventix_ical::col::ColError::DirWriteProtected(_)) => {}
+                        Err(err) => return Err(err.into()),
                     }
+                } else {
+                    let dir = Self::load_calendar(xdg, col_id, col, &cal_id, cal, local_tz)?;
+                    store.add(dir);
                 }
             }
         }
@@ -245,78 +283,41 @@ impl State {
         Ok(dir)
     }
 
-    fn reload_from_file(
+    fn prepare_collection_sync(
         state: &mut State,
         col_id: &String,
-        cal_ids: Vec<String>,
-    ) -> anyhow::Result<()> {
-        // Delete all calendars of that collection from the in-memory store; they will be reloaded
-        // from disk below.
-        state
-            .store_mut()
-            .retain(|dir| !cal_ids.contains(&**dir.id()));
-
-        // Load calendars again from file
-        let col = state.settings().collections().get(col_id).unwrap();
-        let local_tz = *state.timezone();
-        let mut dirs = vec![];
-        for cal_id in cal_ids {
-            let cal = col.all_calendars().get(&cal_id).unwrap();
-            let dir = Self::load_calendar(state.xdg(), col_id, col, &cal_id, cal, &local_tz)?;
-            dirs.push(dir);
-        }
-
-        // add them to store
-        for dir in dirs {
-            state.store_mut().add(dir);
-        }
-        Ok(())
-    }
-
-    /// Discovers a remote collection and return information about it.
-    ///
-    /// Returns a `SyncResult` describing the discovered collection with collection id `col_id` or
-    /// an error. If `auth_url` is given, it is used to re-authenticate the user.
-    pub async fn discover_collection(
-        state: &mut State,
-        col_id: &String,
-        auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        sync::discover_collection(state, col_id, auth_url).await
-    }
-
-    /// Synchronizes a single collection with its remote source.
-    ///
-    /// On success returns a `SyncResult` describing the performed operations. If `auth_url` is
-    /// given, it is used to re-authenticate the user.
-    pub async fn sync_collection(
-        state: &mut State,
-        col_id: &String,
-        auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        sync::sync_collection(state, col_id, auth_url).await
-    }
-
-    /// Reloads a collection from its remote source and refresh local files.
-    ///
-    /// Discards local files for the collection, re-fetches from the remote source, and returns
-    /// the resulting `SyncResult`. If `auth_url` is given, it is used to re-authenticate.
-    pub async fn reload_collection(
-        state: &mut State,
-        col_id: &String,
-        auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        let res = sync::reload_collection(state, col_id, auth_url).await?;
-
-        let col = state.settings().collections().get(col_id).unwrap();
-        let cal_ids = col
+    ) -> anyhow::Result<CollectionSyncPlan> {
+        let snapshot = state
+            .settings()
+            .collections()
+            .get(col_id)
+            .cloned()
+            .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
+        let index = state
+            .settings()
+            .collections()
+            .keys()
+            .enumerate()
+            .find_map(|(idx, id)| (id == col_id).then_some(idx))
+            .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
+        let token = state.misc().collection_token(col_id).cloned();
+        let protected_dirs = snapshot
             .all_calendars()
             .keys()
-            .map(|id| id.to_string())
+            .cloned()
+            .map(Arc::new)
             .collect::<Vec<_>>();
-        Self::reload_from_file(state, col_id, cal_ids)?;
-
-        Ok(res)
+        let protection = state
+            .store_mut()
+            .protect_directories(protected_dirs.clone())
+            .map_err(anyhow::Error::from)?;
+        Ok(CollectionSyncPlan {
+            col_id: col_id.clone(),
+            index,
+            snapshot,
+            token,
+            protection: Some(protection),
+        })
     }
 
     /// Deletes a collection remotely and remove it from local settings.
@@ -353,31 +354,78 @@ impl State {
         sync::delete_calendar_by_folder(state, col_id, folder).await
     }
 
+    /// Synchronizes a single collection.
+    pub async fn sync_collection(
+        state: &EventixState,
+        col_id: &String,
+        auth_url: Option<&String>,
+    ) -> anyhow::Result<sync::SyncResult> {
+        Self::run_collection_sync_op(state, col_id, auth_url, sync::run_sync_from_snapshot).await
+    }
+
+    /// Discovers a remote collection and returns information about it.
+    pub async fn discover_collection(
+        state: &EventixState,
+        col_id: &String,
+        auth_url: Option<&String>,
+    ) -> anyhow::Result<sync::SyncResult> {
+        Self::run_collection_sync_op(state, col_id, auth_url, sync::run_discover_from_snapshot)
+            .await
+    }
+
+    /// Reloads a collection from its remote source and refreshes local files.
+    pub async fn reload_collection(
+        state: &EventixState,
+        col_id: &String,
+        auth_url: Option<&String>,
+    ) -> anyhow::Result<sync::SyncResult> {
+        Self::run_collection_sync_op(
+            state,
+            col_id,
+            auth_url,
+            sync::run_reload_collection_from_snapshot,
+        )
+        .await
+    }
+
     /// Reloads a single calendar from its remote source and refreshes the local file.
-    ///
-    /// Discards local files for the calendar identified by `cal_id`, re-fetches from the remote
-    /// source, and returns the resulting `SyncResult`. If `auth_url` is given, it is used to
-    /// re-authenticate.
     pub async fn reload_calendar(
-        state: &mut State,
+        state: &EventixState,
         col_id: &String,
         cal_id: &String,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let res = sync::reload_calendar(state, col_id, cal_id, auth_url).await?;
-        Self::reload_from_file(state, col_id, vec![cal_id.to_string()])?;
-        Ok(res)
+        Self::run_collection_sync_op(state, col_id, auth_url, |xdg, idx, id, col, token, auth| {
+            sync::run_reload_calendar_from_snapshot(xdg, idx, id, col, token, auth, cal_id)
+        })
+        .await
     }
 
     /// Synchronizes all collections.
     pub async fn sync_all(
-        state: &mut State,
+        state: &EventixState,
         auth_url: Option<&String>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let sync_res = sync::sync_all(state, auth_url).await?;
+        let col_ids = {
+            let state = state.lock().await;
+            state
+                .settings()
+                .collections()
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+        };
 
+        let mut sync_res = sync::SyncResult::default();
+        for col_id in col_ids {
+            let mut col_res = Self::sync_collection(state, &col_id, auth_url).await?;
+            sync_res.changed |= col_res.changed;
+            sync_res.collections.extend(col_res.collections.drain());
+            sync_res.calendars.extend(col_res.calendars.drain());
+        }
+
+        let mut state = state.lock().await;
         state.last_reload = chrono::Utc::now().naive_utc();
-
         Ok(sync_res)
     }
 
@@ -506,7 +554,7 @@ mod tests {
     use eventix_ical::col::{CalDir, CalStore};
 
     use crate::{
-        PersonalAlarms,
+        CalendarSettings, PersonalAlarms,
         misc::Misc,
         settings::{CollectionSettings, SyncerType},
     };
@@ -610,5 +658,28 @@ mod tests {
             ts >= before && ts <= after,
             "last_reload must be set at construction time"
         );
+    }
+
+    #[test]
+    fn prepare_collection_sync_releases_protection_on_drop() {
+        let mut state = make_state("cal1", "Cal");
+        let mut col = CollectionSettings::new(SyncerType::FileSystem {
+            path: "/tmp".to_string(),
+        });
+        col.all_calendars_mut()
+            .insert("cal1".to_string(), CalendarSettings::default());
+        state
+            .settings_mut()
+            .collections_mut()
+            .insert("col1".to_string(), col);
+
+        let cal_id = Arc::new("cal1".to_string());
+        let plan = State::prepare_collection_sync(&mut state, &"col1".to_string()).unwrap();
+
+        assert!(state.store().directory_write_protected(&cal_id));
+
+        drop(plan);
+
+        assert!(!state.store().directory_write_protected(&cal_id));
     }
 }

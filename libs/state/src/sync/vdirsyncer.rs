@@ -14,7 +14,6 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
-use crate::State;
 use crate::settings::SyncTimeSpan;
 use crate::sync::{SyncColResult, Syncer, SyncerAuth, log_line};
 
@@ -393,11 +392,7 @@ impl VDirSyncer {
         }
     }
 
-    async fn run_sync(
-        &mut self,
-        state: &mut State,
-        names: Vec<String>,
-    ) -> anyhow::Result<SyncColResult> {
+    async fn run_sync(&mut self, names: Vec<String>) -> anyhow::Result<SyncColResult> {
         let mut tried_discover = false;
         loop {
             let mut args = vec!["--config", self.cfg.to_str().unwrap(), "sync"];
@@ -406,7 +401,7 @@ impl VDirSyncer {
 
             let output = self.runner.run("vdirsyncer", &args, None).await?;
             let status = output.status;
-            let res = self.post_process(state, output).await?;
+            let res = self.post_process(output).await?;
 
             match res {
                 SyncResult::NeedsDiscover => {
@@ -501,7 +496,7 @@ impl VDirSyncer {
         Ok(())
     }
 
-    async fn post_process(&self, state: &mut State, output: Output) -> anyhow::Result<SyncResult> {
+    async fn post_process(&self, output: Output) -> anyhow::Result<SyncResult> {
         let stderr = String::from_utf8(output.stderr)?;
         let (result, changes) = parse_output(&stderr, &self.folder_id);
 
@@ -514,26 +509,7 @@ impl VDirSyncer {
             return Ok(result);
         }
 
-        let local_tz = *state.timezone();
-        for (id, changes) in changes.calendars.iter() {
-            if let Some(dir) = state.store_mut().directory_mut(&Arc::new(id.clone())) {
-                if changes.added {
-                    // rescan the whole directory for new files as we only know the new UIDs, but
-                    // not necessarily their filenames (as these can be different).
-                    dir.rescan_for_additions(&local_tz)?;
-                }
-                for uid in &changes.changed {
-                    if let Some(file) = dir.file_by_id_mut(uid) {
-                        file.reload_calendar(&local_tz)?;
-                    } else {
-                        tracing::warn!("file for uid {} does not exist", uid);
-                    }
-                }
-                for uid in &changes.deleted {
-                    dir.remove_by_uid(uid)?;
-                }
-            }
-        }
+        let _ = changes;
 
         Ok(result)
     }
@@ -541,7 +517,7 @@ impl VDirSyncer {
 
 #[async_trait]
 impl Syncer for VDirSyncer {
-    async fn discover(&self, _state: &mut State) -> anyhow::Result<SyncColResult> {
+    async fn discover(&mut self) -> anyhow::Result<SyncColResult> {
         self.run_discover().await?;
 
         // metasync propagates calendar metadata (display name, colour) from the remote storage
@@ -563,76 +539,54 @@ impl Syncer for VDirSyncer {
         Ok(SyncColResult::Success(true))
     }
 
-    async fn sync_cal(
-        &mut self,
-        state: &mut State,
-        cal_id: &String,
-    ) -> anyhow::Result<SyncColResult> {
-        let names = {
-            let col = state.settings().collections().get(&self.name).unwrap();
-            let (_, cal) = col
-                .all_calendars()
-                .iter()
-                .find(|(id, _settings)| *id == cal_id)
-                .ok_or_else(|| anyhow!("No calendar with id {}", cal_id))?;
-            if !cal.enabled() {
-                return Ok(SyncColResult::Success(false));
-            }
-            vec![format!("{}/{}", self.name, cal.folder())]
+    async fn sync_cal(&mut self, cal_id: &String) -> anyhow::Result<SyncColResult> {
+        let Some(folder) = self
+            .folder_id
+            .iter()
+            .find_map(|(folder, id)| (id == cal_id).then_some(folder.clone()))
+        else {
+            return Ok(SyncColResult::Success(false));
         };
 
-        self.run_sync(state, names).await
+        self.run_sync(vec![format!("{}/{}", self.name, folder)])
+            .await
     }
 
-    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncColResult> {
-        // determine collection and pair names to sync
-        let names = {
-            let col = state.settings().collections().get(&self.name).unwrap();
-            col.calendars()
-                .map(|(_id, settings)| format!("{}/{}", &self.name, settings.folder()))
-                .collect::<Vec<_>>()
-        };
+    async fn sync(&mut self) -> anyhow::Result<SyncColResult> {
+        let names = self
+            .folder_id
+            .keys()
+            .map(|folder| format!("{}/{}", &self.name, folder))
+            .collect::<Vec<_>>();
         if names.is_empty() {
             return Ok(SyncColResult::Success(false));
         }
 
-        self.run_sync(state, names).await
+        self.run_sync(names).await
     }
 
-    async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()> {
-        let folder = state
-            .settings()
-            .collections()
-            .get(&self.name)
-            .unwrap()
-            .all_calendars()
-            .get(cal_id)
-            .map(|cal| cal.folder().as_str())
+    async fn delete_cal(&mut self, cal_id: &String) -> anyhow::Result<()> {
+        let folder = self
+            .folder_id
+            .iter()
+            .find_map(|(folder, id)| (id == cal_id).then_some(folder.as_str()))
             .ok_or_else(|| anyhow!("No calendar with id {}", cal_id))?;
         self.remove_local_folder_data(folder, false).await
     }
 
-    async fn create_cal_by_folder(
-        &mut self,
-        _state: &mut State,
-        folder: &String,
-    ) -> anyhow::Result<()> {
+    async fn create_cal_by_folder(&mut self, folder: &String) -> anyhow::Result<()> {
         self.run_create_sync(vec![format!("{}/{}", self.name, folder)])
             .await?;
         self.run_discover().await
     }
 
-    async fn delete_cal_by_folder(
-        &mut self,
-        _state: &mut State,
-        folder: &String,
-    ) -> anyhow::Result<()> {
+    async fn delete_cal_by_folder(&mut self, folder: &String) -> anyhow::Result<()> {
         self.run_delete_sync(vec![format!("{}/{}", self.name, folder)])
             .await?;
         self.remove_local_folder_data(folder, false).await
     }
 
-    async fn delete(&mut self, _state: &mut State, all: bool) -> anyhow::Result<()> {
+    async fn delete(&mut self, all: bool) -> anyhow::Result<()> {
         let dir = self.cfg.parent().unwrap();
 
         // remove complete status and directory
@@ -659,7 +613,6 @@ impl Syncer for VDirSyncer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eventix_ical::col::CalStore;
     use std::os::unix::process::ExitStatusExt;
     use std::sync::Mutex as StdMutex;
 
@@ -1115,11 +1068,7 @@ mod tests {
         let runner_ref = runner.clone();
 
         let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref).await;
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-        let result = syncer.run_sync(&mut state, vec![]).await.unwrap();
+        let result = syncer.run_sync(vec![]).await.unwrap();
         assert_eq!(result, SyncColResult::Success(false));
 
         // Verify call sequence: sync → discover (interactive) → sync (retry).
@@ -1151,11 +1100,7 @@ mod tests {
         );
 
         let (mut syncer, _tmp) = make_syncer_with_runner(runner).await;
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-        let result = syncer.run_sync(&mut state, vec![]).await;
+        let result = syncer.run_sync(vec![]).await;
         assert!(result.is_err());
         assert!(
             result
@@ -1171,13 +1116,8 @@ mod tests {
         let runner_ref =
             FakeCommandRunner::new(vec![CannedOutput::success(b"")], vec![(ok_status, vec![])]);
         let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref.clone()).await;
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-
         syncer
-            .create_cal_by_folder(&mut state, &"work".to_string())
+            .create_cal_by_folder(&"work".to_string())
             .await
             .unwrap();
 
@@ -1217,42 +1157,8 @@ mod tests {
         let runner = FakeCommandRunner::new(vec![CannedOutput::failure(b"")], vec![]);
 
         let (mut syncer, _tmp) = make_syncer_with_runner(runner).await;
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-        let result = syncer.run_sync(&mut state, vec![]).await;
+        let result = syncer.run_sync(vec![]).await;
         assert!(result.is_err());
-    }
-
-    // --- Helper to build a State with one named calendar in a collection ---
-
-    fn make_state_with_calendar(
-        col_name: &str,
-        cal_id: &str,
-        folder: &str,
-        enabled: bool,
-    ) -> crate::State {
-        use crate::settings::{CalendarSettings, CollectionSettings, SyncerType};
-
-        let mut settings = crate::settings::Settings::new(std::path::PathBuf::default());
-        let mut col = CollectionSettings::new(SyncerType::FileSystem {
-            path: "/tmp".to_string(),
-        });
-        let mut cal = CalendarSettings::default();
-        cal.set_enabled(enabled);
-        cal.set_folder(folder.to_string());
-        cal.set_name("Test Cal".to_string());
-        col.all_calendars_mut().insert(cal_id.to_string(), cal);
-        settings.collections_mut().insert(col_name.to_string(), col);
-
-        // Build State with the settings but an empty store (no actual files on disk).
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-        *state.settings_mut() = settings;
-        state
     }
 
     // --- sync tests ---
@@ -1270,8 +1176,7 @@ mod tests {
         // Override the folder_id so sync knows which pair names to pass.
         syncer.folder_id = folder_id;
 
-        let mut state = make_state_with_calendar("testcol", "cal-1", "work", true);
-        let result = syncer.sync(&mut state).await.unwrap();
+        let result = syncer.sync().await.unwrap();
         assert_eq!(result, SyncColResult::Success(false));
 
         let calls = runner.calls();
@@ -1290,18 +1195,7 @@ mod tests {
 
         let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref).await;
 
-        // State has an empty collection (no calendars enabled).
-        let mut state = make_state_with_calendar("testcol", "cal-1", "work", false);
-        // Disable the only calendar by removing it entirely from the enabled set.
-        state
-            .settings_mut()
-            .collections_mut()
-            .get_mut("testcol")
-            .unwrap()
-            .all_calendars_mut()
-            .clear();
-
-        let result = syncer.sync(&mut state).await.unwrap();
+        let result = syncer.sync().await.unwrap();
         assert_eq!(result, SyncColResult::Success(false));
         assert!(runner.calls().is_empty());
     }
@@ -1314,12 +1208,11 @@ mod tests {
         let runner_ref = runner.clone();
 
         let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref).await;
+        let mut folder_id = HashMap::new();
+        folder_id.insert("work".to_string(), "cal-1".to_string());
+        syncer.folder_id = folder_id;
 
-        let mut state = make_state_with_calendar("testcol", "cal-1", "work", true);
-        let result = syncer
-            .sync_cal(&mut state, &"cal-1".to_string())
-            .await
-            .unwrap();
+        let result = syncer.sync_cal(&"cal-1".to_string()).await.unwrap();
         assert_eq!(result, SyncColResult::Success(false));
 
         let calls = runner.calls();
@@ -1336,12 +1229,9 @@ mod tests {
         let runner_ref = runner.clone();
 
         let (mut syncer, _tmp) = make_syncer_with_runner(runner_ref).await;
+        syncer.folder_id.clear();
 
-        let mut state = make_state_with_calendar("testcol", "cal-1", "work", false);
-        let result = syncer
-            .sync_cal(&mut state, &"cal-1".to_string())
-            .await
-            .unwrap();
+        let result = syncer.sync_cal(&"cal-1".to_string()).await.unwrap();
         assert_eq!(result, SyncColResult::Success(false));
         assert!(runner.calls().is_empty());
     }
@@ -1386,15 +1276,14 @@ mod tests {
     async fn delete_removes_status_and_data_dirs() {
         let runner = FakeCommandRunner::new(vec![], vec![]);
         let (mut syncer, _tmp) = make_syncer_with_runner(runner).await;
+        let mut folder_id = HashMap::new();
+        folder_id.insert("work".to_string(), "cal-1".to_string());
+        syncer.folder_id = folder_id;
 
         let cfg_dir = syncer.cfg.parent().unwrap().to_path_buf();
         create_sync_layout(&cfg_dir, "testcol", "work").await;
 
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-        syncer.delete(&mut state, false).await.unwrap();
+        syncer.delete(false).await.unwrap();
 
         assert!(
             !cfg_dir.join("testcol-status").exists(),
@@ -1417,11 +1306,7 @@ mod tests {
         let cfg_dir = cfg_path.parent().unwrap().to_path_buf();
         create_sync_layout(&cfg_dir, "testcol", "work").await;
 
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
-        syncer.delete(&mut state, true).await.unwrap();
+        syncer.delete(true).await.unwrap();
 
         assert!(!cfg_dir.join("testcol-status").exists());
         assert!(!cfg_dir.join("testcol-data").exists());
@@ -1435,15 +1320,14 @@ mod tests {
     async fn delete_cal_removes_status_and_data_files_but_keeps_meta() {
         let runner = FakeCommandRunner::new(vec![], vec![]);
         let (mut syncer, _tmp) = make_syncer_with_runner(runner).await;
+        let mut folder_id = HashMap::new();
+        folder_id.insert("work".to_string(), "cal-1".to_string());
+        syncer.folder_id = folder_id;
 
         let cfg_dir = syncer.cfg.parent().unwrap().to_path_buf();
         create_sync_layout(&cfg_dir, "testcol", "work").await;
 
-        let mut state = make_state_with_calendar("testcol", "cal-1", "work", true);
-        syncer
-            .delete_cal(&mut state, &"cal-1".to_string())
-            .await
-            .unwrap();
+        syncer.delete_cal(&"cal-1".to_string()).await.unwrap();
 
         // Status files should be gone.
         assert!(
@@ -1482,12 +1366,8 @@ mod tests {
         let cfg_dir = syncer.cfg.parent().unwrap().to_path_buf();
         create_sync_layout(&cfg_dir, "testcol", "work").await;
 
-        let mut state = crate::State::new_for_test(
-            CalStore::default(),
-            crate::misc::Misc::new(std::path::PathBuf::default()),
-        );
         syncer
-            .delete_cal_by_folder(&mut state, &"work".to_string())
+            .delete_cal_by_folder(&"work".to_string())
             .await
             .unwrap();
 

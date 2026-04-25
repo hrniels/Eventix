@@ -29,7 +29,7 @@ mod store;
 pub use dir::CalDir;
 pub use file::CalFile;
 pub use occurrence::{AlarmOccurrence, EventTzRange, Occurrence};
-pub use store::CalStore;
+pub use store::{CalStore, DirectoryWriteGuard};
 
 /// Errors that can occur in the collections module.
 #[derive(Debug, Error)]
@@ -50,6 +50,8 @@ pub enum ColError {
     FileType(PathBuf, io::Error),
     #[error("Unable to find directory with id {0}")]
     DirNotFound(String),
+    #[error("Directory {0} is write-protected")]
+    DirWriteProtected(String),
     #[error("Unable to find file with path {0}")]
     FileNotFound(PathBuf),
     #[error("Component with uid {0} not found")]

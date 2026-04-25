@@ -1,7 +1,5 @@
 function handleAJAXError(jqXHR, textStatus, errorThrown) {
-    let msg = "Unknown error";
-    if (jqXHR && jqXHR.responseJSON && jqXHR.responseJSON.error) msg = jqXHR.responseJSON.error;
-    console.log(msg);
+    notifyAJAXError(formatAJAXErrorMessage(jqXHR, textStatus, errorThrown));
 }
 
 function getRequest(url, success, type = "json") {

@@ -206,7 +206,7 @@ mod tests {
         // now exclude it and ensure it's no longer found
         let todo = state
             .store_mut()
-            .files_by_id_mut("uid-excl")
+            .try_file_by_id_mut("uid-excl")
             .unwrap()
             .component_with_mut(|c| c.uid() == "uid-excl")
             .unwrap();

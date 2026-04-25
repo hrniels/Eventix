@@ -64,7 +64,7 @@ async fn run_respond(
 
     let file = state
         .store_mut()
-        .files_by_id_mut(&req.uid)
+        .try_file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
     let complete = |base: Option<&CalComponent>, c: &mut CalComponent| -> anyhow::Result<()> {

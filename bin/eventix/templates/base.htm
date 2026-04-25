@@ -120,6 +120,26 @@
                         class="bi bi-exclamation-circle-fill"
                     ></i>
                 </a>
+                <span class="ev_error_center">
+                    <a
+                        id="link-errors"
+                        class="ev_button_medium ev_button_normal ev_error_button"
+                        title="{{ "Errors"|t(locale) }}"
+                        aria-label="{{ "Errors"|t(locale) }}"
+                        aria-expanded="false"
+                        aria-controls="error-list"
+                    >
+                        <i class="bi bi-exclamation-circle"></i>
+                    </a>
+                    <div
+                        id="error-list"
+                        class="ev_error_list ev_border"
+                        data-empty-label="{{ "No recent errors"|t(locale) }}"
+                        data-unknown-label="{{ "Unknown error"|t(locale) }}"
+                        data-status-label="{{ "Request failed with status {}"|t(locale) }}"
+                        hidden
+                    ></div>
+                </span>
             </div>
             <br style="clear: both;" />
 

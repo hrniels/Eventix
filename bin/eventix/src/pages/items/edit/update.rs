@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -44,7 +44,7 @@ fn action_update(
     let (store, personal_alarms) = state.store_and_alarms_mut();
 
     let file = store
-        .files_by_id_mut(&req.uid)
+        .try_file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
     let ctx = file.calendar().date_context();
 
@@ -168,8 +168,8 @@ fn action_update(
             let old_dir = file.directory().clone();
             let dir = state
                 .store_mut()
-                .directory_mut(&old_dir)
-                .ok_or_else(|| anyhow!("Unable to find directory with id {}", old_dir))?;
+                .try_directory_mut(&old_dir)
+                .map_err(anyhow::Error::from)?;
             dir.delete_by_uid(&req.uid)?;
         } else {
             // just update the file
@@ -179,8 +179,8 @@ fn action_update(
         // save to file
         let dir = state
             .store_mut()
-            .directory_mut(&calendar)
-            .ok_or_else(|| anyhow!("Unable to find directory with id {}", calendar))?;
+            .try_directory_mut(&calendar)
+            .map_err(anyhow::Error::from)?;
 
         let mut path = dir.path().clone();
         path.push(format!("{uid}.ics"));
@@ -286,16 +286,20 @@ pub async fn handler(
 
     let form = {
         let mut state = state.lock().await;
-        match action_update(&mut page, &locale, &mut state, &mut form, &req)? {
-            (true, Some(uid)) => {
+        match action_update(&mut page, &locale, &mut state, &mut form, &req) {
+            Ok((true, Some(uid))) => {
                 // present the user an edit form for the created series
                 req.uid = uid;
                 req.mode = EditMode::Series;
                 req.rid = None;
                 None
             }
-            (true, None) => None,
-            _ => Some(form),
+            Ok((true, None)) => None,
+            Ok((false, _)) => Some(form),
+            Err(e) => {
+                page.add_localized_error(&locale, &state, e);
+                Some(form)
+            }
         }
     };
 

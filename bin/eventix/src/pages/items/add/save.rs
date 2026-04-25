@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -58,10 +58,14 @@ pub async fn handler(
 
     {
         let mut state = state.lock().await;
-        if action_update(&mut page, &locale, &mut state, &mut form, &req).await? {
-            page.add_info(locale.translate("info.event_added"));
+        match action_update(&mut page, &locale, &mut state, &mut form, &req).await {
+            Ok(true) => {
+                page.add_info(locale.translate("info.event_added"));
 
-            form = CompNew::new(&req, locale.timezone(), Some(form.calendar));
+                form = CompNew::new(&req, locale.timezone(), Some(form.calendar));
+            }
+            Ok(false) => {}
+            Err(e) => page.add_localized_error(&locale, &state, e),
         }
     }
 

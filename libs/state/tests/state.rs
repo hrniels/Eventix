@@ -8,7 +8,7 @@
 //! accordingly. Because these variables are process-wide, tests in this file share a single
 //! test binary and run sequentially (the default for integration test binaries).
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use tempfile::TempDir;
 
@@ -21,6 +21,7 @@ mod common;
 use common::{
     make_cal_settings, make_filesystem_col, make_id, make_xdg_with_locale, make_xdg_with_real_data,
 };
+use tokio::{sync::Mutex, time::sleep};
 
 // --- State::new ---
 
@@ -54,8 +55,8 @@ fn reload_locale_succeeds_with_real_locale_files() {
 
 // --- refresh_store: add and rename ---
 
-#[test]
-fn refresh_store_adds_new_calendar_from_settings() {
+#[tokio::test]
+async fn refresh_store_adds_new_calendar_from_settings() {
     // Start with an empty store. Add a collection with one calendar to settings pointing at a
     // real (empty) directory on disk. After refresh_store the store must contain the calendar.
     let tmp = TempDir::new().unwrap();
@@ -77,10 +78,8 @@ fn refresh_store_adds_new_calendar_from_settings() {
         .collections_mut()
         .insert("col1".to_string(), col);
 
-    // Run refresh_store; because it is async we use a tokio runtime.
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::refresh_store(&mut state))
+    State::refresh_store(&mut state)
+        .await
         .expect("refresh_store must succeed");
 
     assert_eq!(state.store().directories().len(), 1);
@@ -91,8 +90,8 @@ fn refresh_store_adds_new_calendar_from_settings() {
     assert_eq!(dir.name(), "My Cal");
 }
 
-#[test]
-fn refresh_store_renames_existing_calendar() {
+#[tokio::test]
+async fn refresh_store_renames_existing_calendar() {
     // Pre-populate the store with a calendar, then change its name in settings. After
     // refresh_store the directory must carry the new name.
     let tmp = TempDir::new().unwrap();
@@ -114,9 +113,8 @@ fn refresh_store_renames_existing_calendar() {
         .collections_mut()
         .insert("col1".to_string(), col);
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::refresh_store(&mut state))
+    State::refresh_store(&mut state)
+        .await
         .expect("first refresh_store must succeed");
 
     // Now rename the calendar in settings and re-run.
@@ -130,9 +128,8 @@ fn refresh_store_renames_existing_calendar() {
         .unwrap()
         .set_name("New Name".to_string());
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::refresh_store(&mut state))
+    State::refresh_store(&mut state)
+        .await
         .expect("second refresh_store must succeed");
 
     let dir = state
@@ -142,8 +139,8 @@ fn refresh_store_renames_existing_calendar() {
     assert_eq!(dir.name(), "New Name");
 }
 
-#[test]
-fn refresh_store_removes_calendar_absent_from_settings() {
+#[tokio::test]
+async fn refresh_store_removes_calendar_absent_from_settings() {
     // Pre-populate the store with a calendar that is *not* present in settings.
     // After refresh_store the store must be empty.
     let tmp = TempDir::new().unwrap();
@@ -166,9 +163,8 @@ fn refresh_store_removes_calendar_absent_from_settings() {
         .collections_mut()
         .insert("col1".to_string(), col);
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::refresh_store(&mut state))
+    State::refresh_store(&mut state)
+        .await
         .expect("first refresh_store must succeed");
     assert_eq!(state.store().directories().len(), 1);
 
@@ -181,9 +177,8 @@ fn refresh_store_removes_calendar_absent_from_settings() {
         .all_calendars_mut()
         .remove("stale-cal");
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::refresh_store(&mut state))
+    State::refresh_store(&mut state)
+        .await
         .expect("second refresh_store must succeed");
 
     assert!(
@@ -223,18 +218,15 @@ fn make_fs_state_with_xdg(tmp: &TempDir, col_id: &str, cal_id: &str, folder: &st
     state
 }
 
-#[test]
-fn state_discover_collection_with_fs_syncer() {
+#[tokio::test]
+async fn state_discover_collection_with_fs_syncer() {
     let tmp = TempDir::new().unwrap();
-    let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
 
-    let result = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::discover_collection(
-            &mut state,
-            &"col1".to_string(),
-            None,
-        ))
+    let result = State::discover_collection(&state, &"col1".to_string(), None)
+        .await
         .expect("discover_collection must succeed");
 
     assert_eq!(
@@ -244,18 +236,23 @@ fn state_discover_collection_with_fs_syncer() {
     );
 }
 
-#[test]
-fn state_sync_collection_with_fs_syncer() {
+#[tokio::test]
+async fn state_sync_collection_with_fs_syncer() {
     let tmp = TempDir::new().unwrap();
-    let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
 
-    let result = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::sync_collection(
-            &mut state,
-            &"col1".to_string(),
-            None,
-        ))
+    // Populate the store by running a first refresh.
+    {
+        let mut locked = state.lock().await;
+        State::refresh_store(&mut locked)
+            .await
+            .expect("refresh_store must succeed");
+    }
+
+    let result = State::sync_collection(&state, &"col1".to_string(), None)
+        .await
         .expect("sync_collection must succeed");
 
     assert_eq!(
@@ -265,50 +262,52 @@ fn state_sync_collection_with_fs_syncer() {
     assert!(!result.changed);
 }
 
-#[test]
-fn state_sync_all_updates_last_reload() {
+#[tokio::test]
+async fn state_sync_all_updates_last_reload() {
     let tmp = TempDir::new().unwrap();
-    let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
 
-    let before = state.last_reload();
+    let before = state.lock().await.last_reload();
 
     // Sleep briefly so the timestamp has a chance to advance.
-    std::thread::sleep(std::time::Duration::from_millis(5));
+    sleep(Duration::from_millis(5)).await;
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::sync_all(&mut state, None))
+    State::sync_all(&state, None)
+        .await
         .expect("sync_all must succeed");
 
+    let after = state.lock().await.last_reload();
+
     assert!(
-        state.last_reload() >= before,
+        after >= before,
         "last_reload must be updated after sync_all"
     );
 }
 
-#[test]
-fn state_reload_collection_reloads_store() {
+#[tokio::test]
+async fn state_reload_collection_reloads_store() {
     let tmp = TempDir::new().unwrap();
-    let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
 
     // Populate the store by running a first refresh.
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::refresh_store(&mut state))
-        .expect("refresh_store must succeed");
+    {
+        let mut state = state.lock().await;
+        State::refresh_store(&mut state).await
+    }
+    .expect("refresh_store must succeed");
+
     assert_eq!(
-        state.store().directories().len(),
+        state.lock().await.store().directories().len(),
         1,
         "store must have one calendar"
     );
 
-    let result = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::reload_collection(
-            &mut state,
-            &"col1".to_string(),
-            None,
-        ))
+    let result = State::reload_collection(&state, &"col1".to_string(), None)
+        .await
         .expect("reload_collection must succeed");
 
     assert_eq!(
@@ -317,13 +316,18 @@ fn state_reload_collection_reloads_store() {
     );
     // The calendar must still be present in the store after the reload.
     assert!(
-        state.store().directory(&make_id("cal1")).is_some(),
+        state
+            .lock()
+            .await
+            .store()
+            .directory(&make_id("cal1"))
+            .is_some(),
         "cal1 must be in the store after reload_collection"
     );
 }
 
-#[test]
-fn state_delete_collection_removes_from_settings() {
+#[tokio::test]
+async fn state_delete_collection_removes_from_settings() {
     let tmp = TempDir::new().unwrap();
     let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
     let log_path = log_file(state.xdg(), &"col1".to_string());
@@ -338,9 +342,8 @@ fn state_delete_collection_removes_from_settings() {
         "log file must exist before delete_collection"
     );
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::delete_collection(&mut state, &"col1".to_string()))
+    State::delete_collection(&mut state, &"col1".to_string())
+        .await
         .expect("delete_collection must succeed");
 
     assert!(
@@ -353,8 +356,8 @@ fn state_delete_collection_removes_from_settings() {
     );
 }
 
-#[test]
-fn state_delete_calendar_removes_from_settings() {
+#[tokio::test]
+async fn state_delete_calendar_removes_from_settings() {
     let tmp = TempDir::new().unwrap();
     let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
 
@@ -369,13 +372,8 @@ fn state_delete_calendar_removes_from_settings() {
         "cal1 must be in settings before delete"
     );
 
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::delete_calendar(
-            &mut state,
-            &"col1".to_string(),
-            &"cal1".to_string(),
-        ))
+    State::delete_calendar(&mut state, &"col1".to_string(), &"cal1".to_string())
+        .await
         .expect("delete_calendar must succeed");
 
     assert!(
@@ -390,26 +388,23 @@ fn state_delete_calendar_removes_from_settings() {
     );
 }
 
-#[test]
-fn state_reload_calendar_reloads_store() {
+#[tokio::test]
+async fn state_reload_calendar_reloads_store() {
     let tmp = TempDir::new().unwrap();
-    let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
 
     // Populate the store first.
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::refresh_store(&mut state))
-        .expect("refresh_store must succeed");
-    assert_eq!(state.store().directories().len(), 1);
+    {
+        let mut state = state.lock().await;
+        State::refresh_store(&mut state).await
+    }
+    .expect("refresh_store must succeed");
+    assert_eq!(state.lock().await.store().directories().len(), 1);
 
-    let result = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(State::reload_calendar(
-            &mut state,
-            &"col1".to_string(),
-            &"cal1".to_string(),
-            None,
-        ))
+    let result = State::reload_calendar(&state, &"col1".to_string(), &"cal1".to_string(), None)
+        .await
         .expect("reload_calendar must succeed");
 
     assert_eq!(
@@ -419,7 +414,12 @@ fn state_reload_calendar_reloads_store() {
     assert_eq!(result.calendars.get("cal1"), Some(&false));
     // The calendar must still be present in the store after the per-calendar reload.
     assert!(
-        state.store().directory(&make_id("cal1")).is_some(),
+        state
+            .lock()
+            .await
+            .store()
+            .directory(&make_id("cal1"))
+            .is_some(),
         "cal1 must be in the store after reload_calendar"
     );
 }

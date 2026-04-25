@@ -163,6 +163,7 @@ pub struct O365 {
     vdirsyncer: VDirSyncer,
     auth_url: Option<String>,
     props_path: PathBuf,
+    pending_token: Option<String>,
     log: Arc<Mutex<File>>,
     runner: Arc<dyn DavmailRunner>,
 }
@@ -235,6 +236,7 @@ impl O365 {
             vdirsyncer,
             auth_url: auth_url.cloned(),
             props_path,
+            pending_token: None,
             log,
             runner,
         }
@@ -304,8 +306,7 @@ impl O365 {
     }
 
     async fn remember_token(
-        &self,
-        state: &mut State,
+        &mut self,
         res: anyhow::Result<SyncColResult>,
     ) -> anyhow::Result<SyncColResult> {
         // Only persist the token when the sync succeeded AND this was an interactive auth flow
@@ -323,21 +324,22 @@ impl O365 {
                     && let Some(split) = line.find('=')
                 {
                     let token = &line[split + 1..];
-                    // permanently remember the token
-                    let misc = state.misc_mut();
-                    misc.set_collection_token(&self.col_id, token.to_string());
-                    misc.write_to_file()?;
+                    self.pending_token = Some(token.to_string());
                     break;
                 }
             }
         }
         res
     }
+
+    fn take_token(&mut self) -> Option<String> {
+        self.pending_token.take()
+    }
 }
 
 #[async_trait]
 impl Syncer for O365 {
-    async fn discover(&self, state: &mut State) -> anyhow::Result<SyncColResult> {
+    async fn discover(&mut self) -> anyhow::Result<SyncColResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
@@ -345,88 +347,73 @@ impl Syncer for O365 {
         // Clone the runner Arc so the borrow of `self` ends before we need `self` in the future.
         let runner = self.runner.clone();
 
-        runner
+        let res = runner
             .run_with_davmail(
                 &props_path,
                 &id,
                 auth_url.as_ref(),
                 log,
-                Box::pin(async {
-                    let res = self.vdirsyncer.discover(state).await;
-                    self.remember_token(state, res).await
-                }),
+                Box::pin(async { self.vdirsyncer.discover().await }),
             )
-            .await
+            .await;
+
+        self.remember_token(res).await
     }
 
-    async fn sync_cal(
-        &mut self,
-        state: &mut State,
-        cal_id: &String,
-    ) -> anyhow::Result<SyncColResult> {
+    async fn sync_cal(&mut self, cal_id: &String) -> anyhow::Result<SyncColResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
         let log = self.log.clone();
         let runner = self.runner.clone();
 
-        runner
+        let res = runner
             .run_with_davmail(
                 &props_path,
                 &id,
                 auth_url.as_ref(),
                 log,
-                Box::pin(async {
-                    let res = self.vdirsyncer.sync_cal(state, cal_id).await;
-                    self.remember_token(state, res).await
-                }),
+                Box::pin(async { self.vdirsyncer.sync_cal(cal_id).await }),
             )
-            .await
+            .await;
+
+        self.remember_token(res).await
     }
 
-    async fn sync(&mut self, state: &mut State) -> anyhow::Result<SyncColResult> {
+    async fn sync(&mut self) -> anyhow::Result<SyncColResult> {
         let id = self.col_id.clone();
         let auth_url = self.auth_url.clone();
         let props_path = self.props_path.clone();
         let log = self.log.clone();
         let runner = self.runner.clone();
 
-        runner
+        let res = runner
             .run_with_davmail(
                 &props_path,
                 &id,
                 auth_url.as_ref(),
                 log,
-                Box::pin(async {
-                    let res = self.vdirsyncer.sync(state).await;
-                    self.remember_token(state, res).await
-                }),
+                Box::pin(async { self.vdirsyncer.sync().await }),
             )
-            .await
+            .await;
+
+        self.remember_token(res).await
     }
 
-    async fn delete_cal(&mut self, state: &mut State, cal_id: &String) -> anyhow::Result<()> {
-        self.vdirsyncer.delete_cal(state, cal_id).await
+    async fn delete_cal(&mut self, cal_id: &String) -> anyhow::Result<()> {
+        self.vdirsyncer.delete_cal(cal_id).await
     }
 
-    async fn create_cal_by_folder(
-        &mut self,
-        state: &mut State,
-        folder: &String,
-    ) -> anyhow::Result<()> {
-        self.vdirsyncer.create_cal_by_folder(state, folder).await
+    async fn create_cal_by_folder(&mut self, folder: &String) -> anyhow::Result<()> {
+        self.vdirsyncer.create_cal_by_folder(folder).await
     }
 
-    async fn delete_cal_by_folder(
-        &mut self,
-        state: &mut State,
-        folder: &String,
-    ) -> anyhow::Result<()> {
-        self.vdirsyncer.delete_cal_by_folder(state, folder).await
+    async fn delete_cal_by_folder(&mut self, folder: &String) -> anyhow::Result<()> {
+        self.vdirsyncer.delete_cal_by_folder(folder).await
     }
 
-    async fn delete(&mut self, state: &mut State, all: bool) -> anyhow::Result<()> {
-        self.vdirsyncer.delete(state, all).await?;
+    async fn delete(&mut self, all: bool) -> anyhow::Result<()> {
+        self.vdirsyncer.delete(all).await?;
 
         if all {
             // remove generated property file
@@ -437,6 +424,15 @@ impl Syncer for O365 {
         } else {
             Ok(())
         }
+    }
+
+    fn finish(&mut self, state: &mut State, _result: &mut SyncColResult) -> anyhow::Result<()> {
+        if let Some(token) = self.take_token() {
+            let misc = state.misc_mut();
+            misc.set_collection_token(&self.col_id, token);
+            misc.write_to_file()?;
+        }
+        Ok(())
     }
 }
 
@@ -621,50 +617,6 @@ mod tests {
         }
     }
 
-    /// Builds a `State` containing one named, enabled calendar in the given collection.
-    fn make_state_with_calendar(col_name: &str, cal_id: &str, folder: &str) -> crate::State {
-        use crate::settings::{CalendarSettings, CollectionSettings, SyncerType};
-
-        let mut settings = crate::settings::Settings::new(PathBuf::default());
-        let mut col = CollectionSettings::new(SyncerType::FileSystem {
-            path: "/tmp".to_string(),
-        });
-        let mut cal = CalendarSettings::default();
-        cal.set_enabled(true);
-        cal.set_folder(folder.to_string());
-        cal.set_name("Test Cal".to_string());
-        col.all_calendars_mut().insert(cal_id.to_string(), cal);
-        settings.collections_mut().insert(col_name.to_string(), col);
-
-        let mut state = crate::State::new_for_test(
-            eventix_ical::col::CalStore::default(),
-            crate::misc::Misc::new(PathBuf::default()),
-        );
-        *state.settings_mut() = settings;
-        state
-    }
-
-    /// Builds a `State` that contains an empty collection named `col_name`.
-    ///
-    /// The collection has no calendars, so `VDirSyncer::sync` will short-circuit to
-    /// `Success(false)` without invoking the runner.
-    fn make_state_with_empty_collection(col_name: &str) -> crate::State {
-        use crate::settings::{CollectionSettings, SyncerType};
-
-        let mut settings = crate::settings::Settings::new(PathBuf::default());
-        let col = CollectionSettings::new(SyncerType::FileSystem {
-            path: "/tmp".to_string(),
-        });
-        settings.collections_mut().insert(col_name.to_string(), col);
-
-        let mut state = crate::State::new_for_test(
-            eventix_ical::col::CalStore::default(),
-            crate::misc::Misc::new(PathBuf::default()),
-        );
-        *state.settings_mut() = settings;
-        state
-    }
-
     /// Builds a minimal `O365` using the supplied fake runners.
     ///
     /// The inner `VDirSyncer` is configured with `col_id = "mycol"` and `folder_id`.
@@ -844,8 +796,7 @@ mod tests {
         )
         .await;
 
-        let mut state = make_state_with_calendar("mycol", "cal-1", "work");
-        let res = o365.sync(&mut state).await.unwrap();
+        let res = o365.sync().await.unwrap();
         assert_eq!(res, SyncColResult::Success(false));
 
         let calls = vdir_runner.calls();
@@ -879,11 +830,7 @@ mod tests {
         )
         .await;
 
-        let mut state = make_state_with_calendar("mycol", "cal-1", "work");
-        let res = o365
-            .sync_cal(&mut state, &"cal-1".to_string())
-            .await
-            .unwrap();
+        let res = o365.sync_cal(&"cal-1".to_string()).await.unwrap();
         assert_eq!(res, SyncColResult::Success(false));
 
         let calls = vdir_runner.calls();
@@ -899,7 +846,7 @@ mod tests {
     async fn discover_invokes_vdirsyncer_runner() {
         // discover calls run_interactive (discover) then run (metasync).
         let ok_status = ExitStatus::from_raw(0);
-        let (_tmp, vdir_runner, o365) = setup_o365_with_vdir(
+        let (_tmp, vdir_runner, mut o365) = setup_o365_with_vdir(
             vec![CannedOutput::success(b"")],
             vec![(ok_status, vec![])],
             HashMap::new(),
@@ -908,11 +855,7 @@ mod tests {
         )
         .await;
 
-        let mut state = crate::State::new_for_test(
-            eventix_ical::col::CalStore::default(),
-            crate::misc::Misc::new(PathBuf::default()),
-        );
-        let res = o365.discover(&mut state).await.unwrap();
+        let res = o365.discover().await.unwrap();
         assert_eq!(res, SyncColResult::Success(true));
 
         let calls = vdir_runner.calls();
@@ -936,20 +879,13 @@ mod tests {
         )
         .await;
 
-        let mut state = crate::State::new_for_test(
-            eventix_ical::col::CalStore::default(),
-            crate::misc::Misc::new(PathBuf::default()),
-        );
-        let res = o365.sync(&mut state).await.unwrap();
+        let res = o365.sync().await.unwrap();
         assert_eq!(res, SyncColResult::AuthFailed(url.to_string()));
 
-        let res = o365
-            .sync_cal(&mut state, &"cal-1".to_string())
-            .await
-            .unwrap();
+        let res = o365.sync_cal(&"cal-1".to_string()).await.unwrap();
         assert_eq!(res, SyncColResult::AuthFailed(url.to_string()));
 
-        let res = o365.discover(&mut state).await.unwrap();
+        let res = o365.discover().await.unwrap();
         assert_eq!(res, SyncColResult::AuthFailed(url.to_string()));
     }
 
@@ -970,18 +906,13 @@ mod tests {
         let props_path = o365.props_path.clone();
         assert!(props_path.exists(), "props file should exist before delete");
 
-        let mut state = crate::State::new_for_test(
-            eventix_ical::col::CalStore::default(),
-            crate::misc::Misc::new(PathBuf::default()),
-        );
-
-        o365.delete(&mut state, false).await.unwrap();
+        o365.delete(false).await.unwrap();
         assert!(
             props_path.exists(),
             "props file should be kept when config=false"
         );
 
-        o365.delete(&mut state, true).await.unwrap();
+        o365.delete(true).await.unwrap();
         assert!(
             !props_path.exists(),
             "props file should be removed when config=true"
@@ -1011,19 +942,10 @@ mod tests {
         .await
         .unwrap();
 
-        // Use a real misc path so that write_to_file succeeds.
-        let misc_path = tmp.path().join("misc.toml");
-        let misc = crate::misc::Misc::new(misc_path);
-        let mut state = make_state_with_empty_collection("mycol");
-        *state.misc_mut() = misc;
-
-        let res = o365.sync(&mut state).await.unwrap();
+        let res = o365.sync().await.unwrap();
         assert_eq!(res, SyncColResult::Success(false));
 
-        assert_eq!(
-            state.misc().collection_token(&"mycol".to_string()),
-            Some(&"super-secret-token".to_string()),
-        );
+        assert_eq!(o365.take_token(), Some("super-secret-token".to_string()),);
     }
 
     // --- run_with_davmail_impl unit tests ---

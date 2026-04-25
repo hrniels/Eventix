@@ -6,7 +6,6 @@ mod calendars;
 mod compaction;
 mod dayocc;
 
-use anyhow::anyhow;
 use eventix_ical::{
     col::CalFile,
     objects::{CalCompType, CalComponent, CalEvent, CalOrganizer, CalTodo, DateContext},
@@ -65,8 +64,8 @@ where
 
     let dir = state
         .store_mut()
-        .directory_mut(&calendar)
-        .ok_or_else(|| anyhow!("Unable to find directory with id {}", calendar))?;
+        .try_directory_mut(&calendar)
+        .map_err(anyhow::Error::from)?;
 
     let mut path = dir.path().clone();
     path.push(format!("{uid}.ics"));
