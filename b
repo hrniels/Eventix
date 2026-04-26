@@ -122,6 +122,15 @@ def cmd_vdirsyncer(args):
     subprocess.run(["run/venv/bin/pip", "install", "-e", "contrib/vdirsyncer"])
 
 
+def cmd_test(args):
+    """Runs cargo tests with the prepared development environment."""
+    cmd = ["cargo", "test"]
+    cmd.extend(args.cargo_args)
+    if args.nocapture:
+        cmd.extend(["--", "--nocapture"])
+    subprocess.run(cmd, env=dev_env(), check=True)
+
+
 def cmd_coverage(args):
     """Generates code coverage information for the workspace."""
     cmd = [
@@ -325,6 +334,15 @@ def main():
         "vdirsyncer", parents=[parent_parser], help="Build vdirsyncer")
     vdirsyncer_parser.set_defaults(func=cmd_vdirsyncer)
 
+    test_parser = subparsers.add_parser(
+        "test", parents=[parent_parser],
+        help="Run cargo tests with bundled dev tools")
+    test_parser.add_argument(
+        "--nocapture", action="store_true",
+        help="Show output from passing tests")
+    test_parser.set_defaults(cargo_args=[])
+    test_parser.set_defaults(func=cmd_test)
+
     coverage_parser = subparsers.add_parser(
         "coverage", parents=[parent_parser], help="Generate code coverage information")
     coverage_parser.add_argument(
@@ -348,7 +366,11 @@ def main():
         help="Check JS, CSS, and HTML template formatting with Prettier")
     format_check_parser.set_defaults(func=cmd_format_check)
 
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if args.command == "test":
+        args.cargo_args = unknown
+    elif unknown:
+        parser.error("unrecognized arguments: {}".format(" ".join(unknown)))
     args.func(args)
 
 
