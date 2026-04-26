@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777194652528,
+  "lastUpdate": 1777195338517,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -1256,6 +1256,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/list/results/content/keyword_or",
             "value": 5723044.473894955,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "8de508427f5f1d1baaaf4bdc7a81d57f20ffa785",
+          "message": "Added tests with radicale",
+          "timestamp": "2026-04-25T16:10:29Z",
+          "url": "https://github.com/hrniels/Eventix/pull/33/commits/8de508427f5f1d1baaaf4bdc7a81d57f20ffa785"
+        },
+        "date": 1777195338269,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/list/results/content/all_items",
+            "value": 5248006.091799262,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_and",
+            "value": 5627440.017335112,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_or",
+            "value": 5776632.688385696,
             "unit": "ns"
           }
         ]
