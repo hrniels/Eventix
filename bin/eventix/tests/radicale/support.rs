@@ -26,8 +26,40 @@ pub const REMOTE_CALENDAR_NAME: &str = "Work";
 pub const REMOTE_CALENDAR2_FOLDER: &str = "personal";
 pub const REMOTE_CALENDAR2_NAME: &str = "Personal";
 
-pub fn binaries_available() -> bool {
-    find_binary("radicale").is_some()
+const EXPECTED_VDIRSYNCER_VERSION: &str = "0.20.0+eventix";
+
+fn expected_vdirsyncer_available() -> bool {
+    let Some(vdirsyncer) = find_binary("vdirsyncer") else {
+        return false;
+    };
+    let Ok(output) = Command::new(vdirsyncer).arg("--version").output() else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let version = stdout
+        .trim()
+        .strip_prefix("vdirsyncer, version ")
+        .unwrap_or(stdout.trim());
+    version == EXPECTED_VDIRSYNCER_VERSION
+}
+
+#[allow(clippy::assertions_on_constants)]
+pub fn check_requirements() -> Option<String> {
+    if find_binary("radicale").is_none() {
+        return Some("skipping radicale test as radicale is missing".to_string());
+    }
+    if !expected_vdirsyncer_available() {
+        assert!(
+            false,
+            "Cannot run radicale tests as the Eventix vdirsyncer is not active.\nPlease run tests via ./b test."
+        );
+        return Some("skipping radicale test".to_string());
+    }
+    None
 }
 
 fn free_port() -> anyhow::Result<u16> {

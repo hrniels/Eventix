@@ -9,13 +9,13 @@ mod support;
 use helper::COL_ID;
 use support::{
     REMOTE_CALENDAR_FOLDER, REMOTE_CALENDAR_NAME, REMOTE_CALENDAR2_FOLDER, REMOTE_CALENDAR2_NAME,
-    RadicalePair, binaries_available,
+    RadicalePair, check_requirements,
 };
 
 #[tokio::test]
 async fn discover_collection_succeeds() {
-    if !binaries_available() {
-        eprintln!("skipping Radicale integration test because radicale is missing");
+    if let Some(msg) = check_requirements() {
+        eprintln!("{msg}");
         return;
     }
 
@@ -43,8 +43,8 @@ async fn discover_collection_succeeds() {
 
 #[tokio::test]
 async fn sync_collection_pulls_remote_event_into_store() {
-    if !binaries_available() {
-        eprintln!("skipping Radicale integration test because radicale is missing");
+    if let Some(msg) = check_requirements() {
+        eprintln!("{msg}");
         return;
     }
 
@@ -79,8 +79,8 @@ async fn sync_collection_pulls_remote_event_into_store() {
 
 #[tokio::test]
 async fn sync_all_pulls_remote_event_into_store() {
-    if !binaries_available() {
-        eprintln!("skipping Radicale integration test because radicale is missing");
+    if let Some(msg) = check_requirements() {
+        eprintln!("{msg}");
         return;
     }
 
@@ -115,8 +115,8 @@ async fn sync_all_pulls_remote_event_into_store() {
 
 #[tokio::test]
 async fn reload_collection_refreshes_local_cache_from_remote_server() {
-    if !binaries_available() {
-        eprintln!("skipping Radicale integration test because radicale is missing");
+    if let Some(msg) = check_requirements() {
+        eprintln!("{msg}");
         return;
     }
 
@@ -159,8 +159,8 @@ async fn reload_collection_refreshes_local_cache_from_remote_server() {
 
 #[tokio::test]
 async fn reload_calendar_refreshes_only_the_selected_calendar() {
-    if !binaries_available() {
-        eprintln!("skipping Radicale integration test because radicale is missing");
+    if let Some(msg) = check_requirements() {
+        eprintln!("{msg}");
         return;
     }
 
