@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777225875057,
+  "lastUpdate": 1777225952965,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -4019,6 +4019,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 92973894.7,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "131f69421424a9ccf3230e465c5122993fe10de7",
+          "message": "Fixed handling of overwrites",
+          "timestamp": "2026-04-26T09:30:08Z",
+          "url": "https://github.com/hrniels/Eventix/pull/34/commits/131f69421424a9ccf3230e465c5122993fe10de7"
+        },
+        "date": 1777225952709,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1540842.5077965588,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 6614606.766155293,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 92856727.45,
             "unit": "ns"
           }
         ]
