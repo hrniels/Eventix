@@ -107,6 +107,24 @@ async fn respond_tentative_recurring_creates_override() {
         .find(|a| a.address().to_lowercase() == "test@example.com")
         .expect("attendee not found");
     assert_eq!(att.part_stat(), Some(CalPartStat::Tentative));
+
+    let raw = std::fs::read_to_string(cal_dir.join(format!("{uid}.ics"))).unwrap();
+    let rid_index = raw
+        .find("RECURRENCE-ID;TZID=Europe/Berlin:20260415T090000")
+        .expect("expected serialized override recurrence-id");
+    let override_start = raw[..rid_index]
+        .rfind("BEGIN:VEVENT")
+        .expect("expected serialized override block start");
+    let override_end = raw[rid_index..]
+        .find("END:VEVENT")
+        .map(|idx| rid_index + idx + "END:VEVENT".len())
+        .expect("expected override END:VEVENT");
+    let override_block = &raw[override_start..override_end];
+
+    assert!(override_block.contains("RECURRENCE-ID;TZID=Europe/Berlin:20260415T090000"));
+    assert!(override_block.contains("DTSTART;TZID=Europe/Berlin:20260415T090000"));
+    assert!(override_block.contains("DTEND;TZID=Europe/Berlin:20260415T100000"));
+    assert!(override_block.contains("SUMMARY:Weekly standup"));
 }
 
 /// Supplying an invalid `stat` string returns a non-200 status (deserialization failure).

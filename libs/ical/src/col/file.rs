@@ -48,7 +48,7 @@ impl<'a, 'r> OccurrenceIterator<'a, 'r> {
         dates: Option<(&'a CalComponent, CompDateIterator<'a, 'r>)>,
     ) -> Self {
         let mut sorted_overwritten: Vec<&CalComponent> = file.components().iter().collect();
-        sorted_overwritten.sort_by_key(|comp| comp.start());
+        sorted_overwritten.sort_by_key(|comp| comp.start().or(comp.rid()));
         Self {
             start,
             end,
@@ -115,6 +115,7 @@ impl<'a, 'r> OccurrenceIterator<'a, 'r> {
 
                 let start_date = overwritten
                     .start()
+                    .or(overwritten.rid())
                     .unwrap()
                     .as_start_with_resolver(&timezone, resolver);
                 let mut occ = Occurrence::new_single_in_tz(
@@ -676,6 +677,18 @@ impl CalFile {
         };
         comp.set_start(Some(start));
         comp.set_rid(Some(rid.clone()));
+
+        // set sensible default for the end/due date
+        if let (Some(chrono_dur), Some(CalDate::DateTime(CalDateTime::Timezone(naive, tzid)))) =
+            (base.time_duration(), comp.start())
+        {
+            let end = CalDate::DateTime(CalDateTime::Timezone(*naive + chrono_dur, tzid.clone()));
+            match &mut comp {
+                CalComponent::Event(ev) => ev.set_end(Some(end)),
+                CalComponent::Todo(td) => td.set_due(Some(end)),
+            }
+        }
+
         comp.set_last_modified(CalDate::now());
         comp.set_stamp(CalDate::now());
 
@@ -1987,6 +2000,61 @@ mod tests {
 
         let occ = file.occurrence_by_id("exc", Some(&rid), tz).unwrap();
         assert!(occ.is_excluded());
+    }
+
+    #[test]
+    fn occurrences_between_uses_rid_when_override_dtstart_is_collapsed() {
+        let base_start = NaiveDate::from_ymd_opt(2026, 1, 15)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
+        let rid_start = NaiveDate::from_ymd_opt(2026, 2, 5)
+            .unwrap()
+            .and_hms_opt(10, 0, 0)
+            .unwrap();
+
+        let mut cal = Calendar::default();
+        cal.add_component(CalComponent::Event(
+            EventBuilder::new("collapsed-override")
+                .start(CalDate::DateTime(CalDateTime::Timezone(
+                    base_start,
+                    "Europe/Berlin".to_string(),
+                )))
+                .end(CalDate::DateTime(CalDateTime::Timezone(
+                    base_start + Duration::hours(1),
+                    "Europe/Berlin".to_string(),
+                )))
+                .rrule("FREQ=WEEKLY;COUNT=6".parse().unwrap())
+                .done(),
+        ));
+        cal.add_component(CalComponent::Event(
+            EventBuilder::new("collapsed-override")
+                .rid(CalDate::DateTime(CalDateTime::Timezone(
+                    rid_start,
+                    "Europe/Berlin".to_string(),
+                )))
+                .end(CalDate::DateTime(CalDateTime::Timezone(
+                    rid_start + Duration::hours(2),
+                    "Europe/Berlin".to_string(),
+                )))
+                .done(),
+        ));
+        let file = CalFile::new_simple(cal);
+
+        let occs: Vec<_> = file
+            .occurrences_between(new_date(2026, 2, 1), new_date(2026, 2, 8), |_| true)
+            .collect();
+
+        assert_eq!(occs.len(), 1);
+        assert_eq!(
+            occs[0].occurrence_start(),
+            Some(new_datetime(2026, 2, 5, 10, 0, 0))
+        );
+        assert_eq!(
+            occs[0].occurrence_end(),
+            Some(new_datetime(2026, 2, 5, 12, 0, 0))
+        );
+        assert!(!occs[0].is_all_day());
     }
 
     // -----------------------------------------------------------------------

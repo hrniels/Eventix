@@ -209,6 +209,34 @@ impl EventLikeComponent {
         }
         Ok(())
     }
+
+    fn collapse_optional<T: PartialEq>(slot: &mut Option<T>, base: Option<&T>) {
+        if slot.as_ref() == base {
+            *slot = None;
+        }
+    }
+
+    fn collapse_against_base(&mut self, base: &EventLikeComponent) {
+        Self::collapse_optional(&mut self.created, base.created.as_ref());
+        Self::collapse_optional(&mut self.last_mod, base.last_mod.as_ref());
+        Self::collapse_optional(&mut self.start, base.start.as_ref());
+        Self::collapse_optional(&mut self.duration, base.duration.as_ref());
+        Self::collapse_optional(&mut self.summary, base.summary.as_ref());
+        Self::collapse_optional(&mut self.desc, base.desc.as_ref());
+        Self::collapse_optional(&mut self.location, base.location.as_ref());
+        Self::collapse_optional(&mut self.categories, base.categories.as_ref());
+        Self::collapse_optional(&mut self.organizer, base.organizer.as_ref());
+        Self::collapse_optional(&mut self.attendees, base.attendees.as_ref());
+        Self::collapse_optional(&mut self.alarms, base.alarms.as_ref());
+        if self.priority == base.priority {
+            self.priority = None;
+        }
+        Self::collapse_optional(&mut self.rrule, base.rrule.as_ref());
+        if self.exdates == base.exdates {
+            self.exdates.clear()
+        }
+        self.props.retain(|prop| !base.props.contains(prop));
+    }
 }
 
 impl PropertyProducer for EventLikeComponent {
@@ -515,6 +543,96 @@ pub enum CalComponent {
 }
 
 impl CalComponent {
+    fn expand_common_from_base(
+        base: &EventLikeComponent,
+        over: &EventLikeComponent,
+        start: Option<CalDate>,
+    ) -> EventLikeComponent {
+        let override_prop_names = over
+            .props
+            .iter()
+            .map(|prop| prop.name().to_string())
+            .collect::<std::collections::HashSet<_>>();
+        let props = base
+            .props
+            .iter()
+            .filter(|prop| !override_prop_names.contains(prop.name()))
+            .cloned()
+            .chain(over.props.iter().cloned())
+            .collect();
+
+        EventLikeComponent {
+            ctype: over.ctype,
+            uid: over.uid.clone(),
+            stamp: over.stamp.clone(),
+            created: over.created.clone().or_else(|| base.created.clone()),
+            last_mod: over.last_mod.clone().or_else(|| base.last_mod.clone()),
+            start,
+            duration: over.duration.or(base.duration),
+            summary: over.summary.clone().or_else(|| base.summary.clone()),
+            desc: over.desc.clone().or_else(|| base.desc.clone()),
+            location: over.location.clone().or_else(|| base.location.clone()),
+            categories: over.categories.clone().or_else(|| base.categories.clone()),
+            organizer: over.organizer.clone().or_else(|| base.organizer.clone()),
+            attendees: over.attendees.clone().or_else(|| base.attendees.clone()),
+            exdates: vec![],
+            alarms: over.alarms.clone().or_else(|| base.alarms.clone()),
+            priority: over.priority.or(base.priority),
+            rrule: None,
+            rid: over.rid.clone(),
+            props,
+        }
+    }
+
+    pub(crate) fn expanded_from_base(&self, base: &CalComponent) -> Self {
+        debug_assert!(self.rid().is_some());
+
+        let start = self.start().cloned().or_else(|| self.rid().cloned());
+        match (base, self) {
+            (Self::Event(base_ev), Self::Event(over_ev)) => {
+                let mut event = CalEvent::new(over_ev.uid());
+                event.inner = Self::expand_common_from_base(&base_ev.inner, &over_ev.inner, start);
+                event.set_status(over_ev.status().or(base_ev.status()));
+                event.set_end(over_ev.end().cloned());
+                Self::Event(event)
+            }
+            (Self::Todo(base_td), Self::Todo(over_td)) => {
+                let mut todo = CalTodo::new(over_td.uid());
+                todo.inner = Self::expand_common_from_base(&base_td.inner, &over_td.inner, start);
+                todo.set_status(over_td.status().or(base_td.status()));
+                todo.set_completed(over_td.completed().or_else(|| base_td.completed()).cloned());
+                todo.set_percent(over_td.percent().or(base_td.percent()));
+                todo.set_due(over_td.due().cloned());
+                Self::Todo(todo)
+            }
+            _ => self.clone(),
+        }
+    }
+
+    pub(crate) fn collapse_against_base(&mut self, base: &CalComponent) {
+        match (self, base) {
+            (Self::Event(overwrite), Self::Event(base)) => {
+                overwrite.inner.collapse_against_base(&base.inner);
+                if overwrite.status() == base.status() {
+                    overwrite.set_status(None);
+                }
+            }
+            (Self::Todo(overwrite), Self::Todo(base)) => {
+                overwrite.inner.collapse_against_base(&base.inner);
+                if overwrite.status() == base.status() {
+                    overwrite.set_status(None);
+                }
+                if overwrite.completed() == base.completed() {
+                    overwrite.set_completed(None);
+                }
+                if overwrite.percent() == base.percent() {
+                    overwrite.set_percent(None);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Returns the component as an [`CalEvent`], if it is an event.
     pub fn as_event(&self) -> Option<&CalEvent> {
         match self {
