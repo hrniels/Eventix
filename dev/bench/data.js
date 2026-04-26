@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777194588811,
+  "lastUpdate": 1777194652528,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -4573,6 +4573,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 44152214.9888889,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "e53df8223a36801ce0a3cc32c86c4637bf109acb",
+          "message": "Added tests with radicale",
+          "timestamp": "2026-04-25T16:10:29Z",
+          "url": "https://github.com/hrniels/Eventix/pull/33/commits/e53df8223a36801ce0a3cc32c86c4637bf109acb"
+        },
+        "date": 1777194652256,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 44155993.711111106,
             "unit": "ns"
           }
         ]
