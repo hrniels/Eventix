@@ -85,8 +85,21 @@ jobs:
         with:
           gtk: "true"
 
+      - name: Install test system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            radicale \
+            ant \
+            maven
+
+      - name: Build bundled test tools
+        run: |
+          ./b vdirsyncer
+          ./b davmail
+
       - name: Run tests
-        run: cargo test --all-features
+        run: ./b test --all-features
 
   # --------------------------------------------------------------------------
   # Code coverage (runs only after tests pass)
