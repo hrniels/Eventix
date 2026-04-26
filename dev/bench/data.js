@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777225952965,
+  "lastUpdate": 1777226015841,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -4963,6 +4963,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 43513614.288888894,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "131f69421424a9ccf3230e465c5122993fe10de7",
+          "message": "Fixed handling of overwrites",
+          "timestamp": "2026-04-26T09:30:08Z",
+          "url": "https://github.com/hrniels/Eventix/pull/34/commits/131f69421424a9ccf3230e465c5122993fe10de7"
+        },
+        "date": 1777226015596,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 44268903.466666676,
             "unit": "ns"
           }
         ]
