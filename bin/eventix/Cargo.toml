@@ -85,5 +85,9 @@ path = "tests/pages/collections/add.rs"
 name = "pages_collections_edit"
 path = "tests/pages/collections/edit.rs"
 
+[[test]]
+name = "radicale_sync"
+path = "tests/radicale/sync.rs"
+
 [build-dependencies]
 askama = "0.15.6"
