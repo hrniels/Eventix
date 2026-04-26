@@ -70,7 +70,6 @@ impl RadicaleServer {
         let stderr = fs::File::create(tmp.path().join("radicale.stderr.log"))?;
         let child = Command::new(radicale)
             .arg("--config")
-            .arg("")
             .arg(&config_path)
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr))
