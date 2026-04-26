@@ -333,6 +333,24 @@ async fn occurrence_edit_overrides_single() {
         .find(|c: &&eventix_ical::objects::CalComponent| c.rid().is_some())
         .expect("expected overwrite");
     assert_eq!(overwrite.summary(), Some(&"Special standup".to_string()));
+
+    let raw = std::fs::read_to_string(&ics_path).unwrap();
+    let rid_index = raw
+        .find("RECURRENCE-ID;TZID=Europe/Berlin:20260415T090000")
+        .expect("expected serialized override recurrence-id");
+    let override_start = raw[..rid_index]
+        .rfind("BEGIN:VEVENT")
+        .expect("expected serialized override block start");
+    let override_end = raw[rid_index..]
+        .find("END:VEVENT")
+        .map(|idx| rid_index + idx + "END:VEVENT".len())
+        .expect("expected override END:VEVENT");
+    let override_block = &raw[override_start..override_end];
+
+    assert!(override_block.contains("RECURRENCE-ID;TZID=Europe/Berlin:20260415T090000"));
+    assert!(override_block.contains("DTSTART;TZID=Europe/Berlin:20260415T090000"));
+    assert!(override_block.contains("DTEND;TZID=Europe/Berlin:20260415T110000"));
+    assert!(override_block.contains("SUMMARY:Special standup"));
 }
 
 // --- Following edit ---

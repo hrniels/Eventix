@@ -7,9 +7,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use eventix_ical::objects::{
-    CalComponent, CalDate, CalDateTime, CalEventStatus, DateContext, EventLike, UpdatableEventLike,
-};
+use eventix_ical::objects::{CalComponent, CalDate, CalEventStatus, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::{Deserialize, Serialize};
 
@@ -77,21 +75,6 @@ async fn run_cancel(
         c.as_event_mut()
             .unwrap()
             .set_status(Some(CalEventStatus::Cancelled));
-        // if that's an override, also set the end date
-        if let Some(base) = base {
-            let dur = base.time_duration().unwrap();
-            let start = DateContext::system()
-                .date(c.start().unwrap())
-                .start_in(locale.timezone());
-            let end = start + dur;
-            c.as_event_mut()
-                .unwrap()
-                .set_end(Some(CalDate::DateTime(CalDateTime::Timezone(
-                    end.naive_local(),
-                    locale.timezone().name().to_string(),
-                ))));
-        }
-
         c.set_last_modified(CalDate::now());
         c.set_stamp(CalDate::now());
         Ok(())

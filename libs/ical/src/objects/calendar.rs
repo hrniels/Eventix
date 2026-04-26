@@ -304,6 +304,24 @@ impl Calendar {
             tzids.insert(tzid.clone());
         }
     }
+
+    fn minimize_overrides(&mut self) {
+        let bases = self
+            .comps
+            .iter()
+            .filter(|comp| comp.rid().is_none())
+            .map(|comp| (comp.uid().clone(), comp.clone()))
+            .collect::<HashMap<_, _>>();
+
+        // collapse all properties in overwrites that are equal to the ones in the base component
+        for comp in &mut self.comps {
+            if let Some(base) = comp.rid().and_then(|_| bases.get(comp.uid())) {
+                comp.collapse_against_base(base);
+            }
+        }
+
+        self.invalidate_timezone_resolver();
+    }
 }
 
 impl Default for Calendar {
@@ -337,7 +355,19 @@ impl PropertyProducer for Calendar {
             props.extend(tz.to_props());
         }
         for comp in &self.comps {
-            props.extend(comp.to_props());
+            match comp.rid() {
+                // for overwrites, repeat properties of the base component
+                Some(_) => {
+                    let expanded = self
+                        .comps
+                        .iter()
+                        .find(|base| base.uid() == comp.uid() && base.rid().is_none())
+                        .map(|base| comp.expanded_from_base(base))
+                        .unwrap_or_else(|| comp.clone());
+                    props.extend(expanded.to_props());
+                }
+                None => props.extend(comp.to_props()),
+            }
         }
         // since we also store duplicate components (same UID without RID, see above) in here, they
         // have to go last
@@ -413,6 +443,7 @@ impl PropertyConsumer for Calendar {
                     if prop.value() != "VCALENDAR" {
                         return Err(ParseError::UnexpectedEnd(prop.take_value()));
                     }
+                    cal.minimize_overrides();
                     break Ok(cal);
                 }
                 _ => {
@@ -566,8 +597,8 @@ mod tests {
     use chrono_tz::Tz;
 
     use crate::{
-        objects::{CalComponent, CalDate, CalDateTime, Calendar, EventLike},
-        parser::{ParseError, Property},
+        objects::{CalComponent, CalDate, CalDateTime, Calendar, EventLike, UpdatableEventLike},
+        parser::{ParseError, Property, PropertyProducer},
     };
 
     #[test]
@@ -1286,6 +1317,234 @@ END:VCALENDAR\n";
         assert!(output.contains("BEGIN:X-CUSTOM"));
         assert!(output.contains("X-PROP:custom-value"));
         assert!(output.contains("END:X-CUSTOM"));
+    }
+
+    #[test]
+    fn write_expands_override_with_inherited_properties() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:series-uid\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20260415T090000\n\
+DTEND;TZID=Europe/Berlin:20260415T100000\n\
+RRULE:FREQ=WEEKLY;BYDAY=WE\n\
+EXDATE;TZID=Europe/Berlin:20260429T090000\n\
+SUMMARY:Weekly standup\n\
+DESCRIPTION:Base description\n\
+LOCATION:Room 42\n\
+ATTENDEE;CN=Alice:mailto:alice@example.com\n\
+BEGIN:VALARM\n\
+ACTION:DISPLAY\n\
+TRIGGER:-PT15M\n\
+DESCRIPTION:Reminder\n\
+END:VALARM\n\
+X-BASE:kept\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:series-uid\n\
+DTSTAMP:20250102T000000Z\n\
+RECURRENCE-ID;TZID=Europe/Berlin:20260422T090000\n\
+DTEND;TZID=Europe/Berlin:20260422T100000\n\
+SUMMARY:Special standup\n\
+X-OVERRIDE:present\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let mut buf = Vec::new();
+        cal.write(&mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        let rid_index = output
+            .find("RECURRENCE-ID;TZID=Europe/Berlin:20260422T090000")
+            .expect("expected serialized override recurrence-id");
+        let override_start = output[..rid_index]
+            .rfind("BEGIN:VEVENT")
+            .expect("expected serialized override block start");
+        let override_end = output[rid_index..]
+            .find("END:VEVENT")
+            .map(|idx| rid_index + idx + "END:VEVENT".len())
+            .expect("expected override END:VEVENT");
+        let override_block = &output[override_start..override_end];
+
+        assert!(
+            override_block.contains("RECURRENCE-ID;TZID=Europe/Berlin:20260422T090000"),
+            "override RECURRENCE-ID must be written: {override_block}"
+        );
+        assert!(
+            override_block.contains("DTSTART;TZID=Europe/Berlin:20260422T090000"),
+            "override DTSTART must follow the occurrence slot: {override_block}"
+        );
+        assert!(
+            override_block.contains("DTEND;TZID=Europe/Berlin:20260422T100000"),
+            "override DTEND must come from the occurrence-local overwrite: {override_block}"
+        );
+        assert!(override_block.contains("SUMMARY:Special standup"));
+        assert!(override_block.contains("DESCRIPTION:Base description"));
+        assert!(override_block.contains("LOCATION:Room 42"));
+        assert!(override_block.contains("ATTENDEE;CN=Alice:mailto:alice@example.com"));
+        assert!(override_block.contains("BEGIN:VALARM"));
+        assert!(override_block.contains("TRIGGER;RELATED=START:-PT15M"));
+        assert!(override_block.contains("DESCRIPTION:Reminder"));
+        assert!(override_block.contains("X-BASE:kept"));
+        assert!(override_block.contains("X-OVERRIDE:present"));
+        assert!(!override_block.contains("RRULE:"));
+        assert!(!override_block.contains("EXDATE:"));
+    }
+
+    #[test]
+    fn write_keeps_explicit_empty_override_collections() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:series-empty\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20260415T090000\n\
+DTEND;TZID=Europe/Berlin:20260415T100000\n\
+RRULE:FREQ=WEEKLY;BYDAY=WE\n\
+SUMMARY:Weekly standup\n\
+ATTENDEE;CN=Alice:mailto:alice@example.com\n\
+BEGIN:VALARM\n\
+ACTION:DISPLAY\n\
+TRIGGER:-PT15M\n\
+DESCRIPTION:Reminder\n\
+END:VALARM\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:series-empty\n\
+DTSTAMP:20250102T000000Z\n\
+RECURRENCE-ID;TZID=Europe/Berlin:20260422T090000\n\
+DTEND;TZID=Europe/Berlin:20260422T100000\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let mut cal = input.parse::<Calendar>().unwrap();
+        let override_comp = cal
+            .components_mut()
+            .iter_mut()
+            .find(|comp| comp.rid().is_some())
+            .unwrap();
+        override_comp.set_attendees(Some(vec![]));
+        override_comp.set_alarms(Some(vec![]));
+
+        let mut buf = Vec::new();
+        cal.write(&mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+
+        let override_start = output
+            .rfind("BEGIN:VEVENT")
+            .expect("expected override component in output");
+        let override_block = &output[override_start..];
+        assert!(!override_block.contains("ATTENDEE;"));
+        assert!(!override_block.contains("BEGIN:VALARM"));
+    }
+
+    #[test]
+    fn parse_collapses_identical_override_properties() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:series-collapse\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20260415T090000\n\
+DTEND;TZID=Europe/Berlin:20260415T100000\n\
+RRULE:FREQ=WEEKLY;BYDAY=WE\n\
+SUMMARY:Weekly standup\n\
+DESCRIPTION:Base description\n\
+LOCATION:Room 42\n\
+ATTENDEE;CN=Alice:mailto:alice@example.com\n\
+X-BASE:kept\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:series-collapse\n\
+DTSTAMP:20250102T000000Z\n\
+RECURRENCE-ID;TZID=Europe/Berlin:20260422T090000\n\
+DTSTART;TZID=Europe/Berlin:20260422T090000\n\
+DTEND;TZID=Europe/Berlin:20260422T100000\n\
+SUMMARY:Weekly standup\n\
+DESCRIPTION:Base description\n\
+LOCATION:Room 42\n\
+ATTENDEE;CN=Alice:mailto:alice@example.com\n\
+X-BASE:kept\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let overwrite = cal
+            .components()
+            .iter()
+            .find(|comp| comp.rid().is_some())
+            .expect("expected override");
+
+        assert_eq!(overwrite.summary(), None);
+        assert_eq!(overwrite.description(), None);
+        assert_eq!(overwrite.location(), None);
+        assert_eq!(overwrite.attendees(), None);
+        assert_eq!(
+            overwrite.end_or_due(),
+            Some(
+                &"TTEurope/Berlin;2026-04-22T10:00:00"
+                    .parse::<CalDate>()
+                    .unwrap()
+            )
+        );
+
+        let raw_props = overwrite.to_props();
+        let raw_strings = raw_props
+            .iter()
+            .map(|prop| prop.to_string())
+            .collect::<Vec<_>>();
+        assert!(
+            raw_strings
+                .iter()
+                .any(|line| line == "RECURRENCE-ID;TZID=Europe/Berlin:20260422T090000")
+        );
+        assert!(!raw_strings.iter().any(|line| line.starts_with("SUMMARY:")));
+        assert!(
+            !raw_strings
+                .iter()
+                .any(|line| line.starts_with("DESCRIPTION:"))
+        );
+        assert!(!raw_strings.iter().any(|line| line.starts_with("LOCATION:")));
+        assert!(
+            raw_strings
+                .iter()
+                .any(|line| line == "DTEND;TZID=Europe/Berlin:20260422T100000")
+        );
+        assert!(!raw_strings.iter().any(|line| line.starts_with("ATTENDEE;")));
+        assert!(!raw_strings.iter().any(|line| line == "X-BASE:kept"));
+    }
+
+    #[test]
+    fn parse_keeps_distinct_override_properties() {
+        let input = "BEGIN:VCALENDAR\n\
+BEGIN:VEVENT\n\
+UID:series-distinct\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART;TZID=Europe/Berlin:20260415T090000\n\
+DTEND;TZID=Europe/Berlin:20260415T100000\n\
+RRULE:FREQ=WEEKLY;BYDAY=WE\n\
+SUMMARY:Weekly standup\n\
+LOCATION:Room 42\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:series-distinct\n\
+DTSTAMP:20250102T000000Z\n\
+RECURRENCE-ID;TZID=Europe/Berlin:20260422T090000\n\
+DTSTART;TZID=Europe/Berlin:20260422T110000\n\
+DTEND;TZID=Europe/Berlin:20260422T120000\n\
+SUMMARY:Special standup\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let overwrite = cal
+            .components()
+            .iter()
+            .find(|comp| comp.rid().is_some())
+            .expect("expected override");
+
+        assert_eq!(overwrite.summary(), Some(&"Special standup".to_string()));
+        assert!(overwrite.start().is_some());
+        assert!(overwrite.end_or_due().is_some());
     }
 
     // --- validate_times ---
