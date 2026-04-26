@@ -49,37 +49,40 @@ Check only (faster, no artifacts):
 
 ## TEST COMMANDS
 
+Use `./b test` for all test execution so bundled development tools such as
+`contrib/vdirsyncer` are available on `PATH`.
+
 Run all tests in workspace:
 
-    cargo test
+    ./b test
 
 Run tests for a specific crate:
 
-    cargo test -p <crate-name>
+    ./b test -p <crate-name>
 
 Example:
 
-    cargo test -p eventix-ical
+    ./b test -p eventix-ical
 
 Run a single test by exact name:
 
-    cargo test <test_name>
+    ./b test <test_name>
 
 Example:
 
-    cargo test recur_parses_weekly
+    ./b test recur_parses_weekly
 
 Run tests matching a substring:
 
-    cargo test recur
+    ./b test recur
 
 Run tests in a specific module path:
 
-    cargo test parser::prop
+    ./b test parser::prop
 
 Show output from passing tests:
 
-    cargo test -- --nocapture
+    ./b test --nocapture
 
 Agents should prefer running tests at the smallest relevant scope first
 (single crate or single test) before running the full workspace suite.
@@ -283,7 +286,7 @@ Before committing changes:
 
 1. Run ./b format
 2. Run cargo clippy --all-targets --all-features
-3. Run cargo test (or targeted crate tests first)
+3. Run ./b test (or targeted tests first)
 
 When modifying parsing or recurrence logic in libs/ical or state logic
 in libs/state, always run that crate's full test suite.
