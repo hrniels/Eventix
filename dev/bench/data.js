@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777208405554,
+  "lastUpdate": 1777208484406,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -2620,6 +2620,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 60552557.06666667,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "26a10c9f85856bf5427c6100db050612d398f1d3",
+          "message": "Fixed handling of overwrites",
+          "timestamp": "2026-04-26T09:30:08Z",
+          "url": "https://github.com/hrniels/Eventix/pull/34/commits/26a10c9f85856bf5427c6100db050612d398f1d3"
+        },
+        "date": 1777208483756,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 5194520.251644197,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 3202040.0654334524,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 60058696.8,
             "unit": "ns"
           }
         ]
