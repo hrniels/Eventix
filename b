@@ -375,4 +375,24 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except subprocess.CalledProcessError as e:
+        # Print a concise message for subprocess failures without a Python
+        # backtrace. Use shlex.join when the command is a sequence for nicer
+        # formatting.
+        cmd = shlex.join(e.cmd) if isinstance(e.cmd, (list, tuple)) else e.cmd
+        print(f"Command '{cmd}' failed with exit code {e.returncode}", file=sys.stderr)
+        # Preserve the subprocess exit code if possible
+        try:
+            code = int(e.returncode)
+        except Exception:
+            code = 1
+        raise SystemExit(code)
+    except KeyboardInterrupt:
+        # Respect Ctrl-C with a normal exit code
+        raise SystemExit(130)
+    except Exception as e:
+        # Generic fallback: print the error message only (no traceback)
+        print(e, file=sys.stderr)
+        raise SystemExit(1)
