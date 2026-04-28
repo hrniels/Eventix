@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777400667017,
+  "lastUpdate": 1777400730196,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -5223,6 +5223,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 41689765.89999998,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "d33d606932126e0dac2133e871dbb2c643824414",
+          "message": "Several improvements to be more RFC compliants",
+          "timestamp": "2026-04-26T17:57:29Z",
+          "url": "https://github.com/hrniels/Eventix/pull/35/commits/d33d606932126e0dac2133e871dbb2c643824414"
+        },
+        "date": 1777400729571,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 51656973.11666667,
             "unit": "ns"
           }
         ]
