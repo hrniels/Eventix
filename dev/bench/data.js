@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777403248512,
+  "lastUpdate": 1777403324805,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -4334,6 +4334,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 94152187.38333334,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "ab1591c3d227841645255b3ed854e1856adb7157",
+          "message": "Several improvements to be more RFC compliants",
+          "timestamp": "2026-04-26T17:57:29Z",
+          "url": "https://github.com/hrniels/Eventix/pull/35/commits/ab1591c3d227841645255b3ed854e1856adb7157"
+        },
+        "date": 1777403324513,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1444161.1195797506,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 6438737.777722907,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 92156629.1,
             "unit": "ns"
           }
         ]
