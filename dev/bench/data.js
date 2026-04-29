@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777486126814,
+  "lastUpdate": 1777486191581,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -3180,6 +3180,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 66506924.833333336,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "f4e93ce31fdce61cafda62c066c546e164f05b2d",
+          "message": "Miscellaneous improvements",
+          "timestamp": "2026-04-28T20:23:49Z",
+          "url": "https://github.com/hrniels/Eventix/pull/37/commits/f4e93ce31fdce61cafda62c066c546e164f05b2d"
+        },
+        "date": 1777486191039,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 5314213.893305151,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 3186773.962542893,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 62769112.266666666,
             "unit": "ns"
           }
         ]
