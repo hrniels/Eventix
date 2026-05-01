@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777641814988,
+  "lastUpdate": 1777641878362,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -6593,6 +6593,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 50137562.18333333,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "11c7902a61aae07e509a2bbedb70c43f55603186",
+          "message": "Improved password source",
+          "timestamp": "2026-05-01T08:52:47Z",
+          "url": "https://github.com/hrniels/Eventix/pull/39/commits/11c7902a61aae07e509a2bbedb70c43f55603186"
+        },
+        "date": 1777641877763,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 42709605.38888888,
             "unit": "ns"
           }
         ]
