@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777661618117,
+  "lastUpdate": 1777663980171,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -1886,6 +1886,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/list/results/content/keyword_or",
             "value": 5938139.771872887,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "83e0c37a131d4bed6f41cc19824b4bda0b2abdf4",
+          "message": "Multiple bug fixes and improvements regarding DST gaps/folds",
+          "timestamp": "2026-05-01T13:30:08Z",
+          "url": "https://github.com/hrniels/Eventix/pull/40/commits/83e0c37a131d4bed6f41cc19824b4bda0b2abdf4"
+        },
+        "date": 1777663979633,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/list/results/content/all_items",
+            "value": 5516363.6935784565,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_and",
+            "value": 5843653.010110637,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_or",
+            "value": 5939703.529691603,
             "unit": "ns"
           }
         ]
