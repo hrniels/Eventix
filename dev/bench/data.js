@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777623556118,
+  "lastUpdate": 1777623564231,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -6263,6 +6263,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 51192479.06666667,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "bc60f63cd97ac35ed6ea26a66276b7b50ab0d7e0",
+          "message": "Miscellaneous improvements",
+          "timestamp": "2026-04-29T19:02:57Z",
+          "url": "https://github.com/hrniels/Eventix/pull/38/commits/bc60f63cd97ac35ed6ea26a66276b7b50ab0d7e0"
+        },
+        "date": 1777623563923,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 51597884.333333336,
             "unit": "ns"
           }
         ]
