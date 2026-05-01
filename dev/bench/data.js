@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777636160504,
+  "lastUpdate": 1777641657860,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -1746,6 +1746,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/list/results/content/keyword_or",
             "value": 5801927.00661444,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "11c7902a61aae07e509a2bbedb70c43f55603186",
+          "message": "Improved password source",
+          "timestamp": "2026-05-01T08:52:47Z",
+          "url": "https://github.com/hrniels/Eventix/pull/39/commits/11c7902a61aae07e509a2bbedb70c43f55603186"
+        },
+        "date": 1777641657298,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/list/results/content/all_items",
+            "value": 5014361.996945194,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_and",
+            "value": 5412666.420745905,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_or",
+            "value": 5494352.777868794,
             "unit": "ns"
           }
         ]
