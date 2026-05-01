@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777661551907,
+  "lastUpdate": 1777661618117,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -6913,6 +6913,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 52946186.85,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "c661cb721e369332a1c15ace5d5e8fe4d54183b1",
+          "message": "Multiple bug fixes and improvements regarding DST gaps/folds",
+          "timestamp": "2026-05-01T13:30:08Z",
+          "url": "https://github.com/hrniels/Eventix/pull/40/commits/c661cb721e369332a1c15ace5d5e8fe4d54183b1"
+        },
+        "date": 1777661617762,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 52541278.166666664,
             "unit": "ns"
           }
         ]
