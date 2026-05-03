@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777829437778,
+  "lastUpdate": 1777829518420,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -6329,6 +6329,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 56732263.81666667,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "e6056eedcac33fb59e80094a9c450f41a116e714",
+          "message": "Improved flatpak build",
+          "timestamp": "2026-05-03T08:43:53Z",
+          "url": "https://github.com/hrniels/Eventix/pull/42/commits/e6056eedcac33fb59e80094a9c450f41a116e714"
+        },
+        "date": 1777829517797,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1631520.7364173415,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 5173874.325943914,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 62233327.05,
             "unit": "ns"
           }
         ]
