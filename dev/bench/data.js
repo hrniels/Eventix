@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777829518420,
+  "lastUpdate": 1777829583697,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -7823,6 +7823,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 49291550.066666655,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "e6056eedcac33fb59e80094a9c450f41a116e714",
+          "message": "Improved flatpak build",
+          "timestamp": "2026-05-03T08:43:53Z",
+          "url": "https://github.com/hrniels/Eventix/pull/42/commits/e6056eedcac33fb59e80094a9c450f41a116e714"
+        },
+        "date": 1777829583074,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 54860719.766666666,
             "unit": "ns"
           }
         ]
