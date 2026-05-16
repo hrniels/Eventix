@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1778952020518,
+  "lastUpdate": 1778952097933,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -7589,6 +7589,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 64725057.53333333,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "df5fe3c5de19a4892aa19c7cdf73447904a85e4e",
+          "message": "Various improvements on flatpak packaging",
+          "timestamp": "2026-05-16T08:50:32Z",
+          "url": "https://github.com/hrniels/Eventix/pull/47/commits/df5fe3c5de19a4892aa19c7cdf73447904a85e4e"
+        },
+        "date": 1778952097564,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1507080.5343184313,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 4847336.421519606,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 59396436.1,
             "unit": "ns"
           }
         ]
