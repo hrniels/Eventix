@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1779093110551,
+  "lastUpdate": 1779093196864,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -7694,6 +7694,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 59396436.1,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "b0f839d8f3af1a5c6f1ef2fa0ed4926a5be05b91",
+          "message": "Reworked approach for passwords",
+          "timestamp": "2026-05-17T06:23:49Z",
+          "url": "https://github.com/hrniels/Eventix/pull/48/commits/b0f839d8f3af1a5c6f1ef2fa0ed4926a5be05b91"
+        },
+        "date": 1779093196599,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1413485.7241217224,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 4752964.4257956995,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 60170312.06666667,
             "unit": "ns"
           }
         ]
