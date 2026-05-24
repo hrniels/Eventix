@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1779632854096,
+  "lastUpdate": 1779632941607,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -5700,6 +5700,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 43539491.58888889,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "78dce525c8da343fe1476048e4391beed18f89ef",
+          "message": "Overhauled handling of DST gaps/folds",
+          "timestamp": "2026-05-18T17:02:42Z",
+          "url": "https://github.com/hrniels/Eventix/pull/49/commits/78dce525c8da343fe1476048e4391beed18f89ef"
+        },
+        "date": 1779632940964,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 2000404.009294012,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 1722410.6000805197,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 43906214.77777777,
             "unit": "ns"
           }
         ]
