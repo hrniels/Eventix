@@ -50,6 +50,10 @@ a:hover {
     text-decoration: underline;
 }
 
+.ev_hidden[hidden] {
+    display: none;
+}
+
 /* ------------ MARGIN ------------ */
 
 .ev_margin_top {
@@ -157,13 +161,13 @@ fieldset.ev_form div.ev_submit {
     width: 3em;
 }
 
-
 .ev_edit_modes {
     float: right;
 }
 .ev_edit_modes_action {
     width: 170px !important;
 }
+
 /* ------------ PAGINATION ------------ */
 
 .ev_pageno {
@@ -735,6 +739,7 @@ span.ev_msg_error span.ev_msg_info {
 .ev_vscrollbox_lg {
     max-height: 150px;
 }
+
 .ev_box {
     display: flex;
     flex-direction: column;

@@ -28,8 +28,9 @@
     </ul>
     <div
         id="{{ id }}-tabs-VDIRSYNCER"
+        class="ev_hidden"
         {% if only.is_some() && only.unwrap() != Syncer::VDirSyncer %}
-            style="display: none"
+            hidden
         {% endif %}
     >
         <fieldset class="ev_nopad">
@@ -129,8 +130,9 @@
     </div>
     <div
         id="{{ id }}-tabs-O365"
+        class="ev_hidden"
         {% if only.is_some() && only.unwrap() != Syncer::O365 %}
-            style="display: none"
+            hidden
         {% endif %}
     >
         <fieldset class="ev_nopad">
@@ -204,8 +206,9 @@
     </div>
     <div
         id="{{ id }}-tabs-FILESYSTEM"
+        class="ev_hidden"
         {% if only.is_some() && only.unwrap() != Syncer::FileSystem %}
-            style="display: none"
+            hidden
         {% endif %}
     >
         <fieldset class="ev_nopad">
