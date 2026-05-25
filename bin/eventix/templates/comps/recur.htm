@@ -1,5 +1,5 @@
 <input type="hidden" id="{{ id }}_freq" name="{{ name }}[freq]" value="{{ freq }}" />
-<div id="{{ id }}-tabs">
+<div id="{{ id }}-tabs" class="ev_tabs">
     <ul>
         <li><a href="#{{ id }}-tabs-NONE">{{ "None"|t(locale) }}</a></li>
         <li><a href="#{{ id }}-tabs-HOURLY">{{ "Hourly"|t(locale) }}</a></li>
@@ -12,7 +12,7 @@
     <div id="{{ id }}-tabs-HOURLY"></div>
     <div id="{{ id }}-tabs-DAILY"></div>
     <div id="{{ id }}-tabs-WEEKLY">
-        <div id="{{ id }}_weekdays_list" style="padding: .4em">
+        <div id="{{ id }}_weekdays_list" class="ev_pad">
             <input
                 type="hidden"
                 id="{{ id }}_weekdays"
@@ -43,10 +43,10 @@
             </a>
         </div>
     </div>
-    <div id="{{ id }}-tabs-MONTHLY" style="display: flex; gap: .4em">
-        <div style="padding: .4em">{{ "On"|t(locale) }}:</div>
+    <div id="{{ id }}-tabs-MONTHLY" class="ev_inline_flex_gap_sm">
+        <div class="ev_pad">{{ "On"|t(locale) }}:</div>
         <div>
-            <div style="padding-top: .4em">
+            <div class="ev_pad_top">
                 <input
                     class="radio"
                     type="radio"
@@ -57,7 +57,7 @@
                 />
                 <label for="{{ id }}-monthly-none">{{ "Same day"|t(locale) }}</label>
             </div>
-            <div style="padding-top: .4em">
+            <div class="ev_pad_top">
                 <input
                     class="radio"
                     type="radio"
@@ -77,7 +77,7 @@
                     {{ "of the month"|t(locale) }}
                 </label>
             </div>
-            <div style="padding-top: .4em">
+            <div class="ev_pad_top">
                 <input
                     class="radio"
                     type="radio"
@@ -93,10 +93,10 @@
             </div>
         </div>
     </div>
-    <div id="{{ id }}-tabs-YEARLY" style="display: flex; gap: .4em">
-        <div style="padding: .4em">{{ "On"|t(locale) }}:</div>
+    <div id="{{ id }}-tabs-YEARLY" class="ev_inline_flex_gap_sm">
+        <div class="ev_pad">{{ "On"|t(locale) }}:</div>
         <div>
-            <div style="padding-top: .4em">
+            <div class="ev_pad_top">
                 <input
                     class="radio"
                     type="radio"
@@ -107,7 +107,7 @@
                 />
                 <label for="{{ id }}-yearly-none">{{ "Same day"|t(locale) }}</label>
             </div>
-            <div style="padding-top: .4em">
+            <div class="ev_pad_top">
                 <input
                     class="radio"
                     type="radio"
@@ -124,7 +124,7 @@
                     value="{{ yearly_day }}"
                 />
             </div>
-            <div style="padding-top: .4em">
+            <div class="ev_pad_top">
                 <input
                     class="radio"
                     type="radio"
@@ -140,8 +140,8 @@
             </div>
         </div>
     </div>
-    <div id="{{ id }}-tabs-end" style="display: none; padding: .4em">
-        <div style="padding-top: .3em">
+    <div id="{{ id }}-tabs-end" class="ev_pad" style="display: none">
+        <div class="ev_pad_bottom">
             {{ "Every"|t(locale) }}
             <input
                 id="{{ id }}_interval"
@@ -151,10 +151,10 @@
             />
             <label id="{{ id }}_interval_label"></label>
         </div>
-        <div style="padding-top: .6em">
+        <div class="ev_pad_top">
             <b>{{ "Range of recurrence"|t(locale) }}:</b>
         </div>
-        <div style="padding-top: .4em">
+        <div class="ev_pad_top">
             <input
                 class="radio"
                 type="radio"
@@ -165,7 +165,7 @@
             />
             <label for="{{ id }}-end0">{{ "No end date"|t(locale) }}</label>
         </div>
-        <div style="padding-top: .4em">
+        <div class="ev_pad_top">
             <input
                 class="radio"
                 type="radio"
@@ -178,7 +178,7 @@
             <input id="{{ id }}_count" name="{{ name }}[count]" size="5" value="{{ count }}" />
             {{ "Repetitions"|t(locale) }}
         </div>
-        <div style="padding-top: .4em">
+        <div class="ev_pad_top">
             <input
                 class="radio"
                 type="radio"
@@ -193,13 +193,6 @@
     </div>
 </div>
 
-<!-- prettier-ignore-start -->
-<style type="text/css">
-    #{{ id }}-tabs > div {
-        padding: 0;
-    }
-</style>
-<!-- prettier-ignore-end -->
 <script>
     function toggle_wday(wday) {
         let wdaylist = $("#{{ id }}_weekdays").attr("value");

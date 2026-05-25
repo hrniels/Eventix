@@ -1,17 +1,17 @@
 <div class="ev_response_dropdown" id="{{ id }}-dropdown">
     {% match stat %}
         {% when CalPartStat::Accepted %}
-        <a id="{{ id }}-toggle" class="ev_button ev_button_good" style="width: auto">
+        <a id="{{ id }}-toggle" class="ev_button ev_button_good ev_button_auto">
             <i class="bi bi-check-lg"></i>
             <span>{{ "Accepted"|t(locale) }} {{ prefix }}</span>
         </a>
         {% when CalPartStat::Declined %}
-        <a id="{{ id }}-toggle" class="ev_button ev_button_critical" style="width: auto">
+        <a id="{{ id }}-toggle" class="ev_button ev_button_critical ev_button_auto">
             <i class="bi bi-x-lg"></i>
             <span>{{ "Declined"|t(locale) }} {{ prefix }}</span>
         </a>
         {% when CalPartStat::Tentative %}
-        <a id="{{ id }}-toggle" class="ev_button ev_button_warn" style="width: auto">
+        <a id="{{ id }}-toggle" class="ev_button ev_button_warn ev_button_auto">
             <i class="bi bi-question-lg"></i>
             <span>{{ "Tentative"|t(locale) }} {{ prefix }}</span>
         </a>

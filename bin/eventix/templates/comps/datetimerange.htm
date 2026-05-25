@@ -139,7 +139,7 @@
 </script>
 <!-- prettier-ignore-end -->
 
-<div style="padding-bottom: .3em">
+<div class="ev_pad_bottom">
     <input
         type="checkbox"
         id="{{ id }}all_day"
@@ -151,7 +151,7 @@
 
 <table class="ev_date">
     <tr>
-        <td style="width: 3em">{{ "Start"|t(locale) }}:</td>
+        <td class="ev_label_datetimerange">{{ "Start"|t(locale) }}:</td>
         <td>
             {% if ctype == CalCompType::Todo %}
                 <input
@@ -212,7 +212,7 @@
     </tr>
 </table>
 
-<div id="{{ id }}dst_warning" style="display: none; padding-top: .5em"></div>
+<div id="{{ id }}dst_warning" style="display: none" class="ev_pad_top"></div>
 
 <!-- prettier-ignore-start -->
 <script type="text/javascript">

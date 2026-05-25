@@ -3,7 +3,7 @@
         -
     {% else %}
         {% for (i, (att, role)) in attendees.names.iter().zip(attendees.roles).enumerate() %}
-            <div id="{{ id }}-attendee_{{ i }}" style="padding-bottom: .5em">
+            <div id="{{ id }}-attendee_{{ i }}" class="ev_pad_bottom">
                 <a href="javascript:toggleRole({{ i }})">
                     {% if role == &AttendeeRole::Required %}
                         <i id="{{ id }}_roleicon_{{ i }}" class="bi bi-person-fill"></i>
@@ -78,7 +78,7 @@
         }
 
         list.html(list.html() + '\
-            <div id="{{ id }}-attendee_' + id + '" style="padding-bottom: .5em">\
+            <div id="{{ id }}-attendee_' + id + '" class="ev_pad_bottom">\
                 <a href="javascript:toggleRole(' + id + ')">\
                     <i id="{{ id }}_roleicon_' + id + '" class="bi bi-person-fill"></i>\
                 </a>\

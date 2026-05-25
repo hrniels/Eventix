@@ -1,5 +1,5 @@
 <input type="hidden" id="{{ id }}_syncer" name="{{ name }}[syncer]" value="{{ syncer() }}" />
-<div id="{{ id }}-tabs">
+<div id="{{ id }}-tabs" class="ev_tabs ev_tabs_icons">
     <ul>
         {% if only.is_none() || only.unwrap() == Syncer::VDirSyncer %}
             <li>
@@ -227,21 +227,6 @@
 
 <div class="ev_margin_top">{{ "info.required_fields"|t(locale) }}</div>
 
-<!-- prettier-ignore-start -->
-<style type="text/css">
-    #{{ id }}-tabs > div {
-        padding: 0;
-    }
-    #{{ id }}-tabs ul li a {
-        display: flex;
-        gap: 0.3em;
-    }
-    #{{ id }}-tabs ul li a img {
-        width: 20px;
-        height: 20px;
-    }
-</style>
-<!-- prettier-ignore-end -->
 <!-- prettier-ignore-start -->
 <script>
     $(function () {

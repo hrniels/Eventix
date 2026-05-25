@@ -50,7 +50,7 @@ a:hover {
     text-decoration: underline;
 }
 
-/* ------------ PADDING ------------ */
+/* ------------ MARGIN ------------ */
 
 .ev_margin_top {
     margin-top: 0.9em !important;
@@ -62,6 +62,20 @@ a:hover {
 
 .ev_margin_bottom_big {
     margin-bottom: 1.5em !important;
+}
+
+/* ------------ PADDING ------------ */
+
+.ev_pad {
+    padding: 0.4em;
+}
+
+.ev_pad_top {
+    padding-top: 0.4em;
+}
+
+.ev_pad_bottom {
+    padding-bottom: 0.4em;
 }
 
 /* ------------ FORMULARS ------------ */
@@ -118,6 +132,15 @@ fieldset.ev_form div.ev_submit {
     padding: 0.8em;
     background-color: #dbdbdb;
     text-align: center;
+}
+
+.ev_inline_flex_gap_sm {
+    display: flex;
+    gap: 0.4em;
+}
+
+.ev_label_datetimerange {
+    width: 3em;
 }
 
 /* ------------ PAGINATION ------------ */
@@ -454,6 +477,10 @@ a.ev_button_critical:hover {
 }
 .ev_button_error * {
     color: white;
+}
+
+.ev_button_auto {
+    width: auto;
 }
 
 .ev_error_center {
@@ -999,6 +1026,22 @@ div.ev_selected {
 .ev_jump input {
     font-size: 0.75em;
     color: #000;
+}
+
+/* ------------ TABS ------------ */
+
+.ev_tabs > .ui-tabs-panel {
+    padding: 0 !important;
+}
+
+.ev_tabs_icons ul li a {
+    display: flex;
+    gap: 0.3em;
+}
+
+.ev_tabs_icons ul li a img {
+    width: 20px;
+    height: 20px;
 }
 
 /* ------------ CALENDAR SOURCES ------------ */
