@@ -8,7 +8,7 @@
         {% endif %}
         {% for (id, c) in comps.iter().enumerate() %}
             <tr>
-                <td width="3%" align="center" style="height: 2.3em">
+                <td width="3%" align="center" class="ev_list_icon_cell">
                     {% if c.comp.ctype() == CalCompType::Event %}
                         <i class="bi bi-calendar-date"></i>
                     {% else %}
@@ -16,7 +16,7 @@
                     {% endif %}
                 </td>
                 <td width="32%">
-                    <div style="display: flex; gap: .4em; float: left">
+                    <div class="ev_flex ev_list_summary">
                         <span class="ev_cal_src ev_cal_src_{{ c.dir }}">
                             {% if !c.owner %}
                                 <div class="ev_cal_src_inner">
@@ -87,8 +87,7 @@
                                 <span>{{ "Delete"|t(locale) }}</span>
                             </a>
                             <a
-                                class="ev_button ev_button_normal"
-                                style="width: 60px"
+                                class="ev_button ev_button_normal ev_button_short"
                                 href="javascript:loadWithPrev('/pages/items/edit?uid={{ c.comp.uid() }}&mode=Series')"
                             >
                                 <i class="bi bi-pencil"></i>
@@ -102,8 +101,7 @@
                         {% if c.personal_alarms %}
                             <a
                                 id="alarm-button-{{ id }}"
-                                style="width: 60px"
-                                class="ev_button ev_button_normal"
+                                class="ev_button ev_button_normal ev_button_short"
                                 href="javascript:editAlarms('alarm-button-{{ id }}', '{{ c.comp.uid() }}', null)"
                             >
                                 <i class="bi bi-pencil"></i>
@@ -121,14 +119,14 @@
             </tr>
             <tr id="row_{{ id }}" style="display: none">
                 <td></td>
-                <td colspan="3" style="padding: .2em">
+                <td colspan="3" class="ev_list_details_cell">
                     <table width="100%" class="ev_noborder">
                         <tr>
-                            <td width="33%" style="vertical-align: top">
+                            <td width="33%" class="ev_list_details_main">
                                 <table width="100%" class="ev_noborder">
                                     {% if let Some(rrule) = c.comp.rrule() %}
                                         <tr>
-                                            <td width="20%" style="vertical-align: top">
+                                            <td width="20%" class="ev_list_details_label">
                                                 <b>{{ "Repeats"|t(locale) }}:</b>
                                             </td>
                                             <td width="80%">
@@ -203,24 +201,16 @@
                                     {% endif %}
                                 </table>
                             </td>
-                            <td width="34%" style="vertical-align: top">
+                            <td width="34%" class="ev_list_details_text">
                                 {% if let Some(desc) = html::text_to_html(c.comp.description()) %}
                                     <b>{{ "Description"|t(locale) }}:</b><br />
-                                    <div
-                                        class="ev_vscrollbox"
-                                        style="max-width: 350px; max-height: 100px;"
-                                    >
-                                        {{ desc|safe }}
-                                    </div>
+                                    <div class="ev_vscrollbox">{{ desc|safe }}</div>
                                 {% endif %}
                             </td>
-                            <td width="33%" style="vertical-align: top">
+                            <td width="33%" class="ev_list_details_attendees">
                                 {% if let Some(atts) = c.comp.attendees() %}
                                     <b>{{ "Attendees"|t(locale) }}:</b><br />
-                                    <div
-                                        class="ev_vscrollbox"
-                                        style="max-width: 350px; max-height: 100px;"
-                                    >
+                                    <div class="ev_vscrollbox">
                                         <ul class="ev_iconlist">
                                             {% for att in Self::attendees_sorted(atts) %}
                                                 <li>
@@ -252,7 +242,7 @@
                             <tr id="row_{{ id }}_prev">
                                 <td colspan="3" align="center">
                                     <a
-                                        style="font-size: 1.5em"
+                                        class="ev_list_occurrence_more"
                                         href="javascript:loadPrev('{{ id }}', '{{ c.comp.uid() }}')"
                                     >
                                         ...
@@ -262,7 +252,7 @@
                             <tr id="row_{{ id }}_next">
                                 <td colspan="3" align="center">
                                     <a
-                                        style="font-size: 1.5em"
+                                        class="ev_list_occurrence_more"
                                         href="javascript:loadNext('{{ id }}', '{{ c.comp.uid() }}')"
                                     >
                                         ...

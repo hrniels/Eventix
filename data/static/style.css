@@ -78,6 +78,11 @@ a:hover {
     padding-bottom: 0.4em;
 }
 
+.ev_flex {
+    display: flex;
+    gap: 0.4em;
+}
+
 /* ------------ FORMULARS ------------ */
 
 input.ev_toggle_button {
@@ -134,9 +139,10 @@ fieldset.ev_form div.ev_submit {
     text-align: center;
 }
 
-.ev_inline_flex_gap_sm {
-    display: flex;
-    gap: 0.4em;
+.ev_quick_search {
+    font-size: 0.8em;
+    padding: 2px;
+    width: 150px;
 }
 
 .ev_label_datetimerange {
@@ -198,6 +204,34 @@ fieldset.ev_form div.ev_submit {
 }
 .ev_header * {
     color: #fff;
+}
+
+.ev_header_search {
+    float: left;
+}
+.ev_header_nav {
+    float: right;
+}
+.ev_header_calendars {
+    float: left;
+    cursor: default;
+}
+
+.ev_header_clear {
+    clear: both;
+}
+
+.ev_header_nav_link {
+    padding-left: 1em;
+    padding-right: 1em;
+}
+
+#out-of-sync {
+    color: transparent;
+}
+
+.ev_footer_version {
+    float: right;
 }
 
 .ev_next_day_header {
@@ -413,6 +447,9 @@ td.ev_status_need_info {
     height: 30px;
     font-size: 1.1em;
     padding-bottom: 7px;
+}
+.ev_button_short {
+    width: 60px;
 }
 
 .ev_button_normal {
@@ -658,6 +695,9 @@ span.ev_msg_error span.ev_msg_info {
     overscroll-behavior-y: contain;
     text-overflow: ellipsis;
 }
+.ev_vscrollbox_lg {
+    max-height: 150px;
+}
 .ev_box {
     display: flex;
     flex-direction: column;
@@ -675,6 +715,13 @@ span.ev_msg_error span.ev_msg_info {
 .ev_box .ev_summary {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.ev_sidebar_add_link {
+    float: right;
+}
+.ev_sidebar_add_link > i {
+    color: white;
 }
 
 /* ------------ MONTH/WEEK VIEW ------------ */
@@ -839,6 +886,57 @@ span.ev_msg_error span.ev_msg_info {
 .ev_resize_bottom {
     bottom: 0;
     cursor: s-resize;
+}
+
+/* ------------ LIST VIEW -------------- */
+
+.ev_list_summary {
+    float: left;
+}
+
+.ev_list_icon_cell {
+    height: 2.3em;
+}
+
+.ev_list_details_cell {
+    padding: 0.2em !important;
+}
+
+.ev_list_details_main,
+.ev_list_details_label,
+.ev_list_details_text,
+.ev_list_details_attendees {
+    vertical-align: top;
+}
+
+.ev_list_occurrence_more {
+    font-size: 1.5em;
+}
+
+/* ------------ DETAILS VIEW -------------- */
+
+.ev_details_header_tag {
+    float: left;
+}
+
+.ev_details_header_calendar {
+    float: right;
+}
+
+.ev_details_header_calendar_tag {
+    width: 20px;
+    height: 20px;
+}
+
+.ev_details_delete_action,
+.ev_details_cancel_action,
+.ev_details_occurrence_action {
+    float: left;
+}
+
+.ev_details_series_action,
+.ev_details_complete_action {
+    float: right;
 }
 
 /* ------------ ADD ICON -------------- */

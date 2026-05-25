@@ -1,6 +1,6 @@
 <div class="ev_border ev_box">
     <div class="ev_header">
-        <span style="float: left">
+        <span class="ev_details_header_tag">
             <i
                 class="ev_tag bi bi-tag"
                 title="{{ occ.uid() }}"
@@ -9,10 +9,9 @@
             </i>
         </span>
         {{ occ.summary().unwrap() }}
-        <span style="float: right">
+        <span class="ev_details_header_calendar">
             <div
-                class="ev_cal_src ev_cal_src_{{ dir.id() }}"
-                style="width: 20px; height: 20px"
+                class="ev_cal_src ev_cal_src_{{ dir.id() }} ev_details_header_calendar_tag"
                 title="{{ dir.name() }}"
             ></div>
         </span>
@@ -97,7 +96,7 @@
             <tr>
                 <td width="30%">{{ "Attendees"|t(locale) }}:</td>
                 <td width="70%">
-                    <div class="ev_vscrollbox" style="max-width: 350px; max-height: 100px;">
+                    <div class="ev_vscrollbox">
                         <ul class="ev_iconlist">
                             {% for att in occ.attendees_sorted() %}
                                 <li>
@@ -123,9 +122,7 @@
             <tr>
                 <td width="30%">{{ "Description"|t(locale) }}:</td>
                 <td width="70%">
-                    <div class="ev_vscrollbox" style="max-width: 350px; max-height: 150px;">
-                        {{ desc|safe }}
-                    </div>
+                    <div class="ev_vscrollbox ev_vscrollbox_lg">{{ desc|safe }}</div>
                 </td>
             </tr>
         {% endif %}
@@ -138,8 +135,7 @@
                         {% endif %}
                         <a
                             id="delete-series-button"
-                            style="float: left"
-                            class="ev_button ev_button_critical"
+                            class="ev_button ev_button_critical ev_details_delete_action"
                             href="#"
                         >
                             <i class="bi bi-trash"></i>
@@ -154,8 +150,7 @@
                         {% if owner %}
                             {% if !occ.is_recurrent() %}
                                 <a
-                                    style="float: right"
-                                    class="ev_button ev_button_normal"
+                                    class="ev_button ev_button_normal ev_details_series_action"
                                     href="javascript:loadWithPrev('/pages/items/edit?uid={{ occ.uid() }}&mode=Series')"
                                 >
                                     <i class="bi bi-pencil"></i>
@@ -164,8 +159,7 @@
                             {% endif %}
                             {% if occ.ctype() == CalCompType::Todo %}
                                 <a
-                                    style="float: right"
-                                    class="ev_button ev_button_good"
+                                    class="ev_button ev_button_good ev_details_complete_action"
                                     href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
                                 >
                                     <i class="bi bi-check-lg"></i>
@@ -176,8 +170,7 @@
                                 {% if owner && occ.organizer().is_some() %}
                                     {% if occ.status_class() != Some(String::from("Cancelled")) %}
                                         <a
-                                            style="float: left"
-                                            class="ev_button ev_button_critical"
+                                            class="ev_button ev_button_critical ev_details_cancel_action"
                                             href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
                                         >
                                             <i class="bi bi-dash-circle"></i>
@@ -186,8 +179,7 @@
                                     {% endif %}
                                 {% else %}
                                     <a
-                                        style="float: left"
-                                        class="ev_button ev_button_normal"
+                                        class="ev_button ev_button_normal ev_details_occurrence_action"
                                         href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
                                     >
                                         <i class="bi bi-dash-circle"></i>

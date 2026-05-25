@@ -103,7 +103,7 @@
                    (occ.is_all_day() || occ.is_all_day_on(day_date.clone())) %}
                 {{ occ.summary().unwrap() }}
             {% else %}
-                <div style="display: flex; gap: .4em">
+                <div class="ev_flex">
                     <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}">
                         {% if !occ.is_owner() %}
                             <div class="ev_cal_src_inner">

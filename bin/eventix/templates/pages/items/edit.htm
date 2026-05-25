@@ -31,7 +31,7 @@
                             {% if let Some(calendars) = calendars %}
                                 {{ calendars|safe }}
                             {% else %}
-                                <div style="display: flex; gap: .4em">
+                                <div class="ev_flex">
                                     <span class="ev_cal_src ev_cal_src_{{ dir.id() }}"></span>
                                     {{ dir.name() }}
                                 </div>
