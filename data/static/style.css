@@ -52,15 +52,15 @@ a:hover {
 
 /* ------------ PADDING ------------ */
 
-.ev_padtop {
+.ev_margin_top {
     margin-top: 0.9em !important;
 }
 
-.ev_padbottom {
+.ev_margin_bottom {
     margin-bottom: 0.9em !important;
 }
 
-.ev_padbottom_big {
+.ev_margin_bottom_big {
     margin-bottom: 1.5em !important;
 }
 

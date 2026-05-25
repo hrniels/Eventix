@@ -1,4 +1,4 @@
-<div class="ev_border ev_padtop">
+<div class="ev_border ev_margin_top">
     <h1 class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
     <table width="100%" class="ev_table">
         {% if comps.is_empty() %}
@@ -308,7 +308,7 @@
     }
 </script>
 
-<div class="ev_padtop" id="list-pagination" align="center">{{ pagination|safe }}</div>
+<div class="ev_margin_top" id="list-pagination" align="center">{{ pagination|safe }}</div>
 
 <script type="text/javascript">
     // Intercept pagination link clicks so they go through AJAX instead of full navigation.
