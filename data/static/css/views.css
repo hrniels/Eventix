@@ -223,6 +223,19 @@
 .ev_week_hour_add_link {
     float: left;
 }
+
+.ev_week_timeline {
+    position: relative;
+    height: 1440px;
+    padding: 0;
+}
+
+.ev_week_now_line {
+    position: absolute;
+    width: 100%;
+    border-top: 0.1em solid red;
+}
+
 .ev_week_event div {
     white-space: nowrap;
     overflow: hidden;
