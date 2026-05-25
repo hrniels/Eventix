@@ -807,6 +807,25 @@ span.ev_msg_error span.ev_msg_info {
     background-color: red;
 }
 
+.ev_month_week_header {
+    position: relative;
+}
+.ev_month_week_header_clear {
+    clear: both;
+}
+
+.ev_month_week_nav {
+    position: absolute;
+    text-align: center;
+    z-index: 0;
+}
+.ev_month_week_nav_prev {
+    margin-right: 0.5em;
+}
+.ev_month_week_nav_next {
+    margin-left: 0.5em;
+}
+
 /* ------------ MONTH VIEW ------------ */
 
 .ev_month_td {
@@ -821,6 +840,33 @@ span.ev_msg_error span.ev_msg_info {
     background-color: #f0f0f0;
     color: #555;
     padding: 0.2em;
+}
+
+.ev_month_nav {
+    left: 30px;
+    width: calc(100% - 30px);
+}
+
+.ev_month_label {
+    display: inline-block;
+    width: 8em;
+}
+
+.ev_month_table {
+    table-layout: fixed;
+}
+
+.ev_month_week_label {
+    width: 30px;
+    padding: 0 !important;
+}
+
+.ev_month_week_number {
+    vertical-align: middle;
+}
+
+.ev_month_add_link {
+    float: left;
 }
 
 .ev_cur_month {
@@ -856,6 +902,52 @@ span.ev_msg_error span.ev_msg_info {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
+}
+
+.ev_week_nav {
+    left: 70px;
+    width: calc(100% - 70px);
+}
+
+.ev_week_label {
+    display: inline-block;
+    width: 24em;
+}
+
+.ev_week_table {
+    table-layout: fixed;
+}
+
+.ev_week_time_label {
+    width: 70px;
+    padding: 0 !important;
+}
+
+.ev_week_time_change_icon {
+    float: right;
+}
+
+.ev_week_all_day {
+    max-height: 110px;
+    overflow-y: scroll;
+}
+
+.ev_week_all_day_table {
+    table-layout: fixed;
+    border-bottom: none;
+}
+
+.ev_week_all_day_cell {
+    height: auto !important;
+}
+
+.ev_week_scroll_area {
+    height: 720px;
+    overflow-y: scroll;
+}
+
+.ev_week_hour_add_link {
+    float: left;
 }
 .ev_week_event div {
     white-space: nowrap;
@@ -1121,6 +1213,10 @@ div.ev_selected {
 
 /* ------------ JUMP TO DATE ------------ */
 
+.ev_jump {
+    position: absolute;
+    z-index: 1;
+}
 .ev_jump input {
     font-size: 0.75em;
     color: #000;

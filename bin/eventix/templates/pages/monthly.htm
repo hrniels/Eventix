@@ -1,30 +1,28 @@
 <div class="ev_border">
-    <h1 class="ev_header" style="position: relative">
-        <div style="z-index: 1; position: absolute; float: left" class="ev_jump">
+    <h1 class="ev_header ev_month_week_header">
+        <div class="ev_jump">
             <input type="text" id="jump_location" size="10" />
             <input type="button" value="{{ "Jump!"|t(locale) }}" onclick="executeJump()" />
         </div>
 
-        <div
-            style="z-index: 0; position: absolute; width: calc(100% - 30px); left: 30px; text-align: center"
-        >
+        <div class="ev_month_week_nav ev_month_nav">
             <a
-                style="margin-right: .5em"
+                class="ev_month_week_nav_prev"
                 id="link-prev"
                 href="javascript:loadMonthlyContent('{{ prev_month }}')"
             >
                 &laquo;
             </a>
-            <div style="display: inline-block; width: 8em">{{ month }}</div>
+            <div class="ev_month_label">{{ month }}</div>
             <a
-                style="margin-left: .5em"
+                class="ev_month_week_nav_next"
                 id="link-next"
                 href="javascript:loadMonthlyContent('{{ next_month }}')"
             >
                 &raquo;
             </a>
         </div>
-        <br clear="both" />
+        <br class="ev_month_week_header_clear" />
     </h1>
 
     <script type="text/javascript">
@@ -52,9 +50,9 @@
         });
     </script>
 
-    <table id="ev_month_table" width="100%" class="ev_table" style="table-layout: fixed">
+    <table id="ev_month_table" width="100%" class="ev_table ev_month_table">
         <tr>
-            <td align="center" style="padding: 0; width: 30px"></td>
+            <td align="center" class="ev_month_week_label"></td>
             {% for wday in weekdays %}
                 <td align="center"><b>{{ wday }}</b></td>
             {% endfor %}
@@ -64,7 +62,7 @@
         {% let date = day.date.unwrap() %}
         {% if idx % 7 == 0 %}
         <tr>
-            <td class="ev_month_td" align="center" style="vertical-align: middle">
+            <td class="ev_month_td ev_month_week_number" align="center">
                 <a
                     href="javascript:navigateTo('/pages/weekly?date={{ date.format("%Y-%m-%d") }}')"
                 >
@@ -86,8 +84,7 @@
                     {% if page.any_writable_events() %}
                     <a
                         href="javascript:loadWithPrev('/pages/items/add?ctype=Event&date={{ date.format("%Y-%m-%d") }}')"
-                        style="float: left"
-                        class="ev_add_icon"
+                        class="ev_add_icon ev_month_add_link"
                     >
                         <i class="bi bi-plus-square"></i>
                     </a>
