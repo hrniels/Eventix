@@ -46,13 +46,13 @@
                     </script>
                 {% endif %}
 
-                <div class="ev_cal_box_left_item" style="padding-left: 1em">
+                <div class="ev_cal_box_left_item ev_cal_box_name">
                     <span
                         id="bgcolor_head_{{ cal.id() }}"
                         class="ev_cal_src ev_cal_src_button"
                         style="background-color: {{ cal.bgcolor() }}"
                     ></span>
-                    <span style="padding-left: .3em">
+                    <span class="ev_cal_box_label">
                         {% if mode == CalendarBoxMode::View %}
                             {{ cal.name() }}
                         {% else %}

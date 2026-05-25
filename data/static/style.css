@@ -1280,6 +1280,18 @@ span.ev_cal_src_disabled {
 
 /* ------------ CALENDARS ------------ */
 
+.ev_callist_link {
+    vertical-align: middle;
+}
+.ev_callist_error_icon[hidden] {
+    display: none;
+}
+
+.ev_calcombo_icon {
+    float: left;
+    margin-right: 0.5em;
+}
+
 .ev_col_buttons {
     display: flex;
     align-items: start;
@@ -1337,6 +1349,13 @@ span.ev_cal_src_disabled {
 
 .ev_cal_box_color_grid div * {
     vertical-align: middle;
+}
+
+.ev_cal_box_name {
+    padding-left: 1em;
+}
+.ev_cal_box_label {
+    padding-left: 0.3em;
 }
 
 .ev_add_cal {
