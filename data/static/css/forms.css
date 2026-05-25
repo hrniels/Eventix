@@ -1,0 +1,144 @@
+/* ------------ FORMULARS ------------ */
+
+input.ev_toggle_button {
+    appearance: none;
+    padding: 12px 25px;
+    border-radius: 12px;
+    background: radial-gradient(circle 10px, white 100%, transparent calc(100% + 1px)) #ccc -12px;
+    transition: 0.3s ease-in-out;
+}
+
+input.ev_toggle_button:checked {
+    background-color: dodgerBlue;
+    background-position: 12px;
+}
+
+fieldset.ev_form {
+    padding: 0;
+    margin: 0;
+    border: 0;
+}
+
+fieldset.ev_form dl {
+    padding: 0;
+    margin: 0;
+    margin-top: 1px;
+    background-color: #dbdbdb;
+}
+
+fieldset.ev_form dt {
+    display: block;
+    margin: 0;
+    float: left;
+    padding: 0.5em;
+    width: 21%;
+    font-weight: bold;
+    text-align: left;
+    vertical-align: middle;
+}
+
+fieldset.ev_form dd {
+    display: block;
+    margin: 0;
+    padding: 0.5em;
+    margin-left: 23%;
+    background-color: #ebebeb;
+    vertical-align: middle;
+}
+
+fieldset.ev_form div.ev_submit {
+    font-size: 1.1em;
+    font-weight: bold;
+    padding: 0.8em;
+    background-color: #dbdbdb;
+    text-align: center;
+}
+
+.ev_form_tabs {
+    padding: 0;
+}
+
+.ev_form_tab_panel {
+    padding: 0;
+}
+
+.ev_form_textarea {
+    width: 90%;
+}
+
+.ev_form_note {
+    margin-top: 0.5em;
+}
+
+.ev_form_action {
+    width: 80px;
+}
+
+.ev_quick_search {
+    font-size: 0.8em;
+    padding: 2px;
+    width: 150px;
+}
+
+.ev_label_datetimerange {
+    width: 3em;
+}
+
+.ev_edit_modes {
+    float: right;
+}
+.ev_edit_modes_action {
+    width: 170px !important;
+}
+
+.ev_hidden_panel {
+    display: none;
+}
+
+.ev_alarm_overwrite {
+    padding: 0.4em;
+}
+
+.ev_alarm_actions {
+    margin-top: 0.5em;
+}
+
+.ev_todo_status_process,
+.ev_todo_status_completed_label {
+    display: none;
+}
+
+.ev_syncer_tab_panel[hidden] {
+    display: none;
+}
+
+.ev_syncer_fieldset {
+    padding: 0;
+}
+
+/* ------------ JUMP TO DATE ------------ */
+
+.ev_jump {
+    position: absolute;
+    z-index: 1;
+}
+.ev_jump input {
+    font-size: 0.75em;
+    color: #000;
+}
+
+/* ------------ TABS ------------ */
+
+.ev_tabs > .ui-tabs-panel {
+    padding: 0 !important;
+}
+
+.ev_tabs_icons ul li a {
+    display: flex;
+    gap: 0.3em;
+}
+
+.ev_tabs_icons ul li a img {
+    width: 20px;
+    height: 20px;
+}

@@ -1,0 +1,176 @@
+/* ------------ TAG & FOLDER ------------ */
+
+.ev_tag,
+.ev_folder {
+    color: white;
+}
+.ev_tag:hover,
+.ev_folder:hover {
+    cursor: pointer;
+}
+.ev_tag:hover::before {
+    content: "\f5af";
+}
+
+.ev_folder i.bi-folder-fill {
+    display: none;
+}
+.ev_folder:hover i.bi-folder {
+    display: none;
+}
+.ev_folder:hover i.bi-folder-fill {
+    display: inline-block;
+}
+
+/* ------------ CALENDAR SOURCES ------------ */
+
+div.ev_cal_src {
+    border: 1px solid #ffffff;
+}
+span.ev_cal_src {
+    height: 18px;
+    width: 18px;
+    border: 1px solid #bbbbbb;
+    border-radius: 50%;
+    display: inline-block;
+    vertical-align: text-bottom;
+    margin-bottom: 2px;
+    flex: 0 0 18px; /* minimum width */
+}
+span.ev_cal_src_button {
+    font-size: 0.7em;
+    text-align: center;
+}
+
+.ev_cal_src_inner {
+    position: relative;
+    left: 2px;
+    top: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: #fff;
+    font-size: 12px;
+    text-align: center;
+}
+
+span.ev_cal_src_highlight {
+    border: 1px solid #000 !important;
+}
+
+span.ev_cal_src_disabled {
+    background-color: #a0a0a0;
+}
+
+/* ------------ CALENDARS ------------ */
+
+.ev_callist_link {
+    vertical-align: middle;
+}
+.ev_callist_error_icon[hidden] {
+    display: none;
+}
+
+.ev_cal_collection,
+.ev_cal_collection_content {
+    vertical-align: top;
+}
+
+.ev_calcombo_icon {
+    float: left;
+    margin-right: 0.5em;
+}
+
+.ev_col_buttons {
+    display: flex;
+    align-items: start;
+}
+
+.ev_cal_actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6em;
+}
+
+.ev_add_cal_wrapper {
+    margin-left: auto;
+}
+
+.ev_cal_box {
+    background-color: #ffffff;
+    border-radius: 3px;
+    -moz-border-radius: 3px;
+    -khtml-border-radius: 3px;
+    -webkit-border-radius: 3px;
+}
+
+.ev_cal_box_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    padding: 0.3em;
+}
+
+.ev_cal_box_body {
+    margin: 0.3em;
+}
+
+.ev_cal_box_left,
+.ev_cal_box_right {
+    display: flex;
+}
+
+.ev_cal_box_left_item,
+.ev_cal_box_right_item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ev_cal_box_color_grid {
+    display: grid;
+    grid-template-columns: auto 5em auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 0.3em;
+}
+
+.ev_cal_box_color_grid div * {
+    vertical-align: middle;
+}
+
+.ev_cal_box_name {
+    padding-left: 1em;
+}
+.ev_cal_box_label {
+    padding-left: 0.3em;
+}
+
+.ev_add_cal {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4em;
+}
+
+.ev_cal_title {
+    display: flex;
+    gap: 0.3em;
+}
+
+.ev_cal_title img {
+    width: 20px;
+    height: 20px;
+}
+
+.ev_cal_meta {
+    padding-top: 0.3em;
+}
+
+.ev_cal_list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+}

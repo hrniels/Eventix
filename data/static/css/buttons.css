@@ -1,0 +1,299 @@
+/* ------------ STATUS ------------ */
+
+td.ev_status_open {
+    padding: 4px 4px 4px 4px;
+    background-color: #f8b4b4;
+}
+
+td.ev_status_running {
+    padding: 4px 4px 4px 4px;
+    background-color: #fff366;
+}
+
+td.ev_status_not_tested {
+    padding: 4px 4px 4px 4px;
+    background-color: #a8d742;
+}
+
+td.ev_status_fixed {
+    padding: 4px 4px 4px 4px;
+    background-color: #cceedd;
+}
+
+td.ev_status_not_reproducable {
+    padding: 4px 4px 4px 4px;
+    background-color: #cc99cc;
+}
+
+td.ev_status_need_info {
+    padding: 4px 4px 4px 4px;
+    background-color: #ff6633;
+}
+
+/* ------------ BUTTONS ------------ */
+
+.ev_button,
+.ev_button_medium,
+.ev_button_big {
+    background-image: linear-gradient(#f9f9f9, #f1f1f1);
+    border-radius: 5px;
+    display: inline-block;
+    position: relative;
+    width: auto;
+    padding-top: 2px;
+    padding-left: 0.6em;
+    padding-right: 0.6em;
+    margin: 2px;
+    text-align: left;
+    font-weight: bold;
+    cursor: pointer;
+}
+.ev_button *,
+.ev_button_medium *,
+.ev_button_big * {
+    vertical-align: sub;
+}
+.ev_button_link {
+    text-decoration: none;
+    color: #000;
+}
+.ev_button_link:hover {
+    text-decoration: none;
+    color: #3f5e88;
+}
+
+.ev_button {
+    height: 16px;
+    font-size: 0.8em;
+    padding-bottom: 4px;
+}
+.ev_button_medium {
+    height: 20px;
+    font-size: 1em;
+    padding-bottom: 6px;
+}
+.ev_button_big {
+    text-align: center;
+    height: 30px;
+    font-size: 1.1em;
+    padding-bottom: 7px;
+}
+.ev_button_short {
+    width: 60px;
+}
+.ev_button_form_action {
+    width: 80px;
+}
+
+.ev_button_normal {
+    border: 1px solid #3f5e88;
+    border-left: 5px solid #3f5e88;
+    color: #000000;
+}
+a.ev_button_normal:hover {
+    color: #3f5e88;
+    text-decoration: none;
+}
+
+.ev_good_color {
+    color: #198754;
+}
+.ev_button_good {
+    border: 1px solid #198754;
+    border-left: 5px solid #198754;
+    color: #198754;
+}
+a.ev_button_good:hover {
+    background-image: linear-gradient(#198754, #13653f) !important;
+    color: white;
+    text-decoration: none;
+}
+
+.ev_warn_color {
+    color: #f57c00;
+}
+.ev_button_warn {
+    border: 1px solid #f57c00;
+    border-left: 5px solid #f57c00;
+    -webkit-text-stroke: 0.4px rgba(0, 0, 0, 0.3);
+    color: #f57c00;
+}
+a.ev_button_warn:hover {
+    background-image: linear-gradient(#f57c00, #c66400) !important;
+    -webkit-text-stroke: 0;
+    color: white;
+    text-decoration: none;
+}
+
+.ev_critical_color {
+    color: red;
+}
+.ev_button_critical {
+    border: 1px solid red;
+    border-left: 5px solid red;
+    color: red;
+}
+a.ev_button_critical:hover {
+    background-image: linear-gradient(#ff0000, #e00000) !important;
+    color: white;
+    text-decoration: none;
+}
+
+.ev_button_error {
+    background-image: linear-gradient(#ff0000, #e00000) !important;
+    border: 1px solid red;
+    border-left: 5px solid red;
+    color: white;
+}
+.ev_button_error * {
+    color: white;
+}
+
+.ev_button_auto {
+    width: auto;
+}
+
+.ev_error_center {
+    display: inline-block;
+    position: relative;
+}
+
+.ev_error_shake {
+    animation: ev_error_shake 0.42s ease-in-out;
+}
+
+@keyframes ev_error_shake {
+    0% {
+        transform: translateX(0);
+    }
+    15% {
+        transform: translateX(-8px);
+    }
+    30% {
+        transform: translateX(8px);
+    }
+    45% {
+        transform: translateX(-6px);
+    }
+    60% {
+        transform: translateX(6px);
+    }
+    75% {
+        transform: translateX(-3px);
+    }
+    90% {
+        transform: translateX(3px);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
+.ev_error_list {
+    position: absolute;
+    right: 2px;
+    top: calc(100% + 0.35em);
+    width: min(28rem, 80vw);
+    max-height: 18rem;
+    overflow-y: auto;
+    background: #fff;
+    box-shadow: 0 0.4em 1.1em rgba(0, 0, 0, 0.18);
+    z-index: 1100;
+}
+
+.ev_error_list_empty,
+.ev_error_entry {
+    padding: 0.65em 0.8em;
+}
+
+.ev_error_list_empty {
+    color: #666;
+}
+
+.ev_error_entry + .ev_error_entry {
+    border-top: 1px solid #ddd;
+}
+
+.ev_error_entry_time {
+    color: #666;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-bottom: 0.2em;
+}
+
+.ev_error_entry_message {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ev_error_entry_cal {
+    padding: 0px 4px;
+    margin-right: 6px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: white;
+}
+
+.ev_button_selected,
+.ev_button_selected:hover,
+.ev_button_selected:active,
+.ev_button_selected:link,
+.ev_button_selected:visited {
+    background-color: #627492 !important;
+    color: #ffffff !important;
+}
+
+.ev_button_uid {
+    background-image: linear-gradient(#3f5e88, #3f5e88) !important;
+    padding-left: 0.4em !important;
+    padding-right: 0.4em !important;
+    color: #ffffff;
+}
+
+/* ------------ RESPONSE MENU ------------ */
+
+.ev_response_dropdown {
+    position: relative;
+    display: inline-block;
+}
+.ev_response_dropdown a {
+    width: 100px;
+}
+.ev_response_dropdown a i {
+    margin-right: 8px;
+}
+
+.ev_response_menu {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 100%;
+    margin: 0;
+    margin-left: 2px;
+    padding: 0;
+    list-style: none;
+    z-index: 1000;
+}
+.ev_response_menu a {
+    width: 100px;
+    margin: 0;
+    margin-bottom: 2px;
+    float: left;
+}
+
+/* ------------ ICONS ------------ */
+
+i.ev_spin {
+    animation: rotate 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes rotate {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}

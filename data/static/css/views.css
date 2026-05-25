@@ -1,0 +1,349 @@
+/* ------------ MONTH/WEEK VIEW ------------ */
+
+.ev_event_occurrence {
+    cursor: pointer;
+    height: 30px;
+}
+
+.ev_occ_content {
+    padding: 5px;
+}
+.ev_occ_block_center {
+    text-align: center;
+}
+
+.ev_occ_timed {
+    position: absolute;
+    padding: 0;
+}
+.ev_occ_timed .ev_occ_content {
+    padding: 2px;
+}
+
+.ev_occ_sidebar.ev_occ_content {
+    padding: 5px;
+}
+.ev_occ_sidebar_allday_event.ev_occ_content {
+    padding-left: 12px;
+}
+
+.ev_today {
+    background-color: #fff8a2 !important;
+    font-weight: bold;
+}
+.ev_today_bg {
+    background-color: #fff8a2 !important;
+}
+
+.ev_status_Cancelled,
+.ev_status_Completed {
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
+.ev_vertbar {
+    float: left;
+    position: relative;
+    padding: 3px 0px !important;
+    width: 5px;
+    height: calc(100% - 10px);
+}
+.ev_vertbar::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 5px;
+    height: 100%;
+    box-sizing: border-box;
+    border: 1px solid white;
+}
+
+.ev_vertbar_spacer {
+    width: 9px;
+    float: left;
+}
+
+.ev_vertbar_needsaction {
+    margin: 2px;
+    background-color: #ffffff;
+}
+.ev_vertbar_ACCEPTED {
+    margin: 2px;
+    background-color: #198754;
+}
+.ev_vertbar_TENTATIVE {
+    margin: 2px;
+    background-color: #d56c05;
+}
+.ev_vertbar_DECLINED {
+    margin: 2px;
+    background-color: red;
+}
+
+.ev_month_week_header {
+    position: relative;
+}
+.ev_month_week_header_clear {
+    clear: both;
+}
+
+.ev_month_week_nav {
+    position: absolute;
+    text-align: center;
+    z-index: 0;
+}
+.ev_month_week_nav_prev {
+    margin-right: 0.5em;
+}
+.ev_month_week_nav_next {
+    margin-left: 0.5em;
+}
+
+/* ------------ MONTH VIEW ------------ */
+
+.ev_month_td {
+    max-width: 3cm;
+    height: 130px;
+    vertical-align: top;
+    padding: 0px !important;
+}
+
+.ev_month_day_header {
+    text-align: right;
+    background-color: #f0f0f0;
+    color: #555;
+    padding: 0.2em;
+}
+
+.ev_month_nav {
+    left: 30px;
+    width: calc(100% - 30px);
+}
+
+.ev_month_label {
+    display: inline-block;
+    width: 8em;
+}
+
+.ev_month_table {
+    table-layout: fixed;
+}
+
+.ev_month_week_label {
+    width: 30px;
+    padding: 0 !important;
+}
+
+.ev_month_week_number {
+    vertical-align: middle;
+}
+
+.ev_month_add_link {
+    float: left;
+}
+
+.ev_cur_month {
+    background-color: #ddd;
+    color: #000 !important;
+}
+
+.ev_month_cell {
+    height: 104px;
+    overflow-y: scroll;
+    overscroll-behavior-y: contain;
+}
+.ev_month_cell div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ------------ WEEK VIEW ------------ */
+
+.ev_week_day_header {
+    position: relative;
+}
+.ev_week_day_header > .ev_add_icon {
+    position: absolute;
+    left: 0px;
+    top: 50%;
+    transform: translateY(-50%);
+    visibility: hidden;
+}
+
+.ev_week_cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+.ev_week_nav {
+    left: 70px;
+    width: calc(100% - 70px);
+}
+
+.ev_week_label {
+    display: inline-block;
+    width: 24em;
+}
+
+.ev_week_table {
+    table-layout: fixed;
+}
+
+.ev_week_time_label {
+    width: 70px;
+    padding: 0 !important;
+}
+
+.ev_week_time_change_icon {
+    float: right;
+}
+
+.ev_week_all_day {
+    max-height: 110px;
+    overflow-y: scroll;
+}
+
+.ev_week_all_day_table {
+    table-layout: fixed;
+    border-bottom: none;
+}
+
+.ev_week_all_day_cell {
+    height: auto !important;
+}
+
+.ev_week_scroll_area {
+    height: 720px;
+    overflow-y: scroll;
+}
+
+.ev_week_hour_add_link {
+    float: left;
+}
+.ev_week_event div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ev_drag_event {
+    border: 1px solid #000 !important;
+    font-weight: bold;
+}
+.ev_drag_hover {
+    outline: 1px solid #000000;
+    outline-offset: -1px;
+}
+
+.ev_resize_handle {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    z-index: 10;
+}
+.ev_resize_top {
+    top: 0;
+    cursor: n-resize;
+}
+.ev_resize_bottom {
+    bottom: 0;
+    cursor: s-resize;
+}
+
+/* ------------ LIST VIEW -------------- */
+
+.ev_list_summary {
+    float: left;
+}
+
+.ev_list_icon_cell {
+    height: 2.3em;
+}
+
+.ev_list_details_row {
+    display: none;
+}
+
+.ev_list_details_cell {
+    padding: 0.2em !important;
+}
+
+.ev_list_filter_conjunction {
+    margin-top: 0.5em;
+}
+
+.ev_list_filter_calendar {
+    display: inline;
+    padding: 2px;
+}
+
+.ev_list_filter_actions {
+    padding-top: 0.5em;
+}
+
+.ev_list_details_main,
+.ev_list_details_label,
+.ev_list_details_text,
+.ev_list_details_attendees {
+    vertical-align: top;
+}
+
+.ev_list_occurrence_more {
+    font-size: 1.5em;
+}
+
+.ev_occlist_summary_cell {
+    height: 2em;
+}
+
+.ev_occlist_owner_action,
+.ev_occlist_alarm_action,
+.ev_occlist_partstat,
+.ev_occlist_complete_action {
+    float: right;
+}
+
+.ev_occlist_alarm_action {
+    width: 60px;
+}
+
+/* ------------ DETAILS VIEW -------------- */
+
+.ev_details_header_tag {
+    float: left;
+}
+
+.ev_details_header_calendar {
+    float: right;
+}
+
+.ev_details_header_calendar_tag {
+    width: 20px;
+    height: 20px;
+}
+
+.ev_details_delete_action,
+.ev_details_cancel_action,
+.ev_details_occurrence_action {
+    float: left;
+}
+
+.ev_details_series_action,
+.ev_details_complete_action {
+    float: right;
+}
+
+/* ------------ LISTS ------------ */
+
+ul.ev_iconlist {
+    margin-right: 0.1em;
+    margin-top: 0.1em;
+    margin-bottom: 0.1em;
+    margin-left: 0px;
+    padding-left: 0px;
+    list-style-type: none;
+}
