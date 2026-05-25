@@ -5,7 +5,7 @@
             <input type="hidden" name="rid" value="{{ rid }}" />
         {% endif %}
         <div id="smaller-font">
-            <div style="padding: .4em">
+            <div class="ev_pad">
                 <input
                     type="checkbox"
                     id="personal_overwrite"
@@ -50,7 +50,7 @@
         -
     {% endif %}
     {% if personal_alarms %}
-        <div style="margin-top: .5em">
+        <div class="ev_margin_top">
             {% if occ.is_recurrent() %}
                 <a
                     class="ev_button ev_button_normal"

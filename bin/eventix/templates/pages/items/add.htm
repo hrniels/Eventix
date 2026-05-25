@@ -22,12 +22,12 @@
                     {{ "New Task"|t(locale) }}
                 {% endif %}
             </h1>
-            <div id="tabs" style="padding: 0">
+            <div id="tabs" class="ev_nopad">
                 <ul id="tab-bar">
                     <li><a href="#tabs-basics">{{ "Basics"|t(locale) }}</a></li>
                     <li><a href="#tabs-advanced">{{ "Advanced"|t(locale) }}</a></li>
                 </ul>
-                <div id="tabs-basics" style="padding: 0">
+                <div id="tabs-basics" class="ev_nopad">
                     <dl>
                         <dt>{{ "Calendar"|t(locale) }}:</dt>
                         <dd>{{ calendars|safe }}</dd>
@@ -68,13 +68,13 @@
                         <dt>{{ "Description"|t(locale) }}:</dt>
                         <dd>
                             <!-- prettier-ignore-start -->
-                            <textarea rows="10" style="width: 90%;"
+                            <textarea rows="10" class="ev_form_textarea"
                                       name="description">{{ description }}</textarea>
                             <!-- prettier-ignore-end -->
                         </dd>
                     </dl>
                 </div>
-                <div id="tabs-advanced" style="padding: 0">
+                <div id="tabs-advanced" class="ev_nopad">
                     <dl>
                         <dt>{{ "Repeat"|t(locale) }}:</dt>
                         <dd>{{ rrule|safe }}</dd>

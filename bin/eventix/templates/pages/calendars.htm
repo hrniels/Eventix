@@ -8,7 +8,7 @@
         {% endif %}
         {% for (col_id, col) in collections.iter() %}
             <tr>
-                <td class="ev_desc" width="40%" style="vertical-align: top">
+                <td class="ev_desc ev_cal_collection" width="40%">
                     <div class="ev_cal_title">
                         {% match col.syncer() %}
                             {% when SyncerType::VDirSyncer { .. } %}
@@ -89,7 +89,7 @@
                         {% endif %}
                     </div>
                 </td>
-                <td class="ev_main" width="60%" style="vertical-align: top">
+                <td class="ev_main ev_cal_collection_content" width="60%">
                     <div class="ev_cal_list">
                         {% for cal in calendars.get(col_id).unwrap() %}
                             <div id="ev_cal_box_{{ cal.cal().id() }}">{{ cal|safe }}</div>

@@ -66,6 +66,10 @@ a:hover {
 
 /* ------------ PADDING ------------ */
 
+.ev_nopad {
+    padding: 0 !important;
+}
+
 .ev_pad {
     padding: 0.4em;
 }
@@ -139,6 +143,10 @@ fieldset.ev_form div.ev_submit {
     text-align: center;
 }
 
+.ev_form_textarea {
+    width: 90%;
+}
+
 .ev_quick_search {
     font-size: 0.8em;
     padding: 2px;
@@ -149,6 +157,13 @@ fieldset.ev_form div.ev_submit {
     width: 3em;
 }
 
+
+.ev_edit_modes {
+    float: right;
+}
+.ev_edit_modes_action {
+    width: 170px !important;
+}
 /* ------------ PAGINATION ------------ */
 
 .ev_pageno {
@@ -172,7 +187,26 @@ fieldset.ev_form div.ev_submit {
     text-decoration: none;
 }
 
+.ev_pagination_prev_icon {
+    float: left;
+}
+.ev_pagination_next_icon {
+    float: right;
+}
+
 /* ------------ CONTENT ------------ */
+
+.ev_layout_main {
+    float: left;
+    width: 80%;
+}
+.ev_layout_sidebar {
+    float: right;
+    width: 19%;
+}
+.ev_layout_clear {
+    clear: both;
+}
 
 .ev_main {
     padding: 0.3em;
@@ -450,6 +484,9 @@ td.ev_status_need_info {
 }
 .ev_button_short {
     width: 60px;
+}
+.ev_button_form_action {
+    width: 80px;
 }
 
 .ev_button_normal {
@@ -994,6 +1031,11 @@ span.ev_msg_error span.ev_msg_info {
     padding: 0.2em !important;
 }
 
+.ev_list_filter_calendar {
+    display: inline;
+    padding: 2px;
+}
+
 .ev_list_details_main,
 .ev_list_details_label,
 .ev_list_details_text,
@@ -1003,6 +1045,21 @@ span.ev_msg_error span.ev_msg_info {
 
 .ev_list_occurrence_more {
     font-size: 1.5em;
+}
+
+.ev_occlist_summary_cell {
+    height: 2em;
+}
+
+.ev_occlist_owner_action,
+.ev_occlist_alarm_action,
+.ev_occlist_partstat,
+.ev_occlist_complete_action {
+    float: right;
+}
+
+.ev_occlist_alarm_action {
+    width: 60px;
 }
 
 /* ------------ DETAILS VIEW -------------- */
@@ -1285,6 +1342,11 @@ span.ev_cal_src_disabled {
 }
 .ev_callist_error_icon[hidden] {
     display: none;
+}
+
+.ev_cal_collection,
+.ev_cal_collection_content {
+    vertical-align: top;
 }
 
 .ev_calcombo_icon {

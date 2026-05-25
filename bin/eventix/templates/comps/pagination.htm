@@ -1,9 +1,9 @@
 {% if page != 1 %}
     <a id="link-prev" href="{{ (build_url)(&(page - 1)) }}">
-        <i style="float: left" class="bi bi-caret-left-fill"></i>
+        <i class="bi bi-caret-left-fill ev_pagination_prev_icon"></i>
     </a>
 {% else %}
-    <i style="float: left" class="bi bi-caret-left-fill"></i>
+    <i class="bi bi-caret-left-fill ev_pagination_prev_icon"></i>
 {% endif %}
 
 <span class="{% if page == 1 %}ev_pagecurrent{% else %}ev_pageno{% endif %}">
@@ -34,10 +34,10 @@
 
 {% if page != num && num > 0 %}
     <a id="link-next" href="{{ (build_url)(&(page + 1)) }}">
-        <i style="float: right" class="bi bi-caret-right-fill"></i>
+        <i class="bi bi-caret-right-fill ev_pagination_next_icon"></i>
     </a>
 {% else %}
-    <i style="float: right" class="bi bi-caret-right-fill"></i>
+    <i class="bi bi-caret-right-fill ev_pagination_next_icon"></i>
 {% endif %}
 
 {% if page != 1 || page != num %}

@@ -2,7 +2,7 @@
     <div class="ev_border ev_margin_bottom_big">
         <h1 class="ev_header ev_error">{{ "Errors"|t(locale) }}</h1>
         <div class="ev_main">
-            <div style="padding: 0.3em;">
+            <div class="ev_pad">
                 <ul>
                     {% for err in page.errors() %}
                         <li>
@@ -19,7 +19,7 @@
     <div class="ev_border ev_margin_bottom_big">
         <h1 class="ev_header ev_info">{{ "Information"|t(locale) }}</h1>
         <div class="ev_main">
-            <div style="padding: 0.3em;">
+            <div class="ev_pad">
                 <ul>
                     {% for info in page.infos() %}
                         <li>

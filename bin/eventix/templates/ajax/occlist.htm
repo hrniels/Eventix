@@ -1,6 +1,6 @@
 {% for occ in occs %}
     <tr id="occrow_{{ occ.rid_str()|to_id }}">
-        <td style="height: 2em">
+        <td class="ev_occlist_summary_cell">
             &bull;&nbsp;
             <span
                 class="ev_summary
@@ -41,8 +41,7 @@
                     {% if occ.organizer().is_some() %}
                         {% if occ.status_class() != Some(String::from("Cancelled")) %}
                             <a
-                                style="float: right"
-                                class="ev_button ev_button_critical"
+                                class="ev_button ev_button_critical ev_occlist_owner_action"
                                 href="javascript:cancelAndRefresh('{{ occ.uid() }}',
                                                                   '{{ occ.rid_str() }}',
                                                                   '{{ occ.rid_str()|to_id }}')"
@@ -53,8 +52,7 @@
                         {% endif %}
                     {% else %}
                         <a
-                            style="float: right"
-                            class="ev_button ev_button_normal"
+                            class="ev_button ev_button_normal ev_occlist_owner_action"
                             href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
                                                                   '{{ occ.rid_str() }}',
                                                                   '{{ occ.rid_str()|to_id }}')"
@@ -72,8 +70,7 @@
                     {% if personal_alarms %}
                         <a
                             id="alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}"
-                            style="float: right; width: 60px"
-                            class="ev_button ev_button_normal"
+                            class="ev_button ev_button_normal ev_occlist_alarm_action"
                             href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}',
                                                         '{{ occ.uid() }}',
                                                         '{{ occ.rid_str() }}')"
@@ -83,14 +80,13 @@
                         </a>
                     {% endif %}
                     {% if let Some(partstat) = occ.partstat %}
-                        <span style="float: right"> {{ partstat|safe }} </span>
+                        <span class="ev_occlist_partstat"> {{ partstat|safe }} </span>
                     {% endif %}
                 {% endif %}
                 {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
                     {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
                         <a
-                            style="float: right"
-                            class="ev_button ev_button_good"
+                            class="ev_button ev_button_good ev_occlist_complete_action"
                             href="javascript:completeTodoAndRefresh('{{ occ.uid() }}',
                                                                     '{{ occ.rid_str() }}',
                                                                     '{{ occ.rid_str()|to_id }}')"

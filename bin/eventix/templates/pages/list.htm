@@ -20,7 +20,7 @@
                             name="keywords"
                             value="{{ filter.keywords }}"
                         />
-                        <div style="margin-top: .5em">{{ conjunction|safe }}</div>
+                        <div class="ev_margin_top">{{ conjunction|safe }}</div>
                     </dd>
                 </dl>
                 <dl>
@@ -33,8 +33,7 @@
                             <tr>
                             {% endif %}
                                 <td>
-                                    <div style="display: inline; padding: 2px"
-                                         class="ev_cal_src ev_cal_src_{{ src.id() }}">
+                                    <div class="ev_cal_src ev_cal_src_{{ src.id() }} ev_list_filter_calendar">
                                         <input type="checkbox" id="dir_{{ idx + 1 }}"
                                                name="dirs[]" value="{{ src.id() }}"
                                                {% if filter.dirs.contains(src.id()) %}
@@ -49,7 +48,7 @@
                         {% endfor %}
                         </table>
                         <!-- prettier-ignore-end -->
-                        <div style="padding-top: 0.5em">
+                        <div class="ev_pad_top">
                             <input
                                 type="button"
                                 value="{{ "Invert selection"|t(locale) }}"
