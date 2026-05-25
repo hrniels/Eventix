@@ -21,13 +21,13 @@
                         <b>{{ col_id }}</b>
                     </div>
 
-                    <div style="padding-top: .3em">
+                    <div class="ev_cal_meta">
                         {% if let Some(email) = col.email() %}
                             {{ email.name() }}
                             &lt;{{ email.org_address() }}&gt;
                         {% endif %}
                     </div>
-                    <div class="ev_col_buttons" style="padding-top: .3em">
+                    <div class="ev_col_buttons ev_cal_meta">
                         <a
                             href="javascript:askDeleteCollection('{{ col_id }}')"
                             class="ev_button ev_button_critical"
@@ -90,7 +90,7 @@
                     </div>
                 </td>
                 <td class="ev_main" width="60%" style="vertical-align: top">
-                    <div style="display: flex; flex-direction: column; gap: .3em">
+                    <div class="ev_cal_list">
                         {% for cal in calendars.get(col_id).unwrap() %}
                             <div id="ev_cal_box_{{ cal.cal().id() }}">{{ cal|safe }}</div>
                         {% endfor %}
@@ -122,32 +122,6 @@
     {% endif %}
 </div>
 
-<style type="text/css">
-    .ev_cal_actions {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        gap: 0.6em;
-        align-items: center;
-    }
-    .ev_add_cal_wrapper {
-        margin-left: auto;
-    }
-    .ev_add_cal {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4em;
-        align-items: center;
-    }
-    .ev_cal_title {
-        display: flex;
-        gap: 0.3em;
-    }
-    .ev_cal_title img {
-        width: 20px;
-        height: 20px;
-    }
-</style>
 <script type="text/javascript">
     function reloadContentIfPossible() {
         requestReload("out-of-sync", !popupOrFormsOpen());

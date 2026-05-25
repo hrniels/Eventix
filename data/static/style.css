@@ -897,6 +897,79 @@ div.ev_selected {
     padding: 0.8em 0.8em 0.8em 0.8em;
 }
 
+.ev_popup_title {
+    font-size: 1.4rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.ev_popup_container {
+    display: grid;
+}
+
+.ev_popup_container_centered {
+    margin: 1em;
+    text-align: center;
+}
+
+.ev_popup_container_wide {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.ev_popup_container_2cols {
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.ev_shortcut_row {
+    display: flex;
+    align-items: center;
+    padding: 0.3rem 0;
+}
+
+.ev_shortcut_keys {
+    min-width: 180px;
+    display: flex;
+    justify-content: flex-end;
+    padding-right: 1rem;
+}
+
+.ev_shortcut_key,
+.ev_shortcut_mousebtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    text-align: center;
+}
+
+.ev_shortcut_key {
+    background: #eeeeec;
+    border: 1px solid #d3d7cf;
+    border-radius: 6px;
+    box-shadow: inset 0 -1px 0 #babdb6;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.ev_code {
+    font-family: monospace;
+}
+
+.ev_log_outer {
+    margin: 0.5em;
+}
+
+.ev_log_content {
+    border: 1px solid #000;
+    width: 100%;
+    height: 400px;
+    overflow-y: scroll;
+    overscroll-behavior-y: contain;
+}
+
 /* ------------ TAG & FOLDER ------------ */
 
 .ev_tag,
@@ -975,6 +1048,18 @@ span.ev_cal_src_disabled {
     align-items: start;
 }
 
+.ev_cal_actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6em;
+}
+
+.ev_add_cal_wrapper {
+    margin-left: auto;
+}
+
 .ev_cal_box {
     background-color: #ffffff;
     border-radius: 3px;
@@ -1019,8 +1104,29 @@ span.ev_cal_src_disabled {
 
 .ev_add_cal {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
     align-items: center;
+    gap: 0.4em;
+}
+
+.ev_cal_title {
+    display: flex;
+    gap: 0.3em;
+}
+
+.ev_cal_title img {
+    width: 20px;
+    height: 20px;
+}
+
+.ev_cal_meta {
+    padding-top: 0.3em;
+}
+
+.ev_cal_list {
+    display: flex;
+    flex-direction: column;
     gap: 0.3em;
 }
 
