@@ -54,24 +54,8 @@ fieldset.ev_form div.ev_submit {
     text-align: center;
 }
 
-.ev_form_tabs {
-    padding: 0;
-}
-
-.ev_form_tab_panel {
-    padding: 0;
-}
-
 .ev_form_textarea {
     width: 90%;
-}
-
-.ev_form_note {
-    margin-top: 0.5em;
-}
-
-.ev_form_action {
-    width: 80px;
 }
 
 .ev_quick_search {
@@ -89,31 +73,6 @@ fieldset.ev_form div.ev_submit {
 }
 .ev_edit_modes_action {
     width: 170px !important;
-}
-
-.ev_hidden_panel {
-    display: none;
-}
-
-.ev_alarm_overwrite {
-    padding: 0.4em;
-}
-
-.ev_alarm_actions {
-    margin-top: 0.5em;
-}
-
-.ev_todo_status_process,
-.ev_todo_status_completed_label {
-    display: none;
-}
-
-.ev_syncer_tab_panel[hidden] {
-    display: none;
-}
-
-.ev_syncer_fieldset {
-    padding: 0;
 }
 
 /* ------------ JUMP TO DATE ------------ */

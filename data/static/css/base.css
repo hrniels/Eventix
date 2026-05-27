@@ -304,8 +304,3 @@ span.ev_msg_error span.ev_msg_info {
 .ev_warn > i {
     color: orange;
 }
-
-.ev_message_details,
-.ev_error_details {
-    padding: 0.3em;
-}

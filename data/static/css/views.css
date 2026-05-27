@@ -264,25 +264,13 @@
     height: 2.3em;
 }
 
-.ev_list_details_row {
-    display: none;
-}
-
 .ev_list_details_cell {
     padding: 0.2em !important;
-}
-
-.ev_list_filter_conjunction {
-    margin-top: 0.5em;
 }
 
 .ev_list_filter_calendar {
     display: inline;
     padding: 2px;
-}
-
-.ev_list_filter_actions {
-    padding-top: 0.5em;
 }
 
 .ev_list_details_main,
