@@ -57,10 +57,6 @@
   <screenshots>
     <screenshot type="default">
       <caption>Weekly calendar view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/weekly.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>Event details in weekly view</caption>
       <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/weekly-details.png</image>
     </screenshot>
     <screenshot>
@@ -82,10 +78,6 @@
     <screenshot>
       <caption>Calendar management</caption>
       <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/calendars.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>Adding a new calendar collection</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/new-collection.png</image>
     </screenshot>
   </screenshots>
 
