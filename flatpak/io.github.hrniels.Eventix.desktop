@@ -7,5 +7,6 @@ Exec=eventix-app
 Icon=io.github.hrniels.Eventix
 Terminal=false
 Categories=Office;Calendar;
+Keywords=calendar;event;task;todo
 StartupNotify=true
 StartupWMClass=io.github.hrniels.Eventix

@@ -8,4 +8,5 @@ Icon=io.github.hrniels.Eventix
 Terminal=false
 StartupNotify=false
 Categories=Office;Calendar;
+Keywords=calendar;event;task;todo;import;ics
 MimeType=text/calendar;

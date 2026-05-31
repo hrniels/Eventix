@@ -10,6 +10,16 @@
   <content_rating type="oars-1.1" />
   <developer_name>Nils Asmussen</developer_name>
   <summary>Event and Task Manager</summary>
+  <keywords>
+    <keyword>calendar</keyword>
+    <keyword>event</keyword>
+    <keyword>task</keyword>
+    <keyword>todo</keyword>
+    <keyword>CalDAV</keyword>
+    <keyword>Exchange</keyword>
+    <keyword>O365</keyword>
+    <keyword>ICS</keyword>
+  </keywords>
 
   <description>
     <p>
