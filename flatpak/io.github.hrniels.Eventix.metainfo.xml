@@ -20,6 +20,10 @@
     <keyword>O365</keyword>
     <keyword>ICS</keyword>
   </keywords>
+  <branding>
+    <color type="primary" scheme_preference="light">#c9e9ff</color>
+    <color type="primary" scheme_preference="dark">#26a269</color>
+  </branding>
 
   <description>
     <p>
