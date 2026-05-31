@@ -8,7 +8,9 @@
   <url type="vcs-browser">https://github.com/hrniels/Eventix</url>
   <url type="bugtracker">https://github.com/hrniels/Eventix/issues</url>
   <content_rating type="oars-1.1" />
-  <developer_name>Nils Asmussen</developer_name>
+  <developer id="io.github.hrniels">
+    <name>Nils Asmussen</name>
+  </developer>
   <summary>Event and Task Manager</summary>
   <keywords>
     <keyword>calendar</keyword>
