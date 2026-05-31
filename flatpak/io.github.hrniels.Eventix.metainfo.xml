@@ -24,6 +24,11 @@
     <color type="primary" scheme_preference="light">#c9e9ff</color>
     <color type="primary" scheme_preference="dark">#26a269</color>
   </branding>
+  <requires>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <display_length compare="ge">1280</display_length>
+  </requires>
 
   <description>
     <p>
