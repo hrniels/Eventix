@@ -86,8 +86,8 @@ configuration and other files are stored in XDG-standard locations under the app
 `io.github.hrniels.Eventix`. With flatpak, the base directory will be under
 `$HOME/.var/app/io.github.hrniels.Eventix`. The relevant files and directories are:
 
-| File                                                     | Purpose                                                   |
-| -------------------------------------------------------- | --------------------------------------------------------- |
+| File                                                    | Purpose                                                   |
+| ------------------------------------------------------- | --------------------------------------------------------- |
 | `<base>/config/io.github.hrniels.Eventix/settings.toml` | Collection and calendar settings                          |
 | `<base>/data/io.github.hrniels.Eventix/misc.toml`       | Runtime state: last alarm check, disabled calendars, etc. |
 | `<base>/data/io.github.hrniels.Eventix/alarms`          | Personal alarms                                           |
