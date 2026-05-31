@@ -32,8 +32,9 @@ window with system tray integration.
 
 ## Installation
 
-Eventix is intended to be run as a Flatpak application. The flatpak package can be built and
-installed via:
+Eventix is intended to be run as a Flatpak application and available on
+[Flathub](https://flathub.org/en/apps/io.github.hrniels.Eventix). It can also be built and installed
+from source:
 
 ```bash
 ./b flatpak
@@ -42,20 +43,24 @@ flatpak install --user flatpak/Eventix.flatpak
 
 ## Running
 
-Start the server:
+When using the default command, the GUI is started which will automatically start the server if it's
+not already running. However, the server can also be started beforehand and run in the background.
+One advantage is that the server can send notifications for calendar alarms even if the GUI is not
+running.
+
+You can start the server via:
 
 ```bash
 flatpak run --command=eventix io.github.hrniels.Eventix
 ```
 
-Afterwards, start the desktop UI. The flatpak package comes with a `.desktop` file, but it can also
-be started via CLI:
+The flatpak package comes with a `.desktop` file for the GUI, but it can also be started via:
 
 ```bash
 flatpak run io.github.hrniels.Eventix
 ```
 
-It might make sense to run the server via systemd:
+It might also make sense to run the server via systemd:
 
 ```ini
 [Unit]
