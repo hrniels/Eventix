@@ -13,10 +13,24 @@
 
   <description>
     <p>
-      Eventix is an iCalendar event and task manager for Linux desktops. It runs a local web server
-      that provides a calendar UI, and ships a GTK desktop wrapper that embeds that UI in a native
-      application window with system tray integration.
+      Eventix is an iCalendar event and task manager for Linux desktops supporting CalDAV and
+      Microsoft 365 (Exchange). It runs a local web server that provides a calendar UI, and ships a
+      GTK desktop wrapper that embeds that UI in a native application window with system tray
+      integration.
     </p>
+    <p>Most important features:</p>
+    <ul>
+      <li>Monthly, weekly, and list calendar views</li>
+      <li>Event and task management with full create / edit / delete support</li>
+      <li>Recurrent events and tasks</li>
+      <li>Organized events with attendees and accept/decline</li>
+      <li>Alarm / notification system with per-calendar personal alarm overrides</li>
+      <li>CalDAV synchronization via vdirsyncer (bundled)</li>
+      <li>Microsoft 365 synchronization via DavMail (bundled)</li>
+      <li>Local filesystem calendar support (no sync required)</li>
+      <li>iCalendar (.ics) file import via a GTK dialog</li>
+      <li>System tray icon showing due-today and overdue task counts</li>
+    </ul>
   </description>
 
   <launchable type="desktop-id">io.github.hrniels.Eventix.desktop</launchable>
