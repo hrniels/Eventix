@@ -12,7 +12,8 @@
         "--share=network",
         "--share=ipc",
         "--device=dri",
-        "--socket=x11",
+        "--socket=wayland",
+        "--socket=fallback-x11",
         "--talk-name=org.kde.StatusNotifierWatcher",
         "--env=PATH=/app/jre/bin:/app/bin:/usr/bin"
     ],

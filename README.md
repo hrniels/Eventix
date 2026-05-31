@@ -117,9 +117,9 @@ eventix/
 
 ## Notes
 
-Eventix currently uses the X11 windowing system, because at least with KDE and fractional scaling,
-the rendering quality on Wayland is suboptimal at the moment. If you do not have this issue, feel
-free to switch to Wayland in the flatpak settings.
+There is a [known problem](https://github.com/WebKit/WebKit/pull/34556) in WebKit when using
+Wayland with fractional scaling at the moment, leading to suboptimal rendering quality. If you run
+into this, you can switch to the X11 windowing system in the flatpak settings.
 
 ## License
 
