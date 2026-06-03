@@ -59,31 +59,38 @@
   <screenshots>
     <screenshot type="default">
       <caption>Weekly calendar view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/weekly-details.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.10/data/screenshots/weekly-details.png</image>
     </screenshot>
     <screenshot>
       <caption>Monthly calendar view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/monthly.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.10/data/screenshots/monthly.png</image>
     </screenshot>
     <screenshot>
       <caption>Creating a new event</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/new-event1.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.10/data/screenshots/new-event1.png</image>
     </screenshot>
     <screenshot>
       <caption>Event repetition options</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/new-event2.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.10/data/screenshots/new-event2.png</image>
     </screenshot>
     <screenshot>
       <caption>List view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/list.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.10/data/screenshots/list.png</image>
     </screenshot>
     <screenshot>
       <caption>Calendar management</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.9/data/screenshots/calendars.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.0.10/data/screenshots/calendars.png</image>
     </screenshot>
   </screenshots>
 
   <releases>
+    <release version="1.0.10" date="2026-06-03">
+      <description>
+        <ul>
+          <li>Icon and metadata improvements.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.9" date="2026-05-28">
       <description>
         <ul>
