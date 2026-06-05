@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1779991036323,
+  "lastUpdate": 1780674237060,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -3006,6 +3006,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/list/results/content/keyword_or",
             "value": 5768934.392165027,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "86fb830186bf94930bd45c0479d567bad2bc4f72",
+          "message": "CSS cleanup",
+          "timestamp": "2026-06-03T18:55:21Z",
+          "url": "https://github.com/hrniels/Eventix/pull/53/commits/86fb830186bf94930bd45c0479d567bad2bc4f72"
+        },
+        "date": 1780674236370,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/list/results/content/all_items",
+            "value": 5261407.842038814,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_and",
+            "value": 5742371.17665033,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_or",
+            "value": 5801665.375339585,
             "unit": "ns"
           }
         ]
