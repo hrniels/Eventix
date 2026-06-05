@@ -115,11 +115,7 @@
                     <tr>
                         <td width="25%" align="left">
                             {% if rid.is_none() %}
-                                <a
-                                    id="delete-button"
-                                    class="ev_button_big ev_button_critical"
-                                    href="#"
-                                >
+                                <a id="delete-button" class="ev_button_big ev_button_critical">
                                     <span>
                                         {% if occ.is_recurrent() %}
                                             {{ "Delete series"|t(locale) }}
@@ -179,7 +175,8 @@
         {% if rid.is_none() %}
         $("#delete-button")
             .off("click")
-            .on("click", async function () {
+            .on("click", async function (e) {
+                e.preventDefault();
                 if (
                     !(await showConfirm(
                         "{% if occ.is_recurrent() %}{{ "warning.delete_series"|t(locale) }}{% else %}{{ "warning.delete_item"|t(locale) }}{% endif %}",
