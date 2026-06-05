@@ -93,6 +93,7 @@ div.ev_selected {
 .ev_shortcut_keys {
     min-width: 180px;
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     padding-right: 1rem;
 }
