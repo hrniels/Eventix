@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780674323165,
+  "lastUpdate": 1780674409401,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -9059,6 +9059,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 58532881.86666667,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "86fb830186bf94930bd45c0479d567bad2bc4f72",
+          "message": "CSS cleanup",
+          "timestamp": "2026-06-03T18:55:21Z",
+          "url": "https://github.com/hrniels/Eventix/pull/53/commits/86fb830186bf94930bd45c0479d567bad2bc4f72"
+        },
+        "date": 1780674408674,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 2020868.216816005,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 2011677.3289027822,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 53750732.266666666,
             "unit": "ns"
           }
         ]
