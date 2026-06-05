@@ -1,0 +1,82 @@
+.ev_tz_filter {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-bottom: 1px solid #dddddd;
+    font-size: 11pt;
+    outline: none;
+}
+
+.ev_tz_list {
+    max-height: 250px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+}
+
+.ev_tz_wrapper {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.ev_tz_name {
+    flex: 1 1 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.ev_tz_offset {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    opacity: 0.65;
+}
+
+.ev_tz_selected > .ui-menu-item-wrapper {
+    background: #637591;
+    color: #fff;
+}
+
+.ev_tz_selected .ev_tz_offset {
+    opacity: 1;
+}
+
+.ev_tz_empty {
+    padding: 8px;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+}
+
+.ev_dst_gap,
+.ev_dst_fold {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.05),
+        rgba(0, 0, 0, 0.05) 10px,
+        rgba(0, 0, 0, 0.1) 10px,
+        rgba(0, 0, 0, 0.1) 20px
+    );
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    z-index: 2000;
+    pointer-events: none;
+}
+.ev_dst_gap::after {
+    content: "\f128"; /* bi-arrow-down */
+    font-family: "bootstrap-icons";
+    font-size: 20px;
+    color: rgba(0, 0, 0, 0.3);
+}
+.ev_dst_fold::after {
+    content: "\f148"; /* bi-arrow-up */
+    font-family: "bootstrap-icons";
+    font-size: 20px;
+    color: rgba(0, 0, 0, 0.3);
+}

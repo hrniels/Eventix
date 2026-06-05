@@ -21,18 +21,18 @@
         }
     </script>
 
-    <div style="float: left; width: 80%">
+    <div class="ev_layout_main">
         {% block main %}
             <h1>Dummy content</h1>
         {% endblock main %}
     </div>
 
-    <div style="float: right; width: 19%">
+    <div class="ev_layout_sidebar">
         <div id="sidebar-content">
             <p>{{ "Loading..."|t(locale) }}</p>
         </div>
     </div>
-    <br style="clear: both" />
+    <br class="ev_layout_clear" />
 
     <script type="text/javascript">
         $(document).keydown(function (e) {

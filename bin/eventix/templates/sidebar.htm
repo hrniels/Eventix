@@ -13,10 +13,10 @@
         {% if page.any_writable_events() %}
             <a
                 id="link-event"
-                style="float: right"
+                class="ev_sidebar_add_link"
                 href="javascript:loadWithPrev('/pages/items/add?ctype=Event')"
             >
-                <i class="bi bi-plus-square" style="color: white"></i>
+                <i class="bi bi-plus-square"></i>
             </a>
         {% endif %}
     </div>
@@ -42,10 +42,10 @@
         {% if page.any_writable_tasks() %}
             <a
                 id="link-todo"
-                style="float: right"
+                class="ev_sidebar_add_link"
                 href="javascript:loadWithPrev('/pages/items/add?ctype=Todo')"
             >
-                <i class="bi bi-plus-square" style="color: white"></i>
+                <i class="bi bi-plus-square"></i>
             </a>
         {% endif %}
     </div>

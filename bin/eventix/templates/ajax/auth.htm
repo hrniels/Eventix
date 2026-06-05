@@ -1,15 +1,4 @@
-<div>
-    <style>
-        h1.title {
-            font-size: 1.4rem;
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-        .container {
-            margin: 1em;
-            text-align: center;
-        }
-    </style>
+<div class="ev_border">
     <script type="text/javascript">
         function submitAndClose() {
             const auth_url = $("#result_url").val();
@@ -26,9 +15,9 @@
         }
     </script>
 
-    <h1 class="title">{{ "Authentication Failed"|t(locale) }}</h1>
+    <h1 class="ev_popup_title">{{ "Authentication Failed"|t(locale) }}</h1>
 
-    <div class="container">
+    <div class="ev_popup_container_centered">
         <p>{{ error }}</p>
         <p>
             <a href="{{ url }}">{{ "Authenticate"|t(locale) }}</a>

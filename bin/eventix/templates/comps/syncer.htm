@@ -1,5 +1,5 @@
 <input type="hidden" id="{{ id }}_syncer" name="{{ name }}[syncer]" value="{{ syncer() }}" />
-<div id="{{ id }}-tabs">
+<div id="{{ id }}-tabs" class="ev_tabs ev_tabs_icons">
     <ul>
         {% if only.is_none() || only.unwrap() == Syncer::VDirSyncer %}
             <li>
@@ -28,11 +28,12 @@
     </ul>
     <div
         id="{{ id }}-tabs-VDIRSYNCER"
+        class="ev_hidden"
         {% if only.is_some() && only.unwrap() != Syncer::VDirSyncer %}
-            style="display: none"
+            hidden
         {% endif %}
     >
-        <fieldset style="padding: 0">
+        <fieldset class="ev_nopad">
             <dl>
                 <dt>{{ "Your Name"|t(locale) }}: *</dt>
                 <dd>
@@ -129,11 +130,12 @@
     </div>
     <div
         id="{{ id }}-tabs-O365"
+        class="ev_hidden"
         {% if only.is_some() && only.unwrap() != Syncer::O365 %}
-            style="display: none"
+            hidden
         {% endif %}
     >
-        <fieldset style="padding: 0">
+        <fieldset class="ev_nopad">
             <dl>
                 <dt>{{ "Your Name"|t(locale) }}: *</dt>
                 <dd>
@@ -204,11 +206,12 @@
     </div>
     <div
         id="{{ id }}-tabs-FILESYSTEM"
+        class="ev_hidden"
         {% if only.is_some() && only.unwrap() != Syncer::FileSystem %}
-            style="display: none"
+            hidden
         {% endif %}
     >
-        <fieldset style="padding: 0">
+        <fieldset class="ev_nopad">
             <dl>
                 <dt>{{ "Path"|t(locale) }}: *</dt>
                 <dd>
@@ -225,23 +228,8 @@
     </div>
 </div>
 
-<div class="ev_padtop">{{ "info.required_fields"|t(locale) }}</div>
+<div class="ev_margin_top">{{ "info.required_fields"|t(locale) }}</div>
 
-<!-- prettier-ignore-start -->
-<style type="text/css">
-    #{{ id }}-tabs > div {
-        padding: 0;
-    }
-    #{{ id }}-tabs ul li a {
-        display: flex;
-        gap: 0.3em;
-    }
-    #{{ id }}-tabs ul li a img {
-        width: 20px;
-        height: 20px;
-    }
-</style>
-<!-- prettier-ignore-end -->
 <!-- prettier-ignore-start -->
 <script>
     $(function () {

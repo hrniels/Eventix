@@ -1,18 +1,18 @@
-<div class="ev_response_dropdown" id="{{ id }}-dropdown" style="float: right">
+<div class="ev_response_dropdown ev_edit_modes" id="{{ id }}-dropdown">
     <a id="{{ id }}-toggle" class="ev_button ev_button_normal">
         <i class="bi bi-pencil"></i>
         <span>{{ "Edit"|t(locale) }}</span>
     </a>
     <div id="{{ id }}-menu" class="ev_response_menu">
-        <a class="ev_button ev_button_normal" style="width: 170px" data-value="Occurrence">
+        <a class="ev_button ev_button_normal ev_edit_modes_action" data-value="Occurrence">
             <i class="bi bi-calendar-event"></i>
             <span>{{ "This occurrence"|t(locale) }}</span>
         </a>
-        <a class="ev_button ev_button_normal" style="width: 170px" data-value="Following">
+        <a class="ev_button ev_button_normal ev_edit_modes_action" data-value="Following">
             <i class="bi bi-calendar-range"></i>
             <span>{{ "This and following occ."|t(locale) }}</span>
         </a>
-        <a class="ev_button ev_button_normal" style="width: 170px" data-value="Series">
+        <a class="ev_button ev_button_normal ev_edit_modes_action" data-value="Series">
             <i class="bi bi-arrow-repeat"></i>
             <span>{{ "Complete series"|t(locale) }}</span>
         </a>

@@ -1,32 +1,28 @@
 <div class="ev_border">
-    <h1 class="ev_header" style="position: relative">
-        <div style="z-index: 1; position: absolute; float: left" class="ev_jump">
+    <h1 class="ev_header ev_month_week_header">
+        <div class="ev_jump">
             <input type="text" id="jump_location" size="10" />
             <input type="button" value="{{ "Jump!"|t(locale) }}" onclick="executeJump()" />
         </div>
 
-        <div
-            style="z-index: 0; position: absolute; width: calc(100% - 70px); left: 70px; text-align: center"
-        >
+        <div class="ev_month_week_nav ev_week_nav">
             <a
-                style="margin-right: .5em"
+                class="ev_month_week_nav_prev"
                 id="link-prev"
                 href="javascript:loadWeeklyContent('{{ prev_week }}')"
             >
                 &laquo;
             </a>
-            <div style="display: inline-block; width: 24em">
-                W{{ week_number }}: {{ week_start }} - {{ week_end }}
-            </div>
+            <div class="ev_week_label">W{{ week_number }}: {{ week_start }} - {{ week_end }}</div>
             <a
-                style="margin-left: .5em"
+                class="ev_month_week_nav_next"
                 id="link-next"
                 href="javascript:loadWeeklyContent('{{ next_week }}')"
             >
                 &raquo;
             </a>
         </div>
-        <br clear="both" />
+        <br class="ev_month_week_header_clear" />
     </h1>
 
     <script type="text/javascript">
@@ -57,9 +53,9 @@
         });
     </script>
 
-    <table width="100%" class="ev_table ev_border_bottom" style="table-layout: fixed">
+    <table width="100%" class="ev_table ev_border_bottom ev_week_table">
         <tr>
-            <td style="padding: 0; width: 70px"></td>
+            <td class="ev_week_time_label"></td>
             {% for day in days %}
                 <td
                     width="14%"
@@ -70,8 +66,7 @@
                         <a
                             href="javascript:loadWithPrev(
                      '/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
-                            style="float: left"
-                            class="ev_add_icon"
+                            class="ev_add_icon ev_month_add_link"
                         >
                             <i class="bi bi-plus-square"></i>
                         </a>
@@ -84,8 +79,7 @@
                     </b>
                     {% if !day.gaps.is_empty() || !day.folds.is_empty() %}
                         <i
-                            style="float: right"
-                            class="bi bi-clock-history"
+                            class="bi bi-clock-history ev_week_time_change_icon"
                             title="{{ "Time change"|t(locale) }}"
                         ></i>
                     {% endif %}
@@ -93,20 +87,15 @@
             {% endfor %}
         </tr>
     </table>
-    <div style="max-height: 110px; overflow-y: scroll">
-        <table
-            width="100%"
-            class="ev_table ev_border_bottom"
-            style="table-layout: fixed; border-bottom: none"
-        >
+    <div class="ev_week_all_day">
+        <table width="100%" class="ev_table ev_border_bottom ev_week_all_day_table">
             <tr>
-                <td style="padding: 0; width: 70px"></td>
+                <td class="ev_week_time_label"></td>
                 {% for day in days %}
                     <td
                         width="14%"
                         align="center"
-                        class="ev_week_allday ev_month_td {% if day.date == today %}ev_today_bg{% endif %}"
-                        style="height: auto"
+                        class="ev_week_allday ev_month_td ev_week_all_day_cell {% if day.date == today %}ev_today_bg{% endif %}"
                         data-date="{{ day.date.format("%Y-%m-%d") }}"
                     >
                         <div class="ev_week_cell">
@@ -133,11 +122,11 @@
             </tr>
         </table>
     </div>
-    <div id="week_scroll_area" class="ev_border_top" style="height: 720px; overflow-y: scroll;">
-        <table width="100%" class="ev_table" style="table-layout: fixed">
+    <div id="week_scroll_area" class="ev_border_top ev_week_scroll_area">
+        <table width="100%" class="ev_table ev_week_table">
             <tr>
-                <td class="ev_month_td" style="padding: 0; width: 70px">
-                    <div style="position: relative; height: 1440px; padding: 0px">
+                <td class="ev_month_td ev_week_time_label">
+                    <div class="ev_week_timeline">
                         {% for hour in 0..24 %}
                             <div
                                 style="position: absolute;
@@ -158,7 +147,7 @@
                             class="ev_week_cell
                         {% if day.date == today %}ev_today_bg{% endif %}"
                         >
-                            <div style="position: relative; height: 1440px; padding: 0px">
+                            <div class="ev_week_timeline">
                                 {% for gap in day.gaps %}
                                     <div
                                         style="position: absolute;
@@ -193,8 +182,7 @@
                                         {% if page.any_writable_events() %}
                                             <a
                                                 href="javascript:loadWithPrev('/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}')"
-                                                style="float: left"
-                                                class="ev_add_icon"
+                                                class="ev_add_icon ev_week_hour_add_link"
                                             >
                                                 <i class="bi bi-plus-square"></i>
                                             </a>
@@ -239,10 +227,7 @@
                                     <!-- prettier-ignore-end -->
                                 {% endfor %}
                                 {% if day.date == today %}
-                                    <div
-                                        id="now_line"
-                                        style="position: absolute; width: 100%; border-top: .1em solid red;"
-                                    ></div>
+                                    <div id="now_line" class="ev_week_now_line"></div>
                                 {% endif %}
                             </div>
                         </div>

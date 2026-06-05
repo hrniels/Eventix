@@ -25,15 +25,13 @@
             </dl>
             <div class="ev_submit">
                 <a
-                    class="ev_button_big ev_button_normal"
-                    style="width: 80px"
+                    class="ev_button_big ev_button_normal ev_button_form_action"
                     href="javascript:submitEditForm()"
                 >
                     <span>{{ "Save"|t(locale) }}</span>
                 </a>
                 <a
-                    class="ev_button_big ev_button_normal"
-                    style="width: 80px"
+                    class="ev_button_big ev_button_normal ev_button_form_action"
                     {% if let Some(prev) = prev %}
                         href="javascript:navigateTo('{{ prev }}')"
                     {% else %}

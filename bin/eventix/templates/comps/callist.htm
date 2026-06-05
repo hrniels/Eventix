@@ -11,7 +11,7 @@
 <!-- prettier-ignore-end -->
 
 {% for cal in page.calendars() %}
-    <a style="vertical-align: middle" href="javascript:toggleCalendar('{{ cal.id }}')">
+    <a class="ev_callist_link" href="javascript:toggleCalendar('{{ cal.id }}')">
         <span
             id="calendar_enabled_{{ cal.id }}"
             data-name="{{ cal.name }}"
@@ -26,12 +26,8 @@
         >
             <i
                 id="ev_cal_src_button_{{ cal.id }}"
-                {% if cal.sync_error %}
-                    style="display: inline"
-                {% else %}
-                    style="display: none"
-                {% endif %}
-                class="bi bi-exclamation-triangle-fill"
+                {% if !cal.sync_error %}hidden{% endif %}
+                class="bi bi-exclamation-triangle-fill ev_callist_error_icon"
             ></i>
         </span>
     </a>

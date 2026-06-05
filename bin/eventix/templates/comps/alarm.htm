@@ -1,4 +1,4 @@
-<div id="{{ id }}-tabs">
+<div id="{{ id }}-tabs" class="ev_tabs">
     <ul>
         <li>
             <a href="#{{ id }}-tabs-CALENDAR">{{ "Calendar"|t(locale) }}</a>
@@ -12,7 +12,7 @@
     <div id="{{ id }}-tabs-CALENDAR">{{ calendar|safe }}</div>
     {% if let Some(personal) = personal %}
         <div id="{{ id }}-tabs-PERSONAL">
-            <div style="padding: .4em">
+            <div class="ev_pad">
                 <input
                     type="checkbox"
                     id="{{ id }}_personal_overwrite"
@@ -28,7 +28,7 @@
 
 {% if let Some(personal) = personal %}
     {% if edit %}
-        <div style="padding-top: .6em; padding-left: .4em">
+        <div class="ev_pad_top">
             <b>{{ "Effective"|t(locale) }}:</b>
             {% if let Some(effective) = personal.effective %}
                 {{ effective[0].human(&**locale) }}
@@ -39,11 +39,6 @@
     {% endif %}
 {% endif %}
 <!-- prettier-ignore-start -->
-<style type="text/css">
-    #{{ id }}-tabs > div {
-        padding: 0;
-    }
-</style>
 <script>
     $(function () {
         $("#{{ id }}-tabs").tabs();

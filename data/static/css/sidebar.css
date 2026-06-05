@@ -1,0 +1,95 @@
+/* ------------ BOXES ------------ */
+
+.ev_vscrollbox {
+    max-width: 350px;
+    max-height: 100px;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    overscroll-behavior-y: contain;
+    text-overflow: ellipsis;
+}
+.ev_vscrollbox_lg {
+    max-height: 150px;
+}
+
+.ev_box {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.ev_box .ev_scrollbox {
+    height: 100%;
+    overflow-y: scroll;
+    overscroll-behavior-y: contain;
+}
+.ev_box > .ev_scrollbox > div {
+    border: 1px solid #fff;
+    white-space: nowrap;
+}
+.ev_box .ev_summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ev_sidebar_add_link {
+    float: right;
+}
+.ev_sidebar_add_link > i {
+    color: white;
+}
+
+.ev_overdue {
+    color: red;
+    font-weight: bold;
+}
+.ev_duetoday {
+    font-weight: bold;
+}
+
+/* ------------ ADD ICON -------------- */
+
+.ev_add_icon {
+    color: #000;
+    visibility: hidden;
+}
+.ev_week_day_header:hover > .ev_add_icon {
+    visibility: visible;
+}
+.ev_month_day_header:hover > .ev_add_icon {
+    visibility: visible;
+}
+.ev_hour_cell:hover > .ev_add_icon {
+    visibility: visible;
+}
+
+.ev_right_icon {
+    float: right;
+    margin-left: 0.2em;
+}
+
+/* ------------ QUICKTASK -------------- */
+
+.ev_quicktask {
+    padding: 0.3em;
+    border-top: 1px solid #3f5e88;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 0.2em;
+}
+.ev_quicktask #quick_summary {
+    flex: 1;
+    width: 10px;
+}
+.ev_quicktask a {
+    height: auto !important;
+    margin: 0 !important;
+}
+.ev_quicktask a * {
+    vertical-align: -moz-middle-with-baseline !important;
+}
+.ev_quicktask i {
+    margin-top: auto;
+    margin-bottom: auto;
+}

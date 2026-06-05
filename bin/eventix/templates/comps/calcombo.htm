@@ -3,7 +3,6 @@
         <option
             value="{{ cal.id }}"
             {% if *calendar == cal.id %}selected="selected"{% endif %}
-            data-style="float: left; margin-right: .5em"
             data-class="{{ cal.id }}"
         >
             {{ cal.name }}
@@ -25,8 +24,8 @@
                 let buttonItem = this.options.compact ? $("<span>") : this._super(item);
 
                 let icon = $("<span>", {
-                    style: item.element.attr("data-style"),
-                    class: "ev_cal_src ev_cal_src_" + item.element.attr("data-class"),
+                    class:
+                        "ev_cal_src ev_calcombo_icon ev_cal_src_" + item.element.attr("data-class"),
                 });
                 icon.appendTo(buttonItem);
 
@@ -40,8 +39,8 @@
                 if (item.disabled) li.addClass("ui-state-disabled");
 
                 $("<span>", {
-                    style: item.element.attr("data-style"),
-                    class: "ev_cal_src ev_cal_src_" + item.element.attr("data-class"),
+                    class:
+                        "ev_cal_src ev_calcombo_icon ev_cal_src_" + item.element.attr("data-class"),
                 }).appendTo(wrapper);
 
                 return li.append(wrapper).appendTo(ul);
@@ -70,14 +69,3 @@
     });
 </script>
 <!-- prettier-ignore-end -->
-
-<style>
-    .ui-selectmenu-menu .ui-menu.customicons .ui-menu-item-wrapper {
-        padding: 0.5em;
-    }
-    .ui-selectmenu-menu .ui-menu.customicons .ui-menu-item .ui-icon {
-        height: 24px;
-        width: 24px;
-        top: 0.1em;
-    }
-</style>

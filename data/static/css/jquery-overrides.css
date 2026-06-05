@@ -1,0 +1,105 @@
+.bi-check-circle {
+    color: #198754;
+}
+
+.ui-autocomplete {
+    max-height: 200px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    /* prevent horizontal scrollbar */
+    overflow-x: hidden;
+}
+
+.ui-selectmenu-text {
+    margin-right: 5px !important;
+}
+.ui-button {
+    padding: 0.4em 0.5em !important;
+}
+
+.ui-state-active {
+    margin: 0px !important;
+}
+.ui-selectmenu-menu .ui-menu .ui-menu-item-wrapper {
+    border: 1px solid transparent;
+    box-sizing: border-box;
+}
+.ui-selectmenu-menu .ui-menu .ui-state-focus,
+.ui-selectmenu-menu .ui-menu .ui-state-active {
+    margin: 0 !important;
+}
+.ui-corner-all {
+    border-radius: 3px 3px 0px 0px !important;
+}
+
+.popup {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.popup:before {
+    content: "";
+    width: 15px;
+    height: 15px;
+    transform: rotate(45deg);
+    border-left: 1px solid #c4c4c4;
+    border-top: 1px solid #c4c4c4;
+    border-collapse: separate !important;
+    background: #fff;
+    position: absolute;
+    z-index: 1;
+    left: 20px;
+    top: -8px;
+}
+.popover-title {
+    background-color: #637591 !important;
+    border-radius: 3px 3px 0 0 !important;
+    padding: 0.1em !important;
+    margin-top: 2px !important;
+    margin-left: 2px !important;
+    margin-right: 2px !important;
+    color: #bbb !important;
+}
+.popover-content {
+    border: 1px solid #c5c5c5 !important;
+    border-top: none !important;
+    border-radius: 0 0 3px 3px !important;
+    background-color: #f6f6f6 !important;
+    padding: 0.2em !important;
+    margin-left: 2px !important;
+    margin-right: 2px !important;
+    margin-bottom: 2px !important;
+}
+.clockpicker-tick:hover {
+    background-color: #627492 !important;
+    color: #fff !important;
+}
+.text-primary {
+    color: #fff !important;
+}
+
+.iconselectmenu-compact {
+    min-width: auto !important;
+    width: auto !important;
+    padding: 0.2em !important;
+}
+.iconselectmenu-compact .ui-selectmenu-icon {
+    display: none;
+}
+.iconselectmenu-compact .ev_cal_src {
+    margin-right: 0 !important;
+}
+.iconselectmenu-compact .ui-selectmenu-text {
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ui-selectmenu-menu .ui-menu.customicons .ui-menu-item-wrapper {
+    padding: 0.5em;
+}
+.ui-selectmenu-menu .ui-menu.customicons .ui-menu-item .ui-icon {
+    height: 24px;
+    width: 24px;
+    top: 0.1em;
+}

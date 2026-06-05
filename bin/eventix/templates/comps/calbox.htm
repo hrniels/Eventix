@@ -46,13 +46,13 @@
                     </script>
                 {% endif %}
 
-                <div class="ev_cal_box_left_item" style="padding-left: 1em">
+                <div class="ev_cal_box_left_item ev_cal_box_name">
                     <span
                         id="bgcolor_head_{{ cal.id() }}"
                         class="ev_cal_src ev_cal_src_button"
                         style="background-color: {{ cal.bgcolor() }}"
                     ></span>
-                    <span style="padding-left: .3em">
+                    <span class="ev_cal_box_label">
                         {% if mode == CalendarBoxMode::View %}
                             {{ cal.name() }}
                         {% else %}
@@ -306,7 +306,7 @@
                                 name="alarm_type"
                                 value="{{ alarm_type|fmt("{:?}") }}"
                             />
-                            <div id="cal_tabs_{{ cal.id() }}">
+                            <div id="cal_tabs_{{ cal.id() }}" class="ev_tabs">
                                 <ul>
                                     <li>
                                         <a href="#cal_tabs_{{ cal.id() }}-Calendar">
@@ -324,11 +324,6 @@
                             </div>
 
                             <!-- prettier-ignore-start -->
-                            <style type="text/css">
-                                #cal_tabs_{{ cal.id() }} > div {
-                                    padding: 0;
-                                }
-                            </style>
                             <script>
                                 $(function () {
                                     $("#cal_tabs_{{ cal.id() }}").tabs({
