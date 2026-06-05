@@ -98,6 +98,10 @@ div.ev_selected {
     padding-right: 1rem;
 }
 
+.ev_shortcut_keys img {
+    height: 28px;
+}
+
 .ev_shortcut_key,
 .ev_shortcut_mousebtn {
     display: flex;
