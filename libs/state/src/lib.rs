@@ -35,6 +35,7 @@ use tracing::debug;
 use xdg::BaseDirectories;
 
 pub use crypto::{decrypt_password, encrypt_password, retrieve_portal_secret};
+pub use misc::Misc;
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
 pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, EncryptedPassword,

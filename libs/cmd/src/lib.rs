@@ -38,6 +38,8 @@ use xdg::BaseDirectories;
 pub enum Request {
     /// Import an iCalendar file into a named calendar.
     Import(ImportOptions),
+    /// Search for a calendar item by UID.
+    Search(String),
     /// Query the number of tasks due today and overdue.
     TaskStatus,
 }
@@ -46,6 +48,10 @@ pub enum Request {
 pub enum Response {
     /// The request completed successfully without a return value.
     Success,
+    /// The response for a [`Request::Search`] query.
+    ///
+    /// When found, it contains `Some` with the calendar id and name.
+    SearchResponse(Option<(String, String)>),
     /// Task counts returned in response to a [`Request::TaskStatus`] query.
     ///
     /// The first field is the number of tasks due today; the second is the number of overdue tasks.
@@ -163,6 +169,7 @@ async fn do_send(
 async fn handle_request(state: EventixState, req: Request) -> anyhow::Result<Response> {
     match req {
         Request::Import(req) => handle_import(state, req).await,
+        Request::Search(uid) => handle_search(state, uid).await,
         Request::TaskStatus => handle_task_status(state).await,
     }
 }
@@ -207,6 +214,23 @@ async fn handle_import(state: EventixState, req: ImportOptions) -> anyhow::Resul
     }
 
     Ok(Response::Success)
+}
+
+async fn handle_search(state: EventixState, uid: String) -> anyhow::Result<Response> {
+    let state = state.lock().await;
+    let res = match state.store().file_by_id(&uid) {
+        Some(c_file) => {
+            let name = state
+                .settings()
+                .calendar(c_file.directory())
+                .unwrap_or_else(|| panic!("calendar {} not found", c_file.directory()))
+                .1
+                .name();
+            Some(((**c_file.directory()).clone(), name.clone()))
+        }
+        _ => None,
+    };
+    Ok(Response::SearchResponse(res))
 }
 
 async fn handle_task_status(state: EventixState) -> anyhow::Result<Response> {

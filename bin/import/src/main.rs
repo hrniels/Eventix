@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::Parser;
+use eventix_cmd::Response;
 use eventix_ical::objects::{Calendar, EventLike};
+use eventix_state::{Misc, Settings};
 use gtk::gio::prelude::*;
 use gtk::gio::{Cancellable, File};
 use std::collections::HashSet;
@@ -96,21 +98,56 @@ fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
     rt.block_on(async { eventix_cmd::send(&state.xdg, cmd).await.map(|_| ()) })
 }
 
+async fn build_model(
+    xdg: &BaseDirectories,
+    calendars: Vec<ImportCalendar>,
+    ics: &Calendar,
+) -> anyhow::Result<ImportModel> {
+    let mut items = Vec::new();
+    for c in ics.components().iter().filter(|c| c.rid().is_none()) {
+        let Response::SearchResponse(exists_in) =
+            eventix_cmd::send(xdg, eventix_cmd::Request::Search(c.uid().clone())).await?
+        else {
+            return Err(anyhow!("Unexpected response"));
+        };
+        items.push(ImportComponent {
+            ty: c.ctype(),
+            summary: c.summary().cloned(),
+            start: c.start().cloned(),
+            end: c.end_or_due().cloned(),
+            rrule: c.rrule().cloned(),
+            exists_in,
+        })
+    }
+
+    if items
+        .iter()
+        .filter_map(|i| i.exists_in.as_ref().map(|(id, _name)| id))
+        .collect::<HashSet<_>>()
+        .len()
+        > 1
+    {
+        error_and_exit(
+            "The ICS file contains multiple components that exist \
+             in different calendars and thus cannot be imported.",
+        );
+    }
+
+    Ok(ImportModel::new(calendars, items))
+}
+
 fn main() {
     let args = Args::parse();
 
     ImportView::init();
 
     let xdg = Arc::new(BaseDirectories::with_prefix(APP_ID));
-    let state = match eventix_state::State::new(xdg.clone()) {
-        Ok(state) => state,
-        Err(err) => error_and_exit(format_error("Unable to load state.", &err)),
-    };
-    let locale = state.locale();
+    let misc = Misc::load_from_file(&xdg).expect("load misc state");
+    let settings = Settings::load_from_file(&xdg).expect("load settings");
+    let locale = eventix_locale::new(&xdg, misc.locale_type()).expect("create locale");
 
     // collect all calendars
-    let calendars = state
-        .settings()
+    let calendars = settings
         .calendars()
         .map(|(id, cal)| ImportCalendar {
             id: id.clone(),
@@ -126,46 +163,10 @@ fn main() {
         Ok(ics) => ics,
     };
 
-    let items = ics
-        .components()
-        .iter()
-        .filter(|c| c.rid().is_none())
-        .map(|c| {
-            let exists_in = state.store().file_by_id(c.uid()).map(|c_file| {
-                let name = state
-                    .settings()
-                    .calendar(c_file.directory())
-                    .unwrap()
-                    .1
-                    .name();
-                ((**c_file.directory()).clone(), name.clone())
-            });
-            ImportComponent {
-                ty: c.ctype(),
-                summary: c.summary().cloned(),
-                start: c.start().cloned(),
-                end: c.end_or_due().cloned(),
-                rrule: c.rrule().cloned(),
-                exists_in,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    if items
-        .iter()
-        .filter_map(|i| i.exists_in.as_ref().map(|(id, _name)| id))
-        .collect::<HashSet<_>>()
-        .len()
-        > 1
-    {
-        error_and_exit(
-            "The ICS file contains multiple components that exist \
-             in different calendars and thus cannot be imported.",
-        );
-    }
-
-    // build model and pass it to view
-    let model = ImportModel::new(calendars, items);
+    let rt = Runtime::new().unwrap();
+    let model = rt
+        .block_on(async { build_model(&xdg, calendars, &ics).await })
+        .expect("create model");
 
     // build our own state for the import later and pass it through the view
     let import_state = ImportState {
