@@ -13,6 +13,7 @@
 "info.paste_url_and_retry" = "Please paste the resulting URL here and retry:"
 "info.name_and_email" = "Your name and email address is used for shared calendar events (when you are the organizer or an attendee)."
 "info.name_and_email_o365" = "Your name and email address is used for shared calendar events (when you are the organizer or an attendee). In addition, the email address is required for authentication."
+"info.out_of_sync_tooltip" = "The current view might be out-of-date and could not be refreshed automatically due to user activity. Click here to refresh it."
 
 "warning.reload_calendar" = "Warning: removes all local items and forgets the calendar settings. Local changes will be lost."
 "warning.reload_collection" = "Warning: removes all local items and reloads them from the server side. Local changes will be lost."

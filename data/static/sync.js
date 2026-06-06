@@ -157,12 +157,13 @@ function syncAll(lastReloadId, spinnerId, iconId, force, auth_url) {
 }
 
 function requestReload(iconId, force, sidebar = false) {
+    let oos_icon = $("#" + iconId);
     if (force || !userIsActive()) {
         reloadContent();
         if (sidebar) reloadSidebar();
-        $("#" + iconId).css("color", "transparent");
+        oos_icon.css("color", "transparent").attr("title", "");
     } else {
         outOfSync = true;
-        $("#" + iconId).css("color", "red");
+        oos_icon.css("color", "red").attr("title", oos_icon.data("oosTooltip"));
     }
 }
