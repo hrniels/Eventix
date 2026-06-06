@@ -23,6 +23,7 @@
 "warning.dst_range" = "Dieser Zeitraum enthält mindestens eine Uhrzeit, die aufgrund einer Zeitumstellung mehrdeutig ist oder nicht existiert ({}). Falls Start oder Ende mehrdeutig sind, gilt jeweils der frühere Zeitpunkt. Falls Start oder Ende nicht existiert, wird es entsprechend vorwärts verschoben."
 "warning.delete_item" = "Löscht dieses Element."
 "warning.delete_series" = "Löscht diese Serie."
+"warning.import_exists_overwrite" = "Warnung: UID existiert in Kalender '{}' und wird überschrieben werden!"
 
 "error.collection_exists" = "Eine Gruppe mit diesem Namen existiert bereits."
 "error.calendar_name" = "Bitte gib einen Kalendernamen an!"
@@ -48,6 +49,11 @@
 "error.dst_nonexistent" = "Das Datum/die Uhrzeit existiert aufgrund einer Zeitumstellung nicht. Bitte wähle eine andere Uhrzeit."
 "error.end_before_start" = "Das Ende kann nicht vor dem Start sein."
 "error.reauth_required" = "Die Authentifizierung für den Kalender '{}' ist fehlgeschlagen. Bitte authentifiziere dich hier erneut:"
+"error.import_multiple_calendars" = "Die ICS-Datei enthält mehrere Kalendereinträge, die bereits in unterschiedlichen Kalendern existieren und daher nicht importiert werden können."
+"error.import_parse_file" = "Die ICS-Datei '{}' konnte nicht geparsed werden."
+"error.import_prepare" = "Die Vorbereitung des Imports ist fehlgeschlagen."
+"error.import_no_calendar" = "Es existiert kein Kalender für diesen Import."
+"error.import_failed" = "Der Import ist fehlgeschlagen."
 
 "help.jump_ymd" = "Springe zu <month> und <day> in <year> (z.B., 2019-02-14)"
 "help.jump_w" = "Springe zu <week> in <year>, falls angegeben, oder im aktuellen Jahr"

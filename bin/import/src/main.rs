@@ -6,7 +6,9 @@ use anyhow::{anyhow, Context};
 use clap::Parser;
 use eventix_cmd::Response;
 use eventix_ical::objects::{Calendar, EventLike};
+use eventix_locale::Locale;
 use eventix_state::{Misc, Settings};
+use formatx::formatx;
 use gtk::gio::prelude::*;
 use gtk::gio::{Cancellable, File};
 use std::collections::HashSet;
@@ -100,6 +102,7 @@ fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
 
 async fn build_model(
     xdg: &BaseDirectories,
+    locale: &Arc<dyn Locale + Send + Sync>,
     calendars: Vec<ImportCalendar>,
     ics: &Calendar,
 ) -> anyhow::Result<ImportModel> {
@@ -127,10 +130,7 @@ async fn build_model(
         .len()
         > 1
     {
-        error_and_exit(
-            "The ICS file contains multiple components that exist \
-             in different calendars and thus cannot be imported.",
-        );
+        error_and_exit(locale.translate("error.import_multiple_calendars"));
     }
 
     Ok(ImportModel::new(calendars, items))
@@ -159,13 +159,16 @@ fn main() {
 
     // parse items from ICS file
     let ics = match parse_ics_file(&args.file) {
-        Err(err) => error_and_exit(format_error("Unable to parse file.", &err)),
+        Err(err) => error_and_exit(format_error(
+            &formatx!(locale.translate("error.import_parse_file"), args.file).unwrap(),
+            &err,
+        )),
         Ok(ics) => ics,
     };
 
     let rt = Runtime::new().unwrap();
     let model = rt
-        .block_on(async { build_model(&xdg, calendars, &ics).await })
+        .block_on(async { build_model(&xdg, &locale, calendars, &ics).await })
         .expect("create model");
 
     // build our own state for the import later and pass it through the view
@@ -175,7 +178,7 @@ fn main() {
     };
     let view = match ImportView::new(model, &xdg, &*locale, import_state, import) {
         Ok(view) => view,
-        Err(err) => error_and_exit(format_error("Unable to prepare import.", &err)),
+        Err(err) => error_and_exit(format_error(locale.translate("error.import_prepare"), &err)),
     };
 
     view.show();
