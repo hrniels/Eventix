@@ -136,7 +136,6 @@
                         <a
                             id="delete-series-button"
                             class="ev_button ev_button_critical ev_details_delete_action"
-                            href="#"
                         >
                             <i class="bi bi-trash"></i>
                             <span>
@@ -226,7 +225,8 @@
     $(function () {
         $("#delete-series-button")
             .off("click")
-            .on("click", async function () {
+            .on("click", async function (e) {
+                e.preventDefault();
                 if (
                     !(await showConfirm(
                         '{% if occ.is_recurrent() %}{{ "warning.delete_series"|t(locale) }}{% else %}{{ "warning.delete_item"|t(locale) }}{% endif %}',

@@ -284,7 +284,8 @@
         (function (i) {
             $("#delete-button-" + i)
                 .off("click")
-                .on("click", async function () {
+                .on("click", async function (e) {
+                    e.preventDefault();
                     if (
                         await showConfirm(
                             '{{ "warning.delete_item"|t(locale) }}',

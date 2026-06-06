@@ -13,6 +13,7 @@
 "info.paste_url_and_retry" = "Bitte füge die erhaltene URL hier ein und versuche es erneut:"
 "info.name_and_email" = "Dein Name und deine E-Mail Adresse werden für geteilte Kalendertermine verwendet (falls du Organisator oder Teilnehmer bist)."
 "info.name_and_email_o365" = "Dein Name und deine E-Mail Adresse werden für geteilte Kalendertermine verwendet (falls du Organisator oder Teilnehmer bist). Zusätzlich wird es zur Authentifizierung benötigt."
+"info.out_of_sync_tooltip" = "Die aktuelle Ansicht könnte veraltet sein und konnte aufgrund von Benutzeraktivität nicht automatisch aktualisiert werden. Klicke hier, um sie zu aktualisieren."
 
 "warning.reload_calendar" = "Warnung: entfernt alle lokalen Elemente und vergisst die Kalendereinstellungen. Lokale Änderungen werden überschrieben."
 "warning.reload_collection" = "Warnung: entfernt alle lokalen Elemente und lädt sie erneut von der Serverseite. Lokale Änderungen werden überschrieben."

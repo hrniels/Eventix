@@ -21,7 +21,7 @@ function stopSpinning(spinnerId, error) {
     void error;
 }
 
-function postWithSpinner(spinnerId, url, onresponse) {
+function postWithSpinner(spinnerId, url, onresponse, onerror = null) {
     startSpinning(spinnerId);
     postRequest(
         url,
@@ -33,6 +33,7 @@ function postWithSpinner(spinnerId, url, onresponse) {
         },
         function () {
             stopSpinning(spinnerId, true);
+            if (onerror) onerror();
         },
     );
 }
@@ -141,19 +142,28 @@ function syncAll(lastReloadId, spinnerId, iconId, force, auth_url) {
     let url = "/api/calendars/syncop?op[type]=SyncAll";
     if (auth_url) url += "&auth_url=" + encodeURIComponent(auth_url);
 
-    postWithSpinner(spinnerId, url, function (data, auth_success) {
-        $("#" + lastReloadId).html(data.date);
-        syncing = false;
-        if (auth_success && data.changed) requestReload(iconId, syncForce);
-    });
+    postWithSpinner(
+        spinnerId,
+        url,
+        function (data, auth_success) {
+            $("#" + lastReloadId).html(data.date);
+            syncing = false;
+            if (outOfSync || (auth_success && data.changed)) requestReload(iconId, syncForce);
+        },
+        function () {
+            syncing = false;
+        },
+    );
 }
 
 function requestReload(iconId, force, sidebar = false) {
+    let oos_icon = $("#" + iconId);
     if (force || !userIsActive()) {
         reloadContent();
         if (sidebar) reloadSidebar();
+        oos_icon.css("color", "transparent").attr("title", "");
     } else {
         outOfSync = true;
-        $("#" + iconId).css("color", "red");
+        oos_icon.css("color", "red").attr("title", oos_icon.data("oosTooltip"));
     }
 }
