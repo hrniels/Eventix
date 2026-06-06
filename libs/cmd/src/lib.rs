@@ -265,7 +265,7 @@ mod tests {
         col::{CalDir, CalFile, CalStore},
         objects::{CalComponent, CalEvent, Calendar},
     };
-    use eventix_state::State;
+    use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
     use tempfile::TempDir;
     use tokio::{net::UnixStream, sync::Mutex};
 
@@ -428,6 +428,74 @@ END:VCALENDAR\r\n",
 
         let resp = handle_request(state, Request::TaskStatus).await.unwrap();
         assert_eq!(resp, Response::TaskStatus(0, 0));
+    }
+
+    // --- handle_request / handle_search ---
+
+    #[tokio::test]
+    async fn handle_search_find_existing_uid() {
+        let _guard = env_lock!();
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let cal_dir = "search";
+        let cal_name = "cal-search";
+        let col_id = "col-search";
+        let cal_tmp = TempDir::new().unwrap();
+        let cal_id = Arc::new(cal_dir.to_string());
+
+        // Create the CalFile with the UID we will search for.
+        let file = make_cal_file(cal_dir, cal_tmp.path(), "search-uid-1");
+
+        // Build state with the calendar directory and insert the search file.
+        let state = make_state_with_cal(xdg, &cal_tmp, cal_dir);
+
+        {
+            // Add file to directory
+            let mut guard = state.lock().await;
+            let dir = guard.store_mut().directory_mut(&cal_id).unwrap();
+            dir.add_file(file).unwrap();
+
+            // Add collection and calendar in settings so handle_search can look it up
+            let mut col = CollectionSettings::new(SyncerType::FileSystem {
+                path: "/data/calendars".to_string(),
+            });
+            let mut cal_settings = CalendarSettings::default();
+            cal_settings.set_enabled(true);
+            cal_settings.set_folder("cal".to_string());
+            cal_settings.set_name(cal_name.to_string());
+            col.all_calendars_mut()
+                .insert(cal_id.to_string(), cal_settings);
+            guard
+                .settings_mut()
+                .collections_mut()
+                .insert(col_id.to_string(), col);
+        }
+
+        let resp = handle_request(state, Request::Search("search-uid-1".to_string()))
+            .await
+            .unwrap();
+        match resp {
+            Response::SearchResponse(Some((dname, cname))) => {
+                assert_eq!(dname, cal_dir);
+                assert_eq!(cname, cal_name);
+            }
+            _ => panic!("expected SearchResponse(Some(...))"),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_search_nonexistent_uid_returns_none() {
+        let state = {
+            let _guard = env_lock!();
+            let tmp = TempDir::new().unwrap();
+            let xdg = make_xdg(&tmp);
+            make_state(xdg)
+        };
+
+        let resp = handle_request(state, Request::Search("nonexistent-uid".to_string()))
+            .await
+            .unwrap();
+        assert!(matches!(resp, Response::SearchResponse(None)));
     }
 
     // --- handle_request / handle_import ---
