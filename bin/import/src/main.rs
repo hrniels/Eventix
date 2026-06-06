@@ -12,7 +12,6 @@ use std::io::Write;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::model::{ImportCalendar, ImportComponent, ImportModel};
@@ -76,7 +75,6 @@ fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
 }
 
 struct ImportState {
-    state: eventix_state::State,
     xdg: Arc<BaseDirectories>,
     file: String,
 }
@@ -95,11 +93,7 @@ fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
         calendar: cal,
     });
 
-    rt.block_on(async {
-        eventix_cmd::send_or_execute(&state.xdg, Arc::new(Mutex::new(state.state)), cmd)
-            .await
-            .map(|_| ())
-    })
+    rt.block_on(async { eventix_cmd::send(&state.xdg, cmd).await.map(|_| ()) })
 }
 
 fn main() {
@@ -176,7 +170,6 @@ fn main() {
     // build our own state for the import later and pass it through the view
     let import_state = ImportState {
         file: args.file,
-        state,
         xdg: xdg.clone(),
     };
     let view = match ImportView::new(model, &xdg, &*locale, import_state, import) {

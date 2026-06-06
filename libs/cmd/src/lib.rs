@@ -18,9 +18,6 @@
 //!
 //! - [`send`] — connects to the daemon socket and forwards a request, returning an error if no
 //!   daemon is running.
-//! - [`send_or_execute`] — attempts to reach the daemon first; if the socket is not reachable the
-//!   request is executed in-process instead. This is the preferred entry point for CLI commands
-//!   that should work regardless of whether the daemon is running.
 
 use anyhow::Context;
 use chrono::Local;
@@ -84,7 +81,7 @@ async fn acquire_lock(xdg: &BaseDirectories) -> anyhow::Result<File> {
 /// first, then processes each connection by reading a [`Request`], dispatching it against `state`,
 /// and writing back the [`Response`]. Errors on individual connections are logged but do not
 /// terminate the loop. This function runs indefinitely and is intended to be the server-side
-/// counterpart of [`send`] and [`send_or_execute`].
+/// counterpart of [`send`].
 pub async fn handle_commands(xdg: &BaseDirectories, state: EventixState) -> anyhow::Result<()> {
     let socket_path = get_socket_path(xdg);
 
@@ -139,29 +136,10 @@ async fn parse_and_handle(state: EventixState, stream: &mut UnixStream) -> anyho
     Ok(())
 }
 
-/// Sends a request to the running daemon if one is reachable, or executes it locally otherwise.
-///
-/// Attempts to connect to the Unix socket managed by [`handle_commands`]. On success the request
-/// is forwarded to the daemon and its response is returned. If the socket is not reachable the
-/// request is handled in-process against `state`, so callers do not need to distinguish between
-/// the two modes.
-pub async fn send_or_execute(
-    xdg: &BaseDirectories,
-    state: EventixState,
-    req: Request,
-) -> anyhow::Result<Response> {
-    let path = get_socket_path(xdg);
-    if let Ok(stream) = UnixStream::connect(&path).await {
-        do_send(xdg, req, stream).await
-    } else {
-        handle_request(state, req).await
-    }
-}
-
 /// Sends a request to the running daemon and returns its response.
 ///
 /// Connects to the Unix socket managed by [`handle_commands`] and returns an error if no daemon
-/// is listening. Prefer [`send_or_execute`] when a local fallback is acceptable.
+/// is listening.
 pub async fn send(xdg: &BaseDirectories, req: Request) -> anyhow::Result<Response> {
     let path = get_socket_path(xdg);
     let stream = UnixStream::connect(&path).await?;
@@ -581,26 +559,6 @@ END:VCALENDAR\r\n",
                 .unwrap_or(false)
         });
         assert_eq!(count.count(), 1);
-    }
-
-    // --- send_or_execute: local fallback path ---
-
-    #[tokio::test]
-    async fn send_or_execute_falls_back_to_local_when_no_daemon() {
-        let (xdg2, state) = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            let state = make_state(xdg);
-            // Construct a fresh xdg pointing at a socket path where no daemon is listening.
-            let xdg2 = make_xdg(&tmp);
-            (xdg2, state)
-        };
-
-        let resp = send_or_execute(&xdg2, state, Request::TaskStatus)
-            .await
-            .unwrap();
-        assert_eq!(resp, Response::TaskStatus(0, 0));
     }
 
     // --- parse_and_handle ---
