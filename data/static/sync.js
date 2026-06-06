@@ -152,6 +152,7 @@ function requestReload(iconId, force, sidebar = false) {
     if (force || !userIsActive()) {
         reloadContent();
         if (sidebar) reloadSidebar();
+        $("#" + iconId).css("color", "transparent");
     } else {
         outOfSync = true;
         $("#" + iconId).css("color", "red");
