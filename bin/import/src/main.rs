@@ -2,9 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::Parser;
+use eventix_cmd::Response;
 use eventix_ical::objects::{Calendar, EventLike};
+use eventix_locale::Locale;
+use eventix_state::{Misc, Settings};
+use formatx::formatx;
 use gtk::gio::prelude::*;
 use gtk::gio::{Cancellable, File};
 use std::collections::HashSet;
@@ -12,7 +16,6 @@ use std::io::Write;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::runtime::Runtime;
-use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::model::{ImportCalendar, ImportComponent, ImportModel};
@@ -76,14 +79,12 @@ fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
 }
 
 struct ImportState {
-    state: eventix_state::State,
     xdg: Arc<BaseDirectories>,
+    rt: tokio::runtime::Runtime,
     file: String,
 }
 
 fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
-    let rt = Runtime::new().unwrap();
-
     // copy URI to temp file in run directory
     let mut tmp_file = NamedTempFile::new_in(state.xdg.get_runtime_directory()?)
         .context("create temp file in runtime directory")?;
@@ -95,11 +96,45 @@ fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
         calendar: cal,
     });
 
-    rt.block_on(async {
-        eventix_cmd::send_or_execute(&state.xdg, Arc::new(Mutex::new(state.state)), cmd)
-            .await
-            .map(|_| ())
-    })
+    state
+        .rt
+        .block_on(async { eventix_cmd::send(&state.xdg, cmd).await.map(|_| ()) })
+}
+
+async fn build_model(
+    xdg: &BaseDirectories,
+    locale: &Arc<dyn Locale + Send + Sync>,
+    calendars: Vec<ImportCalendar>,
+    ics: &Calendar,
+) -> anyhow::Result<ImportModel> {
+    let mut items = Vec::new();
+    for c in ics.components().iter().filter(|c| c.rid().is_none()) {
+        let Response::SearchResponse(exists_in) =
+            eventix_cmd::send(xdg, eventix_cmd::Request::Search(c.uid().clone())).await?
+        else {
+            return Err(anyhow!("Unexpected response"));
+        };
+        items.push(ImportComponent {
+            ty: c.ctype(),
+            summary: c.summary().cloned(),
+            start: c.start().cloned(),
+            end: c.end_or_due().cloned(),
+            rrule: c.rrule().cloned(),
+            exists_in,
+        })
+    }
+
+    if items
+        .iter()
+        .filter_map(|i| i.exists_in.as_ref().map(|(id, _name)| id))
+        .collect::<HashSet<_>>()
+        .len()
+        > 1
+    {
+        error_and_exit(locale.translate("error.import_multiple_calendars"));
+    }
+
+    Ok(ImportModel::new(calendars, items))
 }
 
 fn main() {
@@ -108,15 +143,12 @@ fn main() {
     ImportView::init();
 
     let xdg = Arc::new(BaseDirectories::with_prefix(APP_ID));
-    let state = match eventix_state::State::new(xdg.clone()) {
-        Ok(state) => state,
-        Err(err) => error_and_exit(format_error("Unable to load state.", &err)),
-    };
-    let locale = state.locale();
+    let misc = Misc::load_from_file(&xdg).expect("load misc state");
+    let settings = Settings::load_from_file(&xdg).expect("load settings");
+    let locale = eventix_locale::new(&xdg, misc.locale_type()).expect("create locale");
 
     // collect all calendars
-    let calendars = state
-        .settings()
+    let calendars = settings
         .calendars()
         .map(|(id, cal)| ImportCalendar {
             id: id.clone(),
@@ -128,60 +160,28 @@ fn main() {
 
     // parse items from ICS file
     let ics = match parse_ics_file(&args.file) {
-        Err(err) => error_and_exit(format_error("Unable to parse file.", &err)),
+        Err(err) => error_and_exit(format_error(
+            &formatx!(locale.translate("error.import_parse_file"), args.file).unwrap(),
+            &err,
+        )),
         Ok(ics) => ics,
     };
 
-    let items = ics
-        .components()
-        .iter()
-        .filter(|c| c.rid().is_none())
-        .map(|c| {
-            let exists_in = state.store().file_by_id(c.uid()).map(|c_file| {
-                let name = state
-                    .settings()
-                    .calendar(c_file.directory())
-                    .unwrap()
-                    .1
-                    .name();
-                ((**c_file.directory()).clone(), name.clone())
-            });
-            ImportComponent {
-                ty: c.ctype(),
-                summary: c.summary().cloned(),
-                start: c.start().cloned(),
-                end: c.end_or_due().cloned(),
-                rrule: c.rrule().cloned(),
-                exists_in,
-            }
-        })
-        .collect::<Vec<_>>();
+    let rt = Runtime::new().unwrap();
 
-    if items
-        .iter()
-        .filter_map(|i| i.exists_in.as_ref().map(|(id, _name)| id))
-        .collect::<HashSet<_>>()
-        .len()
-        > 1
-    {
-        error_and_exit(
-            "The ICS file contains multiple components that exist \
-             in different calendars and thus cannot be imported.",
-        );
-    }
-
-    // build model and pass it to view
-    let model = ImportModel::new(calendars, items);
+    let model = rt
+        .block_on(async { build_model(&xdg, &locale, calendars, &ics).await })
+        .expect("create model");
 
     // build our own state for the import later and pass it through the view
     let import_state = ImportState {
         file: args.file,
-        state,
+        rt,
         xdg: xdg.clone(),
     };
     let view = match ImportView::new(model, &xdg, &*locale, import_state, import) {
         Ok(view) => view,
-        Err(err) => error_and_exit(format_error("Unable to prepare import.", &err)),
+        Err(err) => error_and_exit(format_error(locale.translate("error.import_prepare"), &err)),
     };
 
     view.show();

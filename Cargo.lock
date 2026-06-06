@@ -889,6 +889,7 @@ dependencies = [
  "eventix-ical",
  "eventix-locale",
  "eventix-state",
+ "formatx",
  "gtk4",
  "tempfile",
  "tokio",

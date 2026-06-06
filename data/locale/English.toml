@@ -23,6 +23,7 @@
 "warning.dst_range" = "This range contains at least one time that is ambiguous or does not exist because of a DST transition ({}). If the start or end is ambiguous, the earlier point in time is used. If the start or end does not exist, it is shifted forward accordingly."
 "warning.delete_item" = "This will permanently delete this item."
 "warning.delete_series" = "This will permanently delete this series."
+"warning.import_exists_overwrite" = "Warning: UID exists in calendar '{}' and will be overwritten!"
 
 "error.collection_exists" = "A collection with that name does already exist."
 "error.calendar_name" = "Please enter a calendar name!"
@@ -48,6 +49,11 @@
 "error.dst_nonexistent" = "The date/time does not exist due to a DST transition. Please choose a different time."
 "error.end_before_start" = "The end cannot be before the start."
 "error.reauth_required" = "The authentication for calendar '{}' failed. Please re-authenticate yourself by following the instruction here:"
+"error.import_multiple_calendars" = "The ICS file contains multiple calendar items that exist in different calendars and thus cannot be imported."
+"error.import_parse_file" = "Unable to parse ICS file '{}'."
+"error.import_prepare" = "Preparing the import failed."
+"error.import_no_calendar" = "No calendar is available for this import."
+"error.import_failed" = "The import failed."
 
 "help.jump_ymd" = "Jump to <month> and <day> of <year> (e.g., 2019-02-14)"
 "help.jump_w" = "Jump to <week> of <year>, if given, or the current year"

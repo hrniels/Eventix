@@ -4,6 +4,7 @@
 
 use eventix_ical::objects::{CalCompType, DateContext};
 use eventix_locale::Locale;
+use formatx::formatx;
 use gtk::gdk::RGBA;
 use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::gio;
@@ -106,7 +107,12 @@ impl ImportView {
             }
             if let Some((cal_id, cal_name)) = c.exists_in.as_ref() {
                 label.push_str(&format!(
-                    "\n<b>Warning: UID exists in calendar '{cal_name}' and will be overwritten!</b>",
+                    "\n<b>{}</b>",
+                    formatx!(
+                        locale.translate("warning.import_exists_overwrite"),
+                        cal_name
+                    )
+                    .unwrap()
                 ));
                 cal_filter.push(cal_id.to_string());
             }
@@ -156,7 +162,7 @@ impl ImportView {
             .collect();
 
         if filtered_cals.is_empty() {
-            anyhow::bail!("No compatible calendar is available for this import.");
+            Self::show_error(locale.translate("error.import_no_calendar"));
         }
 
         let (calendar_dropdown, cal_entries) =
@@ -177,13 +183,14 @@ impl ImportView {
 
         // Connect Import
         let data = Rc::new(RefCell::new(Some(data)));
+        let import_failed_msg = locale.translate("error.import_failed").to_string();
         import_button.connect_clicked(move |_| {
             let idx = calendar_dropdown.selected() as usize;
             let cal_id = cal_entries[idx].id.clone();
             let data = data.borrow_mut().take().unwrap();
             match import(data, cal_id) {
                 Ok(()) => Self::quit(0),
-                Err(err) => Self::show_error(&crate::format_error("Import failed.", &err)),
+                Err(err) => Self::show_error(&crate::format_error(&import_failed_msg, &err)),
             }
         });
 

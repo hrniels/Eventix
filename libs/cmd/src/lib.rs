@@ -18,9 +18,6 @@
 //!
 //! - [`send`] — connects to the daemon socket and forwards a request, returning an error if no
 //!   daemon is running.
-//! - [`send_or_execute`] — attempts to reach the daemon first; if the socket is not reachable the
-//!   request is executed in-process instead. This is the preferred entry point for CLI commands
-//!   that should work regardless of whether the daemon is running.
 
 use anyhow::Context;
 use chrono::Local;
@@ -41,6 +38,8 @@ use xdg::BaseDirectories;
 pub enum Request {
     /// Import an iCalendar file into a named calendar.
     Import(ImportOptions),
+    /// Search for a calendar item by UID.
+    Search(String),
     /// Query the number of tasks due today and overdue.
     TaskStatus,
 }
@@ -49,6 +48,10 @@ pub enum Request {
 pub enum Response {
     /// The request completed successfully without a return value.
     Success,
+    /// The response for a [`Request::Search`] query.
+    ///
+    /// When found, it contains `Some` with the calendar id and name.
+    SearchResponse(Option<(String, String)>),
     /// Task counts returned in response to a [`Request::TaskStatus`] query.
     ///
     /// The first field is the number of tasks due today; the second is the number of overdue tasks.
@@ -84,7 +87,7 @@ async fn acquire_lock(xdg: &BaseDirectories) -> anyhow::Result<File> {
 /// first, then processes each connection by reading a [`Request`], dispatching it against `state`,
 /// and writing back the [`Response`]. Errors on individual connections are logged but do not
 /// terminate the loop. This function runs indefinitely and is intended to be the server-side
-/// counterpart of [`send`] and [`send_or_execute`].
+/// counterpart of [`send`].
 pub async fn handle_commands(xdg: &BaseDirectories, state: EventixState) -> anyhow::Result<()> {
     let socket_path = get_socket_path(xdg);
 
@@ -139,29 +142,10 @@ async fn parse_and_handle(state: EventixState, stream: &mut UnixStream) -> anyho
     Ok(())
 }
 
-/// Sends a request to the running daemon if one is reachable, or executes it locally otherwise.
-///
-/// Attempts to connect to the Unix socket managed by [`handle_commands`]. On success the request
-/// is forwarded to the daemon and its response is returned. If the socket is not reachable the
-/// request is handled in-process against `state`, so callers do not need to distinguish between
-/// the two modes.
-pub async fn send_or_execute(
-    xdg: &BaseDirectories,
-    state: EventixState,
-    req: Request,
-) -> anyhow::Result<Response> {
-    let path = get_socket_path(xdg);
-    if let Ok(stream) = UnixStream::connect(&path).await {
-        do_send(xdg, req, stream).await
-    } else {
-        handle_request(state, req).await
-    }
-}
-
 /// Sends a request to the running daemon and returns its response.
 ///
 /// Connects to the Unix socket managed by [`handle_commands`] and returns an error if no daemon
-/// is listening. Prefer [`send_or_execute`] when a local fallback is acceptable.
+/// is listening.
 pub async fn send(xdg: &BaseDirectories, req: Request) -> anyhow::Result<Response> {
     let path = get_socket_path(xdg);
     let stream = UnixStream::connect(&path).await?;
@@ -185,6 +169,7 @@ async fn do_send(
 async fn handle_request(state: EventixState, req: Request) -> anyhow::Result<Response> {
     match req {
         Request::Import(req) => handle_import(state, req).await,
+        Request::Search(uid) => handle_search(state, uid).await,
         Request::TaskStatus => handle_task_status(state).await,
     }
 }
@@ -231,6 +216,23 @@ async fn handle_import(state: EventixState, req: ImportOptions) -> anyhow::Resul
     Ok(Response::Success)
 }
 
+async fn handle_search(state: EventixState, uid: String) -> anyhow::Result<Response> {
+    let state = state.lock().await;
+    let res = match state.store().file_by_id(&uid) {
+        Some(c_file) => {
+            let name = state
+                .settings()
+                .calendar(c_file.directory())
+                .unwrap_or_else(|| panic!("calendar {} not found", c_file.directory()))
+                .1
+                .name();
+            Some(((**c_file.directory()).clone(), name.clone()))
+        }
+        _ => None,
+    };
+    Ok(Response::SearchResponse(res))
+}
+
 async fn handle_task_status(state: EventixState) -> anyhow::Result<Response> {
     let state = state.lock().await;
     let tz = *state.locale().timezone();
@@ -263,25 +265,17 @@ mod tests {
         col::{CalDir, CalFile, CalStore},
         objects::{CalComponent, CalEvent, Calendar},
     };
-    use eventix_state::State;
+    use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
     use tempfile::TempDir;
     use tokio::{net::UnixStream, sync::Mutex};
-
-    // Serialise every test that mutates XDG environment variables to prevent races when
-    // tests run on the default multi-threaded executor. Using `unwrap_or_else` on the lock
-    // ensures that a panic in one test (which poisons the mutex) does not cascade to others.
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    macro_rules! env_lock {
-        () => {
-            ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner())
-        };
-    }
 
     // --- helpers ---
 
     /// Creates an isolated XDG environment inside `dir` and returns `BaseDirectories`
-    /// pointing at it. Requires the caller to hold `ENV_LOCK`.
+    /// pointing at it.
     fn make_xdg(dir: &TempDir) -> BaseDirectories {
+        static XDG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
         let root = dir.path();
 
         // The locale file must be discoverable via XDG_DATA_HOME.
@@ -299,9 +293,12 @@ mod tests {
             std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700)).unwrap();
         }
 
-        // SAFETY: tests that call `make_xdg` must hold `ENV_LOCK` for their entire
-        // synchronous setup phase, serialising all env-var mutations so that no two
-        // threads observe a partially-written environment at the same time.
+        // note that guarding the creation of BaseDirectories is sufficient, because it reads all
+        // env variables during construction, so that they can be changed again afterwards.
+        let _guard = XDG_LOCK.lock().unwrap();
+        // SAFETY: the lock above ensures no other thread reads or writes these
+        // variables while we hold it, so the unsynchronised write is safe within
+        // the test-only context.
         unsafe {
             std::env::set_var("XDG_DATA_HOME", root);
             std::env::set_var("XDG_CONFIG_HOME", root);
@@ -417,27 +414,85 @@ END:VCALENDAR\r\n",
 
     #[tokio::test]
     async fn handle_task_status_empty_store_returns_zero_counts() {
-        let state = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            make_state(xdg)
-        };
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let state = make_state(xdg);
 
         let resp = handle_request(state, Request::TaskStatus).await.unwrap();
         assert_eq!(resp, Response::TaskStatus(0, 0));
+    }
+
+    // --- handle_request / handle_search ---
+
+    #[tokio::test]
+    async fn handle_search_find_existing_uid() {
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let cal_dir = "search";
+        let cal_name = "cal-search";
+        let col_id = "col-search";
+        let cal_tmp = TempDir::new().unwrap();
+        let cal_id = Arc::new(cal_dir.to_string());
+
+        // Create the CalFile with the UID we will search for.
+        let file = make_cal_file(cal_dir, cal_tmp.path(), "search-uid-1");
+
+        // Build state with the calendar directory and insert the search file.
+        let state = make_state_with_cal(xdg, &cal_tmp, cal_dir);
+
+        {
+            // Add file to directory
+            let mut guard = state.lock().await;
+            let dir = guard.store_mut().directory_mut(&cal_id).unwrap();
+            dir.add_file(file).unwrap();
+
+            // Add collection and calendar in settings so handle_search can look it up
+            let mut col = CollectionSettings::new(SyncerType::FileSystem {
+                path: "/data/calendars".to_string(),
+            });
+            let mut cal_settings = CalendarSettings::default();
+            cal_settings.set_enabled(true);
+            cal_settings.set_folder("cal".to_string());
+            cal_settings.set_name(cal_name.to_string());
+            col.all_calendars_mut()
+                .insert(cal_id.to_string(), cal_settings);
+            guard
+                .settings_mut()
+                .collections_mut()
+                .insert(col_id.to_string(), col);
+        }
+
+        let resp = handle_request(state, Request::Search("search-uid-1".to_string()))
+            .await
+            .unwrap();
+        match resp {
+            Response::SearchResponse(Some((dname, cname))) => {
+                assert_eq!(dname, cal_dir);
+                assert_eq!(cname, cal_name);
+            }
+            _ => panic!("expected SearchResponse(Some(...))"),
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_search_nonexistent_uid_returns_none() {
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let state = make_state(xdg);
+
+        let resp = handle_request(state, Request::Search("nonexistent-uid".to_string()))
+            .await
+            .unwrap();
+        assert!(matches!(resp, Response::SearchResponse(None)));
     }
 
     // --- handle_request / handle_import ---
 
     #[tokio::test]
     async fn handle_import_unknown_calendar_returns_error() {
-        let state = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            make_state(xdg)
-        };
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let state = make_state(xdg);
 
         let opts = ImportOptions {
             file: "/tmp/does-not-matter.ics".into(),
@@ -454,18 +509,14 @@ END:VCALENDAR\r\n",
 
     #[tokio::test]
     async fn handle_import_invalid_ics_file_returns_error() {
-        let (state, bad_ics, _tmp, _cal_tmp) = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            let cal_tmp = TempDir::new().unwrap();
-            let state = make_state_with_cal(xdg, &cal_tmp, "test-cal");
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let cal_tmp = TempDir::new().unwrap();
+        let state = make_state_with_cal(xdg, &cal_tmp, "test-cal");
 
-            // Create a file that is not valid iCalendar data.
-            let bad_ics = tmp.path().join("bad.ics");
-            std::fs::write(&bad_ics, "this is not icalendar data").unwrap();
-            (state, bad_ics, tmp, cal_tmp)
-        };
+        // Create a file that is not valid iCalendar data.
+        let bad_ics = tmp.path().join("bad.ics");
+        std::fs::write(&bad_ics, "this is not icalendar data").unwrap();
 
         let opts = ImportOptions {
             file: bad_ics.to_string_lossy().into_owned(),
@@ -482,13 +533,10 @@ END:VCALENDAR\r\n",
 
     #[tokio::test]
     async fn handle_import_nonexistent_file_returns_error() {
-        let state = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            let cal_tmp = TempDir::new().unwrap();
-            make_state_with_cal(xdg, &cal_tmp, "test-cal")
-        };
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let cal_tmp = TempDir::new().unwrap();
+        let state = make_state_with_cal(xdg, &cal_tmp, "test-cal");
 
         let opts = ImportOptions {
             file: "/does/not/exist.ics".into(),
@@ -505,17 +553,13 @@ END:VCALENDAR\r\n",
 
     #[tokio::test]
     async fn handle_import_valid_ics_adds_file_to_calendar() {
-        let (state, ics_path, _tmp, _cal_tmp) = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            let cal_tmp = TempDir::new().unwrap();
-            let state = make_state_with_cal(xdg, &cal_tmp, "test-cal");
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let cal_tmp = TempDir::new().unwrap();
+        let state = make_state_with_cal(xdg, &cal_tmp, "test-cal");
 
-            let ics_path = tmp.path().join("import.ics");
-            write_ics(&ics_path, "import-uid-1");
-            (state, ics_path, tmp, cal_tmp)
-        };
+        let ics_path = tmp.path().join("import.ics");
+        write_ics(&ics_path, "import-uid-1");
 
         let opts = ImportOptions {
             file: ics_path.to_string_lossy().into_owned(),
@@ -535,32 +579,28 @@ END:VCALENDAR\r\n",
 
     #[tokio::test]
     async fn handle_import_replaces_existing_uid() {
-        let (state, ics_path, id, _tmp, _cal_tmp) = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let cal_tmp = TempDir::new().unwrap();
-            // Pre-populate the state with a file that has the same UID we will import.
-            let cal_id = "test-cal";
-            let id = Arc::new(cal_id.to_string());
-            let mut dir = CalDir::new_empty(
-                id.clone(),
-                cal_tmp.path().to_path_buf(),
-                cal_id.to_string(),
-                false,
-            );
-            dir.add_file(make_cal_file(cal_id, cal_tmp.path(), "replace-uid"))
-                .unwrap();
-            let mut store = CalStore::default();
-            store.add(dir);
+        let tmp = TempDir::new().unwrap();
+        let cal_tmp = TempDir::new().unwrap();
+        // Pre-populate the state with a file that has the same UID we will import.
+        let cal_id = "test-cal";
+        let id = Arc::new(cal_id.to_string());
+        let mut dir = CalDir::new_empty(
+            id.clone(),
+            cal_tmp.path().to_path_buf(),
+            cal_id.to_string(),
+            false,
+        );
+        dir.add_file(make_cal_file(cal_id, cal_tmp.path(), "replace-uid"))
+            .unwrap();
+        let mut store = CalStore::default();
+        store.add(dir);
 
-            let mut raw = State::new(Arc::new(make_xdg(&tmp))).expect("State::new");
-            *raw.store_mut() = store;
-            let state = Arc::new(Mutex::new(raw));
+        let mut raw = State::new(Arc::new(make_xdg(&tmp))).expect("State::new");
+        *raw.store_mut() = store;
+        let state = Arc::new(Mutex::new(raw));
 
-            let ics_path = tmp.path().join("replace.ics");
-            write_ics(&ics_path, "replace-uid");
-            (state, ics_path, id, tmp, cal_tmp)
-        };
+        let ics_path = tmp.path().join("replace.ics");
+        write_ics(&ics_path, "replace-uid");
 
         let opts = ImportOptions {
             file: ics_path.to_string_lossy().into_owned(),
@@ -583,36 +623,13 @@ END:VCALENDAR\r\n",
         assert_eq!(count.count(), 1);
     }
 
-    // --- send_or_execute: local fallback path ---
-
-    #[tokio::test]
-    async fn send_or_execute_falls_back_to_local_when_no_daemon() {
-        let (xdg2, state) = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            let state = make_state(xdg);
-            // Construct a fresh xdg pointing at a socket path where no daemon is listening.
-            let xdg2 = make_xdg(&tmp);
-            (xdg2, state)
-        };
-
-        let resp = send_or_execute(&xdg2, state, Request::TaskStatus)
-            .await
-            .unwrap();
-        assert_eq!(resp, Response::TaskStatus(0, 0));
-    }
-
     // --- parse_and_handle ---
 
     #[tokio::test]
     async fn parse_and_handle_task_status_over_stream() {
-        let state = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            make_state(xdg)
-        };
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let state = make_state(xdg);
 
         let (mut client, mut server) = UnixStream::pair().unwrap();
 
@@ -633,12 +650,8 @@ END:VCALENDAR\r\n",
 
     #[tokio::test]
     async fn acquire_lock_succeeds_with_valid_runtime_dir() {
-        let (xdg, _tmp) = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            (xdg, tmp)
-        };
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
 
         let file = acquire_lock(&xdg).await.unwrap();
         // The lock file should be a valid open file handle.
@@ -665,14 +678,10 @@ END:VCALENDAR\r\n",
 
     #[tokio::test]
     async fn send_over_live_socket() {
-        let (xdg, state, _tmp) = {
-            let _guard = env_lock!();
-            let tmp = TempDir::new().unwrap();
-            let xdg = make_xdg(&tmp);
-            let xdg2 = make_xdg(&tmp);
-            let state = make_state(xdg2);
-            (xdg, state, tmp)
-        };
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let xdg2 = make_xdg(&tmp);
+        let state = make_state(xdg2);
 
         let socket_path = get_socket_path(&xdg);
         let _server = spawn_one_shot_server(socket_path, state).await;
@@ -688,13 +697,9 @@ END:VCALENDAR\r\n",
         let tmp = TempDir::new().unwrap();
         let tmp2 = TempDir::new().unwrap();
 
-        let (xdg, state) = {
-            let _guard = env_lock!();
-            let xdg = make_xdg(&tmp);
-            let xdg2 = make_xdg(&tmp);
-            let state = make_state(xdg2);
-            (xdg, state)
-        };
+        let xdg = make_xdg(&tmp);
+        let xdg2 = make_xdg(&tmp);
+        let state = make_state(xdg2);
 
         let socket_path = get_socket_path(&xdg);
 
@@ -708,10 +713,7 @@ END:VCALENDAR\r\n",
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
         // Manually connect to the already-bound socket path and send a request.
-        let socket_xdg = {
-            let _guard = env_lock!();
-            Arc::new(make_xdg(&tmp2))
-        };
+        let socket_xdg = Arc::new(make_xdg(&tmp2));
         let stream = UnixStream::connect(&socket_path).await.unwrap();
         let resp = do_send(&socket_xdg, Request::TaskStatus, stream)
             .await
