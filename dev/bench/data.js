@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780674481234,
+  "lastUpdate": 1780730595431,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -3041,6 +3041,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/list/results/content/keyword_or",
             "value": 5801665.375339585,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "5dd7d4d92ef562bade5e8d2608893cd6aadb63c9",
+          "message": "Multiple UI fixes",
+          "timestamp": "2026-06-05T15:41:31Z",
+          "url": "https://github.com/hrniels/Eventix/pull/54/commits/5dd7d4d92ef562bade5e8d2608893cd6aadb63c9"
+        },
+        "date": 1780730594802,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/list/results/content/all_items",
+            "value": 4093299.3045944762,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_and",
+            "value": 4488134.050968991,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_or",
+            "value": 4509722.028004306,
             "unit": "ns"
           }
         ]
