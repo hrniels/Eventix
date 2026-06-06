@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780730665755,
+  "lastUpdate": 1780730737570,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -9164,6 +9164,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 53750732.266666666,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "5dd7d4d92ef562bade5e8d2608893cd6aadb63c9",
+          "message": "Multiple UI fixes",
+          "timestamp": "2026-06-05T15:41:31Z",
+          "url": "https://github.com/hrniels/Eventix/pull/54/commits/5dd7d4d92ef562bade5e8d2608893cd6aadb63c9"
+        },
+        "date": 1780730736959,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1695381.1105949061,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 1693483.3086520163,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 43905425.677777775,
             "unit": "ns"
           }
         ]
