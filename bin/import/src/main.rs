@@ -80,12 +80,11 @@ fn parse_ics_file(uri: &str) -> anyhow::Result<Calendar> {
 
 struct ImportState {
     xdg: Arc<BaseDirectories>,
+    rt: tokio::runtime::Runtime,
     file: String,
 }
 
 fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
-    let rt = Runtime::new().unwrap();
-
     // copy URI to temp file in run directory
     let mut tmp_file = NamedTempFile::new_in(state.xdg.get_runtime_directory()?)
         .context("create temp file in runtime directory")?;
@@ -97,7 +96,9 @@ fn import(state: ImportState, cal: String) -> anyhow::Result<()> {
         calendar: cal,
     });
 
-    rt.block_on(async { eventix_cmd::send(&state.xdg, cmd).await.map(|_| ()) })
+    state
+        .rt
+        .block_on(async { eventix_cmd::send(&state.xdg, cmd).await.map(|_| ()) })
 }
 
 async fn build_model(
@@ -167,6 +168,7 @@ fn main() {
     };
 
     let rt = Runtime::new().unwrap();
+
     let model = rt
         .block_on(async { build_model(&xdg, &locale, calendars, &ics).await })
         .expect("create model");
@@ -174,6 +176,7 @@ fn main() {
     // build our own state for the import later and pass it through the view
     let import_state = ImportState {
         file: args.file,
+        rt,
         xdg: xdg.clone(),
     };
     let view = match ImportView::new(model, &xdg, &*locale, import_state, import) {
