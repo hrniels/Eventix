@@ -1,4 +1,4 @@
-<div class="ev_response_dropdown ev_response_dropdown_big" id="{{ id }}-dropdown">
+<div class="ev_response_dropdown" id="{{ id }}-dropdown">
     {% match stat %}
         {% when CalPartStat::Accepted %}
         <a id="{{ id }}-toggle" class="ev_button ev_button_good ev_button_auto">
@@ -21,7 +21,7 @@
                 <i class="bi bi-reply"></i>
                 <span>
                     {% if recurrent && rid.is_some() %}
-                        {{ "Occ."|t(locale) }}
+                        {{ "Occurrence"|t(locale) }}
                     {% else if recurrent && rid.is_none() %}
                         {{ "Series"|t(locale) }}
                     {% else %}
