@@ -146,6 +146,8 @@ mod dstwarn;
 mod editalarm;
 #[path = "items/occlist.rs"]
 mod occlist;
+#[path = "items/postpone.rs"]
+mod postpone;
 #[path = "items/resize.rs"]
 mod resize;
 #[path = "items/respond.rs"]
