@@ -33,7 +33,7 @@
 <script>
     $(document).ready(function () {
         $("#{{ id }}-toggle").on("click", function () {
-            $("#{{ id }}-menu").toggle();
+            toggleDropdown("{{ id }}");
         });
 
         $(document).on("click", function (e) {

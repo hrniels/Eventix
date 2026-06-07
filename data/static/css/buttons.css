@@ -269,6 +269,11 @@ a.ev_button_critical:hover {
     list-style: none;
     z-index: 1000;
 }
+
+.ev_response_dropdown.dropdown-flip .ev_response_menu {
+    top: auto;
+    bottom: 100%;
+}
 .ev_response_menu a {
     margin: 0;
     margin-bottom: 2px;

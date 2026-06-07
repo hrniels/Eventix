@@ -149,3 +149,22 @@ function replaceSmoothly(id, newHtml, delay) {
         });
     }
 }
+
+function toggleDropdown(id) {
+    let $menu = $("#" + id + "-menu");
+    let $dropdown = $("#" + id + "-dropdown");
+
+    if ($menu.is(":visible")) {
+        $menu.hide();
+        $dropdown.removeClass("dropdown-flip");
+    } else {
+        $menu.show();
+        // Check if the dropdown would extend below the viewport
+        let menuBottom = $menu.offset().top + $menu.outerHeight();
+        let viewportBottom = $(window).scrollTop() + $(window).height();
+
+        if (menuBottom > viewportBottom) {
+            $dropdown.addClass("dropdown-flip");
+        }
+    }
+}

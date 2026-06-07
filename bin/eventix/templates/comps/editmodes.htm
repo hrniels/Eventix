@@ -22,7 +22,7 @@
 <script>
     $(document).ready(function () {
         $("#{{ id }}-toggle").on("click", function () {
-            $("#{{ id }}-menu").toggle();
+            toggleDropdown("{{ id }}");
         });
 
         $("#{{ id }}-menu a").on("click", function () {
