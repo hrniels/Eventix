@@ -7,6 +7,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
+use eventix_ical::col::ColError;
 use eventix_ical::objects::{
     CalAttendee, CalComponent, CalDate, CalPartStat, EventLike, UpdatableEventLike,
 };
@@ -66,30 +67,39 @@ async fn run_respond(
         .file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    file.change_single(
-        &req.uid,
-        req.rid.as_ref(),
-        locale.timezone(),
-        Some(&user.address()),
-        false,
-        |base: Option<&CalComponent>, c: &mut CalComponent| {
-            let mut atts = c
-                .attendees()
-                .unwrap_or(base.and_then(|b| b.attendees()).unwrap_or(&[]))
-                .to_vec();
-            if let Some(att) = atts.iter_mut().find(|a| a.address() == user.address()) {
-                att.set_part_stat(Some(req.stat));
-            } else {
-                let mut att = CalAttendee::new(user.address());
-                att.set_common_name(user.name().clone());
-                att.set_part_stat(Some(req.stat));
-                atts.push(att);
-            }
-            c.set_attendees(Some(atts));
-            c.touch();
-            Ok(())
-        },
-    )?;
+    let modify = |base: Option<&CalComponent>, c: &mut CalComponent| {
+        let mut atts = c
+            .attendees()
+            .unwrap_or(base.and_then(|b| b.attendees()).unwrap_or(&[]))
+            .to_vec();
+        if let Some(att) = atts.iter_mut().find(|a| a.address() == user.address()) {
+            att.set_part_stat(Some(req.stat));
+        } else {
+            let mut att = CalAttendee::new(user.address());
+            att.set_common_name(user.name().clone());
+            att.set_part_stat(Some(req.stat));
+            atts.push(att);
+        }
+        c.set_attendees(Some(atts));
+        c.touch();
+        Ok(())
+    };
+
+    if let Some(rid) = req.rid.as_ref() {
+        file.change_single(
+            &req.uid,
+            Some(rid),
+            locale.timezone(),
+            Some(&user.address()),
+            false,
+            modify,
+        )?;
+    } else {
+        let comp = file
+            .component_with_mut(|c| c.uid() == &req.uid && c.rid().is_none())
+            .ok_or_else(|| ColError::UidNotFound(req.uid.clone()))?;
+        modify(None, comp).map_err(ColError::ModifyFailed)?;
+    }
 
     file.save().context(format!(
         "Unable to save item with uid '{}' and rid '{:?}'",
