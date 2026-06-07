@@ -66,42 +66,30 @@ async fn run_respond(
         .file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    let complete = |base: Option<&CalComponent>, c: &mut CalComponent| -> anyhow::Result<()> {
-        let mut atts = c
-            .attendees()
-            .unwrap_or(base.and_then(|b| b.attendees()).unwrap_or(&[]))
-            .to_vec();
-        if let Some(att) = atts.iter_mut().find(|a| a.address() == user.address()) {
-            att.set_part_stat(Some(req.stat));
-        } else {
-            let mut att = CalAttendee::new(user.address());
-            att.set_common_name(user.name().clone());
-            att.set_part_stat(Some(req.stat));
-            atts.push(att);
-        }
-        c.set_attendees(Some(atts));
-        c.touch();
-        Ok(())
-    };
+    file.change_single(
+        &req.uid,
+        req.rid.as_ref(),
+        locale.timezone(),
+        Some(&user.address()),
+        |base: Option<&CalComponent>, c: &mut CalComponent| {
+            let mut atts = c
+                .attendees()
+                .unwrap_or(base.and_then(|b| b.attendees()).unwrap_or(&[]))
+                .to_vec();
+            if let Some(att) = atts.iter_mut().find(|a| a.address() == user.address()) {
+                att.set_part_stat(Some(req.stat));
+            } else {
+                let mut att = CalAttendee::new(user.address());
+                att.set_common_name(user.name().clone());
+                att.set_part_stat(Some(req.stat));
+                atts.push(att);
+            }
+            c.set_attendees(Some(atts));
+            c.touch();
+            Ok(())
+        },
+    )?;
 
-    if let Some(comp) =
-        file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
-    {
-        complete(None, comp)?;
-    } else {
-        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
-        if !comp.is_recurrent() {
-            return Err(anyhow!("Component '{}' is not recurrent", req.uid));
-        }
-
-        file.create_overwrite(
-            &req.uid,
-            req.rid.clone().unwrap(),
-            locale.timezone(),
-            |base, comp| complete(Some(base), comp),
-        )
-        .context("Creating overwrite failed")?;
-    }
     file.save().context(format!(
         "Unable to save item with uid '{}' and rid '{:?}'",
         req.uid, req.rid

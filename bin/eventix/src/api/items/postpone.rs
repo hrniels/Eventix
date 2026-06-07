@@ -9,11 +9,14 @@ use axum::{
     response::IntoResponse,
     routing::post,
 };
-use eventix_ical::objects::{CalComponent, CalDate, EventLike, UpdatableEventLike};
+use eventix_ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::Deserialize;
 
-use crate::api::{JsonError, run_post};
+use crate::{
+    api::{JsonError, run_post},
+    util,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -47,39 +50,29 @@ async fn run_complete(
 
     let locale = state.locale();
 
+    let user_mail = util::user_for_uid(state, &req.uid)?.map(|a| a.address());
+
     let file = state
         .store_mut()
         .file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    let complete = |c: &mut CalComponent| -> anyhow::Result<()> {
-        let td = c.as_todo_mut().unwrap();
-        let Some(due) = td.due() else {
-            return Err(anyhow!("TODO has no due date"));
-        };
-        td.set_due(Some(due.add_days(req.delay_days)));
-        td.touch();
-        Ok(())
-    };
+    file.change_single(
+        &req.uid,
+        req.rid.as_ref(),
+        locale.timezone(),
+        user_mail.as_ref(),
+        |_base, c: &mut CalComponent| {
+            let td = c.as_todo_mut().unwrap();
+            let Some(due) = td.due() else {
+                return Err("TODO has no due date".to_string());
+            };
+            td.set_due(Some(due.add_days(req.delay_days)));
+            td.touch();
+            Ok(())
+        },
+    )?;
 
-    if let Some(comp) =
-        file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
-    {
-        complete(comp)?;
-    } else {
-        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
-        if !comp.is_recurrent() {
-            return Err(anyhow!("Component '{}' is not recurrent", req.uid));
-        }
-
-        file.create_overwrite(
-            &req.uid,
-            req.rid.clone().unwrap(),
-            locale.timezone(),
-            |_base, comp| complete(comp),
-        )
-        .context("Creating overwrite failed")?;
-    }
     file.save().context(format!(
         "Unable to save item with uid '{}' and rid '{:?}'",
         req.uid, req.rid

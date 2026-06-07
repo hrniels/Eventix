@@ -722,6 +722,59 @@ impl CalFile {
         Ok(rid)
     }
 
+    /// Changes a single occurrence with given uid and recurrence id.
+    ///
+    /// If a component with given uid and recurrence-id is found, `modify` is called on it with
+    /// `None` as the first argument and the component as the second.
+    ///
+    /// Otherwise, a new overwrite is created and `modify` is called with the base component as the
+    /// first argument and the to-be-created overwrite as the second argument.
+    ///
+    /// The argument `tz` specifies the timezone set by the user, whereas `user_mail` specifies the
+    /// email address specified for this file, if any, and will determine whether the user is
+    /// allowed to edit this occurrence.
+    pub fn change_single<F>(
+        &mut self,
+        uid: &String,
+        rid: Option<&CalDate>,
+        tz: &Tz,
+        user_mail: Option<&String>,
+        modify: F,
+    ) -> Result<(), ColError>
+    where
+        F: FnOnce(Option<&CalComponent>, &mut CalComponent) -> Result<(), String>,
+    {
+        if let Some(comp) = self.component_with_mut(|c| c.uid() == uid && c.rid() == rid) {
+            if !comp.is_owned_by(user_mail) {
+                return Err(ColError::NoEditPermission(comp.uid().clone()));
+            }
+
+            modify(None, comp).map_err(ColError::ModifyFailed)?;
+        } else {
+            let comp = self
+                .component_with(|c| c.uid() == uid)
+                .ok_or_else(|| ColError::UidNotFound(uid.to_string()))?;
+
+            // We always assume here that there is at least a base component (with RID=None). For
+            // that reason, we either do not find the UID at all (see above) or we want to create a
+            // new overwrite (see below).
+            let rid = rid.expect("Base component not found!?");
+
+            if !comp.is_recurrent() {
+                return Err(ColError::NotRecurrent(comp.uid().clone()));
+            }
+            if !comp.is_owned_by(user_mail) {
+                return Err(ColError::NoEditPermission(comp.uid().clone()));
+            }
+
+            self.create_overwrite(uid, rid.clone(), tz, |base, comp| {
+                modify(Some(base), comp).map_err(ColError::ModifyFailed)
+            })?;
+        }
+
+        Ok(())
+    }
+
     /// Changes the start (and optionally the end or due date) of the base component with the
     /// given uid, and shifts all overwrite RECURRENCE-IDs by the same time delta.
     ///
