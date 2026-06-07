@@ -63,9 +63,9 @@ async fn run_cancel(
             if c.as_event().unwrap().status() == Some(CalEventStatus::Cancelled) {
                 return Err("Occurrence is already canceled".to_string());
             }
-            let summary = match base {
-                Some(base) => base.summary(),
-                None => c.summary(),
+            let summary = match c.summary() {
+                Some(s) => Some(s),
+                None => base.and_then(|b| b.summary()),
             };
             if let Some(sum) = summary {
                 c.set_summary(Some(format!("Canceled: {sum}")));
