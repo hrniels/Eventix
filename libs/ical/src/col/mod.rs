@@ -64,6 +64,8 @@ pub enum ColError {
     FileModified(PathBuf),
     #[error("Component with uid {0} does not exist")]
     UidNotFound(String),
+    #[error("Component with uid {0} is recurrent")]
+    Recurrent(String),
     #[error("Component with uid {0} is not recurrent")]
     NotRecurrent(String),
     #[error("No edit permission for uid {0}")]

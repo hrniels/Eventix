@@ -71,6 +71,7 @@ async fn run_respond(
         req.rid.as_ref(),
         locale.timezone(),
         Some(&user.address()),
+        false,
         |base: Option<&CalComponent>, c: &mut CalComponent| {
             let mut atts = c
                 .attendees()

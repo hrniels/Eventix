@@ -58,6 +58,7 @@ async fn run_cancel(
         Some(&rid),
         locale.timezone(),
         user_mail.as_ref(),
+        true,
         |base: Option<&CalComponent>, c: &mut CalComponent| {
             if c.as_event().unwrap().status() == Some(CalEventStatus::Cancelled) {
                 return Err("Occurrence is already canceled".to_string());

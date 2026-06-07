@@ -59,6 +59,7 @@ async fn run_complete(
         req.rid.as_ref(),
         locale.timezone(),
         user_mail.as_ref(),
+        true,
         |_base, c: &mut CalComponent| {
             let td = c.as_todo_mut().unwrap();
             td.set_status(Some(CalTodoStatus::Completed));

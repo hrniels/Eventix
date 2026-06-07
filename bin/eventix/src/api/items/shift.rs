@@ -86,6 +86,7 @@ async fn run_shift(
         req.rid.as_ref(),
         locale.timezone(),
         user_mail.as_ref(),
+        true,
         |_base, comp| {
             let start = get_new_start(comp)?;
             comp.as_event_mut()

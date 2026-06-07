@@ -560,6 +560,35 @@ impl CalFile {
         self.cal.components_mut().iter_mut().find(|c| filter(c))
     }
 
+    /// Returns mutable references to both the base component and overwrite for given UID+RID.
+    pub fn base_and_overwrite_mut(
+        &mut self,
+        uid: &String,
+        rid: &CalDate,
+    ) -> Option<(&mut CalComponent, Option<&mut CalComponent>)> {
+        let base_idx = self
+            .cal
+            .components()
+            .iter()
+            .position(|c| c.uid() == uid && c.rid().is_none())?;
+        match self
+            .cal
+            .components()
+            .iter()
+            .position(|c| c.uid() == uid && c.rid() == Some(rid))
+        {
+            Some(ow_idx) => {
+                let [base, ow] = self
+                    .cal
+                    .components_mut()
+                    .get_disjoint_mut([base_idx, ow_idx])
+                    .unwrap();
+                Some((base, Some(ow)))
+            }
+            None => Some((&mut self.cal.components_mut()[base_idx], None)),
+        }
+    }
+
     /// Returns all components that are part of this file.
     pub fn components(&self) -> &[CalComponent] {
         self.cal.components()
@@ -724,52 +753,62 @@ impl CalFile {
 
     /// Changes a single occurrence with given uid and recurrence id.
     ///
-    /// If a component with given uid and recurrence-id is found, `modify` is called on it with
-    /// `None` as the first argument and the component as the second.
+    /// If `rid` is `Some`, the base component needs to be recurrent and this method will then
+    /// either update an existing overwrite for that `rid`, if found, or create a new one
+    /// otherwise. In this case `modify` will be called with the base component as the first
+    /// argument and the to-be-changed component as the second argument.
     ///
-    /// Otherwise, a new overwrite is created and `modify` is called with the base component as the
-    /// first argument and the to-be-created overwrite as the second argument.
+    /// If `rid` is `None`, the base component needs to be non-recurrent and this method will
+    /// update the base component. In this case `modify` will be called with `None` as the first
+    /// argument and the to-be-updated base component as the second argument.
     ///
     /// The argument `tz` specifies the timezone set by the user, whereas `user_mail` specifies the
-    /// email address specified for this file, if any, and will determine whether the user is
-    /// allowed to edit this occurrence.
+    /// email address specified for this file. If `needs_perm` is true, `user_mail` will determine
+    /// whether the user is allowed to edit this occurrence.
     pub fn change_single<F>(
         &mut self,
         uid: &String,
         rid: Option<&CalDate>,
         tz: &Tz,
         user_mail: Option<&String>,
+        needs_perm: bool,
         modify: F,
     ) -> Result<(), ColError>
     where
         F: FnOnce(Option<&CalComponent>, &mut CalComponent) -> Result<(), String>,
     {
-        if let Some(comp) = self.component_with_mut(|c| c.uid() == uid && c.rid() == rid) {
-            if !comp.is_owned_by(user_mail) {
-                return Err(ColError::NoEditPermission(comp.uid().clone()));
+        if let Some(rid) = rid {
+            let (base, comp) = self
+                .base_and_overwrite_mut(uid, rid)
+                .ok_or_else(|| ColError::UidNotFound(uid.to_string()))?;
+            if needs_perm && !base.is_owned_by(user_mail) {
+                return Err(ColError::NoEditPermission(base.uid().clone()));
+            }
+            if !base.is_recurrent() {
+                return Err(ColError::NotRecurrent(base.uid().clone()));
             }
 
-            modify(None, comp).map_err(ColError::ModifyFailed)?;
+            if let Some(comp) = comp {
+                modify(Some(base), comp).map_err(ColError::ModifyFailed)?;
+            } else {
+                self.create_overwrite(uid, rid.clone(), tz, |base, comp| {
+                    if !comp.is_owned_by(user_mail) {
+                        return Err(ColError::NoEditPermission(comp.uid().clone()));
+                    }
+                    modify(Some(base), comp).map_err(ColError::ModifyFailed)
+                })?;
+            }
         } else {
             let comp = self
-                .component_with(|c| c.uid() == uid)
+                .component_with_mut(|c| c.uid() == uid && c.rid().is_none())
                 .ok_or_else(|| ColError::UidNotFound(uid.to_string()))?;
-
-            // We always assume here that there is at least a base component (with RID=None). For
-            // that reason, we either do not find the UID at all (see above) or we want to create a
-            // new overwrite (see below).
-            let rid = rid.expect("Base component not found!?");
-
-            if !comp.is_recurrent() {
-                return Err(ColError::NotRecurrent(comp.uid().clone()));
-            }
-            if !comp.is_owned_by(user_mail) {
+            if needs_perm && !comp.is_owned_by(user_mail) {
                 return Err(ColError::NoEditPermission(comp.uid().clone()));
             }
-
-            self.create_overwrite(uid, rid.clone(), tz, |base, comp| {
-                modify(Some(base), comp).map_err(ColError::ModifyFailed)
-            })?;
+            if comp.is_recurrent() {
+                return Err(ColError::Recurrent(comp.uid().clone()));
+            }
+            modify(None, comp).map_err(ColError::ModifyFailed)?;
         }
 
         Ok(())

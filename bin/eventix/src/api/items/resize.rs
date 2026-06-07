@@ -184,6 +184,7 @@ async fn run_resize(
         req.rid.as_ref(),
         locale.timezone(),
         user_mail.as_ref(),
+        true,
         |_base, comp| {
             comp.as_event_mut()
                 .unwrap()
