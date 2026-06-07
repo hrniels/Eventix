@@ -9,7 +9,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use eventix_ical::objects::{CalComponent, CalDate, CalEventStatus, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::{JsonError, run_post};
 use crate::util;
@@ -20,8 +20,7 @@ pub struct Request {
     rid: String,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -99,5 +98,5 @@ async fn run_cancel(
         req.uid, req.rid
     ))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

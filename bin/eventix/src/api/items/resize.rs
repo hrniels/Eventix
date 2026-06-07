@@ -14,7 +14,7 @@ use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalDate, CalDateTime, EventLike, RangeEdge, UpdatableEventLike};
 use eventix_locale::Locale;
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::{JsonError, run_post};
 use crate::util;
@@ -29,8 +29,7 @@ pub struct Request {
     end_minute: Option<u32>,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -214,5 +213,5 @@ async fn run_resize(
         req.uid, req.rid
     ))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

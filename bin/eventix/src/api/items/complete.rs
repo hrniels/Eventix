@@ -13,7 +13,7 @@ use eventix_ical::objects::{
     CalComponent, CalDate, CalTodoStatus, EventLike, PRIORITY_MEDIUM, UpdatableEventLike,
 };
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::{JsonError, run_post};
 
@@ -23,8 +23,7 @@ pub struct Request {
     rid: Option<CalDate>,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -85,5 +84,5 @@ async fn run_complete(
         req.uid, req.rid
     ))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

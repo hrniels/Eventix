@@ -17,8 +17,7 @@ pub struct Request {
     uid: String,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -50,5 +49,5 @@ async fn run_delete(
         .delete_by_uid(&form.uid)
         .with_context(|| format!("Unable to delete item with uid '{}'", form.uid))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

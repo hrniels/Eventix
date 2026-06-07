@@ -11,7 +11,7 @@ use eventix_ical::objects::{
     CalAttendee, CalComponent, CalDate, CalPartStat, EventLike, UpdatableEventLike,
 };
 use eventix_state::EventixState;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 
 use crate::api::{JsonError, run_post};
 use crate::util;
@@ -37,8 +37,7 @@ pub struct Request {
     stat: CalPartStat,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -108,5 +107,5 @@ async fn run_respond(
         req.uid, req.rid
     ))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }
