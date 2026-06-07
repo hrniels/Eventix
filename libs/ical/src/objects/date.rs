@@ -11,7 +11,7 @@ use std::{
 };
 
 use chrono::{
-    DateTime, Duration, FixedOffset, MappedLocalTime, NaiveDate, NaiveDateTime, NaiveTime,
+    DateTime, Days, Duration, FixedOffset, MappedLocalTime, NaiveDate, NaiveDateTime, NaiveTime,
     TimeZone, Utc,
 };
 use chrono_tz::Tz;
@@ -427,6 +427,26 @@ impl CalDate {
                 };
                 Self::DateTime(CalDateTime::Floating(naive))
             }
+        }
+    }
+
+    /// Returns a new `CalDate` moved forward in time by the given number of days.
+    ///
+    /// Note that this ignores DST changes, meaning that the time will remain the same and only the
+    /// day is changed.
+    pub fn add_days(&self, days: u32) -> Self {
+        let days = Days::new(days.into());
+        match self {
+            CalDate::Date(date, ty) => CalDate::Date(date.checked_add_days(days).unwrap(), *ty),
+            CalDate::DateTime(CalDateTime::Utc(dt)) => {
+                CalDate::DateTime(CalDateTime::Utc(dt.checked_add_days(days).unwrap()))
+            }
+            CalDate::DateTime(CalDateTime::Floating(dt)) => {
+                CalDate::DateTime(CalDateTime::Floating(dt.checked_add_days(days).unwrap()))
+            }
+            CalDate::DateTime(CalDateTime::Timezone(dt, tz)) => CalDate::DateTime(
+                CalDateTime::Timezone(dt.checked_add_days(days).unwrap(), tz.clone()),
+            ),
         }
     }
 

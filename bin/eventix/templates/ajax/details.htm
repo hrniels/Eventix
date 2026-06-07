@@ -164,6 +164,9 @@
                                     <i class="bi bi-check-lg"></i>
                                     <span>{{ "Complete"|t(locale) }}</span>
                                 </a>
+                                {% if let Some(pp) = postpone %}
+                                    {{ pp|safe }}
+                                {% endif %}
                             {% endif %}
                             {% if occ.is_recurrent() %}
                                 {% if owner && occ.organizer().is_some() %}

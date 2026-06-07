@@ -257,10 +257,13 @@ a.ev_button_critical:hover {
     position: relative;
     display: inline-block;
 }
-.ev_response_dropdown a {
+.ev_response_dropdown_small a {
+    width: 90px;
+}
+.ev_response_dropdown_big a {
     width: 100px;
 }
-.ev_response_dropdown a i {
+.ev_response_dropdown_big a i {
     margin-right: 8px;
 }
 
@@ -276,10 +279,15 @@ a.ev_button_critical:hover {
     z-index: 1000;
 }
 .ev_response_menu a {
-    width: 100px;
     margin: 0;
     margin-bottom: 2px;
     float: left;
+}
+.ev_response_menu_small a {
+    width: 90px;
+}
+.ev_response_menu_big a {
+    width: 100px;
 }
 
 /* ------------ ICONS ------------ */

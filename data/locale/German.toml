@@ -74,6 +74,13 @@
 "{} minutes" = "{} Minute(n)"
 "{} seconds" = "{} Sekunde(n)"
 
+"Postpone" = "Aufschieben"
+"1day" = "1 Tag"
+"2days" = "2 Tage"
+"3days" = "3 Tage"
+"5days" = "5 Tage"
+"1week" = "1 Woche"
+
 "in" = "im"
 "in {}" = "im {}"
 "on {}" = "am {}"
@@ -226,7 +233,7 @@
 "Events/tasks to import" = "Zu importierende Termine/Aufgaben"
 "Unlimited" = "Unbegrenzt"
 "Every" = "Alle"
-"Exclude occ." = "Termin auslassen"
+"Exclude occ." = "Auslassen"
 "Exclude" = "Auslassen"
 "FileSystem" = "Dateisystem"
 "Filter" = "Filter"

@@ -74,6 +74,13 @@
 "{} minutes" = "{} minute(s)"
 "{} seconds" = "{} second(s)"
 
+"Postpone" = "Postpone"
+"1day" = "1 day"
+"2days" = "2 days"
+"3days" = "3 days"
+"5days" = "5 days"
+"1week" = "1 week"
+
 "in" = "in"
 "in {}" = "in {}"
 "on {}" = "on {}"
