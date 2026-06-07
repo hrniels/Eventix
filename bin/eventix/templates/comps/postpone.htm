@@ -1,0 +1,45 @@
+<div class="ev_response_dropdown" id="{{ id }}-dropdown">
+    <a id="{{ id }}-toggle" class="ev_button ev_button_normal">
+        <i class="bi bi-skip-forward-fill"></i>
+        <span>{{ "Postpone"|t(locale) }}</span>
+    </a>
+    <div id="{{ id }}-menu" class="ev_response_menu ev_response_menu_small">
+        {% for (name, days) in [("1day", 1), ("2days", 2), ("3days", 3), ("5days", 5), ("1week", 7)] %}
+            <a class="ev_button ev_button_normal" href="javascript:postpone({{ days }})">
+                <span>{{ name|t(locale) }}</span>
+            </a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- prettier-ignore-start -->
+<script>
+    function postpone(days) {
+        function onpostponed() {
+            fireEvent(new DeselectEvent());
+            reloadSidebar();
+        }
+
+        let base_url = "/api/items/postpone?uid={{ uid }}&delay_days=" + days;
+        {% if let Some(rid) = rid %}
+            postRequest(base_url + "&rid={{ rid }}", onpostponed)
+        {% else %}
+            postRequest(base_url, onpostponed)
+        {% endif %}
+    }
+</script>
+<!-- prettier-ignore-end -->
+
+<script>
+    $(document).ready(function () {
+        $("#{{ id }}-toggle").on("click", function () {
+            toggleDropdown("{{ id }}");
+        });
+
+        $(document).on("click", function (e) {
+            if (!$(e.target).closest("#{{ id }}-dropdown").length) {
+                $("#{{ id }}-menu").hide();
+            }
+        });
+    });
+</script>

@@ -12,14 +12,14 @@ function getRequest(url, success, type = "json") {
     });
 }
 
-function postRequest(url, success, error) {
+function postRequest(url, success, error, sidebar = true) {
     $.ajax({
         type: "POST",
         url: url,
         dataType: "json",
         success: function (data) {
             success(data);
-            reloadSidebar();
+            if (sidebar) reloadSidebar();
         },
         error: function (jqXHR, textStatus, errorThrown) {
             handleAJAXError(jqXHR, textStatus, errorThrown);
@@ -132,5 +132,5 @@ function deleteCollection(col_id, onDeleted) {
 }
 
 function setLang(lang) {
-    postRequest("/api/setlang?lang=" + lang, reloadPage);
+    postRequest("/api/setlang?lang=" + lang, reloadPage, null, false);
 }

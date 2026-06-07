@@ -171,9 +171,8 @@ async fn togglecal_toggles_calendar_and_persists_misc_state() {
     let data_home = state.lock().await.xdg().get_data_home().unwrap();
 
     let router1 = make_calendars_api_router(state.clone());
-    let (status1, body1) = post_query(router1, &format!("/api/togglecal?id={CAL_ID}")).await;
-    assert_eq!(status1, StatusCode::OK, "unexpected body:\n{body1}");
-    assert_eq!(body1, "{}");
+    let (status1, _) = post_query(router1, &format!("/api/togglecal?id={CAL_ID}")).await;
+    assert_eq!(status1, StatusCode::OK);
 
     {
         let locked = state.lock().await;
@@ -183,9 +182,8 @@ async fn togglecal_toggles_calendar_and_persists_misc_state() {
     assert!(misc_after_disable.contains(&format!("disabled_calendars = [\"{CAL_ID}\"]")));
 
     let router2 = make_calendars_api_router(state.clone());
-    let (status2, body2) = post_query(router2, &format!("/api/togglecal?id={CAL_ID}")).await;
-    assert_eq!(status2, StatusCode::OK, "unexpected body:\n{body2}");
-    assert_eq!(body2, "{}");
+    let (status2, _) = post_query(router2, &format!("/api/togglecal?id={CAL_ID}")).await;
+    assert_eq!(status2, StatusCode::OK);
 
     {
         let locked = state.lock().await;

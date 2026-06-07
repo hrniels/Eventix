@@ -11,7 +11,7 @@ use chrono::{NaiveDateTime, NaiveTime, Timelike};
 use eventix_ical::col::CalFile;
 use eventix_ical::objects::{CalDate, CalDateTime, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::api::{JsonError, run_post};
@@ -25,8 +25,7 @@ pub struct Request {
     hour: Option<u32>,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -125,5 +124,5 @@ async fn run_copy(
 
     dir_arc.add_file(new_file).map_err(anyhow::Error::from)?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

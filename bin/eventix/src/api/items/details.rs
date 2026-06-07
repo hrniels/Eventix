@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::api::JsonError;
-use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::{
-    editalarm::EditAlarmTemplate, organizer::OrganizerTemplate, partstat::PartStatTemplate,
+    editalarm::EditAlarmTemplate, editmodes::EditModesTemplate, organizer::OrganizerTemplate,
+    partstat::PartStatTemplate, postpone::PostponeTemplate,
 };
 use crate::html::{self, filters};
 use crate::objects::DayOccurrence;
@@ -52,6 +52,7 @@ struct DetailsTemplate<'a> {
     series_partstat: Option<PartStatTemplate>,
     occ_partstat: Option<PartStatTemplate>,
     edit_modes: Option<EditModesTemplate>,
+    postpone: Option<PostponeTemplate>,
     owner: bool,
     read_only: bool,
 }
@@ -138,9 +139,23 @@ async fn handler(
             )
         }),
         edit_modes: if owner && !collection.is_read_only() {
-            req.rid.map(|rid| {
+            req.rid.as_ref().map(|rid| {
                 EditModesTemplate::new(locale.clone(), "edit", req.uid.clone(), rid.to_string())
             })
+        } else {
+            None
+        },
+        postpone: if occ.ctype() == CalCompType::Todo
+            && occ.end_or_due().is_some()
+            && owner
+            && !collection.is_read_only()
+        {
+            Some(PostponeTemplate::new(
+                locale.clone(),
+                "postpone",
+                req.uid.clone(),
+                req.rid.as_ref().map(|rid| rid.to_string()),
+            ))
         } else {
             None
         },

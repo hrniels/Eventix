@@ -9,7 +9,7 @@ use axum::{
     routing::post,
 };
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tracing::warn;
 
 use crate::api::{JsonError, run_post};
@@ -18,9 +18,6 @@ use crate::api::{JsonError, run_post};
 pub struct Request {
     id: String,
 }
-
-#[derive(Debug, Serialize)]
-struct Response {}
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -35,10 +32,7 @@ async fn handler(
     run_post(state, move |state| Box::pin(run_togglecal(state, req))).await
 }
 
-async fn run_togglecal(
-    state: &mut eventix_state::State,
-    req: Request,
-) -> anyhow::Result<Json<Response>> {
+async fn run_togglecal(state: &mut eventix_state::State, req: Request) -> anyhow::Result<Json<()>> {
     let misc = state.misc_mut();
     misc.toggle_calendar(&req.id);
     // permanently remember the new calendar state
@@ -46,5 +40,5 @@ async fn run_togglecal(
         warn!("Unable to misc state: {}", e);
     }
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

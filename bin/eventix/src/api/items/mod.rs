@@ -11,6 +11,7 @@ pub mod details;
 pub mod dstwarn;
 pub mod editalarm;
 pub mod occlist;
+pub mod postpone;
 pub mod resize;
 pub mod respond;
 pub mod shift;
@@ -31,10 +32,11 @@ pub fn router(state: EventixState) -> Router {
         .merge(details::router(state.clone()))
         .merge(dstwarn::router(state.clone()))
         .merge(editalarm::router(state.clone()))
-        .merge(resize::router(state.clone()))
-        .merge(shift::router(state.clone()))
         .merge(occlist::router(state.clone()))
+        .merge(postpone::router(state.clone()))
+        .merge(resize::router(state.clone()))
         .merge(respond::router(state.clone()))
+        .merge(shift::router(state.clone()))
         .merge(toggle::router(state.clone()))
         .merge(tzconvert::router(state.clone()))
 }

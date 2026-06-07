@@ -21,7 +21,7 @@
                 <i class="bi bi-reply"></i>
                 <span>
                     {% if recurrent && rid.is_some() %}
-                        {{ "Occ."|t(locale) }}
+                        {{ "Occurrence"|t(locale) }}
                     {% else if recurrent && rid.is_none() %}
                         {{ "Series"|t(locale) }}
                     {% else %}
@@ -32,7 +32,7 @@
         {% endif %}
     {% endmatch %}
     {% if !read_only %}
-        <div id="{{ id }}-menu" class="ev_response_menu">
+        <div id="{{ id }}-menu" class="ev_response_menu ev_response_menu_big">
             <a class="ev_button ev_button_good" data-value="Accept">
                 <i class="bi bi-check-lg"></i>
                 <span>{{ "Accept"|t(locale) }}</span>
@@ -57,7 +57,7 @@
             if (readOnly) return;
 
             $("#" + id + "-toggle").on("click", function () {
-                $("#" + id + "-menu").toggle();
+                toggleDropdown(id);
             });
 
             $("#" + id + "-menu a").on("click", function () {

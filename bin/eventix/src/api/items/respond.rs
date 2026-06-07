@@ -7,11 +7,12 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
+use eventix_ical::col::ColError;
 use eventix_ical::objects::{
     CalAttendee, CalComponent, CalDate, CalPartStat, EventLike, UpdatableEventLike,
 };
 use eventix_state::EventixState;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer};
 
 use crate::api::{JsonError, run_post};
 use crate::util;
@@ -37,8 +38,7 @@ pub struct Request {
     stat: CalPartStat,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -67,7 +67,7 @@ async fn run_respond(
         .file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    let complete = |base: Option<&CalComponent>, c: &mut CalComponent| -> anyhow::Result<()> {
+    let modify = |base: Option<&CalComponent>, c: &mut CalComponent| {
         let mut atts = c
             .attendees()
             .unwrap_or(base.and_then(|b| b.attendees()).unwrap_or(&[]))
@@ -85,28 +85,26 @@ async fn run_respond(
         Ok(())
     };
 
-    if let Some(comp) =
-        file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
-    {
-        complete(None, comp)?;
-    } else {
-        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
-        if !comp.is_recurrent() {
-            return Err(anyhow!("Component '{}' is not recurrent", req.uid));
-        }
-
-        file.create_overwrite(
+    if let Some(rid) = req.rid.as_ref() {
+        file.change_single(
             &req.uid,
-            req.rid.clone().unwrap(),
+            Some(rid),
             locale.timezone(),
-            |base, comp| complete(Some(base), comp),
-        )
-        .context("Creating overwrite failed")?;
+            Some(&user.address()),
+            false,
+            modify,
+        )?;
+    } else {
+        let comp = file
+            .component_with_mut(|c| c.uid() == &req.uid && c.rid().is_none())
+            .ok_or_else(|| ColError::UidNotFound(req.uid.clone()))?;
+        modify(None, comp).map_err(ColError::ModifyFailed)?;
     }
+
     file.save().context(format!(
         "Unable to save item with uid '{}' and rid '{:?}'",
         req.uid, req.rid
     ))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

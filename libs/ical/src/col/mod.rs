@@ -62,4 +62,14 @@ pub enum ColError {
     FileMetadata(PathBuf),
     #[error("Getting last modified timestamp of {0} failed")]
     FileModified(PathBuf),
+    #[error("Component with uid {0} does not exist")]
+    UidNotFound(String),
+    #[error("Component with uid {0} is recurrent")]
+    Recurrent(String),
+    #[error("Component with uid {0} is not recurrent")]
+    NotRecurrent(String),
+    #[error("No edit permission for uid {0}")]
+    NoEditPermission(String),
+    #[error("Modify failed: {0}")]
+    ModifyFailed(String),
 }

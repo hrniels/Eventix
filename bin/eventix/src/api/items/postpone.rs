@@ -1,17 +1,15 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use axum::{
     Json, Router,
     extract::{Query, State},
     response::IntoResponse,
     routing::post,
 };
-use eventix_ical::objects::{
-    CalComponent, CalDate, CalTodoStatus, PRIORITY_MEDIUM, UpdatableEventLike,
-};
+use eventix_ical::objects::{CalComponent, CalDate, UpdatableEventLike};
 use eventix_state::EventixState;
 use serde::Deserialize;
 
@@ -24,13 +22,14 @@ use crate::{
 pub struct Request {
     uid: String,
     rid: Option<CalDate>,
+    delay_days: u32,
 }
 
 type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/complete", post(handler))
+        .route("/postpone", post(handler))
         .with_state(state)
 }
 
@@ -45,6 +44,10 @@ async fn run_complete(
     state: &mut eventix_state::State,
     req: Request,
 ) -> anyhow::Result<Json<Response>> {
+    if req.delay_days > 7 {
+        return Err(anyhow!("Unsupported number of days"));
+    }
+
     let locale = state.locale();
 
     let user_mail = util::user_for_uid(state, &req.uid)?.map(|a| a.address());
@@ -62,12 +65,10 @@ async fn run_complete(
         true,
         |_base, c: &mut CalComponent| {
             let td = c.as_todo_mut().unwrap();
-            td.set_status(Some(CalTodoStatus::Completed));
-            td.set_percent(Some(100));
-            td.set_completed(Some(CalDate::now()));
-            // set the priority as is required by MS exchange as soon as TODOs are completed - unsure
-            // why; we don't care about the priority at the moment and thus are fine with any value.
-            td.set_priority(Some(PRIORITY_MEDIUM));
+            let Some(due) = td.due() else {
+                return Err("TODO has no due date".to_string());
+            };
+            td.set_due(Some(due.add_days(req.delay_days)));
             td.touch();
             Ok(())
         },

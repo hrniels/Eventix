@@ -560,6 +560,35 @@ impl CalFile {
         self.cal.components_mut().iter_mut().find(|c| filter(c))
     }
 
+    /// Returns mutable references to both the base component and overwrite for given UID+RID.
+    pub fn base_and_overwrite_mut(
+        &mut self,
+        uid: &String,
+        rid: &CalDate,
+    ) -> Option<(&mut CalComponent, Option<&mut CalComponent>)> {
+        let base_idx = self
+            .cal
+            .components()
+            .iter()
+            .position(|c| c.uid() == uid && c.rid().is_none())?;
+        match self
+            .cal
+            .components()
+            .iter()
+            .position(|c| c.uid() == uid && c.rid() == Some(rid))
+        {
+            Some(ow_idx) => {
+                let [base, ow] = self
+                    .cal
+                    .components_mut()
+                    .get_disjoint_mut([base_idx, ow_idx])
+                    .unwrap();
+                Some((base, Some(ow)))
+            }
+            None => Some((&mut self.cal.components_mut()[base_idx], None)),
+        }
+    }
+
     /// Returns all components that are part of this file.
     pub fn components(&self) -> &[CalComponent] {
         self.cal.components()
@@ -626,9 +655,10 @@ impl CalFile {
     /// Creates a new overwrite for the occurrence of the component with given uid at given date.
     ///
     /// The `uid` specifies the id of the base component, whereas the `rid` specifies the date of
-    /// the occurrence in UTC. The timezone will be used to for the start date of the occurrence.
-    /// The function `func` will be called with a reference to the base component and a mutable
-    /// reference to the created overwrite, so that changes can be made before it is stored.
+    /// the occurrence. The timezone will be used to for the start date of the occurrence if
+    /// required. The function `func` will be called with a reference to the base component and a
+    /// mutable reference to the created overwrite, so that changes can be made before it is
+    /// stored.
     ///
     /// Expects that the component with given uid exists, but *not* the overwrite.
     ///
@@ -677,6 +707,7 @@ impl CalFile {
             CalComponent::Todo(CalTodo::new(base.uid()))
         };
         let start = match &rid {
+            CalDate::Date(date, _) => CalDate::Date(*date, base.ctype().into()),
             CalDate::DateTime(CalDateTime::Timezone(naive, tzid)) => {
                 CalDate::DateTime(CalDateTime::Timezone(*naive, tzid.clone()))
             }
@@ -693,14 +724,21 @@ impl CalFile {
         comp.set_rid(Some(rid.clone()));
 
         // set sensible default for the end/due date
-        if let (Some(chrono_dur), Some(CalDate::DateTime(CalDateTime::Timezone(naive, tzid)))) =
-            (base.wallclock_duration(), comp.start())
-        {
-            let end = CalDate::DateTime(CalDateTime::Timezone(*naive + chrono_dur, tzid.clone()));
-            match &mut comp {
-                CalComponent::Event(ev) => ev.set_end(Some(end)),
-                CalComponent::Todo(td) => td.set_due(Some(end)),
+        let end = match (base.wallclock_duration(), comp.start()) {
+            (Some(chrono_dur), Some(CalDate::DateTime(CalDateTime::Timezone(naive, tzid)))) => {
+                Some(CalDate::DateTime(CalDateTime::Timezone(
+                    *naive + chrono_dur,
+                    tzid.clone(),
+                )))
             }
+            (Some(chrono_dur), Some(CalDate::Date(date, _))) => {
+                Some(CalDate::Date(*date + chrono_dur, base.ctype().into()))
+            }
+            _ => None,
+        };
+        match &mut comp {
+            CalComponent::Event(ev) => ev.set_end(end),
+            CalComponent::Todo(td) => td.set_due(end),
         }
 
         comp.touch();
@@ -711,6 +749,69 @@ impl CalFile {
 
         self.add_component(comp);
         Ok(rid)
+    }
+
+    /// Changes a single occurrence with given uid and recurrence id.
+    ///
+    /// If `rid` is `Some`, the base component needs to be recurrent and this method will then
+    /// either update an existing overwrite for that `rid`, if found, or create a new one
+    /// otherwise. In this case `modify` will be called with the base component as the first
+    /// argument and the to-be-changed component as the second argument.
+    ///
+    /// If `rid` is `None`, the base component needs to be non-recurrent and this method will
+    /// update the base component. In this case `modify` will be called with `None` as the first
+    /// argument and the to-be-updated base component as the second argument.
+    ///
+    /// The argument `tz` specifies the timezone set by the user, whereas `user_mail` specifies the
+    /// email address specified for this file. If `needs_perm` is true, `user_mail` will determine
+    /// whether the user is allowed to edit this occurrence.
+    pub fn change_single<F>(
+        &mut self,
+        uid: &String,
+        rid: Option<&CalDate>,
+        tz: &Tz,
+        user_mail: Option<&String>,
+        needs_perm: bool,
+        modify: F,
+    ) -> Result<(), ColError>
+    where
+        F: FnOnce(Option<&CalComponent>, &mut CalComponent) -> Result<(), String>,
+    {
+        if let Some(rid) = rid {
+            let (base, comp) = self
+                .base_and_overwrite_mut(uid, rid)
+                .ok_or_else(|| ColError::UidNotFound(uid.to_string()))?;
+            if needs_perm && !base.is_owned_by(user_mail) {
+                return Err(ColError::NoEditPermission(base.uid().clone()));
+            }
+            if !base.is_recurrent() {
+                return Err(ColError::NotRecurrent(base.uid().clone()));
+            }
+
+            if let Some(comp) = comp {
+                modify(Some(base), comp).map_err(ColError::ModifyFailed)?;
+            } else {
+                self.create_overwrite(uid, rid.clone(), tz, |base, comp| {
+                    if !comp.is_owned_by(user_mail) {
+                        return Err(ColError::NoEditPermission(comp.uid().clone()));
+                    }
+                    modify(Some(base), comp).map_err(ColError::ModifyFailed)
+                })?;
+            }
+        } else {
+            let comp = self
+                .component_with_mut(|c| c.uid() == uid && c.rid().is_none())
+                .ok_or_else(|| ColError::UidNotFound(uid.to_string()))?;
+            if needs_perm && !comp.is_owned_by(user_mail) {
+                return Err(ColError::NoEditPermission(comp.uid().clone()));
+            }
+            if comp.is_recurrent() {
+                return Err(ColError::Recurrent(comp.uid().clone()));
+            }
+            modify(None, comp).map_err(ColError::ModifyFailed)?;
+        }
+
+        Ok(())
     }
 
     /// Changes the start (and optionally the end or due date) of the base component with the
@@ -932,15 +1033,15 @@ impl CalFile {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Datelike, Duration, NaiveDate, TimeDelta, TimeZone};
+    use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, TimeDelta, TimeZone};
 
     use std::path::PathBuf;
     use std::sync::Arc;
 
     use crate::col::{CalDir, ColError};
     use crate::objects::{
-        CalAction, CalAlarm, CalAttendee, CalComponent, CalDate, CalDateTime, CalRRule, CalRelated,
-        CalTrigger, DefaultAlarmOverlay, UpdatableEventLike,
+        CalAction, CalAlarm, CalAttendee, CalComponent, CalDate, CalDateTime, CalDateType,
+        CalRRule, CalRelated, CalTrigger, DefaultAlarmOverlay, UpdatableEventLike,
     };
 
     use super::*;
@@ -2218,6 +2319,99 @@ END:VCALENDAR";
         let overwrite = file
             .component_with(|c| c.uid() == "ev-ow" && c.rid() == Some(&rid))
             .unwrap();
+        assert_eq!(overwrite.start(), Some(&rid));
+        assert_eq!(overwrite.summary(), Some(&"Custom Summary".to_string()));
+        assert_eq!(overwrite.sequence(), Some(1));
+    }
+
+    #[test]
+    fn create_overwrite_success_event_datetime() {
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2024, 5, 1).unwrap();
+        let base_start = base_date.and_time(NaiveTime::from_hms_opt(12, 0, 0).unwrap());
+        let base_end = base_date.and_time(NaiveTime::from_hms_opt(14, 0, 0).unwrap());
+        let start = CalDate::DateTime(CalDateTime::Timezone(base_start, tz.name().to_string()));
+        let end = CalDate::DateTime(CalDateTime::Timezone(base_end, tz.name().to_string()));
+
+        let rid_date = NaiveDate::from_ymd_opt(2024, 5, 15).unwrap();
+        let rid_dt = rid_date.and_time(NaiveTime::from_hms_opt(12, 0, 0).unwrap());
+        let rid = CalDate::DateTime(CalDateTime::Timezone(rid_dt, tz.name().to_string()));
+
+        let mut file = new_file(
+            EventBuilder::new("ev-ow")
+                .start(start)
+                .end(end)
+                .rrule("FREQ=WEEKLY;COUNT=4".parse().unwrap())
+                .done(),
+        );
+
+        file.create_overwrite::<_, _, ColError>("ev-ow", rid.clone(), tz, |_base, overwrite| {
+            overwrite.set_summary(Some("Custom Summary".into()));
+            Ok(())
+        })
+        .unwrap();
+
+        // The overwrite component should now be present.
+        let overwrite = file
+            .component_with(|c| c.uid() == "ev-ow" && c.rid() == Some(&rid))
+            .unwrap();
+        assert_eq!(overwrite.start(), Some(&rid));
+        assert_eq!(
+            overwrite.as_event().unwrap().end(),
+            Some(&CalDate::DateTime(CalDateTime::Timezone(
+                NaiveDate::from_ymd_opt(2024, 5, 15)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(14, 0, 0).unwrap()),
+                tz.name().to_string()
+            )))
+        );
+        assert_eq!(overwrite.summary(), Some(&"Custom Summary".to_string()));
+        assert_eq!(overwrite.sequence(), Some(1));
+    }
+
+    #[test]
+    fn create_overwrite_success_event_datetime_dst_gap() {
+        let tz = &chrono_tz::Europe::Berlin;
+        let base_date = NaiveDate::from_ymd_opt(2026, 3, 29).unwrap();
+        // Create event with DST gap inside
+        let base_start = base_date.and_time(NaiveTime::from_hms_opt(1, 0, 0).unwrap());
+        let base_end = base_date.and_time(NaiveTime::from_hms_opt(4, 0, 0).unwrap());
+        let start = CalDate::DateTime(CalDateTime::Timezone(base_start, tz.name().to_string()));
+        let end = CalDate::DateTime(CalDateTime::Timezone(base_end, tz.name().to_string()));
+
+        let rid_date = NaiveDate::from_ymd_opt(2026, 3, 29).unwrap();
+        let rid_dt = rid_date.and_time(NaiveTime::from_hms_opt(1, 0, 0).unwrap());
+        let rid = CalDate::DateTime(CalDateTime::Timezone(rid_dt, tz.name().to_string()));
+
+        let mut file = new_file(
+            EventBuilder::new("ev-ow")
+                .start(start)
+                .end(end)
+                .rrule("FREQ=WEEKLY;COUNT=4".parse().unwrap())
+                .done(),
+        );
+
+        file.create_overwrite::<_, _, ColError>("ev-ow", rid.clone(), tz, |_base, overwrite| {
+            overwrite.set_summary(Some("Custom Summary".into()));
+            Ok(())
+        })
+        .unwrap();
+
+        // The overwrite component should now be present.
+        let overwrite = file
+            .component_with(|c| c.uid() == "ev-ow" && c.rid() == Some(&rid))
+            .unwrap();
+        assert_eq!(overwrite.start(), Some(&rid));
+        // The end should be the same as before, ignoring that there is a DST gap in between
+        assert_eq!(
+            overwrite.as_event().unwrap().end(),
+            Some(&CalDate::DateTime(CalDateTime::Timezone(
+                NaiveDate::from_ymd_opt(2026, 3, 29)
+                    .unwrap()
+                    .and_time(NaiveTime::from_hms_opt(4, 0, 0).unwrap()),
+                tz.name().to_string()
+            )))
+        );
         assert_eq!(overwrite.summary(), Some(&"Custom Summary".to_string()));
         assert_eq!(overwrite.sequence(), Some(1));
     }
@@ -2226,28 +2420,45 @@ END:VCALENDAR";
     fn create_overwrite_success_todo() {
         // Verifies that create_overwrite works for a VTODO base (the CalCompType::Todo branch).
         let tz = &chrono_tz::Europe::Berlin;
-        let base_date = NaiveDate::from_ymd_opt(2024, 5, 1).unwrap();
-        let rid = CalDate::Date(base_date, CalCompType::Todo.into());
+        let base_start = NaiveDate::from_ymd_opt(2024, 5, 1).unwrap();
+        let base_due = NaiveDate::from_ymd_opt(2024, 5, 2).unwrap();
+        let start = CalDate::Date(base_start, CalCompType::Todo.into());
+        let due = CalDate::Date(base_due, CalCompType::Todo.into());
+
+        // pick the wrong type deliberately, because the type of the overwrite should depend on the
+        // base component type, not the date type of the RID.
+        let rid_date = NaiveDate::from_ymd_opt(2024, 5, 8).unwrap();
+        let rid = CalDate::Date(rid_date, CalDateType::Exclusive);
 
         let mut todo = CalTodo::new("todo-ow");
-        todo.set_start(Some(rid.clone()));
+        todo.set_start(Some(start.clone()));
+        todo.set_due(Some(due.clone()));
         todo.set_rrule(Some("FREQ=WEEKLY;COUNT=3".parse().unwrap()));
 
         let mut cal = Calendar::default();
         cal.add_component(CalComponent::Todo(todo));
         let mut file = CalFile::new_simple(cal);
 
-        file.create_overwrite::<_, _, ColError>("todo-ow", rid.clone(), tz, |_base, overwrite| {
-            overwrite.set_summary(Some("Todo Overwrite".into()));
-            Ok(())
-        })
-        .unwrap();
+        let norm_rid = file
+            .create_overwrite::<_, _, ColError>("todo-ow", rid.clone(), tz, |_base, overwrite| {
+                overwrite.set_summary(Some("Todo Overwrite".into()));
+                Ok(())
+            })
+            .unwrap();
 
         let overwrite = file
-            .component_with(|c| c.uid() == "todo-ow" && c.rid() == Some(&rid))
+            .component_with(|c| c.uid() == "todo-ow" && c.rid() == Some(&norm_rid))
             .unwrap();
         assert_eq!(overwrite.ctype(), CalCompType::Todo);
         assert_eq!(overwrite.summary(), Some(&"Todo Overwrite".to_string()));
+        assert_eq!(overwrite.start(), Some(&norm_rid));
+        assert_eq!(
+            overwrite.as_todo().unwrap().due(),
+            Some(&CalDate::Date(
+                NaiveDate::from_ymd_opt(2024, 5, 9).unwrap(),
+                CalCompType::Todo.into()
+            ))
+        );
     }
 
     #[test]

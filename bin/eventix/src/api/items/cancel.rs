@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
 use eventix_ical::objects::{CalComponent, CalDate, CalEventStatus, EventLike, UpdatableEventLike};
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::{JsonError, run_post};
 use crate::util;
@@ -20,8 +20,7 @@ pub struct Request {
     rid: String,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -54,50 +53,35 @@ async fn run_cancel(
         .file_by_id_mut(&req.uid)
         .context(format!("Unable to find component with uid '{}'", req.uid))?;
 
-    let checks = |c: &CalComponent| -> anyhow::Result<()> {
-        if c.as_event().unwrap().status() == Some(CalEventStatus::Cancelled) {
-            return Err(anyhow!("Occurrence is already canceled"));
-        }
-        if !c.is_owned_by(user_mail.as_ref()) {
-            return Err(anyhow!("No edit permission"));
-        }
-        Ok(())
-    };
+    file.change_single(
+        &req.uid,
+        Some(&rid),
+        locale.timezone(),
+        user_mail.as_ref(),
+        true,
+        |base: Option<&CalComponent>, c: &mut CalComponent| {
+            if c.as_event().unwrap().status() == Some(CalEventStatus::Cancelled) {
+                return Err("Occurrence is already canceled".to_string());
+            }
+            let summary = match c.summary() {
+                Some(s) => Some(s),
+                None => base.and_then(|b| b.summary()),
+            };
+            if let Some(sum) = summary {
+                c.set_summary(Some(format!("Canceled: {sum}")));
+            }
+            c.as_event_mut()
+                .unwrap()
+                .set_status(Some(CalEventStatus::Cancelled));
+            c.touch();
+            Ok(())
+        },
+    )?;
 
-    let complete = |base: Option<&CalComponent>, c: &mut CalComponent| -> anyhow::Result<()> {
-        let summary = match base {
-            Some(base) => base.summary(),
-            None => c.summary(),
-        };
-        if let Some(sum) = summary {
-            c.set_summary(Some(format!("Canceled: {sum}")));
-        }
-        c.as_event_mut()
-            .unwrap()
-            .set_status(Some(CalEventStatus::Cancelled));
-        c.touch();
-        Ok(())
-    };
-
-    if let Some(comp) = file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == Some(&rid)) {
-        checks(comp)?;
-        complete(None, comp)?;
-    } else {
-        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
-        if !comp.is_recurrent() {
-            return Err(anyhow!("Component '{}' is not recurrent", req.uid));
-        }
-        checks(comp)?;
-
-        file.create_overwrite(&req.uid, rid, locale.timezone(), |base, comp| {
-            complete(Some(base), comp)
-        })
-        .context("Creating overwrite failed")?;
-    }
     file.save().context(format!(
         "Unable to save item with uid '{}' and rid '{:?}'",
         req.uid, req.rid
     ))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

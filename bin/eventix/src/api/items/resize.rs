@@ -14,7 +14,7 @@ use eventix_ical::col::Occurrence;
 use eventix_ical::objects::{CalDate, CalDateTime, EventLike, RangeEdge, UpdatableEventLike};
 use eventix_locale::Locale;
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::api::{JsonError, run_post};
 use crate::util;
@@ -29,8 +29,7 @@ pub struct Request {
     end_minute: Option<u32>,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -66,7 +65,7 @@ fn get_resize_op(
     c: &Occurrence<'_>,
     locale: &Arc<dyn Locale + Send + Sync>,
     req: &Request,
-    user_mail: Option<String>,
+    user_mail: Option<&String>,
     resize_start: bool,
 ) -> anyhow::Result<(RangeEdge, CalDate)> {
     if !c.is_owned_by(user_mail.as_ref()) {
@@ -178,41 +177,28 @@ async fn run_resize(
                 req.rid
             )
         })?;
-    let (edge, new_value) = get_resize_op(&occ, &locale, &req, user_mail, resize_start)?;
+    let (edge, new_value) = get_resize_op(&occ, &locale, &req, user_mail.as_ref(), resize_start)?;
 
-    if let Some(comp) =
-        file.component_with_mut(|c| c.uid() == &req.uid && c.rid() == req.rid.as_ref())
-    {
-        comp.as_event_mut()
-            .unwrap()
-            .resize(&ctx, edge, new_value, locale.timezone())
-            .map_err(anyhow::Error::from)?;
-        comp.touch();
-    } else {
-        let comp = file.component_with(|c| c.uid() == &req.uid).unwrap();
-        if !comp.is_recurrent() {
-            return Err(anyhow!("Component '{}' is not recurrent", req.uid));
-        }
+    file.change_single(
+        &req.uid,
+        req.rid.as_ref(),
+        locale.timezone(),
+        user_mail.as_ref(),
+        true,
+        |_base, comp| {
+            comp.as_event_mut()
+                .unwrap()
+                .resize(&ctx, edge, new_value, locale.timezone())
+                .map_err(|e| e.to_string())?;
+            comp.touch();
+            Ok(())
+        },
+    )?;
 
-        file.create_overwrite(
-            &req.uid,
-            req.rid.clone().unwrap(),
-            locale.timezone(),
-            |_base, comp| {
-                comp.as_event_mut()
-                    .unwrap()
-                    .resize(&ctx, edge, new_value, locale.timezone())
-                    .map_err(anyhow::Error::from)?;
-                comp.touch();
-                Ok::<(), anyhow::Error>(())
-            },
-        )
-        .context("Creating overwrite failed")?;
-    }
     file.save().context(format!(
         "Unable to save item with uid '{}' and rid '{:?}'",
         req.uid, req.rid
     ))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

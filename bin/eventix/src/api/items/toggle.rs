@@ -20,8 +20,7 @@ pub struct Request {
     rid: CalDate,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {}
+type Response = ();
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
@@ -68,5 +67,5 @@ async fn run_toggle(
     file.save()
         .with_context(|| format!("Unable to save item with uid '{}'", form.uid))?;
 
-    Ok(Json(Response {}))
+    Ok(Json(()))
 }

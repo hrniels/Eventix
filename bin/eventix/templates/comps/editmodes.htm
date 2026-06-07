@@ -3,7 +3,7 @@
         <i class="bi bi-pencil"></i>
         <span>{{ "Edit"|t(locale) }}</span>
     </a>
-    <div id="{{ id }}-menu" class="ev_response_menu">
+    <div id="{{ id }}-menu" class="ev_response_menu ev_response_menu_big">
         <a class="ev_button ev_button_normal ev_edit_modes_action" data-value="Occurrence">
             <i class="bi bi-calendar-event"></i>
             <span>{{ "This occurrence"|t(locale) }}</span>
@@ -22,7 +22,7 @@
 <script>
     $(document).ready(function () {
         $("#{{ id }}-toggle").on("click", function () {
-            $("#{{ id }}-menu").toggle();
+            toggleDropdown("{{ id }}");
         });
 
         $("#{{ id }}-menu a").on("click", function () {

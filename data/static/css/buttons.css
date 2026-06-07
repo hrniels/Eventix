@@ -257,12 +257,6 @@ a.ev_button_critical:hover {
     position: relative;
     display: inline-block;
 }
-.ev_response_dropdown a {
-    width: 100px;
-}
-.ev_response_dropdown a i {
-    margin-right: 8px;
-}
 
 .ev_response_menu {
     display: none;
@@ -275,11 +269,21 @@ a.ev_button_critical:hover {
     list-style: none;
     z-index: 1000;
 }
+
+.ev_response_dropdown.dropdown-flip .ev_response_menu {
+    top: auto;
+    bottom: 100%;
+}
 .ev_response_menu a {
-    width: 100px;
     margin: 0;
     margin-bottom: 2px;
     float: left;
+}
+.ev_response_menu_small a {
+    width: 90px;
+}
+.ev_response_menu_big a {
+    width: 100px;
 }
 
 /* ------------ ICONS ------------ */
