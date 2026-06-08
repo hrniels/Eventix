@@ -433,7 +433,7 @@ impl CalDate {
     /// Returns a new `CalDate` moved forward in time by the given number of days.
     ///
     /// Note that this ignores DST changes, meaning that the time will remain the same and only the
-    /// day is changed.
+    /// day is changed. This method panics if adding the given number of days fails.
     pub fn add_days(&self, days: u32) -> Self {
         let days = Days::new(days.into());
         match self {
