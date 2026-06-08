@@ -37,10 +37,10 @@ async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
-    run_post(state, move |state| Box::pin(run_complete(state, req))).await
+    run_post(state, move |state| Box::pin(run_postpone(state, req))).await
 }
 
-async fn run_complete(
+async fn run_postpone(
     state: &mut eventix_state::State,
     req: Request,
 ) -> anyhow::Result<Json<Response>> {
