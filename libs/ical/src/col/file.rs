@@ -655,10 +655,9 @@ impl CalFile {
     /// Creates a new overwrite for the occurrence of the component with given uid at given date.
     ///
     /// The `uid` specifies the id of the base component, whereas the `rid` specifies the date of
-    /// the occurrence. The timezone will be used to for the start date of the occurrence if
-    /// required. The function `func` will be called with a reference to the base component and a
-    /// mutable reference to the created overwrite, so that changes can be made before it is
-    /// stored.
+    /// the occurrence. The timezone will be used for the start date of the occurrence if required.
+    /// The function `func` will be called with a reference to the base component and a mutable
+    /// reference to the created overwrite, so that changes can be made before it is stored.
     ///
     /// Expects that the component with given uid exists, but *not* the overwrite.
     ///
