@@ -247,7 +247,11 @@ impl<'a> DayOccurrence<'a> {
             } else {
                 NaiveTime::from_hms_opt(23, 59, 59).unwrap()
             };
-            (end_time - start_time).num_minutes() as u64
+            if end_time >= start_time {
+                (end_time - start_time).num_minutes() as u64
+            } else {
+                0
+            }
         } else {
             // we do not call this if the event is running the full day on `date`
             assert!(self.inner.occurrence_ends_on(date));
