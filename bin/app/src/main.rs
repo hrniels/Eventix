@@ -115,6 +115,24 @@ fn main() {
     let args = Args::parse();
 
     let xdg = BaseDirectories::with_prefix(APP_ID);
+
+    // Change directory to something that is definitively visible. This seems to be a weird issue
+    // of webkit leading to the following problem if, for example, being embedded in a flatpak
+    // application that is started from the home directory (which is not mounted in the sandbox):
+    //
+    //   Connection: failed to receive credentials: Expecting to read a single byte for receiving
+    //     credentials but read zero bytes
+    //
+    // My guess is that webkit tries to detect whether it's running in a sandbox and that detection
+    // is brittle. Apparently the problem can be avoided by changing the current directory to some
+    // other place that is mounted in the sandbox.
+    //
+    // Other people had similar issues:
+    // - https://github.com/hugolabe/Wike/issues/239#issuecomment-4300133558
+    if let Some(data_home) = xdg.get_data_home() {
+        let _ = env::set_current_dir(data_home);
+    }
+
     let spawned_server = Arc::new(Mutex::new(ensure_webserver_running(&args)));
     let app = gtk::Application::builder().application_id(APP_ID).build();
 
