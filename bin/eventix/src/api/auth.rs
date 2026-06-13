@@ -10,10 +10,10 @@ use axum::{Router, routing::get};
 use eventix_locale::Locale;
 use eventix_state::EventixState;
 use formatx::formatx;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::api::JsonError;
+use crate::api::{HTMLResponse, JsonError};
 use crate::html::filters;
 
 pub fn router(state: EventixState) -> Router {
@@ -26,11 +26,6 @@ struct Request {
     url: String,
     op_url: String,
     spinner_id: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Response {
-    html: String,
 }
 
 #[derive(Template)]
@@ -60,5 +55,5 @@ async fn handler(
     .render()
     .context("auth template")?;
 
-    Ok(Json(Response { html }))
+    Ok(Json(HTMLResponse { html }))
 }

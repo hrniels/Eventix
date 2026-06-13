@@ -150,7 +150,7 @@
                             {% if !occ.is_recurrent() %}
                                 <a
                                     class="ev_button ev_button_normal ev_details_series_action"
-                                    href="javascript:loadWithPrev('/pages/items/edit?uid={{ occ.uid() }}&mode=Series')"
+                                    href="javascript:fireEvent(new EditEvent('{{ occ.uid() }}', null))"
                                 >
                                     <i class="bi bi-pencil"></i>
                                     <span>{{ "Edit"|t(locale) }}</span>
@@ -212,7 +212,7 @@
     }
 
     function editAlarm(uid, rid) {
-        fireEvent(new EditEvent(null, uid, rid));
+        fireEvent(new EditAlarmsEvent(null, uid, rid));
         getRequest(alarmURL(uid, rid, true), function (data) {
             $("#alarms").html(data.html);
         });

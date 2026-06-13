@@ -258,13 +258,10 @@ pub fn make_state_from_col(col: CollectionSettings) -> (EventixState, TempDir) {
 
 /// Builds a minimal axum `Router` wiring only the add-item endpoints.
 ///
-/// This is sufficient for create-event and create-todo tests. The pages router is mounted at
-/// `/pages/items/add` and the API items router at `/api/items`.
+/// This is sufficient for create-event and create-todo tests. The API items router at `/api/items`.
 #[allow(dead_code)]
 pub fn make_router(state: EventixState) -> Router {
-    Router::new()
-        .nest("/pages/items", eventix::pages::items::router(state.clone()))
-        .nest("/api/items", eventix::api::items::router(state))
+    Router::new().nest("/api/items", eventix::api::items::router(state))
 }
 
 /// Builds an axum `Router` wiring only the collections page endpoints.

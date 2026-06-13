@@ -64,8 +64,6 @@ const PAGE_SLUGS = {
     "/pages/weekly": "weekly",
     "/pages/list": "list",
     "/pages/calendars": "calendars",
-    "/pages/items/add": "items/add",
-    "/pages/items/edit": "items/edit",
     "/pages/collections/add": "collections/add",
     "/pages/collections/edit": "collections/edit",
 };

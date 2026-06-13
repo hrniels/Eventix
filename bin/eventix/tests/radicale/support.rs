@@ -238,7 +238,8 @@ impl RadicalePeer {
             ("summary", summary),
             ("due_date", "2026-04-20"),
         ]);
-        let (status, resp) = post(make_router(self.state.clone()), "/api/items/add", &body).await;
+        let (status, resp) =
+            post(make_router(self.state.clone()), "/api/items/addtodo", &body).await;
         if status != StatusCode::OK {
             return Err(anyhow::anyhow!("add failed with {status}: {resp}"));
         }

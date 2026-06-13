@@ -64,8 +64,10 @@
                 >
                     {% if page.any_writable_events() %}
                         <a
-                            href="javascript:loadWithPrev(
-                     '/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&allday=true')"
+                            id="weekly-add-{{ day.date }}"
+                            href="javascript:fireEvent(createAddEvent('weekly-add-{{ day.date }}',
+                                                                      'Event',
+                                                                      '{{ day.date.format("%Y-%m-%d") }}'))"
                             class="ev_add_icon ev_month_add_link"
                         >
                             <i class="bi bi-plus-square"></i>
@@ -177,11 +179,15 @@
                                         {% endif %}"
                                         data-date="{{ day.date.format("%Y-%m-%d") }}"
                                         data-hour="{{ hour }}"
+                                        id="weekly-hour-{{ day.date }}"
                                         class="ev_hour_cell"
                                     >
                                         {% if page.any_writable_events() %}
                                             <a
-                                                href="javascript:loadWithPrev('/pages/items/add?ctype=Event&date={{ day.date.format("%Y-%m-%d") }}&hour={{ hour }}')"
+                                                href="javascript:fireEvent(createAddEvent(
+                                                        'weekly-hour-{{ day.date }}',
+                                                        'Event',
+                                                        '{{ day.date.format("%Y-%m-%d") }}', {{ hour }}))"
                                                 class="ev_add_icon ev_week_hour_add_link"
                                             >
                                                 <i class="bi bi-plus-square"></i>
@@ -257,8 +263,7 @@
             e.preventDefault();
             const date = target.dataset.date;
             const hour = target.dataset.hour;
-            const url = "/pages/items/add?ctype=Event&date=" + date + "&hour=" + hour;
-            loadWithPrev(url);
+            fireEvent(createAddEvent(target.id, "Event", date, parseInt(hour)));
         }
     });
 

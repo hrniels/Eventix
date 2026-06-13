@@ -3,12 +3,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod add;
+pub mod addtodo;
 pub mod cancel;
 pub mod complete;
 pub mod copy;
 pub mod delete;
 pub mod details;
 pub mod dstwarn;
+pub mod edit;
 pub mod editalarm;
 pub mod occlist;
 pub mod postpone;
@@ -25,12 +27,14 @@ pub fn router(state: EventixState) -> Router {
     Router::new()
         .with_state(state.clone())
         .merge(add::router(state.clone()))
+        .merge(addtodo::router(state.clone()))
         .merge(cancel::router(state.clone()))
         .merge(complete::router(state.clone()))
         .merge(copy::router(state.clone()))
         .merge(delete::router(state.clone()))
         .merge(details::router(state.clone()))
         .merge(dstwarn::router(state.clone()))
+        .merge(edit::router(state.clone()))
         .merge(editalarm::router(state.clone()))
         .merge(occlist::router(state.clone()))
         .merge(postpone::router(state.clone()))

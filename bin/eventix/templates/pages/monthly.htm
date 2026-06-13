@@ -83,7 +83,7 @@
                 >
                     {% if page.any_writable_events() %}
                     <a
-                        href="javascript:loadWithPrev('/pages/items/add?ctype=Event&date={{ date.format("%Y-%m-%d") }}')"
+                        href="javascript:fireEvent(createAddEvent('Event', '{{ date.format("%Y-%m-%d") }}'))"
                         class="ev_add_icon ev_month_add_link"
                     >
                         <i class="bi bi-plus-square"></i>

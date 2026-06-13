@@ -11,10 +11,10 @@ use eventix_ical::col::CalDir;
 use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, DateContext, EventLike};
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::api::JsonError;
+use crate::api::{HTMLResponse, JsonError};
 use crate::comps::{
     editalarm::EditAlarmTemplate, editmodes::EditModesTemplate, organizer::OrganizerTemplate,
     partstat::PartStatTemplate, postpone::PostponeTemplate,
@@ -33,11 +33,6 @@ pub struct Request {
     uid: String,
     rid: Option<CalDate>,
     edit: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct Response {
-    html: String,
 }
 
 #[derive(Template)]
@@ -167,5 +162,5 @@ async fn handler(
     .render()
     .context("details template")?;
 
-    Ok(Json(Response { html }))
+    Ok(Json(HTMLResponse { html }))
 }

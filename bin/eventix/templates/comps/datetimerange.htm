@@ -53,7 +53,8 @@
         }
     }
 
-    let requestCounter = 0;
+    if (typeof window.requestCounter === "undefined") window.requestCounter = {};
+    window.requestCounter["{{ id }}"] = 0;
 
     function warningBox() {
         return $("#{{ id }}dst_warning");
@@ -92,8 +93,8 @@
             return;
         }
 
-        requestCounter += 1;
-        let current = requestCounter;
+        window.requestCounter["{{ id }}"] += 1;
+        let current = window.requestCounter["{{ id }}"];
         let params = new URLSearchParams({
             from_date: fromDate,
             from_time: fromTime,
@@ -103,7 +104,7 @@
         });
 
         getRequest("/api/items/dstwarn?" + params.toString(), function (data) {
-            if (current !== requestCounter) return;
+            if (current !== window.requestCounter["{{ id }}"]) return;
 
             if (!data.warning) {
                 hideWarning();

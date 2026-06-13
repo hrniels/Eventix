@@ -9,9 +9,9 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-use crate::api::JsonError;
+use crate::api::{HTMLResponse, JsonError};
 use crate::comps::calbox::{CalendarBox, CalendarBoxMode, CalendarBoxTemplate};
 
 #[derive(Clone, Debug, Deserialize)]
@@ -22,11 +22,6 @@ pub struct Request {
     name: Option<String>,
     color: Option<String>,
     mode: CalendarBoxMode,
-}
-
-#[derive(Debug, Serialize)]
-struct Response {
-    html: String,
 }
 
 pub fn router(state: EventixState) -> Router {
@@ -73,5 +68,5 @@ async fn handler(
     .render()
     .context("auth template")?;
 
-    Ok(Json(Response { html }))
+    Ok(Json(HTMLResponse { html }))
 }

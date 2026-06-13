@@ -20,10 +20,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use eventix_state::EventixState;
+use serde::Serialize;
 use serde_json::json;
 use std::{future::Future, pin::Pin};
 
 type StateTask<'a, T> = Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send + 'a>>;
+
+#[derive(Debug, Serialize)]
+struct HTMLResponse {
+    html: String,
+}
 
 #[derive(Debug)]
 pub struct JsonError {

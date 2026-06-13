@@ -1,18 +1,6 @@
-<script type="text/javascript">
-    setFormPage(true);
-</script>
+<div class="ev_errors" id="form-errors" style="display: none;"></div>
 
-{% include "messages.htm" %}
-
-<form
-    id="add-form"
-    method="post"
-    {% if let Some(prev) = prev %}
-        action="/pages/items/add?ctype={{ ctype }}&prev={{ prev|urlencode_strict }}"
-    {% else %}
-        action="/pages/items/add?ctype={{ ctype }}"
-    {% endif %}
->
+<form id="add-form" method="post" action="/api/items/add?ctype={{ ctype }}">
     <div class="ev_border">
         <fieldset class="ev_form">
             <h1 id="title" class="ev_tabheader">
@@ -88,15 +76,8 @@
                     <a class="ev_button_big ev_button_normal" href="javascript:submitAddForm()">
                         <span>{{ "Save"|t(locale) }}</span>
                     </a>
-                    <a
-                        class="ev_button_big ev_button_normal"
-                        {% if let Some(prev) = prev %}
-                            href="javascript:navigateTo('{{ prev }}')"
-                        {% else %}
-                            href="javascript:navigateTo('/')"
-                        {% endif %}
-                    >
-                        <span>{{ "Back"|t(locale) }}</span>
+                    <a class="ev_button_big ev_button_normal" href="javascript:closePopup()">
+                        <span>{{ "Cancel"|t(locale) }}</span>
                     </a>
                 </div>
             </div>
@@ -123,11 +104,19 @@
         } else $("#alarm-tabs ul li:eq(1)").show();
     }
 
-    // Submits the add form via AJAX and injects the response fragment into #add-content.
     function submitAddForm() {
         if ($("#attendees-new-attendee").val() != "")
             errorDialog('{{ "error.new_attendee_not_empty"|t(locale) }}');
-        else formRequest("add-form", replaceContent, "html");
+        else formRequest("add-form", submitFormCallback, "json");
+    }
+
+    function submitFormCallback(data) {
+        if (!data.html) {
+            closePopup();
+            reloadContent();
+        } else {
+            $("#popup").html(data.html);
+        }
     }
 
     $(function () {

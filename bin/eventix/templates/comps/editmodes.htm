@@ -27,11 +27,9 @@
 
         $("#{{ id }}-menu a").on("click", function () {
             if ($(this).data("value") == "Series")
-                loadWithPrev("/pages/items/edit?uid={{ uid }}&mode=Series");
+                fireEvent(new EditEvent("{{ uid }}", null, "Series"));
             else {
-                loadWithPrev(
-                    "/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode=" + $(this).data("value"),
-                );
+                fireEvent(new EditEvent("{{ uid }}", "{{ rid }}", $(this).data("value")));
             }
         });
 

@@ -65,7 +65,7 @@ async fn todo_basic() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -100,7 +100,7 @@ async fn todo_with_due_date() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -139,7 +139,7 @@ async fn todo_with_start_and_due() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -174,7 +174,7 @@ async fn todo_status_needs_action() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -206,7 +206,7 @@ async fn todo_status_completed() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -239,7 +239,7 @@ async fn todo_status_in_process() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -272,7 +272,7 @@ async fn todo_with_utc_due() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -320,7 +320,7 @@ async fn todo_with_foreign_dst_gap_due_is_accepted() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -366,7 +366,7 @@ async fn todo_with_local_dst_gap_start_and_due_is_accepted() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -421,7 +421,7 @@ async fn todo_with_local_dst_fold_due_is_accepted() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -471,7 +471,7 @@ async fn recurring_todo_in_local_timezone_skips_gap_occurrence() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -531,7 +531,7 @@ async fn recurring_todo_in_foreign_timezone_keeps_first_fold_occurrence() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_success(&resp_body);
 
@@ -563,7 +563,7 @@ async fn todo_missing_summary() {
     let fields = merge_fields(base_todo_fields(), &[("calendar", CAL_ID), ("summary", "")]);
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_error(&resp_body);
     assert_no_ics(&cal_dir);
@@ -582,7 +582,7 @@ async fn todo_without_any_calendars() {
     let fields = merge_fields(base_todo_fields(), &[("summary", "Buy groceries")]);
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/pages/items/add?ctype=Todo", &body).await;
+    let (status, resp_body) = post(router, "/api/items/add?ctype=Todo", &body).await;
     assert_eq!(status, 200);
     assert_error(&resp_body);
     assert!(

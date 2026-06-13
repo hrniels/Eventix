@@ -28,6 +28,15 @@ class LargeState extends State {
     }
 }
 
+class FormState extends State {
+    constructor(ids, popup_pos, details_url) {
+        super("form");
+        this.ids = ids;
+        this.popup_pos = popup_pos;
+        this.details_url = details_url;
+    }
+}
+
 class PageState extends State {
     constructor(url) {
         super("page");
@@ -82,6 +91,7 @@ class DeselectEvent extends Event {
                 await _deselect(state.ids);
                 return new InitState();
 
+            case "form":
             case "page":
             case "large":
                 if (state.popup_pos != null) {
@@ -97,9 +107,9 @@ class DeselectEvent extends Event {
     }
 }
 
-class EditEvent extends Event {
+class EditAlarmsEvent extends Event {
     constructor(id, uid, rid) {
-        super("edit");
+        super("editalarms");
         this.data = {
             uid: uid,
             rid: rid,
@@ -131,6 +141,74 @@ class EditEvent extends Event {
     }
 }
 
+class AddEvent extends Event {
+    constructor(btnid, ctype, date, hour) {
+        super("add");
+        this.data = {
+            id: btnid,
+            ctype: ctype,
+            date: date,
+            hour: hour,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+            case "small":
+                if (state.name === "small") {
+                    await _deselect(state.ids);
+                }
+                await _openAddPopup(this.data);
+                return new FormState(null, null, null);
+
+            default:
+                return state;
+        }
+    }
+}
+
+class EditEvent extends Event {
+    constructor(uid, rid, mode = "Series") {
+        super("edit");
+        this.data = {
+            uid: uid,
+            rid: rid,
+            id: null,
+            mode: mode,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+                await _openLargePopup(this.data);
+                return new LargeState(null, null);
+
+            case "small":
+                let popup_pos = {
+                    top: $("#popup").css("top"),
+                    left: $("#popup").css("left"),
+                    width: $("#popup").width(),
+                };
+                let url = "/api/items/edit?uid=" + this.data.uid;
+                if (this.data.rid) url += "&rid=" + this.data.rid;
+                url += "&mode=" + this.data.mode;
+                await _loadPage(url);
+                setTimeout(async () => {
+                    await _animateOpenPopup();
+                }, 10);
+                return new FormState(state.ids, popup_pos);
+
+            case "page":
+                console.assert(false, "This should not happen");
+
+            default:
+                return state;
+        }
+    }
+}
+
 class CancelEvent extends Event {
     constructor() {
         super("cancel");
@@ -140,8 +218,11 @@ class CancelEvent extends Event {
         switch (state.name) {
             case "page":
             case "large":
+            case "form":
                 let new_state;
                 if (state.popup_pos != null) {
+                    if (state.name == "form")
+                        await _loadOccurrence(state.ids.uid, state.ids.rid, false);
                     await _shrinkPopup(state.popup_pos);
                     new_state = new SmallState(state.ids);
                 } else {
@@ -198,6 +279,10 @@ function createAuthEvent(cal, url, op_url, spinnerId) {
             "&spinner_id=" +
             encodeURIComponent(spinnerId),
     );
+}
+
+function createAddEvent(btnid, ctype, date, hour) {
+    return new AddEvent(btnid, ctype, date, hour);
 }
 
 let state = new InitState();
@@ -288,6 +373,15 @@ async function _animateOpenPopup() {
 async function _openLargePopup(el) {
     await _openFromElement("#" + el.id, async function () {
         await _loadOccurrence(el.uid, el.rid, true);
+    });
+}
+
+async function _openAddPopup(data) {
+    await _openFromElement("#" + data.id, async function () {
+        let url = "/api/items/add?ctype=" + data.ctype;
+        if (data.date) url += "&date=" + data.date;
+        if (data.hour) url += "&hour=" + data.hour;
+        await _loadPage(url);
     });
 }
 
@@ -459,6 +553,10 @@ async function _loadPage(url) {
             resolve();
         });
     });
+}
+
+function closePopup() {
+    fireEvent(new CancelEvent());
 }
 
 function _pageBoundingBox(el) {

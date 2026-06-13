@@ -113,7 +113,7 @@ async fn series_edit_todo_summary() {
         &[("summary", "Buy oat milk")],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -148,7 +148,7 @@ async fn series_edit_todo_add_due_date() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -189,7 +189,7 @@ async fn series_edit_todo_status_in_process() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -225,7 +225,7 @@ async fn series_edit_todo_status_completed() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -258,7 +258,7 @@ async fn series_edit_todo_status_cancelled() {
         &[("summary", "Old task"), ("status[status]", "CANCELLED")],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -294,7 +294,7 @@ async fn series_edit_todo_location_and_description() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -339,7 +339,7 @@ async fn series_edit_todo_add_rrule_with_new_start() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -386,7 +386,7 @@ async fn series_edit_todo_due_in_local_dst_fold_is_accepted() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -434,7 +434,7 @@ async fn series_edit_recurring_todo_with_foreign_gap_start_skips_gap_occurrence(
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -473,7 +473,7 @@ async fn series_edit_todo_stale_rejected() {
         &[("summary", "Should not save")],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -496,7 +496,7 @@ async fn series_edit_todo_missing_summary() {
 
     let fields = merge_fields(base_edit_todo_fields(&edit_start), &[("summary", "")]);
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
     let (status, resp_body) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
@@ -532,7 +532,7 @@ async fn edit_form_prefills_local_tz_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
     let (status, resp_body) = get(router, &uri).await;
     assert_eq!(status, 200);
     assert_checked(&resp_body, "start_endfrom_enabled");
@@ -569,7 +569,7 @@ async fn edit_form_prefills_foreign_tz_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
     let (status, resp_body) = get(router, &uri).await;
     assert_eq!(status, 200);
     assert_not_checked(&resp_body, "start_endfrom_enabled");
@@ -604,7 +604,7 @@ async fn edit_form_prefills_utc_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
     let (status, resp_body) = get(router, &uri).await;
     assert_eq!(status, 200);
     assert_not_checked(&resp_body, "start_endfrom_enabled");
@@ -639,7 +639,7 @@ async fn edit_form_prefills_allday_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
     let (status, resp_body) = get(router, &uri).await;
     assert_eq!(status, 200);
     assert_checked(&resp_body, "start_endall_day");
@@ -672,7 +672,7 @@ async fn edit_form_prefills_todo_with_no_dates() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
     let (status, resp_body) = get(router, &uri).await;
     assert_eq!(status, 200);
     assert_not_checked(&resp_body, "start_endfrom_enabled");
