@@ -26,12 +26,7 @@ async fn get_returns_html() {
     let (status, body) = get(router, &uri).await;
     assert_eq!(status, 200);
 
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|_| panic!("response is not valid JSON: {body}"));
-    assert!(
-        json.get("html").and_then(|v| v.as_str()).is_some(),
-        "expected 'html' key in response JSON, got: {json}"
-    );
+    assert!(!body.html.is_empty(), "expected non-empty html");
 }
 
 /// Fetching the alarm editor for an unknown UID returns a non-200 status.

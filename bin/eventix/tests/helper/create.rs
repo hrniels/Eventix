@@ -4,6 +4,7 @@
 
 use std::{path::Path, sync::Arc};
 
+use eventix::api::HTMLResponse;
 use eventix_ical::col::CalFile;
 
 use crate::helper::CAL_ID;
@@ -36,14 +37,11 @@ pub fn read_created_ics(cal_dir: &Path) -> CalFile {
     CalFile::new_from_file(Arc::new(CAL_ID.to_string()), entries[0].clone()).unwrap()
 }
 
-/// Asserts that the HTML response body contains a success info banner and no error banner.
-pub fn assert_success(body: &str) {
+/// Asserts that the response indicates a successful creation (no errors).
+pub fn assert_success(resp: &HTMLResponse) {
     assert!(
-        body.contains("ev_msg_info") || body.contains("info.event_added"),
-        "expected success info banner in response, got:\n{body}"
-    );
-    assert!(
-        !body.contains("ev_msg_error"),
-        "expected no error banner in response, got:\n{body}"
+        resp.errors.is_empty(),
+        "expected no errors in response, got: {:?}",
+        resp.errors
     );
 }

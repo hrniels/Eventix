@@ -59,7 +59,7 @@ async fn handler(
         .render()
         .context("log template")?;
 
-    Ok(Json(HTMLResponse { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }
 
 async fn log_info(

@@ -55,5 +55,5 @@ async fn handler(
     .render()
     .context("auth template")?;
 
-    Ok(Json(HTMLResponse { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }

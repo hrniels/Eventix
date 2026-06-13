@@ -29,5 +29,5 @@ async fn handler(State(state): State<EventixState>) -> Result<impl IntoResponse,
 
     let html = HelpTemplate { locale }.render().context("help template")?;
 
-    Ok(Json(HTMLResponse { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }

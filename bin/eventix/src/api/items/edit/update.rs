@@ -309,28 +309,22 @@ pub async fn content(
     let locale = state.lock().await.locale();
     let mut page = Page::new(&state).await;
 
-    let form = {
+    let (form, errors) = {
         let mut state = state.lock().await;
         match action_update(&mut page, &locale, &mut state, &mut form, &mut req) {
             Ok((true, Some(uid))) => {
-                // present the user an edit form for the created series
                 req.uid = uid;
                 req.mode = EditMode::Series;
                 req.rid = None;
-                None
+                (None, Vec::new())
             }
             Ok((true, None)) => {
-                return Ok(Json(HTMLResponse {
-                    html: "".to_string(),
-                }));
+                return Ok(Json(HTMLResponse::new(String::new())));
             }
-            Ok((false, _)) => Some(form),
-            Err(e) => {
-                page.add_localized_error(&locale, &state, e);
-                Some(form)
-            }
+            Ok((false, _)) => (Some(form), page.errors().to_vec()),
+            Err(e) => return Err(e.into()),
         }
     };
 
-    super::index::content_with(locale, State(state), Query(req), form).await
+    super::index::content_with(locale, State(state), Query(req), form, errors).await
 }

@@ -57,7 +57,7 @@ pub async fn content(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
     let locale = state.lock().await.locale();
-    content_with(locale, State(state), Query(req), None).await
+    content_with(locale, State(state), Query(req), None, Vec::new()).await
 }
 
 /// Renders the edit-item form fragment with the given page state and form data.
@@ -67,6 +67,7 @@ pub async fn content_with(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
     form: Option<CompEdit>,
+    errors: Vec<String>,
 ) -> Result<Json<HTMLResponse>, JsonError> {
     let state = state.lock().await;
 
@@ -180,5 +181,5 @@ pub async fn content_with(
     .render()
     .context("edit form template")?;
 
-    Ok(Json(HTMLResponse { html }))
+    Ok(Json(HTMLResponse::with_errors(html, errors)))
 }

@@ -115,9 +115,9 @@ async fn series_edit_todo_summary() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -150,9 +150,9 @@ async fn series_edit_todo_add_due_date() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -191,9 +191,9 @@ async fn series_edit_todo_status_in_process() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -227,9 +227,9 @@ async fn series_edit_todo_status_completed() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -260,9 +260,9 @@ async fn series_edit_todo_status_cancelled() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -296,9 +296,9 @@ async fn series_edit_todo_location_and_description() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -341,9 +341,9 @@ async fn series_edit_todo_add_rrule_with_new_start() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -388,9 +388,9 @@ async fn series_edit_todo_due_in_local_dst_fold_is_accepted() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     match first_component(&ics).end_or_due().unwrap() {
@@ -436,9 +436,9 @@ async fn series_edit_recurring_todo_with_foreign_gap_start_skips_gap_occurrence(
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let ny = chrono_tz::America::New_York;
@@ -475,9 +475,9 @@ async fn series_edit_todo_stale_rejected() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
 }
 
 /// An edit with an empty summary is rejected.
@@ -498,9 +498,9 @@ async fn series_edit_todo_missing_summary() {
     let body = encode_form(&fields);
     let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
 }
 
 // --- Edit form start/end prefill tests ---
@@ -532,16 +532,16 @@ async fn edit_form_prefills_local_tz_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_checked(&resp_body, "start_endfrom_enabled");
-    assert_field_value(&resp_body, "start_end[from][date]", "2026-05-28");
-    assert_field_value(&resp_body, "start_end[from][time]", "16:00");
-    assert_checked(&resp_body, "start_endto_enabled");
-    assert_field_value(&resp_body, "start_end[to][date]", "2026-05-28");
-    assert_field_value(&resp_body, "start_end[to][time]", "17:30");
-    assert_timezone(&resp_body, "Europe/Berlin");
+    assert_checked(&resp, "start_endfrom_enabled");
+    assert_field_value(&resp, "start_end[from][date]", "2026-05-28");
+    assert_field_value(&resp, "start_end[from][time]", "16:00");
+    assert_checked(&resp, "start_endto_enabled");
+    assert_field_value(&resp, "start_end[to][date]", "2026-05-28");
+    assert_field_value(&resp, "start_end[to][time]", "17:30");
+    assert_timezone(&resp, "Europe/Berlin");
 }
 
 /// Opening the edit form for a todo in a foreign (non-local) timezone keeps its original timezone.
@@ -569,14 +569,14 @@ async fn edit_form_prefills_foreign_tz_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_not_checked(&resp_body, "start_endfrom_enabled");
-    assert_checked(&resp_body, "start_endto_enabled");
-    assert_field_value(&resp_body, "start_end[to][date]", "2026-05-28");
-    assert_field_value(&resp_body, "start_end[to][time]", "10:00");
-    assert_timezone(&resp_body, "America/New_York");
+    assert_not_checked(&resp, "start_endfrom_enabled");
+    assert_checked(&resp, "start_endto_enabled");
+    assert_field_value(&resp, "start_end[to][date]", "2026-05-28");
+    assert_field_value(&resp, "start_end[to][time]", "10:00");
+    assert_timezone(&resp, "America/New_York");
 }
 
 /// Opening the edit form for a UTC todo shows the UTC wall clock time.
@@ -604,14 +604,14 @@ async fn edit_form_prefills_utc_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_not_checked(&resp_body, "start_endfrom_enabled");
-    assert_checked(&resp_body, "start_endto_enabled");
-    assert_field_value(&resp_body, "start_end[to][date]", "2026-05-28");
-    assert_field_value(&resp_body, "start_end[to][time]", "14:00");
-    assert_timezone(&resp_body, "UTC");
+    assert_not_checked(&resp, "start_endfrom_enabled");
+    assert_checked(&resp, "start_endto_enabled");
+    assert_field_value(&resp, "start_end[to][date]", "2026-05-28");
+    assert_field_value(&resp, "start_end[to][time]", "14:00");
+    assert_timezone(&resp, "UTC");
 }
 
 /// Opening the edit form for an all-day todo.
@@ -639,13 +639,13 @@ async fn edit_form_prefills_allday_todo() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_checked(&resp_body, "start_endall_day");
-    assert_not_checked(&resp_body, "start_endfrom_enabled");
-    assert_checked(&resp_body, "start_endto_enabled");
-    assert_field_value(&resp_body, "start_end[to][date]", "2026-05-28");
+    assert_checked(&resp, "start_endall_day");
+    assert_not_checked(&resp, "start_endfrom_enabled");
+    assert_checked(&resp, "start_endto_enabled");
+    assert_field_value(&resp, "start_end[to][date]", "2026-05-28");
 }
 
 /// Opening the edit form for a todo with no dates at all.
@@ -672,9 +672,9 @@ async fn edit_form_prefills_todo_with_no_dates() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/api/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_not_checked(&resp_body, "start_endfrom_enabled");
-    assert_not_checked(&resp_body, "start_endto_enabled");
+    assert_not_checked(&resp, "start_endfrom_enabled");
+    assert_not_checked(&resp, "start_endto_enabled");
 }

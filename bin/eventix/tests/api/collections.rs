@@ -8,7 +8,6 @@ mod helper;
 use axum::http::StatusCode;
 use eventix::APP_ID;
 use eventix_state::{CalendarSettings, CollectionSettings, Settings, SyncerType, load_from_file};
-use serde_json::Value;
 use tempfile::TempDir;
 
 use helper::{CAL_ID, COL_ID, get, make_calendars_api_router, make_state_from_col, post_query};
@@ -88,7 +87,7 @@ async fn log_returns_no_entries_when_log_file_is_missing() {
 
     assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
 
-    let html = body_to_html(&body);
+    let html = body.html;
     assert!(html.contains("Log of collection"));
     assert!(html.contains(COL_ID));
     assert!(html.contains("- No entries -"));
@@ -111,19 +110,11 @@ async fn log_returns_rendered_log_contents() {
 
     assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
 
-    let html = body_to_html(&body);
+    let html = body.html;
     assert!(html.contains("Log of collection"));
     assert!(html.contains(COL_ID));
     assert!(html.contains("from"));
     assert!(html.contains("line one"));
     assert!(html.contains("line two"));
     assert!(html.contains("<pre id=\"log\">"));
-}
-
-fn body_to_html(body: &str) -> String {
-    let json: Value = serde_json::from_str(body).expect("parse JSON response");
-    json.get("html")
-        .and_then(Value::as_str)
-        .expect("html field")
-        .to_string()
 }

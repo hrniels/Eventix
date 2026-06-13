@@ -4,7 +4,7 @@
 
 use tempfile::TempDir;
 
-use crate::helper::{CAL_ID, get, make_router, make_state};
+use crate::helper::{CAL_ID, get_raw, make_router, make_state};
 
 use super::write_event_ics;
 
@@ -23,7 +23,7 @@ async fn returns_gap_hit_for_range_spanning_spring_forward() {
                ?from_date=2026-10-04&from_time=01:45\
                &to_date=2026-10-04&to_time=03:00\
                &timezone=Australia%2FLord_Howe";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -48,7 +48,7 @@ async fn returns_fold_hit_for_range_spanning_fall_back() {
                ?from_date=2025-04-06&from_time=02:30\
                &to_date=2025-04-06&to_time=04:00\
                &timezone=Pacific%2FChatham";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -73,7 +73,7 @@ async fn returns_null_without_transition() {
                ?from_date=2026-05-15&from_time=09:00\
                &to_date=2026-05-15&to_time=10:00\
                &timezone=Pacific%2FChatham";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -93,7 +93,7 @@ async fn returns_null_for_incomplete_fields() {
                ?from_date=2026-03-29&from_time=01:30\
                &to_date=2026-03-29&to_time=10:\
                &timezone=Europe%2FBerlin";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();

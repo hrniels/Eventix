@@ -18,7 +18,9 @@ use tempfile::TempDir;
 use tokio::time::{Duration, sleep};
 use tower::ServiceExt;
 
-use helper::{CAL_ID, get, make_calendars_api_router, make_state, make_state_from_col, post_query};
+use helper::{
+    CAL_ID, get_raw, make_calendars_api_router, make_state, make_state_from_col, post_query,
+};
 
 fn write_event_with_attendees(cal_dir: &Path, uid: &str, attendees: &[&str]) {
     let path = cal_dir.join(format!("{uid}.ics"));
@@ -81,7 +83,7 @@ async fn attendees_returns_sorted_formatted_matches() {
     let state = make_state(&cal_dir);
     let router = make_calendars_api_router(state);
 
-    let (status, body) = get(router, "/api/attendees?term=example.com").await;
+    let (status, body) = get_raw(router, "/api/attendees?term=example.com").await;
 
     assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
     assert_eq!(
@@ -106,7 +108,7 @@ async fn attendees_returns_empty_list_for_no_matches() {
     let state = make_state(&cal_dir);
     let router = make_calendars_api_router(state);
 
-    let (status, body) = get(router, "/api/attendees?term=nomatch").await;
+    let (status, body) = get_raw(router, "/api/attendees?term=nomatch").await;
 
     assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
     assert_eq!(

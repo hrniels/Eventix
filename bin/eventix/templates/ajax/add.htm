@@ -116,6 +116,14 @@
             reloadContent();
         } else {
             $("#popup").html(data.html);
+            if (data.errors && data.errors.length > 0) {
+                var errorsHtml = "<ul>";
+                for (var i = 0; i < data.errors.length; i++) {
+                    errorsHtml += "<li>" + $("<div>").text(data.errors[i]).html() + "</li>";
+                }
+                errorsHtml += "</ul>";
+                $("#form-errors").html(errorsHtml).show();
+            }
         }
     }
 

@@ -162,5 +162,5 @@ async fn handler(
     .render()
     .context("details template")?;
 
-    Ok(Json(HTMLResponse { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }

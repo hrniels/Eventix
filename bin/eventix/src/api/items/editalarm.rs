@@ -50,7 +50,7 @@ pub async fn get_handler(
         .render()
         .context("details template")?;
 
-    Ok(Json(HTMLResponse { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }
 
 pub async fn post_handler(

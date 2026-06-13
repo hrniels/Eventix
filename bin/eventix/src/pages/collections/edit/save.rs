@@ -55,17 +55,21 @@ pub async fn handler(
 ) -> anyhow::Result<impl IntoResponse, HTMLError> {
     let mut page = super::new_page(&state).await;
 
-    let (locale, form) = {
+    let (locale, form, errors) = {
         let mut state = state.lock().await;
         let locale = state.locale();
-        let form = if action_update(&mut page, &locale, &mut state, &mut form, &req).await? {
-            page.add_info(locale.translate("info.collection_updated"));
-            None
-        } else {
-            Some(form)
-        };
-        (locale, form)
+        match action_update(&mut page, &locale, &mut state, &mut form, &req).await {
+            Ok(true) => {
+                page.add_info(locale.translate("info.collection_updated"));
+                (locale, None, Vec::new())
+            }
+            Ok(false) => (locale, Some(form), page.errors().to_vec()),
+            Err(e) => {
+                page.add_localized_error(&locale, &state, e);
+                (locale, Some(form), page.errors().to_vec())
+            }
+        }
     };
 
-    super::index::content_with(page, locale, State(state), form, req).await
+    super::index::content_with(page, locale, State(state), form, req, errors).await
 }

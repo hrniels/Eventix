@@ -60,21 +60,22 @@ pub async fn handler(
 ) -> anyhow::Result<Json<HTMLResponse>, JsonError> {
     let locale = state.lock().await.locale();
 
-    {
+    let errors = {
         let mut page = Page::default();
         let mut state = state.lock().await;
         match action_update(&mut page, &locale, &mut state, &mut form, &req).await {
             Ok(true) => {
                 page.add_info(locale.translate("info.event_added"));
 
-                return Ok(Json(HTMLResponse {
-                    html: "".to_string(),
-                }));
+                return Ok(Json(HTMLResponse::new(String::new())));
             }
-            Ok(false) => {}
-            Err(e) => page.add_localized_error(&locale, &state, e),
+            Ok(false) => page.errors().to_vec(),
+            Err(e) => {
+                page.add_localized_error(&locale, &state, e);
+                page.errors().to_vec()
+            }
         }
-    }
+    };
 
-    super::index::content_with(locale, State(state), form, req).await
+    super::index::content_with(locale, State(state), form, req, errors).await
 }

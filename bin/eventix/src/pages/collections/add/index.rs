@@ -6,13 +6,14 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::{
     extract::{Query, State},
-    response::{Html, IntoResponse},
+    response::IntoResponse,
 };
 use eventix_locale::Locale;
 use eventix_state::EventixState;
 use std::sync::Arc;
 
 use super::Request;
+use crate::api::HTMLResponse;
 use crate::pages::{Page, collections::Form, error::HTMLError};
 use crate::{comps::syncer::SyncerTemplate, html::filters};
 
@@ -34,7 +35,15 @@ pub async fn content(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let locale = state.lock().await.locale();
-    content_with(Page::default(), locale, State(state), Form::new(), req).await
+    content_with(
+        Page::default(),
+        locale,
+        State(state),
+        Form::new(),
+        req,
+        Vec::new(),
+    )
+    .await
 }
 
 /// Renders the add-collection form fragment with the given page state and form data.
@@ -45,6 +54,7 @@ pub async fn content_with(
     State(_state): State<EventixState>,
     form: Form,
     req: Request,
+    errors: Vec<String>,
 ) -> Result<impl IntoResponse, HTMLError> {
     let html = CollectionAddTemplate {
         page,
@@ -56,5 +66,5 @@ pub async fn content_with(
     .render()
     .context("collections add content template")?;
 
-    Ok(Html(html))
+    Ok(HTMLResponse::with_errors(html, errors))
 }

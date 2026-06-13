@@ -75,9 +75,9 @@ async fn timed_event_basic() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -122,9 +122,9 @@ async fn timed_event_with_location_description() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -162,9 +162,9 @@ async fn timed_event_with_relative_alarm() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -205,9 +205,9 @@ async fn timed_event_missing_summary() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -235,9 +235,9 @@ async fn timed_event_end_before_start() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -265,9 +265,9 @@ async fn timed_event_missing_end() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -299,9 +299,9 @@ async fn allday_event_basic() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -342,9 +342,9 @@ async fn allday_multi_day() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -387,9 +387,9 @@ async fn allday_mixed_with_time() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -420,9 +420,9 @@ async fn recurring_daily_no_end() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -465,9 +465,9 @@ async fn recurring_weekly_mon_wed() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -508,9 +508,9 @@ async fn recurring_monthly_by_monthday() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -547,9 +547,9 @@ async fn recurring_yearly_same_day() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -585,9 +585,9 @@ async fn recurring_yearly_by_monthday() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -629,9 +629,9 @@ async fn recurring_with_count() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -666,9 +666,9 @@ async fn recurring_with_until() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -707,9 +707,9 @@ async fn recurring_monthly_bymonthday_missing_day() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -742,9 +742,9 @@ async fn recurring_yearly_byweekday_missing_nth() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -776,9 +776,9 @@ async fn event_with_one_required_attendee() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -821,9 +821,9 @@ async fn event_with_optional_attendee() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -859,9 +859,9 @@ async fn event_with_two_attendees() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -894,9 +894,9 @@ async fn timed_event_missing_start() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -921,9 +921,9 @@ async fn recurring_event_missing_start() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -954,9 +954,9 @@ async fn recurring_with_until_missing_date() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -988,9 +988,9 @@ async fn recurring_yearly_bymonthday_missing_month() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -1022,9 +1022,9 @@ async fn recurring_yearly_bymonthday_missing_day() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -1057,9 +1057,9 @@ async fn recurring_yearly_byweekday_missing_weekday() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -1094,9 +1094,9 @@ async fn timed_event_alarm_absolute() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -1144,9 +1144,9 @@ async fn timed_event_alarm_absolute_missing_datetime() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
     assert_no_ics(&cal_dir);
 }
 
@@ -1184,9 +1184,9 @@ async fn timed_event_start_in_dst_gap() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -1227,9 +1227,9 @@ async fn timed_event_utc() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -1288,9 +1288,9 @@ async fn timed_event_end_in_dst_fold() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let comp = first_component(&ics);
@@ -1337,9 +1337,9 @@ async fn recurring_event_in_local_timezone_skips_gap_occurrence() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let berlin = chrono_tz::Europe::Berlin;
@@ -1394,9 +1394,9 @@ async fn recurring_event_in_foreign_timezone_keeps_first_fold_occurrence() {
     );
     let body = encode_form(&fields);
 
-    let (status, resp_body) = post(router, "/api/items/add?ctype=Event", &body).await;
+    let (status, resp) = post(router, "/api/items/add?ctype=Event", &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_created_ics(&cal_dir);
     let ny = chrono_tz::America::New_York;

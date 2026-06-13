@@ -5,6 +5,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use eventix::api::HTMLResponse;
 use eventix_ical::col::CalFile;
 
 use crate::helper::CAL_ID;
@@ -39,16 +40,12 @@ pub fn read_ics_by_uid(cal_dir: &Path, uid: &str) -> CalFile {
     CalFile::new_from_file(Arc::new(CAL_ID.to_string()), entries[0].clone()).unwrap()
 }
 
-/// Asserts that the HTML response body indicates a successful edit (the edit form is re-rendered
-/// without an error banner).
-pub fn assert_success(body: &str) {
+/// Asserts that the response indicates a successful edit (no errors).
+pub fn assert_success(resp: &HTMLResponse) {
     assert!(
-        body.contains("id=\"edit-form\""),
-        "expected edit form in response, got:\n{body}"
-    );
-    assert!(
-        !body.contains("ev_msg_error"),
-        "expected no error banner in response, got:\n{body}"
+        resp.errors.is_empty(),
+        "expected no errors in response, got: {:?}",
+        resp.errors
     );
 }
 
@@ -64,40 +61,43 @@ pub fn mtime_nanos(path: &Path) -> u128 {
 }
 
 /// Asserts that the element with the given `id` in the HTML body is checked.
-pub fn assert_checked(body: &str, id: &str) {
+pub fn assert_checked(resp: &HTMLResponse, id: &str) {
     let escaped_id = regex::escape(id);
     let pattern = format!(r#"id="{escaped_id}"[^>]*checked="checked""#);
     let re = regex::Regex::new(&pattern).unwrap();
     assert!(
-        re.is_match(body),
-        "expected element with id=\"{id}\" to be checked, but it was not.\nResponse body:\n{body}"
+        re.is_match(&resp.html),
+        "expected element with id=\"{id}\" to be checked, but it was not.\nHTML:\n{}",
+        resp.html
     );
 }
 
 /// Asserts that the element with the given `id` in the HTML body is NOT checked.
-pub fn assert_not_checked(body: &str, id: &str) {
+pub fn assert_not_checked(resp: &HTMLResponse, id: &str) {
     let escaped_id = regex::escape(id);
     let pattern = format!(r#"id="{escaped_id}"[^>]*checked="checked""#);
     let re = regex::Regex::new(&pattern).unwrap();
     assert!(
-        !re.is_match(body),
-        "expected element with id=\"{id}\" NOT to be checked, but it was.\nResponse body:\n{body}"
+        !re.is_match(&resp.html),
+        "expected element with id=\"{id}\" NOT to be checked, but it was.\nHTML:\n{}",
+        resp.html
     );
 }
 
 /// Asserts that a field with the given `name` has the expected `value`.
-pub fn assert_field_value(body: &str, name: &str, value: &str) {
+pub fn assert_field_value(resp: &HTMLResponse, name: &str, value: &str) {
     let escaped_name = regex::escape(name);
     let escaped_value = regex::escape(value);
     let pattern = format!(r#"name="{escaped_name}"[^>]*value="{escaped_value}""#);
     let re = regex::Regex::new(&pattern).unwrap();
     assert!(
-        re.is_match(body),
-        "expected field with name=\"{name}\" to have value=\"{value}\", but it was not found.\nResponse body:\n{body}"
+        re.is_match(&resp.html),
+        "expected field with name=\"{name}\" to have value=\"{value}\", but it was not found.\nHTML:\n{}",
+        resp.html
     );
 }
 
 /// Asserts that the timezone field has the expected value.
-pub fn assert_timezone(body: &str, expected_tz: &str) {
-    assert_field_value(body, "start_end[timezone]", expected_tz);
+pub fn assert_timezone(resp: &HTMLResponse, expected_tz: &str) {
+    assert_field_value(resp, "start_end[timezone]", expected_tz);
 }

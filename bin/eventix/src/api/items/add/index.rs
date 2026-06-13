@@ -57,6 +57,7 @@ pub async fn handler(
         State(state),
         CompNew::new(&req, locale.timezone(), calendar),
         req,
+        Vec::new(),
     )
     .await
 }
@@ -68,6 +69,7 @@ pub async fn content_with(
     State(state): State<EventixState>,
     form: CompNew,
     req: Request,
+    errors: Vec<String>,
 ) -> Result<Json<HTMLResponse>, JsonError> {
     let state = state.lock().await;
 
@@ -130,5 +132,5 @@ pub async fn content_with(
     .render()
     .context("add form template")?;
 
-    Ok(Json(HTMLResponse { html }))
+    Ok(Json(HTMLResponse::with_errors(html, errors)))
 }

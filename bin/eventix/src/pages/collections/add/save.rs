@@ -47,14 +47,22 @@ pub async fn handler(
     let locale = state.lock().await.locale();
     let mut page = super::new_page(&state).await;
 
-    {
+    let errors = {
         let mut state = state.lock().await;
-        if action_update(&mut page, &locale, &mut state, &mut form).await? {
-            page.add_info(locale.translate("info.collection_added"));
+        match action_update(&mut page, &locale, &mut state, &mut form).await {
+            Ok(true) => {
+                page.add_info(locale.translate("info.collection_added"));
 
-            form = Form::new();
+                form = Form::new();
+                Vec::new()
+            }
+            Ok(false) => page.errors().to_vec(),
+            Err(e) => {
+                page.add_localized_error(&locale, &state, e);
+                page.errors().to_vec()
+            }
         }
-    }
+    };
 
-    super::index::content_with(page, locale, State(state), form, req).await
+    super::index::content_with(page, locale, State(state), form, req, errors).await
 }
