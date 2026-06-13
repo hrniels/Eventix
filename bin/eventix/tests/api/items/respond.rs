@@ -158,5 +158,5 @@ async fn no_email_account_returns_error() {
 
     let qs = encode_form(&[("uid", uid), ("stat", "Accept")]);
     let (status, _) = post_query(router, &format!("/api/items/respond?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }

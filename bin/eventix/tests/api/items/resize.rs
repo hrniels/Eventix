@@ -517,7 +517,7 @@ async fn both_start_and_end_returns_error() {
         ("end_minute", "0"),
     ]);
     let (status, _) = post_query(router, &format!("/api/items/resize?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Supplying neither start nor end parameters returns an error.
@@ -540,7 +540,7 @@ async fn neither_start_nor_end_returns_error() {
 
     let qs = encode_form(&[("uid", uid)]);
     let (status, _) = post_query(router, &format!("/api/items/resize?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Supplying an invalid minute (not 0 or 30) returns an error.
@@ -563,7 +563,7 @@ async fn invalid_minute_returns_error() {
 
     let qs = encode_form(&[("uid", uid), ("end_hour", "11"), ("end_minute", "15")]);
     let (status, _) = post_query(router, &format!("/api/items/resize?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Attempting to resize an all-day event returns an error.
@@ -579,7 +579,7 @@ async fn all_day_event_rejected() {
 
     let qs = encode_form(&[("uid", uid), ("end_hour", "11"), ("end_minute", "0")]);
     let (status, _) = post_query(router, &format!("/api/items/resize?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Resizing the end to the end-of-day midnight sentinel (hour=24, minute=0) sets DTEND to
@@ -646,7 +646,7 @@ async fn resize_start_after_end_returns_error() {
     // New start 11:00 is after the end (10:00 wall clock) in every timezone.
     let qs = encode_form(&[("uid", uid), ("start_hour", "11"), ("start_minute", "0")]);
     let (status, _) = post_query(router, &format!("/api/items/resize?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Resizing the end to a time before the existing start returns an error.
@@ -670,5 +670,5 @@ async fn resize_end_before_start_returns_error() {
     // New end 08:30 is before the start (09:00 wall clock) in every timezone.
     let qs = encode_form(&[("uid", uid), ("end_hour", "8"), ("end_minute", "30")]);
     let (status, _) = post_query(router, &format!("/api/items/resize?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }

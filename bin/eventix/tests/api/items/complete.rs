@@ -121,7 +121,7 @@ async fn non_recurrent_with_rid_returns_error() {
     // Supplying a rid for a non-recurrent component should fail.
     let qs = encode_form(&[("uid", uid), ("rid", "TTEurope/Berlin;2026-04-15T09:00:00")]);
     let (status, _) = post_query(router, &format!("/api/items/complete?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Supplying an unknown UID returns an error.
@@ -136,5 +136,5 @@ async fn unknown_uid_returns_error() {
 
     let qs = encode_form(&[("uid", "no-such-uid")]);
     let (status, _) = post_query(router, &format!("/api/items/complete?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }

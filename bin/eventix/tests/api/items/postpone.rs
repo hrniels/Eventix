@@ -82,5 +82,5 @@ async fn postpone_todo_without_due_returns_error() {
 
     let qs = encode_form(&[("uid", uid), ("delay_days", "1")]);
     let (status, _) = post_query(router, &format!("/api/items/postpone?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }

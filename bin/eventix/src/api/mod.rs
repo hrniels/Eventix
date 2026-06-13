@@ -97,8 +97,7 @@ impl IntoResponse for JsonError {
             "error": self.generate_message(),
         }));
 
-        // use a temporary and otherwise unused error code to simply keep the body below
-        (StatusCode::CONTINUE, body).into_response()
+        (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
     }
 }
 
