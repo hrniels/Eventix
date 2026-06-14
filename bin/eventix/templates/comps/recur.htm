@@ -246,13 +246,14 @@
     }
 
     $(function () {
-        const segmented = document.getElementById("{{ id }}_segmented");
-        const slot = segmented
-            ?.closest(".ev_form_row_expanded")
-            ?.previousElementSibling?.querySelector(".ev_form_row_segmented");
-        if (segmented && slot && segmented.parentElement !== slot) {
-            slot.appendChild(segmented);
-        }
+        const recurFreq = new SegmentedControl("{{ id }}", {
+            inputName: "{{ name }}[freq_seg]",
+            panels: {
+                WEEKLY: "#{{ id }}_weekly_opts",
+                MONTHLY: "#{{ id }}_monthly_opts",
+                YEARLY: "#{{ id }}_yearly_opts",
+            },
+        }).mount();
 
         $("#{{ id }}_weekdays_list a").button();
         $("#{{ id }}_interval").spinner({
@@ -276,16 +277,11 @@
             $("#{{ id }}_weekday_" + wday).toggleClass("ev_button_selected");
         }
 
-        function updateRecurOptions() {
-            const freq = $("input[name='{{ name }}[freq_seg]']:checked").val();
+        recurFreq.onChange(function (freq) {
             $("#{{ id }}_freq").attr("value", freq);
 
             const showOpts = freq !== "NONE" && freq !== undefined;
             $("#{{ id }}_end_opts").toggle(showOpts);
-
-            $("#{{ id }}_weekly_opts").toggle(freq === "WEEKLY");
-            $("#{{ id }}_monthly_opts").toggle(freq === "MONTHLY");
-            $("#{{ id }}_yearly_opts").toggle(freq === "YEARLY");
 
             let label = $("#{{ id }}_interval_label");
             switch (freq) {
@@ -307,17 +303,14 @@
                 default:
                     label.html("");
             }
-        }
-
-        $("input[name='{{ name }}[freq_seg]']").on("change", updateRecurOptions);
+        });
 
         const initialFreq = $("#{{ id }}_freq").attr("value");
+        recurFreq.bind();
         if (initialFreq !== "NONE") {
-            $("input[name='{{ name }}[freq_seg]'][value='" + initialFreq + "']").prop(
-                "checked",
-                true,
-            );
+            recurFreq.select(initialFreq);
+        } else {
+            recurFreq.refresh();
         }
-        updateRecurOptions();
     });
 </script>

@@ -41,56 +41,46 @@
         </div>
     {% endif %}
 {% endif %}
-<!-- prettier-ignore-start -->
+
 <script>
     $(function () {
-        function moveAlarmSegmented_{{ id }}() {
-            const segmented = document.getElementById("{{ id }}_segmented");
-            const slot = segmented
-                ?.closest(".ev_form_row_expanded")
-                ?.previousElementSibling?.querySelector(".ev_form_row_segmented");
-            if (segmented && slot && segmented.parentElement !== slot) {
-                slot.appendChild(segmented);
-            }
-        }
+        const alarmMode = new SegmentedControl("{{ id }}", {
+            inputName: "{{ id }}_mode",
+            panels: {
+                CALENDAR: "#{{ id }}_panel_calendar",
+                PERSONAL: "#{{ id }}_panel_personal",
+            },
+        })
+            .mount()
+            .bind();
 
-        function updateAlarmMode_{{ id }}() {
-            const mode = $("input[name='{{ id }}_mode']:checked").val();
-            $("#{{ id }}_panel_calendar").toggle(mode !== "PERSONAL");
-            $("#{{ id }}_panel_personal").toggle(mode === "PERSONAL");
-        }
-
-        window.setAlarmPersonalAvailable_{{ id }} = function (available) {
-            const personalInput = $("#{{ id }}_mode_personal");
-            const personalLabel = $("#{{ id }}_mode_personal_label");
-            if (!personalInput.length) return;
-
-            personalInput.prop("disabled", !available);
-            personalLabel.toggle(available);
-            $("#{{ id }}_panel_personal").toggle(available && personalInput.is(":checked"));
-
-            if (!available && personalInput.is(":checked")) {
-                $("#{{ id }}_mode_calendar").prop("checked", true);
-            }
-
-            const calendarLabel = $("#{{ id }}_mode_calendar_label");
-            calendarLabel.css("border-right", available ? "" : "none");
-            updateAlarmMode_{{ id }}();
+        if (typeof window.setAlarmPersonalAvailable === "undefined")
+            window.setAlarmPersonalAvailable = {};
+        window.setAlarmPersonalAvailable["{{ id }}"] = function (available) {
+            alarmMode
+                .setOptionEnabled("PERSONAL", available, "CALENDAR")
+                .setLabelStyle("CALENDAR", {
+                    borderRight: available ? "" : "none",
+                })
+                .refresh();
         };
 
-        moveAlarmSegmented_{{ id }}();
-        $("input[name='{{ id }}_mode']").on("change", updateAlarmMode_{{ id }});
-        updateAlarmMode_{{ id }}();
-
-        {% if let Some(personal) = personal %}
-        $("#{{ id }}_personal_overwrite").click(function () {
-            setPersonalOverwrite("{{ id }}_personal_", this.checked);
-        });
-        {% if !personal.overwrite %}
-        setPersonalOverwrite("{{ id }}_personal_", false);
-        {% endif %}
-        window.setAlarmPersonalAvailable_{{ id }}(true);
-        {% endif %}
+        alarmMode.refresh();
     });
 </script>
-<!-- prettier-ignore-end -->
+
+{% if let Some(personal) = personal %}
+    <!-- prettier-ignore-start -->
+    <script>
+        $(function () {
+            $("#{{ id }}_personal_overwrite").click(function () {
+                setPersonalOverwrite("{{ id }}_personal_", this.checked);
+            });
+            {% if !personal.overwrite %}
+            setPersonalOverwrite("{{ id }}_personal_", false);
+            {% endif %}
+            window.setAlarmPersonalAvailable['{{ id }}'](true);
+        });
+    </script>
+    <!-- prettier-ignore-end -->
+{% endif %}

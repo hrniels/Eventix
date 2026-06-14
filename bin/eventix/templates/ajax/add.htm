@@ -135,8 +135,8 @@
 <script>
     function setPersonalAlarms(cal) {
         const available = !!window.ev.add.calendars[cal];
-        if (window.setAlarmPersonalAvailable_alarm) {
-            window.setAlarmPersonalAvailable_alarm(available);
+        if (window.setAlarmPersonalAvailable && window.setAlarmPersonalAvailable["alarm"]) {
+            window.setAlarmPersonalAvailable["alarm"](available);
         }
     }
 
