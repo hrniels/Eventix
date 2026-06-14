@@ -1,11 +1,4 @@
-<input
-    id="{{ id }}"
-    type="text"
-    name="{{ name }}"
-    size="8"
-    maxlength="5"
-    value="{{ value|naive_time }}"
-/>
+<input id="{{ id }}" type="text" name="{{ name }}" maxlength="5" value="{{ value|naive_time }}" />
 
 <script type="text/javascript">
     function getClockTime(el) {

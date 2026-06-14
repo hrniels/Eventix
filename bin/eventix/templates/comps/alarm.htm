@@ -1,17 +1,20 @@
-<div id="{{ id }}-tabs" class="ev_tabs">
-    <ul>
-        <li>
-            <a href="#{{ id }}-tabs-CALENDAR">{{ "Calendar"|t(locale) }}</a>
-        </li>
-        {% if personal.is_some() %}
-            <li>
-                <a href="#{{ id }}-tabs-PERSONAL">{{ "Personal"|t(locale) }}</a>
-            </li>
-        {% endif %}
-    </ul>
-    <div id="{{ id }}-tabs-CALENDAR">{{ calendar|safe }}</div>
+<div id="{{ id }}_segmented" class="ev_segmented ev_segmented_alarm_mode">
+    <input type="radio" id="{{ id }}_mode_calendar" name="{{ id }}_mode" value="CALENDAR" checked />
+    <label id="{{ id }}_mode_calendar_label" for="{{ id }}_mode_calendar">
+        {{ "Calendar"|t(locale) }}
+    </label>
+    {% if personal.is_some() %}
+        <input type="radio" id="{{ id }}_mode_personal" name="{{ id }}_mode" value="PERSONAL" />
+        <label id="{{ id }}_mode_personal_label" for="{{ id }}_mode_personal">
+            {{ "Personal"|t(locale) }}
+        </label>
+    {% endif %}
+</div>
+
+<div id="{{ id }}_panels">
+    <div id="{{ id }}_panel_calendar">{{ calendar|safe }}</div>
     {% if let Some(personal) = personal %}
-        <div id="{{ id }}-tabs-PERSONAL">
+        <div id="{{ id }}_panel_personal">
             <div class="ev_pad">
                 <input
                     type="checkbox"
@@ -41,7 +44,43 @@
 <!-- prettier-ignore-start -->
 <script>
     $(function () {
-        $("#{{ id }}-tabs").tabs();
+        function moveAlarmSegmented_{{ id }}() {
+            const segmented = document.getElementById("{{ id }}_segmented");
+            const slot = segmented
+                ?.closest(".ev_form_row_expanded")
+                ?.previousElementSibling?.querySelector(".ev_form_row_segmented");
+            if (segmented && slot && segmented.parentElement !== slot) {
+                slot.appendChild(segmented);
+            }
+        }
+
+        function updateAlarmMode_{{ id }}() {
+            const mode = $("input[name='{{ id }}_mode']:checked").val();
+            $("#{{ id }}_panel_calendar").toggle(mode !== "PERSONAL");
+            $("#{{ id }}_panel_personal").toggle(mode === "PERSONAL");
+        }
+
+        window.setAlarmPersonalAvailable_{{ id }} = function (available) {
+            const personalInput = $("#{{ id }}_mode_personal");
+            const personalLabel = $("#{{ id }}_mode_personal_label");
+            if (!personalInput.length) return;
+
+            personalInput.prop("disabled", !available);
+            personalLabel.toggle(available);
+            $("#{{ id }}_panel_personal").toggle(available && personalInput.is(":checked"));
+
+            if (!available && personalInput.is(":checked")) {
+                $("#{{ id }}_mode_calendar").prop("checked", true);
+            }
+
+            const calendarLabel = $("#{{ id }}_mode_calendar_label");
+            calendarLabel.css("border-right", available ? "" : "none");
+            updateAlarmMode_{{ id }}();
+        };
+
+        moveAlarmSegmented_{{ id }}();
+        $("input[name='{{ id }}_mode']").on("change", updateAlarmMode_{{ id }});
+        updateAlarmMode_{{ id }}();
 
         {% if let Some(personal) = personal %}
         $("#{{ id }}_personal_overwrite").click(function () {
@@ -50,6 +89,7 @@
         {% if !personal.overwrite %}
         setPersonalOverwrite("{{ id }}_personal_", false);
         {% endif %}
+        window.setAlarmPersonalAvailable_{{ id }}(true);
         {% endif %}
     });
 </script>

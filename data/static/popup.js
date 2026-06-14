@@ -344,7 +344,7 @@ async function _animateOpenPopup() {
 
         const distance = 200;
         const old_width = $("#popup").width();
-        const width = Math.min(1024, $(window).width() - distance * 2);
+        const width = Math.min(700, $(window).width() - distance * 2);
         // set the width temporarily to get the final height of the popup below
         $("#popup").css("display", "block");
         $("#popup").css("width", width + "px");

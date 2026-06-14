@@ -1,6 +1,6 @@
-<table class="ev_date">
-    <tr>
-        <td colspan="2">
+<div id="{{ id }}_options" class="ev_alarm_opts">
+    <div class="ev_alarm_row">
+        <div class="ev_alarm_trigger">
             <input
                 type="radio"
                 id="{{ id }}_none"
@@ -9,10 +9,10 @@
                 {% if trigger == "NONE" %}checked="checked"{% endif %}
             />
             <label for="{{ id }}_none">{{ "None"|t(locale) }}</label>
-        </td>
-    </tr>
-    <tr id="{{ id }}_relative_row">
-        <td width="25%">
+        </div>
+    </div>
+    <div id="{{ id }}_relative_row" class="ev_alarm_row">
+        <div class="ev_alarm_trigger">
             <input
                 type="radio"
                 id="{{ id }}_relative"
@@ -21,8 +21,8 @@
                 {% if trigger == "RELATIVE" %}checked="checked"{% endif %}
             />
             <label for="{{ id }}_relative">{{ "Relative"|t(locale) }}:</label>
-        </td>
-        <td width="75%">
+        </div>
+        <div class="ev_alarm_relative">
             <input
                 id="{{ id }}_duration"
                 name="{{ name }}[duration]"
@@ -38,11 +38,11 @@
                     });
                 });
             </script>
-        </td>
-    </tr>
+        </div>
+    </div>
     {% if let Some(datetime) = datetime %}
-        <tr>
-            <td>
+        <div class="ev_alarm_row">
+            <div class="ev_alarm_trigger">
                 <input
                     type="radio"
                     id="{{ id }}_absolute"
@@ -51,11 +51,11 @@
                     {% if trigger == "ABSOLUTE" %}checked="checked"{% endif %}
                 />
                 <label for="{{ id }}_absolute">{{ "Absolute"|t(locale) }}:</label>
-            </td>
-            <td>{{ datetime|safe }}</td>
-        </tr>
+            </div>
+            <div class="ev_alarm_absolute">{{ datetime|safe }}</div>
+        </div>
     {% endif %}
-</table>
+</div>
 {% if is_todo %}
     <!-- prettier-ignore-start -->
     <script type="text/javascript">
