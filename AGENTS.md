@@ -81,6 +81,11 @@ Naming conventions:
 - Constants: SCREAMING_SNAKE_CASE
 - Traits: PascalCase, descriptive (e.g., CalendarProvider)
 
+CSS naming:
+
+- All CSS classes must use the `ev_` prefix.
+- Use `_` to separate words/tokens, not `-` (e.g., `ev_form_row_label`, not `form-row-label`).
+
 Error handling:
 
 - Prefer Result<T, E> over panicking.
