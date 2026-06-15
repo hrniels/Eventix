@@ -17,7 +17,6 @@
     padding: 0.4em 0.5em !important;
 }
 
-.ev_form_row_content > .ui-selectmenu-button.ui-button,
 .ev_form_row_expanded > .ui-selectmenu-button.ui-button {
     display: block !important;
     width: 100% !important;

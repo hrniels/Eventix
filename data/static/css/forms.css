@@ -56,10 +56,6 @@ fieldset.ev_form {
     font-weight: bold;
 }
 
-.ev_form_row > .ev_form_row_label {
-    padding: 0.4em 0.6em 0.2em;
-}
-
 .ev_form_row_header {
     display: flex;
     align-items: center;
@@ -184,9 +180,6 @@ fieldset.ev_form {
     cursor: not-allowed;
 }
 
-.ev_segmented_alarm label {
-    padding: 3px 10px;
-}
 .ev_segmented_recur label {
     padding: 3px 8px;
 }
@@ -200,10 +193,7 @@ fieldset.ev_form {
 
 .ev_form_row_expanded input[type="text"],
 .ev_form_row_expanded input[type="number"],
-.ev_form_row_expanded textarea,
-.ev_form_row_content > input[type="text"],
-.ev_form_row_content > input[type="number"],
-.ev_form_row_content > textarea {
+.ev_form_row_expanded textarea {
     box-sizing: border-box;
 }
 
@@ -212,16 +202,8 @@ fieldset.ev_form {
     min-height: 3em;
 }
 
-.ev_form_row_expanded select,
-.ev_form_row_content > select {
+.ev_form_row_expanded select {
     max-width: 100%;
-}
-
-.ev_form_row_content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3em;
-    padding: 0.1em 0.6em 0.4em;
 }
 
 .ev_form_row_expanded .ev_date,
@@ -400,10 +382,6 @@ fieldset.ev_form div.ev_submit {
     font-size: 0.8em;
     padding: 2px;
     width: 150px;
-}
-
-.ev_label_datetimerange {
-    width: 3em;
 }
 
 .ev_edit_modes {
