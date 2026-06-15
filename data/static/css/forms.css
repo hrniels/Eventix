@@ -22,21 +22,29 @@ fieldset.ev_form {
 .ev_form_rows {
     display: flex;
     flex-direction: column;
-    gap: 0.5em;
     padding: 0.5em;
     background-color: #ffffff;
+}
+.ev_form_rows > *:not(:first-child) {
+    border-top: 1px solid #d0d0d0;
 }
 
 .ev_form_row {
     display: flex;
     flex-direction: column;
-    border: 1px solid #d0d0d0;
-    background-color: #f8f8f8;
     cursor: default;
+}
+.ev_form_row > *:not(:last-child) {
+    border-right: 1px solid #d0d0d0;
 }
 
 .ev_form_row_collapsible {
     cursor: default;
+}
+
+.ev_form_vscrollbox {
+    width: 100%;
+    max-width: none !important;
 }
 
 .ev_form_row_collapsible:hover > .ev_form_row_header,
@@ -74,7 +82,7 @@ fieldset.ev_form {
 }
 
 .ev_form_row.collapsed .ev_form_row_header {
-    padding: 0.4em 0.5em;
+    padding: 0.6em 0.5em;
 }
 
 .ev_form_row.collapsed .ev_form_row_expanded {
@@ -100,6 +108,12 @@ fieldset.ev_form {
     display: flex;
     align-items: center;
     gap: 0.4em;
+}
+
+.ev_form_row_collapsed input[type="text"],
+.ev_form_row_collapsed .ui-selectmenu-button {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .ev_form_row_current {
@@ -426,4 +440,30 @@ fieldset.ev_form div.ev_submit {
 .ev_tabs_icons ul li a img {
     width: 20px;
     height: 20px;
+}
+
+/* ------------ BUTTONS ------------ */
+
+div.ev_button_row {
+    padding: .5em;
+    padding-top: 0px;
+    display: flex;
+    justify-content: space-between;
+    gap: 2px;
+}
+
+div.ev_button_left {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+div.ev_button_right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
 }

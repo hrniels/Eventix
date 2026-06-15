@@ -17,6 +17,7 @@ const FormExpandShrink = {
         const shortenerId = collapsed.dataset.shortenerId || "default";
         const shortener = this.shorteners[shortenerId] || this.shorteners.default;
         const expanded = row.querySelector(".ev_form_row_expanded");
+        if (!expanded) return "";
 
         return shortener(expanded);
     },

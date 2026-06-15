@@ -11,13 +11,25 @@
                 {% endif %}
             </h1>
             <div id="form-container" class="ev_form_rows">
-                <div class="ev_form_row" data-field="calendar">
-                    <div class="ev_form_row_label">{{ "Calendar"|t(locale) }}</div>
-                    <div class="ev_form_row_content">{{ calendars|safe }}</div>
+                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="calendar">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">{{ "Calendar"|t(locale) }}</div>
+                        <div class="ev_form_row_collapsed">
+                            <span class="ev_form_row_current"></span>
+                            <span class="ev_form_row_expand_hint"></span>
+                        </div>
+                    </div>
+                    <div class="ev_form_row_expanded">{{ calendars|safe }}</div>
                 </div>
-                <div class="ev_form_row" data-field="summary">
-                    <div class="ev_form_row_label">{{ "Summary"|t(locale) }}</div>
-                    <div class="ev_form_row_content">
+                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="summary">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">{{ "Summary"|t(locale) }}</div>
+                        <div class="ev_form_row_collapsed">
+                            <span class="ev_form_row_current"></span>
+                            <span class="ev_form_row_expand_hint"></span>
+                        </div>
+                    </div>
+                    <div class="ev_form_row_expanded">
                         <input
                             type="text"
                             size="50"
@@ -27,9 +39,15 @@
                         />
                     </div>
                 </div>
-                <div class="ev_form_row" data-field="location">
-                    <div class="ev_form_row_label">{{ "Location"|t(locale) }}</div>
-                    <div class="ev_form_row_content">
+                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="location">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">{{ "Location"|t(locale) }}</div>
+                        <div class="ev_form_row_collapsed">
+                            <span class="ev_form_row_current"></span>
+                            <span class="ev_form_row_expand_hint"></span>
+                        </div>
+                    </div>
+                    <div class="ev_form_row_expanded">
                         <input type="text" size="50" name="location" value="{{ location }}" />
                     </div>
                 </div>
@@ -76,7 +94,7 @@
                     </div>
                     <div class="ev_form_row_expanded">
                         <!-- prettier-ignore-start -->
-                        <textarea rows="10" class="ev_form_textarea"
+                        <textarea rows="4" class="ev_form_textarea"
                                   name="description">{{ description }}</textarea>
                         <!-- prettier-ignore-end -->
                     </div>
