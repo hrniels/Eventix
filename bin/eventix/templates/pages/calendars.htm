@@ -81,7 +81,7 @@
                         {% if matches!(col.syncer(), SyncerType::VDirSyncer { .. } | SyncerType::O365 { .. }) %}
                             <a
                                 class="ev_button ev_button_normal"
-                                href="javascript:fireEvent(new PageEvent('/api/collections/log?col_id={{ col_id }}'))"
+                                href="javascript:fireEvent(createLogEvent('{{ col_id }}'))"
                             >
                                 <i class="bi bi-list-ul"></i>
                                 <span>{{ "Log"|t(locale) }}</span>

@@ -8,7 +8,7 @@
             >
             </i>
         </span>
-        {{ occ.summary().unwrap() }}
+        <span class="ev_details_header_summary">{{ occ.summary().unwrap() }}</span>
         <span class="ev_details_header_calendar">
             <div
                 class="ev_cal_src ev_cal_src_{{ dir.id() }} ev_details_header_calendar_tag"
@@ -21,6 +21,7 @@
             <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="date">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
+                        <i class="bi bi-calendar-date"></i>
                         {% if occ.occurrence_start().is_some() && occ.occurrence_end().is_some() %}
                             {{ "Date"|t(locale) }}
                         {% else if occ.occurrence_start().is_some() %}
@@ -53,7 +54,10 @@
         {% if let Some(loc) = html::text_to_html(occ.location()) %}
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
-                    <div class="ev_form_row_label">{{ "Location"|t(locale) }}</div>
+                    <div class="ev_form_row_label">
+                        <i class="bi bi-geo-alt-fill"></i>
+                        {{ "Location"|t(locale) }}
+                    </div>
                     <div class="ev_form_row_collapsed">{{ loc|safe }}</div>
                 </div>
             </div>
@@ -61,7 +65,10 @@
         {% if let Some(status) = occ.event_status() %}
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
-                    <div class="ev_form_row_label">{{ "Status"|t(locale) }}</div>
+                    <div class="ev_form_row_label">
+                        <i class="bi bi-flag"></i>
+                        {{ "Status"|t(locale) }}
+                    </div>
                     <div class="ev_form_row_collapsed">{{ status|fmt("{}")|t(locale) }}</div>
                 </div>
             </div>
@@ -69,7 +76,10 @@
         {% if let Some(status) = occ.todo_status() %}
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
-                    <div class="ev_form_row_label">{{ "Status"|t(locale) }}</div>
+                    <div class="ev_form_row_label">
+                        <i class="bi bi-flag"></i>
+                        {{ "Status"|t(locale) }}
+                    </div>
                     <div class="ev_form_row_collapsed">{{ status|fmt("{}")|t(locale) }}</div>
                 </div>
             </div>
@@ -77,7 +87,10 @@
         {% if let Some(rrule) = occ.rrule() %}
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
-                    <div class="ev_form_row_label">{{ "Repeats"|t(locale) }}</div>
+                    <div class="ev_form_row_label">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        {{ "Repeats"|t(locale) }}
+                    </div>
                     <div class="ev_form_row_collapsed">
                         {{ rrule.human(&**locale)|newlines()|safe }}
                     </div>
@@ -88,11 +101,8 @@
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
-                        {% if personal_alarms %}
-                            {{ "Personal reminder"|t(locale) }}:
-                        {% else %}
-                            {{ "Reminder"|t(locale) }}:
-                        {% endif %}
+                        <i class="bi bi-alarm"></i>
+                        {{ "Reminder"|t(locale) }}
                     </div>
                     <div class="ev_form_row_collapsed">
                         <div id="alarms">{{ alarms|safe }}</div>
@@ -103,7 +113,10 @@
         {% if let Some(org) = org %}
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
-                    <div class="ev_form_row_label">{{ "Organizer"|t(locale) }}</div>
+                    <div class="ev_form_row_label">
+                        <i class="bi bi-person-fill"></i>
+                        {{ "Organizer"|t(locale) }}
+                    </div>
                     <div class="ev_form_row_collapsed">{{ org|safe }}</div>
                 </div>
             </div>
@@ -111,7 +124,10 @@
         {% if let Some(atts) = occ.attendees() %}
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
-                    <div class="ev_form_row_label">{{ "Attendees"|t(locale) }}</div>
+                    <div class="ev_form_row_label">
+                        <i class="bi bi-people-fill"></i>
+                        {{ "Attendees"|t(locale) }}
+                    </div>
                     <div class="ev_form_row_collapsed">
                         <div class="ev_vscrollbox ev_form_vscrollbox">
                             <ul class="ev_iconlist">
@@ -139,9 +155,14 @@
         {% if let Some(desc) = html::text_to_html(occ.description()) %}
             <div class="ev_form_row ev_form_row_collapsible collapsed">
                 <div class="ev_form_row_header">
-                    <div class="ev_form_row_label">{{ "Description"|t(locale) }}</div>
+                    <div class="ev_form_row_label">
+                        <i class="bi bi-journal-text"></i>
+                        {{ "Description"|t(locale) }}
+                    </div>
                     <div class="ev_form_row_collapsed">
-                        <div class="ev_vscrollbox ev_vscrollbox_lg ev_form_vscrollbox">{{ desc|safe }}</div>
+                        <div class="ev_vscrollbox ev_vscrollbox_lg ev_form_vscrollbox">
+                            {{ desc|safe }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -169,7 +190,9 @@
                             {% if occ.status_class() != Some(String::from("Cancelled")) %}
                                 <a
                                     class="ev_button ev_button_critical ev_details_cancel_action"
-                                    href="javascript:cancelOcc('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
+                                    href="javascript:cancelOcc('{{ occ.uid() }}',
+                                                               '{{ occ.rid_str() }}',
+                                                               reloadContentAndDeselect)"
                                 >
                                     <i class="bi bi-dash-circle"></i>
                                     <span>{{ "Cancel occ."|t(locale) }}</span>
@@ -178,7 +201,9 @@
                         {% else %}
                             <a
                                 class="ev_button ev_button_normal ev_details_occurrence_action"
-                                href="javascript:toggleExcl('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
+                                href="javascript:toggleExcl('{{ occ.uid() }}',
+                                                            '{{ occ.rid_str() }}',
+                                                            reloadContentAndDeselect)"
                             >
                                 <i class="bi bi-dash-circle"></i>
                                 <span>{{ "Exclude occ."|t(locale) }}</span>
@@ -205,7 +230,9 @@
                         {% if occ.ctype() == CalCompType::Todo %}
                             <a
                                 class="ev_button ev_button_good ev_details_complete_action"
-                                href="javascript:completeTodo('{{ occ.uid() }}', '{{ occ.rid_str() }}', reloadContent)"
+                                href="javascript:completeTodo('{{ occ.uid() }}',
+                                                              '{{ occ.rid_str() }}',
+                                                              reloadContentAndDeselect)"
                             >
                                 <i class="bi bi-check-lg"></i>
                                 <span>{{ "Complete"|t(locale) }}</span>
@@ -262,7 +289,7 @@
                 ) {
                     return;
                 }
-                deleteItem("{{ occ.uid() }}", null, reloadContent);
+                deleteItem("{{ occ.uid() }}", null, reloadContentAndDeselect);
             });
     });
 </script>

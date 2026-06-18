@@ -13,47 +13,52 @@
             <div id="form-container" class="ev_form_rows">
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="calendar">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Calendar"|t(locale) }}</div>
-                        <div class="ev_form_row_collapsed">
-                            <span class="ev_form_row_current"></span>
-                            <span class="ev_form_row_expand_hint"></span>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-collection"></i>
+                            {{ "Calendar"|t(locale) }}
                         </div>
+                        <div class="ev_form_row_collapsed">{{ calendars|safe }}</div>
                     </div>
-                    <div class="ev_form_row_expanded">{{ calendars|safe }}</div>
                 </div>
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="summary">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Summary"|t(locale) }}</div>
-                        <div class="ev_form_row_collapsed">
-                            <span class="ev_form_row_current"></span>
-                            <span class="ev_form_row_expand_hint"></span>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-card-heading"></i>
+                            {{ "Summary"|t(locale) }}
                         </div>
-                    </div>
-                    <div class="ev_form_row_expanded">
-                        <input
-                            type="text"
-                            size="50"
-                            id="summary"
-                            name="summary"
-                            value="{{ summary }}"
-                        />
+                        <div class="ev_form_row_collapsed">
+                            <input type="text" id="summary" name="summary" value="{{ summary }}" />
+                        </div>
                     </div>
                 </div>
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="location">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Location"|t(locale) }}</div>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-geo-alt-fill"></i>
+                            {{ "Location"|t(locale) }}
+                        </div>
                         <div class="ev_form_row_collapsed">
-                            <span class="ev_form_row_current"></span>
-                            <span class="ev_form_row_expand_hint"></span>
+                            <input type="text" name="location" value="{{ location }}" />
                         </div>
                     </div>
-                    <div class="ev_form_row_expanded">
-                        <input type="text" size="50" name="location" value="{{ location }}" />
-                    </div>
                 </div>
+                {% if let Some(status) = status %}
+                    <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="status">
+                        <div class="ev_form_row_header">
+                            <div class="ev_form_row_label">
+                                <i class="bi bi-flag"></i>
+                                {{ "Status"|t(locale) }}
+                            </div>
+                            <div class="ev_form_row_collapsed">{{ status|safe }}</div>
+                        </div>
+                    </div>
+                {% endif %}
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="date">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Date"|t(locale) }}</div>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-calendar-date"></i>
+                            {{ "Date"|t(locale) }}
+                        </div>
                         <div class="ev_form_row_collapsed" data-shortener-id="datetimerange">
                             <span class="ev_form_row_current"></span>
                             <span class="ev_form_row_expand_hint"></span>
@@ -61,21 +66,12 @@
                     </div>
                     <div class="ev_form_row_expanded">{{ start_end|safe }}</div>
                 </div>
-                {% if let Some(status) = status %}
-                    <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="status">
-                        <div class="ev_form_row_header">
-                            <div class="ev_form_row_label">{{ "Status"|t(locale) }}</div>
-                            <div class="ev_form_row_collapsed">
-                                <span class="ev_form_row_current"></span>
-                                <span class="ev_form_row_expand_hint"></span>
-                            </div>
-                        </div>
-                        <div class="ev_form_row_expanded">{{ status|safe }}</div>
-                    </div>
-                {% endif %}
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="alarm">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Reminder"|t(locale) }}</div>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-alarm"></i>
+                            {{ "Reminder"|t(locale) }}
+                        </div>
                         <div class="ev_form_row_segmented"></div>
                         <div class="ev_form_row_collapsed" data-shortener-id="alarm">
                             <span class="ev_form_row_current"></span>
@@ -86,7 +82,10 @@
                 </div>
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="description">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Description"|t(locale) }}</div>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-journal-text"></i>
+                            {{ "Description"|t(locale) }}
+                        </div>
                         <div class="ev_form_row_collapsed">
                             <span class="ev_form_row_current"></span>
                             <span class="ev_form_row_expand_hint"></span>
@@ -101,7 +100,10 @@
                 </div>
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="repeat">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Repeat"|t(locale) }}</div>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            {{ "Repeat"|t(locale) }}
+                        </div>
                         <div class="ev_form_row_segmented"></div>
                         <div class="ev_form_row_collapsed" data-shortener-id="recur">
                             <span class="ev_form_row_current"></span>
@@ -112,7 +114,10 @@
                 </div>
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="attendees">
                     <div class="ev_form_row_header">
-                        <div class="ev_form_row_label">{{ "Attendees"|t(locale) }}</div>
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-people-fill"></i>
+                            {{ "Attendees"|t(locale) }}
+                        </div>
                         <div class="ev_form_row_collapsed" data-shortener-id="attendees">
                             <span class="ev_form_row_current"></span>
                             <span class="ev_form_row_expand_hint"></span>
@@ -124,15 +129,17 @@
             <div class="ev_submit">
                 <div class="ev_submit_row">
                     <div class="ev_submit_left"></div>
-                    <div class="ev_submit_center">
-                        <a class="ev_button_big ev_button_normal" href="javascript:submitAddForm()">
+                    <div class="ev_submit_center"></div>
+                    <div class="ev_submit_right">
+                        <a class="ev_button ev_button_normal" href="javascript:submitAddForm()">
+                            <i class="bi bi-floppy2-fill"></i>
                             <span>{{ "Save"|t(locale) }}</span>
                         </a>
-                        <a class="ev_button_big ev_button_normal" href="javascript:closePopup()">
+                        <a class="ev_button ev_button_normal" href="javascript:closePopup()">
+                            <i class="bi bi-x-circle"></i>
                             <span>{{ "Cancel"|t(locale) }}</span>
                         </a>
                     </div>
-                    <div class="ev_submit_right"></div>
                 </div>
             </div>
         </fieldset>

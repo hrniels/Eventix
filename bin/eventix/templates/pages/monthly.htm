@@ -76,6 +76,7 @@
                 class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}"
             >
                 <div
+                    id="monthly-day-cell-{{ date }}"
                     class="ev_month_day_header
                            {% if date == today %}ev_today{% endif %}
                            {% if day.cur_month %}ev_cur_month{% endif %}
@@ -83,7 +84,9 @@
                 >
                     {% if page.any_writable_events() %}
                     <a
-                        href="javascript:fireEvent(createAddEvent('Event', '{{ date.format("%Y-%m-%d") }}'))"
+                        href="javascript:fireEvent(createAddEvent('monthly-day-cell-{{ date }}',
+                                                                  'Event',
+                                                                  '{{ date.format("%Y-%m-%d") }}'))"
                         class="ev_add_icon ev_month_add_link"
                     >
                         <i class="bi bi-plus-square"></i>

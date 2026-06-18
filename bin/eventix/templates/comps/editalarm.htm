@@ -18,7 +18,7 @@
         </div>
         <a
             class="ev_button ev_button_normal"
-            href="javascript:formRequest('alarm-form', reloadContent)"
+            href="javascript:formRequest('alarm-form', reloadAndClose)"
         >
             <span>{{ "Save"|t(locale) }}</span>
         </a>
@@ -29,6 +29,13 @@
             <span>{{ "Cancel"|t(locale) }}</span>
         </a>
     </form>
+
+    <script type="text/javascript">
+        function reloadAndClose() {
+            cancelAlarm("{{ uid }}", "{{ rid_str }}");
+            reloadContent();
+        }
+    </script>
 
     <!-- prettier-ignore-start -->
     <script type="text/javascript">

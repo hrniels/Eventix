@@ -34,9 +34,6 @@ fieldset.ev_form {
     flex-direction: column;
     cursor: default;
 }
-.ev_form_row > *:not(:last-child) {
-    border-right: 1px solid #d0d0d0;
-}
 
 .ev_form_row_collapsible {
     cursor: default;
@@ -55,8 +52,12 @@ fieldset.ev_form {
 .ev_form_row_label {
     font-weight: bold;
 }
+.ev_form_row_label > i {
+    padding-right: 3px;
+}
 
 .ev_form_row_header {
+    padding: 0.6em 0.5em;
     display: flex;
     align-items: center;
     gap: 0.4em;
@@ -77,16 +78,8 @@ fieldset.ev_form {
     padding: 0 0.6em;
 }
 
-.ev_form_row.collapsed .ev_form_row_header {
-    padding: 0.6em 0.5em;
-}
-
 .ev_form_row.collapsed .ev_form_row_expanded {
     display: none;
-}
-
-.ev_form_row:not(.collapsed) .ev_form_row_header {
-    padding: 0.4em 0.5em 0.2em;
 }
 
 .ev_form_row:not(.collapsed) .ev_form_row_expanded {
@@ -117,10 +110,9 @@ fieldset.ev_form {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 500px;
+    max-width: 420px;
     white-space: nowrap;
     color: #555;
-    font-style: italic;
 }
 
 .ev_form_row_expand_hint {
@@ -181,10 +173,10 @@ fieldset.ev_form {
 }
 
 .ev_segmented_recur label {
-    padding: 3px 8px;
+    padding: 1px 8px;
 }
 .ev_segmented_alarm_mode label {
-    padding: 3px 14px;
+    padding: 1px 14px;
 }
 
 .ev_form_row[data-field] .ev_form_row_expanded {
@@ -345,7 +337,8 @@ fieldset.ev_form {
 }
 
 fieldset.ev_form div.ev_submit {
-    padding: 0.8em 0.5em;
+    padding-bottom: 0.3em;
+    padding-right: 0.5em;
 }
 
 .ev_submit_row {

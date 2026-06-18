@@ -317,6 +317,19 @@
 .ev_details_header_tag {
     float: left;
 }
+.ev_details_header_tag .ev_tag {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.ev_details_header_summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    vertical-align: middle;
+    text-wrap: nowrap;
+    max-width: 80%;
+}
 
 .ev_details_header_calendar {
     float: right;
@@ -325,6 +338,8 @@
 .ev_details_header_calendar_tag {
     width: 20px;
     height: 20px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .ev_details_delete_action,

@@ -179,13 +179,13 @@
                                         {% endif %}"
                                         data-date="{{ day.date.format("%Y-%m-%d") }}"
                                         data-hour="{{ hour }}"
-                                        id="weekly-hour-{{ day.date }}"
+                                        id="weekly-hour-{{ day.date }}-{{ hour }}"
                                         class="ev_hour_cell"
                                     >
                                         {% if page.any_writable_events() %}
                                             <a
                                                 href="javascript:fireEvent(createAddEvent(
-                                                        'weekly-hour-{{ day.date }}',
+                                                        'weekly-hour-{{ day.date }}-{{ hour }}',
                                                         'Event',
                                                         '{{ day.date.format("%Y-%m-%d") }}', {{ hour }}))"
                                                 class="ev_add_icon ev_week_hour_add_link"

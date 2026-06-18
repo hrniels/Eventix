@@ -1,6 +1,17 @@
 const POPUP_SPEED = 50;
 const RESIZE_SPEED = 200;
 
+const MAX_HEIGHT_EDIT = 500;
+const HEIGHT_ADD_EVENT = 439;
+const HEIGHT_ADD_TODO = 494;
+const WIDTH_LOG = 800;
+const WIDTH_HELP = 1024;
+const WIDTH_AUTH = 600;
+const WIDTH_DETAILS = 600;
+const HEIGHT_LOG = 474;
+const HEIGHT_HELP = 729;
+const HEIGHT_AUTH = 200;
+
 class State {
     constructor(name) {
         this.name = name;
@@ -94,10 +105,7 @@ class DeselectEvent extends Event {
             case "form":
             case "page":
             case "large":
-                if (state.popup_pos != null) {
-                    await _shrinkPopup(state.popup_pos);
-                    await _deselect(state.ids);
-                } else await _deselect(state.ids);
+                await _deselect(state.ids);
                 _animateBlur(0);
                 return new InitState();
 
@@ -119,19 +127,11 @@ class EditAlarmsEvent extends Event {
 
     async trigger(state) {
         switch (state.name) {
-            case "init":
-                await _openLargePopup(this.data);
-                return new LargeState(null, null);
-
             case "small":
-                let popup_pos = {
-                    top: $("#popup").css("top"),
-                    left: $("#popup").css("left"),
-                    width: $("#popup").width(),
-                };
-                await _animateOpenPopup();
+                let popup_pos = _animateExpandPopup("alarms");
                 return new LargeState(state.ids, popup_pos);
 
+            case "init":
             case "page":
                 console.assert(false, "This should not happen");
 
@@ -181,25 +181,17 @@ class EditEvent extends Event {
 
     async trigger(state) {
         switch (state.name) {
-            case "init":
-                await _openLargePopup(this.data);
-                return new LargeState(null, null);
-
             case "small":
-                let popup_pos = {
-                    top: $("#popup").css("top"),
-                    left: $("#popup").css("left"),
-                    width: $("#popup").width(),
-                };
+                let popup_pos = _animateExpandPopup("edit");
+
                 let url = "/api/items/edit?uid=" + this.data.uid;
                 if (this.data.rid) url += "&rid=" + this.data.rid;
                 url += "&mode=" + this.data.mode;
                 await _loadPage(url);
-                setTimeout(async () => {
-                    await _animateOpenPopup();
-                }, 10);
+
                 return new FormState(state.ids, popup_pos);
 
+            case "init":
             case "page":
                 console.assert(false, "This should not happen");
 
@@ -221,9 +213,12 @@ class CancelEvent extends Event {
             case "form":
                 let new_state;
                 if (state.popup_pos != null) {
-                    if (state.name == "form")
+                    if (state.name == "form") {
+                        _shrinkPopup(state.popup_pos);
                         await _loadOccurrence(state.ids.uid, state.ids.rid, false);
-                    await _shrinkPopup(state.popup_pos);
+                    }
+                    else
+                        await _shrinkPopup(state.popup_pos);
                     new_state = new SmallState(state.ids);
                 } else {
                     await _deselect(state.ids);
@@ -239,23 +234,26 @@ class CancelEvent extends Event {
 }
 
 class PageEvent extends Event {
-    constructor(url) {
+    constructor(url, minWidth, heightEstimate) {
         super("page");
         this.data = {
             url: url,
+            minWidth: minWidth,
+            heightEstimate: heightEstimate,
         };
     }
 
     async trigger(state) {
         switch (state.name) {
             case "init":
-                await _openPagePopup(this.data["url"]);
+                await _openPagePopup(this.data["url"], this.data["minWidth"],
+                                     this.data["heightEstimate"]);
                 return new PageState(this.data["url"]);
 
             case "small":
             case "large":
                 await _loadPage(this.data["url"]);
-                await _animateOpenPopup();
+                await _animateOpenPopup(this.data["minWidth"], this.data["heightEstimate"]);
                 return new PageState(this.data["url"]);
 
             default:
@@ -264,8 +262,12 @@ class PageEvent extends Event {
     }
 }
 
+function createLogEvent(col) {
+    return new PageEvent("/api/collections/log?col_id=" + col, WIDTH_LOG, HEIGHT_LOG);
+}
+
 function createHelpEvent() {
-    return new PageEvent("/api/help");
+    return new PageEvent("/api/help", WIDTH_HELP, HEIGHT_HELP);
 }
 
 function createAuthEvent(cal, url, op_url, spinnerId) {
@@ -278,6 +280,8 @@ function createAuthEvent(cal, url, op_url, spinnerId) {
             encodeURIComponent(op_url) +
             "&spinner_id=" +
             encodeURIComponent(spinnerId),
+        WIDTH_AUTH,
+        HEIGHT_AUTH,
     );
 }
 
@@ -338,46 +342,82 @@ function _animateBlur(radius) {
     );
 }
 
-async function _animateOpenPopup() {
+async function _animateOpenPopup(minWidth, heightEstimate) {
     await new Promise(function (resolve) {
-        _animateBlur(10);
-
         const distance = 200;
-        const old_width = $("#popup").width();
-        const width = Math.min(700, $(window).width() - distance * 2);
-        // set the width temporarily to get the final height of the popup below
-        $("#popup").css("display", "block");
-        $("#popup").css("width", width + "px");
+        const width = Math.min(minWidth, $(window).width() - distance * 2);
 
         const doc = document.documentElement;
+        const pgcontent = $("#page-content");
         const yoff = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
-        const height = document.getElementById("popup").getBoundingClientRect().height;
-        const top = height > $(window).height() ? distance : ($(window).height() - height) / 2;
-        const left = ($(window).width() - width) / 2;
+        const top =
+            heightEstimate > $(window).height()
+                ? distance
+                : ($(window).height() - heightEstimate) / 2;
+        const left = pgcontent.offset().left + (pgcontent.width() - width + 70) / 2;
 
-        $("#popup").css("width", old_width + "px");
+        $("#popup").css("display", "block");
+        $("#popup").css("opacity", "0%");
+
         $("#popup").animate(
             {
                 left: left + "px",
                 top: yoff + top + "px",
                 width: width + "px",
-                opacity: 100,
+                height: heightEstimate + "px",
+                opacity: "100%",
             },
             RESIZE_SPEED,
             "swing",
-            () => resolve(),
+            () => {
+                $("#popup").css("height", "");
+                resolve();
+            },
         );
     });
 }
 
-async function _openLargePopup(el) {
-    await _openFromElement("#" + el.id, async function () {
-        await _loadOccurrence(el.uid, el.rid, true);
+function _animateExpandPopup(type) {
+    let popup = $("#popup");
+    let popup_pos = {
+        top: popup.css("top"),
+        left: popup.css("left"),
+        width: popup.width(),
+        height: popup.height(),
+    };
+
+    popup.css("overflow", "hidden");
+    popup.css("maxHeight", popup.height());
+
+    const estimatedHeight = type == "edit" ? MAX_HEIGHT_EDIT : popup.height() + 100;
+    const doc = document.documentElement;
+    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+    const viewBottom = scrollTop + window.innerHeight;
+    const currentTop = parseFloat(popup.css("top"));
+    const expandDown = currentTop + estimatedHeight < viewBottom;
+
+    let animProps = { maxHeight: estimatedHeight + "px" };
+    if (!expandDown) {
+        animProps.top = currentTop - estimatedHeight + popup.height() + "px";
+    }
+
+    popup.animate(animProps, RESIZE_SPEED, "swing", () => {
+        popup.css("max-height", "");
+        popup.css("overflow", "");
+        if (!expandDown) {
+            const newTop = parseFloat(popup.css("top"));
+            const newHeight = popup.height();
+            const originalBottom = currentTop + popup_pos.height;
+            popup.css("top", originalBottom - newHeight + "px");
+        }
     });
+
+    return popup_pos;
 }
 
 async function _openAddPopup(data) {
-    await _openFromElement("#" + data.id, async function () {
+    const heightEstimate = data.ctype == "Event" ? HEIGHT_ADD_EVENT : HEIGHT_ADD_TODO;
+    await _openFromElement("#" + data.id, 600, heightEstimate, async function () {
         let url = "/api/items/add?ctype=" + data.ctype;
         if (data.date) url += "&date=" + data.date;
         if (data.hour) url += "&hour=" + data.hour;
@@ -385,13 +425,13 @@ async function _openAddPopup(data) {
     });
 }
 
-async function _openPagePopup(url) {
-    await _openFromElement("#link-refresh", async function () {
+async function _openPagePopup(url, minWidth, heightEstimate) {
+    await _openFromElement("#link-refresh", minWidth, heightEstimate, async function () {
         await _loadPage(url);
     });
 }
 
-async function _openFromElement(id, func) {
+async function _openFromElement(id, minWidth, heightEstimate, func) {
     // remove old content
     $("#popup").html('<div style="height: 300px"></div>');
 
@@ -406,61 +446,34 @@ async function _openFromElement(id, func) {
             10,
         );
 
-        await func();
-        setTimeout(async () => {
-            await _animateOpenPopup();
-            resolve();
-        }, 10);
+        func();
+        await _animateOpenPopup(minWidth, heightEstimate);
+        resolve();
     });
 }
 
 async function _shrinkPopup(pos) {
     await new Promise(function (resolve) {
-        $("#popup").animate(
+        let popup = $("#popup");
+        popup.css("overflow", "hidden");
+        popup.css("max-height", popup.height());
+        popup.css("height", popup.height());
+        popup.animate(
             {
                 left: pos["left"],
                 top: pos["top"],
                 width: pos["width"] + "px",
+                maxHeight: pos["height"] + "px",
             },
             RESIZE_SPEED,
             function () {
+                popup.css("overflow", "");
+                popup.css("max-height", "");
+                popup.css("height", "");
                 resolve();
             },
         );
     });
-}
-
-// Returns the page-absolute Y coordinate at which the small popup should be anchored (its top
-// edge) before the popup height is known. A precise correction is applied later in
-// _correctPosition() once the content has loaded and the popup height can be measured.
-//
-// Strategy:
-//   - If the event's top edge is visible, use it as-is (normal case).
-//   - If the event starts above the viewport, use the viewport top as a temporary anchor;
-//     _correctPosition() will shift the popup to align its bottom with the event's bottom edge.
-//   - If the event is entirely outside the viewport (defensive fallback), use the click position.
-function _visibleAnchorTop(elRect, clickPageY) {
-    const doc = document.documentElement;
-    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
-    const viewTop = scrollTop;
-    const viewBottom = scrollTop + window.innerHeight;
-
-    const eventVisibleAtTop = elRect.top >= viewTop && elRect.top < viewBottom;
-    const eventSpansViewport = elRect.top < viewTop && elRect.bottom > viewBottom;
-    const eventVisibleAtBottom = elRect.bottom > viewTop && elRect.bottom <= viewBottom;
-
-    if (eventVisibleAtTop) {
-        // Normal case: the event starts within the visible area.
-        return elRect.top;
-    } else if (eventSpansViewport || eventVisibleAtBottom) {
-        // Event top is above the viewport; use viewport top as a temporary position.
-        // _correctPosition() will refine this to bottom-align with the event's bottom edge.
-        return viewTop;
-    } else if (clickPageY !== null) {
-        // Entire event is outside the viewport (defensive fallback): use click position.
-        return clickPageY;
-    }
-    return elRect.top;
 }
 
 async function _select(newid) {
@@ -471,7 +484,7 @@ async function _select(newid) {
 
         let el = document.getElementById(newid.id);
         const elRect = _pageBoundingBox(el);
-        const popWidth = 600;
+        const popWidth = WIDTH_DETAILS;
 
         let popup = $("#popup");
         if (elRect.right + popWidth > window.innerWidth) popup.css("left", elRect.left - popWidth);
@@ -487,44 +500,6 @@ async function _select(newid) {
             resolve();
         }, 10);
     });
-}
-
-// Adjusts the popup's vertical position after its content has loaded and its final height is known.
-//
-// Cases handled (all comparisons in page-absolute coordinates):
-//   - Top clipped, bottom visible: align the popup bottom with the event's bottom edge.
-//   - Top visible, popup overflows viewport bottom: shift the popup upward, clamping its bottom to
-//     the event's bottom edge or the viewport bottom, whichever is higher.
-//   - In both cases, ensure the popup never goes above the current scroll top.
-function _correctPosition(id) {
-    let el = document.getElementById(id);
-    if (!el) return;
-
-    const elRect = _pageBoundingBox(el);
-    const popupRect = _pageBoundingBox(document.getElementById("popup"));
-    const doc = document.documentElement;
-    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
-    const viewTop = scrollTop;
-    const viewBottom = scrollTop + window.innerHeight;
-
-    const topClipped = elRect.top < viewTop;
-    const bottomVisible = elRect.bottom > viewTop && elRect.bottom <= viewBottom;
-
-    let top = parseFloat($("#popup").css("top"));
-
-    if (topClipped && bottomVisible) {
-        // Align the popup bottom with the visible bottom edge of the event.
-        top = elRect.bottom - popupRect.height;
-    } else if (top + popupRect.height > viewBottom) {
-        // Popup overflows the bottom of the viewport: shift upward.
-        // Prefer aligning with the event's bottom edge; fall back to the viewport bottom.
-        const anchor = elRect.bottom > viewBottom ? viewBottom : elRect.bottom;
-        top = anchor - popupRect.height;
-    }
-
-    // Ensure we do not push the popup above the current scroll top.
-    top = Math.max(top, scrollTop);
-    $("#popup").css("top", top);
 }
 
 async function _deselect(oldid) {
@@ -581,4 +556,75 @@ function _inBoundingBox(e, id) {
         e.pageY >= box.top &&
         e.pageY <= box.top + box.height
     );
+}
+
+// Returns the page-absolute Y coordinate at which the small popup should be anchored (its top
+// edge) before the popup height is known. A precise correction is applied later in
+// _correctPosition() once the content has loaded and the popup height can be measured.
+//
+// Strategy:
+//   - If the event's top edge is visible, use it as-is (normal case).
+//   - If the event starts above the viewport, use the viewport top as a temporary anchor;
+//     _correctPosition() will shift the popup to align its bottom with the event's bottom edge.
+//   - If the event is entirely outside the viewport (defensive fallback), use the click position.
+function _visibleAnchorTop(elRect, clickPageY) {
+    const doc = document.documentElement;
+    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+    const viewTop = scrollTop;
+    const viewBottom = scrollTop + window.innerHeight;
+
+    const eventVisibleAtTop = elRect.top >= viewTop && elRect.top < viewBottom;
+    const eventSpansViewport = elRect.top < viewTop && elRect.bottom > viewBottom;
+    const eventVisibleAtBottom = elRect.bottom > viewTop && elRect.bottom <= viewBottom;
+
+    if (eventVisibleAtTop) {
+        // Normal case: the event starts within the visible area.
+        return elRect.top;
+    } else if (eventSpansViewport || eventVisibleAtBottom) {
+        // Event top is above the viewport; use viewport top as a temporary position.
+        // _correctPosition() will refine this to bottom-align with the event's bottom edge.
+        return viewTop;
+    } else if (clickPageY !== null) {
+        // Entire event is outside the viewport (defensive fallback): use click position.
+        return clickPageY;
+    }
+    return elRect.top;
+}
+
+// Adjusts the popup's vertical position after its content has loaded and its final height is known.
+//
+// Cases handled (all comparisons in page-absolute coordinates):
+//   - Top clipped, bottom visible: align the popup bottom with the event's bottom edge.
+//   - Top visible, popup overflows viewport bottom: shift the popup upward, clamping its bottom to
+//     the event's bottom edge or the viewport bottom, whichever is higher.
+//   - In both cases, ensure the popup never goes above the current scroll top.
+function _correctPosition(id) {
+    let el = document.getElementById(id);
+    if (!el) return;
+
+    const elRect = _pageBoundingBox(el);
+    const popupRect = _pageBoundingBox(document.getElementById("popup"));
+    const doc = document.documentElement;
+    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+    const viewTop = scrollTop;
+    const viewBottom = scrollTop + window.innerHeight;
+
+    const topClipped = elRect.top < viewTop;
+    const bottomVisible = elRect.bottom > viewTop && elRect.bottom <= viewBottom;
+
+    let top = parseFloat($("#popup").css("top"));
+
+    if (topClipped && bottomVisible) {
+        // Align the popup bottom with the visible bottom edge of the event.
+        top = elRect.bottom - popupRect.height;
+    } else if (top + popupRect.height > viewBottom) {
+        // Popup overflows the bottom of the viewport: shift upward.
+        // Prefer aligning with the event's bottom edge; fall back to the viewport bottom.
+        const anchor = elRect.bottom > viewBottom ? viewBottom : elRect.bottom;
+        top = anchor - popupRect.height;
+    }
+
+    // Ensure we do not push the popup above the current scroll top.
+    top = Math.max(top, scrollTop);
+    $("#popup").css("top", top);
 }

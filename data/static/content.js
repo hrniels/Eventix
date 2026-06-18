@@ -41,12 +41,16 @@ function reloadContent() {
         reloadPage();
         return;
     }
-    fireEvent(new DeselectEvent());
     if (slug === "weekly") {
         fetchContent(slug, "#page-content", query, _weeklyOnLoaded);
     } else {
         fetchContent(slug, "#page-content", query, null);
     }
+}
+
+function reloadContentAndDeselect() {
+    fireEvent(new DeselectEvent());
+    reloadContent();
 }
 
 function resetPage() {

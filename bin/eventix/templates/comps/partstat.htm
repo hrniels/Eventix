@@ -61,7 +61,7 @@
             });
 
             $("#" + id + "-menu a").on("click", function () {
-                respond(uid, rid, $(this).data("value"), reloadContent);
+                respond(uid, rid, $(this).data("value"), reloadContentAndDeselect);
             });
 
             $(document).on("click", function (e) {

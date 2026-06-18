@@ -42,7 +42,6 @@ struct DetailsTemplate<'a> {
     dir: &'a CalDir,
     occ: DayOccurrence<'a>,
     org: Option<OrganizerTemplate<'a>>,
-    personal_alarms: bool,
     alarms: Option<EditAlarmTemplate<'a>>,
     series_partstat: Option<PartStatTemplate>,
     occ_partstat: Option<PartStatTemplate>,
@@ -99,7 +98,6 @@ async fn handler(
             .organizer()
             .map(|org| OrganizerTemplate::new(locale.clone(), org)),
         dir,
-        personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
         alarms: if matches!(alarm_type, CalendarAlarmType::Personal { .. }) || has_alarms {
             Some(EditAlarmTemplate::new(
                 locale.clone(),
