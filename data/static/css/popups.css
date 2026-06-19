@@ -16,9 +16,20 @@ div.ev_selected {
     z-index: 50;
 }
 
-.ev_modal_layer {
+.ev_layer {
     position: fixed;
     inset: 0;
+}
+
+.ev_layer[hidden] {
+    display: none;
+}
+
+.ev_page_layer {
+    z-index: 40;
+}
+
+.ev_modal_layer {
     z-index: 90;
     display: flex;
     align-items: center;
@@ -26,11 +37,7 @@ div.ev_selected {
     padding: 24px;
 }
 
-.ev_modal_layer[hidden] {
-    display: none;
-}
-
-.ev_modal_backdrop {
+.ev_layer_backdrop {
     position: absolute;
     inset: 0;
     background: rgba(64, 64, 64, 0.5);

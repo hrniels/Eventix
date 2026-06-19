@@ -99,14 +99,11 @@ class DeselectEvent extends Event {
     async trigger(state) {
         switch (state.name) {
             case "small":
-                await _deselect(state.ids);
-                return new InitState();
-
-            case "form":
             case "page":
+            case "form":
             case "large":
                 await _deselect(state.ids);
-                _animateBlur(0);
+                if (state.name == "page") _closePageLayer();
                 return new InitState();
 
             default:
@@ -208,7 +205,6 @@ class CancelEvent extends Event {
 
     async trigger(state) {
         switch (state.name) {
-            case "page":
             case "large":
             case "form":
                 let new_state;
@@ -216,16 +212,18 @@ class CancelEvent extends Event {
                     if (state.name == "form") {
                         _shrinkPopup(state.popup_pos);
                         await _loadOccurrence(state.ids.uid, state.ids.rid, false);
-                    }
-                    else
-                        await _shrinkPopup(state.popup_pos);
+                    } else await _shrinkPopup(state.popup_pos);
                     new_state = new SmallState(state.ids);
                 } else {
                     await _deselect(state.ids);
                     new_state = new InitState();
                 }
-                _animateBlur(0);
                 return new_state;
+
+            case "page":
+                await _deselect(state.ids);
+                _closePageLayer();
+                return new InitState();
 
             default:
                 return state;
@@ -246,12 +244,17 @@ class PageEvent extends Event {
     async trigger(state) {
         switch (state.name) {
             case "init":
-                await _openPagePopup(this.data["url"], this.data["minWidth"],
-                                     this.data["heightEstimate"]);
+                _openPageLayer();
+                await _openPagePopup(
+                    this.data["url"],
+                    this.data["minWidth"],
+                    this.data["heightEstimate"],
+                );
                 return new PageState(this.data["url"]);
 
             case "small":
             case "large":
+                _openPageLayer();
                 await _loadPage(this.data["url"]);
                 await _animateOpenPopup(this.data["minWidth"], this.data["heightEstimate"]);
                 return new PageState(this.data["url"]);
@@ -305,10 +308,13 @@ async function fireEvent(ev) {
 }
 
 $(document).mousedown(function (e) {
+    if (e.target.closest(".ev_layer")) return;
+
     let popup = document.getElementById("popup");
     if (!popup.contains(e.target) && !_inBoundingBox(e, "popup")) fireEvent(new DeselectEvent());
 });
 $(document).keydown(function (e) {
+    if (e.defaultPrevented) return;
     if (e.key == "Escape") fireEvent(new DeselectEvent());
 });
 
@@ -316,30 +322,18 @@ $.fn.slideFadeToggle = function (easing, callback) {
     return this.animate({ opacity: "toggle" }, POPUP_SPEED, easing, callback);
 };
 
-function _setBlur(el, radius) {
-    $(el).css({
-        "-webkit-filter": "blur(" + radius + "px)",
-        "-moz-filter": "blur(" + radius + "px)",
-        "-o-filter": "blur(" + radius + "px)",
-        "-ms-filter": "blur(" + radius + "px)",
-        filter: "blur(" + radius + "px)",
+function _pageLayer() {
+    return window.ev.getLayer("popup-layer");
+}
+
+function _openPageLayer() {
+    _pageLayer().open(function () {
+        fireEvent(new DeselectEvent());
     });
 }
 
-function _animateBlur(radius) {
-    $("#outer").animate(
-        { blurRadius: radius },
-        {
-            duration: RESIZE_SPEED,
-            easing: "linear",
-            step: function () {
-                _setBlur("#outer", this.blurRadius);
-            },
-            complete: function () {
-                _setBlur("#outer", radius);
-            },
-        },
-    );
+function _closePageLayer() {
+    _pageLayer().close();
 }
 
 async function _animateOpenPopup(minWidth, heightEstimate) {

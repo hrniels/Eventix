@@ -11,11 +11,15 @@ function modalIsOpen() {
 }
 
 function modalLayer() {
-    return document.getElementById("modal-layer");
+    return window.ev.getLayer("modal-layer");
+}
+
+function modalLayerElement() {
+    return modalLayer().element;
 }
 
 function modalLabels() {
-    const layer = modalLayer();
+    const layer = modalLayerElement();
     return {
         close: layer.dataset.closeLabel,
         cancel: layer.dataset.cancelLabel,
@@ -38,10 +42,7 @@ function closeModal(result) {
     if (active === null) return;
 
     $(document).off("keydown", active.keyHandler);
-    $(modalLayer()).off("mousedown", active.overlayHandler);
-
-    const layer = modalLayer();
-    layer.hidden = true;
+    modalLayer().close();
 
     document.getElementById("modal-title").textContent = "";
     document.getElementById("modal-title").hidden = true;
@@ -73,7 +74,6 @@ function openModal(options) {
 
     return new Promise(function (resolve) {
         const layer = modalLayer();
-        const dialog = document.getElementById("modal-dialog");
         const title = document.getElementById("modal-title");
         const message = document.getElementById("modal-message");
         const actions = document.getElementById("modal-actions");
@@ -93,23 +93,19 @@ function openModal(options) {
                 return;
             }
         };
-        const overlayHandler = function (e) {
-            if (e.target === layer || e.target.classList.contains("ev_modal_backdrop")) {
-                closeModal(options.dismissResult);
-            }
+        const overlayHandler = function () {
+            closeModal(options.dismissResult);
         };
 
         window.ev.modal.active = {
             resolve,
             keyHandler,
-            overlayHandler,
         };
 
         setModalOpen(true);
-        layer.hidden = false;
+        layer.open(overlayHandler);
 
         $(document).on("keydown", keyHandler);
-        $(layer).on("mousedown", overlayHandler);
     });
 }
 
