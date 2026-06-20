@@ -24,7 +24,7 @@
                 <span class="ev_details_header_summary">{{ title|t(locale) }}</span>
             </div>
             <div id="form-container" class="ev_form_rows">
-                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="calendar">
+                <div class="ev_form_row collapsed" data-field="calendar">
                     <div class="ev_form_row_header">
                         <div class="ev_form_row_label">
                             <i class="bi bi-collection"></i>
@@ -42,7 +42,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="summary">
+                <div class="ev_form_row collapsed" data-field="summary">
                     <div class="ev_form_row_header">
                         <div class="ev_form_row_label">
                             <i class="bi bi-card-heading"></i>
@@ -53,7 +53,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="location">
+                <div class="ev_form_row collapsed" data-field="location">
                     <div class="ev_form_row_header">
                         <div class="ev_form_row_label">
                             <i class="bi bi-geo-alt-fill"></i>
@@ -65,7 +65,7 @@
                     </div>
                 </div>
                 {% if let Some(status) = status %}
-                    <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="status">
+                    <div class="ev_form_row collapsed" data-field="status">
                         <div class="ev_form_row_header">
                             <div class="ev_form_row_label">
                                 <i class="bi bi-flag"></i>
@@ -128,32 +128,36 @@
                         <!-- prettier-ignore-end -->
                     </div>
                 </div>
-                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="repeat">
+                <div
+                    class="ev_form_row
+                            {% if rrule.is_some() %}ev_form_row_collapsible{% endif %}
+                            collapsed"
+                    data-field="repeat"
+                >
                     <div class="ev_form_row_header">
                         <div class="ev_form_row_label">
                             <i class="bi bi-arrow-clockwise"></i>
                             {{ "Repeat"|t(locale) }}
                         </div>
                         <div class="ev_form_row_segmented"></div>
-                        <div class="ev_form_row_collapsed" data-shortener-id="recur">
-                            <span class="ev_form_row_current"></span>
-                            <span class="ev_form_row_expand_hint"></span>
-                        </div>
-                    </div>
-                    <div class="ev_form_row_expanded">
-                        {% match rrule %}
-                            {% when Some(rrule) %}
-                            {{ rrule|safe }}
-                            {% when _ %}
-                            <span id="form-row-expanded-rrule-ro">
+                        {% if rrule.is_none() %}
+                            <div class="ev_form_row_collapsed">
                                 {% if let Some(rrule) = occ.rrule() %}
                                     {{ rrule.human(&**locale)|newlines()|safe }}
                                 {% else %}
                                     -
                                 {% endif %}
-                            </span>
-                        {% endmatch %}
+                            </div>
+                        {% else %}
+                            <div class="ev_form_row_collapsed" data-shortener-id="recur">
+                                <span class="ev_form_row_current"></span>
+                                <span class="ev_form_row_expand_hint"></span>
+                            </div>
+                        {% endif %}
                     </div>
+                    {% if let Some(rrule) = rrule %}
+                        <div class="ev_form_row_expanded">{{ rrule|safe }}</div>
+                    {% endif %}
                 </div>
                 <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="attendees">
                     <div class="ev_form_row_header">

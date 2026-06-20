@@ -11,7 +11,7 @@
                 {% endif %}
             </h1>
             <div id="form-container" class="ev_form_rows">
-                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="calendar">
+                <div class="ev_form_row collapsed" data-field="calendar">
                     <div class="ev_form_row_header">
                         <div class="ev_form_row_label">
                             <i class="bi bi-collection"></i>
@@ -20,7 +20,7 @@
                         <div class="ev_form_row_collapsed">{{ calendars|safe }}</div>
                     </div>
                 </div>
-                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="summary">
+                <div class="ev_form_row collapsed" data-field="summary">
                     <div class="ev_form_row_header">
                         <div class="ev_form_row_label">
                             <i class="bi bi-card-heading"></i>
@@ -31,7 +31,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="location">
+                <div class="ev_form_row collapsed" data-field="location">
                     <div class="ev_form_row_header">
                         <div class="ev_form_row_label">
                             <i class="bi bi-geo-alt-fill"></i>
@@ -43,7 +43,7 @@
                     </div>
                 </div>
                 {% if let Some(status) = status %}
-                    <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="status">
+                    <div class="ev_form_row collapsed" data-field="status">
                         <div class="ev_form_row_header">
                             <div class="ev_form_row_label">
                                 <i class="bi bi-flag"></i>

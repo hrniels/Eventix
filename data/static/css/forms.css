@@ -35,17 +35,13 @@ fieldset.ev_form {
     cursor: default;
 }
 
-.ev_form_row_collapsible {
-    cursor: default;
-}
-
 .ev_form_vscrollbox {
     width: 100%;
     max-width: none !important;
 }
 
-.ev_form_row_collapsible:hover > .ev_form_row_header,
-.ev_form_row_collapsible:hover > .ev_form_row_expanded {
+.ev_form_row:hover > .ev_form_row_header,
+.ev_form_row:hover > .ev_form_row_expanded {
     background-color: #f0f0f0;
 }
 

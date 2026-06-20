@@ -18,7 +18,7 @@
     </div>
     <div id="form-container" class="ev_form_rows">
         {% if occ.occurrence_start().is_some() || occ.occurrence_end().is_some() %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="date">
+            <div class="ev_form_row collapsed" data-field="date">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-calendar-date"></i>
@@ -52,7 +52,7 @@
             </div>
         {% endif %}
         {% if let Some(loc) = html::text_to_html(occ.location()) %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-geo-alt-fill"></i>
@@ -63,7 +63,7 @@
             </div>
         {% endif %}
         {% if let Some(status) = occ.event_status() %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-flag"></i>
@@ -74,7 +74,7 @@
             </div>
         {% endif %}
         {% if let Some(status) = occ.todo_status() %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-flag"></i>
@@ -85,7 +85,7 @@
             </div>
         {% endif %}
         {% if let Some(rrule) = occ.rrule() %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-arrow-clockwise"></i>
@@ -98,7 +98,7 @@
             </div>
         {% endif %}
         {% if let Some(alarms) = alarms %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-alarm"></i>
@@ -111,7 +111,7 @@
             </div>
         {% endif %}
         {% if let Some(org) = org %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-person-fill"></i>
@@ -122,7 +122,7 @@
             </div>
         {% endif %}
         {% if let Some(atts) = occ.attendees() %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-people-fill"></i>
@@ -153,7 +153,7 @@
             </div>
         {% endif %}
         {% if let Some(desc) = html::text_to_html(occ.description()) %}
-            <div class="ev_form_row ev_form_row_collapsible collapsed">
+            <div class="ev_form_row collapsed">
                 <div class="ev_form_row_header">
                     <div class="ev_form_row_label">
                         <i class="bi bi-journal-text"></i>
