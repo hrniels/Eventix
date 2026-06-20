@@ -380,12 +380,18 @@ fieldset.ev_form div.ev_submit {
 /* ------------ JUMP TO DATE ------------ */
 
 .ev_jump {
+    display: flex;
+    gap: 0.3em;
+    margin: -2px 0;
     position: absolute;
     z-index: 1;
 }
 
 .ev_jump input {
-    font-size: 0.75em;
+    color: #000;
+}
+
+.ev_jump .ev_button {
     color: #000;
 }
 
