@@ -266,8 +266,8 @@
         }
     }
 
-    function editAlarms(id, uid, rid) {
-        fireEvent(new EditAlarmsEvent(id, uid, rid));
+    function editAlarms(id, ctype, uid, rid) {
+        fireEvent(new EditAlarmsEvent(id, ctype, uid, rid));
     }
 
     initListFilterDirs();

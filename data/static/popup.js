@@ -11,6 +11,7 @@ const WIDTH_DETAILS = 600;
 const HEIGHT_LOG = 474;
 const HEIGHT_HELP = 729;
 const HEIGHT_AUTH = 200;
+const ALARMS_HEIGHT = 100;
 
 class State {
     constructor(name) {
@@ -113,22 +114,29 @@ class DeselectEvent extends Event {
 }
 
 class EditAlarmsEvent extends Event {
-    constructor(id, uid, rid) {
+    constructor(btnid, ctype, uid, rid) {
         super("editalarms");
         this.data = {
+            btnid: btnid,
+            ctype: ctype,
             uid: uid,
             rid: rid,
-            id: id,
         };
     }
 
     async trigger(state) {
         switch (state.name) {
+            case "init":
+                let url = "/api/items/details?uid=" + this.data.uid;
+                if (this.data.rid) url += "&rid=" + this.data.rid;
+                url += "&edit=true";
+                await _openEditAlarmsPopup(this.data, url);
+                return new LargeState(state.ids, null);
+
             case "small":
                 let popup_pos = _animateExpandPopup("alarms");
                 return new LargeState(state.ids, popup_pos);
 
-            case "init":
             case "page":
                 console.assert(false, "This should not happen");
 
@@ -142,7 +150,7 @@ class AddEvent extends Event {
     constructor(btnid, ctype, date, hour) {
         super("add");
         this.data = {
-            id: btnid,
+            btnid: btnid,
             ctype: ctype,
             date: date,
             hour: hour,
@@ -166,9 +174,11 @@ class AddEvent extends Event {
 }
 
 class EditEvent extends Event {
-    constructor(uid, rid, mode = "Series") {
+    constructor(btnid, ctype, uid, rid, mode = "Series") {
         super("edit");
         this.data = {
+            btnid: btnid,
+            ctype: ctype,
             uid: uid,
             rid: rid,
             id: null,
@@ -178,17 +188,19 @@ class EditEvent extends Event {
 
     async trigger(state) {
         switch (state.name) {
+            case "init":
             case "small":
-                let popup_pos = _animateExpandPopup("edit");
+                let popup_pos = state.name == "small" ? _animateExpandPopup("edit") : null;
 
                 let url = "/api/items/edit?uid=" + this.data.uid;
                 if (this.data.rid) url += "&rid=" + this.data.rid;
                 url += "&mode=" + this.data.mode;
-                await _loadPage(url);
+
+                if (state.name == "small") await _loadPage(url);
+                else await _openEditPopup(this.data, url);
 
                 return new FormState(state.ids, popup_pos);
 
-            case "init":
             case "page":
                 console.assert(false, "This should not happen");
 
@@ -383,7 +395,7 @@ function _animateExpandPopup(type) {
     popup.css("overflow", "hidden");
     popup.css("maxHeight", popup.height());
 
-    const estimatedHeight = type == "edit" ? MAX_HEIGHT_EDIT : popup.height() + 100;
+    const estimatedHeight = type == "edit" ? MAX_HEIGHT_EDIT : popup.height() + ALARMS_HEIGHT;
     const doc = document.documentElement;
     const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
     const viewBottom = scrollTop + window.innerHeight;
@@ -411,10 +423,25 @@ function _animateExpandPopup(type) {
 
 async function _openAddPopup(data) {
     const heightEstimate = data.ctype == "Event" ? HEIGHT_ADD_EVENT : HEIGHT_ADD_TODO;
-    await _openFromElement("#" + data.id, 600, heightEstimate, async function () {
+    await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
         let url = "/api/items/add?ctype=" + data.ctype;
         if (data.date) url += "&date=" + data.date;
         if (data.hour) url += "&hour=" + data.hour;
+        await _loadPage(url);
+    });
+}
+
+async function _openEditPopup(data, url) {
+    const heightEstimate = data.ctype == "Event" ? HEIGHT_ADD_EVENT : HEIGHT_ADD_TODO;
+    await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
+        await _loadPage(url);
+    });
+}
+
+async function _openEditAlarmsPopup(data, url) {
+    let heightEstimate = data.ctype == "Event" ? HEIGHT_ADD_EVENT : HEIGHT_ADD_TODO;
+    heightEstimate += ALARMS_HEIGHT;
+    await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
         await _loadPage(url);
     });
 }

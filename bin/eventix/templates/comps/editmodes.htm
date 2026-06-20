@@ -26,10 +26,19 @@
         });
 
         $("#{{ id }}-menu a").on("click", function () {
+            $("#{{ id }}-menu").hide();
             if ($(this).data("value") == "Series")
-                fireEvent(new EditEvent("{{ uid }}", null, "Series"));
+                fireEvent(new EditEvent("{{ id }}-toggle", "Event", "{{ uid }}", null, "Series"));
             else {
-                fireEvent(new EditEvent("{{ uid }}", "{{ rid }}", $(this).data("value")));
+                fireEvent(
+                    new EditEvent(
+                        "{{ id }}-toggle",
+                        "Event",
+                        "{{ uid }}",
+                        "{{ rid }}",
+                        $(this).data("value"),
+                    ),
+                );
             }
         });
 

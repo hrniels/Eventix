@@ -86,8 +86,12 @@
                                 <span>{{ "Delete"|t(locale) }}</span>
                             </a>
                             <a
+                                id="edit-button-{{ id }}"
                                 class="ev_button ev_button_normal ev_button_short"
-                                href="javascript:fireEvent(new EditEvent('{{ c.comp.uid() }}', null))"
+                                href="javascript:fireEvent(new EditEvent('edit-button-{{ id }}',
+                                                                         '{{ c.comp.ctype() }}',
+                                                                         '{{ c.comp.uid() }}',
+                                                                         null))"
                             >
                                 <i class="bi bi-pencil"></i>
                                 <span>{{ "Edit_short"|t(locale) }}</span>
@@ -101,7 +105,10 @@
                             <a
                                 id="alarm-button-{{ id }}"
                                 class="ev_button ev_button_normal ev_button_short"
-                                href="javascript:editAlarms('alarm-button-{{ id }}', '{{ c.comp.uid() }}', null)"
+                                href="javascript:editAlarms('alarm-button-{{ id }}',
+                                                            '{{ c.comp.ctype() }}',
+                                                            '{{ c.comp.uid() }}',
+                                                            null)"
                             >
                                 <i class="bi bi-pencil"></i>
                                 <span>{{ "Alarms_short"|t(locale) }}</span>

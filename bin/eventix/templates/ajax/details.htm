@@ -221,7 +221,8 @@
                         {% if !occ.is_recurrent() %}
                             <a
                                 class="ev_button ev_button_normal ev_details_series_action"
-                                href="javascript:fireEvent(new EditEvent('{{ occ.uid() }}', null))"
+                                href="javascript:fireEvent(new EditEvent(null, '{{ occ.ctype() }}',
+                                                                         '{{ occ.uid() }}', null))"
                             >
                                 <i class="bi bi-pencil"></i>
                                 <span>{{ "Edit"|t(locale) }}</span>

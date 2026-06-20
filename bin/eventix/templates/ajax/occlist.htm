@@ -72,6 +72,7 @@
                             id="alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}"
                             class="ev_button ev_button_normal ev_occlist_alarm_action"
                             href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}',
+                                                        '{{ occ.ctype() }}',
                                                         '{{ occ.uid() }}',
                                                         '{{ occ.rid_str() }}')"
                         >
