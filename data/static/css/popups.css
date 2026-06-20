@@ -136,6 +136,28 @@ div.ev_selected {
     margin: 0.5em;
 }
 
+.ev_error_banner {
+    border: 2px solid #ff0000;
+    border-radius: 3px;
+    margin: 0.5rem;
+    display: flex;
+    overflow: hidden;
+}
+
+.ev_error_banner_label {
+    background-color: #ff0000;
+    color: #fff;
+    padding: 0.3rem 0.6rem;
+    white-space: nowrap;
+    font-weight: bold;
+}
+
+.ev_error_banner_msg {
+    background-color: #fff;
+    padding: 0.3rem 0.6rem;
+    flex: 1;
+}
+
 #log {
     border: 1px solid #000;
     width: 100%;
