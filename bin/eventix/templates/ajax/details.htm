@@ -129,7 +129,7 @@
                         {{ "Attendees"|t(locale) }}
                     </div>
                     <div class="ev_form_row_collapsed">
-                        <div class="ev_vscrollbox ev_form_vscrollbox">
+                        <div class="ev_vscrollbox">
                             <ul class="ev_iconlist">
                                 {% for att in occ.attendees_sorted() %}
                                     <li>
@@ -160,9 +160,7 @@
                         {{ "Description"|t(locale) }}
                     </div>
                     <div class="ev_form_row_collapsed">
-                        <div class="ev_vscrollbox ev_vscrollbox_lg ev_form_vscrollbox">
-                            {{ desc|safe }}
-                        </div>
+                        <div class="ev_vscrollbox ev_vscrollbox_lg">{{ desc|safe }}</div>
                     </div>
                 </div>
             </div>

@@ -1,7 +1,8 @@
 /* ------------ BOXES ------------ */
 
 .ev_vscrollbox {
-    max-width: 350px;
+    width: 100%;
+    max-width: none;
     max-height: 100px;
     overflow-x: hidden;
     overflow-y: scroll;
