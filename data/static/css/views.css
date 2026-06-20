@@ -269,6 +269,83 @@
 
 /* ------------ LIST VIEW -------------- */
 
+.ev_list_header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.ev_list_header_title {
+    margin-left: auto;
+}
+
+.ev_list_header_filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em;
+    margin: -10px 0px;
+}
+
+@media (min-width: 100em) {
+    .ev_list_header {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+    }
+
+    .ev_list_header_title {
+        grid-column: 2;
+        margin-left: 0;
+    }
+
+    .ev_list_header_filters {
+        grid-column: 1;
+        justify-self: start;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5em;
+    }
+}
+
+@media (max-width: 70em) {
+    .ev_list_header_title {
+        display: none;
+    }
+}
+
+.ev_list_header_group {
+    font-size: .8em;
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
+.ev_list_header_group input,
+.ev_header a.ev_button * {
+    color: #000;
+}
+.ev_header a.ev_button:hover * {
+    color: #3f5e88;
+}
+
+.ev_list_header_search {
+    width: 10em;
+}
+
+.ev_list_header_calendars {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25em;
+}
+
+.ev_list_header_calendar_link {
+    display: inline-flex;
+}
+
 .ev_list_summary {
     float: left;
 }
@@ -279,11 +356,6 @@
 
 .ev_list_details_cell {
     padding: 0.2em !important;
-}
-
-.ev_list_filter_calendar {
-    display: inline;
-    padding: 2px;
 }
 
 .ev_list_details_main,

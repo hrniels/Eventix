@@ -125,6 +125,7 @@ function fetchContent(pageSlug, containerId, queryStr, onLoaded) {
     getRequest(
         "/pages/" + pageSlug + "/content" + params,
         function (html) {
+            if (containerId == "#page-content") $("#outer > form").show();
             replaceContent(html, containerId);
             if (onLoaded) onLoaded();
         },

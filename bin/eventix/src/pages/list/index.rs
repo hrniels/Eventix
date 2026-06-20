@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use askama::Template;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse};
-use eventix_ical::col::{CalDir, CalFile, Occurrence};
+use eventix_ical::col::{CalFile, Occurrence};
 use eventix_ical::objects::{
     CalAlarm, CalAttendee, CalCompType, CalComponent, CalPartStat, CalTodoStatus, EventLike,
 };
@@ -15,11 +15,9 @@ use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::fmt::Display;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::comps::radiogroup::RadioGroupTemplate;
 use crate::comps::{
     organizer::OrganizerTemplate, pagination::PaginationTemplate, partstat::PartStatTemplate,
 };
@@ -28,19 +26,8 @@ use crate::html::{self, filters, to_id};
 use crate::pages::error::HTMLError;
 
 const PER_PAGE: usize = 12;
-
-#[derive(Clone, Copy, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
-enum Conjunction {
-    #[default]
-    And,
-    Or,
-}
-
-impl Display for Conjunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
+const MIN_PER_PAGE: usize = 5;
+const MAX_PER_PAGE: usize = 50;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -48,7 +35,7 @@ pub struct Filter {
     keywords: String,
     page: usize,
     dirs: Vec<String>,
-    conjunction: Conjunction,
+    per_page: Option<usize>,
 }
 
 impl Default for Filter {
@@ -57,7 +44,7 @@ impl Default for Filter {
             keywords: String::from(""),
             page: 1,
             dirs: Vec::new(),
-            conjunction: Conjunction::default(),
+            per_page: None,
         }
     }
 }
@@ -72,8 +59,62 @@ impl Filter {
             keywords: self.keywords.clone(),
             page,
             dirs: self.dirs.clone(),
-            conjunction: self.conjunction,
+            per_page: self.per_page,
         }
+    }
+
+    pub fn effective_per_page(&self) -> usize {
+        self.per_page
+            .unwrap_or(PER_PAGE)
+            .clamp(MIN_PER_PAGE, MAX_PER_PAGE)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CalendarFilter<'a> {
+    id: &'a str,
+    name: &'a str,
+    selected: bool,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct KeywordExpression {
+    groups: Vec<Vec<String>>,
+}
+
+impl KeywordExpression {
+    fn parse(input: &str) -> Self {
+        let mut groups = Vec::new();
+        let mut current = Vec::new();
+
+        for token in input.split_whitespace() {
+            if token.eq_ignore_ascii_case("OR") {
+                if !current.is_empty() {
+                    groups.push(std::mem::take(&mut current));
+                }
+                continue;
+            }
+
+            current.push(token.to_lowercase());
+        }
+
+        if !current.is_empty() {
+            groups.push(current);
+        }
+
+        Self { groups }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+
+    fn matches(&self, text: &str) -> bool {
+        self.is_empty()
+            || self
+                .groups
+                .iter()
+                .any(|group| group.iter().all(|term| text.contains(term)))
     }
 }
 
@@ -189,12 +230,8 @@ impl<'a> ListComponent<'a> {
 #[template(path = "pages/list.htm")]
 struct ListShellTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
-    /// The serialized filter query string used to pre-populate the form and seed the inner
-    /// content request (e.g. `"keywords=foo&page=1&dirs%5B%5D=personal&conjunction=And"`).
-    filter_query: String,
     filter: Filter,
-    conjunction: RadioGroupTemplate<Conjunction>,
-    directories: Vec<&'a CalDir>,
+    calendars: Vec<CalendarFilter<'a>>,
 }
 
 /// Fragment-only template for the paginated list, rendered by the AJAX content endpoint.
@@ -231,29 +268,19 @@ pub async fn content(
         filter.dirs = directories.iter().map(|s| s.id().deref().clone()).collect();
     }
 
-    let filter_query = serde_qs::to_string(&filter).unwrap_or_default();
-
-    let conjunction = RadioGroupTemplate::new(
-        String::from("conjunction"),
-        filter.conjunction,
-        vec![
-            (
-                Conjunction::And,
-                locale.translate("All keywords need to match").to_string(),
-            ),
-            (
-                Conjunction::Or,
-                locale.translate("Any keyword needs to match").to_string(),
-            ),
-        ],
-    );
+    let calendars = directories
+        .into_iter()
+        .map(|dir| CalendarFilter {
+            id: dir.id(),
+            name: dir.name(),
+            selected: filter.dirs.contains(dir.id()),
+        })
+        .collect();
 
     let html = ListShellTemplate {
         locale,
         filter,
-        conjunction,
-        directories,
-        filter_query,
+        calendars,
     }
     .render()
     .context("list shell template")?;
@@ -274,23 +301,7 @@ pub async fn content_results(
         filter.dirs = directories.iter().map(|s| s.id().deref().clone()).collect();
     }
 
-    let keywords = filter.keywords.to_lowercase();
-    let matches_keywords = |field: Option<&String>, kws: &String| {
-        if let Some(field) = field {
-            let field = field.to_lowercase();
-            for kw in kws.split_whitespace() {
-                if filter.conjunction == Conjunction::Or && field.contains(kw) {
-                    return true;
-                }
-                if filter.conjunction == Conjunction::And && !field.contains(kw) {
-                    return false;
-                }
-            }
-            filter.conjunction == Conjunction::And
-        } else {
-            false
-        }
-    };
+    let keywords = KeywordExpression::parse(&filter.keywords);
 
     let settings = state.settings();
     let pers_alarms = state.personal_alarms();
@@ -309,25 +320,23 @@ pub async fn content_results(
                 if !filter.dirs.contains(file.directory()) {
                     return false;
                 }
-                if keywords.is_empty() {
-                    return true;
-                }
-                if matches_keywords(comp.summary(), &keywords) {
-                    return true;
-                }
-                if matches_keywords(comp.description(), &keywords) {
-                    return true;
-                }
-                if matches_keywords(comp.location(), &keywords) {
-                    return true;
-                }
-                if matches_keywords(Some(comp.uid()), &keywords) {
-                    return true;
-                }
-                false
+
+                let searchable = [
+                    comp.summary().map(String::as_str),
+                    comp.description().map(String::as_str),
+                    comp.location().map(String::as_str),
+                    Some(comp.uid().as_str()),
+                ]
+                .into_iter()
+                .flatten()
+                .join(" ")
+                .to_lowercase();
+
+                keywords.matches(&searchable)
             })
     };
     let total = iter().count();
+    let per_page = filter.effective_per_page();
 
     let comps = iter()
         .sorted_by_key(|(_, comp)| {
@@ -336,15 +345,15 @@ pub async fn content_results(
                 .unwrap_or_else(|| comp.stamp())
         })
         .rev()
-        .skip((filter.page - 1) * PER_PAGE)
-        .take(PER_PAGE)
+        .skip((filter.page - 1) * per_page)
+        .take(per_page)
         .map(|(file, comp)| ListComponent::new(comp, file, locale.clone(), settings, pers_alarms))
         .collect::<Vec<_>>();
 
     let pagination = PaginationTemplate::new(
         |page| filter.with_page(*page).url(),
         total,
-        PER_PAGE,
+        per_page,
         filter.page,
     );
 
@@ -357,4 +366,57 @@ pub async fn content_results(
     .context("list content template")?;
 
     Ok(Html(html))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::KeywordExpression;
+
+    #[test]
+    fn keyword_expression_requires_all_terms_by_default() {
+        let expr = KeywordExpression::parse("alpha beta");
+
+        assert!(expr.matches("alpha gamma beta"));
+        assert!(!expr.matches("alpha gamma"));
+    }
+
+    #[test]
+    fn keyword_expression_splits_alternatives_on_or() {
+        let expr = KeywordExpression::parse("alpha beta OR gamma");
+
+        assert!(expr.matches("alpha something beta"));
+        assert!(expr.matches("gamma"));
+        assert!(!expr.matches("alpha only"));
+    }
+
+    #[test]
+    fn keyword_expression_parses_or_case_insensitively() {
+        let expr = KeywordExpression::parse("alpha or beta");
+
+        assert_eq!(
+            expr,
+            KeywordExpression {
+                groups: vec![vec![String::from("alpha")], vec![String::from("beta")]],
+            }
+        );
+    }
+
+    #[test]
+    fn keyword_expression_ignores_empty_or_groups() {
+        let expr = KeywordExpression::parse("OR alpha OR OR beta OR");
+
+        assert_eq!(
+            expr,
+            KeywordExpression {
+                groups: vec![vec![String::from("alpha")], vec![String::from("beta")]],
+            }
+        );
+    }
+
+    #[test]
+    fn empty_keyword_expression_matches_anything() {
+        let expr = KeywordExpression::parse("   ");
+
+        assert!(expr.matches("anything"));
+    }
 }
