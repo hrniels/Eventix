@@ -244,9 +244,10 @@ class CancelEvent extends Event {
 }
 
 class PageEvent extends Event {
-    constructor(url, minWidth, heightEstimate) {
+    constructor(btnid, url, minWidth, heightEstimate) {
         super("page");
         this.data = {
+            btnid: btnid,
             url: url,
             minWidth: minWidth,
             heightEstimate: heightEstimate,
@@ -257,11 +258,7 @@ class PageEvent extends Event {
         switch (state.name) {
             case "init":
                 _openPageLayer();
-                await _openPagePopup(
-                    this.data["url"],
-                    this.data["minWidth"],
-                    this.data["heightEstimate"],
-                );
+                await _openPagePopup(this.data, this.data["url"]);
                 return new PageState(this.data["url"]);
 
             case "small":
@@ -277,16 +274,17 @@ class PageEvent extends Event {
     }
 }
 
-function createLogEvent(col) {
-    return new PageEvent("/api/collections/log?col_id=" + col, WIDTH_LOG, HEIGHT_LOG);
+function createLogEvent(btnid, col) {
+    return new PageEvent(btnid, "/api/collections/log?col_id=" + col, WIDTH_LOG, HEIGHT_LOG);
 }
 
-function createHelpEvent() {
-    return new PageEvent("/api/help", WIDTH_HELP, HEIGHT_HELP);
+function createHelpEvent(btnid) {
+    return new PageEvent(btnid, "/api/help", WIDTH_HELP, HEIGHT_HELP);
 }
 
 function createAuthEvent(cal, url, op_url, spinnerId) {
     return new PageEvent(
+        "link-refresh",
         "/api/auth?calendar=" +
             cal +
             "&url=" +
@@ -446,8 +444,8 @@ async function _openEditAlarmsPopup(data, url) {
     });
 }
 
-async function _openPagePopup(url, minWidth, heightEstimate) {
-    await _openFromElement("#link-refresh", minWidth, heightEstimate, async function () {
+async function _openPagePopup(data, url) {
+    await _openFromElement("#" + data.btnid, data.minWidth, data.heightEstimate, async function () {
         await _loadPage(url);
     });
 }
