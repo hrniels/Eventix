@@ -195,6 +195,7 @@
         setPersonalAlarms($("#calendar").val());
 
         FormExpandShrink.init("#form-container");
+        setTimeout(() => $("#summary").focus(), 50);
     });
 
     bindContentHandler("page-content", document, "keydown", function (e) {
