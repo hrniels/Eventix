@@ -436,3 +436,56 @@ div.ev_button_right {
     flex-wrap: wrap;
     gap: 2px;
 }
+
+/* ------------ SYNCER ------------ */
+
+.ev_syncer_opts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    padding-top: .5em;
+    padding-left: 1.4em;
+}
+
+.ev_syncer_field {
+    display: flex;
+    gap: 0.5em;
+    align-items: center;
+}
+
+.ev_syncer_label {
+    min-width: 9em;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.ev_syncer_input {
+    flex: 1;
+}
+
+.ev_syncer_inputs {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 0.4em;
+}
+
+.ev_syncer_row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.3em;
+}
+
+.ev_syncer_row .ev_syncer_radio_big_gap {
+    margin-right: 0.5em;
+}
+
+.ev_syncer_separator {
+    border-top: 1px dashed #000;
+    margin: 0.3em 0;
+}
+
+.ev_syncer_checkbox {
+    flex: 0 !important;
+}

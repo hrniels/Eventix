@@ -12,9 +12,9 @@ const HEIGHT_LOG = 474;
 const HEIGHT_HELP = 729;
 const HEIGHT_AUTH = 200;
 const ALARMS_HEIGHT = 100;
-const WIDTH_COLLECTION = 500;
-const HEIGHT_ADD_COLLECTION = 260;
-const HEIGHT_EDIT_COLLECTION = 260;
+const WIDTH_COLLECTION = 700;
+const HEIGHT_ADD_COLLECTION = 605;
+const HEIGHT_EDIT_COLLECTION = 450;
 
 class State {
     constructor(name) {
