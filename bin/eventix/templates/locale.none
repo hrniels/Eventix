@@ -44,3 +44,19 @@ function calLocale() {
         firstDay: 1, // Monday
     };
 }
+
+function formStrings() {
+    return {
+        none: "{{ "None"|t(locale) }}",
+        calendar: "{{ "Calendar"|t(locale) }}",
+        personal: "{{ "Personal"|t(locale) }}",
+        relative: "{{ "Relative"|t(locale) }}",
+        absolute: "{{ "Absolute"|t(locale) }}",
+        hourly: "{{ "Hourly"|t(locale) }}",
+        daily: "{{ "Daily"|t(locale) }}",
+        weekly: "{{ "Weekly"|t(locale) }}",
+        monthly: "{{ "Monthly"|t(locale) }}",
+        annually: "{{ "Annually"|t(locale) }}",
+        andMore: "{{ "and {} more"|t(locale) }}",
+    };
+}

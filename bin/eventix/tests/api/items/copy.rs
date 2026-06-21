@@ -281,7 +281,7 @@ async fn recurrent_event_rejected() {
 
     let qs = encode_form(&[("uid", uid), ("date", "2026-04-22")]);
     let (status, _) = post_query(router, &format!("/api/items/copy?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 
     // No copy should have been created.
     let count = std::fs::read_dir(&cal_dir)
@@ -311,7 +311,7 @@ async fn unknown_uid_returns_error() {
 
     let qs = encode_form(&[("uid", "no-such-uid"), ("date", "2026-04-22")]);
     let (status, _) = post_query(router, &format!("/api/items/copy?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 
     // Only the original ICS should exist.
     let count = std::fs::read_dir(&cal_dir)

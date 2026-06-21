@@ -7,8 +7,6 @@ use eventix_locale::Locale;
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::html::filters;
-
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct PasswordRequest {
     password: String,
@@ -37,19 +35,15 @@ impl PasswordRequest {
 #[derive(Template)]
 #[template(path = "comps/password.htm")]
 pub struct PasswordTemplate {
-    locale: Arc<dyn Locale + Send + Sync>,
     name: String,
     id: String,
-    is_edit: bool,
 }
 
 impl PasswordTemplate {
-    pub fn new(locale: Arc<dyn Locale + Send + Sync>, name: String, is_edit: bool) -> Self {
+    pub fn new(name: String) -> Self {
         Self {
             id: name.replace("[", "_").replace("]", "_"),
             name,
-            locale,
-            is_edit,
         }
     }
 }

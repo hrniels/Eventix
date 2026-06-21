@@ -123,7 +123,7 @@ async fn already_cancelled_returns_error() {
 
     let qs = encode_form(&[("uid", uid), ("rid", "TTEurope/Berlin;2026-04-15T09:00:00")]);
     let (status, body_str) = post_query(router, &format!("/api/items/cancel?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
     assert!(
         body_str.contains("already canceled"),
         "expected 'already canceled' error, got: {body_str}"
@@ -143,7 +143,7 @@ async fn non_recurrent_event_rejected() {
 
     let qs = encode_form(&[("uid", uid), ("rid", "TTEurope/Berlin;2026-04-15T09:00:00")]);
     let (status, _) = post_query(router, &format!("/api/items/cancel?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Attempting to cancel an event with an unknown UID returns an error.
@@ -160,5 +160,5 @@ async fn unknown_uid_returns_error() {
         ("rid", "TTEurope/Berlin;2026-04-15T09:00:00"),
     ]);
     let (status, _) = post_query(router, &format!("/api/items/cancel?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }

@@ -13,7 +13,7 @@
             <span>{{ "This and following occ."|t(locale) }}</span>
         </a>
         <a class="ev_button ev_button_normal ev_edit_modes_action" data-value="Series">
-            <i class="bi bi-arrow-repeat"></i>
+            <i class="bi bi-arrow-clockwise"></i>
             <span>{{ "Complete series"|t(locale) }}</span>
         </a>
     </div>
@@ -26,11 +26,18 @@
         });
 
         $("#{{ id }}-menu a").on("click", function () {
+            $("#{{ id }}-menu").hide();
             if ($(this).data("value") == "Series")
-                loadWithPrev("/pages/items/edit?uid={{ uid }}&mode=Series");
+                fireEvent(new EditEvent("{{ id }}-toggle", "Event", "{{ uid }}", null, "Series"));
             else {
-                loadWithPrev(
-                    "/pages/items/edit?uid={{ uid }}&rid={{ rid }}&mode=" + $(this).data("value"),
+                fireEvent(
+                    new EditEvent(
+                        "{{ id }}-toggle",
+                        "Event",
+                        "{{ uid }}",
+                        "{{ rid }}",
+                        $(this).data("value"),
+                    ),
                 );
             }
         });

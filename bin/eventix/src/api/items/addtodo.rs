@@ -23,7 +23,9 @@ pub struct Request {
 }
 
 pub fn router(state: EventixState) -> Router {
-    Router::new().route("/add", post(handler)).with_state(state)
+    Router::new()
+        .route("/addtodo", post(handler))
+        .with_state(state)
 }
 
 pub async fn handler(

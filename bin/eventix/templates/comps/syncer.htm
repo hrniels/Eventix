@@ -1,252 +1,273 @@
 <input type="hidden" id="{{ id }}_syncer" name="{{ name }}[syncer]" value="{{ syncer() }}" />
-<div id="{{ id }}-tabs" class="ev_tabs ev_tabs_icons">
-    <ul>
-        {% if only.is_none() || only.unwrap() == Syncer::VDirSyncer %}
-            <li>
-                <a href="#{{ id }}-tabs-VDIRSYNCER">
-                    <img src="/static/caldav.png" />
-                    <span>{{ "CalDAV"|t(locale) }}</span>
-                </a>
-            </li>
-        {% endif %}
-        {% if only.is_none() || only.unwrap() == Syncer::O365 %}
-            <li>
-                <a href="#{{ id }}-tabs-O365">
-                    <img src="/static/o365.png" />
-                    <span>{{ "O365"|t(locale) }}</span>
-                </a>
-            </li>
-        {% endif %}
-        {% if only.is_none() || only.unwrap() == Syncer::FileSystem %}
-            <li>
-                <a href="#{{ id }}-tabs-FILESYSTEM">
-                    <img src="/static/fs.png" />
-                    <span>{{ "FileSystem"|t(locale) }}</span>
-                </a>
-            </li>
-        {% endif %}
-    </ul>
-    <div
-        id="{{ id }}-tabs-VDIRSYNCER"
-        class="ev_hidden"
-        {% if only.is_some() && only.unwrap() != Syncer::VDirSyncer %}
-            hidden
-        {% endif %}
-    >
-        <fieldset class="ev_nopad">
-            <dl>
-                <dt>{{ "Your Name"|t(locale) }}: *</dt>
-                <dd>
-                    <input
-                        type="text"
-                        name="{{ name }}[vdir_name]"
-                        size="30"
-                        value="{{ value.vdir_name }}"
-                    />
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Email Address"|t(locale) }}: *</dt>
-                <dd>
-                    <input
-                        type="text"
-                        name="{{ name }}[vdir_email]"
-                        size="50"
-                        value="{{ value.vdir_email }}"
-                    />
-                    <div>{{ "info.name_and_email"|t(locale) }}</div>
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Location"|t(locale) }}: *</dt>
-                <dd>
-                    <input
-                        type="text"
-                        name="{{ name }}[vdir_url]"
-                        size="60"
-                        value="{{ value.vdir_url }}"
-                    />
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Read-only"|t(locale) }}:</dt>
-                <dd>
-                    <input
-                        type="checkbox"
-                        name="{{ name }}[vdir_readonly]"
-                        value="true"
-                        {% if value.vdir_readonly.is_some() %}checked="checked"{% endif %}
-                    />
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Username"|t(locale) }}:</dt>
-                <dd>
-                    <input
-                        type="text"
-                        name="{{ name }}[vdir_username]"
-                        size="30"
-                        value="{{ value.vdir_username }}"
-                    />
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Password"|t(locale) }}:</dt>
-                <dd>{{ vdir_pw()|safe }}</dd>
-            </dl>
-            <dl>
-                <dt>{{ "Sync window"|t(locale) }}:</dt>
-                <dd>
-                    <input
-                        type="radio"
-                        id="{{ id }}_vdir_time_span_infinite"
-                        name="{{ name }}[vdir_time_span]"
-                        value="infinite"
-                        {% if value.vdir_time_span != "years" %}checked="checked"{% endif %}
-                    />
-                    <label for="{{ id }}_vdir_time_span_infinite">
-                        {{- "Unlimited"|t(locale) -}} </label
-                    ><br />
-                    <input
-                        type="radio"
-                        id="{{ id }}_vdir_time_span_years"
-                        name="{{ name }}[vdir_time_span]"
-                        value="years"
-                        {% if value.vdir_time_span == "years" %}checked="checked"{% endif %}
-                    />
-                    <label for="{{ id }}_vdir_time_span_years">
-                        {{- "Last N years"|t(locale) -}}
-                    </label>
-                    <input
-                        id="{{ id }}_vdir_time_span_years_val"
-                        name="{{ name }}[vdir_time_span_years]"
-                        size="4"
-                        value="{{ value.vdir_time_span_years }}"
-                    />
-                    {{ "year(s)"|t(locale) }}
-                </dd>
-            </dl>
-        </fieldset>
+<div id="{{ id }}_segmented" class="ev_segmented">
+    <input
+        type="radio"
+        id="{{ id }}_syncer_VDIRSYNCER"
+        name="{{ name }}[syncer_seg]"
+        value="VDIRSYNCER"
+        {% if syncer() == "VDIRSYNCER" %}checked="checked"{% endif %}
+        {% if only.is_some() && only.unwrap() != Syncer::VDirSyncer %}disabled{% endif %}
+    />
+    <label for="{{ id }}_syncer_VDIRSYNCER">{{ "CalDAV"|t(locale) }}</label>
+    <input
+        type="radio"
+        id="{{ id }}_syncer_O365"
+        name="{{ name }}[syncer_seg]"
+        value="O365"
+        {% if syncer() == "O365" %}checked="checked"{% endif %}
+        {% if only.is_some() && only.unwrap() != Syncer::O365 %}disabled{% endif %}
+    />
+    <label for="{{ id }}_syncer_O365">{{ "O365"|t(locale) }}</label>
+    <input
+        type="radio"
+        id="{{ id }}_syncer_FILESYSTEM"
+        name="{{ name }}[syncer_seg]"
+        value="FILESYSTEM"
+        {% if syncer() == "FILESYSTEM" %}checked="checked"{% endif %}
+        {% if only.is_some() && only.unwrap() != Syncer::FileSystem %}disabled{% endif %}
+    />
+    <label for="{{ id }}_syncer_FILESYSTEM">{{ "FileSystem"|t(locale) }}</label>
+</div>
+
+<div
+    id="{{ id }}_vdirsyncer_opts"
+    class="ev_syncer_opts"
+    style="display: {% if syncer() == "VDIRSYNCER" %}flex{% else %}none{% endif %}"
+>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_vdir_name" class="ev_syncer_label"
+            >{{ "Your Name"|t(locale) }} *</label
+        >
+        <div class="ev_syncer_inputs">
+            <input
+                type="text"
+                id="{{ id }}_vdir_name"
+                name="{{ name }}[vdir_name]"
+                value="{{ value.vdir_name }}"
+                class="ev_syncer_input"
+            />
+        </div>
     </div>
-    <div
-        id="{{ id }}-tabs-O365"
-        class="ev_hidden"
-        {% if only.is_some() && only.unwrap() != Syncer::O365 %}
-            hidden
-        {% endif %}
-    >
-        <fieldset class="ev_nopad">
-            <dl>
-                <dt>{{ "Your Name"|t(locale) }}: *</dt>
-                <dd>
-                    <input
-                        type="text"
-                        name="{{ name }}[o365_name]"
-                        size="30"
-                        value="{{ value.o365_name }}"
-                    />
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Email Address"|t(locale) }}: *</dt>
-                <dd>
-                    <input
-                        type="text"
-                        name="{{ name }}[o365_email]"
-                        size="50"
-                        value="{{ value.o365_email }}"
-                    />
-                    <div>{{ "info.name_and_email_o365"|t(locale) }}</div>
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Read-only"|t(locale) }}:</dt>
-                <dd>
-                    <input
-                        type="checkbox"
-                        name="{{ name }}[o365_readonly]"
-                        value="true"
-                        {% if value.o365_readonly.is_some() %}checked="checked"{% endif %}
-                    />
-                </dd>
-            </dl>
-            <dl>
-                <dt>{{ "Sync window"|t(locale) }}:</dt>
-                <dd>
-                    <input
-                        type="radio"
-                        id="{{ id }}_o365_time_span_infinite"
-                        name="{{ name }}[o365_time_span]"
-                        value="infinite"
-                        {% if value.o365_time_span != "years" %}checked="checked"{% endif %}
-                    />
-                    <label for="{{ id }}_o365_time_span_infinite">
-                        {{- "Unlimited"|t(locale) -}} </label
-                    ><br />
-                    <input
-                        type="radio"
-                        id="{{ id }}_o365_time_span_years"
-                        name="{{ name }}[o365_time_span]"
-                        value="years"
-                        {% if value.o365_time_span == "years" %}checked="checked"{% endif %}
-                    />
-                    <label for="{{ id }}_o365_time_span_years">
-                        {{- "Last N years"|t(locale) -}}
-                    </label>
-                    <input
-                        id="{{ id }}_o365_time_span_years_val"
-                        name="{{ name }}[o365_time_span_years]"
-                        size="4"
-                        value="{{ value.o365_time_span_years }}"
-                    />
-                    {{ "year(s)"|t(locale) }}
-                </dd>
-            </dl>
-        </fieldset>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_vdir_email" class="ev_syncer_label"
+            >{{ "Email Address"|t(locale) }} *
+            <i class="bi bi-question-circle" title="{{ "info.name_and_email"|t(locale) }}"></i>
+        </label>
+        <div class="ev_syncer_inputs">
+            <input
+                type="text"
+                id="{{ id }}_vdir_email"
+                name="{{ name }}[vdir_email]"
+                value="{{ value.vdir_email }}"
+                class="ev_syncer_input"
+            />
+        </div>
     </div>
-    <div
-        id="{{ id }}-tabs-FILESYSTEM"
-        class="ev_hidden"
-        {% if only.is_some() && only.unwrap() != Syncer::FileSystem %}
-            hidden
-        {% endif %}
-    >
-        <fieldset class="ev_nopad">
-            <dl>
-                <dt>{{ "Path"|t(locale) }}: *</dt>
-                <dd>
-                    <input
-                        type="text"
-                        name="{{ name }}[fs_path]"
-                        size="50"
-                        value="{{ value.fs_path }}"
-                    />
-                    <div>{{ "info.collection_folder_path"|t(locale) }}</div>
-                </dd>
-            </dl>
-        </fieldset>
+    <div class="ev_syncer_separator"></div>
+    <div class="ev_syncer_field">
+        <span class="ev_syncer_label">{{ "Location"|t(locale) }} *</span>
+        <div class="ev_syncer_inputs">
+            <input
+                type="text"
+                name="{{ name }}[vdir_url]"
+                value="{{ value.vdir_url }}"
+                class="ev_syncer_input"
+            />
+        </div>
+    </div>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_vdir_readonly" class="ev_syncer_label"
+            >{{ "Read-only"|t(locale) }}</label
+        >
+        <div class="ev_syncer_inputs ev_syncer_checkbox">
+            <input
+                type="checkbox"
+                id="{{ id }}_vdir_readonly"
+                name="{{ name }}[vdir_readonly]"
+                value="true"
+                {% if value.vdir_readonly.is_some() %}checked="checked"{% endif %}
+            />
+        </div>
+    </div>
+    <div class="ev_syncer_field">
+        <span class="ev_syncer_label">{{ "Sync window"|t(locale) }}</span>
+        <div class="ev_syncer_row">
+            <input
+                type="radio"
+                id="{{ id }}_vdir_time_span_infinite"
+                name="{{ name }}[vdir_time_span]"
+                value="infinite"
+                {% if value.vdir_time_span != "years" %}checked="checked"{% endif %}
+            />
+            <label for="{{ id }}_vdir_time_span_infinite" class="ev_syncer_radio_big_gap"
+                >{{ "Unlimited"|t(locale) }}</label
+            >
+            <input
+                type="radio"
+                id="{{ id }}_vdir_time_span_years"
+                name="{{ name }}[vdir_time_span]"
+                value="years"
+                {% if value.vdir_time_span == "years" %}checked="checked"{% endif %}
+            />
+            <label for="{{ id }}_vdir_time_span_years">{{ "Last N years"|t(locale) }}</label>
+            <input
+                id="{{ id }}_vdir_time_span_years_val"
+                name="{{ name }}[vdir_time_span_years]"
+                size="4"
+                value="{{ value.vdir_time_span_years }}"
+            />
+            <span>{{ "year(s)"|t(locale) }}</span>
+        </div>
+    </div>
+    <div class="ev_syncer_separator"></div>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_vdir_username" class="ev_syncer_label"
+            >{{ "Username"|t(locale) }}</label
+        >
+        <div class="ev_syncer_inputs">
+            <input
+                type="text"
+                id="{{ id }}_vdir_username"
+                name="{{ name }}[vdir_username]"
+                value="{{ value.vdir_username }}"
+                class="ev_syncer_input"
+            />
+        </div>
+    </div>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_vdir_password" class="ev_syncer_label"
+            >{{ "Password"|t(locale) }}
+            {% if is_edit %}
+                <i
+                    class="bi bi-question-circle"
+                    title="{{ "info.edit_password_help"|t(locale) }}"
+                ></i>
+            {% endif %}
+        </label>
+        <div class="ev_syncer_inputs">{{ vdir_pw()|safe }}</div>
     </div>
 </div>
 
-<div class="ev_margin_top">{{ "info.required_fields"|t(locale) }}</div>
+<div
+    id="{{ id }}_o365_opts"
+    class="ev_syncer_opts"
+    style="display: {% if syncer() == "O365" %}flex{% else %}none{% endif %}"
+>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_o365_name" class="ev_syncer_label"
+            >{{ "Your Name"|t(locale) }} *</label
+        >
+        <div class="ev_syncer_inputs">
+            <input
+                type="text"
+                id="{{ id }}_o365_name"
+                name="{{ name }}[o365_name]"
+                value="{{ value.o365_name }}"
+                class="ev_syncer_input"
+            />
+        </div>
+    </div>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_o365_email" class="ev_syncer_label"
+            >{{ "Email Address"|t(locale) }} *
+            <i class="bi bi-question-circle" title="{{ "info.name_and_email_o365"|t(locale) }}"></i>
+        </label>
+        <div class="ev_syncer_inputs">
+            <input
+                type="text"
+                id="{{ id }}_o365_email"
+                name="{{ name }}[o365_email]"
+                value="{{ value.o365_email }}"
+                class="ev_syncer_input"
+            />
+        </div>
+    </div>
+    <div class="ev_syncer_separator"></div>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_o365_readonly" class="ev_syncer_label"
+            >{{ "Read-only"|t(locale) }}</label
+        >
+        <div class="ev_syncer_inputs ev_syncer_checkbox">
+            <input
+                type="checkbox"
+                id="{{ id }}_o365_readonly"
+                name="{{ name }}[o365_readonly]"
+                value="true"
+                {% if value.o365_readonly.is_some() %}checked="checked"{% endif %}
+            />
+        </div>
+    </div>
+    <div class="ev_syncer_field">
+        <span class="ev_syncer_label">{{ "Sync window"|t(locale) }}</span>
+        <div class="ev_syncer_row">
+            <input
+                type="radio"
+                id="{{ id }}_o365_time_span_infinite"
+                name="{{ name }}[o365_time_span]"
+                value="infinite"
+                {% if value.o365_time_span != "years" %}checked="checked"{% endif %}
+            />
+            <label for="{{ id }}_o365_time_span_infinite" class="ev_syncer_radio_big_gap"
+                >{{ "Unlimited"|t(locale) }}</label
+            >
+            <input
+                type="radio"
+                id="{{ id }}_o365_time_span_years"
+                name="{{ name }}[o365_time_span]"
+                value="years"
+                {% if value.o365_time_span == "years" %}checked="checked"{% endif %}
+            />
+            <label for="{{ id }}_o365_time_span_years">{{ "Last N years"|t(locale) }}</label>
+            <input
+                id="{{ id }}_o365_time_span_years_val"
+                name="{{ name }}[o365_time_span_years]"
+                size="4"
+                value="{{ value.o365_time_span_years }}"
+            />
+            <span>{{ "year(s)"|t(locale) }}</span>
+        </div>
+    </div>
+</div>
+
+<div
+    id="{{ id }}_filesystem_opts"
+    class="ev_syncer_opts"
+    style="display: {% if syncer() == "FILESYSTEM" %}flex{% else %}none{% endif %}"
+>
+    <div class="ev_syncer_field">
+        <label for="{{ id }}_fs_path" class="ev_syncer_label">{{ "Path"|t(locale) }} *</label>
+        <div class="ev_syncer_inputs">
+            <input
+                type="text"
+                id="{{ id }}_fs_path"
+                name="{{ name }}[fs_path]"
+                value="{{ value.fs_path }}"
+                class="ev_syncer_input"
+            />
+            <div>{{ "info.collection_folder_path"|t(locale) }}</div>
+        </div>
+    </div>
+</div>
 
 <!-- prettier-ignore-start -->
 <script>
     $(function () {
-        $("#{{ id }}-tabs").tabs({
-            activate: function (event, data) {
-                const name = data.newPanel.attr("id").replace("{{ id }}-tabs-", "");
-                $("#{{ id }}_syncer").attr("value", name);
+        const syncerMode = new SegmentedControl("{{ id }}", {
+            inputName: "{{ name }}[syncer_seg]",
+            panels: {
+                VDIRSYNCER: "#{{ id }}_vdirsyncer_opts",
+                O365: "#{{ id }}_o365_opts",
+                FILESYSTEM: "#{{ id }}_filesystem_opts",
             },
+        })
+            .mount()
+            .bind();
+
+        syncerMode.onChange((val) => {
+            $("#{{ id }}_syncer").attr("value", val);
         });
 
-        const tab = $("#{{ id }}_syncer").attr("value");
-        {% if only.is_none() %}
-        if (tab != "NONE") {
-            const tabs = ["VDIRSYNCER", "O365", "FILESYSTEM"];
-            $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
-        }
-        {% endif %}
+        syncerMode.refresh();
 
         $("#{{ id }}_vdir_time_span_years_val").spinner({ min: 1, max: 100 });
         $("#{{ id }}_o365_time_span_years_val").spinner({ min: 1, max: 100 });

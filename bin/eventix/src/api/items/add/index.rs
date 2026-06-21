@@ -5,31 +5,29 @@
 use anyhow::{Context, Result};
 use askama::Template;
 use axum::{
+    Json,
     extract::{Query, State},
-    response::{Html, IntoResponse},
+    response::IntoResponse,
 };
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
 use std::sync::Arc;
 
+use crate::api::{HTMLResponse, JsonError, items::add::CompNew};
 use crate::comps::{
     alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
     datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
 };
 use crate::html::filters;
 use crate::objects::Calendars;
-use crate::pages::{Page, error::HTMLError};
 
-use super::{CompNew, Request};
+use super::Request;
 
-/// Fragment-only template for the add-item form, rendered by the AJAX content endpoint.
 #[derive(Template)]
-#[template(path = "pages/items/add.htm")]
-struct NewTemplate<'a> {
-    page: Page,
+#[template(path = "ajax/add.htm")]
+struct AddTemplate<'a> {
     locale: Arc<dyn Locale + Send + Sync>,
-    prev: Option<&'a String>,
     ctype: CalCompType,
     summary: &'a String,
     location: &'a String,
@@ -43,12 +41,10 @@ struct NewTemplate<'a> {
     status: Option<TodoStatusTemplate>,
 }
 
-/// Renders only the add-item form fragment for the given request. Used by the AJAX content
-/// endpoint (GET).
-pub async fn content(
+pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let (locale, calendar) = {
         let state = state.lock().await;
         let locale = state.locale();
@@ -57,11 +53,11 @@ pub async fn content(
     };
 
     content_with(
-        Page::default(),
         locale.clone(),
         State(state),
         CompNew::new(&req, locale.timezone(), calendar),
         req,
+        Vec::new(),
     )
     .await
 }
@@ -69,12 +65,12 @@ pub async fn content(
 /// Renders the add-item form fragment with the given page state and form data.
 /// Called by `content` for the initial GET and by `save::handler` after a POST.
 pub async fn content_with(
-    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
     form: CompNew,
     req: Request,
-) -> Result<impl IntoResponse, HTMLError> {
+    errors: Vec<String>,
+) -> Result<Json<HTMLResponse>, JsonError> {
     let state = state.lock().await;
 
     let calendar: Arc<String> = Arc::from(form.calendar.clone());
@@ -90,8 +86,7 @@ pub async fn content_with(
         })
         .collect();
 
-    let html = NewTemplate {
-        page,
+    let html = AddTemplate {
         summary: &form.summary,
         location: &form.location,
         description: &form.description,
@@ -133,10 +128,9 @@ pub async fn content_with(
             .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),
         locale,
         ctype: req.ctype,
-        prev: req.prev.as_ref(),
     }
     .render()
-    .context("new content template")?;
+    .context("add form template")?;
 
-    Ok(Html(html))
+    Ok(Json(HTMLResponse::with_errors(html, errors)))
 }

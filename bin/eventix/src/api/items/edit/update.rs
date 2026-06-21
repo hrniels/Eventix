@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use anyhow::{Context, anyhow};
-use axum::extract::{Query, State};
-use axum::response::IntoResponse;
+use axum::{
+    Json,
+    extract::{Query, State},
+};
 use chrono::Duration;
 use chrono_tz::Tz;
 use eventix_ical::col::CalFile;
@@ -17,10 +19,13 @@ use eventix_state::EventixState;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::api::items::edit::EditMode;
 use crate::extract::MultiForm;
-use crate::pages::items::edit::EditMode;
-use crate::pages::{Page, error::HTMLError};
 use crate::util;
+use crate::{
+    api::{HTMLResponse, JsonError},
+    pages::Page,
+};
 
 use super::{CompAction, CompEdit, Request};
 
@@ -51,10 +56,7 @@ fn action_update(
 
     let last_modified = util::system_time_stamp(file.last_modified()?);
     if last_modified > form.edit_start {
-        page.add_error(format!(
-            "This component has been modified. Please <a href=\"/pages/items/edit?{}\">restart</a> the editing.",
-            serde_qs::to_string(&req).unwrap()
-        ));
+        page.add_error(locale.translate("error.component_was_modified"));
         return Ok((false, None));
     }
 
@@ -297,32 +299,30 @@ fn action_update(
     Ok((true, new_uid))
 }
 
-pub async fn handler(
+pub async fn content(
     State(state): State<EventixState>,
     Query(mut req): Query<Request>,
     MultiForm(mut form): MultiForm<CompEdit>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
+) -> Result<Json<HTMLResponse>, JsonError> {
     let locale = state.lock().await.locale();
-    let mut page = super::new_page(&state).await;
+    let mut page = Page::new(&state).await;
 
-    let form = {
+    let (form, errors) = {
         let mut state = state.lock().await;
         match action_update(&mut page, &locale, &mut state, &mut form, &mut req) {
             Ok((true, Some(uid))) => {
-                // present the user an edit form for the created series
                 req.uid = uid;
                 req.mode = EditMode::Series;
                 req.rid = None;
-                None
+                (None, Vec::new())
             }
-            Ok((true, None)) => None,
-            Ok((false, _)) => Some(form),
-            Err(e) => {
-                page.add_localized_error(&locale, &state, e);
-                Some(form)
+            Ok((true, None)) => {
+                return Ok(Json(HTMLResponse::new(String::new())));
             }
+            Ok((false, _)) => (Some(form), page.errors().to_vec()),
+            Err(e) => return Err(e.into()),
         }
     };
 
-    super::index::content_with(page, locale, State(state), Query(req), form).await
+    super::index::content_with(locale, State(state), Query(req), form, errors).await
 }

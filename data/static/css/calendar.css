@@ -41,6 +41,12 @@ span.ev_cal_src_button {
     font-size: 0.7em;
     text-align: center;
 }
+span.ev_cal_src_highlight {
+    cursor: pointer;
+}
+span.ev_cal_src_highlight:hover {
+    border: 1px solid #000 !important;
+}
 
 .ev_cal_src_inner {
     position: relative;
@@ -52,10 +58,6 @@ span.ev_cal_src_button {
     background-color: #fff;
     font-size: 12px;
     text-align: center;
-}
-
-span.ev_cal_src_highlight {
-    border: 1px solid #000 !important;
 }
 
 span.ev_cal_src_disabled {

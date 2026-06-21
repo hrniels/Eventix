@@ -16,6 +16,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::{MappedLocalTime, NaiveDateTime, TimeZone};
+use eventix::api::HTMLResponse;
 use eventix_ical::col::CalFile;
 use eventix_state::{
     CalendarSettings, CollectionSettings, EmailAccount, EventixState, Settings, SyncerType,
@@ -258,21 +259,18 @@ pub fn make_state_from_col(col: CollectionSettings) -> (EventixState, TempDir) {
 
 /// Builds a minimal axum `Router` wiring only the add-item endpoints.
 ///
-/// This is sufficient for create-event and create-todo tests. The pages router is mounted at
-/// `/pages/items/add` and the API items router at `/api/items`.
+/// This is sufficient for create-event and create-todo tests. The API items router at `/api/items`.
 #[allow(dead_code)]
 pub fn make_router(state: EventixState) -> Router {
-    Router::new()
-        .nest("/pages/items", eventix::pages::items::router(state.clone()))
-        .nest("/api/items", eventix::api::items::router(state))
+    Router::new().nest("/api/items", eventix::api::items::router(state))
 }
 
-/// Builds an axum `Router` wiring only the collections page endpoints.
+/// Builds an axum `Router` wiring only the collections API endpoints.
 ///
-/// Routes are mounted at `/collections`, matching the path used by the real application.
+/// Routes are mounted at `/api/collections`, matching the path used by the real application.
 #[allow(dead_code)]
 pub fn make_collections_router(state: EventixState) -> Router {
-    Router::new().nest("/collections", eventix::pages::collections::router(state))
+    Router::new().nest("/api/collections", eventix::api::collections::router(state))
 }
 
 /// Builds an axum `Router` wiring only the calendars API endpoints.
@@ -282,9 +280,9 @@ pub fn make_calendars_api_router(state: EventixState) -> Router {
 }
 
 /// Sends a POST to `uri` with the given `application/x-www-form-urlencoded` body and returns the
-/// status code and response body text.
+/// status code and parsed JSON response.
 #[allow(dead_code)]
-pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, String) {
+pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, HTMLResponse) {
     let req = Request::builder()
         .method("POST")
         .uri(uri)
@@ -297,8 +295,11 @@ pub async fn post(router: Router, uri: &str, body: &str) -> (StatusCode, String)
     let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
         .await
         .unwrap();
-    let body = String::from_utf8_lossy(&bytes).into_owned();
-    (status, body)
+    let resp_body = match serde_json::from_slice::<HTMLResponse>(&bytes) {
+        Ok(r) => r,
+        Err(_) => HTMLResponse::new(String::new()),
+    };
+    (status, resp_body)
 }
 
 /// Sends a POST to `uri` (which may include query parameters) with an empty body and returns the
@@ -323,9 +324,31 @@ pub async fn post_query(router: Router, uri: &str) -> (StatusCode, String) {
     (status, body)
 }
 
-/// Sends a GET to `uri` and returns the status code and response body text.
+/// Sends a GET to `uri` and returns the status code and parsed JSON response.
 #[allow(dead_code)]
-pub async fn get(router: Router, uri: &str) -> (StatusCode, String) {
+pub async fn get(router: Router, uri: &str) -> (StatusCode, HTMLResponse) {
+    let req = Request::builder()
+        .method("GET")
+        .uri(uri)
+        .body(Body::empty())
+        .unwrap();
+
+    let resp = router.oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let resp_body = match serde_json::from_slice::<HTMLResponse>(&bytes) {
+        Ok(r) => r,
+        Err(_) => HTMLResponse::new(String::new()),
+    };
+    (status, resp_body)
+}
+
+/// Sends a GET to `uri` and returns the status code and raw response body as string.
+/// Use this for endpoints that return raw JSON (not wrapped in HTMLResponse).
+#[allow(dead_code)]
+pub async fn get_raw(router: Router, uri: &str) -> (StatusCode, String) {
     let req = Request::builder()
         .method("GET")
         .uri(uri)
@@ -354,12 +377,12 @@ pub fn assert_no_ics(cal_dir: &Path) {
     assert_eq!(count, 0, "expected no .ics files but found {count}");
 }
 
-/// Asserts that the HTML response body contains an error banner and no success info banner.
+/// Asserts that the response contains errors.
 #[allow(dead_code)]
-pub fn assert_error(body: &str) {
+pub fn assert_error(resp: &HTMLResponse) {
     assert!(
-        body.contains("ev_msg_error"),
-        "expected error banner in response, got:\n{body}"
+        !resp.errors.is_empty(),
+        "expected errors in response, got none"
     );
 }
 

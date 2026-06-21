@@ -4,9 +4,7 @@
 
 pub mod calendars;
 pub mod callist;
-pub mod collections;
 pub mod error;
-pub mod items;
 pub mod list;
 pub mod monthly;
 pub mod shell;
@@ -35,8 +33,6 @@ pub fn router(state: EventixState) -> Router {
     Router::new()
         .nest("/calendars", calendars::router(state.clone()))
         .nest("/callist", callist::router(state.clone()))
-        .nest("/collections", collections::router(state.clone()))
-        .nest("/items", items::router(state.clone()))
         .nest("/list", list::router(state.clone()))
         .nest("/monthly", monthly::router(state.clone()))
         .nest("/sidebar", sidebar::router(state.clone()))
@@ -176,6 +172,7 @@ impl Page {
         self.add_detailed_error(error);
     }
 
+    #[allow(dead_code)]
     pub fn infos(&self) -> &[String] {
         &self.infos
     }

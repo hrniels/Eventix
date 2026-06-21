@@ -61,7 +61,9 @@
             });
 
             $("#" + id + "-menu a").on("click", function () {
-                respond(uid, rid, $(this).data("value"), reloadContent);
+                respond(uid, rid, $(this).data("value"), function (data) {
+                    $(document).trigger("partstat-changed", [{ uid: uid, rid: rid }]);
+                });
             });
 
             $(document).on("click", function (e) {

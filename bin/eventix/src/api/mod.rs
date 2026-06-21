@@ -20,10 +20,48 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use eventix_state::EventixState;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{future::Future, pin::Pin};
+use std::{fmt, future::Future, pin::Pin};
 
 type StateTask<'a, T> = Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send + 'a>>;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HTMLResponse {
+    pub html: String,
+    pub errors: Vec<String>,
+}
+
+impl HTMLResponse {
+    pub fn new(html: String) -> Self {
+        Self::with_errors(html, Vec::new())
+    }
+
+    pub fn with_errors(html: String, errors: Vec<String>) -> Self {
+        Self { html, errors }
+    }
+
+    #[allow(unused)]
+    pub fn contains(&self, s: &str) -> bool {
+        self.html.contains(s)
+    }
+}
+
+impl fmt::Display for HTMLResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.html)
+    }
+}
+
+impl IntoResponse for HTMLResponse {
+    fn into_response(self) -> Response {
+        Json(json!({
+            "html": self.html,
+            "errors": self.errors,
+        }))
+        .into_response()
+    }
+}
 
 #[derive(Debug)]
 pub struct JsonError {
@@ -55,12 +93,10 @@ impl IntoResponse for JsonError {
     fn into_response(self) -> Response {
         tracing::debug!("request failed: {:?}", self.inner);
 
-        let body = Json(json!({
-            "error": self.generate_message(),
-        }));
-
-        // use a temporary and otherwise unused error code to simply keep the body below
-        (StatusCode::CONTINUE, body).into_response()
+        Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(self.generate_message()))
+            .unwrap()
     }
 }
 
@@ -114,10 +150,8 @@ async fn json_error_middleware(req: Request<Body>, next: Next) -> Response {
             }
         };
 
-        resp.headers_mut().append(
-            "Content-Type",
-            HeaderValue::from_str("application/json").unwrap(),
-        );
+        resp.headers_mut()
+            .insert("Content-Type", HeaderValue::from_static("application/json"));
 
         return resp;
     } else {

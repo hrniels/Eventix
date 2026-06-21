@@ -16,7 +16,7 @@
             id="calendar_enabled_{{ cal.id }}"
             data-name="{{ cal.name }}"
             title="{{ cal.name }}"
-            class="ev_cal_src ev_cal_src_button
+            class="ev_cal_src ev_cal_src_button ev_cal_src_highlight
             {% if cal.enabled %}
                 ev_cal_src_{{ cal.id }}
             {% else %}
@@ -44,21 +44,6 @@
             if (!window.collectionCalendars["{{ cal.col_id }}"].includes("{{ cal.id }}")) {
                 window.collectionCalendars["{{ cal.col_id }}"].push("{{ cal.id }}");
             }
-
-            {% if !cal.enabled %}
-            $("#calendar_enabled_{{ cal.id }}").hover(
-                // use explicit add/remove calls for in/out instead of toggle here, because the
-                // click event handler replaces this whole block via AJAX, so that we do not execute
-                // the out handler in this case.
-                function () { $(this).addClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight"); },
-                function () { $(this).removeClass("ev_cal_src_{{ cal.id }} ev_cal_src_highlight"); }
-            );
-            {% else %}
-            $("#calendar_enabled_{{ cal.id }}").hover(
-                function () { $(this).addClass("ev_cal_src_highlight"); },
-                function () { $(this).removeClass("ev_cal_src_highlight"); }
-            );
-            {% endif %}
         });
     </script>
     <!-- prettier-ignore-end -->

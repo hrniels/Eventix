@@ -85,6 +85,12 @@ td.ev_status_need_info {
     width: 80px;
 }
 
+.ev_button i,
+.ev_button_medium i,
+.ev_button_big i {
+    padding-right: 2px;
+}
+
 .ev_button_normal {
     border: 1px solid #3f5e88;
     border-left: 5px solid #3f5e88;

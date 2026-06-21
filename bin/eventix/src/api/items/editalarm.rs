@@ -10,9 +10,9 @@ use axum::response::{IntoResponse, Json};
 use axum::routing::{get, post};
 use eventix_ical::objects::CalDate;
 use eventix_state::EventixState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-use crate::api::{JsonError, run_post};
+use crate::api::{HTMLResponse, JsonError, run_post};
 use crate::comps::{alarmconfig::AlarmConfig, editalarm::EditAlarmTemplate};
 use crate::extract::MultiForm;
 
@@ -21,11 +21,6 @@ pub struct GetRequest {
     uid: String,
     rid: Option<CalDate>,
     edit: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct GetResponse {
-    html: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,7 +50,7 @@ pub async fn get_handler(
         .render()
         .context("details template")?;
 
-    Ok(Json(GetResponse { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }
 
 pub async fn post_handler(

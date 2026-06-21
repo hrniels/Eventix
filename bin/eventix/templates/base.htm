@@ -90,7 +90,7 @@
                 <a
                     id="link-help"
                     class="ev_button_medium ev_button_normal ev_header_nav_link"
-                    href="javascript:fireEvent(createHelpEvent())"
+                    href="javascript:fireEvent(createHelpEvent('link-help'))"
                 >
                     <i class="bi bi-question-circle"></i>
                     <span>{{ "Help"|t(locale) }}</span>
@@ -152,16 +152,19 @@
             </div>
         </div>
 
+        <div id="popup-layer" class="ev_layer ev_page_layer" hidden>
+            <div class="ev_layer_backdrop"></div>
+        </div>
         <div id="popup" class="ev_popup"></div>
         <div
             id="modal-layer"
-            class="ev_modal_layer"
+            class="ev_layer ev_modal_layer"
             data-close-label="{{ "Close"|t(locale) }}"
             data-cancel-label="{{ "Cancel"|t(locale) }}"
             data-default-title="{{ "Are you sure?"|t(locale) }}"
             hidden
         >
-            <div class="ev_modal_backdrop"></div>
+            <div class="ev_layer_backdrop"></div>
             <div
                 id="modal-dialog"
                 class="ev_modal_dialog ev_border"

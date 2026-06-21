@@ -36,8 +36,9 @@
                             <i class="bi bi-trash"></i>
                         </a>
                         <a
+                            id="edit_{{ col_id }}"
                             class="ev_button ev_button_normal"
-                            href="javascript:loadWithPrev('/pages/collections/edit?col_id={{ col_id }}')"
+                            href="javascript:fireEvent(createEditCollectionEvent('edit_{{ col_id }}', '{{ col_id }}'))"
                             title="{{ "Edit"|t(locale) }}"
                         >
                             <i class="bi bi-pencil"></i>
@@ -80,8 +81,9 @@
                         </a>
                         {% if matches!(col.syncer(), SyncerType::VDirSyncer { .. } | SyncerType::O365 { .. }) %}
                             <a
+                                id="log_{{ col_id }}"
                                 class="ev_button ev_button_normal"
-                                href="javascript:fireEvent(new PageEvent('/api/collections/log?col_id={{ col_id }}'))"
+                                href="javascript:fireEvent(createLogEvent('log_{{ col_id }}', '{{ col_id }}'))"
                             >
                                 <i class="bi bi-list-ul"></i>
                                 <span>{{ "Log"|t(locale) }}</span>
@@ -102,7 +104,11 @@
 </div>
 
 <div class="ev_margin_top ev_cal_actions">
-    <a class="ev_button ev_button_normal" href="javascript:loadWithPrev('/pages/collections/add')">
+    <a
+        id="add_collection_btn"
+        class="ev_button ev_button_normal"
+        href="javascript:fireEvent(createAddCollectionEvent('add_collection_btn'))"
+    >
         <i class="bi bi-plus-square"></i>
         <span>{{ "Add Collection"|t(locale) }}</span>
     </a>

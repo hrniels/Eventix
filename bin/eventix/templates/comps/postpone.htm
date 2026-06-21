@@ -5,7 +5,10 @@
     </a>
     <div id="{{ id }}-menu" class="ev_response_menu ev_response_menu_small">
         {% for (name, days) in [("1day", 1), ("2days", 2), ("3days", 3), ("5days", 5), ("1week", 7)] %}
-            <a class="ev_button ev_button_normal" href="javascript:postpone({{ days }})">
+            <a
+                class="ev_button ev_button_normal"
+                href="javascript:window.ev.postpone_func['{{ id }}']({{ days }})"
+            >
                 <span>{{ name|t(locale) }}</span>
             </a>
         {% endfor %}
@@ -14,10 +17,17 @@
 
 <!-- prettier-ignore-start -->
 <script>
-    function postpone(days) {
+    if (typeof window.ev.postpone_func === 'undefined')
+        window.ev.postpone_func = {};
+
+window.ev.postpone_func['{{ id }}'] = function (days) {
         function onpostponed() {
             fireEvent(new DeselectEvent());
-            reloadSidebar();
+            {% if let Some(rid) = rid %}
+            $(document).trigger("postpone-changed", [{ uid: "{{ uid }}", rid: "{{ rid }}" }]);
+            {% else %}
+            $(document).trigger("postpone-changed", [{ uid: "{{ uid }}", rid: null }]);
+            {% endif %}
         }
 
         let base_url = "/api/items/postpone?uid={{ uid }}&delay_days=" + days;
@@ -26,7 +36,7 @@
         {% else %}
             postRequest(base_url, onpostponed)
         {% endif %}
-    }
+    };
 </script>
 <!-- prettier-ignore-end -->
 

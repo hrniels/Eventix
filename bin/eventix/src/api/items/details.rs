@@ -11,10 +11,10 @@ use eventix_ical::col::CalDir;
 use eventix_ical::objects::{CalCompType, CalDate, CalPartStat, DateContext, EventLike};
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::api::JsonError;
+use crate::api::{HTMLResponse, JsonError};
 use crate::comps::{
     editalarm::EditAlarmTemplate, editmodes::EditModesTemplate, organizer::OrganizerTemplate,
     partstat::PartStatTemplate, postpone::PostponeTemplate,
@@ -35,11 +35,6 @@ pub struct Request {
     edit: bool,
 }
 
-#[derive(Debug, Serialize)]
-struct Response {
-    html: String,
-}
-
 #[derive(Template)]
 #[template(path = "ajax/details.htm")]
 struct DetailsTemplate<'a> {
@@ -47,7 +42,6 @@ struct DetailsTemplate<'a> {
     dir: &'a CalDir,
     occ: DayOccurrence<'a>,
     org: Option<OrganizerTemplate<'a>>,
-    personal_alarms: bool,
     alarms: Option<EditAlarmTemplate<'a>>,
     series_partstat: Option<PartStatTemplate>,
     occ_partstat: Option<PartStatTemplate>,
@@ -104,7 +98,6 @@ async fn handler(
             .organizer()
             .map(|org| OrganizerTemplate::new(locale.clone(), org)),
         dir,
-        personal_alarms: matches!(alarm_type, CalendarAlarmType::Personal { .. }),
         alarms: if matches!(alarm_type, CalendarAlarmType::Personal { .. }) || has_alarms {
             Some(EditAlarmTemplate::new(
                 locale.clone(),
@@ -167,5 +160,5 @@ async fn handler(
     .render()
     .context("details template")?;
 
-    Ok(Json(Response { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }

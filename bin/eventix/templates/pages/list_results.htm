@@ -1,5 +1,4 @@
-<div class="ev_border ev_margin_top">
-    <h1 class="ev_header">{{ "Events and Tasks"|t(locale) }}</h1>
+<div class="ev_border">
     <table width="100%" class="ev_table">
         {% if comps.is_empty() %}
             <tr>
@@ -15,7 +14,7 @@
                         <i class="bi bi-check2-square"></i>
                     {% endif %}
                 </td>
-                <td width="32%">
+                <td width="30%">
                     <div class="ev_flex ev_list_summary">
                         <span class="ev_cal_src ev_cal_src_{{ c.dir }}">
                             {% if !c.owner %}
@@ -59,13 +58,13 @@
                         <i class="bi bi-alarm ev_right_icon"></i>
                     {% endif %}
                 </td>
-                <td width="33%" align="center">
+                <td width="34%" align="center">
                     {{ c.date_range|safe }}
                     {% if let Some(rrule) = c.comp.rrule() %}
                         <div>{{ rrule.human_interval(&**locale) }}</div>
                     {% endif %}
                 </td>
-                <td width="32%" align="right">
+                <td width="33%" align="right">
                     {% if let Some(td) = c.comp.as_todo() %}
                         {%
                             if !c.read_only && !td.is_recurrent() &&
@@ -79,6 +78,9 @@
                                 <span>{{ "Complete"|t(locale) }}</span>
                             </a>
                         {% endif %}
+                        {% if let Some(pp) = c.postpone %}
+                            {{ pp|safe }}
+                        {% endif %}
                     {% endif %}
                     {% if c.owner %}
                         {% if !c.read_only %}
@@ -87,8 +89,12 @@
                                 <span>{{ "Delete"|t(locale) }}</span>
                             </a>
                             <a
+                                id="edit-button-{{ id }}"
                                 class="ev_button ev_button_normal ev_button_short"
-                                href="javascript:loadWithPrev('/pages/items/edit?uid={{ c.comp.uid() }}&mode=Series')"
+                                href="javascript:fireEvent(new EditEvent('edit-button-{{ id }}',
+                                                                         '{{ c.comp.ctype() }}',
+                                                                         '{{ c.comp.uid() }}',
+                                                                         null))"
                             >
                                 <i class="bi bi-pencil"></i>
                                 <span>{{ "Edit_short"|t(locale) }}</span>
@@ -102,7 +108,10 @@
                             <a
                                 id="alarm-button-{{ id }}"
                                 class="ev_button ev_button_normal ev_button_short"
-                                href="javascript:editAlarms('alarm-button-{{ id }}', '{{ c.comp.uid() }}', null)"
+                                href="javascript:editAlarms('alarm-button-{{ id }}',
+                                                            '{{ c.comp.ctype() }}',
+                                                            '{{ c.comp.uid() }}',
+                                                            null)"
                             >
                                 <i class="bi bi-pencil"></i>
                                 <span>{{ "Alarms_short"|t(locale) }}</span>
@@ -122,7 +131,7 @@
                 <td colspan="3" class="ev_list_details_cell">
                     <table width="100%" class="ev_noborder">
                         <tr>
-                            <td width="33%" class="ev_list_details_main">
+                            <td width="30%" class="ev_list_details_main">
                                 <table width="100%" class="ev_noborder">
                                     {% if let Some(rrule) = c.comp.rrule() %}
                                         <tr>
@@ -310,6 +319,6 @@
         if (!href || href.startsWith("javascript:")) return;
         e.preventDefault();
         const url = new URL(href, window.location.origin);
-        window.loadListContent(url.search.slice(1));
+        window.loadListResultsWith(url.search.slice(1));
     });
 </script>

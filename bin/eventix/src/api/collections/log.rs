@@ -13,22 +13,17 @@ use chrono_tz::Tz;
 use eventix_locale::{DateFlags, Locale};
 use eventix_state::EventixState;
 use formatx::formatx;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, BufReader};
 
-use crate::api::JsonError;
+use crate::api::{HTMLResponse, JsonError};
 
 #[derive(Debug, Deserialize)]
 pub struct Params {
     col_id: String,
-}
-
-#[derive(Debug, Serialize)]
-struct Response {
-    html: String,
 }
 
 #[derive(Template)]
@@ -64,7 +59,7 @@ async fn handler(
         .render()
         .context("log template")?;
 
-    Ok(Json(Response { html }))
+    Ok(Json(HTMLResponse::new(html)))
 }
 
 async fn log_info(

@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use axum::extract::{Query, State};
-use axum::response::IntoResponse;
+use axum::{
+    Json,
+    extract::{Query, State},
+};
 use eventix_ical::objects::UpdatableEventLike;
 use eventix_locale::Locale;
 use eventix_state::EventixState;
@@ -11,7 +13,10 @@ use std::sync::Arc;
 
 use crate::extract::MultiForm;
 use crate::objects::{CompAction, create_component};
-use crate::pages::{Page, error::HTMLError};
+use crate::{
+    api::{HTMLResponse, JsonError},
+    pages::Page,
+};
 
 use super::{CompNew, Request};
 
@@ -30,8 +35,7 @@ async fn action_update(
     let rrule = match form.rrule.to_rrule(start.as_ref()) {
         Ok(rrule) => rrule,
         Err(e) => {
-            page.add_error(e);
-            return Ok(false);
+            return Err(e);
         }
     };
 
@@ -53,22 +57,25 @@ pub async fn handler(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
     MultiForm(mut form): MultiForm<CompNew>,
-) -> anyhow::Result<impl IntoResponse, HTMLError> {
+) -> anyhow::Result<Json<HTMLResponse>, JsonError> {
     let locale = state.lock().await.locale();
-    let mut page = super::new_page(&state).await;
 
-    {
+    let errors = {
+        let mut page = Page::default();
         let mut state = state.lock().await;
         match action_update(&mut page, &locale, &mut state, &mut form, &req).await {
             Ok(true) => {
                 page.add_info(locale.translate("info.event_added"));
 
-                form = CompNew::new(&req, locale.timezone(), Some(form.calendar));
+                return Ok(Json(HTMLResponse::new(String::new())));
             }
-            Ok(false) => {}
-            Err(e) => page.add_localized_error(&locale, &state, e),
+            Ok(false) => page.errors().to_vec(),
+            Err(e) => {
+                page.add_localized_error(&locale, &state, e);
+                page.errors().to_vec()
+            }
         }
-    }
+    };
 
-    super::index::content_with(page, locale, State(state), form, req).await
+    super::index::content_with(locale, State(state), form, req, errors).await
 }

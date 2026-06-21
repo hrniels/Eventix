@@ -7,7 +7,6 @@ mod update;
 
 use axum::{
     Router,
-    extract::{RawQuery, State},
     routing::{get, post},
 };
 use chrono_tz::Tz;
@@ -22,7 +21,6 @@ use crate::comps::{
     todostatus::TodoStatus,
 };
 use crate::objects::CompAction;
-use crate::pages::{Page, shell};
 use crate::util;
 
 pub fn deserialize_u128<'de, D>(deserializer: D) -> Result<u128, D::Error>
@@ -52,7 +50,6 @@ pub struct Request {
     mode: EditMode,
     uid: String,
     rid: Option<String>,
-    prev: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -150,21 +147,9 @@ pub fn build_title(occ: &Occurrence, rid: &Option<String>, mode: EditMode) -> St
     title
 }
 
-pub async fn new_page(state: &EventixState) -> Page {
-    Page::new(state).await
-}
-
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route(
-            "/",
-            get(
-                |State(state): State<EventixState>, RawQuery(raw): RawQuery| async move {
-                    shell::handler(state, raw, "items/edit").await
-                },
-            ),
-        )
-        .route("/", post(self::update::handler))
-        .route("/content", get(self::index::content))
+        .route("/edit", get(index::content))
+        .route("/edit", post(update::content))
         .with_state(state)
 }

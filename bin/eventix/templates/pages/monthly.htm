@@ -1,8 +1,16 @@
 <div class="ev_border">
     <h1 class="ev_header ev_month_week_header">
         <div class="ev_jump">
-            <input type="text" id="jump_location" size="10" />
-            <input type="button" value="{{ "Jump!"|t(locale) }}" onclick="executeJump()" />
+            <span class="ev_list_header_group">
+                <input
+                    type="text"
+                    id="jump_location"
+                    class="ev_quick_search ev_list_header_search"
+                />
+            </span>
+            <a class="ev_button ev_button_normal" href="javascript:executeJump()">
+                {{ "Jump!"|t(locale) }}
+            </a>
         </div>
 
         <div class="ev_month_week_nav ev_month_nav">
@@ -76,6 +84,7 @@
                 class="ev_month_td{% if day.date.unwrap() == today %} ev_today_bg{% endif %}"
             >
                 <div
+                    id="monthly-day-cell-{{ date }}"
                     class="ev_month_day_header
                            {% if date == today %}ev_today{% endif %}
                            {% if day.cur_month %}ev_cur_month{% endif %}
@@ -83,7 +92,9 @@
                 >
                     {% if page.any_writable_events() %}
                     <a
-                        href="javascript:loadWithPrev('/pages/items/add?ctype=Event&date={{ date.format("%Y-%m-%d") }}')"
+                        href="javascript:fireEvent(createAddEvent('monthly-day-cell-{{ date }}',
+                                                                  'Event',
+                                                                  '{{ date.format("%Y-%m-%d") }}'))"
                         class="ev_add_icon ev_month_add_link"
                     >
                         <i class="bi bi-plus-square"></i>

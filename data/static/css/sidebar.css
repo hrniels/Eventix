@@ -1,12 +1,14 @@
 /* ------------ BOXES ------------ */
 
 .ev_vscrollbox {
-    max-width: 350px;
+    width: 100%;
+    max-width: none;
     max-height: 100px;
     overflow-x: hidden;
     overflow-y: scroll;
     overscroll-behavior-y: contain;
     text-overflow: ellipsis;
+    word-break: break-word;
 }
 .ev_vscrollbox_lg {
     max-height: 150px;

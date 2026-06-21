@@ -389,7 +389,7 @@ async fn unknown_uid_returns_error() {
 
     let qs = encode_form(&[("uid", "no-such-uid"), ("date", "2026-04-22")]);
     let (status, _) = post_query(router, &format!("/api/items/shift?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }
 
 /// Supplying a `rid` for a non-recurrent event (no matching component and non-recurrent base)
@@ -412,5 +412,5 @@ async fn shift_non_recurrent_with_rid_returns_error() {
         ("date", "2026-04-22"),
     ]);
     let (status, _) = post_query(router, &format!("/api/items/shift?{qs}")).await;
-    assert_eq!(status.as_u16(), 100);
+    assert_eq!(status.as_u16(), 500);
 }

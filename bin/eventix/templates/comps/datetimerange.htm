@@ -53,7 +53,8 @@
         }
     }
 
-    let requestCounter = 0;
+    if (typeof window.requestCounter === "undefined") window.requestCounter = {};
+    window.requestCounter["{{ id }}"] = 0;
 
     function warningBox() {
         return $("#{{ id }}dst_warning");
@@ -92,8 +93,8 @@
             return;
         }
 
-        requestCounter += 1;
-        let current = requestCounter;
+        window.requestCounter["{{ id }}"] += 1;
+        let current = window.requestCounter["{{ id }}"];
         let params = new URLSearchParams({
             from_date: fromDate,
             from_time: fromTime,
@@ -103,7 +104,7 @@
         });
 
         getRequest("/api/items/dstwarn?" + params.toString(), function (data) {
-            if (current !== requestCounter) return;
+            if (current !== window.requestCounter["{{ id }}"]) return;
 
             if (!data.warning) {
                 hideWarning();
@@ -139,78 +140,81 @@
 </script>
 <!-- prettier-ignore-end -->
 
-<div class="ev_pad_bottom">
-    <input
-        type="checkbox"
-        id="{{ id }}all_day"
-        name="{{ name }}all_day"
-        {% if all_day %}checked="checked"{% endif %}
-    />
-    <label for="{{ id }}all_day">{{ "All day"|t(locale) }}</label>
+<div class="ev_date">
+    <div class="ev_date_row">
+        <div class="ev_date_group">
+            <span class="ev_date_label">{{ "Start"|t(locale) }}:</span>
+            <span class="ev_date_field ev_date_field_datetime">
+                {% if ctype == CalCompType::Todo %}
+                    <input
+                        type="checkbox"
+                        id="{{ id }}from_enabled"
+                        name="{{ name }}[from_enabled]"
+                        value="true"
+                        {% if from_enabled %}checked="checked"{% endif %}
+                    />
+                {% else %}
+                    <input type="hidden" name="{{ name }}[from_enabled]" value="true" />
+                {% endif %}
+                <input
+                    id="{{ id }}from_date"
+                    type="text"
+                    name="{{ name }}[from][date]"
+                    maxlength="10"
+                    value="{{ from_date|naive_date }}"
+                />
+                {{ from_time|safe }}
+            </span>
+        </div>
+        <div class="ev_date_group">
+            <span class="ev_date_label">
+                {% if ctype == CalCompType::Todo %}
+                    {{ "Due"|t(locale) }}:
+                {% else %}
+                    {{ "End"|t(locale) }}:
+                {% endif %}
+            </span>
+            <span class="ev_date_field ev_date_field_datetime">
+                {% if ctype == CalCompType::Todo %}
+                    <input
+                        type="checkbox"
+                        id="{{ id }}to_enabled"
+                        name="{{ name }}[to_enabled]"
+                        value="true"
+                        {% if to_enabled %}checked="checked"{% endif %}
+                    />
+                {% else %}
+                    <input type="hidden" name="{{ name }}[to_enabled]" value="true" />
+                {% endif %}
+                <input
+                    id="{{ id }}to_date"
+                    type="text"
+                    name="{{ name }}[to][date]"
+                    maxlength="10"
+                    value="{{ to_date|naive_date }}"
+                />
+                {{ to_time|safe }}
+            </span>
+        </div>
+    </div>
+    <div class="ev_date_row">
+        <div class="ev_date_group">
+            <span class="ev_date_label">{{ "All day"|t(locale) }}:</span>
+            <span class="ev_date_field ev_date_field_toggle">
+                <input
+                    type="checkbox"
+                    id="{{ id }}all_day"
+                    name="{{ name }}all_day"
+                    {% if all_day %}checked="checked"{% endif %}
+                />
+            </span>
+        </div>
+        <div id="{{ id }}tz_group" class="ev_date_group">
+            <span class="ev_date_label">{{ "Timezone"|t(locale) }}:</span>
+            <span class="ev_date_field ev_date_field_timezone">{{ tz_combo|safe }}</span>
+        </div>
+    </div>
 </div>
-
-<table class="ev_date">
-    <tr>
-        <td class="ev_label_datetimerange">{{ "Start"|t(locale) }}:</td>
-        <td>
-            {% if ctype == CalCompType::Todo %}
-                <input
-                    type="checkbox"
-                    id="{{ id }}from_enabled"
-                    name="{{ name }}[from_enabled]"
-                    value="true"
-                    {% if from_enabled %}checked="checked"{% endif %}
-                />
-            {% else %}
-                <input type="hidden" name="{{ name }}[from_enabled]" value="true" />
-            {% endif %}
-            <input
-                id="{{ id }}from_date"
-                type="text"
-                name="{{ name }}[from][date]"
-                size="10"
-                maxlength="10"
-                value="{{ from_date|naive_date }}"
-            />
-            {{ from_time|safe }}
-        </td>
-    </tr>
-    <tr>
-        <td>
-            {% if ctype == CalCompType::Todo %}
-                {{ "Due"|t(locale) }}:
-            {% else %}
-                {{ "End"|t(locale) }}:
-            {% endif %}
-        </td>
-        <td>
-            {% if ctype == CalCompType::Todo %}
-                <input
-                    type="checkbox"
-                    id="{{ id }}to_enabled"
-                    name="{{ name }}[to_enabled]"
-                    value="true"
-                    {% if to_enabled %}checked="checked"{% endif %}
-                />
-            {% else %}
-                <input type="hidden" name="{{ name }}[to_enabled]" value="true" />
-            {% endif %}
-            <input
-                id="{{ id }}to_date"
-                type="text"
-                name="{{ name }}[to][date]"
-                size="10"
-                maxlength="10"
-                value="{{ to_date|naive_date }}"
-            />
-            {{ to_time|safe }}
-        </td>
-    </tr>
-    <tr id="{{ id }}tz_row">
-        <td>{{ "Timezone"|t(locale) }}:</td>
-        <td>{{ tz_combo|safe }}</td>
-    </tr>
-</table>
 
 <div id="{{ id }}dst_warning" class="ev_pad_top ev_hidden" hidden></div>
 
@@ -232,11 +236,11 @@
         if (allday) {
             $("#{{ id }}_from__time_").prop("disabled", true);
             $("#{{ id }}_to__time_").prop("disabled", true);
-            $("#{{ id }}tz_row").hide();
+            $("#{{ id }}tz_group").css("visibility", "hidden");
         } else {
             $("#{{ id }}_from__time_").prop("disabled", false);
             $("#{{ id }}_to__time_").prop("disabled", false);
-            $("#{{ id }}tz_row").show();
+            $("#{{ id }}tz_group").css("visibility", "visible");
         }
     }
 </script>

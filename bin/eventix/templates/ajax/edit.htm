@@ -1,0 +1,272 @@
+<form
+    id="edit-form"
+    method="post"
+    {% if let Some(rid) = rid %}
+        action="/api/items/edit?uid={{ uid }}&rid={{ rid }}&mode={{ mode }}"
+    {% else %}
+        action="/api/items/edit?uid={{ uid }}&mode={{ mode }}"
+    {% endif %}
+>
+    <input type="hidden" name="edit_start" value="{{ edit_start }}" />
+    <div class="ev_border">
+        <fieldset class="ev_form">
+            <div class="ev_header">
+                <span class="ev_details_header_tag">
+                    <i
+                        class="ev_tag bi bi-tag"
+                        title="{{ occ.uid() }}"
+                        onclick="copyToClipboard('{{ occ.uid() }}')"
+                    >
+                    </i>
+                </span>
+                <span class="ev_details_header_summary">{{ title|t(locale) }}</span>
+            </div>
+            <div id="form-container" class="ev_form_rows">
+                <div class="ev_form_row collapsed" data-field="calendar">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-collection"></i>
+                            {{ "Calendar"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_collapsed">
+                            {% if let Some(calendars) = calendars %}
+                                {{ calendars|safe }}
+                            {% else %}
+                                <div class="ev_flex">
+                                    <span class="ev_cal_src ev_cal_src_{{ dir.id() }}"></span>
+                                    {{ dir.name() }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="ev_form_row collapsed" data-field="summary">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-card-heading"></i>
+                            {{ "Summary"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_collapsed">
+                            <input type="text" id="summary" name="summary" value="{{ summary }}" />
+                        </div>
+                    </div>
+                </div>
+                <div class="ev_form_row collapsed" data-field="location">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-geo-alt-fill"></i>
+                            {{ "Location"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_collapsed">
+                            <input type="text" name="location" value="{{ location }}" />
+                        </div>
+                    </div>
+                </div>
+                {% if let Some(status) = status %}
+                    <div class="ev_form_row collapsed" data-field="status">
+                        <div class="ev_form_row_header">
+                            <div class="ev_form_row_label">
+                                <i class="bi bi-flag"></i>
+                                {{ "Status"|t(locale) }}
+                            </div>
+                            <div class="ev_form_row_collapsed">{{ status|safe }}</div>
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="date">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-calendar-date"></i>
+                            {{ "Date"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_collapsed" data-shortener-id="datetimerange">
+                            <span class="ev_form_row_current"></span>
+                            <span class="ev_form_row_expand_hint"></span>
+                        </div>
+                    </div>
+                    <div class="ev_form_row_expanded">
+                        {{ start_end|safe }}
+                        {% if mode == EditMode::Series && occ.rrule().is_some() %}
+                            <div class="ev_margin_top">
+                                <b>{{ "Note"|t(locale) }}:</b>
+                                {{ "info.series_overwritten_start"|t(locale) }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="alarm">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-alarm"></i>
+                            {{ "Reminder"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_segmented"></div>
+                        <div class="ev_form_row_collapsed" data-shortener-id="alarm">
+                            <span class="ev_form_row_current"></span>
+                            <span class="ev_form_row_expand_hint"></span>
+                        </div>
+                    </div>
+                    <div class="ev_form_row_expanded">{{ alarm|safe }}</div>
+                </div>
+                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="description">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-journal-text"></i>
+                            {{ "Description"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_collapsed">
+                            <span class="ev_form_row_current"></span>
+                            <span class="ev_form_row_expand_hint"></span>
+                        </div>
+                    </div>
+                    <div class="ev_form_row_expanded">
+                        <!-- prettier-ignore-start -->
+                        <textarea rows="4" class="ev_form_textarea"
+                                  name="description">{{ description }}</textarea>
+                        <!-- prettier-ignore-end -->
+                    </div>
+                </div>
+                <div
+                    class="ev_form_row
+                            {% if rrule.is_some() %}ev_form_row_collapsible{% endif %}
+                            collapsed"
+                    data-field="repeat"
+                >
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            {{ "Repeat"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_segmented"></div>
+                        {% if rrule.is_none() %}
+                            <div class="ev_form_row_collapsed">
+                                {% if let Some(rrule) = occ.rrule() %}
+                                    {{ rrule.human(&**locale)|newlines()|safe }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="ev_form_row_collapsed" data-shortener-id="recur">
+                                <span class="ev_form_row_current"></span>
+                                <span class="ev_form_row_expand_hint"></span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% if let Some(rrule) = rrule %}
+                        <div class="ev_form_row_expanded">{{ rrule|safe }}</div>
+                    {% endif %}
+                </div>
+                <div class="ev_form_row ev_form_row_collapsible collapsed" data-field="attendees">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-people-fill"></i>
+                            {{ "Attendees"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_collapsed" data-shortener-id="attendees">
+                            <span class="ev_form_row_current"></span>
+                            <span class="ev_form_row_expand_hint"></span>
+                        </div>
+                    </div>
+                    <div class="ev_form_row_expanded">{{ attendees|safe }}</div>
+                </div>
+            </div>
+            <div class="ev_error_banner" id="form-errors" style="display: none;">
+                <div class="ev_error_banner_label">{{ "Error"|t(locale) }}</div>
+                <div class="ev_error_banner_msg" id="form-error-msg"></div>
+            </div>
+            <div class="ev_submit">
+                <div class="ev_submit_row">
+                    <div class="ev_submit_left">
+                        {% if rid.is_none() %}
+                            <a id="delete-button" class="ev_button ev_button_critical">
+                                <i class="bi bi-trash"></i>
+                                <span>
+                                    {% if occ.is_recurrent() %}
+                                        {{ "Delete series"|t(locale) }}
+                                    {% else %}
+                                        {{ "Delete"|t(locale) }}
+                                    {% endif %}
+                                </span>
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="ev_submit_center"></div>
+                    <div class="ev_submit_right">
+                        <a class="ev_button ev_button_normal" href="javascript:submitEditForm()">
+                            <i class="bi bi-floppy2-fill"></i>
+                            <span>{{ "Save"|t(locale) }}</span>
+                        </a>
+                        <a class="ev_button ev_button_normal" href="javascript:closePopup()">
+                            <i class="bi bi-x-circle"></i>
+                            <span>{{ "Cancel"|t(locale) }}</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+    </div>
+</form>
+
+<script>
+    function onDeleted() {
+        closePopup();
+        reloadContent();
+    }
+
+    function submitEditForm() {
+        if ($("#attendees-new-attendee").val() != "")
+            errorDialog('{{ "error.new_attendee_not_empty"|t(locale) }}');
+        else formRequest("edit-form", submitFormCallback);
+    }
+
+    function submitFormCallback(data) {
+        if (!data.html) {
+            closePopup();
+            reloadContent();
+        } else {
+            $("#popup").html(data.html);
+            if (data.errors && data.errors.length > 0) {
+                $("#form-error-msg").text(data.errors[0]);
+                $("#form-errors").show();
+            }
+        }
+    }
+
+    bindContentHandler("page-content", document, "keydown", function (e) {
+        if (e.ctrlKey && e.code == "Enter") {
+            submitEditForm();
+            return false;
+        }
+        return true;
+    });
+</script>
+
+<!-- prettier-ignore-start -->
+<script>
+    $(function () {
+        {% if rid.is_none() %}
+        $("#delete-button")
+            .off("click")
+            .on("click", async function (e) {
+                e.preventDefault();
+                if (
+                    !(await showConfirm(
+                        "{% if occ.is_recurrent() %}{{ "warning.delete_series"|t(locale) }}{% else %}{{ "warning.delete_item"|t(locale) }}{% endif %}",
+                        "{{ "Delete"|t(locale) }}",
+                    ))
+                ) {
+                    return;
+                }
+                deleteItem("{{ uid }}", null, onDeleted);
+            });
+        {% endif %}
+
+        FormExpandShrink.init("#form-container");
+        setTimeout(() => $("#summary").focus(), 50);
+    });
+</script>
+<!-- prettier-ignore-end -->
+
+{% if rid.is_none() %}
+{% endif %}

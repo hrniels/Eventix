@@ -4,7 +4,7 @@
 
 use tempfile::TempDir;
 
-use crate::helper::{CAL_ID, get, make_router, make_state};
+use crate::helper::{CAL_ID, get_raw, make_router, make_state};
 
 use super::write_event_ics;
 
@@ -24,7 +24,7 @@ async fn convert_from_date() {
     let uri = "/api/items/tzconvert\
                ?from_date=2026-04-15&from_time=10:00\
                &from_tz=Europe%2FBerlin&to_tz=UTC";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -45,7 +45,7 @@ async fn convert_to_date() {
     let uri = "/api/items/tzconvert\
                ?to_date=2026-04-15&to_time=10:00\
                &from_tz=Europe%2FBerlin&to_tz=UTC";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -67,7 +67,7 @@ async fn convert_both() {
                ?from_date=2026-04-15&from_time=09:00\
                &to_date=2026-04-15&to_time=10:00\
                &from_tz=Europe%2FBerlin&to_tz=UTC";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -88,7 +88,7 @@ async fn empty_fields_pass_through() {
     let uri = "/api/items/tzconvert\
                ?from_date=&from_time=&to_date=&to_time=\
                &from_tz=Europe%2FBerlin&to_tz=UTC";
-    let (status, body) = get(router, uri).await;
+    let (status, body) = get_raw(router, uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -112,7 +112,7 @@ async fn invalid_timezone_returns_error() {
     let uri = "/api/items/tzconvert\
                ?from_date=2026-04-15&from_time=10:00\
                &from_tz=Not%2FA%2FTimezone&to_tz=UTC";
-    let (status, _) = get(router, uri).await;
+    let (status, _) = get_raw(router, uri).await;
     assert_ne!(status.as_u16(), 200);
 }
 
@@ -129,6 +129,6 @@ async fn invalid_date_format_returns_error() {
     let uri = "/api/items/tzconvert\
                ?from_date=not-a-date&from_time=10:00\
                &from_tz=Europe%2FBerlin&to_tz=UTC";
-    let (status, _) = get(router, uri).await;
+    let (status, _) = get_raw(router, uri).await;
     assert_ne!(status.as_u16(), 200);
 }

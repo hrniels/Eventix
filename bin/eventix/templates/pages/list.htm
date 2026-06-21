@@ -1,106 +1,201 @@
-<form id="form">
-    <div class="ev_border">
-        <fieldset class="ev_form">
-            <h1
-                class="ev_header"
-                onmouseover="this.style.cursor='pointer';"
-                onmouseout="this.style.cursor='default';"
-                onclick="toggleFilter()"
-            >
-                {{ "Filter"|t(locale) }}
-            </h1>
-            <div id="filter_box">
-                <dl>
-                    <dt>{{ "Keywords"|t(locale) }}:</dt>
-                    <dd>
-                        <input
-                            type="text"
-                            size="50"
-                            id="keywords"
-                            name="keywords"
-                            value="{{ filter.keywords }}"
-                        />
-                        <div class="ev_margin_top">{{ conjunction|safe }}</div>
-                    </dd>
-                </dl>
-                <dl>
-                    <dt>{{ "Calendars"|t(locale) }}:</dt>
-                    <dd>
-                        <!-- prettier-ignore-start -->
-                        <table class="ev_noborder">
-                        {% for (idx, src) in directories.iter().enumerate() %}
-                            {% if idx % 6 == 0 %}
-                            <tr>
-                            {% endif %}
-                                <td>
-                                    <div class="ev_cal_src ev_cal_src_{{ src.id() }} ev_list_filter_calendar">
-                                        <input type="checkbox" id="dir_{{ idx + 1 }}"
-                                               name="dirs[]" value="{{ src.id() }}"
-                                               {% if filter.dirs.contains(src.id()) %}
-                                               checked="checked"
-                                               {% endif %}/>
-                                        <label for="dir_{{ idx + 1 }}">{{ src.name() }}</label>
-                                    </div>
-                                </td>
-                            {% if idx % 6 == 5 %}
-                            </tr>
-                            {% endif %}
-                        {% endfor %}
-                        </table>
-                        <!-- prettier-ignore-end -->
-                        <div class="ev_pad_top">
-                            <input
-                                type="button"
-                                value="{{ "Invert selection"|t(locale) }}"
-                                onclick="invertSelection('dir_')"
-                            />
-                        </div>
-                    </dd>
-                </dl>
-                <div class="ev_submit">
-                    <a class="ev_button_big ev_button_normal" href="javascript:applyListFilter()">
-                        <span>{{ "Apply"|t(locale) }}</span>
-                    </a>
-                    <a
-                        class="ev_button_big ev_button_normal"
-                        href="javascript:navigateTo('/pages/list')"
-                    >
-                        <span>{{ "Reset"|t(locale) }}</span>
-                    </a>
-                </div>
+<div class="ev_border">
+    <h1 class="ev_header ev_list_header">
+        <span class="ev_list_header_filters">
+            <span class="ev_list_header_group">
+                <input
+                    type="text"
+                    id="keywords"
+                    name="keywords"
+                    class="ev_quick_search ev_list_header_search"
+                    value="{{ filter.keywords }}"
+                />
+            </span>
+            <span class="ev_list_header_group">
+                <span class="ev_list_header_calendars">
+                    {% for cal in calendars %}
+                        <a
+                            class="ev_list_header_calendar_link"
+                            href="javascript:toggleListCalendar('{{ cal.id }}')"
+                            title="{{ cal.name }}"
+                            aria-label="{{ cal.name }}"
+                            data-calendar-id="{{ cal.id }}"
+                            data-selected="{% if cal.selected %}1{% else %}0{% endif %}"
+                        >
+                            <span
+                                id="list-calendar-{{ cal.id }}"
+                                class="ev_cal_src ev_cal_src_button ev_cal_src_highlight
+                                {% if cal.selected %}
+                                    ev_cal_src_{{ cal.id }}
+                                {% else %}
+                                    ev_cal_src_disabled
+                                {% endif %}"
+                            ></span>
+                        </a>
+                    {% endfor %}
+                </span>
+            </span>
+            <div>
+                <a class="ev_button ev_button_normal" href="javascript:loadListResults(true)">
+                    <i class="bi bi-funnel"></i>
+                    <span>{{ "Filter"|t(locale) }}</span>
+                </a>
+                <a class="ev_button ev_button_normal" href="javascript:resetListFilter()">
+                    <i class="bi bi-x-circle"></i>
+                </a>
             </div>
-        </fieldset>
-    </div>
-</form>
+        </span>
+        <span class="ev_list_header_title">{{ "Events and Tasks"|t(locale) }}</span>
+    </h1>
+</div>
 
 <div id="list-content">
     <p>{{ "Loading..."|t(locale) }}</p>
 </div>
 
 <script type="text/javascript">
+    window.ev.listFilter = { dirs: [] };
+
+    function calendarElements() {
+        return Array.from(
+            document.querySelectorAll(".ev_list_header_calendar_link[data-calendar-id]"),
+        );
+    }
+
+    function initListFilterDirs() {
+        setListFilterDirs(
+            calendarElements()
+                .filter((cal) => cal.dataset.selected === "1")
+                .map((cal) => cal.dataset.calendarId),
+        );
+    }
+
+    function listFilterDirs() {
+        return window.ev.listFilter.dirs.slice();
+    }
+
+    function setListFilterDirs(dirs) {
+        window.ev.listFilter.dirs = dirs;
+    }
+
+    function selectedListCalendarCount() {
+        return listFilterDirs().length;
+    }
+
+    function calendarIds() {
+        return calendarElements().map((cal) => cal.dataset.calendarId);
+    }
+
+    function updateListCalendarStyles() {
+        const selected = new Set(listFilterDirs());
+        for (const id of calendarIds()) {
+            const calendar = $("#list-calendar-" + CSS.escape(id));
+            calendar.removeClass("ev_cal_src_disabled ev_cal_src_" + id);
+            calendar.addClass(selected.has(id) ? "ev_cal_src_" + id : "ev_cal_src_disabled");
+        }
+    }
+
+    function buildListFilter(page) {
+        const params = new URLSearchParams();
+        const keywords = $("#keywords").val();
+        if (keywords) params.set("keywords", keywords);
+
+        const dirs = listFilterDirs();
+        for (const dir of dirs) params.append("dirs[]", dir);
+
+        if (page && page > 1) params.set("page", page);
+        return params;
+    }
+
     bindContentHandler("page-content", "#keywords", "keydown", function (e) {
         if (e.which == 13) {
-            applyListFilter();
+            loadListResults(true);
             return false;
+        }
+    });
+
+    bindContentHandler("page-content", document, "keydown", function (e) {
+        if (!isInputFocused()) {
+            if (e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return true;
+            if (e.code == "KeyF") {
+                $("#keywords").focus();
+                return false;
+            }
         }
     });
 
     // Module state: ids is populated by list_content.htm on each AJAX reload;
     // occs_state tracks loaded occurrence pages keyed by UID.
     window.ev.list = { ids: [], occs_state: {} };
+    window.ev.currentPerPage = calculatePerPage();
+    window.ev.resizeTimeout = null;
+
+    function calculatePerPage() {
+        const viewportHeight = window.innerHeight;
+        const header = document.querySelector(".ev_list_header");
+        const headerHeight = header ? header.offsetTop + header.offsetHeight : 100;
+        const paginationHeight = 70;
+        const availableHeight = viewportHeight - headerHeight - paginationHeight;
+        const rowHeight = 56;
+        return Math.max(5, Math.min(50, Math.floor(availableHeight / rowHeight)));
+    }
 
     // Loads the list content for `queryStr` via AJAX and injects it into
     // #list-content. Pushes the filter state onto /pages/list in browser history
     // so the URL stays accurate without exposing the internal /content/results sub-path.
-    window.loadListContent = function (queryStr, onloaded) {
-        const params = queryStr ? "?" + queryStr : "";
-        history.pushState({ slug: "list", query: queryStr || "" }, "", "/pages/list" + params);
-        fetchContent("list/results", "#list-content", queryStr, onloaded || null);
+    window.loadListResultsWith = function (queryStr, withHistory = true) {
+        if (withHistory) {
+            const params = queryStr ? "?" + queryStr : "";
+            history.pushState({ slug: "list", query: queryStr || "" }, "", "/pages/list" + params);
+        }
+        fetchContent("list/results", "#list-content", queryStr);
     };
 
-    function applyListFilter(onloaded) {
-        const queryStr = $("#form").serialize();
-        window.loadListContent(queryStr, onloaded || null);
+    function loadListResults(withHistory, withPage = false) {
+        const params = buildListFilter();
+        params.set("per_page", window.ev.currentPerPage);
+        if (withPage) {
+            const cur = new URL(window.location.href);
+            const page = cur.searchParams.get("page");
+            if (page) params.set("page", page);
+        }
+        window.loadListResultsWith(params.toString(), withHistory);
+    }
+
+    function updatePerPage() {
+        const newPerPage = calculatePerPage();
+        if (newPerPage !== window.ev.currentPerPage) {
+            window.ev.currentPerPage = newPerPage;
+            loadListResults(false);
+        }
+    }
+
+    window.addEventListener("resize", function () {
+        clearTimeout(window.ev.resizeTimeout);
+        window.ev.resizeTimeout = setTimeout(updatePerPage, 200);
+    });
+
+    function resetListFilter() {
+        $("#keywords").val("");
+        calendarElements().map((cal) => (cal.dataset.selected = "1"));
+        initListFilterDirs();
+        updateListCalendarStyles();
+        loadListResults(true);
+    }
+
+    function toggleListCalendar(id) {
+        const dirs = listFilterDirs();
+        const index = dirs.indexOf(id);
+
+        if (index >= 0) {
+            if (dirs.length == 1) return;
+            dirs.splice(index, 1);
+        } else {
+            dirs.push(id);
+        }
+
+        setListFilterDirs(dirs);
+        updateListCalendarStyles();
+        loadListResults(true);
     }
 
     function refreshRow(uid, rid, rid_js) {
@@ -129,8 +224,6 @@
             refreshRow(uid, rid, rid_js);
         });
     }
-
-    if (Cookies.get("ev_list_filter") != 1) $("#filter_box").hide();
 
     function loadOccs(uid, ndate, dir, count, onsuccess) {
         getRequest(
@@ -175,19 +268,17 @@
         }
     }
 
-    function editAlarms(id, uid, rid) {
-        fireEvent(new EditEvent(id, uid, rid));
+    function editAlarms(id, ctype, uid, rid) {
+        fireEvent(new EditAlarmsEvent(id, ctype, uid, rid));
     }
 
-    function toggleFilter() {
-        const hidden = document.getElementById("filter_box").style.display == "none";
-        $("#filter_box").toggle("blind", {}, 300);
-        Cookies.set("ev_list_filter", hidden ? 1 : 0, {
-            expires: 30,
-            sameSite: "strict",
-        });
-    }
+    initListFilterDirs();
 
-    // Load the list content for the current filter on shell load.
-    fetchContent("list/results", "#list-content", "{{ filter_query|safe }}", null);
+    // Hide the top-level quick-search since we have our own inline search in the header.
+    $("#outer > form").hide();
+    $("#quick-search").val("");
+    $("#keywords").val("{{ filter.keywords }}");
+
+    // Load the list results
+    loadListResults(false, true);
 </script>

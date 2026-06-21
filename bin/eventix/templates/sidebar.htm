@@ -14,7 +14,7 @@
             <a
                 id="link-event"
                 class="ev_sidebar_add_link"
-                href="javascript:loadWithPrev('/pages/items/add?ctype=Event')"
+                href="javascript:fireEvent(createAddEvent('link-event', 'Event'))"
             >
                 <i class="bi bi-plus-square"></i>
             </a>
@@ -43,7 +43,7 @@
             <a
                 id="link-todo"
                 class="ev_sidebar_add_link"
-                href="javascript:loadWithPrev('/pages/items/add?ctype=Todo')"
+                href="javascript:fireEvent(createAddEvent('link-todo', 'Todo'))"
             >
                 <i class="bi bi-plus-square"></i>
             </a>
@@ -66,7 +66,7 @@
         <!-- prettier-ignore-end -->
     </div>
     {% if let Some(quickcals) = page.quickcals %}
-        <form id="quick_todo_form" method="post" action="/api/items/add">
+        <form id="quick_todo_form" method="post" action="/api/items/addtodo">
             <div class="ev_quicktask">
                 {{ quickcals|safe }}
                 <input

@@ -5,8 +5,9 @@
 use anyhow::{Context, Result, anyhow};
 use askama::Template;
 use axum::{
+    Json,
     extract::{Query, State},
-    response::{Html, IntoResponse},
+    response::IntoResponse,
 };
 use eventix_ical::{
     col::{CalDir, Occurrence},
@@ -16,27 +17,22 @@ use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, EventixState};
 use std::sync::Arc;
 
-use super::{CompEdit, Request};
+use crate::api::{HTMLResponse, JsonError};
+use crate::comps::{
+    alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
+    datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
+};
 use crate::html::filters;
 use crate::objects::Calendars;
-use crate::pages::{Page, error::HTMLError};
 use crate::util;
-use crate::{
-    comps::{
-        alarm::AlarmTemplate, attendees::AttendeesTemplate, calcombo::CalComboTemplate,
-        datetimerange::DateTimeRangeTemplate, recur::RecurTemplate, todostatus::TodoStatusTemplate,
-    },
-    pages::items::edit::EditMode,
-};
 
-/// Fragment-only template for the edit-item form, rendered by the AJAX content endpoint.
+use super::{CompEdit, EditMode, Request, build_title};
+
 #[derive(Template)]
-#[template(path = "pages/items/edit.htm")]
+#[template(path = "ajax/edit.htm")]
 struct EditTemplate<'a> {
-    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     edit_start: String,
-    prev: &'a String,
     uid: String,
     rid: Option<String>,
     mode: EditMode,
@@ -51,6 +47,7 @@ struct EditTemplate<'a> {
     attendees: AttendeesTemplate,
     status: Option<TodoStatusTemplate>,
     occ: &'a Occurrence<'a>,
+    title: String,
 }
 
 /// Renders only the edit-item form fragment for the given request. Used by the AJAX content
@@ -58,20 +55,20 @@ struct EditTemplate<'a> {
 pub async fn content(
     State(state): State<EventixState>,
     Query(req): Query<Request>,
-) -> Result<impl IntoResponse, HTMLError> {
+) -> Result<impl IntoResponse, JsonError> {
     let locale = state.lock().await.locale();
-    content_with(Page::default(), locale, State(state), Query(req), None).await
+    content_with(locale, State(state), Query(req), None, Vec::new()).await
 }
 
 /// Renders the edit-item form fragment with the given page state and form data.
 /// Called by `content` for the initial GET and by `update::handler` after a POST.
 pub async fn content_with(
-    page: Page,
     locale: Arc<dyn Locale + Send + Sync>,
     State(state): State<EventixState>,
     Query(req): Query<Request>,
     form: Option<CompEdit>,
-) -> Result<impl IntoResponse, HTMLError> {
+    errors: Vec<String>,
+) -> Result<Json<HTMLResponse>, JsonError> {
     let state = state.lock().await;
 
     let file = state
@@ -130,8 +127,6 @@ pub async fn content_with(
     );
 
     let html = EditTemplate {
-        page,
-        prev: &req.prev,
         edit_start: format!("{}", form.edit_start),
         uid: req.uid.clone(),
         rid: req.rid.clone(),
@@ -181,9 +176,10 @@ pub async fn content_with(
             .map(|st| TodoStatusTemplate::new(locale.clone(), "status", st)),
         occ: &occ,
         locale,
+        title: build_title(&occ, &req.rid, req.mode),
     }
     .render()
-    .context("edit content template")?;
+    .context("edit form template")?;
 
-    Ok(Html(html))
+    Ok(Json(HTMLResponse::with_errors(html, errors)))
 }

@@ -299,7 +299,11 @@ async fn savecal_updates_existing_calendar_settings() {
     .await;
 
     assert_eq!(status, StatusCode::OK, "unexpected body:\n{resp}");
-    assert_eq!(resp, "null");
+    assert!(
+        resp.errors.is_empty(),
+        "expected no errors, got: {:?}",
+        resp.errors
+    );
 
     let locked = state.lock().await;
     let cal = locked
@@ -344,7 +348,11 @@ async fn savecal_creates_new_calendar_entry() {
     .await;
 
     assert_eq!(status, StatusCode::OK, "unexpected body:\n{resp}");
-    assert_eq!(resp, "null");
+    assert!(
+        resp.errors.is_empty(),
+        "expected no errors, got: {:?}",
+        resp.errors
+    );
 
     let locked = state.lock().await;
     let cal = locked

@@ -1,18 +1,58 @@
 <input type="hidden" id="{{ id }}_freq" name="{{ name }}[freq]" value="{{ freq }}" />
-<div id="{{ id }}-tabs" class="ev_tabs">
-    <ul>
-        <li><a href="#{{ id }}-tabs-NONE">{{ "None"|t(locale) }}</a></li>
-        <li><a href="#{{ id }}-tabs-HOURLY">{{ "Hourly"|t(locale) }}</a></li>
-        <li><a href="#{{ id }}-tabs-DAILY">{{ "Daily"|t(locale) }}</a></li>
-        <li><a href="#{{ id }}-tabs-WEEKLY">{{ "Weekly"|t(locale) }}</a></li>
-        <li><a href="#{{ id }}-tabs-MONTHLY">{{ "Monthly"|t(locale) }}</a></li>
-        <li><a href="#{{ id }}-tabs-YEARLY">{{ "Annually"|t(locale) }}</a></li>
-    </ul>
-    <div id="{{ id }}-tabs-NONE"></div>
-    <div id="{{ id }}-tabs-HOURLY"></div>
-    <div id="{{ id }}-tabs-DAILY"></div>
-    <div id="{{ id }}-tabs-WEEKLY">
-        <div id="{{ id }}_weekdays_list" class="ev_pad">
+<div id="{{ id }}_segmented" class="ev_segmented ev_segmented_recur">
+    <input
+        type="radio"
+        id="{{ id }}_freq_NONE"
+        name="{{ name }}[freq_seg]"
+        value="NONE"
+        {% if freq == "NONE" %}checked="checked"{% endif %}
+    />
+    <label for="{{ id }}_freq_NONE">{{ "None"|t(locale) }}</label>
+    <input
+        type="radio"
+        id="{{ id }}_freq_HOURLY"
+        name="{{ name }}[freq_seg]"
+        value="HOURLY"
+        {% if freq == "HOURLY" %}checked="checked"{% endif %}
+    />
+    <label for="{{ id }}_freq_HOURLY">{{ "Hourly"|t(locale) }}</label>
+    <input
+        type="radio"
+        id="{{ id }}_freq_DAILY"
+        name="{{ name }}[freq_seg]"
+        value="DAILY"
+        {% if freq == "DAILY" %}checked="checked"{% endif %}
+    />
+    <label for="{{ id }}_freq_DAILY">{{ "Daily"|t(locale) }}</label>
+    <input
+        type="radio"
+        id="{{ id }}_freq_WEEKLY"
+        name="{{ name }}[freq_seg]"
+        value="WEEKLY"
+        {% if freq == "WEEKLY" %}checked="checked"{% endif %}
+    />
+    <label for="{{ id }}_freq_WEEKLY">{{ "Weekly"|t(locale) }}</label>
+    <input
+        type="radio"
+        id="{{ id }}_freq_MONTHLY"
+        name="{{ name }}[freq_seg]"
+        value="MONTHLY"
+        {% if freq == "MONTHLY" %}checked="checked"{% endif %}
+    />
+    <label for="{{ id }}_freq_MONTHLY">{{ "Monthly"|t(locale) }}</label>
+    <input
+        type="radio"
+        id="{{ id }}_freq_YEARLY"
+        name="{{ name }}[freq_seg]"
+        value="YEARLY"
+        {% if freq == "YEARLY" %}checked="checked"{% endif %}
+    />
+    <label for="{{ id }}_freq_YEARLY">{{ "Annually"|t(locale) }}</label>
+</div>
+
+<div id="{{ id }}_options">
+    <div id="{{ id }}_weekly_opts" class="ev_pad" style="display: none;">
+        <div id="{{ id }}_weekdays_list">
             <input
                 type="hidden"
                 id="{{ id }}_weekdays"
@@ -43,7 +83,8 @@
             </a>
         </div>
     </div>
-    <div id="{{ id }}-tabs-MONTHLY" class="ev_flex">
+
+    <div id="{{ id }}_monthly_opts" class="ev_flex" style="display: none;">
         <div class="ev_pad">{{ "On"|t(locale) }}:</div>
         <div>
             <div class="ev_pad_top">
@@ -93,7 +134,8 @@
             </div>
         </div>
     </div>
-    <div id="{{ id }}-tabs-YEARLY" class="ev_flex">
+
+    <div id="{{ id }}_yearly_opts" class="ev_flex" style="display: none;">
         <div class="ev_pad">{{ "On"|t(locale) }}:</div>
         <div>
             <div class="ev_pad_top">
@@ -140,7 +182,8 @@
             </div>
         </div>
     </div>
-    <div id="{{ id }}-tabs-end" class="ev_pad ev_hidden" hidden>
+
+    <div id="{{ id }}_end_opts" class="ev_pad" style="display: none;">
         <div class="ev_pad_bottom">
             {{ "Every"|t(locale) }}
             <input
@@ -203,6 +246,15 @@
     }
 
     $(function () {
+        const recurFreq = new SegmentedControl("{{ id }}", {
+            inputName: "{{ name }}[freq_seg]",
+            panels: {
+                WEEKLY: "#{{ id }}_weekly_opts",
+                MONTHLY: "#{{ id }}_monthly_opts",
+                YEARLY: "#{{ id }}_yearly_opts",
+            },
+        }).mount();
+
         $("#{{ id }}_weekdays_list a").button();
         $("#{{ id }}_interval").spinner({
             min: 1,
@@ -225,39 +277,40 @@
             $("#{{ id }}_weekday_" + wday).toggleClass("ev_button_selected");
         }
 
-        $("#{{ id }}-tabs").tabs({
-            activate: function (event, data) {
-                const name = data.newPanel.attr("id").replace("{{ id }}-tabs-", "");
-                if (name != "NONE") {
-                    $("#{{ id }}-tabs-end").show();
-                    let label = $("#{{ id }}_interval_label");
-                    switch (name) {
-                        case "HOURLY":
-                            label.html('{{ "hour(s)"|t(locale) }}');
-                            break;
-                        case "DAILY":
-                            label.html('{{ "day(s)"|t(locale) }}');
-                            break;
-                        case "WEEKLY":
-                            label.html('{{ "week(s)"|t(locale) }}');
-                            break;
-                        case "MONTHLY":
-                            label.html('{{ "month(s)"|t(locale) }}');
-                            break;
-                        case "YEARLY":
-                            label.html('{{ "year(s)"|t(locale) }}');
-                            break;
-                    }
-                } else $("#{{ id }}-tabs-end").hide();
-                $("#{{ id }}_freq").attr("value", name);
-            },
+        recurFreq.onChange(function (freq) {
+            $("#{{ id }}_freq").attr("value", freq);
+
+            const showOpts = freq !== "NONE" && freq !== undefined;
+            $("#{{ id }}_end_opts").toggle(showOpts);
+
+            let label = $("#{{ id }}_interval_label");
+            switch (freq) {
+                case "HOURLY":
+                    label.html('{{ "hour(s)"|t(locale) }}');
+                    break;
+                case "DAILY":
+                    label.html('{{ "day(s)"|t(locale) }}');
+                    break;
+                case "WEEKLY":
+                    label.html('{{ "week(s)"|t(locale) }}');
+                    break;
+                case "MONTHLY":
+                    label.html('{{ "month(s)"|t(locale) }}');
+                    break;
+                case "YEARLY":
+                    label.html('{{ "year(s)"|t(locale) }}');
+                    break;
+                default:
+                    label.html("");
+            }
         });
 
-        const tab = $("#{{ id }}_freq").attr("value");
-        if (tab != "NONE") {
-            const tabs = ["NONE", "HOURLY", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
-            $("#{{ id }}-tabs").tabs("option", "active", tabs.indexOf(tab));
-            $("#{{ id }}-tabs-end").show();
+        const initialFreq = $("#{{ id }}_freq").attr("value");
+        recurFreq.bind();
+        if (initialFreq !== "NONE") {
+            recurFreq.select(initialFreq);
+        } else {
+            recurFreq.refresh();
         }
     });
 </script>

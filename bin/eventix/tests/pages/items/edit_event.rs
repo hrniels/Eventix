@@ -122,11 +122,11 @@ async fn series_edit_basic_fields() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -167,11 +167,11 @@ async fn series_edit_add_relative_alarm() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -218,11 +218,11 @@ async fn series_edit_add_rrule() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let comp = first_component(&ics);
@@ -261,11 +261,11 @@ async fn series_edit_moves_to_different_calendar() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     // The file must no longer exist in the source calendar.
     assert!(
@@ -322,12 +322,12 @@ async fn occurrence_edit_overrides_single() {
     // as "TTEurope/Berlin;2026-04-15T09:00:00" (T prefix for CalDate, then T prefix for
     // CalDateTime::Timezone, then tz;datetime).
     let uri = format!(
-        "/pages/items/edit?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-15T09%3A00%3A00&prev=%2F"
+        "/api/items/edit?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-15T09%3A00%3A00&prev=%2F"
     );
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     // There should now be two components: the base and the overwrite
@@ -358,15 +358,14 @@ async fn occurrence_edit_overrides_single() {
     assert!(override_block.contains("SUMMARY:Special standup"));
 }
 
-/// Saving a not-yet-overwritten occurrence immediately re-renders the form from the created
-/// overwrite instead of the generated base occurrence.
+/// Saving a not-yet-overwritten occurrence creates an overwrite in the ICS file.
 #[tokio::test]
-async fn occurrence_edit_new_overwrite_rerenders_updated_values() {
+async fn occurrence_edit_creates_overwrite_in_ics() {
     let tmp = TempDir::new().unwrap();
     let cal_dir = tmp.path().join(CAL_ID);
     std::fs::create_dir_all(&cal_dir).unwrap();
 
-    let uid = "edit-event-occ-rerender";
+    let uid = "edit-event-occ-overwrite";
     let ics_path = cal_dir.join(format!("{uid}.ics"));
     std::fs::write(
         &ics_path,
@@ -404,16 +403,12 @@ async fn occurrence_edit_new_overwrite_rerenders_updated_values() {
     );
     let body = encode_form(&fields);
     let uri = format!(
-        "/pages/items/edit?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-23T18%3A00%3A00&prev=%2F"
+        "/api/items/edit?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-23T18%3A00%3A00&prev=%2F"
     );
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
-    assert_field_value(&resp_body, "summary", "Changed immediately");
-    assert_field_value(&resp_body, "start_end[to][time]", "19:00");
-    assert_timezone(&resp_body, "UTC");
-    assert_not_checked(&resp_body, "start_endall_day");
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     let overwrite = ics
@@ -460,14 +455,14 @@ async fn occurrence_edit_form_prefills_utc_non_overwrite_in_utc() {
     let router = make_router(state);
 
     let uri = format!(
-        "/pages/items/edit/content?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-05-28T18%3A00%3A00&prev=%2F"
+        "/api/items/edit?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-05-28T18%3A00%3A00&prev=%2F"
     );
 
-    let (status, resp_body) = get(router, &uri).await;
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_field_value(&resp_body, "start_end[from][time]", "16:00");
-    assert_timezone(&resp_body, "UTC");
-    assert_not_checked(&resp_body, "start_endall_day");
+    assert_field_value(&resp, "start_end[from][time]", "16:00");
+    assert_timezone(&resp, "UTC");
+    assert_not_checked(&resp, "start_endall_day");
 }
 
 /// Opening the edit form for a non-overwritten foreign-timezone occurrence keeps the event
@@ -503,15 +498,15 @@ async fn occurrence_edit_form_prefills_foreign_tz_non_overwrite_in_event_tz() {
     let router = make_router(state);
 
     let uri = format!(
-        "/pages/items/edit/content?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-05-28T15%3A00%3A00&prev=%2F"
+        "/api/items/edit?mode=Occurrence&uid={uid}&rid=TTEurope%2FBerlin%3B2026-05-28T15%3A00%3A00&prev=%2F"
     );
 
-    let (status, resp_body) = get(router, &uri).await;
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_field_value(&resp_body, "start_end[from][time]", "09:00");
-    assert_field_value(&resp_body, "start_end[to][time]", "10:30");
-    assert_timezone(&resp_body, "America/New_York");
-    assert_not_checked(&resp_body, "start_endall_day");
+    assert_field_value(&resp, "start_end[from][time]", "09:00");
+    assert_field_value(&resp, "start_end[to][time]", "10:30");
+    assert_timezone(&resp, "America/New_York");
+    assert_not_checked(&resp, "start_endall_day");
 }
 
 // --- Following edit ---
@@ -550,16 +545,17 @@ async fn following_edit_splits_series() {
     let body = encode_form(&fields);
     // Following mode: rid = the occurrence date in CalDate display format.
     let uri = format!(
-        "/pages/items/edit?mode=Following&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-22T09%3A00%3A00&prev=%2F"
+        "/api/items/edit?mode=Following&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-22T09%3A00%3A00&prev=%2F"
     );
 
-    let (status, resp_body): (_, String) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
 
     // On Following success the handler renders the edit form for the new series (no error banner).
     assert!(
-        !resp_body.contains("ev_msg_error"),
-        "unexpected error: {resp_body}"
+        resp.errors.is_empty(),
+        "unexpected error: {:?}",
+        resp.errors
     );
 
     // --- Original series ---
@@ -698,14 +694,15 @@ async fn following_edit_empty_original_deletes_file() {
     );
     let body = encode_form(&fields);
     let uri = format!(
-        "/pages/items/edit?mode=Following&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-15T09%3A00%3A00&prev=%2F"
+        "/api/items/edit?mode=Following&uid={uid}&rid=TTEurope%2FBerlin%3B2026-04-15T09%3A00%3A00&prev=%2F"
     );
 
-    let (status, resp_body): (_, String) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
     assert!(
-        !resp_body.contains("ev_msg_error"),
-        "unexpected error: {resp_body}"
+        resp.errors.is_empty(),
+        "unexpected error: {:?}",
+        resp.errors
     );
 
     // The original file must have been deleted.
@@ -784,11 +781,11 @@ async fn series_edit_stale_rejected() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
 }
 
 /// An edit referencing a UID that does not exist returns an error (500 / HTMLError).
@@ -814,9 +811,9 @@ async fn series_edit_unknown_uid_returns_error() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = "/pages/items/edit?mode=Series&uid=does-not-exist&prev=%2F";
+    let uri = "/api/items/edit?mode=Series&uid=does-not-exist&prev=%2F";
 
-    let (status, _resp_body) = post(router, uri, &body).await;
+    let (status, _resp) = post(router, uri, &body).await;
     // The handler returns an HTMLError (anyhow error) which axum converts to a 500.
     assert_eq!(status, 500);
     assert_no_ics(&cal_dir);
@@ -849,11 +846,11 @@ async fn series_edit_missing_summary() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
 }
 
 /// An edit with missing start datetime (from_enabled absent) is rejected for events.
@@ -884,11 +881,11 @@ async fn series_edit_missing_start() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
 }
 
 /// An edit with end before start is rejected.
@@ -918,11 +915,11 @@ async fn series_edit_end_before_start() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
 }
 
 /// An edit with a start in the Europe/Berlin spring-forward DST gap is accepted.
@@ -953,11 +950,11 @@ async fn series_edit_start_in_dst_gap() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     match first_component(&ics).start().unwrap() {
@@ -1000,11 +997,11 @@ async fn series_edit_start_in_dst_fold() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_success(&resp_body);
+    assert_success(&resp);
 
     let ics = read_ics_by_uid(&cal_dir, uid);
     match first_component(&ics).start().unwrap() {
@@ -1048,11 +1045,11 @@ async fn series_edit_absolute_alarm_missing_datetime() {
         ],
     );
     let body = encode_form(&fields);
-    let uri = format!("/pages/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
 
-    let (status, resp_body) = post(router, &uri, &body).await;
+    let (status, resp) = post(router, &uri, &body).await;
     assert_eq!(status, 200);
-    assert_error(&resp_body);
+    assert_error(&resp);
 }
 
 // --- Edit form start/end prefill tests ---
@@ -1084,13 +1081,13 @@ async fn edit_form_prefills_local_tz_event() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_field_value(&resp_body, "start_end[from][time]", "16:00");
-    assert_field_value(&resp_body, "start_end[to][time]", "17:30");
-    assert_timezone(&resp_body, "Europe/Berlin");
-    assert_not_checked(&resp_body, "start_endall_day");
+    assert_field_value(&resp, "start_end[from][time]", "16:00");
+    assert_field_value(&resp, "start_end[to][time]", "17:30");
+    assert_timezone(&resp, "Europe/Berlin");
+    assert_not_checked(&resp, "start_endall_day");
 }
 
 /// Opening the edit form for an event in a foreign (non-local) timezone keeps the event's wall
@@ -1120,13 +1117,13 @@ async fn edit_form_prefills_foreign_tz_event() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_field_value(&resp_body, "start_end[from][time]", "10:00");
-    assert_field_value(&resp_body, "start_end[to][time]", "11:30");
-    assert_timezone(&resp_body, "America/New_York");
-    assert_not_checked(&resp_body, "start_endall_day");
+    assert_field_value(&resp, "start_end[from][time]", "10:00");
+    assert_field_value(&resp, "start_end[to][time]", "11:30");
+    assert_timezone(&resp, "America/New_York");
+    assert_not_checked(&resp, "start_endall_day");
 }
 
 /// Opening the edit form for a UTC event shows the UTC wall clock time with timezone set to UTC.
@@ -1155,13 +1152,13 @@ async fn edit_form_prefills_utc_event() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_field_value(&resp_body, "start_end[from][time]", "14:00");
-    assert_field_value(&resp_body, "start_end[to][time]", "15:30");
-    assert_timezone(&resp_body, "UTC");
-    assert_not_checked(&resp_body, "start_endall_day");
+    assert_field_value(&resp, "start_end[from][time]", "14:00");
+    assert_field_value(&resp, "start_end[to][time]", "15:30");
+    assert_timezone(&resp, "UTC");
+    assert_not_checked(&resp, "start_endall_day");
 }
 
 /// Opening the edit form for an all-day event shows only dates (no times) and no timezone row.
@@ -1190,12 +1187,12 @@ async fn edit_form_prefills_allday_event() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_field_value(&resp_body, "start_end[from][date]", "2026-05-28");
-    assert_field_value(&resp_body, "start_end[to][date]", "2026-05-28");
-    assert_checked(&resp_body, "start_endall_day");
+    assert_field_value(&resp, "start_end[from][date]", "2026-05-28");
+    assert_field_value(&resp, "start_end[to][date]", "2026-05-28");
+    assert_checked(&resp, "start_endall_day");
 }
 
 /// Opening the edit form for an event ending at exactly 0:00 of the next day.
@@ -1224,13 +1221,13 @@ async fn edit_form_prefills_event_ending_at_midnight() {
     let state = make_state_in_tz(&cal_dir, "Europe/Berlin");
     let router = make_router(state);
 
-    let uri = format!("/pages/items/edit/content?mode=Series&uid={uid}&prev=%2F");
-    let (status, resp_body) = get(router, &uri).await;
+    let uri = format!("/api/items/edit?mode=Series&uid={uid}&prev=%2F");
+    let (status, resp) = get(router, &uri).await;
     assert_eq!(status, 200);
-    assert_field_value(&resp_body, "start_end[from][date]", "2026-05-28");
-    assert_field_value(&resp_body, "start_end[from][time]", "22:00");
-    assert_field_value(&resp_body, "start_end[to][date]", "2026-05-29");
-    assert_field_value(&resp_body, "start_end[to][time]", "00:00");
-    assert_timezone(&resp_body, "Europe/Berlin");
-    assert_not_checked(&resp_body, "start_endall_day");
+    assert_field_value(&resp, "start_end[from][date]", "2026-05-28");
+    assert_field_value(&resp, "start_end[from][time]", "22:00");
+    assert_field_value(&resp, "start_end[to][date]", "2026-05-29");
+    assert_field_value(&resp, "start_end[to][time]", "00:00");
+    assert_timezone(&resp, "Europe/Berlin");
+    assert_not_checked(&resp, "start_endall_day");
 }

@@ -96,12 +96,7 @@ async fn details_returns_html() {
     assert_eq!(status, 200);
 
     // The response is a JSON object with an "html" key.
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|_| panic!("response is not valid JSON: {body}"));
-    assert!(
-        json.get("html").and_then(|v| v.as_str()).is_some(),
-        "expected 'html' key in response JSON, got: {json}"
-    );
+    assert!(!body.html.is_empty(), "expected non-empty html");
 }
 
 /// Fetching the details for a recurring event returns HTTP 200. This exercises the
@@ -124,9 +119,7 @@ async fn details_recurring_event_returns_html() {
     ]);
     let (status, body) = get(router, &format!("/api/items/details?{qs}")).await;
     assert_eq!(status, 200);
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|_| panic!("response is not valid JSON: {body}"));
-    assert!(json.get("html").and_then(|v| v.as_str()).is_some());
+    assert!(!body.html.is_empty(), "expected non-empty html");
 }
 
 /// Fetching the details with `edit=true` and a `rid` exercises the `edit_modes` branch (owner +
@@ -148,9 +141,7 @@ async fn details_edit_mode_with_rid_returns_html() {
     ]);
     let (status, body) = get(router, &format!("/api/items/details?{qs}")).await;
     assert_eq!(status, 200);
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|_| panic!("response is not valid JSON: {body}"));
-    assert!(json.get("html").and_then(|v| v.as_str()).is_some());
+    assert!(!body.html.is_empty(), "expected non-empty html");
 }
 
 /// Fetching the details for an event with an organizer exercises the organizer template branch.
@@ -172,9 +163,7 @@ async fn details_event_with_organizer_returns_html() {
     let qs = encode_form(&[("uid", uid), ("edit", "false")]);
     let (status, body) = get(router, &format!("/api/items/details?{qs}")).await;
     assert_eq!(status, 200);
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|_| panic!("response is not valid JSON: {body}"));
-    assert!(json.get("html").and_then(|v| v.as_str()).is_some());
+    assert!(!body.html.is_empty(), "expected non-empty html");
 }
 
 /// Fetching the details for a recurring event that has an organizer and an attendee exercises the
@@ -201,9 +190,7 @@ async fn details_recurring_with_organizer_and_attendee_returns_html() {
     ]);
     let (status, body) = get(router, &format!("/api/items/details?{qs}")).await;
     assert_eq!(status, 200);
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|_| panic!("response is not valid JSON: {body}"));
-    assert!(json.get("html").and_then(|v| v.as_str()).is_some());
+    assert!(!body.html.is_empty(), "expected non-empty html");
 }
 
 /// Fetching the details for an unknown UID returns a non-200 status.

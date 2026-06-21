@@ -1,6 +1,21 @@
 const POPUP_SPEED = 50;
 const RESIZE_SPEED = 200;
 
+const MAX_HEIGHT_EDIT = 500;
+const HEIGHT_ADD_EVENT = 439;
+const HEIGHT_ADD_TODO = 494;
+const WIDTH_LOG = 800;
+const WIDTH_HELP = 1024;
+const WIDTH_AUTH = 600;
+const WIDTH_DETAILS = 600;
+const HEIGHT_LOG = 474;
+const HEIGHT_HELP = 729;
+const HEIGHT_AUTH = 200;
+const ALARMS_HEIGHT = 100;
+const WIDTH_COLLECTION = 700;
+const HEIGHT_ADD_COLLECTION = 515;
+const HEIGHT_EDIT_COLLECTION = 505;
+
 class State {
     constructor(name) {
         this.name = name;
@@ -25,6 +40,15 @@ class LargeState extends State {
         super("large");
         this.ids = ids;
         this.popup_pos = popup_pos;
+    }
+}
+
+class FormState extends State {
+    constructor(ids, popup_pos, details_url) {
+        super("form");
+        this.ids = ids;
+        this.popup_pos = popup_pos;
+        this.details_url = details_url;
     }
 }
 
@@ -79,16 +103,11 @@ class DeselectEvent extends Event {
     async trigger(state) {
         switch (state.name) {
             case "small":
-                await _deselect(state.ids);
-                return new InitState();
-
             case "page":
+            case "form":
             case "large":
-                if (state.popup_pos != null) {
-                    await _shrinkPopup(state.popup_pos);
-                    await _deselect(state.ids);
-                } else await _deselect(state.ids);
-                _animateBlur(0);
+                await _deselect(state.ids);
+                if (state.name == "page") _closePageLayer();
                 return new InitState();
 
             default:
@@ -97,33 +116,145 @@ class DeselectEvent extends Event {
     }
 }
 
-class EditEvent extends Event {
-    constructor(id, uid, rid) {
-        super("edit");
+class EditAlarmsEvent extends Event {
+    constructor(btnid, ctype, uid, rid) {
+        super("editalarms");
         this.data = {
+            btnid: btnid,
+            ctype: ctype,
             uid: uid,
             rid: rid,
-            id: id,
         };
     }
 
     async trigger(state) {
         switch (state.name) {
             case "init":
-                await _openLargePopup(this.data);
-                return new LargeState(null, null);
+                let url = "/api/items/details?uid=" + this.data.uid;
+                if (this.data.rid) url += "&rid=" + this.data.rid;
+                url += "&edit=true";
+                await _openEditAlarmsPopup(this.data, url);
+                return new LargeState(state.ids, null);
 
             case "small":
-                let popup_pos = {
-                    top: $("#popup").css("top"),
-                    left: $("#popup").css("left"),
-                    width: $("#popup").width(),
-                };
-                await _animateOpenPopup();
+                let popup_pos = _animateExpandPopup("alarms");
                 return new LargeState(state.ids, popup_pos);
 
             case "page":
                 console.assert(false, "This should not happen");
+
+            default:
+                return state;
+        }
+    }
+}
+
+class AddEvent extends Event {
+    constructor(btnid, ctype, date, hour) {
+        super("add");
+        this.data = {
+            btnid: btnid,
+            ctype: ctype,
+            date: date,
+            hour: hour,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+            case "small":
+                if (state.name === "small") {
+                    await _deselect(state.ids);
+                }
+                await _openAddPopup(this.data);
+                return new FormState(null, null, null);
+
+            default:
+                return state;
+        }
+    }
+}
+
+class EditEvent extends Event {
+    constructor(btnid, ctype, uid, rid, mode = "Series") {
+        super("edit");
+        this.data = {
+            btnid: btnid,
+            ctype: ctype,
+            uid: uid,
+            rid: rid,
+            id: null,
+            mode: mode,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+            case "small":
+                let popup_pos = state.name == "small" ? _animateExpandPopup("edit") : null;
+
+                let url = "/api/items/edit?uid=" + this.data.uid;
+                if (this.data.rid) url += "&rid=" + this.data.rid;
+                url += "&mode=" + this.data.mode;
+
+                if (state.name == "small") await _loadPage(url);
+                else await _openEditPopup(this.data, url);
+
+                return new FormState(state.ids, popup_pos);
+
+            case "page":
+                console.assert(false, "This should not happen");
+
+            default:
+                return state;
+        }
+    }
+}
+
+class AddCollectionEvent extends Event {
+    constructor(btnid) {
+        super("addcollection");
+        this.data = {
+            btnid: btnid,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+            case "small":
+                if (state.name === "small") {
+                    await _deselect(state.ids);
+                }
+                await _openAddCollectionPopup(this.data);
+                return new FormState(null, null, null);
+
+            default:
+                return state;
+        }
+    }
+}
+
+class EditCollectionEvent extends Event {
+    constructor(btnid, col_id) {
+        super("editcollection");
+        this.data = {
+            btnid: btnid,
+            col_id: col_id,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+            case "small":
+                if (state.name === "small") {
+                    await _deselect(state.ids);
+                }
+                await _openEditCollectionPopup(this.data);
+                return new FormState(null, null, null);
 
             default:
                 return state;
@@ -138,18 +269,25 @@ class CancelEvent extends Event {
 
     async trigger(state) {
         switch (state.name) {
-            case "page":
             case "large":
+            case "form":
                 let new_state;
                 if (state.popup_pos != null) {
-                    await _shrinkPopup(state.popup_pos);
+                    if (state.name == "form") {
+                        _shrinkPopup(state.popup_pos);
+                        await _loadOccurrence(state.ids.uid, state.ids.rid, false);
+                    } else await _shrinkPopup(state.popup_pos);
                     new_state = new SmallState(state.ids);
                 } else {
                     await _deselect(state.ids);
                     new_state = new InitState();
                 }
-                _animateBlur(0);
                 return new_state;
+
+            case "page":
+                await _deselect(state.ids);
+                _closePageLayer();
+                return new InitState();
 
             default:
                 return state;
@@ -158,23 +296,28 @@ class CancelEvent extends Event {
 }
 
 class PageEvent extends Event {
-    constructor(url) {
+    constructor(btnid, url, minWidth, heightEstimate) {
         super("page");
         this.data = {
+            btnid: btnid,
             url: url,
+            minWidth: minWidth,
+            heightEstimate: heightEstimate,
         };
     }
 
     async trigger(state) {
         switch (state.name) {
             case "init":
-                await _openPagePopup(this.data["url"]);
+                _openPageLayer();
+                await _openPagePopup(this.data, this.data["url"]);
                 return new PageState(this.data["url"]);
 
             case "small":
             case "large":
+                _openPageLayer();
                 await _loadPage(this.data["url"]);
-                await _animateOpenPopup();
+                await _animateOpenPopup(this.data["minWidth"], this.data["heightEstimate"]);
                 return new PageState(this.data["url"]);
 
             default:
@@ -183,12 +326,17 @@ class PageEvent extends Event {
     }
 }
 
-function createHelpEvent() {
-    return new PageEvent("/api/help");
+function createLogEvent(btnid, col) {
+    return new PageEvent(btnid, "/api/collections/log?col_id=" + col, WIDTH_LOG, HEIGHT_LOG);
+}
+
+function createHelpEvent(btnid) {
+    return new PageEvent(btnid, "/api/help", WIDTH_HELP, HEIGHT_HELP);
 }
 
 function createAuthEvent(cal, url, op_url, spinnerId) {
     return new PageEvent(
+        "link-refresh",
         "/api/auth?calendar=" +
             cal +
             "&url=" +
@@ -197,7 +345,21 @@ function createAuthEvent(cal, url, op_url, spinnerId) {
             encodeURIComponent(op_url) +
             "&spinner_id=" +
             encodeURIComponent(spinnerId),
+        WIDTH_AUTH,
+        HEIGHT_AUTH,
     );
+}
+
+function createAddEvent(btnid, ctype, date, hour) {
+    return new AddEvent(btnid, ctype, date, hour);
+}
+
+function createAddCollectionEvent(btnid) {
+    return new AddCollectionEvent(btnid);
+}
+
+function createEditCollectionEvent(btnid, col_id) {
+    return new EditCollectionEvent(btnid, col_id);
 }
 
 let state = new InitState();
@@ -216,10 +378,17 @@ async function fireEvent(ev) {
 }
 
 $(document).mousedown(function (e) {
+    if (e.target.closest(".ev_layer")) return;
+
+    if (e.target.closest(".ui-datepicker")) return;
+    if (e.target.closest(".clockpicker-popover")) return;
+    if (e.target.closest(".ui-autocomplete")) return;
+
     let popup = document.getElementById("popup");
     if (!popup.contains(e.target) && !_inBoundingBox(e, "popup")) fireEvent(new DeselectEvent());
 });
 $(document).keydown(function (e) {
+    if (e.defaultPrevented) return;
     if (e.key == "Escape") fireEvent(new DeselectEvent());
 });
 
@@ -227,77 +396,147 @@ $.fn.slideFadeToggle = function (easing, callback) {
     return this.animate({ opacity: "toggle" }, POPUP_SPEED, easing, callback);
 };
 
-function _setBlur(el, radius) {
-    $(el).css({
-        "-webkit-filter": "blur(" + radius + "px)",
-        "-moz-filter": "blur(" + radius + "px)",
-        "-o-filter": "blur(" + radius + "px)",
-        "-ms-filter": "blur(" + radius + "px)",
-        filter: "blur(" + radius + "px)",
+function _pageLayer() {
+    return window.ev.getLayer("popup-layer");
+}
+
+function _openPageLayer() {
+    _pageLayer().open(function () {
+        fireEvent(new DeselectEvent());
     });
 }
 
-function _animateBlur(radius) {
-    $("#outer").animate(
-        { blurRadius: radius },
-        {
-            duration: RESIZE_SPEED,
-            easing: "linear",
-            step: function () {
-                _setBlur("#outer", this.blurRadius);
-            },
-            complete: function () {
-                _setBlur("#outer", radius);
-            },
-        },
-    );
+function _closePageLayer() {
+    _pageLayer().close();
 }
 
-async function _animateOpenPopup() {
+async function _animateOpenPopup(minWidth, heightEstimate) {
     await new Promise(function (resolve) {
-        _animateBlur(10);
-
         const distance = 200;
-        const old_width = $("#popup").width();
-        const width = Math.min(1024, $(window).width() - distance * 2);
-        // set the width temporarily to get the final height of the popup below
-        $("#popup").css("display", "block");
-        $("#popup").css("width", width + "px");
+        const width = Math.min(minWidth, $(window).width() - distance * 2);
 
         const doc = document.documentElement;
+        const pgcontent = $("#page-content");
         const yoff = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
-        const height = document.getElementById("popup").getBoundingClientRect().height;
-        const top = height > $(window).height() ? distance : ($(window).height() - height) / 2;
-        const left = ($(window).width() - width) / 2;
+        const top =
+            heightEstimate > $(window).height()
+                ? distance
+                : ($(window).height() - heightEstimate) / 2;
+        const left = pgcontent.offset().left + (pgcontent.width() - width + 70) / 2;
 
-        $("#popup").css("width", old_width + "px");
+        $("#popup").css("display", "block");
+        $("#popup").css("opacity", "0%");
+
         $("#popup").animate(
             {
                 left: left + "px",
                 top: yoff + top + "px",
                 width: width + "px",
-                opacity: 100,
+                height: heightEstimate + "px",
+                opacity: "100%",
             },
             RESIZE_SPEED,
             "swing",
-            () => resolve(),
+            () => {
+                $("#popup").css("height", "");
+                resolve();
+            },
         );
     });
 }
 
-async function _openLargePopup(el) {
-    await _openFromElement("#" + el.id, async function () {
-        await _loadOccurrence(el.uid, el.rid, true);
+function _animateExpandPopup(type) {
+    let popup = $("#popup");
+    let popup_pos = {
+        top: popup.css("top"),
+        left: popup.css("left"),
+        width: popup.width(),
+        height: popup.height(),
+    };
+
+    popup.css("overflow", "hidden");
+    popup.css("maxHeight", popup.height());
+
+    const estimatedHeight = type == "edit" ? MAX_HEIGHT_EDIT : popup.height() + ALARMS_HEIGHT;
+    const doc = document.documentElement;
+    const scrollTop = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+    const viewBottom = scrollTop + window.innerHeight;
+    const currentTop = parseFloat(popup.css("top"));
+    const expandDown = currentTop + estimatedHeight < viewBottom;
+
+    let animProps = { maxHeight: estimatedHeight + "px" };
+    if (!expandDown) {
+        animProps.top = currentTop - estimatedHeight + popup.height() + "px";
+    }
+
+    popup.animate(animProps, RESIZE_SPEED, "swing", () => {
+        popup.css("max-height", "");
+        popup.css("overflow", "");
+        if (!expandDown) {
+            const newTop = parseFloat(popup.css("top"));
+            const newHeight = popup.height();
+            const originalBottom = currentTop + popup_pos.height;
+            popup.css("top", originalBottom - newHeight + "px");
+        }
     });
+
+    return popup_pos;
 }
 
-async function _openPagePopup(url) {
-    await _openFromElement("#link-refresh", async function () {
+async function _openAddPopup(data) {
+    const heightEstimate = data.ctype == "Event" ? HEIGHT_ADD_EVENT : HEIGHT_ADD_TODO;
+    await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
+        let url = "/api/items/add?ctype=" + data.ctype;
+        if (data.date) url += "&date=" + data.date;
+        if (data.hour) url += "&hour=" + data.hour;
         await _loadPage(url);
     });
 }
 
-async function _openFromElement(id, func) {
+async function _openEditPopup(data, url) {
+    const heightEstimate = data.ctype == "Event" ? HEIGHT_ADD_EVENT : HEIGHT_ADD_TODO;
+    await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
+        await _loadPage(url);
+    });
+}
+
+async function _openEditAlarmsPopup(data, url) {
+    let heightEstimate = data.ctype == "Event" ? HEIGHT_ADD_EVENT : HEIGHT_ADD_TODO;
+    heightEstimate += ALARMS_HEIGHT;
+    await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
+        await _loadPage(url);
+    });
+}
+
+async function _openAddCollectionPopup(data) {
+    await _openFromElement(
+        "#" + data.btnid,
+        WIDTH_COLLECTION,
+        HEIGHT_ADD_COLLECTION,
+        async function () {
+            await _loadPage("/api/collections/add");
+        },
+    );
+}
+
+async function _openEditCollectionPopup(data) {
+    await _openFromElement(
+        "#" + data.btnid,
+        WIDTH_COLLECTION,
+        HEIGHT_EDIT_COLLECTION,
+        async function () {
+            await _loadPage("/api/collections/edit?col_id=" + encodeURIComponent(data.col_id));
+        },
+    );
+}
+
+async function _openPagePopup(data, url) {
+    await _openFromElement("#" + data.btnid, data.minWidth, data.heightEstimate, async function () {
+        await _loadPage(url);
+    });
+}
+
+async function _openFromElement(id, minWidth, heightEstimate, func) {
     // remove old content
     $("#popup").html('<div style="height: 300px"></div>');
 
@@ -312,28 +551,116 @@ async function _openFromElement(id, func) {
             10,
         );
 
-        await func();
-        setTimeout(async () => {
-            await _animateOpenPopup();
-            resolve();
-        }, 10);
+        func();
+        await _animateOpenPopup(minWidth, heightEstimate);
+        resolve();
     });
 }
 
 async function _shrinkPopup(pos) {
     await new Promise(function (resolve) {
-        $("#popup").animate(
+        let popup = $("#popup");
+        popup.css("overflow", "hidden");
+        popup.css("max-height", popup.height());
+        popup.css("height", popup.height());
+        popup.animate(
             {
                 left: pos["left"],
                 top: pos["top"],
                 width: pos["width"] + "px",
+                maxHeight: pos["height"] + "px",
             },
             RESIZE_SPEED,
             function () {
+                popup.css("overflow", "");
+                popup.css("max-height", "");
+                popup.css("height", "");
                 resolve();
             },
         );
     });
+}
+
+async function _select(newid) {
+    await new Promise(async function (resolve) {
+        $("#" + newid.id).addClass("ev_current");
+        $("." + newid.jsuid).addClass("ev_selected");
+        setPopupOpen(true);
+
+        let el = document.getElementById(newid.id);
+        const elRect = _pageBoundingBox(el);
+        const popWidth = WIDTH_DETAILS;
+
+        let popup = $("#popup");
+        if (elRect.right + popWidth > window.innerWidth) popup.css("left", elRect.left - popWidth);
+        else popup.css("left", elRect.right);
+        popup.css("width", popWidth + "px");
+        popup.css("top", _visibleAnchorTop(elRect, newid.clickPageY));
+        popup.css("position", "absolute");
+        popup.slideFadeToggle();
+
+        await _loadOccurrence(newid.uid, newid.rid, false);
+        setTimeout(() => {
+            _correctPosition(newid.id);
+            resolve();
+        }, 10);
+    });
+}
+
+async function _deselect(oldid) {
+    await new Promise(function (resolve) {
+        $("#popup").slideFadeToggle(function () {
+            if (oldid) {
+                $("#" + oldid.id).removeClass("ev_current");
+                $("." + oldid.jsuid).removeClass("ev_selected");
+            }
+            setPopupOpen(false);
+            resolve();
+        });
+    });
+}
+
+async function _loadOccurrence(uid, rid, edit) {
+    let url = "/api/items/details?uid=" + uid + "&edit=" + (edit ? "true" : "false");
+    if (rid) url += "&rid=" + rid;
+    await _loadPage(url);
+}
+
+async function _loadPage(url) {
+    await new Promise(function (resolve) {
+        getRequest(url, function (data) {
+            $("#popup").html(data.html);
+            resolve();
+        });
+    });
+}
+
+function closePopup() {
+    fireEvent(new CancelEvent());
+}
+
+function _pageBoundingBox(el) {
+    let rect = el.getBoundingClientRect();
+    const doc = document.documentElement;
+    const left = (window.pageXOffset || doc.scrollLeft) - (doc.clientLeft || 0);
+    const top = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+    rect.x += left;
+    rect.y += top;
+    rect.top += top;
+    rect.bottom += top;
+    rect.left += left;
+    rect.right += left;
+    return rect;
+}
+
+function _inBoundingBox(e, id) {
+    const box = _pageBoundingBox(document.getElementById(id));
+    return (
+        e.pageX >= box.left &&
+        e.pageX <= box.left + box.width &&
+        e.pageY >= box.top &&
+        e.pageY <= box.top + box.height
+    );
 }
 
 // Returns the page-absolute Y coordinate at which the small popup should be anchored (its top
@@ -367,32 +694,6 @@ function _visibleAnchorTop(elRect, clickPageY) {
         return clickPageY;
     }
     return elRect.top;
-}
-
-async function _select(newid) {
-    await new Promise(async function (resolve) {
-        $("#" + newid.id).addClass("ev_current");
-        $("." + newid.jsuid).addClass("ev_selected");
-        setPopupOpen(true);
-
-        let el = document.getElementById(newid.id);
-        const elRect = _pageBoundingBox(el);
-        const popWidth = 600;
-
-        let popup = $("#popup");
-        if (elRect.right + popWidth > window.innerWidth) popup.css("left", elRect.left - popWidth);
-        else popup.css("left", elRect.right);
-        popup.css("width", popWidth + "px");
-        popup.css("top", _visibleAnchorTop(elRect, newid.clickPageY));
-        popup.css("position", "absolute");
-        popup.slideFadeToggle();
-
-        await _loadOccurrence(newid.uid, newid.rid, false);
-        setTimeout(() => {
-            _correctPosition(newid.id);
-            resolve();
-        }, 10);
-    });
 }
 
 // Adjusts the popup's vertical position after its content has loaded and its final height is known.
@@ -431,56 +732,4 @@ function _correctPosition(id) {
     // Ensure we do not push the popup above the current scroll top.
     top = Math.max(top, scrollTop);
     $("#popup").css("top", top);
-}
-
-async function _deselect(oldid) {
-    await new Promise(function (resolve) {
-        $("#popup").slideFadeToggle(function () {
-            if (oldid) {
-                $("#" + oldid.id).removeClass("ev_current");
-                $("." + oldid.jsuid).removeClass("ev_selected");
-            }
-            setPopupOpen(false);
-            resolve();
-        });
-    });
-}
-
-async function _loadOccurrence(uid, rid, edit) {
-    let url = "/api/items/details?uid=" + uid + "&edit=" + (edit ? "true" : "false");
-    if (rid) url += "&rid=" + rid;
-    await _loadPage(url);
-}
-
-async function _loadPage(url) {
-    await new Promise(function (resolve) {
-        getRequest(url, function (data) {
-            $("#popup").html(data.html);
-            resolve();
-        });
-    });
-}
-
-function _pageBoundingBox(el) {
-    let rect = el.getBoundingClientRect();
-    const doc = document.documentElement;
-    const left = (window.pageXOffset || doc.scrollLeft) - (doc.clientLeft || 0);
-    const top = (window.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
-    rect.x += left;
-    rect.y += top;
-    rect.top += top;
-    rect.bottom += top;
-    rect.left += left;
-    rect.right += left;
-    return rect;
-}
-
-function _inBoundingBox(e, id) {
-    const box = _pageBoundingBox(document.getElementById(id));
-    return (
-        e.pageX >= box.left &&
-        e.pageX <= box.left + box.width &&
-        e.pageY >= box.top &&
-        e.pageY <= box.top + box.height
-    );
 }

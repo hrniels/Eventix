@@ -4,7 +4,7 @@
 
 use tempfile::TempDir;
 
-use crate::helper::{CAL_ID, get, make_router, make_state};
+use crate::helper::{CAL_ID, get_raw, make_router, make_state};
 
 use super::write_recurring_event_ics;
 
@@ -25,7 +25,7 @@ async fn occlist_forward_returns_html_and_date() {
     // Request 2 occurrences forward from 2026-04-01.
     let uri =
         format!("/api/items/occlist?uid={uid}&date=D2026-04-01%3BInclusive&dir=Forward&count=2");
-    let (status, body) = get(router, &uri).await;
+    let (status, body) = get_raw(router, &uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body)
@@ -56,7 +56,7 @@ async fn occlist_forward_from() {
     let uri = format!(
         "/api/items/occlist?uid={uid}&date=D2026-04-15%3BInclusive&dir=ForwardFrom&count=1"
     );
-    let (status, body) = get(router, &uri).await;
+    let (status, body) = get_raw(router, &uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -82,7 +82,7 @@ async fn occlist_backwards() {
 
     let uri =
         format!("/api/items/occlist?uid={uid}&date=D2026-05-01%3BInclusive&dir=Backwards&count=2");
-    let (status, body) = get(router, &uri).await;
+    let (status, body) = get_raw(router, &uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -122,7 +122,7 @@ async fn occlist_no_more_pages_returns_null_date() {
     // Request more than the available 2 occurrences.
     let uri =
         format!("/api/items/occlist?uid={uid}&date=D2026-04-01%3BInclusive&dir=Forward&count=10");
-    let (status, body) = get(router, &uri).await;
+    let (status, body) = get_raw(router, &uri).await;
     assert_eq!(status, 200);
 
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -143,7 +143,7 @@ async fn unknown_uid_returns_error() {
     let state = make_state(&cal_dir);
     let router = make_router(state);
 
-    let (status, _) = get(
+    let (status, _) = get_raw(
         router,
         "/api/items/occlist?uid=no-such-uid&date=D2026-04-01%3BInclusive&dir=Forward&count=5",
     )
