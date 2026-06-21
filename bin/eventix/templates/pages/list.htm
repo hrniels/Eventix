@@ -176,7 +176,9 @@
 
     function resetListFilter() {
         $("#keywords").val("");
+        calendarElements().map((cal) => (cal.dataset.selected = "1"));
         initListFilterDirs();
+        updateListCalendarStyles();
         loadListResults(true);
     }
 
