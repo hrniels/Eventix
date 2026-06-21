@@ -212,20 +212,7 @@
             </div>
             <div class="ev_button_right">
                 {% if !read_only %}
-                    {% if let Some(edit) = edit_modes %}
-                        {{ edit|safe }}
-                    {% endif %}
                     {% if owner %}
-                        {% if !occ.is_recurrent() %}
-                            <a
-                                class="ev_button ev_button_normal ev_details_series_action"
-                                href="javascript:fireEvent(new EditEvent(null, '{{ occ.ctype() }}',
-                                                                         '{{ occ.uid() }}', null))"
-                            >
-                                <i class="bi bi-pencil"></i>
-                                <span>{{ "Edit"|t(locale) }}</span>
-                            </a>
-                        {% endif %}
                         {% if occ.ctype() == CalCompType::Todo %}
                             <a
                                 class="ev_button ev_button_good ev_details_complete_action"
@@ -240,6 +227,16 @@
                                 {{ pp|safe }}
                             {% endif %}
                         {% endif %}
+                        {% if !occ.is_recurrent() %}
+                            <a
+                                class="ev_button ev_button_normal ev_details_series_action"
+                                href="javascript:fireEvent(new EditEvent(null, '{{ occ.ctype() }}',
+                                                                         '{{ occ.uid() }}', null))"
+                            >
+                                <i class="bi bi-pencil"></i>
+                                <span>{{ "Edit"|t(locale) }}</span>
+                            </a>
+                        {% endif %}
                     {% else %}
                         {% if let Some(series_partstat) = series_partstat %}
                             {{ series_partstat|safe }}
@@ -247,6 +244,9 @@
                         {% if let Some(occ_partstat) = occ_partstat %}
                             {{ occ_partstat|safe }}
                         {% endif %}
+                    {% endif %}
+                    {% if let Some(edit) = edit_modes %}
+                        {{ edit|safe }}
                     {% endif %}
                 {% endif %}
             </div>
