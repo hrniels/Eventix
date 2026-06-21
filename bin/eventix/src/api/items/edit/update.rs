@@ -56,9 +56,7 @@ fn action_update(
 
     let last_modified = util::system_time_stamp(file.last_modified()?);
     if last_modified > form.edit_start {
-        page.add_error(format!(
-            "This component has been modified. Please restart the editing."
-        ));
+        page.add_error("This component has been modified. Please restart the editing.");
         return Ok((false, None));
     }
 
