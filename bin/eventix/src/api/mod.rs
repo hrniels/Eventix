@@ -93,11 +93,10 @@ impl IntoResponse for JsonError {
     fn into_response(self) -> Response {
         tracing::debug!("request failed: {:?}", self.inner);
 
-        let body = Json(json!({
-            "error": self.generate_message(),
-        }));
-
-        (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+        Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(self.generate_message()))
+            .unwrap()
     }
 }
 
@@ -151,10 +150,8 @@ async fn json_error_middleware(req: Request<Body>, next: Next) -> Response {
             }
         };
 
-        resp.headers_mut().append(
-            "Content-Type",
-            HeaderValue::from_str("application/json").unwrap(),
-        );
+        resp.headers_mut()
+            .insert("Content-Type", HeaderValue::from_static("application/json"));
 
         return resp;
     } else {
