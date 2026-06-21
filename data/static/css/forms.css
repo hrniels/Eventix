@@ -58,7 +58,7 @@ fieldset.ev_form {
 .ev_form_row_header .ev_form_row_label {
     padding: 0;
     flex-shrink: 0;
-    min-width: 7.5em;
+    min-width: 8em;
 }
 
 .ev_form_row_collapsible .ev_form_row_header {
