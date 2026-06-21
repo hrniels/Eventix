@@ -18,7 +18,7 @@ use ksni::blocking::{Handle, TrayMethods};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 use webkit6::{
-    NavigationPolicyDecision, PolicyDecisionType, WebView,
+    NavigationPolicyDecision, PolicyDecisionType, WebContext, WebView,
     prelude::{PolicyDecisionExt, WebViewExt},
 };
 use xdg::BaseDirectories;
@@ -182,7 +182,9 @@ fn main() {
             window.maximize();
         }
 
-        let webview = WebView::new();
+        let context = WebContext::new();
+        context.set_cache_model(webkit6::CacheModel::DocumentViewer);
+        let webview = WebView::builder().web_context(&context).build();
         let settings = WebViewExt::settings(&webview).expect("webview settings");
         settings.set_enable_developer_extras(true);
         // smooth scrolling feels really laggy, so disable it
