@@ -54,6 +54,7 @@
 "error.import_prepare" = "Die Vorbereitung des Imports ist fehlgeschlagen."
 "error.import_no_calendar" = "Es existiert kein Kalender für diesen Import."
 "error.import_failed" = "Der Import ist fehlgeschlagen."
+"error.component_was_modified" = "Das Element wurde geändert. Bitte starte die Bearbeitung erneut."
 
 "help.jump_ymd" = "Springe zu <month> und <day> in <year> (z.B., 2019-02-14)"
 "help.jump_w" = "Springe zu <week> in <year>, falls angegeben, oder im aktuellen Jahr"

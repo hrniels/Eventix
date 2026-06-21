@@ -54,6 +54,7 @@
 "error.import_prepare" = "Preparing the import failed."
 "error.import_no_calendar" = "No calendar is available for this import."
 "error.import_failed" = "The import failed."
+"error.component_was_modified" = "This component has been modified. Please restart the editing."
 
 "help.jump_ymd" = "Jump to <month> and <day> of <year> (e.g., 2019-02-14)"
 "help.jump_w" = "Jump to <week> of <year>, if given, or the current year"
