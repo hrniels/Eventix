@@ -145,7 +145,7 @@ FormExpandShrink.registerShortener("datetimerange", function (expanded) {
         }
     }
 
-    if (!fromValue && !toValue) return "None";
+    if (!fromValue && !toValue) return formStrings().none;
     let res = fromValue + " - " + toValue;
     if (!allDay && tz.value) res += ", " + tz.value;
     return res;
@@ -155,10 +155,11 @@ FormExpandShrink.registerShortener("alarm", function (expanded) {
     const personalMode = expanded.parentElement.querySelector("input[id$='_mode_personal']");
     const isPersonal = personalMode?.checked ?? false;
 
+    const s = formStrings();
     const panelId = isPersonal ? "_panel_personal" : "_panel_calendar";
-    const prefix = isPersonal ? "Personal: " : "Calendar: ";
+    const prefix = isPersonal ? s.personal + ": " : s.calendar + ": ";
     const panel = expanded.querySelector("[id$='" + panelId + "']");
-    if (!panel) return prefix + "None";
+    if (!panel) return prefix + s.none;
 
     const checkedTrigger = panel.querySelector("input[name$='[trigger]']:checked");
 
@@ -171,7 +172,7 @@ FormExpandShrink.registerShortener("alarm", function (expanded) {
         const durunitText = durunit?.options[durunit.selectedIndex]?.textContent.trim() || "";
         const durtypeText = durtype?.options[durtype.selectedIndex]?.textContent.trim() || "";
 
-        if (!durValue) return prefix + "Relative";
+        if (!durValue) return prefix + s.relative;
         return prefix + [durValue, durunitText, durtypeText].filter(Boolean).join(" ");
     }
 
@@ -182,11 +183,11 @@ FormExpandShrink.registerShortener("alarm", function (expanded) {
         const dateValue = dateInput?.value.trim() || "";
         const timeValue = timeInput?.value.trim() || "";
 
-        if (!dateValue && !timeValue) return prefix + "Absolute";
+        if (!dateValue && !timeValue) return prefix + s.absolute;
         return prefix + [dateValue, timeValue].filter(Boolean).join(" ");
     }
 
-    return prefix + "None";
+    return prefix + s.none;
 });
 
 FormExpandShrink.registerShortener("recur", function (expanded) {
@@ -194,21 +195,22 @@ FormExpandShrink.registerShortener("recur", function (expanded) {
     if (ro) return ro.innerHTML.replace("<br>", ", ");
 
     const freq = expanded.querySelector("input[id$='_freq']")?.value;
+    const s = formStrings();
     if (freq) {
         switch (freq) {
             case "HOURLY":
-                return "Hourly";
+                return s.hourly;
             case "DAILY":
-                return "Daily";
+                return s.daily;
             case "WEEKLY":
-                return "Weekly";
+                return s.weekly;
             case "MONTHLY":
-                return "Monthly";
+                return s.monthly;
             case "YEARLY":
-                return "Annually";
+                return s.annually;
         }
     }
-    return "None";
+    return s.none;
 });
 
 FormExpandShrink.registerShortener("attendees", function (expanded) {
@@ -222,9 +224,10 @@ FormExpandShrink.registerShortener("attendees", function (expanded) {
         }
     });
 
+    const s = formStrings();
     if (names.length === 0) {
         const container = expanded.querySelector("[id$='-attendees']");
-        if (container && container.textContent.trim() === "-") return "None";
+        if (container && container.textContent.trim() === "-") return s.none;
         const newInput = expanded.querySelector("[id$='-new-attendee']");
         if (newInput && newInput.value.trim()) {
             const displayName = attendeeDisplayName(newInput.value.trim());
@@ -232,9 +235,9 @@ FormExpandShrink.registerShortener("attendees", function (expanded) {
         }
     }
 
-    if (names.length === 0) return "None";
+    if (names.length === 0) return s.none;
     if (names.length <= 3) return names.join(", ");
 
     const extra = names.length - 3;
-    return `${names.slice(0, 3).join(", ")} and ${extra} more`;
+    return s.andMore.replace("{}", extra);
 });
