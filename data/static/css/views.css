@@ -276,6 +276,18 @@
     gap: 0.5em;
 }
 
+.ev_list_top {
+    border-bottom: 0px !important;
+    border-bottom-left-radius: 0px !important;
+    border-bottom-right-radius: 0px !important;
+}
+
+.ev_list_bottom {
+    border-top: 0px !important;
+    border-top-left-radius: 0px !important;
+    border-top-right-radius: 0px !important;
+}
+
 .ev_list_header_title {
     margin-left: auto;
 }
