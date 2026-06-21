@@ -396,7 +396,7 @@
     text-overflow: ellipsis;
     display: inline-block;
     vertical-align: middle;
-    text-wrap: nowrap;
+    white-space: nowrap;
     max-width: 80%;
 }
 
