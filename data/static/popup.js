@@ -380,6 +380,10 @@ async function fireEvent(ev) {
 $(document).mousedown(function (e) {
     if (e.target.closest(".ev_layer")) return;
 
+    if (e.target.closest(".ui-datepicker")) return;
+    if (e.target.closest(".clockpicker-popover")) return;
+    if (e.target.closest(".ui-autocomplete")) return;
+
     let popup = document.getElementById("popup");
     if (!popup.contains(e.target) && !_inBoundingBox(e, "popup")) fireEvent(new DeselectEvent());
 });
