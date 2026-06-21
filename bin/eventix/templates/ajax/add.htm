@@ -193,7 +193,11 @@
         setPersonalAlarms($("#calendar").val());
 
         FormExpandShrink.init("#form-container");
-        setTimeout(() => $("#summary").focus(), 50);
+        setTimeout(() => {
+            let input = $("#summary")[0];
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+        }, 50);
     });
 
     bindContentHandler("page-content", document, "keydown", function (e) {
