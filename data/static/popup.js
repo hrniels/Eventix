@@ -309,13 +309,13 @@ class PageEvent extends Event {
     async trigger(state) {
         switch (state.name) {
             case "init":
-                _openPageLayer();
+                _openPageLayer(true);
                 await _openPagePopup(this.data, this.data["url"]);
                 return new PageState(this.data["url"]);
 
             case "small":
             case "large":
-                _openPageLayer();
+                _openPageLayer(true);
                 await _loadPage(this.data["url"]);
                 await _animateOpenPopup(this.data["minWidth"], this.data["heightEstimate"]);
                 return new PageState(this.data["url"]);
@@ -400,10 +400,10 @@ function _pageLayer() {
     return window.ev.getLayer("popup-layer");
 }
 
-function _openPageLayer() {
+function _openPageLayer(animate = false) {
     _pageLayer().open(function () {
         fireEvent(new DeselectEvent());
-    });
+    }, animate);
 }
 
 function _closePageLayer() {

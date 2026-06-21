@@ -1,3 +1,5 @@
+const LAYER_SPEED = 150;
+
 window.ev.layers = {};
 
 class EvLayer {
@@ -16,10 +18,14 @@ class EvLayer {
         };
     }
 
-    open(dismissHandler = null) {
+    open(dismissHandler = null, animate = false) {
         this.close();
         this.dismissHandler = dismissHandler;
         this.element.hidden = false;
+
+        if (animate) {
+            $(this.element).css("opacity", 0).fadeTo(LAYER_SPEED, 1);
+        }
 
         if (dismissHandler !== null) {
             $(this.element).on("mousedown", this.pointerHandler);
