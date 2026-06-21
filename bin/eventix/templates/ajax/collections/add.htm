@@ -8,12 +8,13 @@
                         <div class="ev_form_row_label">
                             <i class="bi bi-collection"></i>
                             {{ "Name"|t(locale) }} *
+                            <i
+                                class="bi bi-question-circle"
+                                title="{{ "info.collection_name"|t(locale) }}"
+                            ></i>
                         </div>
                         <div class="ev_form_row_collapsed">
-                            <div class="ev_syncer_inputs">
-                                <input type="text" id="name" name="name" value="{{ name }}" />
-                                <div>{{ "info.collection_name"|t(locale) }}</div>
-                            </div>
+                            <input type="text" id="name" name="name" value="{{ name }}" />
                         </div>
                     </div>
                 </div>

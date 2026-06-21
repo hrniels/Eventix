@@ -50,8 +50,9 @@
     </div>
     <div class="ev_syncer_field">
         <label for="{{ id }}_vdir_email" class="ev_syncer_label"
-            >{{ "Email Address"|t(locale) }} *</label
-        >
+            >{{ "Email Address"|t(locale) }} *
+            <i class="bi bi-question-circle" title="{{ "info.name_and_email"|t(locale) }}"></i>
+        </label>
         <div class="ev_syncer_inputs">
             <input
                 type="text"
@@ -60,7 +61,6 @@
                 value="{{ value.vdir_email }}"
                 class="ev_syncer_input"
             />
-            <div>{{ "info.name_and_email"|t(locale) }}</div>
         </div>
     </div>
     <div class="ev_syncer_separator"></div>
@@ -136,8 +136,14 @@
     </div>
     <div class="ev_syncer_field">
         <label for="{{ id }}_vdir_password" class="ev_syncer_label"
-            >{{ "Password"|t(locale) }}:</label
-        >
+            >{{ "Password"|t(locale) }}
+            {% if is_edit %}
+                <i
+                    class="bi bi-question-circle"
+                    title="{{ "info.edit_password_help"|t(locale) }}"
+                ></i>
+            {% endif %}
+        </label>
         <div class="ev_syncer_inputs">{{ vdir_pw()|safe }}</div>
     </div>
 </div>
@@ -163,8 +169,9 @@
     </div>
     <div class="ev_syncer_field">
         <label for="{{ id }}_o365_email" class="ev_syncer_label"
-            >{{ "Email Address"|t(locale) }} *</label
-        >
+            >{{ "Email Address"|t(locale) }} *
+            <i class="bi bi-question-circle" title="{{ "info.name_and_email_o365"|t(locale) }}"></i>
+        </label>
         <div class="ev_syncer_inputs">
             <input
                 type="text"
@@ -173,7 +180,6 @@
                 value="{{ value.o365_email }}"
                 class="ev_syncer_input"
             />
-            <div>{{ "info.name_and_email_o365"|t(locale) }}</div>
         </div>
     </div>
     <div class="ev_syncer_separator"></div>

@@ -394,10 +394,6 @@ impl<'a> SyncerTemplate<'a> {
     }
 
     pub fn vdir_pw(&self) -> PasswordTemplate {
-        PasswordTemplate::new(
-            self.locale.clone(),
-            format!("{}[vdir_pw]", self.name),
-            self.is_edit,
-        )
+        PasswordTemplate::new(format!("{}[vdir_pw]", self.name))
     }
 }
