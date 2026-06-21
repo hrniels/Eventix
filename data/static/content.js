@@ -68,8 +68,6 @@ const PAGE_SLUGS = {
     "/pages/weekly": "weekly",
     "/pages/list": "list",
     "/pages/calendars": "calendars",
-    "/pages/collections/add": "collections/add",
-    "/pages/collections/edit": "collections/edit",
 };
 
 // Navigates to a SPA page by AJAX-loading its content fragment into
@@ -86,20 +84,6 @@ function navigateTo(url) {
     }
     const queryStr = parsed.search ? parsed.search.slice(1) : "";
     loadPageContent(slug, "#page-content", queryStr, null);
-}
-
-// Navigates to an add/edit form page via AJAX, appending the current URL as the
-// `prev` parameter so the form's Back button knows where to return. If the current
-// page already carries a `prev` parameter (i.e. the user is already on a form),
-// that earlier origin is used instead, so the chain always points back to the
-// last non-form page.
-function loadWithPrev(url) {
-    const prevFull = document.location.href;
-    const prevUrl = new URL(prevFull);
-    const prevPrev = prevUrl.searchParams.get("prev");
-    const fullUrl = new URL(url, prevUrl.origin);
-    fullUrl.searchParams.append("prev", prevPrev ?? prevFull);
-    navigateTo(fullUrl.toString());
 }
 
 // Replaces the content of the given container with `html`, making sure that our state is refreshed

@@ -1,0 +1,62 @@
+<form id="edit-form" method="post" action="/api/collections/edit?col_id={{ col_id }}">
+    <div class="ev_border">
+        <fieldset class="ev_form">
+            <h1 class="ev_header">{{ "Edit Collection"|t(locale) }}</h1>
+            <dl>
+                <dt>{{ "Name"|t(locale) }}:</dt>
+                <dd>{{ col_id }}</dd>
+            </dl>
+            <dl>
+                <dt>{{ "Syncer"|t(locale) }}:</dt>
+                <dd>{{ syncer|safe }}</dd>
+            </dl>
+            <div class="ev_error_banner" id="form-errors" style="display: none;">
+                <div class="ev_error_banner_label">{{ "Error"|t(locale) }}</div>
+                <div class="ev_error_banner_msg" id="form-error-msg"></div>
+            </div>
+            <div class="ev_submit">
+                <div class="ev_submit_row">
+                    <div class="ev_submit_left"></div>
+                    <div class="ev_submit_center"></div>
+                    <div class="ev_submit_right">
+                        <a class="ev_button ev_button_normal" href="javascript:submitEditForm()">
+                            <i class="bi bi-floppy2-fill"></i>
+                            <span>{{ "Save"|t(locale) }}</span>
+                        </a>
+                        <a class="ev_button ev_button_normal" href="javascript:closePopup()">
+                            <i class="bi bi-x-circle"></i>
+                            <span>{{ "Cancel"|t(locale) }}</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+    </div>
+</form>
+
+<script>
+    function submitEditForm() {
+        formRequest("edit-form", submitFormCallback, "json");
+    }
+
+    function submitFormCallback(data) {
+        if (!data.html) {
+            closePopup();
+            reloadContent();
+        } else {
+            $("#popup").html(data.html);
+            if (data.errors && data.errors.length > 0) {
+                $("#form-error-msg").text(data.errors[0]);
+                $("#form-errors").show();
+            }
+        }
+    }
+
+    bindContentHandler("page-content", document, "keydown", function (e) {
+        if (e.ctrlKey && e.code == "Enter") {
+            submitEditForm();
+            return false;
+        }
+        return true;
+    });
+</script>

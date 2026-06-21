@@ -12,6 +12,9 @@ const HEIGHT_LOG = 474;
 const HEIGHT_HELP = 729;
 const HEIGHT_AUTH = 200;
 const ALARMS_HEIGHT = 100;
+const WIDTH_COLLECTION = 500;
+const HEIGHT_ADD_COLLECTION = 260;
+const HEIGHT_EDIT_COLLECTION = 260;
 
 class State {
     constructor(name) {
@@ -210,6 +213,55 @@ class EditEvent extends Event {
     }
 }
 
+class AddCollectionEvent extends Event {
+    constructor(btnid) {
+        super("addcollection");
+        this.data = {
+            btnid: btnid,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+            case "small":
+                if (state.name === "small") {
+                    await _deselect(state.ids);
+                }
+                await _openAddCollectionPopup(this.data);
+                return new FormState(null, null, null);
+
+            default:
+                return state;
+        }
+    }
+}
+
+class EditCollectionEvent extends Event {
+    constructor(btnid, col_id) {
+        super("editcollection");
+        this.data = {
+            btnid: btnid,
+            col_id: col_id,
+        };
+    }
+
+    async trigger(state) {
+        switch (state.name) {
+            case "init":
+            case "small":
+                if (state.name === "small") {
+                    await _deselect(state.ids);
+                }
+                await _openEditCollectionPopup(this.data);
+                return new FormState(null, null, null);
+
+            default:
+                return state;
+        }
+    }
+}
+
 class CancelEvent extends Event {
     constructor() {
         super("cancel");
@@ -300,6 +352,14 @@ function createAuthEvent(cal, url, op_url, spinnerId) {
 
 function createAddEvent(btnid, ctype, date, hour) {
     return new AddEvent(btnid, ctype, date, hour);
+}
+
+function createAddCollectionEvent(btnid) {
+    return new AddCollectionEvent(btnid);
+}
+
+function createEditCollectionEvent(btnid, col_id) {
+    return new EditCollectionEvent(btnid, col_id);
 }
 
 let state = new InitState();
@@ -442,6 +502,28 @@ async function _openEditAlarmsPopup(data, url) {
     await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
         await _loadPage(url);
     });
+}
+
+async function _openAddCollectionPopup(data) {
+    await _openFromElement(
+        "#" + data.btnid,
+        WIDTH_COLLECTION,
+        HEIGHT_ADD_COLLECTION,
+        async function () {
+            await _loadPage("/api/collections/add");
+        },
+    );
+}
+
+async function _openEditCollectionPopup(data) {
+    await _openFromElement(
+        "#" + data.btnid,
+        WIDTH_COLLECTION,
+        HEIGHT_EDIT_COLLECTION,
+        async function () {
+            await _loadPage("/api/collections/edit?col_id=" + encodeURIComponent(data.col_id));
+        },
+    );
 }
 
 async function _openPagePopup(data, url) {

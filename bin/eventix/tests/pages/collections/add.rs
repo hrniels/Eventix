@@ -92,7 +92,7 @@ async fn add_filesystem_success() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state.clone());
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_success(&resp);
@@ -114,7 +114,7 @@ async fn add_vdirsync_success() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state.clone());
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_success(&resp);
@@ -135,7 +135,7 @@ async fn add_o365_success() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state.clone());
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_success(&resp);
@@ -157,7 +157,7 @@ async fn add_empty_name() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -178,7 +178,7 @@ async fn add_invalid_name_chars() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -199,7 +199,7 @@ async fn add_duplicate_name() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -218,7 +218,7 @@ async fn add_filesystem_empty_path() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -237,7 +237,7 @@ async fn add_filesystem_nonexistent_path() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -256,7 +256,7 @@ async fn add_vdirsync_empty_name() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -278,7 +278,7 @@ async fn add_vdirsync_invalid_email() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -300,7 +300,7 @@ async fn add_vdirsync_invalid_url() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -325,7 +325,7 @@ async fn add_vdirsync_time_span_years_too_large() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -344,7 +344,7 @@ async fn add_o365_empty_name() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -366,7 +366,7 @@ async fn add_o365_invalid_email() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);
@@ -391,7 +391,7 @@ async fn add_o365_time_span_years_too_large() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let (status, resp) = helper::post(router, "/collections/add", &body).await;
+    let (status, resp) = helper::post(router, "/api/collections/add", &body).await;
 
     assert_eq!(status, StatusCode::OK);
     assert_error(&resp);

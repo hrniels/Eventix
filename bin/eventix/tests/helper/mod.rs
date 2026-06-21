@@ -265,12 +265,12 @@ pub fn make_router(state: EventixState) -> Router {
     Router::new().nest("/api/items", eventix::api::items::router(state))
 }
 
-/// Builds an axum `Router` wiring only the collections page endpoints.
+/// Builds an axum `Router` wiring only the collections API endpoints.
 ///
-/// Routes are mounted at `/collections`, matching the path used by the real application.
+/// Routes are mounted at `/api/collections`, matching the path used by the real application.
 #[allow(dead_code)]
 pub fn make_collections_router(state: EventixState) -> Router {
-    Router::new().nest("/collections", eventix::pages::collections::router(state))
+    Router::new().nest("/api/collections", eventix::api::collections::router(state))
 }
 
 /// Builds an axum `Router` wiring only the calendars API endpoints.

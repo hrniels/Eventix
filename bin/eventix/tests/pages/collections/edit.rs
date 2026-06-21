@@ -95,7 +95,7 @@ async fn edit_filesystem_success() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state.clone());
-    let uri = format!("/collections/edit?col_id={COL_ID}");
+    let uri = format!("/api/collections/edit?col_id={COL_ID}");
     let (status, resp) = helper::post(router, &uri, &body).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -119,7 +119,7 @@ async fn edit_filesystem_empty_path() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let uri = format!("/collections/edit?col_id={COL_ID}");
+    let uri = format!("/api/collections/edit?col_id={COL_ID}");
     let (status, resp) = helper::post(router, &uri, &body).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -139,7 +139,7 @@ async fn edit_filesystem_nonexistent_path() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let uri = format!("/collections/edit?col_id={COL_ID}");
+    let uri = format!("/api/collections/edit?col_id={COL_ID}");
     let (status, resp) = helper::post(router, &uri, &body).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -160,7 +160,7 @@ async fn edit_syncer_type_change() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let uri = format!("/collections/edit?col_id={COL_ID}");
+    let uri = format!("/api/collections/edit?col_id={COL_ID}");
     let (status, resp) = helper::post(router, &uri, &body).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -179,7 +179,7 @@ async fn edit_vdirsync_success() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state.clone());
-    let uri = format!("/collections/edit?col_id={COL_ID}");
+    let uri = format!("/api/collections/edit?col_id={COL_ID}");
     let (status, resp) = helper::post(router, &uri, &body).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -202,7 +202,7 @@ async fn edit_vdirsync_invalid_email() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let uri = format!("/collections/edit?col_id={COL_ID}");
+    let uri = format!("/api/collections/edit?col_id={COL_ID}");
     let (status, resp) = helper::post(router, &uri, &body).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -228,7 +228,7 @@ async fn edit_vdirsync_time_span_years_too_large() {
     let body = encode_form(&fields);
 
     let router = make_collections_router(state);
-    let uri = format!("/collections/edit?col_id={COL_ID}");
+    let uri = format!("/api/collections/edit?col_id={COL_ID}");
     let (status, resp) = helper::post(router, &uri, &body).await;
 
     assert_eq!(status, StatusCode::OK);
@@ -250,7 +250,8 @@ async fn edit_unknown_col_id() {
 
     let router = make_collections_router(state);
     // Use a col_id that does not exist in the settings.
-    let (status, _resp) = helper::post(router, "/collections/edit?col_id=nonexistent", &body).await;
+    let (status, _resp) =
+        helper::post(router, "/api/collections/edit?col_id=nonexistent", &body).await;
 
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
