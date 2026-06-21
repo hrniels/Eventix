@@ -22,6 +22,7 @@ use std::sync::Arc;
 use crate::api::JsonError;
 use crate::comps::editmodes::EditModesTemplate;
 use crate::comps::partstat::PartStatTemplate;
+use crate::comps::postpone::PostponeTemplate;
 use crate::html::{filters, to_id};
 use crate::objects::DayOccurrence;
 
@@ -60,6 +61,7 @@ struct ListOccurrence<'a> {
     occ: DayOccurrence<'a>,
     edit_modes: EditModesTemplate,
     partstat: Option<PartStatTemplate>,
+    postpone: Option<PostponeTemplate>,
     owner: bool,
     read_only: bool,
 }
@@ -105,6 +107,22 @@ impl<'a> ListOccurrence<'a> {
                 occ.uid().clone(),
                 occ.rid_str(),
             ),
+            postpone: if occ.ctype() == CalCompType::Todo
+                && occ.end_or_due().is_some()
+                && occ.todo_status().unwrap_or(CalTodoStatus::NeedsAction)
+                    != CalTodoStatus::Completed
+                && owner
+                && !read_only
+            {
+                Some(PostponeTemplate::new(
+                    locale.clone(),
+                    format!("postpone-{}-{}", to_id(occ.uid()), to_id(occ.rid_str())),
+                    occ.uid().clone(),
+                    Some(occ.rid_str()),
+                ))
+            } else {
+                None
+            },
             occ,
             owner,
             read_only,

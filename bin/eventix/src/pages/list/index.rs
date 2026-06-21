@@ -18,6 +18,7 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::comps::postpone::PostponeTemplate;
 use crate::comps::{
     organizer::OrganizerTemplate, pagination::PaginationTemplate, partstat::PartStatTemplate,
 };
@@ -128,6 +129,7 @@ struct ListComponent<'a> {
     alarms: Option<Vec<CalAlarm>>,
     part_stat: Option<CalPartStat>,
     part_stat_btns: Option<PartStatTemplate>,
+    postpone: Option<PostponeTemplate>,
     date_range: String,
     start_display: Option<String>,
     end_display: Option<String>,
@@ -216,6 +218,26 @@ impl<'a> ListComponent<'a> {
                     read_only,
                 )
             }),
+            postpone: if c.ctype() == CalCompType::Todo
+                && c.end_or_due().is_some()
+                && !c.is_recurrent()
+                && c.as_todo()
+                    .unwrap()
+                    .status()
+                    .unwrap_or(CalTodoStatus::NeedsAction)
+                    != CalTodoStatus::Completed
+                && owner
+                && !read_only
+            {
+                Some(PostponeTemplate::new(
+                    locale.clone(),
+                    format!("postpone-{}", to_id(c.uid())),
+                    occ.uid().clone(),
+                    None,
+                ))
+            } else {
+                None
+            },
             part_stat,
             date_range,
             start_display,

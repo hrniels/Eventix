@@ -134,3 +134,21 @@ function deleteCollection(col_id, onDeleted) {
 function setLang(lang) {
     postRequest("/api/setlang?lang=" + lang, reloadPage, null, false);
 }
+
+function toJsId(id) {
+    if (!id) return id;
+    return String(id).replace(/[^a-zA-Z0-9-_]/g, "_");
+}
+
+function reloadAfterPartStatPostpone(e, data) {
+    const rid = data.rid ? toJsId(data.rid) : null;
+    const rowId = rid ? "occrow_" + rid : null;
+    if (rowId && document.getElementById(rowId)) {
+        refreshRow(data.uid, data.rid, rid);
+    } else {
+        reloadContentAndDeselect();
+    }
+}
+
+$(document).on("partstat-changed", reloadAfterPartStatPostpone);
+$(document).on("postpone-changed", reloadAfterPartStatPostpone);

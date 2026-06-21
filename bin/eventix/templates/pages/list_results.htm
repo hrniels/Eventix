@@ -78,6 +78,9 @@
                                 <span>{{ "Complete"|t(locale) }}</span>
                             </a>
                         {% endif %}
+                        {% if let Some(pp) = c.postpone %}
+                            {{ pp|safe }}
+                        {% endif %}
                     {% endif %}
                     {% if c.owner %}
                         {% if !c.read_only %}

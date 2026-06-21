@@ -35,69 +35,74 @@
             }}
         </td>
         <td>
-            {% if !occ.read_only %}
-                {% if occ.owner %}
-                    {{ occ.edit_modes|safe }}
-                    {% if occ.organizer().is_some() %}
-                        {% if occ.status_class() != Some(String::from("Cancelled")) %}
+            <div class="ev_occlist_action_buttons">
+                {% if !occ.read_only %}
+                    {% if occ.owner %}
+                        {{ occ.edit_modes|safe }}
+                        {% if occ.organizer().is_some() %}
+                            {% if occ.status_class() != Some(String::from("Cancelled")) %}
+                                <a
+                                    class="ev_button ev_button_critical"
+                                    href="javascript:cancelAndRefresh('{{ occ.uid() }}',
+                                                                  '{{ occ.rid_str() }}',
+                                                                  '{{ occ.rid_str()|to_id }}')"
+                                >
+                                    <i class="bi bi-dash-circle"></i>
+                                    <span>{{ "Cancel"|t(locale) }}</span>
+                                </a>
+                            {% endif %}
+                        {% else %}
                             <a
-                                class="ev_button ev_button_critical ev_occlist_owner_action"
-                                href="javascript:cancelAndRefresh('{{ occ.uid() }}',
+                                class="ev_button ev_button_normal"
+                                href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
                                                                   '{{ occ.rid_str() }}',
                                                                   '{{ occ.rid_str()|to_id }}')"
                             >
-                                <i class="bi bi-dash-circle"></i>
-                                <span>{{ "Cancel"|t(locale) }}</span>
+                                {% if !occ.is_excluded() %}
+                                    <i class="bi bi-dash-circle"></i>
+                                    <span>{{ "Exclude"|t(locale) }}</span>
+                                {% else %}
+                                    <i class="bi bi-plus-circle"></i>
+                                    <span>{{ "Include"|t(locale) }}</span>
+                                {% endif %}
                             </a>
                         {% endif %}
                     {% else %}
-                        <a
-                            class="ev_button ev_button_normal ev_occlist_owner_action"
-                            href="javascript:toggleExclAndRefresh('{{ occ.uid() }}',
-                                                                  '{{ occ.rid_str() }}',
-                                                                  '{{ occ.rid_str()|to_id }}')"
-                        >
-                            {% if !occ.is_excluded() %}
-                                <i class="bi bi-dash-circle"></i>
-                                <span>{{ "Exclude"|t(locale) }}</span>
-                            {% else %}
-                                <i class="bi bi-plus-circle"></i>
-                                <span>{{ "Include"|t(locale) }}</span>
-                            {% endif %}
-                        </a>
-                    {% endif %}
-                {% else %}
-                    {% if personal_alarms %}
-                        <a
-                            id="alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}"
-                            class="ev_button ev_button_normal ev_occlist_alarm_action"
-                            href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}',
+                        {% if personal_alarms %}
+                            <a
+                                id="alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}"
+                                class="ev_button ev_button_normal ev_occlist_alarm_action"
+                                href="javascript:editAlarms('alarm-button-{{ occ.uid() }}-{{ occ.rid_str()|to_id }}',
                                                         '{{ occ.ctype() }}',
                                                         '{{ occ.uid() }}',
                                                         '{{ occ.rid_str() }}')"
-                        >
-                            <i class="bi bi-pencil"></i>
-                            <span>{{ "Alarms_short"|t(locale) }}</span>
-                        </a>
+                            >
+                                <i class="bi bi-pencil"></i>
+                                <span>{{ "Alarms_short"|t(locale) }}</span>
+                            </a>
+                        {% endif %}
+                        {% if let Some(partstat) = occ.partstat %}
+                            <span class="ev_occlist_partstat"> {{ partstat|safe }} </span>
+                        {% endif %}
                     {% endif %}
-                    {% if let Some(partstat) = occ.partstat %}
-                        <span class="ev_occlist_partstat"> {{ partstat|safe }} </span>
-                    {% endif %}
-                {% endif %}
-                {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
-                    {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
-                        <a
-                            class="ev_button ev_button_good ev_occlist_complete_action"
-                            href="javascript:completeTodoAndRefresh('{{ occ.uid() }}',
+                    {% if !occ.is_excluded() && occ.ctype() == CalCompType::Todo %}
+                        {% if let Some(pp) = occ.postpone %}
+                            {{ pp|safe }}
+                        {% endif %}
+                        {% if occ.todo_status().unwrap() != CalTodoStatus::Completed %}
+                            <a
+                                class="ev_button ev_button_good"
+                                href="javascript:completeTodoAndRefresh('{{ occ.uid() }}',
                                                                     '{{ occ.rid_str() }}',
                                                                     '{{ occ.rid_str()|to_id }}')"
-                        >
-                            <i class="bi bi-check-lg"></i>
-                            <span>{{ "Complete"|t(locale) }}</span>
-                        </a>
+                            >
+                                <i class="bi bi-check-lg"></i>
+                                <span>{{ "Complete"|t(locale) }}</span>
+                            </a>
+                        {% endif %}
                     {% endif %}
                 {% endif %}
-            {% endif %}
+            </div>
         </td>
     </tr>
 {% endfor %}
