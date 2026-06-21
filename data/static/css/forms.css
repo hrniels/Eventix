@@ -69,6 +69,11 @@ fieldset.ev_form {
     padding: 0 0.6em;
 }
 
+.ev_form_row_header .ev_form_row_expanded {
+    flex: 1;
+    min-width: 0;
+}
+
 .ev_form_row.collapsed .ev_form_row_expanded {
     display: none;
 }

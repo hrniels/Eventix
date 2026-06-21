@@ -169,11 +169,14 @@
         </div>
 
         {% if mode == CalendarBoxMode::Edit %}
-            <div class="ev_cal_box_body">
-                <table width="100%" class="ev_table ev_noborder">
-                    <tr>
-                        <td width="20%"><b>{{ "Folder"|t(locale) }}:</b></td>
-                        <td>
+            <div class="ev_form_rows">
+                <div class="ev_form_row">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-folder"></i>
+                            {{ "Folder"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_expanded">
                             {% if let SyncerType::FileSystem { .. } = col.syncer() %}
                                 <input
                                     type="text"
@@ -185,15 +188,20 @@
                                 <input type="hidden" name="folder" value="{{ cal.folder() }}" />
                                 {{ cal.folder() }}
                             {% endif %}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><b>{{ "Color"|t(locale) }}:</b></td>
-                        <td>
+                        </div>
+                    </div>
+                </div>
+                <div class="ev_form_row">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-palette"></i>
+                            {{ "Color"|t(locale) }}
+                        </div>
+                        <div class="ev_form_row_expanded">
                             <div class="ev_cal_box_color_grid">
                                 <div>
                                     <label for="bgcolor_{{ cal.id() }}">
-                                        {{ "Background"|t(locale) }}:
+                                        {{ "Background"|t(locale) }}
                                     </label>
                                 </div>
                                 <div>
@@ -205,7 +213,7 @@
                                     />
                                 </div>
                                 <div>
-                                    <span>{{ "Timed"|t(locale) }}:</span>
+                                    <span>{{ "Timed"|t(locale) }}</span>
                                 </div>
                                 <div>
                                     <span
@@ -216,7 +224,7 @@
                                 </div>
                                 <div>
                                     <label for="fgcolor_{{ cal.id() }}">
-                                        {{ "Foreground"|t(locale) }}:
+                                        {{ "Foreground"|t(locale) }}
                                     </label>
                                 </div>
                                 <div>
@@ -228,7 +236,7 @@
                                     />
                                 </div>
                                 <div>
-                                    <span>{{ "All-day"|t(locale) }}:</span>
+                                    <span>{{ "All-day"|t(locale) }}</span>
                                 </div>
                                 <div>
                                     <span
@@ -260,18 +268,20 @@
                                     });
                                 </script>
                             </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <b>{{ "Creation"|t(locale) }}:</b>
+                        </div>
+                    </div>
+                </div>
+                <div class="ev_form_row">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-calendar-plus"></i>
+                            {{ "Creation"|t(locale) }}
                             <i
                                 class="bi bi-question-circle"
                                 title="{{ "info.calendar_item_types"|t(locale) }}"
-                            >
-                            </i>
-                        </td>
-                        <td>
+                            ></i>
+                        </div>
+                        <div class="ev_form_row_expanded">
                             <input
                                 type="checkbox"
                                 id="type_event_{{ cal.id() }}"
@@ -288,64 +298,90 @@
                                 {% if cal.types().contains(&CalCompType::Todo) %}checked="checked"{% endif %}
                             />
                             <label for="type_todo_{{ cal.id() }}">{{ "Tasks"|t(locale) }}</label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>
-                            <b>{{ "Alarms"|t(locale) }}:</b>
+                        </div>
+                    </div>
+                </div>
+                <div class="ev_form_row">
+                    <div class="ev_form_row_header">
+                        <div class="ev_form_row_label">
+                            <i class="bi bi-alarm"></i>
+                            {{ "Alarms"|t(locale) }}
                             <i
                                 class="bi bi-question-circle"
                                 title="{{ "info.calendar_alarms"|t(locale) }}"
-                            >
-                            </i>
-                        </td>
-                        <td>
+                            ></i>
+                        </div>
+                        <div class="ev_form_row_expanded">
                             <input
                                 id="alarms_hidden"
                                 type="hidden"
                                 name="alarm_type"
                                 value="{{ alarm_type|fmt("{:?}") }}"
                             />
-                            <div id="cal_tabs_{{ cal.id() }}" class="ev_tabs">
-                                <ul>
-                                    <li>
-                                        <a href="#cal_tabs_{{ cal.id() }}-Calendar">
-                                            {{ "Calendar"|t(locale) }}
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="#cal_tabs_{{ cal.id() }}-Personal">
-                                            {{ "Personal"|t(locale) }}
-                                        </a>
-                                    </li>
-                                </ul>
-                                <div id="cal_tabs_{{ cal.id() }}-Calendar"></div>
-                                <div id="cal_tabs_{{ cal.id() }}-Personal">{{ personal|safe }}</div>
+                            <div
+                                id="cal_segmented_{{ cal.id() }}"
+                                class="ev_segmented ev_segmented_alarm_mode"
+                            >
+                                <input
+                                    type="radio"
+                                    id="cal_mode_calendar_{{ cal.id() }}"
+                                    name="cal_mode_{{ cal.id() }}"
+                                    value="Calendar"
+                                    checked
+                                />
+                                <label
+                                    id="cal_mode_calendar_label_{{ cal.id() }}"
+                                    for="cal_mode_calendar_{{ cal.id() }}"
+                                >
+                                    {{ "Calendar"|t(locale) }}
+                                </label>
+                                <input
+                                    type="radio"
+                                    id="cal_mode_personal_{{ cal.id() }}"
+                                    name="cal_mode_{{ cal.id() }}"
+                                    value="Personal"
+                                />
+                                <label
+                                    id="cal_mode_personal_label_{{ cal.id() }}"
+                                    for="cal_mode_personal_{{ cal.id() }}"
+                                >
+                                    {{ "Personal"|t(locale) }}
+                                </label>
                             </div>
-
-                            <!-- prettier-ignore-start -->
-                            <script>
-                                $(function () {
-                                    $("#cal_tabs_{{ cal.id() }}").tabs({
-                                        activate: function (event, data) {
-                                            const id = data.newPanel.attr("id");
-                                            const name = id.replace(
-                                                "cal_tabs_{{ cal.id() }}-",
-                                                "",
-                                            );
-                                            $("#alarms_hidden").attr("value", name);
-                                        },
-                                    });
-                                    {% if alarm_type == AlarmType::Personal %}
-                                    $("#cal_tabs_{{ cal.id() }}").tabs("option", "active", 1);
-                                    {% endif %}
-                                });
-                            </script>
-                            <!-- prettier-ignore-end -->
-                        </td>
-                    </tr>
-                </table>
+                            <div class="ev_pad_top" id="cal_panels_{{ cal.id() }}">
+                                <div id="cal_panel_calendar_{{ cal.id() }}"></div>
+                                <div id="cal_panel_personal_{{ cal.id() }}">
+                                    {{ personal|safe }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+            <!-- prettier-ignore-start -->
+            <script>
+                $(function () {
+                    const alarmMode = new SegmentedControl("cal_segmented_{{ cal.id() }}", {
+                        inputName: "cal_mode_{{ cal.id() }}",
+                        panels: {
+                            Calendar: "#cal_panel_calendar_{{ cal.id() }}",
+                            Personal: "#cal_panel_personal_{{ cal.id() }}",
+                        },
+                    })
+                        .mount()
+                        .bind()
+                        .onChange(function (value) {
+                            $("#alarms_hidden").attr("value", value);
+                        });
+
+                    {% if alarm_type == AlarmType::Personal %}
+                    alarmMode.select("Personal");
+                    {% endif %}
+
+                    alarmMode.refresh();
+                });
+            </script>
+            <!-- prettier-ignore-end -->
         {% endif %}
     </form>
 </div>
