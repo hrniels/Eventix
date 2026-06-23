@@ -1,0 +1,70 @@
+name: Release CI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update release body
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const ref = context.ref;
+            const tagName = ref.replace('refs/tags/', '');
+            const version = tagName.replace(/^v/, '');
+            const escapedVersion = version.replace(/\./g, '\\.');
+
+            const metainfo = fs.readFileSync('flatpak/io.github.hrniels.Eventix.metainfo.xml', 'utf8');
+
+            const releaseRegex = new RegExp('<release version="' + escapedVersion + '"[^>]*>([\\s\\S]*?)<\\/release>', 'i');
+            const match = metainfo.match(releaseRegex);
+
+            if (!match) {
+              console.log('No release found for version:', version);
+              return;
+            }
+
+            let changelog = match[1];
+            changelog = changelog.replace(/<description>[\s\S]*?<ul>/gi, '');
+            changelog = changelog.replace(/<\/ul>[\s\S]*?<\/description>/gi, '');
+            changelog = changelog.replace(/<li>/gi, '- ');
+            changelog = changelog.replace(/<\/li>/gi, '');
+            changelog = changelog.replace(/^\s+/gm, '');
+            changelog = changelog.trim();
+
+            const releaseBody = '## Changelog\n\n' + changelog + '\n\n---\n\nEventix is distributed through Flathub. This release will be available shortly.\n<a href="https://flathub.org/en/apps/io.github.hrniels.Eventix"><img src="https://camo.githubusercontent.com/beb21f2caeb903f002860a4d968026c88e7c816af1cf8ccf03febf8c49a29ddc/68747470733a2f2f666c61746875622e6f72672f6173736574732f6261646765732f666c61746875622d62616467652d656e2e737667" width="150" alt="Download on Flathub" /></a>';
+
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: tagName
+            }).catch(() => null);
+
+            if (release) {
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+                body: releaseBody
+              });
+              console.log('Release body updated for tag:', tagName);
+            } else {
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tagName,
+                name: tagName,
+                body: releaseBody
+              });
+              console.log('Release created for tag:', tagName);
+            }
