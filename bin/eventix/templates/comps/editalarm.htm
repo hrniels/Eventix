@@ -16,18 +16,22 @@
             </div>
             {{ config|safe }}
         </div>
-        <a
-            class="ev_button ev_button_normal"
-            href="javascript:formRequest('alarm-form', reloadAndClose)"
-        >
-            <span>{{ "Save"|t(locale) }}</span>
-        </a>
-        <a
-            class="ev_button ev_button_normal"
-            href="javascript:cancelAlarm('{{ uid }}', '{{ rid_str }}')"
-        >
-            <span>{{ "Cancel"|t(locale) }}</span>
-        </a>
+        <div class="ev_pad_top">
+            <a
+                class="ev_button ev_button_normal"
+                href="javascript:formRequest('alarm-form', reloadAndClose)"
+            >
+                <i class="bi bi-floppy2-fill"></i>
+                <span>{{ "Save"|t(locale) }}</span>
+            </a>
+            <a
+                class="ev_button ev_button_normal"
+                href="javascript:cancelAlarm('{{ uid }}', '{{ rid_str }}')"
+            >
+                <i class="bi bi-x-circle"></i>
+                <span>{{ "Cancel"|t(locale) }}</span>
+            </a>
+        </div>
     </form>
 
     <script type="text/javascript">
