@@ -27,9 +27,9 @@ wrapper that embeds that UI in a native application window with system tray inte
 
 | | |
 |:---:|:---:|
-| ![weekly](data/screenshots/weekly.png) | ![weekly-details](data/screenshots/weekly-details.png) |
-| ![monthly](data/screenshots/monthly.png) | ![new-event1](data/screenshots/new-event1.png) |
-| ![new-event2](data/screenshots/new-event2.png) | ![list](data/screenshots/list.png) |
+| ![weekly](data/screenshots/weekly.png) | ![monthly-details](data/screenshots/monthly.png) |
+| ![edit-event](data/screenshots/edit-event.png) | ![new-task](data/screenshots/new-task.png) |
+| ![postpone-todo](data/screenshots/postpone-todo.png) | ![list](data/screenshots/list.png) |
 | ![calendars](data/screenshots/calendars.png) | ![new-collection](data/screenshots/new-collection.png) |
 
 ## Installation
