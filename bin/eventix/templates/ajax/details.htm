@@ -8,7 +8,9 @@
             >
             </i>
         </span>
-        <span class="ev_details_header_summary">{{ occ.summary().unwrap() }}</span>
+        <span class="ev_details_header_summary" title="{{ occ.summary().unwrap() }}">
+            {{ occ.summary().unwrap() }}
+        </span>
         <span class="ev_details_header_calendar">
             <div
                 class="ev_cal_src ev_cal_src_{{ dir.id() }} ev_details_header_calendar_tag"
