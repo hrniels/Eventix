@@ -623,6 +623,81 @@ END:VCALENDAR\r\n",
         assert_eq!(count.count(), 1);
     }
 
+    #[tokio::test]
+    async fn handle_import_splits_by_uid_and_keeps_uid_scoped_unknowns() {
+        let tmp = TempDir::new().unwrap();
+        let xdg = make_xdg(&tmp);
+        let cal_tmp = TempDir::new().unwrap();
+        let state = make_state_with_cal(xdg, &cal_tmp, "test-cal");
+
+        let ics_path = tmp.path().join("import-split.ics");
+        std::fs::write(
+            &ics_path,
+            "BEGIN:VCALENDAR\r\n\
+VERSION:2.0\r\n\
+BEGIN:VEVENT\r\n\
+UID:uid-1\r\n\
+DTSTART:20250102T090000Z\r\n\
+RECURRENCE-ID:20250102T090000Z\r\n\
+DTSTAMP:20250101T000000Z\r\n\
+SUMMARY:Override\r\n\
+END:VEVENT\r\n\
+BEGIN:VEVENT\r\n\
+UID:uid-1\r\n\
+DTSTART:20250101T090000Z\r\n\
+DTSTAMP:20250101T000000Z\r\n\
+RRULE:FREQ=DAILY;COUNT=2\r\n\
+SUMMARY:Base\r\n\
+END:VEVENT\r\n\
+BEGIN:VEVENT\r\n\
+UID:uid-1\r\n\
+DTSTART:20250103T090000Z\r\n\
+DTSTAMP:20250101T000000Z\r\n\
+SUMMARY:Older duplicate\r\n\
+END:VEVENT\r\n\
+BEGIN:VEVENT\r\n\
+UID:uid-2\r\n\
+DTSTART:20250104T090000Z\r\n\
+DTEND:20250104T100000Z\r\n\
+DTSTAMP:20250101T000000Z\r\n\
+SUMMARY:Other\r\n\
+END:VEVENT\r\n\
+BEGIN:X-GLOBAL\r\n\
+X-PROP:global\r\n\
+END:X-GLOBAL\r\n\
+END:VCALENDAR\r\n",
+        )
+        .unwrap();
+
+        let opts = ImportOptions {
+            file: ics_path.to_string_lossy().into_owned(),
+            calendar: "test-cal".into(),
+        };
+        let resp = handle_request(state.clone(), Request::Import(opts))
+            .await
+            .unwrap();
+        assert_eq!(resp, Response::Success);
+
+        let locked = state.lock().await;
+        let cal_id = Arc::new("test-cal".to_string());
+        let dir = locked.store().directory(&cal_id).unwrap();
+        assert!(dir.file_by_id("uid-1").is_some());
+        assert!(dir.file_by_id("uid-2").is_some());
+        assert_eq!(dir.files().len(), 2);
+
+        let uid_1 = std::fs::read_to_string(cal_tmp.path().join("uid-1.ics")).unwrap();
+        assert!(uid_1.contains("UID:uid-1"));
+        assert!(uid_1.contains("SUMMARY:Older duplicate"));
+        assert!(uid_1.contains("BEGIN:X-GLOBAL"));
+        assert!(!uid_1.contains("UID:uid-2"));
+
+        let uid_2 = std::fs::read_to_string(cal_tmp.path().join("uid-2.ics")).unwrap();
+        assert!(uid_2.contains("UID:uid-2"));
+        assert!(uid_2.contains("BEGIN:X-GLOBAL"));
+        assert!(!uid_2.contains("SUMMARY:Older duplicate"));
+        assert!(!uid_2.contains("UID:uid-1"));
+    }
+
     // --- parse_and_handle ---
 
     #[tokio::test]

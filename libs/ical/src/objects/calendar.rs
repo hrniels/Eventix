@@ -103,13 +103,29 @@ impl Calendar {
             let entry = uids.entry(c.uid().clone()).or_default();
             entry.push(c);
         }
+
+        let mut unknown_without_uid = Vec::new();
+        let mut unknown_by_uid = HashMap::<String, Vec<Unknown>>::new();
+        for unknown in self.unknown {
+            match unknown.uid() {
+                Some(uid) => unknown_by_uid.entry(uid).or_default().push(unknown),
+                None => unknown_without_uid.push(unknown),
+            }
+        }
+
         uids.into_values()
-            .map(|comps| Self {
-                comps,
-                timezones: self.timezones.clone(),
-                props: self.props.clone(),
-                unknown: self.unknown.clone(),
-                tzresolver: OnceLock::new(),
+            .map(|comps| {
+                let uid = comps.first().unwrap().uid().clone();
+                let mut unknown = unknown_without_uid.clone();
+                unknown.extend(unknown_by_uid.get(&uid).cloned().unwrap_or_default());
+
+                Self {
+                    comps,
+                    timezones: self.timezones.clone(),
+                    props: self.props.clone(),
+                    unknown,
+                    tzresolver: OnceLock::new(),
+                }
             })
             .collect()
     }
@@ -522,6 +538,13 @@ impl Unknown {
 
     fn add(&mut self, prop: Property) {
         self.props.push(prop);
+    }
+
+    fn uid(&self) -> Option<String> {
+        self.props
+            .iter()
+            .find(|prop| prop.name() == "UID")
+            .map(|prop| prop.value().clone())
     }
 }
 
@@ -1250,6 +1273,57 @@ END:VCALENDAR\n";
         assert!(uids.contains(&"uid-1".to_string()));
         assert!(uids.contains(&"uid-2".to_string()));
         assert!(uids.contains(&"uid-3".to_string()));
+    }
+
+    #[test]
+    fn split_by_uid_keeps_unknowns_with_matching_uid_only() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:uid-1\n\
+DTSTART:20250101T120000Z\n\
+SUMMARY:Event 1\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:uid-1\n\
+DTSTART:20250102T120000Z\n\
+SUMMARY:Event 1 duplicate\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:uid-2\n\
+DTSTART:20250103T120000Z\n\
+SUMMARY:Event 2\n\
+END:VEVENT\n\
+BEGIN:X-GLOBAL\n\
+X-PROP:global\n\
+END:X-GLOBAL\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let splits = cal.split_by_uid();
+
+        assert_eq!(splits.len(), 2);
+
+        let uid_1 = splits
+            .iter()
+            .find(|split| split.components()[0].uid() == "uid-1")
+            .unwrap();
+        let uid_2 = splits
+            .iter()
+            .find(|split| split.components()[0].uid() == "uid-2")
+            .unwrap();
+
+        let mut uid_1_buf = Vec::new();
+        uid_1.write(&mut uid_1_buf).unwrap();
+        let uid_1_output = String::from_utf8(uid_1_buf).unwrap();
+        assert!(uid_1_output.contains("SUMMARY:Event 1 duplicate"));
+        assert!(uid_1_output.contains("BEGIN:X-GLOBAL"));
+
+        let mut uid_2_buf = Vec::new();
+        uid_2.write(&mut uid_2_buf).unwrap();
+        let uid_2_output = String::from_utf8(uid_2_buf).unwrap();
+        assert!(!uid_2_output.contains("SUMMARY:Event 1 duplicate"));
+        assert!(uid_2_output.contains("BEGIN:X-GLOBAL"));
     }
 
     #[test]
