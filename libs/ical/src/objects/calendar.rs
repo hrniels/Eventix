@@ -157,8 +157,13 @@ impl Calendar {
             } else {
                 self.add_as_unknown(comp);
             }
-        // if it's a base component and we already have the same UID, just pretend we don't know it
-        } else if comp.rid().is_none() && self.comps.iter().any(|c| c.uid() == comp.uid()) {
+        // if it's a second base component for the same UID, keep it as unknown for round-tripping
+        } else if comp.rid().is_none()
+            && self
+                .comps
+                .iter()
+                .any(|c| c.uid() == comp.uid() && c.rid().is_none())
+        {
             self.add_as_unknown(comp);
         } else {
             self.comps.push(comp);
@@ -1269,6 +1274,34 @@ END:VCALENDAR\n";
 
         let unknown = &cal.unknown[0];
         assert_eq!(unknown.name, "VEVENT");
+    }
+
+    #[test]
+    fn base_component_after_override_is_not_stored_as_unknown() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:series-uid\n\
+RECURRENCE-ID:20250102T090000Z\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART:20250102T090000Z\n\
+SUMMARY:Override\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:series-uid\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART:20250101T090000Z\n\
+RRULE:FREQ=DAILY;COUNT=2\n\
+SUMMARY:Base\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+
+        assert_eq!(cal.components().len(), 2);
+        assert!(cal.unknown.is_empty());
+        assert!(cal.components().iter().any(|comp| comp.rid().is_none()));
+        assert!(cal.components().iter().any(|comp| comp.rid().is_some()));
     }
 
     #[test]
