@@ -59,35 +59,43 @@
   <screenshots>
     <screenshot type="default">
       <caption>Edit event</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.0/data/screenshots/edit-event.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/edit-event.png</image>
     </screenshot>
     <screenshot>
       <caption>Weekly calendar view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.0/data/screenshots/weekly.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/weekly.png</image>
     </screenshot>
     <screenshot>
       <caption>Monthly calendar view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.0/data/screenshots/monthly.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/monthly.png</image>
     </screenshot>
     <screenshot>
       <caption>Postpone a task</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.0/data/screenshots/postpone-todo.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/postpone-todo.png</image>
     </screenshot>
     <screenshot>
       <caption>List view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.0/data/screenshots/list.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/list.png</image>
     </screenshot>
     <screenshot>
       <caption>Calendar management</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.0/data/screenshots/calendars.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/calendars.png</image>
     </screenshot>
     <screenshot>
       <caption>New collection</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.0/data/screenshots/new-collection.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/new-collection.png</image>
     </screenshot>
   </screenshots>
 
   <releases>
+    <release version="1.1.1" date="2026-06-28">
+      <description>
+        <ul>
+          <li>Fixed bug in UID-splitting during import.</li>
+          <li>Fixed layout problem with german locale.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-06-26">
       <description>
         <ul>
