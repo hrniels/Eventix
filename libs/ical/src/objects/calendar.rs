@@ -103,13 +103,29 @@ impl Calendar {
             let entry = uids.entry(c.uid().clone()).or_default();
             entry.push(c);
         }
+
+        let mut unknown_without_uid = Vec::new();
+        let mut unknown_by_uid = HashMap::<String, Vec<Unknown>>::new();
+        for unknown in self.unknown {
+            match unknown.uid() {
+                Some(uid) => unknown_by_uid.entry(uid).or_default().push(unknown),
+                None => unknown_without_uid.push(unknown),
+            }
+        }
+
         uids.into_values()
-            .map(|comps| Self {
-                comps,
-                timezones: self.timezones.clone(),
-                props: self.props.clone(),
-                unknown: self.unknown.clone(),
-                tzresolver: OnceLock::new(),
+            .map(|comps| {
+                let uid = comps.first().unwrap().uid().clone();
+                let mut unknown = unknown_without_uid.clone();
+                unknown.extend(unknown_by_uid.get(&uid).cloned().unwrap_or_default());
+
+                Self {
+                    comps,
+                    timezones: self.timezones.clone(),
+                    props: self.props.clone(),
+                    unknown,
+                    tzresolver: OnceLock::new(),
+                }
             })
             .collect()
     }
@@ -157,8 +173,13 @@ impl Calendar {
             } else {
                 self.add_as_unknown(comp);
             }
-        // if it's a base component and we already have the same UID, just pretend we don't know it
-        } else if comp.rid().is_none() && self.comps.iter().any(|c| c.uid() == comp.uid()) {
+        // if it's a second base component for the same UID, keep it as unknown for round-tripping
+        } else if comp.rid().is_none()
+            && self
+                .comps
+                .iter()
+                .any(|c| c.uid() == comp.uid() && c.rid().is_none())
+        {
             self.add_as_unknown(comp);
         } else {
             self.comps.push(comp);
@@ -517,6 +538,13 @@ impl Unknown {
 
     fn add(&mut self, prop: Property) {
         self.props.push(prop);
+    }
+
+    fn uid(&self) -> Option<String> {
+        self.props
+            .iter()
+            .find(|prop| prop.name() == "UID")
+            .map(|prop| prop.value().clone())
     }
 }
 
@@ -1248,6 +1276,57 @@ END:VCALENDAR\n";
     }
 
     #[test]
+    fn split_by_uid_keeps_unknowns_with_matching_uid_only() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:uid-1\n\
+DTSTART:20250101T120000Z\n\
+SUMMARY:Event 1\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:uid-1\n\
+DTSTART:20250102T120000Z\n\
+SUMMARY:Event 1 duplicate\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:uid-2\n\
+DTSTART:20250103T120000Z\n\
+SUMMARY:Event 2\n\
+END:VEVENT\n\
+BEGIN:X-GLOBAL\n\
+X-PROP:global\n\
+END:X-GLOBAL\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+        let splits = cal.split_by_uid();
+
+        assert_eq!(splits.len(), 2);
+
+        let uid_1 = splits
+            .iter()
+            .find(|split| split.components()[0].uid() == "uid-1")
+            .unwrap();
+        let uid_2 = splits
+            .iter()
+            .find(|split| split.components()[0].uid() == "uid-2")
+            .unwrap();
+
+        let mut uid_1_buf = Vec::new();
+        uid_1.write(&mut uid_1_buf).unwrap();
+        let uid_1_output = String::from_utf8(uid_1_buf).unwrap();
+        assert!(uid_1_output.contains("SUMMARY:Event 1 duplicate"));
+        assert!(uid_1_output.contains("BEGIN:X-GLOBAL"));
+
+        let mut uid_2_buf = Vec::new();
+        uid_2.write(&mut uid_2_buf).unwrap();
+        let uid_2_output = String::from_utf8(uid_2_buf).unwrap();
+        assert!(!uid_2_output.contains("SUMMARY:Event 1 duplicate"));
+        assert!(uid_2_output.contains("BEGIN:X-GLOBAL"));
+    }
+
+    #[test]
     fn duplicate_event_without_rid_is_stored_as_unknown() {
         let input = "BEGIN:VCALENDAR\n\
 VERSION:2.0\n\
@@ -1269,6 +1348,34 @@ END:VCALENDAR\n";
 
         let unknown = &cal.unknown[0];
         assert_eq!(unknown.name, "VEVENT");
+    }
+
+    #[test]
+    fn base_component_after_override_is_not_stored_as_unknown() {
+        let input = "BEGIN:VCALENDAR\n\
+VERSION:2.0\n\
+BEGIN:VEVENT\n\
+UID:series-uid\n\
+RECURRENCE-ID:20250102T090000Z\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART:20250102T090000Z\n\
+SUMMARY:Override\n\
+END:VEVENT\n\
+BEGIN:VEVENT\n\
+UID:series-uid\n\
+DTSTAMP:20250101T000000Z\n\
+DTSTART:20250101T090000Z\n\
+RRULE:FREQ=DAILY;COUNT=2\n\
+SUMMARY:Base\n\
+END:VEVENT\n\
+END:VCALENDAR\n";
+
+        let cal = input.parse::<Calendar>().unwrap();
+
+        assert_eq!(cal.components().len(), 2);
+        assert!(cal.unknown.is_empty());
+        assert!(cal.components().iter().any(|comp| comp.rid().is_none()));
+        assert!(cal.components().iter().any(|comp| comp.rid().is_some()));
     }
 
     #[test]

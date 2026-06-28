@@ -136,7 +136,7 @@
                                     {% if let Some(rrule) = c.comp.rrule() %}
                                         <tr>
                                             <td width="20%" class="ev_list_details_label">
-                                                <b>{{ "Repeats"|t(locale) }}:</b>
+                                                <b>{{ "Repeats_short"|t(locale) }}:</b>
                                             </td>
                                             <td width="80%">
                                                 {{ rrule.human(&**locale)|newlines()|safe }}
