@@ -32,11 +32,12 @@ async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
+    let term = req.term.to_lowercase();
     let mut locations = state
         .store()
         .locations()
         .into_iter()
-        .filter(|l| l.contains(&req.term))
+        .filter(|l| l.to_lowercase().contains(&term))
         .collect::<Vec<_>>();
     locations.sort();
     Ok(Json(Response(locations)))

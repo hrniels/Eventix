@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -32,11 +32,14 @@ async fn handler(
     Query(req): Query<Request>,
 ) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
+    let term = req.term.to_lowercase();
     let mut contacts = state
         .store()
         .contacts()
         .iter()
-        .filter(|(address, name)| name.contains(&req.term) || address.contains(&req.term))
+        .filter(|(address, name)| {
+            name.to_lowercase().contains(&term) || address.to_lowercase().contains(&term)
+        })
         .map(|(address, name)| {
             if address == name {
                 address.clone()
