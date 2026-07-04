@@ -36,7 +36,12 @@
                             {{ "Location"|t(locale) }}
                         </div>
                         <div class="ev_form_row_collapsed">
-                            <input type="text" name="location" value="{{ location }}" />
+                            <input
+                                type="text"
+                                name="location"
+                                id="location"
+                                value="{{ location }}"
+                            />
                         </div>
                     </div>
                 </div>
@@ -191,6 +196,11 @@
             setPersonalAlarms($(this).val());
         });
         setPersonalAlarms($("#calendar").val());
+
+        $("#location").autocomplete({
+            source: "/api/locations",
+            minLength: 2,
+        });
 
         FormExpandShrink.init("#form-container");
         setTimeout(() => {

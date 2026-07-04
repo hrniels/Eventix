@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -8,6 +8,7 @@ pub mod calendars;
 pub mod collections;
 pub mod help;
 pub mod items;
+pub mod locations;
 pub mod setlang;
 pub mod togglecal;
 
@@ -174,6 +175,7 @@ pub fn router(state: EventixState) -> Router {
         .merge(attendees::router(state.clone()))
         .merge(auth::router(state.clone()))
         .merge(help::router(state.clone()))
+        .merge(locations::router(state.clone()))
         .merge(togglecal::router(state.clone()))
         .merge(setlang::router(state.clone()))
         .fallback(error_handler)

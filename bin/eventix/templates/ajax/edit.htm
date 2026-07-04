@@ -58,7 +58,12 @@
                             {{ "Location"|t(locale) }}
                         </div>
                         <div class="ev_form_row_collapsed">
-                            <input type="text" name="location" value="{{ location }}" />
+                            <input
+                                type="text"
+                                name="location"
+                                id="location"
+                                value="{{ location }}"
+                            />
                         </div>
                     </div>
                 </div>
@@ -263,6 +268,10 @@
         {% endif %}
 
         FormExpandShrink.init("#form-container");
+        $("#location").autocomplete({
+            source: "/api/locations",
+            minLength: 2,
+        });
         setTimeout(() => {
             let input = $("#summary")[0];
             input.focus();

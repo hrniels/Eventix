@@ -228,6 +228,18 @@ impl CalStore {
         contacts
     }
 
+    /// Returns a list with all distinct locations that occur in this store.
+    ///
+    /// The locations are collected from the `LOCATION` property of all components across all files.
+    /// Empty locations are skipped.
+    pub fn locations(&self) -> Vec<String> {
+        let mut locations = HashSet::new();
+        for i in self.files() {
+            locations.extend(i.locations());
+        }
+        locations.into_iter().collect()
+    }
+
     /// Returns an iterator with all TODOs in this store.
     pub fn todos(&self) -> impl Iterator<Item = &CalTodo> {
         self.files().flat_map(|i| i.todos())
