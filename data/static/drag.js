@@ -177,6 +177,10 @@ class ResizeOperation {
         this._initialTop = "";
         this._initialHeight = "";
         this._initialInnerHeight = "";
+        this._startLabel = null;
+        this._endLabel = null;
+        this._initialStartText = "";
+        this._initialEndText = "";
         this._didResize = false;
         this._boundMove = this._move.bind(this);
         this._boundStop = this._stop.bind(this);
@@ -196,6 +200,10 @@ class ResizeOperation {
         this._initialHeight = el.style.height;
         const inner = el.querySelector("div[style*='height: calc']");
         this._initialInnerHeight = inner ? inner.style.height : "";
+        this._startLabel = el.querySelector(".ev_occ_start");
+        this._endLabel = el.querySelector(".ev_occ_end");
+        this._initialStartText = this._startLabel ? this._startLabel.textContent : "";
+        this._initialEndText = this._endLabel ? this._endLabel.textContent : "";
         this._didResize = false;
 
         // The column container is the `position: relative; height: 1440px` div that is the
@@ -221,6 +229,14 @@ class ResizeOperation {
 
     _snapToGrid(rawMinutes) {
         return Math.round(rawMinutes / 30) * 30;
+    }
+
+    // Formats a minute-of-day value as zero-padded `HH:MM`, matching the server's
+    // `TimeFlags::Short` rendering (`%H:%M`).
+    _fmtTime(totalMin) {
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
     }
 
     _hasExceededActivationDistance(e) {
@@ -253,6 +269,9 @@ class ResizeOperation {
             if (inner) {
                 inner.style.height = "calc(" + visHeight + "px - 8px)";
             }
+            if (this._startLabel) {
+                this._startLabel.textContent = this._fmtTime(newStart);
+            }
         } else {
             // New end must be at least 30 min after the box's rendered top edge.
             const newEnd = Math.max(snapped, this._boxTop + 30);
@@ -264,6 +283,9 @@ class ResizeOperation {
             if (inner) {
                 inner.style.height = "calc(" + visHeight + "px - 8px)";
             }
+            if (this._endLabel) {
+                this._endLabel.textContent = this._fmtTime(newEnd);
+            }
         }
     }
 
@@ -274,6 +296,12 @@ class ResizeOperation {
             const inner = el.querySelector("div[style*='height: calc']");
             if (inner) {
                 inner.style.height = this._initialInnerHeight;
+            }
+            if (this._startLabel) {
+                this._startLabel.textContent = this._initialStartText;
+            }
+            if (this._endLabel) {
+                this._endLabel.textContent = this._initialEndText;
             }
         }
     }

@@ -151,14 +151,14 @@
             {{ occ.summary().unwrap() }}<br />
             {% if occ.occurrence_starts_on(day_date.clone()) && !occ.occurrence_ends_on(day_date.clone()) %}
                 <i class="bi bi-arrow-bar-right"></i>
-                {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
+                <span class="ev_occ_start">{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</span>
             {% else if !occ.occurrence_starts_on(day_date.clone()) && occ.occurrence_ends_on(day_date.clone()) %}
                 <i class="bi bi-arrow-bar-left"></i>
-                {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
+                <span class="ev_occ_end">{{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}</span>
             {% else %}
-                {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
+                <span class="ev_occ_start">{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</span>
                 -
-                {{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}
+                <span class="ev_occ_end">{{ &occ.occurrence_end().unwrap()|time(locale, TimeFlags::Short) }}</span>
             {% endif %}
         {% else %}
             {% if !occ.is_all_day() && !occ.is_all_day_on(day_date.clone()) %}
