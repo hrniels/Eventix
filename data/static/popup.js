@@ -388,8 +388,13 @@ $(document).mousedown(function (e) {
     if (!popup.contains(e.target) && !_inBoundingBox(e, "popup")) fireEvent(new DeselectEvent());
 });
 $(document).keydown(function (e) {
-    if (e.defaultPrevented) return;
-    if (e.key == "Escape") fireEvent(new DeselectEvent());
+    if (e.isDefaultPrevented()) return;
+    if (e.key == "Escape") {
+        if ($(".ui-datepicker:visible").length > 0) return;
+        if ($(".clockpicker-popover:visible").length > 0) return;
+        if ($(".ui-autocomplete:visible").length > 0) return;
+        fireEvent(new DeselectEvent());
+    }
 });
 
 $.fn.slideFadeToggle = function (easing, callback) {
