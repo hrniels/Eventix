@@ -493,7 +493,7 @@ async function _openAddPopup(data) {
     await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
         let url = "/api/items/add?ctype=" + data.ctype;
         if (data.date) url += "&date=" + data.date;
-        if (data.hour) url += "&hour=" + data.hour;
+        if (data.hour !== undefined && data.hour !== null) url += "&hour=" + data.hour;
         else url += "&allday=true";
         await _loadPage(url);
     });
