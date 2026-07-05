@@ -388,8 +388,13 @@ $(document).mousedown(function (e) {
     if (!popup.contains(e.target) && !_inBoundingBox(e, "popup")) fireEvent(new DeselectEvent());
 });
 $(document).keydown(function (e) {
-    if (e.defaultPrevented) return;
-    if (e.key == "Escape") fireEvent(new DeselectEvent());
+    if (e.isDefaultPrevented()) return;
+    if (e.key == "Escape") {
+        if ($(".ui-datepicker:visible").length > 0) return;
+        if ($(".clockpicker-popover:visible").length > 0) return;
+        if ($(".ui-autocomplete:visible").length > 0) return;
+        fireEvent(new DeselectEvent());
+    }
 });
 
 $.fn.slideFadeToggle = function (easing, callback) {
@@ -488,7 +493,8 @@ async function _openAddPopup(data) {
     await _openFromElement("#" + data.btnid, 600, heightEstimate, async function () {
         let url = "/api/items/add?ctype=" + data.ctype;
         if (data.date) url += "&date=" + data.date;
-        if (data.hour) url += "&hour=" + data.hour;
+        if (data.hour !== undefined && data.hour !== null) url += "&hour=" + data.hour;
+        else url += "&allday=true";
         await _loadPage(url);
     });
 }

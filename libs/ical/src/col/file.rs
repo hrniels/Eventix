@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -636,6 +636,22 @@ impl CalFile {
             }
         }
         contacts
+    }
+
+    /// Returns a list with all distinct locations that occur in this file.
+    ///
+    /// The locations are collected from the `LOCATION` property of all components. Empty locations
+    /// are skipped.
+    pub fn locations(&self) -> Vec<String> {
+        let mut locations = HashSet::new();
+        for c in self.components() {
+            if let Some(loc) = c.location()
+                && !loc.is_empty()
+            {
+                locations.insert(loc.clone());
+            }
+        }
+        locations.into_iter().collect()
     }
 
     /// Adds the given component to this file.

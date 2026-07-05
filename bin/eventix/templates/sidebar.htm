@@ -5,6 +5,16 @@
     $(window).on("load", function () {
         resizeBoxes();
     });
+
+    function createEventInNextHour() {
+        const date = curDate("{{ locale.timezone().name() }}");
+        const y = date.year;
+        const m = date.month.toString().padStart(2, "0");
+        const d = date.day.toString().padStart(2, "0");
+        const hour = date.hour < 23 ? date.hour + 1 : date.hour;
+        const dateStr = `${y}-${m}-${d}`;
+        fireEvent(createAddEvent("link-event", "Event", dateStr, hour));
+    }
 </script>
 
 <div class="ev_border ev_box" id="box_events">
@@ -14,7 +24,7 @@
             <a
                 id="link-event"
                 class="ev_sidebar_add_link"
-                href="javascript:fireEvent(createAddEvent('link-event', 'Event'))"
+                href="javascript:createEventInNextHour()"
             >
                 <i class="bi bi-plus-square"></i>
             </a>

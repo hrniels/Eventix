@@ -23,7 +23,7 @@ struct Response(Vec<String>);
 
 pub fn router(state: EventixState) -> Router {
     Router::new()
-        .route("/attendees", get(handler))
+        .route("/locations", get(handler))
         .with_state(state)
 }
 
@@ -33,25 +33,12 @@ async fn handler(
 ) -> Result<impl IntoResponse, JsonError> {
     let state = state.lock().await;
     let term = req.term.to_lowercase();
-    let mut contacts = state
+    let mut locations = state
         .store()
-        .contacts()
-        .iter()
-        .filter(|(address, name)| {
-            name.to_lowercase().contains(&term) || address.to_lowercase().contains(&term)
-        })
-        .map(|(address, name)| {
-            if address == name {
-                address.clone()
-            } else {
-                let address = match address.strip_prefix("mailto:") {
-                    Some(addr) => addr,
-                    None => address,
-                };
-                format!("{name} <{address}>")
-            }
-        })
+        .locations()
+        .into_iter()
+        .filter(|l| l.to_lowercase().contains(&term))
         .collect::<Vec<_>>();
-    contacts.sort();
-    Ok(Json(Response(contacts)))
+    locations.sort();
+    Ok(Json(Response(locations)))
 }

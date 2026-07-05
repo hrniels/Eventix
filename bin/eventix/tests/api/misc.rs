@@ -47,6 +47,32 @@ fn write_event_with_attendees(cal_dir: &Path, uid: &str, attendees: &[&str]) {
     .unwrap();
 }
 
+fn write_event_with_location(cal_dir: &Path, uid: &str, location: &str) {
+    let path = cal_dir.join(format!("{uid}.ics"));
+    let location_line = if location.is_empty() {
+        String::new()
+    } else {
+        format!("LOCATION:{location}\r\n")
+    };
+
+    std::fs::write(
+        path,
+        format!(
+            "BEGIN:VCALENDAR\r\n\
+             BEGIN:VEVENT\r\n\
+             UID:{uid}\r\n\
+             DTSTAMP:20260101T000000Z\r\n\
+             DTSTART;TZID=Europe/Berlin:20260415T090000\r\n\
+             DTEND;TZID=Europe/Berlin:20260415T100000\r\n\
+             SUMMARY:Meeting\r\n\
+             {location_line}\
+             END:VEVENT\r\n\
+             END:VCALENDAR\r\n"
+        ),
+    )
+    .unwrap();
+}
+
 fn make_collection(tmp: &TempDir) -> CollectionSettings {
     let calendars_path = tmp.path().join("calendars");
     let cal_dir = calendars_path.join(CAL_ID);
@@ -114,6 +140,100 @@ async fn attendees_returns_empty_list_for_no_matches() {
     assert_eq!(
         from_str::<Vec<String>>(&body).expect("parse attendees response"),
         Vec::<String>::new()
+    );
+}
+
+#[tokio::test]
+async fn attendees_matches_case_insensitively() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    write_event_with_attendees(
+        &cal_dir,
+        "attendees-ci",
+        &[
+            "ATTENDEE;CN=Aaron Example:mailto:aaron@example.com",
+            "ATTENDEE:bob@example.com",
+        ],
+    );
+    let state = make_state(&cal_dir);
+    let router = make_calendars_api_router(state);
+
+    // Uppercase term matches both the CN ("Aaron Example") and the address.
+    let (status, body) = get_raw(router, "/api/attendees?term=AARON").await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+    assert_eq!(
+        from_str::<Vec<String>>(&body).expect("parse attendees response"),
+        vec!["Aaron Example <aaron@example.com>".to_string()]
+    );
+}
+
+// --- GET /api/locations ---
+
+#[tokio::test]
+async fn locations_returns_sorted_matches() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    write_event_with_location(&cal_dir, "locations-a", "Conference Room B");
+    write_event_with_location(&cal_dir, "locations-b", "Conference Room A");
+    write_event_with_location(&cal_dir, "locations-c", "");
+    write_event_with_location(&cal_dir, "locations-d", "Office");
+    write_event_with_location(&cal_dir, "locations-e", "Office");
+    let state = make_state(&cal_dir);
+    let router = make_calendars_api_router(state);
+
+    let (status, body) = get_raw(router, "/api/locations?term=Conference").await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+    assert_eq!(
+        from_str::<Vec<String>>(&body).expect("parse locations response"),
+        vec![
+            "Conference Room A".to_string(),
+            "Conference Room B".to_string(),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn locations_returns_empty_list_for_no_matches() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    write_event_with_location(&cal_dir, "locations-d", "Conference Room A");
+    let state = make_state(&cal_dir);
+    let router = make_calendars_api_router(state);
+
+    let (status, body) = get_raw(router, "/api/locations?term=nomatch").await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+    assert_eq!(
+        from_str::<Vec<String>>(&body).expect("parse locations response"),
+        Vec::<String>::new()
+    );
+}
+
+#[tokio::test]
+async fn locations_matches_case_insensitively() {
+    let tmp = TempDir::new().unwrap();
+    let cal_dir = tmp.path().join(CAL_ID);
+    std::fs::create_dir_all(&cal_dir).unwrap();
+    write_event_with_location(&cal_dir, "locations-ci-a", "Conference Room A");
+    write_event_with_location(&cal_dir, "locations-ci-b", "Conference Room B");
+    let state = make_state(&cal_dir);
+    let router = make_calendars_api_router(state);
+
+    // Lowercase term matches mixed-case stored locations.
+    let (status, body) = get_raw(router, "/api/locations?term=conference").await;
+
+    assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+    assert_eq!(
+        from_str::<Vec<String>>(&body).expect("parse locations response"),
+        vec![
+            "Conference Room A".to_string(),
+            "Conference Room B".to_string(),
+        ]
     );
 }
 
