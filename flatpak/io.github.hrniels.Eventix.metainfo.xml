@@ -88,6 +88,13 @@
   </screenshots>
 
   <releases>
+    <release version="1.1.2" date="2026-07-14">
+      <description>
+        <ul>
+          <li>Fixed bug in occurrence display.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.1" date="2026-06-28">
       <description>
         <ul>
