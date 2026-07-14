@@ -101,7 +101,9 @@
         {% if mode == OccurrenceMode::Sidebar %}
             {% if occ.ctype() == CalCompType::Event &&
                    (occ.is_all_day() || occ.is_all_day_on(day_date.clone())) %}
-                {{ occ.summary().unwrap() }}
+                {% if let Some(summary) = occ.summary() %}
+                {{ summary }}
+                {% endif %}
             {% else %}
                 <div class="ev_flex">
                     <span class="ev_cal_src ev_cal_src_{{ occ.directory() }}">
@@ -144,11 +146,18 @@
                             {% endif %}
                         {% endif %}
                     {% endif %}
-                    <span class="ev_summary">{{ occ.summary().unwrap() }}</span>
+                    <span class="ev_summary">
+                        {% if let Some(summary) = occ.summary() %}
+                        {{ summary }}
+                        {% endif %}
+                    </span>
                 </div>
             {% endif %}
         {% else if mode == OccurrenceMode::Timed %}
-            {{ occ.summary().unwrap() }}<br />
+            {% if let Some(summary) = occ.summary() %}
+            {{ summary }}
+            {% endif %}
+            <br />
             {% if occ.occurrence_starts_on(day_date.clone()) && !occ.occurrence_ends_on(day_date.clone()) %}
                 <i class="bi bi-arrow-bar-right"></i>
                 <span class="ev_occ_start">{{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}</span>
@@ -172,7 +181,9 @@
                     {{ &occ.occurrence_start().unwrap()|time(locale, TimeFlags::Short) }}
                 {% endif %}
             {% endif %}
-            {{ occ.summary().unwrap() }}
+            {% if let Some(summary) = occ.summary() %}
+            {{ summary }}
+            {% endif %}
         {% endif %}
     </div>
 </div>
