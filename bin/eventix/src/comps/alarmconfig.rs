@@ -281,12 +281,12 @@ impl AlarmConfigTemplate {
             duration: value.duration,
             durunit: ComboboxTemplate::new(
                 locale.clone(),
-                format!("{}[durunit]", &name),
+                format!("{}[durunit]", name),
                 Some(value.durunit),
             ),
             durtype: ComboboxTemplate::new(
                 locale.clone(),
-                format!("{}[durtype]", &name),
+                format!("{}[durtype]", name),
                 Some(value.durtype),
             ),
             datetime: if absolute {

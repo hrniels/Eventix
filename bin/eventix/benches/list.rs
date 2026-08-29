@@ -49,8 +49,8 @@ fn benchmark_list(c: &mut Criterion) {
                     "unexpected status for {uri}"
                 );
                 assert!(
-                    body.contains("Events and Tasks"),
-                    "missing list heading for {uri}"
+                    body.contains("id=\"list-pagination\""),
+                    "missing list results for {uri}"
                 );
             });
         });

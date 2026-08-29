@@ -44,7 +44,7 @@ async fn run_calop(state: &mut eventix_state::State, req: Params) -> anyhow::Res
         .settings_mut()
         .collections_mut()
         .get_mut(&req.col_id)
-        .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
+        .ok_or_else(|| anyhow!("No collection '{}'", req.col_id))?;
 
     match req.op {
         Operation::Delete => {
@@ -59,7 +59,7 @@ async fn run_calop(state: &mut eventix_state::State, req: Params) -> anyhow::Res
                 }
                 (None, Some(folder)) => {
                     if col.is_syncer_read_only() {
-                        return Err(anyhow!("Collection '{}' is read-only", &req.col_id));
+                        return Err(anyhow!("Collection '{}' is read-only", req.col_id));
                     }
 
                     eventix_state::State::delete_calendar_by_folder(state, &req.col_id, folder)

@@ -213,6 +213,8 @@ async fn handle_import(state: EventixState, req: ImportOptions) -> anyhow::Resul
         dir.add_file(f).map_err(anyhow::Error::from)?;
     }
 
+    state.notify_external_change();
+
     Ok(Response::Success)
 }
 

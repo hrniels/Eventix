@@ -145,7 +145,7 @@ impl EventixTray {
         let mut data = Vec::with_capacity((width * height * 4) as usize);
         for y in 0..height {
             let row = &pixels[(y as usize) * stride..(y as usize) * stride + width as usize * 4];
-            for px in row.chunks_exact(4) {
+            for px in row.as_chunks::<4>().0 {
                 let r = px[0];
                 let g = px[1];
                 let b = px[2];
