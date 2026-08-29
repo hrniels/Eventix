@@ -106,9 +106,9 @@ async fn run_addcal(state: &mut eventix_state::State, req: Params) -> anyhow::Re
             .settings_mut()
             .collections_mut()
             .get_mut(&req.col_id)
-            .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
+            .ok_or_else(|| anyhow!("No collection '{}'", req.col_id))?;
         if col.is_syncer_read_only() {
-            return Err(anyhow!("Collection '{}' is read-only", &req.col_id));
+            return Err(anyhow!("Collection '{}' is read-only", req.col_id));
         }
         let col_path = col.path(&xdg, &req.col_id);
         let folder = unique_folder_name(&col_path, col.all_calendars(), &name).await;
@@ -119,7 +119,7 @@ async fn run_addcal(state: &mut eventix_state::State, req: Params) -> anyhow::Re
         .settings_mut()
         .collections_mut()
         .get_mut(&req.col_id)
-        .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
+        .ok_or_else(|| anyhow!("No collection '{}'", req.col_id))?;
 
     let id = uuid::Uuid::new_v4().simple().to_string();
     let mut cal = CalendarSettings::default();

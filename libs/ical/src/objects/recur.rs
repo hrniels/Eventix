@@ -559,17 +559,17 @@ impl Iterator for RecurIterator<'_> {
             while self.date <= self.until {
                 let date_only = self.dtdur.is_none();
                 if !self.rrule.limited(self.date, date_only) {
-                    match self.rrule.expand(
-                        self.dtstart,
-                        self.dtdur,
-                        date_only,
-                        self.start,
-                        self.end,
-                        self.date,
-                        &mut self.count,
-                    ) {
-                        Some(dates) => self.last = dates,
-                        None => return None,
+                    {
+                        let dates = self.rrule.expand(
+                            self.dtstart,
+                            self.dtdur,
+                            date_only,
+                            self.start,
+                            self.end,
+                            self.date,
+                            &mut self.count,
+                        )?;
+                        self.last = dates
                     }
 
                     // if we've found something, walk through that

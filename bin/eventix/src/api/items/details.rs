@@ -74,7 +74,7 @@ async fn handler(
         .occurrence_by_id(&req.uid, req.rid.as_ref(), locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
-            &req.uid, req.rid
+            req.uid, req.rid
         ))?;
 
     let (collection, calendar) = state.settings().calendar(occ.directory()).unwrap();

@@ -398,7 +398,7 @@ impl VDirSyncer {
             .join(" ");
         anyhow!(
             "collection '{}': command `{}` exited with {}",
-            &self.col_id,
+            self.col_id,
             command,
             status
         )
@@ -594,7 +594,7 @@ impl Syncer for VDirSyncer {
         let names = self
             .folder_id
             .keys()
-            .map(|folder| format!("{}/{}", &self.col_id, folder))
+            .map(|folder| format!("{}/{}", self.col_id, folder))
             .collect::<Vec<_>>();
         if names.is_empty() {
             return Ok(SyncColResult::Success(false));

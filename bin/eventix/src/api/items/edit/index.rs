@@ -89,7 +89,7 @@ pub async fn content_with(
         .occurrence_by_id(&req.uid, rid.as_ref(), locale.timezone())
         .context(format!(
             "Unable to find occurrence with uid '{}' and rid '{:?}'",
-            &req.uid, rid
+            req.uid, rid
         ))?;
 
     if !util::user_is_event_owner(file.directory(), &state, &occ) {

@@ -58,7 +58,7 @@ async fn run_savecal(
         .settings_mut()
         .collections_mut()
         .get_mut(&req.col_id)
-        .ok_or_else(|| anyhow!("No collection '{}'", &req.col_id))?;
+        .ok_or_else(|| anyhow!("No collection '{}'", req.col_id))?;
 
     let update_cal = |settings: &mut CalendarSettings| -> anyhow::Result<()> {
         settings.set_name(form.name.clone());

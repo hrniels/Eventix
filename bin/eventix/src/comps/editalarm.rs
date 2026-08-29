@@ -42,7 +42,7 @@ impl<'a> EditAlarmTemplate<'a> {
             .occurrence_by_id(&uid, rid.as_ref(), locale.timezone())
             .context(format!(
                 "Unable to find occurrence with uid '{}' and rid '{:?}'",
-                &uid, rid
+                uid, rid
             ))?;
 
         let (col_settings, cal_settings) = state.settings().calendar(occ.directory()).unwrap();
