@@ -161,6 +161,7 @@ function requestReload(iconId, force, sidebar = false) {
     if (force || !userIsActive()) {
         reloadContent();
         if (sidebar) reloadSidebar();
+        outOfSync = false;
         oos_icon.css("color", "transparent").attr("title", "");
     } else {
         outOfSync = true;
