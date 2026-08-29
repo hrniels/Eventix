@@ -6,6 +6,7 @@ pub mod attendees;
 pub mod auth;
 pub mod calendars;
 pub mod collections;
+pub mod events;
 pub mod help;
 pub mod items;
 pub mod locations;
@@ -171,6 +172,7 @@ pub fn router(state: EventixState) -> Router {
         .with_state(state.clone())
         .nest("/calendars", calendars::router(state.clone()))
         .nest("/collections", collections::router(state.clone()))
+        .merge(events::router(state.clone()))
         .nest("/items", items::router(state.clone()))
         .merge(attendees::router(state.clone()))
         .merge(auth::router(state.clone()))

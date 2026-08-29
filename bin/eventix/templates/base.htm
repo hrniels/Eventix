@@ -33,6 +33,11 @@
             trackActivity();
             syncAllEvery(1000 * 5 * 60, "last-update", "sync-spinner", "out-of-sync");
 
+            const events = new EventSource("/api/events");
+            events.addEventListener("external-change", function () {
+                requestReload("out-of-sync", false, true);
+            });
+
             const startDay = curUTCDay();
             setInterval(function () {
                 if (curUTCDay() != startDay) {
