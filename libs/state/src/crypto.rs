@@ -6,8 +6,8 @@ use std::io::Read;
 use std::os::unix::net::UnixStream;
 
 use aes_gcm::{
-    AeadCore, Aes256Gcm, Nonce,
-    aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Nonce,
+    aead::{Aead, Generate, KeyInit, Nonce as AeadNonce},
 };
 use ashpd::desktop::secret::Secret;
 use base64::{Engine as _, engine::general_purpose};
@@ -82,7 +82,7 @@ fn derive_key(portal_secret: &[u8]) -> [u8; 32] {
 pub fn encrypt_password(portal_secret: &[u8], plaintext: &str) -> Result<EncryptedPassword> {
     let key_bytes = derive_key(portal_secret);
     let cipher = Aes256Gcm::new_from_slice(&key_bytes).map_err(|_| CryptoError::Encryption)?;
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng); // 96-bits; unique per message
+    let nonce = AeadNonce::<Aes256Gcm>::generate(); // 96-bits; unique per message
 
     let ciphertext = cipher
         .encrypt(&nonce, plaintext.as_bytes())
@@ -105,14 +105,14 @@ pub fn decrypt_password(portal_secret: &[u8], encrypted: &EncryptedPassword) -> 
     if nonce_bytes.len() != 12 {
         return Err(CryptoError::InvalidNonce);
     }
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::try_from(nonce_bytes.as_slice()).map_err(|_| CryptoError::InvalidNonce)?;
 
     let ciphertext = general_purpose::STANDARD
         .decode(&encrypted.ciphertext)
         .map_err(|_| CryptoError::InvalidCiphertext)?;
 
     let plaintext_bytes = cipher
-        .decrypt(nonce, ciphertext.as_ref())
+        .decrypt(&nonce, ciphertext.as_ref())
         .map_err(|_| CryptoError::Decryption)?;
 
     String::from_utf8(plaintext_bytes).map_err(|_| CryptoError::Decryption)
