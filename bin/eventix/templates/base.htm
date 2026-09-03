@@ -38,7 +38,7 @@
                 requestReload("out-of-sync", false, true);
             });
 
-            const startDay = curUTCDay();
+            let startDay = curUTCDay();
             setInterval(function () {
                 if (curUTCDay() != startDay) {
                     requestReload("out-of-sync", false, true);
