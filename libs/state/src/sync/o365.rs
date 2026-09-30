@@ -114,7 +114,8 @@ where
     // Wait until DavMail signals that it is ready to accept connections.
     while let Ok(Some(line)) = reader.next_line().await {
         log_line(&log, id, &line).await?;
-        if line.contains("Start DavMail in server mode") {
+        if line.contains("Start DavMail in server mode") || line.contains("Start DavMail headless ")
+        {
             break;
         }
     }
@@ -281,8 +282,18 @@ impl O365 {
             .await?;
 
         props.write_all(b"davmail.server=true\n").await?;
-        props.write_all(b"davmail.mode=O365Manual\n").await?;
+        props.write_all(b"davmail.mode=O365Graph\n").await?;
+        props
+            .write_all(b"davmail.authentication=O365Manual\n")
+            .await?;
+        props.write_all(b"davmail.enableGraph=true\n").await?;
         props.write_all(b"davmail.enableOidc=true\n").await?;
+        props
+            .write_all(b"davmail.oauth.clientId=d3590ed6-52b3-4102-aeff-aad2292ab01c\n")
+            .await?;
+        props
+            .write_all(b"davmail.oauth.redirectUri=urn:ietf:wg:oauth:2.0:oob\n")
+            .await?;
         props
             .write_all(b"davmail.oauth.persistToken=true\n")
             .await?;
@@ -677,7 +688,13 @@ mod tests {
             .unwrap();
 
         assert!(content.contains("davmail.server=true"));
-        assert!(content.contains("davmail.mode=O365Manual"));
+        assert!(content.contains("davmail.mode=O365Graph"));
+        assert!(content.contains("davmail.authentication=O365Manual"));
+        assert!(content.contains("davmail.enableGraph=true"));
+        assert!(content.contains("davmail.enableOidc=true"));
+        assert!(content.contains("davmail.oauth.clientId=d3590ed6-52b3-4102-aeff-aad2292ab01c"));
+        assert!(content.contains("davmail.oauth.redirectUri=urn:ietf:wg:oauth:2.0:oob"));
+        assert!(!content.contains("davmail.oauth.scope"));
         assert!(content.contains(&format!("davmail.caldavPort={}", port)));
         assert!(content.contains("davmail.bindAddress=127.0.0.1"));
         assert!(content.contains("davmail.allowRemote=false"));
@@ -981,7 +998,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn impl_calls_func_after_ready_line() {
+    async fn impl_calls_func_after_legacy_ready_line() {
         // Spawn a task that writes the readiness line and then keeps the writer open.
         // read_output will block on the next next_line() call, giving func time to win.
         let (mut writer, reader) = tokio::io::duplex(4096);
@@ -1022,6 +1039,34 @@ mod tests {
             "kill should be called"
         );
         drop(writer); // keep alive until here
+    }
+
+    #[tokio::test]
+    async fn impl_calls_func_after_davmail_7_ready_line() {
+        let (mut writer, reader) = tokio::io::duplex(4096);
+        writer
+            .write_all(b"Start DavMail headless O365Graph O365Manual\n")
+            .await
+            .unwrap();
+        let mut reader_lines = BufReader::new(reader).lines();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let log = make_log(tmp.path()).await;
+
+        let res = run_with_davmail_impl(
+            tokio::io::sink(),
+            &mut reader_lines,
+            || async {},
+            "test",
+            None,
+            log,
+            Box::pin(async { Ok(SyncColResult::Success(true)) }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(res, SyncColResult::Success(true));
+        drop(writer);
     }
 
     #[tokio::test]
