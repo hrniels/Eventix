@@ -17,6 +17,8 @@ arches = {
         'linux-aarch_32': 'arm'
 }
 
+MAX_CONCURRENT_DOWNLOADS = 8
+
 async def get_remote_sha256(http_session, url):
     logging.info(f"started sha256({url})")
     sha256 = hashlib.sha256()
@@ -31,19 +33,34 @@ async def get_remote_sha256(http_session, url):
     logging.info(f"done sha256({url})")
     return sha256.hexdigest()
 
-async def parse_url(http_session, url, destdir, arch=None):
+def get_file_sha256(path):
+    sha256 = hashlib.sha256()
+    with open(path, 'rb') as file:
+        while data := file.read(4096):
+            sha256.update(data)
+    return sha256.hexdigest()
+
+async def parse_url(http_session, url, destdir, arch=None, maven_repo=None):
     # Extract path from URL to mirror Maven repository layout
     # e.g., https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-resources-plugin/3.4.0/maven-resources-plugin-3.4.0.pom
     # results in org/apache/maven/plugins/maven-resources-plugin/3.4.0/
-    path_match = re.search(r'/maven2/(.+)/[^/]+$', url)
+    path_match = re.search(r'/maven2/(.+)/([^/]+)$', url)
     if path_match:
         sub_dest = os.path.join(destdir, path_match.group(1))
     else:
         sub_dest = destdir
 
+    if maven_repo and path_match:
+        local_path = os.path.join(maven_repo, path_match.group(1), path_match.group(2))
+        if not os.path.isfile(local_path):
+            return []
+        sha256 = get_file_sha256(local_path)
+    else:
+        sha256 = await get_remote_sha256(http_session, url)
+
     ret = [{ 'type': 'file',
             'url': url,
-            'sha256': await get_remote_sha256(http_session, url),
+            'sha256': sha256,
             'dest': sub_dest, }]
     if arch:
         ret[0]['only-arches'] = [arch]
@@ -57,15 +74,15 @@ def arch_for_url(url, urls_arch):
         pass
     return arch
 
-async def parse_urls(urls, urls_arch, destdir):
+async def parse_urls(urls, urls_arch, destdir, maven_repo=None):
     sources = []
     sha_coros = []
-    http_session = aiohttp.ClientSession()
-    for url in urls:
-        arch = arch_for_url(url, urls_arch)
-        sha_coros.append(parse_url(http_session, str(url), destdir, arch))
-    sources.extend(sum(await asyncio.gather(*sha_coros), []))
-    await http_session.close()
+    connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT_DOWNLOADS)
+    async with aiohttp.ClientSession(connector=connector) as http_session:
+        for url in dict.fromkeys(urls):
+            arch = arch_for_url(url, urls_arch)
+            sha_coros.append(parse_url(http_session, str(url), destdir, arch, maven_repo))
+        sources.extend(sum(await asyncio.gather(*sha_coros), []))
     return sources
 
 def gradle_arch_to_flatpak_arch(arch):
@@ -88,6 +105,8 @@ def main():
     parser.add_argument('--arches',
                         help='Comma-separated list of architectures the generated sources will be for',
                         default='x86_64,aarch64,i386,arm')
+    parser.add_argument('--maven-repo',
+                        help='Local Maven repository to use for calculating checksums')
     args = parser.parse_args()
     req_flatpak_arches = args.arches.split(',')
     req_gradle_arches = []
@@ -114,7 +133,7 @@ def main():
     # print(urls)
     # print(urls_arch)
 
-    sources = asyncio.run(parse_urls(urls, urls_arch, args.destdir))
+    sources = asyncio.run(parse_urls(urls, urls_arch, args.destdir, args.maven_repo))
 
     sources.sort(key=lambda x: x['url'])
 

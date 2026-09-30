@@ -328,6 +328,7 @@ def cmd_flatpak_sources(args):
             subprocess.run([
                 str(venv_bin / "python"), "contrib/flatpak-gradle-generator.py",
                 "--destdir", "flatpak/java-deps",
+                "--maven-repo", tmp_javadeps,
                 str(log_file), "flatpak/java-sources.json"
             ], check=True)
         finally:
