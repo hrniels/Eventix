@@ -34,7 +34,9 @@ use tokio::sync::{Mutex, broadcast};
 use tracing::debug;
 use xdg::BaseDirectories;
 
-pub use crypto::{decrypt_password, encrypt_password, retrieve_portal_secret};
+pub use crypto::{
+    decrypt_password, encrypt_password, generate_local_password, retrieve_portal_secret,
+};
 pub use misc::Misc;
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
 pub use settings::{
@@ -93,6 +95,9 @@ impl State {
     {
         let (mut plan, xdg) = {
             let mut state = state.lock().await;
+            // in case the o365 is empty (e.g., due to an earlier migration where it didn't matter
+            // that it was empty), repair it here by generating a new one and storing it.
+            Self::repair_o365_password(&mut state, col_id).await?;
             let plan = Self::prepare_collection_sync(&mut state, col_id)?;
             (plan, state.xdg.clone())
         };
@@ -333,6 +338,45 @@ impl State {
             token,
             protection: Some(protection),
         })
+    }
+
+    async fn repair_o365_password(state: &mut State, col_id: &String) -> anyhow::Result<()> {
+        let replacement =
+            state
+                .settings()
+                .collections()
+                .get(col_id)
+                .and_then(|col| match col.syncer() {
+                    SyncerType::O365 {
+                        email,
+                        read_only,
+                        password,
+                        time_span,
+                    } if password.nonce.is_empty() && password.ciphertext.is_empty() => {
+                        Some((email.clone(), *read_only, time_span.clone()))
+                    }
+                    _ => None,
+                });
+
+        if let Some((email, read_only, time_span)) = replacement {
+            let secret = retrieve_portal_secret().await?;
+            let generated = crypto::generate_local_password();
+            let password = encrypt_password(&secret, &generated)?;
+            let col = state
+                .settings_mut()
+                .collections_mut()
+                .get_mut(col_id)
+                .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
+            col.set_syncer(SyncerType::O365 {
+                email,
+                read_only,
+                password,
+                time_span,
+            });
+            state.settings().write_to_file()?;
+        }
+
+        Ok(())
     }
 
     /// Deletes a collection remotely and remove it from local settings.

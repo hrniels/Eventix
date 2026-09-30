@@ -94,6 +94,13 @@ pub fn encrypt_password(portal_secret: &[u8], plaintext: &str) -> Result<Encrypt
     })
 }
 
+/// Generates a random password for credentials used only between local services.
+pub fn generate_local_password() -> String {
+    let first = AeadNonce::<Aes256Gcm>::generate();
+    let second = AeadNonce::<Aes256Gcm>::generate();
+    general_purpose::STANDARD_NO_PAD.encode([first.as_slice(), second.as_slice()].concat())
+}
+
 /// Decrypts an `EncryptedPassword` using the portal secret.
 pub fn decrypt_password(portal_secret: &[u8], encrypted: &EncryptedPassword) -> Result<String> {
     let key_bytes = derive_key(portal_secret);
@@ -132,6 +139,15 @@ mod tests {
 
         let decrypted = decrypt_password(secret, &encrypted).unwrap();
         assert_eq!(decrypted, password);
+    }
+
+    #[test]
+    fn generated_local_password_is_nonempty_and_random() {
+        let first = generate_local_password();
+        let second = generate_local_password();
+
+        assert!(!first.is_empty());
+        assert_ne!(first, second);
     }
 
     #[test]
