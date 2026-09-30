@@ -334,13 +334,11 @@ function createHelpEvent(btnid) {
     return new PageEvent(btnid, "/api/help", WIDTH_HELP, HEIGHT_HELP);
 }
 
-function createAuthEvent(cal, url, op_url, spinnerId) {
+function createAuthEvent(cal, op_url, spinnerId) {
     return new PageEvent(
         "link-refresh",
         "/api/auth?calendar=" +
             cal +
-            "&url=" +
-            encodeURIComponent(url) +
             "&op_url=" +
             encodeURIComponent(op_url) +
             "&spinner_id=" +

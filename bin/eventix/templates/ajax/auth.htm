@@ -1,32 +1,67 @@
 <div class="ev_border">
     <script type="text/javascript">
-        function submitAndClose() {
-            const auth_url = $("#result_url").val();
-            const op_url = "{{ op_url|safe }}";
-            let url =
-                op_url +
-                (op_url.includes("?") ? "&" : "?") +
-                "auth_url=" +
-                encodeURIComponent(auth_url);
+        function finishDeviceAuthentication() {
+            const session = $("#ev_device_auth");
+            const op_url = session.data("opUrl");
+            const spinner_id = session.data("spinnerId");
             fireEvent(new DeselectEvent());
-            postWithSpinner("{{ spinner_id }}", url, function (data, auth_failed) {
-                if (data.changed) reloadContent();
-            });
+            postWithSpinner(spinner_id, op_url, defaultSyncFinish(reloadContent));
         }
+
+        function pollDeviceAuthentication(delay) {
+            setTimeout(function () {
+                const session = $("#ev_device_auth");
+                if (!session.length) return;
+                $.ajax({
+                    type: "POST",
+                    url: "/api/auth/poll?auth_id=" + encodeURIComponent(session.data("authId")),
+                    dataType: "json",
+                    success: function (data) {
+                        if (data.status === "complete") {
+                            $("#ev_device_auth_status").text(session.data("completeText"));
+                            finishDeviceAuthentication();
+                        } else if (data.status === "declined") {
+                            $("#ev_device_auth_status").text(session.data("declinedText"));
+                        } else if (data.status === "expired") {
+                            $("#ev_device_auth_status").text(session.data("expiredText"));
+                        } else {
+                            pollDeviceAuthentication(data.retry_after_ms);
+                        }
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        handleAJAXError(jqXHR, textStatus, errorThrown);
+                        $("#ev_device_auth_status").text(session.data("failedText"));
+                    },
+                });
+            }, delay);
+        }
+
+        $(function () {
+            const session = $("#ev_device_auth");
+            pollDeviceAuthentication(session.data("interval"));
+        });
     </script>
 
-    <h1 class="ev_popup_title">{{ "Authentication Failed"|t(locale) }}</h1>
+    <h1 class="ev_popup_title">{{ "Authentication Required"|t(locale) }}</h1>
 
-    <div class="ev_popup_container_centered">
+    <div
+        id="ev_device_auth"
+        class="ev_popup_container_centered"
+        data-auth-id="{{ auth_id }}"
+        data-interval="{{ interval_ms }}"
+        data-op-url="{{ op_url }}"
+        data-spinner-id="{{ spinner_id }}"
+        data-complete-text="{{ "Authentication completed."|t(locale) }}"
+        data-declined-text="{{ "Authentication was declined."|t(locale) }}"
+        data-expired-text="{{ "The authentication code expired. Please try again."|t(locale) }}"
+        data-failed-text="{{ "Authentication failed. Please try again."|t(locale) }}"
+    >
         <p>{{ error }}</p>
         <p>
-            <a href="{{ url }}">{{ "Authenticate"|t(locale) }}</a>
+            <a href="{{ verification_uri }}">{{ "Open Microsoft sign-in"|t(locale) }}</a>
         </p>
-
-        {{ "info.paste_url_and_retry"|t(locale) }}
-        <br />
-        <input type="text" id="result_url" name="result_url" size="50" />
-        <input type="submit" value="{{ "Retry"|t(locale) }}" onclick="submitAndClose()" />
+        <p>{{ "Enter this code:"|t(locale) }} <strong>{{ user_code }}</strong></p>
+        <p id="ev_device_auth_status">{{ "Waiting for authentication..."|t(locale) }}</p>
         <input
             type="button"
             value="{{ "Cancel"|t(locale) }}"

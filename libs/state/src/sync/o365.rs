@@ -135,6 +135,11 @@ where
                     // otherwise we fail and ask the user to authenticate
                     return Ok(SyncColResult::AuthFailed(line));
                 }
+            } else if line.contains("login.microsoft.com/device")
+                || line.contains("microsoft.com/devicelogin")
+                || line.contains("microsoft.com/link")
+            {
+                return Ok(SyncColResult::AuthFailed(line));
             }
         }
         Err(anyhow!("DavMail exited first"))
@@ -284,7 +289,7 @@ impl O365 {
         props.write_all(b"davmail.server=true\n").await?;
         props.write_all(b"davmail.mode=O365Graph\n").await?;
         props
-            .write_all(b"davmail.authentication=O365Manual\n")
+            .write_all(b"davmail.authentication=O365DeviceCode\n")
             .await?;
         props.write_all(b"davmail.enableGraph=true\n").await?;
         props.write_all(b"davmail.enableOidc=true\n").await?;
@@ -292,7 +297,9 @@ impl O365 {
             .write_all(b"davmail.oauth.clientId=d3590ed6-52b3-4102-aeff-aad2292ab01c\n")
             .await?;
         props
-            .write_all(b"davmail.oauth.redirectUri=urn:ietf:wg:oauth:2.0:oob\n")
+            .write_all(
+                b"davmail.oauth.scope=openid profile offline_access https://graph.microsoft.com/.default\n",
+            )
             .await?;
         props
             .write_all(b"davmail.oauth.persistToken=true\n")
@@ -336,12 +343,9 @@ impl O365 {
         &mut self,
         res: anyhow::Result<SyncColResult>,
     ) -> anyhow::Result<SyncColResult> {
-        // Only persist the token when the sync succeeded AND this was an interactive auth flow
-        // (auth_url is Some). Background syncs that reuse a stored token should not overwrite
-        // the persisted token, because DavMail may not have written a fresh one.
-        if let Ok(SyncColResult::Success(_)) = res
-            && self.auth_url.is_some()
-        {
+        // DavMail can rotate a refresh token whenever it uses it, so persist the value written
+        // back to the properties file after every successful operation.
+        if let Ok(SyncColResult::Success(_)) = res {
             let file = File::options().read(true).open(&self.props_path).await?;
             let reader = BufReader::new(file);
             let mut lines = reader.lines();
@@ -689,12 +693,14 @@ mod tests {
 
         assert!(content.contains("davmail.server=true"));
         assert!(content.contains("davmail.mode=O365Graph"));
-        assert!(content.contains("davmail.authentication=O365Manual"));
+        assert!(content.contains("davmail.authentication=O365DeviceCode"));
         assert!(content.contains("davmail.enableGraph=true"));
         assert!(content.contains("davmail.enableOidc=true"));
         assert!(content.contains("davmail.oauth.clientId=d3590ed6-52b3-4102-aeff-aad2292ab01c"));
-        assert!(content.contains("davmail.oauth.redirectUri=urn:ietf:wg:oauth:2.0:oob"));
-        assert!(!content.contains("davmail.oauth.scope"));
+        assert!(content.contains(
+            "davmail.oauth.scope=openid profile offline_access https://graph.microsoft.com/.default"
+        ));
+        assert!(!content.contains("davmail.oauth.redirectUri"));
         assert!(content.contains(&format!("davmail.caldavPort={}", port)));
         assert!(content.contains("davmail.bindAddress=127.0.0.1"));
         assert!(content.contains("davmail.allowRemote=false"));
@@ -913,13 +919,12 @@ mod tests {
     #[tokio::test]
     async fn remember_token_persists_token_on_success() {
         let tmp = tempfile::tempdir().unwrap();
-        let auth_url = "https://login.microsoftonline.com/redirect?code=abc".to_string();
         let mut o365 = make_o365_with_runners(
             &tmp,
             HashMap::new(),
             FakeCommandRunner::empty(),
             FakeDavmailRunner::call_through(),
-            Some(&auth_url),
+            None,
         )
         .await;
 
@@ -1045,7 +1050,7 @@ mod tests {
     async fn impl_calls_func_after_davmail_7_ready_line() {
         let (mut writer, reader) = tokio::io::duplex(4096);
         writer
-            .write_all(b"Start DavMail headless O365Graph O365Manual\n")
+            .write_all(b"Start DavMail headless O365Graph O365DeviceCode\n")
             .await
             .unwrap();
         let mut reader_lines = BufReader::new(reader).lines();
@@ -1104,6 +1109,35 @@ mod tests {
             panic!("expected AuthFailed, got {:?}", res);
         };
         assert!(url.starts_with("https://login.microsoftonline.com/"));
+    }
+
+    #[tokio::test]
+    async fn impl_returns_auth_failed_for_device_code_prompt() {
+        let (mut writer, reader) = tokio::io::duplex(4096);
+        writer
+            .write_all(
+                b"Start DavMail headless O365Graph O365DeviceCode\nTo sign in, use a web browser to open the page https://login.microsoft.com/device and enter the code ABCD to authenticate.\n",
+            )
+            .await
+            .unwrap();
+        let mut reader_lines = BufReader::new(reader).lines();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let log = make_log(tmp.path()).await;
+        let res = run_with_davmail_impl(
+            tokio::io::sink(),
+            &mut reader_lines,
+            || async {},
+            "test",
+            None,
+            log,
+            Box::pin(std::future::pending()),
+        )
+        .await
+        .unwrap();
+
+        drop(writer);
+        assert!(matches!(res, SyncColResult::AuthFailed(_)));
     }
 
     #[tokio::test]
