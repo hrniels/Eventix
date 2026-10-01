@@ -173,6 +173,7 @@ mod tests {
     use chrono::NaiveDate;
     use eventix_ical::objects::CalCompType;
     use eventix_locale::LocaleType;
+    use std::os::unix::fs::PermissionsExt;
 
     use super::Misc;
 
@@ -260,6 +261,8 @@ mod tests {
     fn write_and_load_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("misc.toml");
+        std::fs::write(&path, "old content").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         let mut m = Misc::new(path.clone());
         m.set_locale_type(LocaleType::German);
         m.set_collection_token(&"col".to_string(), "tok".to_string());
@@ -270,6 +273,10 @@ mod tests {
         assert_eq!(
             loaded.collection_token(&"col".to_string()),
             Some(&"tok".to_string())
+        );
+        assert_eq!(
+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600
         );
     }
 }

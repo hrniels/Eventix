@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use std::collections::HashMap;
 use std::future::Future;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -282,9 +283,14 @@ impl O365 {
         let mut props = File::options()
             .create(true)
             .write(true)
-            .truncate(true)
+            .truncate(false)
+            .mode(0o600)
             .open(&props_path)
             .await?;
+        props
+            .set_permissions(std::fs::Permissions::from_mode(0o600))
+            .await?;
+        props.set_len(0).await?;
 
         props.write_all(b"davmail.server=true\n").await?;
         props.write_all(b"davmail.mode=O365Graph\n").await?;
@@ -708,6 +714,13 @@ mod tests {
             !content.contains("refreshToken"),
             "no token when token is None"
         );
+        let mode = tokio::fs::metadata(path)
+            .await
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[tokio::test]
