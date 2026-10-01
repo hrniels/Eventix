@@ -27,6 +27,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs::File,
     io::{Read, Write},
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::PathBuf,
     sync::Arc,
 };
@@ -125,6 +126,55 @@ impl State {
         )
         .await;
         Ok(sync_res)
+    }
+
+    async fn encrypt_o365_token(
+        password: &EncryptedPassword,
+        token: &str,
+    ) -> anyhow::Result<String> {
+        let secret = retrieve_portal_secret().await?;
+        let password = decrypt_password(&secret, password)?;
+        Ok(crypto::encrypt_davmail_token(&password, token).await?)
+    }
+
+    /// Encrypts and persists a Microsoft refresh token for an O365 collection.
+    pub async fn store_o365_refresh_token(
+        state: &EventixState,
+        col_id: &String,
+        token: &str,
+    ) -> anyhow::Result<()> {
+        let password = {
+            let state = state.lock().await;
+            let collection = state
+                .settings()
+                .collections()
+                .get(col_id)
+                .ok_or_else(|| anyhow!("No collection with id {}", col_id))?;
+            match collection.syncer() {
+                SyncerType::O365 { password, .. } => password.clone(),
+                _ => return Err(anyhow!("Collection '{}' is not an O365 collection", col_id)),
+            }
+        };
+
+        let encrypted = Self::encrypt_o365_token(&password, token).await?;
+        let mut state = state.lock().await;
+        let password_matches = matches!(
+            state
+                .settings()
+                .collections()
+                .get(col_id)
+                .map(|collection| collection.syncer()),
+            Some(SyncerType::O365 { password: current, .. }) if current == &password
+        );
+        if !password_matches {
+            return Err(anyhow!(
+                "Collection '{}' changed while encrypting its refresh token",
+                col_id
+            ));
+        }
+        state.misc_mut().set_collection_token(col_id, encrypted);
+        state.misc().write_to_file()?;
+        Ok(())
     }
 
     /// Creates a new in-memory application `State` by loading persisted data from the provided XDG
@@ -588,9 +638,13 @@ pub fn write_to_file<S: Serialize>(filename: &PathBuf, data: S) -> anyhow::Resul
     let mut file = File::options()
         .write(true)
         .create(true)
-        .truncate(true)
+        .truncate(false)
+        .mode(0o600)
         .open(filename)
         .context(format!("open {filename:?}"))?;
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))
+        .context(format!("set permissions on {filename:?}"))?;
+    file.set_len(0).context(format!("truncate {filename:?}"))?;
     file.write_all(
         toml::to_string(&data)
             .context(format!("serialize {filename:?}"))?
@@ -639,7 +693,7 @@ mod tests {
     use eventix_ical::col::{CalDir, CalStore};
 
     use crate::{
-        CalendarSettings, PersonalAlarms,
+        CalendarSettings, EmailAccount, PersonalAlarms, SyncTimeSpan, encrypt_password,
         misc::Misc,
         settings::{CollectionSettings, SyncerType},
     };
@@ -659,7 +713,42 @@ mod tests {
         State::new_for_test(store, Misc::new(PathBuf::default()))
     }
 
+    fn make_o365_state(path: PathBuf) -> State {
+        let mut state = State::new_for_test(CalStore::default(), Misc::new(path));
+        let password = encrypt_password(b"eventix test secret", "P@ssw0rd").unwrap();
+        state.settings_mut().collections_mut().insert(
+            "o365".to_string(),
+            CollectionSettings::new(SyncerType::O365 {
+                email: EmailAccount::new("User".to_string(), "user@example.com".to_string()),
+                read_only: false,
+                password,
+                time_span: SyncTimeSpan::default(),
+            }),
+        );
+        state
+    }
+
     // --- accessor tests ---
+
+    #[tokio::test]
+    async fn stores_o365_refresh_token_encrypted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("misc.toml");
+        let state = Arc::new(tokio::sync::Mutex::new(make_o365_state(path.clone())));
+
+        State::store_o365_refresh_token(&state, &"o365".to_string(), "plain-refresh-token")
+            .await
+            .unwrap();
+
+        let state = state.lock().await;
+        let token = state.misc().collection_token(&"o365".to_string()).unwrap();
+        assert!(token.starts_with("{AES}"));
+        assert!(
+            !std::fs::read_to_string(path)
+                .unwrap()
+                .contains("plain-refresh-token")
+        );
+    }
 
     #[test]
     fn state_store_accessors() {

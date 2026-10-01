@@ -333,6 +333,11 @@ impl O365 {
             .write_all(b"davmail.showStartupBanner=false\n")
             .await?;
         if let Some(token) = token {
+            if !token.starts_with("{AES}") {
+                return Err(anyhow!(
+                    "Refusing to write an unencrypted O365 refresh token"
+                ));
+            }
             props
                 .write_all(format!("davmail.oauth.{}.refreshToken={}\n", user, token).as_bytes())
                 .await?;
@@ -361,6 +366,9 @@ impl O365 {
                     && let Some(split) = line.find('=')
                 {
                     let token = &line[split + 1..];
+                    if !token.starts_with("{AES}") {
+                        return Err(anyhow!("DavMail persisted an unencrypted refresh token"));
+                    }
                     self.pending_token = Some(token.to_string());
                     break;
                 }
@@ -736,7 +744,7 @@ mod tests {
             &name,
             25001,
             &user,
-            Some("my-refresh-token".to_string()),
+            Some("{AES}encrypted-refresh-token".to_string()),
         )
         .await
         .unwrap();
@@ -749,7 +757,24 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(content.contains("refreshToken=my-refresh-token"));
+        assert!(content.contains("refreshToken={AES}encrypted-refresh-token"));
+    }
+
+    #[tokio::test]
+    async fn generate_props_rejects_plaintext_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = make_xdg(&tmp).await;
+
+        let result = O365::generate_props(
+            &xdg,
+            &"mycol".to_string(),
+            25001,
+            &"user@example.com".to_string(),
+            Some("plaintext-refresh-token".to_string()),
+        )
+        .await;
+
+        assert!(result.unwrap_err().to_string().contains("unencrypted"));
     }
 
     // --- FakeDavmailRunner behaviour tests ---
@@ -944,7 +969,7 @@ mod tests {
         // Simulate DavMail writing a refreshToken line to the props file.
         tokio::fs::write(
             &o365.props_path,
-            "davmail.oauth.user@example.com.refreshToken=super-secret-token\n",
+            "davmail.oauth.user@example.com.refreshToken={AES}encrypted-token\n",
         )
         .await
         .unwrap();
@@ -952,7 +977,7 @@ mod tests {
         let res = o365.sync().await.unwrap();
         assert_eq!(res, SyncColResult::Success(false));
 
-        assert_eq!(o365.take_token(), Some("super-secret-token".to_string()),);
+        assert_eq!(o365.take_token(), Some("{AES}encrypted-token".to_string()),);
     }
 
     // --- run_with_davmail_impl unit tests ---

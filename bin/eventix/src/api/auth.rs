@@ -18,7 +18,7 @@ use axum::{
     routing::{get, post},
 };
 use eventix_locale::Locale;
-use eventix_state::{EventixState, SyncerType};
+use eventix_state::{EventixState, State as AppState, SyncerType};
 use formatx::formatx;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -319,18 +319,7 @@ async fn poll_handler(
 
     match poll {
         TokenPoll::Complete(token) => {
-            let mut app_state = state.lock().await;
-            // The collection may have been deleted or changed while the user authenticated.
-            let collection = app_state
-                .settings()
-                .collections()
-                .get(&col_id)
-                .ok_or_else(|| anyhow!("No collection with id {}", col_id))?;
-            if !matches!(collection.syncer(), SyncerType::O365 { .. }) {
-                return Err(anyhow!("Collection '{}' is not an O365 collection", col_id).into());
-            }
-            app_state.misc_mut().set_collection_token(&col_id, token);
-            app_state.misc().write_to_file()?;
+            AppState::store_o365_refresh_token(&state, &col_id, &token).await?;
             service.sessions.lock().await.remove(&auth_id);
             Ok(Json(PollResponse::Complete))
         }
