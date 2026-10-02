@@ -11,10 +11,13 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, Lines};
+use tokio::net::TcpStream;
 use tokio::process::Command;
 use tokio::sync::Mutex;
+use tokio::time::{sleep, timeout};
 use xdg::BaseDirectories;
 
 use crate::State;
@@ -23,6 +26,8 @@ use crate::sync::vdirsyncer::VDirSyncer;
 use crate::sync::{SyncColResult, Syncer, log_line};
 
 const PORT_BASE: u16 = 25000;
+const DAVMAIL_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
+const DAVMAIL_PORT_RETRY_DELAY: Duration = Duration::from_millis(50);
 
 // --- DavmailRunner trait and implementations ---
 
@@ -35,12 +40,13 @@ type SyncFuture<'a> =
 /// Abstracts the DavMail subprocess lifecycle so that tests can inject a fake runner without
 /// spawning a real DavMail process.
 pub(crate) trait DavmailRunner: Send + Sync {
-    /// Starts DavMail with the given properties file, waits for it to signal readiness, and
+    /// Starts DavMail with the given properties file, waits for its CalDAV port to open, and
     /// then drives `func` to completion.  While `func` is running, monitors DavMail output for
     /// auth requests and handles them using `auth_url` if available.  Kills DavMail when done.
     fn run_with_davmail<'a>(
         &'a self,
         props_path: &'a Path,
+        port: u16,
         id: &'a str,
         auth_url: Option<&'a String>,
         log: Arc<Mutex<File>>,
@@ -55,6 +61,7 @@ impl DavmailRunner for RealDavmailRunner {
     fn run_with_davmail<'a>(
         &'a self,
         props_path: &'a Path,
+        port: u16,
         id: &'a str,
         auth_url: Option<&'a String>,
         log: Arc<Mutex<File>>,
@@ -79,6 +86,7 @@ impl DavmailRunner for RealDavmailRunner {
             run_with_davmail_impl(
                 stdin,
                 &mut reader,
+                wait_for_port(port, DAVMAIL_STARTUP_TIMEOUT),
                 || async move {
                     child.kill().await.ok();
                 },
@@ -92,14 +100,30 @@ impl DavmailRunner for RealDavmailRunner {
     }
 }
 
-/// Core DavMail lifecycle logic: waits for the readiness line, then races the caller-supplied
+/// Waits until the local DavMail CalDAV port accepts TCP connections.
+async fn wait_for_port(port: u16, startup_timeout: Duration) -> anyhow::Result<()> {
+    timeout(startup_timeout, async move {
+        loop {
+            if TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+                return;
+            }
+            sleep(DAVMAIL_PORT_RETRY_DELAY).await;
+        }
+    })
+    .await
+    .with_context(|| format!("DavMail did not open port {port} within {startup_timeout:?}"))
+}
+
+/// Core DavMail lifecycle logic: waits for a readiness future, then races the caller-supplied
 /// sync future against stdout monitoring for auth requests.
 ///
 /// Accepts pre-constructed I/O handles so that tests can inject in-memory pipes without spawning
 /// a real DavMail process. `kill` is called unconditionally when the function returns.
-async fn run_with_davmail_impl<W, R, K, Fut>(
+#[allow(clippy::too_many_arguments)]
+async fn run_with_davmail_impl<W, R, Ready, K, Fut>(
     mut stdin: W,
     reader: &mut Lines<BufReader<R>>,
+    ready: Ready,
     kill: K,
     id: &str,
     auth_url: Option<&String>,
@@ -109,21 +133,17 @@ async fn run_with_davmail_impl<W, R, K, Fut>(
 where
     W: AsyncWrite + Unpin,
     R: AsyncRead + Unpin,
+    Ready: Future<Output = anyhow::Result<()>>,
     K: FnOnce() -> Fut,
     Fut: Future<Output = ()>,
 {
-    // Wait until DavMail signals that it is ready to accept connections.
-    while let Ok(Some(line)) = reader.next_line().await {
-        log_line(&log, id, &line).await?;
-        if line.contains("Start DavMail in server mode") || line.contains("Start DavMail headless ")
-        {
-            break;
-        }
-    }
-
     // Read lines from DavMail stdout and watch for auth requests.
-    let mut read_output = async || {
-        while let Ok(Some(line)) = reader.next_line().await {
+    let read_output = async {
+        while let Some(line) = reader
+            .next_line()
+            .await
+            .context("Reading DavMail output failed")?
+        {
             log_line(&log, id, &line).await?;
 
             // do we need to (re-)authenticate?
@@ -145,13 +165,19 @@ where
         }
         Err(anyhow!("DavMail exited first"))
     };
+    tokio::pin!(read_output);
 
-    // Race the caller-supplied sync function against DavMail's stdout monitor. Whichever
-    // branch completes first wins: if the sync finishes, we get its result; if DavMail exits
-    // (or signals an auth requirement) before the sync completes, we get that error instead.
-    let res = tokio::select! {
-        res = func => res,
-        res = read_output() => res,
+    let startup = tokio::select! {
+        res = ready => res.map(|()| None),
+        res = &mut read_output => res.map(Some),
+    };
+    let res = match startup {
+        Ok(None) => tokio::select! {
+            res = func => res,
+            res = &mut read_output => res,
+        },
+        Ok(Some(res)) => Ok(res),
+        Err(err) => Err(err),
     };
     kill().await;
     res
@@ -170,6 +196,7 @@ pub struct O365 {
     vdirsyncer: VDirSyncer,
     auth_url: Option<String>,
     props_path: PathBuf,
+    caldav_port: u16,
     pending_token: Option<String>,
     log: Arc<Mutex<File>>,
     runner: Arc<dyn DavmailRunner>,
@@ -223,6 +250,7 @@ impl O365 {
             vdirsyncer,
             auth_url,
             props_path,
+            port,
             log,
             Arc::new(RealDavmailRunner),
         ))
@@ -235,6 +263,7 @@ impl O365 {
         vdirsyncer: VDirSyncer,
         auth_url: Option<&String>,
         props_path: PathBuf,
+        caldav_port: u16,
         log: Arc<Mutex<File>>,
         runner: Arc<dyn DavmailRunner>,
     ) -> Self {
@@ -243,6 +272,7 @@ impl O365 {
             vdirsyncer,
             auth_url: auth_url.cloned(),
             props_path,
+            caldav_port,
             pending_token: None,
             log,
             runner,
@@ -258,10 +288,18 @@ impl O365 {
         let props_path = self.props_path.clone();
         let log = self.log.clone();
         let runner = self.runner.clone();
+        let caldav_port = self.caldav_port;
         let future = future(&mut self.vdirsyncer);
 
         runner
-            .run_with_davmail(&props_path, &id, auth_url.as_ref(), log, future)
+            .run_with_davmail(
+                &props_path,
+                caldav_port,
+                &id,
+                auth_url.as_ref(),
+                log,
+                future,
+            )
             .await
     }
 
@@ -315,6 +353,7 @@ impl O365 {
             .write_all(format!("davmail.caldavPort={}\n", port).as_bytes())
             .await?;
         props.write_all(b"davmail.allowRemote=false\n").await?;
+        props.write_all(b"davmail.exitOnBindFailed=true\n").await?;
         props
             .write_all(b"davmail.disableUpdateCheck=true\n")
             .await?;
@@ -580,6 +619,7 @@ mod tests {
         fn run_with_davmail<'a>(
             &'a self,
             _props_path: &'a Path,
+            _port: u16,
             _id: &'a str,
             _auth_url: Option<&'a String>,
             _log: Arc<Mutex<File>>,
@@ -658,6 +698,7 @@ mod tests {
             vdirsyncer,
             auth_url,
             props_path,
+            25000,
             log,
             davmail_runner,
         )
@@ -718,6 +759,7 @@ mod tests {
         assert!(content.contains(&format!("davmail.caldavPort={}", port)));
         assert!(content.contains("davmail.bindAddress=127.0.0.1"));
         assert!(content.contains("davmail.allowRemote=false"));
+        assert!(content.contains("davmail.exitOnBindFailed=true"));
         assert!(
             !content.contains("refreshToken"),
             "no token when token is None"
@@ -791,6 +833,7 @@ mod tests {
         let result = runner
             .run_with_davmail(
                 Path::new("/irrelevant"),
+                25000,
                 "test",
                 None,
                 log,
@@ -1041,51 +1084,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn impl_calls_func_after_legacy_ready_line() {
-        // Spawn a task that writes the readiness line and then keeps the writer open.
-        // read_output will block on the next next_line() call, giving func time to win.
-        let (mut writer, reader) = tokio::io::duplex(4096);
-        writer
-            .write_all(b"Start DavMail in server mode\n")
+    async fn wait_for_port_waits_until_listener_is_bound() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let wait = wait_for_port(port, Duration::from_secs(1));
+        tokio::pin!(wait);
+        tokio::select! {
+            result = &mut wait => panic!("port unexpectedly opened: {result:?}"),
+            () = sleep(Duration::from_millis(100)) => {},
+        }
+
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .unwrap();
-        // writer stays alive (not dropped) so read_output blocks after consuming the line.
-        let mut reader_lines = BufReader::new(reader).lines();
-
-        let tmp = tempfile::tempdir().unwrap();
-        let log = make_log(tmp.path()).await;
-        let stdin = tokio::io::sink();
-        let killed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let killed_clone = killed.clone();
-
-        let res = run_with_davmail_impl(
-            stdin,
-            &mut reader_lines,
-            || async move {
-                killed_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-            },
-            "test",
-            None,
-            log,
-            // Yield once so read_output can reach its blocking next_line() call, then return.
-            Box::pin(async {
-                tokio::task::yield_now().await;
-                Ok(SyncColResult::Success(true))
-            }),
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(res, SyncColResult::Success(true));
-        assert!(
-            killed.load(std::sync::atomic::Ordering::SeqCst),
-            "kill should be called"
-        );
-        drop(writer); // keep alive until here
+        wait.await.unwrap();
+        drop(listener);
     }
 
     #[tokio::test]
-    async fn impl_calls_func_after_davmail_7_ready_line() {
+    async fn wait_for_port_times_out() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let err = wait_for_port(port, Duration::from_millis(100))
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("did not open port"));
+    }
+
+    #[tokio::test]
+    async fn impl_ignores_banner_until_port_is_ready() {
         let (mut writer, reader) = tokio::io::duplex(4096);
         writer
             .write_all(b"Start DavMail headless O365Graph O365DeviceCode\n")
@@ -1095,20 +1126,41 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let log = make_log(tmp.path()).await;
+        let stdin = tokio::io::sink();
+        let killed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let killed_clone = killed.clone();
+        let ready = Arc::new(Notify::new());
+        let ready_clone = ready.clone();
 
-        let res = run_with_davmail_impl(
-            tokio::io::sink(),
+        let run = run_with_davmail_impl(
+            stdin,
             &mut reader_lines,
-            || async {},
+            async move {
+                ready_clone.notified().await;
+                Ok(())
+            },
+            || async move {
+                killed_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+            },
             "test",
             None,
             log,
             Box::pin(async { Ok(SyncColResult::Success(true)) }),
-        )
-        .await
-        .unwrap();
+        );
+        tokio::pin!(run);
+        tokio::select! {
+            result = &mut run => panic!("sync started before the port opened: {result:?}"),
+            () = sleep(Duration::from_millis(50)) => {},
+        }
+
+        ready.notify_one();
+        let res = run.await.unwrap();
 
         assert_eq!(res, SyncColResult::Success(true));
+        assert!(
+            killed.load(std::sync::atomic::Ordering::SeqCst),
+            "kill should be called"
+        );
         drop(writer);
     }
 
@@ -1133,6 +1185,7 @@ mod tests {
         let res = run_with_davmail_impl(
             stdin,
             &mut reader_lines,
+            async { Ok(()) },
             || async {},
             "test",
             None,
@@ -1165,6 +1218,7 @@ mod tests {
         let res = run_with_davmail_impl(
             tokio::io::sink(),
             &mut reader_lines,
+            async { Ok(()) },
             || async {},
             "test",
             None,
@@ -1207,6 +1261,7 @@ mod tests {
         let res = run_with_davmail_impl(
             stdin_notifying,
             &mut reader_lines,
+            async { Ok(()) },
             || async {},
             "test",
             Some(&auth_url),
@@ -1235,9 +1290,7 @@ mod tests {
 
     #[tokio::test]
     async fn impl_returns_error_when_stdout_closes_before_ready() {
-        // stdout closes immediately without emitting the readiness line: DavMail exited early.
-        // The readiness loop ends; then read_output() returns Err("DavMail exited first")
-        // immediately (before func produces a result).
+        // stdout closes while the port is still unavailable: DavMail exited early.
         let (writer, reader) = tokio::io::duplex(4096);
         drop(writer); // EOF immediately
         let mut reader_lines = BufReader::new(reader).lines();
@@ -1249,6 +1302,7 @@ mod tests {
         let res = run_with_davmail_impl(
             stdin,
             &mut reader_lines,
+            std::future::pending(),
             || async {},
             "test",
             None,
