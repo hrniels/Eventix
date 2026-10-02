@@ -16,6 +16,8 @@ const WIDTH_COLLECTION = 700;
 const HEIGHT_ADD_COLLECTION = 515;
 const HEIGHT_EDIT_COLLECTION = 505;
 
+let popupLoading = false;
+
 class State {
     constructor(name) {
         this.name = name;
@@ -364,6 +366,7 @@ let state = new InitState();
 let queue = [];
 
 async function fireEvent(ev) {
+    if (popupLoading && (ev instanceof DeselectEvent || ev instanceof CancelEvent)) return;
     queue.push(ev);
     // if the state is null, we are already processing an event
     while (state != null && queue.length > 0) {
@@ -631,11 +634,22 @@ async function _loadOccurrence(uid, rid, edit) {
 }
 
 async function _loadPage(url) {
+    popupLoading = true;
     await new Promise(function (resolve) {
-        getRequest(url, function (data) {
-            $("#popup").html(data.html);
-            resolve();
-        });
+        getRequest(
+            url,
+            function (data) {
+                popupLoading = false;
+                $("#popup").html(data.html);
+                resolve();
+            },
+            "json",
+            function (jqXHR, textStatus, errorThrown) {
+                popupLoading = false;
+                handleAJAXError(jqXHR, textStatus, errorThrown);
+                resolve();
+            },
+        );
     });
 }
 
