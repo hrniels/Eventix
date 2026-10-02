@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    collections::HashMap,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, SystemTime},
 };
 
+use crate::api::{HTMLResponse, JsonError};
+use crate::html::filters;
+use crate::http::HttpClient;
 use anyhow::{Context, anyhow};
 use askama::Template;
 use async_trait::async_trait;
@@ -18,15 +20,12 @@ use axum::{
     routing::{get, post},
 };
 use eventix_locale::Locale;
-use eventix_state::{EventixState, State as AppState, SyncerType};
+use eventix_state::{
+    EncryptedPassword, EventixState, State as AppState, SyncerType, decrypt_password,
+    encrypt_password, retrieve_portal_secret,
+};
 use formatx::formatx;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
-use uuid::Uuid;
-
-use crate::api::{HTMLResponse, JsonError};
-use crate::html::filters;
-use crate::http::HttpClient;
 
 const CLIENT_ID: &str = "d3590ed6-52b3-4102-aeff-aad2292ab01c";
 const OAUTH_SCOPE: &str = "openid profile offline_access https://graph.microsoft.com/.default";
@@ -60,6 +59,7 @@ struct OAuthError {
 
 enum TokenPoll {
     Pending,
+    Retry,
     SlowDown,
     Complete(String),
     Declined,
@@ -111,7 +111,7 @@ impl DeviceCodeClient for MicrosoftDeviceCodeClient {
     }
 
     async fn poll(&self, device_code: &str) -> anyhow::Result<TokenPoll> {
-        let response = self
+        let response = match self
             .client
             .post_form(
                 TOKEN_URL,
@@ -123,7 +123,13 @@ impl DeviceCodeClient for MicrosoftDeviceCodeClient {
                 Duration::from_secs(30),
             )
             .await
-            .context("polling Microsoft device authorization")?;
+        {
+            Ok(response) => response,
+            Err(error) => {
+                tracing::debug!(?error, "polling Microsoft device authorization failed");
+                return Ok(TokenPoll::Retry);
+            }
+        };
         parse_token_response(response.status.is_success(), &response.body)
     }
 }
@@ -153,29 +159,44 @@ fn oauth_error(error: OAuthError) -> anyhow::Error {
     )
 }
 
-struct PendingAuth {
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct PendingAuthState {
     col_id: String,
-    // The Microsoft device code is a credential and therefore never leaves the server.
+    // The Microsoft device code is a credential and therefore never leaves the server in plaintext.
     device_code: String,
-    expires_at: Instant,
-    interval: Duration,
-    next_poll: Instant,
-    polling: bool,
+    expires_at_ms: u64,
+    interval_ms: u64,
+    next_poll_at_ms: u64,
 }
 
 struct DeviceAuthService {
     client: Arc<dyn DeviceCodeClient>,
-    // The browser only receives the opaque UUID used to address these server-side sessions.
-    sessions: Mutex<HashMap<Uuid, PendingAuth>>,
 }
 
 impl DeviceAuthService {
     fn new(client: Arc<dyn DeviceCodeClient>) -> Self {
-        Self {
-            client,
-            sessions: Mutex::new(HashMap::new()),
-        }
+        Self { client }
     }
+}
+
+fn current_time_ms() -> anyhow::Result<u64> {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .context("system time is before Unix epoch")?
+        .as_millis()
+        .try_into()
+        .context("system time does not fit into milliseconds")
+}
+
+fn seal_auth_state(secret: &[u8], state: &PendingAuthState) -> anyhow::Result<EncryptedPassword> {
+    let plaintext =
+        serde_json::to_string(state).context("serializing device authorization state")?;
+    encrypt_password(secret, &plaintext).context("encrypting device authorization state")
+}
+
+fn open_auth_state(secret: &[u8], encrypted: &EncryptedPassword) -> Option<PendingAuthState> {
+    let plaintext = decrypt_password(secret, encrypted).ok()?;
+    serde_json::from_str(&plaintext).ok()
 }
 
 pub fn router(state: EventixState) -> Router {
@@ -201,7 +222,8 @@ struct Request {
 struct AuthTemplate {
     locale: Arc<dyn Locale + Send + Sync>,
     error: String,
-    auth_id: String,
+    auth_nonce: String,
+    auth_ciphertext: String,
     verification_uri: String,
     user_code: String,
     interval_ms: u64,
@@ -229,29 +251,41 @@ async fn handler(
 
     // Do not hold the application-state lock while waiting on Microsoft.
     let device = service.client.start().await?;
-    let auth_id = Uuid::new_v4();
-    let interval = Duration::from_secs(device.interval.max(1));
-    let now = Instant::now();
-    service.sessions.lock().await.insert(
-        auth_id,
-        PendingAuth {
-            col_id: req.calendar.clone(),
-            device_code: device.device_code,
-            expires_at: now + Duration::from_secs(device.expires_in),
-            interval,
-            next_poll: now + interval,
-            polling: false,
-        },
-    );
+    let interval_ms = device
+        .interval
+        .max(1)
+        .checked_mul(1000)
+        .context("device authorization interval is too large")?;
+    let expires_in_ms = device
+        .expires_in
+        .checked_mul(1000)
+        .context("device authorization lifetime is too large")?;
+    let now_ms = current_time_ms()?;
+    let auth_state = PendingAuthState {
+        col_id: req.calendar.clone(),
+        device_code: device.device_code,
+        expires_at_ms: now_ms
+            .checked_add(expires_in_ms)
+            .context("device authorization expiry is too large")?,
+        interval_ms,
+        next_poll_at_ms: now_ms
+            .checked_add(interval_ms)
+            .context("device authorization interval is too large")?,
+    };
+    let secret = retrieve_portal_secret()
+        .await
+        .context("retrieving portal secret")?;
+    let auth_state = seal_auth_state(&secret, &auth_state)?;
 
     let error = formatx!(locale.translate("error.reauth_required"), &req.calendar).unwrap();
     let html = AuthTemplate {
         locale,
         error,
-        auth_id: auth_id.to_string(),
+        auth_nonce: auth_state.nonce,
+        auth_ciphertext: auth_state.ciphertext,
         verification_uri: device.verification_uri,
         user_code: device.user_code,
-        interval_ms: interval.as_millis() as u64,
+        interval_ms,
         op_url: req.op_url,
         spinner_id: req.spinner_id,
     }
@@ -263,13 +297,18 @@ async fn handler(
 
 #[derive(Debug, Deserialize)]
 struct PollRequest {
-    auth_id: String,
+    auth_nonce: String,
+    auth_ciphertext: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 enum PollResponse {
-    Pending { retry_after_ms: u64 },
+    Pending {
+        auth_nonce: String,
+        auth_ciphertext: String,
+        retry_after_ms: u64,
+    },
     Complete,
     Declined,
     Expired,
@@ -278,89 +317,116 @@ enum PollResponse {
 async fn poll_handler(
     State(state): State<EventixState>,
     Extension(service): Extension<Arc<DeviceAuthService>>,
-    Query(req): Query<PollRequest>,
+    Json(req): Json<PollRequest>,
 ) -> Result<impl IntoResponse, JsonError> {
-    let auth_id = Uuid::parse_str(&req.auth_id).context("invalid authorization id")?;
-    let now = Instant::now();
-    let (device_code, col_id) = {
-        let mut sessions = service.sessions.lock().await;
-        let Some(session) = sessions.get_mut(&auth_id) else {
-            return Ok(Json(PollResponse::Expired));
-        };
-        if now >= session.expires_at {
-            sessions.remove(&auth_id);
-            return Ok(Json(PollResponse::Expired));
-        }
-        if session.polling || now < session.next_poll {
-            let retry_after = session.next_poll.saturating_duration_since(now);
-            return Ok(Json(PollResponse::Pending {
-                retry_after_ms: retry_after.as_millis().max(1) as u64,
-            }));
-        }
-        // Mark the session before releasing the mutex so concurrent browser requests cannot
-        // issue overlapping token polls for the same device code.
-        session.polling = true;
-        (session.device_code.clone(), session.col_id.clone())
+    let secret = retrieve_portal_secret()
+        .await
+        .context("retrieving portal secret")?;
+    let encrypted = EncryptedPassword {
+        nonce: req.auth_nonce,
+        ciphertext: req.auth_ciphertext,
     };
+    let Some(mut auth_state) = open_auth_state(&secret, &encrypted) else {
+        return Ok(Json(PollResponse::Expired));
+    };
+    let now_ms = current_time_ms()?;
+    if now_ms >= auth_state.expires_at_ms {
+        return Ok(Json(PollResponse::Expired));
+    }
+    if now_ms < auth_state.next_poll_at_ms {
+        return Ok(Json(PollResponse::Pending {
+            auth_nonce: encrypted.nonce,
+            auth_ciphertext: encrypted.ciphertext,
+            retry_after_ms: auth_state.next_poll_at_ms - now_ms,
+        }));
+    }
 
-    // The session mutex must not be held across the network request; other authorizations should
-    // remain responsive while Microsoft handles this poll.
-    let poll = match service.client.poll(&device_code).await {
-        Ok(poll) => poll,
-        Err(error) => {
-            // Transport failures are retryable by reopening the popup, so leave the session
-            // available rather than converting the failure into a terminal OAuth state.
-            if let Some(session) = service.sessions.lock().await.get_mut(&auth_id) {
-                session.polling = false;
-            }
-            return Err(error.into());
-        }
-    };
+    let poll = service.client.poll(&auth_state.device_code).await?;
 
     match poll {
         TokenPoll::Complete(token) => {
-            AppState::store_o365_refresh_token(&state, &col_id, &token).await?;
-            service.sessions.lock().await.remove(&auth_id);
+            AppState::store_o365_refresh_token(&state, &auth_state.col_id, &token).await?;
             Ok(Json(PollResponse::Complete))
         }
-        TokenPoll::Pending => {
-            let mut sessions = service.sessions.lock().await;
-            let Some(session) = sessions.get_mut(&auth_id) else {
+        TokenPoll::Pending | TokenPoll::Retry => {
+            let now_ms = current_time_ms()?;
+            if now_ms >= auth_state.expires_at_ms {
                 return Ok(Json(PollResponse::Expired));
-            };
-            session.polling = false;
-            session.next_poll = Instant::now() + session.interval;
+            }
+            auth_state.next_poll_at_ms = now_ms.saturating_add(auth_state.interval_ms);
+            let encrypted = seal_auth_state(&secret, &auth_state)?;
             Ok(Json(PollResponse::Pending {
-                retry_after_ms: session.interval.as_millis() as u64,
+                auth_nonce: encrypted.nonce,
+                auth_ciphertext: encrypted.ciphertext,
+                retry_after_ms: auth_state.interval_ms,
             }))
         }
         TokenPoll::SlowDown => {
-            let mut sessions = service.sessions.lock().await;
-            let Some(session) = sessions.get_mut(&auth_id) else {
+            let now_ms = current_time_ms()?;
+            if now_ms >= auth_state.expires_at_ms {
                 return Ok(Json(PollResponse::Expired));
-            };
-            session.polling = false;
+            }
             // RFC 8628 requires increasing the interval by five seconds after `slow_down`.
-            session.interval += Duration::from_secs(5);
-            session.next_poll = Instant::now() + session.interval;
+            auth_state.interval_ms = auth_state.interval_ms.saturating_add(5000);
+            auth_state.next_poll_at_ms = now_ms.saturating_add(auth_state.interval_ms);
+            let encrypted = seal_auth_state(&secret, &auth_state)?;
             Ok(Json(PollResponse::Pending {
-                retry_after_ms: session.interval.as_millis() as u64,
+                auth_nonce: encrypted.nonce,
+                auth_ciphertext: encrypted.ciphertext,
+                retry_after_ms: auth_state.interval_ms,
             }))
         }
-        TokenPoll::Declined => {
-            service.sessions.lock().await.remove(&auth_id);
-            Ok(Json(PollResponse::Declined))
-        }
-        TokenPoll::Expired => {
-            service.sessions.lock().await.remove(&auth_id);
-            Ok(Json(PollResponse::Expired))
-        }
+        TokenPoll::Declined => Ok(Json(PollResponse::Declined)),
+        TokenPoll::Expired => Ok(Json(PollResponse::Expired)),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{TokenPoll, parse_token_response};
+    use super::{
+        EncryptedPassword, PendingAuthState, TokenPoll, open_auth_state, parse_token_response,
+        seal_auth_state,
+    };
+
+    #[test]
+    fn sealed_auth_state_round_trips_without_exposing_device_code() {
+        let state = PendingAuthState {
+            col_id: "collection".to_string(),
+            device_code: "sensitive-device-code".to_string(),
+            expires_at_ms: 20_000,
+            interval_ms: 5_000,
+            next_poll_at_ms: 10_000,
+        };
+
+        let encrypted = seal_auth_state(b"secret", &state).unwrap();
+
+        assert!(!encrypted.ciphertext.contains(&state.device_code));
+        assert_eq!(open_auth_state(b"secret", &encrypted), Some(state));
+    }
+
+    #[test]
+    fn rejects_tampered_auth_state() {
+        let state = PendingAuthState {
+            col_id: "collection".to_string(),
+            device_code: "device-code".to_string(),
+            expires_at_ms: 20_000,
+            interval_ms: 5_000,
+            next_poll_at_ms: 10_000,
+        };
+        let encrypted = seal_auth_state(b"secret", &state).unwrap();
+
+        assert_eq!(open_auth_state(b"other-secret", &encrypted), None);
+        assert_eq!(
+            open_auth_state(
+                b"secret",
+                &EncryptedPassword {
+                    nonce: "invalid".to_string(),
+                    ciphertext: "invalid".to_string(),
+                },
+            ),
+            None
+        );
+    }
 
     #[test]
     fn parses_successful_token_response() {
@@ -384,6 +450,7 @@ mod tests {
             let response = parse_token_response(false, body.as_bytes()).unwrap();
             let actual = match response {
                 TokenPoll::Pending => "pending",
+                TokenPoll::Retry => "retry",
                 TokenPoll::SlowDown => "slow_down",
                 TokenPoll::Declined => "declined",
                 TokenPoll::Expired => "expired",

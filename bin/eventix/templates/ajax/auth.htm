@@ -1,44 +1,90 @@
 <div class="ev_border">
     <script type="text/javascript">
-        function finishDeviceAuthentication() {
-            const session = $("#ev_device_auth");
-            const op_url = session.data("opUrl");
-            const spinner_id = session.data("spinnerId");
-            fireEvent(new DeselectEvent());
-            postWithSpinner(spinner_id, op_url, defaultSyncFinish(reloadContent));
-        }
-
-        function pollDeviceAuthentication(delay) {
-            setTimeout(function () {
-                const session = $("#ev_device_auth");
-                if (!session.length) return;
-                $.ajax({
-                    type: "POST",
-                    url: "/api/auth/poll?auth_id=" + encodeURIComponent(session.data("authId")),
-                    dataType: "json",
-                    success: function (data) {
-                        if (data.status === "complete") {
-                            $("#ev_device_auth_status").text(session.data("completeText"));
-                            finishDeviceAuthentication();
-                        } else if (data.status === "declined") {
-                            $("#ev_device_auth_status").text(session.data("declinedText"));
-                        } else if (data.status === "expired") {
-                            $("#ev_device_auth_status").text(session.data("expiredText"));
-                        } else {
-                            pollDeviceAuthentication(data.retry_after_ms);
-                        }
-                    },
-                    error: function (jqXHR, textStatus, errorThrown) {
-                        handleAJAXError(jqXHR, textStatus, errorThrown);
-                        $("#ev_device_auth_status").text(session.data("failedText"));
-                    },
-                });
-            }, delay);
-        }
-
         $(function () {
-            const session = $("#ev_device_auth");
-            pollDeviceAuthentication(session.data("interval"));
+            const element = document.getElementById("ev_device_auth");
+            if (!element) return;
+
+            const session = $(element);
+            const status = session.find("#ev_device_auth_status");
+            const opUrl = session.data("opUrl");
+            const spinnerId = session.data("spinnerId");
+            let authNonce = session.data("authNonce");
+            let authCiphertext = session.data("authCiphertext");
+            let active = true;
+            let timer = null;
+            let request = null;
+
+            function ownsPopup() {
+                return active && document.getElementById("ev_device_auth") === element;
+            }
+
+            function cancel() {
+                if (!active) return;
+                active = false;
+                if (timer !== null) clearTimeout(timer);
+                timer = null;
+                if (request !== null) request.abort();
+                request = null;
+                authNonce = null;
+                authCiphertext = null;
+            }
+
+            async function finish() {
+                if (!ownsPopup()) return;
+                active = false;
+                authNonce = null;
+                authCiphertext = null;
+                await fireEvent(new DeselectEvent());
+                postWithSpinner(spinnerId, opUrl, defaultSyncFinish(reloadContent));
+            }
+
+            function schedulePoll(delay) {
+                timer = setTimeout(function () {
+                    timer = null;
+                    if (!ownsPopup()) return;
+                    request = $.ajax({
+                        type: "POST",
+                        url: "/api/auth/poll",
+                        contentType: "application/json",
+                        data: JSON.stringify({
+                            auth_nonce: authNonce,
+                            auth_ciphertext: authCiphertext,
+                        }),
+                        dataType: "json",
+                        success: function (data) {
+                            request = null;
+                            if (!ownsPopup()) return;
+                            if (data.status === "complete") {
+                                status.text(session.data("completeText"));
+                                finish();
+                            } else if (data.status === "declined") {
+                                active = false;
+                                authNonce = null;
+                                authCiphertext = null;
+                                status.text(session.data("declinedText"));
+                            } else if (data.status === "expired") {
+                                active = false;
+                                authNonce = null;
+                                authCiphertext = null;
+                                status.text(session.data("expiredText"));
+                            } else {
+                                authNonce = data.auth_nonce;
+                                authCiphertext = data.auth_ciphertext;
+                                schedulePoll(data.retry_after_ms);
+                            }
+                        },
+                        error: function (jqXHR, textStatus, errorThrown) {
+                            request = null;
+                            if (!ownsPopup()) return;
+                            handleAJAXError(jqXHR, textStatus, errorThrown);
+                            status.text(session.data("failedText"));
+                        },
+                    });
+                }, delay);
+            }
+
+            element.evCancelDeviceAuthentication = cancel;
+            schedulePoll(session.data("interval"));
         });
     </script>
 
@@ -47,7 +93,8 @@
     <div
         id="ev_device_auth"
         class="ev_popup_container_centered"
-        data-auth-id="{{ auth_id }}"
+        data-auth-nonce="{{ auth_nonce }}"
+        data-auth-ciphertext="{{ auth_ciphertext }}"
         data-interval="{{ interval_ms }}"
         data-op-url="{{ op_url }}"
         data-spinner-id="{{ spinner_id }}"
