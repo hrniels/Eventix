@@ -31,6 +31,34 @@ jobs:
         run: ./b format-check
 
   # --------------------------------------------------------------------------
+  # Flatpak source consistency check
+  # --------------------------------------------------------------------------
+  flatpak-sources:
+    name: Flatpak sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Check submodule revisions
+        run: |
+          for module in vdirsyncer davmail; do
+            submodule_commit=$(git -C "contrib/$module" rev-parse HEAD)
+            manifest_commit=$(jq -r --arg module "$module" '
+              .modules[]
+              | select(type == "object" and .name == $module)
+              | .sources[]
+              | select(type == "object" and .type == "git")
+              | .commit
+            ' flatpak/io.github.hrniels.Eventix.json)
+            if [[ "$manifest_commit" != "$submodule_commit" ]]; then
+              echo "$module manifest revision $manifest_commit does not match $submodule_commit"
+              exit 1
+            fi
+          done
+
+  # --------------------------------------------------------------------------
   # Formatting check
   # --------------------------------------------------------------------------
   fmt:
