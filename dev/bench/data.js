@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791005110421,
+  "lastUpdate": 1791005190248,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -12113,6 +12113,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 16826477.944444444,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "f6f9312aaf994c2b71a8ecdc3dd8d7006bc4b342",
+          "message": "Switched to O365 Graph API",
+          "timestamp": "2026-09-23T03:38:37Z",
+          "url": "https://github.com/hrniels/Eventix/pull/64/commits/f6f9312aaf994c2b71a8ecdc3dd8d7006bc4b342"
+        },
+        "date": 1791005189930,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 25401374.966666665,
             "unit": "ns"
           }
         ]
