@@ -2,13 +2,13 @@ function handleAJAXError(jqXHR, textStatus, errorThrown) {
     notifyAJAXError(formatAJAXErrorMessage(jqXHR, textStatus, errorThrown));
 }
 
-function getRequest(url, success, type = "json") {
+function getRequest(url, success, type = "json", error = handleAJAXError) {
     $.ajax({
         type: "GET",
         url: url,
         dataType: type,
         success: success,
-        error: handleAJAXError,
+        error: error,
     });
 }
 

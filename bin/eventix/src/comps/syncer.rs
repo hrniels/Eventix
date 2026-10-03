@@ -9,14 +9,13 @@ use email_address::EmailAddress;
 use eventix_locale::Locale;
 use eventix_state::{
     EmailAccount, EncryptedPassword, SyncTimeBound, SyncTimeSpan, SyncerType, encrypt_password,
-    retrieve_portal_secret,
+    generate_local_password, retrieve_portal_secret,
 };
 use formatx::formatx;
 use serde::{Deserialize, Deserializer, de};
 use std::fmt::{self, Display};
 use std::path::Path;
 use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::comps::password::{PasswordRequest, PasswordTemplate};
 use crate::html::filters;
@@ -315,7 +314,7 @@ impl SyncerRequest {
         }
 
         let secret = retrieve_portal_secret().await?;
-        let generated = Uuid::new_v4().simple().to_string();
+        let generated = generate_local_password();
         encrypt_password(&secret, &generated).context("Encrypt password")
     }
 

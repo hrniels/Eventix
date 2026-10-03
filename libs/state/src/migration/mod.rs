@@ -28,6 +28,11 @@ const MIGRATIONS: &[Migration] = &[
         filename: "settings.toml",
         migrate: migrate_settings_v1_to_v2,
     },
+    Migration {
+        version: 2,
+        filename: "misc.toml",
+        migrate: migrate_misc_v2_to_v3,
+    },
 ];
 
 pub fn migrate_if_needed(path: &PathBuf) -> anyhow::Result<()> {
@@ -138,6 +143,10 @@ fn migrate_settings_v1_to_v2(doc: &mut DocumentMut) {
     }
 }
 
+fn migrate_misc_v2_to_v3(doc: &mut DocumentMut) {
+    doc.remove("collection_tokens");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,7 +175,7 @@ syncer.FileSystem.path = "/data"
         migrate_if_needed(&settings_path).unwrap();
 
         let migrated_content = fs::read_to_string(&settings_path).unwrap();
-        assert!(migrated_content.contains("version = 2"));
+        assert!(migrated_content.contains("version = 3"));
         // Check that it passed through v1 (Command type) and ended in v2 (empty encrypted password)
         assert!(!migrated_content.contains("password_cmd"));
         assert!(!migrated_content.contains("password_source"));
@@ -179,23 +188,49 @@ syncer.FileSystem.path = "/data"
     }
 
     #[test]
-    fn test_migrate_v1_no_op() {
+    fn test_migrate_current_version_no_op() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("misc.toml");
 
-        let v2_content = r#"version = 2
+        let v3_content = r#"version = 3
 locale_type = "English"
+"#;
+        fs::write(&path, v3_content).unwrap();
+
+        migrate_if_needed(&path).unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert_eq!(content, v3_content);
+
+        // No backup should be created if no migration was performed
+        let backup_path = dir.path().join("misc.v3.toml");
+        assert!(!backup_path.exists());
+    }
+
+    #[test]
+    fn test_migrate_misc_v2_to_v3_removes_collection_tokens() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("misc.toml");
+        let v2_content = r#"version = 2
+locale_type = "German"
+disabled_calendars = ["cal1"]
+
+[collection_tokens]
+o365 = "refresh-token"
 "#;
         fs::write(&path, v2_content).unwrap();
 
         migrate_if_needed(&path).unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
-        assert_eq!(content, v2_content);
-
-        // No backup should be created if no migration was performed
-        let backup_path = dir.path().join("misc.v2.toml");
-        assert!(!backup_path.exists());
+        assert!(content.contains("version = 3"));
+        assert!(content.contains("locale_type = \"German\""));
+        assert!(content.contains("disabled_calendars = [\"cal1\"]"));
+        assert!(!content.contains("collection_tokens"));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("misc.v2.toml")).unwrap(),
+            v2_content
+        );
     }
 
     #[test]
@@ -224,7 +259,7 @@ syncer.O365.read_only = false
         migrate_if_needed(&settings_path).unwrap();
 
         let migrated_content = fs::read_to_string(&settings_path).unwrap();
-        assert!(migrated_content.contains("version = 2"));
+        assert!(migrated_content.contains("version = 3"));
         // CalDAV check: had password_source, so should have password
         assert!(!migrated_content.contains("password_source"));
         assert!(migrated_content.contains("password = { nonce = \"\", ciphertext = \"\" }"));
@@ -261,7 +296,7 @@ syncer.FileSystem.path = "/data"
         migrate_if_needed(&settings_path).unwrap();
 
         let migrated_content = fs::read_to_string(&settings_path).unwrap();
-        assert!(migrated_content.contains("version = 2"));
+        assert!(migrated_content.contains("version = 3"));
         // VDirSyncer check: had NO password_source, so should have NO password
         assert!(!migrated_content.contains("syncer.VDirSyncer.password_source"));
         assert!(!migrated_content.contains("syncer.VDirSyncer.password ="));
@@ -290,7 +325,7 @@ syncer.VDirSyncer.password_cmd = ["pass", "show", "work"]
         migrate_if_needed(&settings_path).unwrap();
 
         let migrated_content = fs::read_to_string(&settings_path).unwrap();
-        assert!(migrated_content.contains("version = 2"));
+        assert!(migrated_content.contains("version = 3"));
         assert!(!migrated_content.contains("password_cmd"));
         assert!(!migrated_content.contains("password_source"));
         assert!(migrated_content.contains("password = { nonce = \"\", ciphertext = \"\" }"));

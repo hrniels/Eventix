@@ -1,32 +1,114 @@
 <div class="ev_border">
     <script type="text/javascript">
-        function submitAndClose() {
-            const auth_url = $("#result_url").val();
-            const op_url = "{{ op_url|safe }}";
-            let url =
-                op_url +
-                (op_url.includes("?") ? "&" : "?") +
-                "auth_url=" +
-                encodeURIComponent(auth_url);
-            fireEvent(new DeselectEvent());
-            postWithSpinner("{{ spinner_id }}", url, function (data, auth_failed) {
-                if (data.changed) reloadContent();
-            });
-        }
+        $(function () {
+            const element = document.getElementById("ev_device_auth");
+            if (!element) return;
+
+            const session = $(element);
+            const status = session.find("#ev_device_auth_status");
+            const opUrl = session.data("opUrl");
+            const spinnerId = session.data("spinnerId");
+            let authNonce = session.data("authNonce");
+            let authCiphertext = session.data("authCiphertext");
+            let active = true;
+            let timer = null;
+            let request = null;
+
+            function ownsPopup() {
+                return active && document.getElementById("ev_device_auth") === element;
+            }
+
+            function cancel() {
+                if (!active) return;
+                active = false;
+                if (timer !== null) clearTimeout(timer);
+                timer = null;
+                if (request !== null) request.abort();
+                request = null;
+                authNonce = null;
+                authCiphertext = null;
+            }
+
+            async function finish() {
+                if (!ownsPopup()) return;
+                active = false;
+                authNonce = null;
+                authCiphertext = null;
+                await fireEvent(new DeselectEvent());
+                postWithSpinner(spinnerId, opUrl, defaultSyncFinish(reloadContent));
+            }
+
+            function schedulePoll(delay) {
+                timer = setTimeout(function () {
+                    timer = null;
+                    if (!ownsPopup()) return;
+                    request = $.ajax({
+                        type: "POST",
+                        url: "/api/auth/poll",
+                        contentType: "application/json",
+                        data: JSON.stringify({
+                            auth_nonce: authNonce,
+                            auth_ciphertext: authCiphertext,
+                        }),
+                        dataType: "json",
+                        success: function (data) {
+                            request = null;
+                            if (!ownsPopup()) return;
+                            if (data.status === "complete") {
+                                status.text(session.data("completeText"));
+                                finish();
+                            } else if (data.status === "declined") {
+                                active = false;
+                                authNonce = null;
+                                authCiphertext = null;
+                                status.text(session.data("declinedText"));
+                            } else if (data.status === "expired") {
+                                active = false;
+                                authNonce = null;
+                                authCiphertext = null;
+                                status.text(session.data("expiredText"));
+                            } else {
+                                authNonce = data.auth_nonce;
+                                authCiphertext = data.auth_ciphertext;
+                                schedulePoll(data.retry_after_ms);
+                            }
+                        },
+                        error: function (jqXHR, textStatus, errorThrown) {
+                            request = null;
+                            if (!ownsPopup()) return;
+                            handleAJAXError(jqXHR, textStatus, errorThrown);
+                            status.text(session.data("failedText"));
+                        },
+                    });
+                }, delay);
+            }
+
+            element.evCancelDeviceAuthentication = cancel;
+            schedulePoll(session.data("interval"));
+        });
     </script>
 
-    <h1 class="ev_popup_title">{{ "Authentication Failed"|t(locale) }}</h1>
+    <h1 class="ev_popup_title">{{ "Authentication Required"|t(locale) }}</h1>
 
-    <div class="ev_popup_container_centered">
+    <div
+        id="ev_device_auth"
+        class="ev_popup_container_centered"
+        data-auth-nonce="{{ auth_nonce }}"
+        data-auth-ciphertext="{{ auth_ciphertext }}"
+        data-interval="{{ interval_ms }}"
+        data-op-url="{{ op_url }}"
+        data-spinner-id="{{ spinner_id }}"
+        data-complete-text="{{ "Authentication completed."|t(locale) }}"
+        data-declined-text="{{ "Authentication was declined."|t(locale) }}"
+        data-expired-text="{{ "The authentication code expired. Please try again."|t(locale) }}"
+        data-failed-text="{{ "Authentication failed. Please try again."|t(locale) }}"
+    >
         <p>{{ error }}</p>
         <p>
-            <a href="{{ url }}">{{ "Authenticate"|t(locale) }}</a>
+            <a href="{{ verification_uri }}">{{ "Open Microsoft sign-in"|t(locale) }}</a>
         </p>
-
-        {{ "info.paste_url_and_retry"|t(locale) }}
-        <br />
-        <input type="text" id="result_url" name="result_url" size="50" />
-        <input type="submit" value="{{ "Retry"|t(locale) }}" onclick="submitAndClose()" />
+        <p>{{ "Enter this code:"|t(locale) }} <strong>{{ user_code }}</strong></p>
+        <p id="ev_device_auth_status">{{ "Waiting for authentication..."|t(locale) }}</p>
         <input
             type="button"
             value="{{ "Cancel"|t(locale) }}"

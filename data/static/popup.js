@@ -16,6 +16,8 @@ const WIDTH_COLLECTION = 700;
 const HEIGHT_ADD_COLLECTION = 515;
 const HEIGHT_EDIT_COLLECTION = 505;
 
+let popupLoading = false;
+
 class State {
     constructor(name) {
         this.name = name;
@@ -53,9 +55,10 @@ class FormState extends State {
 }
 
 class PageState extends State {
-    constructor(url) {
+    constructor(url, onCancel) {
         super("page");
         this.url = url;
+        this.onCancel = onCancel;
     }
 }
 
@@ -102,12 +105,16 @@ class DeselectEvent extends Event {
 
     async trigger(state) {
         switch (state.name) {
-            case "small":
             case "page":
+                if (state.onCancel) await state.onCancel();
+                await _deselect(state.ids);
+                _closePageLayer();
+                return new InitState();
+
+            case "small":
             case "form":
             case "large":
                 await _deselect(state.ids);
-                if (state.name == "page") _closePageLayer();
                 return new InitState();
 
             default:
@@ -285,6 +292,7 @@ class CancelEvent extends Event {
                 return new_state;
 
             case "page":
+                if (state.onCancel) await state.onCancel();
                 await _deselect(state.ids);
                 _closePageLayer();
                 return new InitState();
@@ -296,13 +304,14 @@ class CancelEvent extends Event {
 }
 
 class PageEvent extends Event {
-    constructor(btnid, url, minWidth, heightEstimate) {
+    constructor(btnid, url, minWidth, heightEstimate, onCancel = null) {
         super("page");
         this.data = {
             btnid: btnid,
             url: url,
             minWidth: minWidth,
             heightEstimate: heightEstimate,
+            onCancel: onCancel,
         };
     }
 
@@ -311,14 +320,14 @@ class PageEvent extends Event {
             case "init":
                 _openPageLayer(true);
                 await _openPagePopup(this.data, this.data["url"]);
-                return new PageState(this.data["url"]);
+                return new PageState(this.data["url"], this.data.onCancel);
 
             case "small":
             case "large":
                 _openPageLayer(true);
                 await _loadPage(this.data["url"]);
                 await _animateOpenPopup(this.data["minWidth"], this.data["heightEstimate"]);
-                return new PageState(this.data["url"]);
+                return new PageState(this.data["url"], this.data.onCancel);
 
             default:
                 return state;
@@ -334,19 +343,18 @@ function createHelpEvent(btnid) {
     return new PageEvent(btnid, "/api/help", WIDTH_HELP, HEIGHT_HELP);
 }
 
-function createAuthEvent(cal, url, op_url, spinnerId) {
+function createAuthEvent(cal, op_url, spinnerId, onCancel) {
     return new PageEvent(
         "link-refresh",
         "/api/auth?calendar=" +
             cal +
-            "&url=" +
-            encodeURIComponent(url) +
             "&op_url=" +
             encodeURIComponent(op_url) +
             "&spinner_id=" +
             encodeURIComponent(spinnerId),
         WIDTH_AUTH,
         HEIGHT_AUTH,
+        onCancel,
     );
 }
 
@@ -366,6 +374,7 @@ let state = new InitState();
 let queue = [];
 
 async function fireEvent(ev) {
+    if (popupLoading && (ev instanceof DeselectEvent || ev instanceof CancelEvent)) return;
     queue.push(ev);
     // if the state is null, we are already processing an event
     while (state != null && queue.length > 0) {
@@ -633,11 +642,22 @@ async function _loadOccurrence(uid, rid, edit) {
 }
 
 async function _loadPage(url) {
+    popupLoading = true;
     await new Promise(function (resolve) {
-        getRequest(url, function (data) {
-            $("#popup").html(data.html);
-            resolve();
-        });
+        getRequest(
+            url,
+            function (data) {
+                popupLoading = false;
+                $("#popup").html(data.html);
+                resolve();
+            },
+            "json",
+            function (jqXHR, textStatus, errorThrown) {
+                popupLoading = false;
+                handleAJAXError(jqXHR, textStatus, errorThrown);
+                resolve();
+            },
+        );
     });
 }
 

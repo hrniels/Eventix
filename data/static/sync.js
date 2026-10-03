@@ -43,8 +43,15 @@ function handleAuthErrors(data, op_url, spinnerId) {
     if (!data || !data.collections) return false;
     for (var col in data.collections) {
         // auth problem? Then show auth popup
-        if (data.collections[col].AuthFailed) {
-            fireEvent(createAuthEvent(col, data.collections[col].AuthFailed, op_url, spinnerId));
+        if (Object.prototype.hasOwnProperty.call(data.collections[col], "AuthFailed")) {
+            fireEvent(
+                createAuthEvent(col, op_url, spinnerId, function () {
+                    const auth = document.getElementById("ev_device_auth");
+                    if (auth && auth.evCancelDeviceAuthentication) {
+                        auth.evCancelDeviceAuthentication();
+                    }
+                }),
+            );
             return true;
         } else if (data.collections[col].Error) {
             error = true;
