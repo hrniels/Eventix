@@ -52,9 +52,13 @@ async def parse_url(http_session, url, destdir, arch=None, maven_repo=None):
 
     if maven_repo and path_match:
         local_path = os.path.join(maven_repo, path_match.group(1), path_match.group(2))
-        if not os.path.isfile(local_path):
-            return []
-        sha256 = get_file_sha256(local_path)
+        if os.path.isfile(local_path):
+            sha256 = get_file_sha256(local_path)
+        else:
+            logging.warning(
+                f"{url} not found in local Maven repo {maven_repo}, computing sha256 remotely"
+            )
+            sha256 = await get_remote_sha256(http_session, url)
     else:
         sha256 = await get_remote_sha256(http_session, url)
 
