@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791004916680,
+  "lastUpdate": 1791005014007,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -6540,6 +6540,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/monthly/content/explicit_month",
             "value": 29568518.083333332,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "f6f9312aaf994c2b71a8ecdc3dd8d7006bc4b342",
+          "message": "Switched to O365 Graph API",
+          "timestamp": "2026-09-23T03:38:37Z",
+          "url": "https://github.com/hrniels/Eventix/pull/64/commits/f6f9312aaf994c2b71a8ecdc3dd8d7006bc4b342"
+        },
+        "date": 1791005013642,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/monthly/content/current_month",
+            "value": 1417934.7438519632,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/dense_month",
+            "value": 1704551.7080162491,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/monthly/content/explicit_month",
+            "value": 42824994.52222223,
             "unit": "ns"
           }
         ]
