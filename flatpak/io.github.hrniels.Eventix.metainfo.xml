@@ -88,6 +88,14 @@
   </screenshots>
 
   <releases>
+    <release version="1.2.0" date="2026-10-03">
+      <description>
+        <ul>
+          <li>Switched to O365 Graph API as EWS is phased out.</li>
+          <li>Use O365 device-code authentication.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.4" date="2026-09-07">
       <description>
         <ul>
