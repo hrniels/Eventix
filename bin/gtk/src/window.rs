@@ -5,7 +5,7 @@
 use chrono::NaiveDate;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
-use crate::week_page::WeekPage;
+use crate::{event_card::EventCard, event_details::EventDetails, week_page::WeekPage};
 
 mod imp {
     use super::*;
@@ -57,6 +57,46 @@ glib::wrapper! {
 impl Window {
     pub fn new(app: &gtk::Application, prefix: String, date: Option<NaiveDate>) -> Self {
         let obj: Self = glib::Object::builder().property("application", app).build();
+        let click = gtk::GestureClick::new();
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = obj.downgrade();
+        click.connect_pressed(move |_, _, x, y| {
+            let Some(window) = weak.upgrade() else { return };
+            let inside_card_or_popup =
+                window
+                    .pick(x, y, gtk::PickFlags::DEFAULT)
+                    .is_some_and(|mut widget| {
+                        loop {
+                            if widget.downcast_ref::<EventCard>().is_some()
+                                || widget.downcast_ref::<EventDetails>().is_some()
+                            {
+                                break true;
+                            }
+                            let Some(parent) = widget.parent() else {
+                                break false;
+                            };
+                            widget = parent;
+                        }
+                    });
+            if !inside_card_or_popup {
+                window.imp().page.dismiss_popovers();
+            }
+        });
+        obj.add_controller(click);
+        let weak = obj.downgrade();
+        obj.connect_hide(move |_| {
+            if let Some(window) = weak.upgrade() {
+                window.imp().page.dismiss_popovers();
+            }
+        });
+        let weak = obj.downgrade();
+        obj.connect_is_active_notify(move |window| {
+            if !window.is_active()
+                && let Some(window) = weak.upgrade()
+            {
+                window.imp().page.dismiss_popovers();
+            }
+        });
         for (name, keys, days) in [
             ("previous", vec!["<Alt>Left"], Some(-7)),
             ("next", vec!["<Alt>Right"], Some(7)),

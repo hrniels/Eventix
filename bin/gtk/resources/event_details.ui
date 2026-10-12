@@ -2,7 +2,7 @@
 <interface>
   <requires lib="gtk" version="4.10"/>
   <template class="EventixEventDetails" parent="GtkPopover">
-    <property name="autohide">true</property>
+    <property name="autohide">false</property>
     <property name="child">
       <object class="GtkScrolledWindow">
         <property name="min-content-width">320</property>

@@ -34,6 +34,7 @@ mod imp {
         #[property(get, set, construct_only)]
         pub(super) all_day: Cell<bool>,
         pub(super) popover: RefCell<Option<EventDetails>>,
+        pub(super) peer: RefCell<Option<glib::WeakRef<super::Timeline>>>,
     }
 
     #[glib::object_subclass]
@@ -45,6 +46,30 @@ mod imp {
 
     #[glib::derived_properties]
     impl ObjectImpl for Timeline {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let timeline = self.obj();
+            let gesture = gtk::GestureClick::new();
+            gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
+            let weak = timeline.downgrade();
+            gesture.connect_pressed(move |_, _, x, y| {
+                let Some(timeline) = weak.upgrade() else {
+                    return;
+                };
+                let on_event = timeline.imp().cards.borrow().iter().any(|card| {
+                    let allocation = card.button.allocation();
+                    x >= f64::from(allocation.x())
+                        && x < f64::from(allocation.x() + allocation.width())
+                        && y >= f64::from(allocation.y())
+                        && y < f64::from(allocation.y() + allocation.height())
+                });
+                if !on_event {
+                    timeline.close_details();
+                }
+            });
+            timeline.add_controller(gesture);
+        }
+
         fn dispose(&self) {
             if let Some(popover) = self.popover.take() {
                 popover.unparent();
@@ -201,6 +226,10 @@ glib::wrapper! {
 }
 
 impl Timeline {
+    pub fn set_peer(&self, peer: &Self) {
+        self.imp().peer.replace(Some(peer.downgrade()));
+    }
+
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
         self.close_details();
         let imp = self.imp();
@@ -247,7 +276,7 @@ impl Timeline {
         self.queue_resize();
     }
 
-    fn close_details(&self) {
+    pub(crate) fn close_details(&self) {
         if let Some(popover) = self.imp().popover.take() {
             popover.popdown();
             popover.unparent();
@@ -255,6 +284,15 @@ impl Timeline {
     }
 
     fn show_details(&self, button: &EventCard) {
+        if let Some(peer) = self
+            .imp()
+            .peer
+            .borrow()
+            .as_ref()
+            .and_then(|peer| peer.upgrade())
+        {
+            peer.close_details();
+        }
         self.close_details();
         let Some(event) = button.event() else { return };
         let week = self.imp().week.borrow();
@@ -263,11 +301,14 @@ impl Timeline {
         popover.set_parent(self);
         popover.set_pointing_to(Some(&button.allocation()));
         let weak = self.downgrade();
-        popover.connect_closed(move |_| {
-            if let Some(timeline) = weak.upgrade()
-                && let Some(popover) = timeline.imp().popover.take()
-            {
-                popover.unparent();
+        popover.connect_closed(move |closed| {
+            if let Some(timeline) = weak.upgrade() {
+                let mut current = timeline.imp().popover.borrow_mut();
+                if current.as_ref() == Some(closed) {
+                    *current = None;
+                }
+                drop(current);
+                closed.unparent();
             }
         });
         self.imp().popover.replace(Some(popover.clone()));

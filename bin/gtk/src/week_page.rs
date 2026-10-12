@@ -120,6 +120,8 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
+            self.timed.set_peer(&self.all_day);
+            self.all_day.set_peer(&self.timed);
             obj.translate_labels();
             self.gutter.set_size_request(GUTTER, -1);
             self.headers.set_margin_end(
@@ -241,7 +243,7 @@ impl WeekPage {
             locale.timezone()
         ));
         for (label, day) in self.day_labels().into_iter().zip(&week.days) {
-            label.set_text(&locale.fmt_weekdate(&day.date, DateFlags::NoToday));
+            label.set_text(&locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday));
         }
         let empty = week
             .days
@@ -292,6 +294,11 @@ impl WeekPage {
             &imp.saturday,
             &imp.sunday,
         ]
+    }
+
+    pub fn dismiss_popovers(&self) {
+        self.imp().timed.close_details();
+        self.imp().all_day.close_details();
     }
 
     fn update_today(&self) {
