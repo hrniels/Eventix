@@ -226,6 +226,15 @@ glib::wrapper! {
 }
 
 impl Timeline {
+    pub(crate) fn event_cards(&self) -> Vec<(i64, EventCard)> {
+        self.imp()
+            .cards
+            .borrow()
+            .iter()
+            .map(|card| (card.event.start.timestamp(), card.button.clone()))
+            .collect()
+    }
+
     pub fn set_peer(&self, peer: &Self) {
         self.imp().peer.replace(Some(peer.downgrade()));
     }

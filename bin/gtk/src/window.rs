@@ -83,6 +83,59 @@ impl Window {
             }
         });
         obj.add_controller(click);
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let weak = obj.downgrade();
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            let Some(window) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            if key == gtk::gdk::Key::Escape {
+                window.imp().page.dismiss_popovers();
+                return glib::Propagation::Proceed;
+            }
+            if modifiers.contains(gtk::gdk::ModifierType::ALT_MASK)
+                && !modifiers.intersects(
+                    gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SUPER_MASK,
+                )
+            {
+                match key {
+                    gtk::gdk::Key::Left => {
+                        window.imp().page.navigate(-7);
+                        return glib::Propagation::Stop;
+                    }
+                    gtk::gdk::Key::Right => {
+                        window.imp().page.navigate(7);
+                        return glib::Propagation::Stop;
+                    }
+                    _ => {}
+                }
+            }
+            if modifiers.intersects(
+                gtk::gdk::ModifierType::ALT_MASK
+                    | gtk::gdk::ModifierType::CONTROL_MASK
+                    | gtk::gdk::ModifierType::SUPER_MASK,
+            ) {
+                return glib::Propagation::Proceed;
+            }
+            let forward = match key {
+                gtk::gdk::Key::Right | gtk::gdk::Key::Down => true,
+                gtk::gdk::Key::Left | gtk::gdk::Key::Up => false,
+                _ => return glib::Propagation::Proceed,
+            };
+            let mut focused = gtk::prelude::GtkWindowExt::focus(&window);
+            let mut current = None;
+            while let Some(widget) = focused {
+                if let Some(card) = widget.downcast_ref::<EventCard>() {
+                    current = Some(card.clone());
+                    break;
+                }
+                focused = widget.parent();
+            }
+            window.imp().page.focus_event(current.as_ref(), forward);
+            glib::Propagation::Stop
+        });
+        obj.add_controller(keys);
         let weak = obj.downgrade();
         obj.connect_hide(move |_| {
             if let Some(window) = weak.upgrade() {
@@ -100,7 +153,7 @@ impl Window {
         for (name, keys, days) in [
             ("previous", vec!["<Alt>Left"], Some(-7)),
             ("next", vec!["<Alt>Right"], Some(7)),
-            ("today", vec!["<Alt>Home"], None),
+            ("today", vec!["<Alt>Home", "period"], None),
             ("reload", vec!["<Primary>r", "F5"], None),
         ] {
             let action = gio::SimpleAction::new(name, None);

@@ -217,6 +217,47 @@ impl WeekPage {
         }
     }
 
+    pub fn focus_event(&self, current: Option<&crate::event_card::EventCard>, forward: bool) {
+        let imp = self.imp();
+        let mut cards = imp.timed.event_cards();
+        cards.extend(imp.all_day.event_cards());
+        cards.sort_by_key(|(start, _)| *start);
+        let index = current.and_then(|current| cards.iter().position(|(_, card)| card == current));
+        let next = event_focus_index(cards.len(), index, forward);
+        if let Some(next) = next {
+            let card = &cards[next].1;
+            if card.grab_focus() {
+                if let Some(window) = self.root().and_downcast::<gtk::Window>() {
+                    window.set_focus_visible(true);
+                }
+                // Custom timeline children can lie outside either scroll viewport.
+                // Reveal the focused card in each enclosing scroller, inside out.
+                let mut ancestor = card.parent();
+                while let Some(widget) = ancestor {
+                    if let Some(scroll) = widget.downcast_ref::<gtk::ScrolledWindow>()
+                        && let Some(child) = scroll.child()
+                    {
+                        let content = child
+                            .downcast_ref::<gtk::Viewport>()
+                            .and_then(|viewport| viewport.child())
+                            .unwrap_or(child);
+                        if let Some(bounds) = card.compute_bounds(&content) {
+                            scroll.vadjustment().clamp_page(
+                                f64::from(bounds.y()),
+                                f64::from(bounds.y() + bounds.height()),
+                            );
+                            scroll.hadjustment().clamp_page(
+                                f64::from(bounds.x()),
+                                f64::from(bounds.x() + bounds.width()),
+                            );
+                        }
+                    }
+                    ancestor = widget.parent();
+                }
+            }
+        }
+    }
+
     pub fn reload(&self) {
         self.request(self.imp().date.get(), true);
     }
@@ -422,11 +463,33 @@ impl WeekPage {
     }
 }
 
+/// Selects an event when entering the calendar, keeping navigation inside its bounds.
+fn event_focus_index(count: usize, current: Option<usize>, forward: bool) -> Option<usize> {
+    match current {
+        None if forward => (count > 0).then_some(0),
+        None => count.checked_sub(1),
+        Some(index) if forward => index.checked_add(1).filter(|next| *next < count),
+        Some(index) => index.checked_sub(1),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs, sync::Arc};
 
-    use super::load_local_state;
+    use super::{event_focus_index, load_local_state};
+
+    #[test]
+    fn arrows_enter_events_from_non_event_focus_and_stop_at_boundaries() {
+        assert_eq!(event_focus_index(3, None, true), Some(0));
+        assert_eq!(event_focus_index(3, None, false), Some(2));
+        assert_eq!(event_focus_index(3, Some(0), true), Some(1));
+        assert_eq!(event_focus_index(3, Some(2), false), Some(1));
+        assert_eq!(event_focus_index(3, Some(2), true), None);
+        assert_eq!(event_focus_index(3, Some(0), false), None);
+        assert_eq!(event_focus_index(0, None, true), None);
+        assert_eq!(event_focus_index(0, None, false), None);
+    }
 
     #[test]
     fn missing_profile_reports_expected_path_but_explicit_empty_profile_loads() {
