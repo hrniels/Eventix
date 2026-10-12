@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{io, path::Path};
-
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use eventix_ical::objects::CalLocale;
@@ -23,12 +21,9 @@ pub struct LocaleDe {
 }
 
 impl LocaleDe {
-    /// Creates a new `LocaleDe` with the given timezone, loading translations from `path`.
-    ///
-    /// Returns an `io::Error` if the file cannot be opened or read.
-    pub(crate) fn new(tz: Tz, path: &Path) -> io::Result<Self> {
-        let trans = Translations::new_from_file(path)?;
-        Ok(Self { tz, trans })
+    /// Creates a German locale with the given timezone and translations.
+    pub(crate) fn new(tz: Tz, trans: Translations) -> Self {
+        Self { tz, trans }
     }
 }
 

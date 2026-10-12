@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -13,7 +13,7 @@ use eventix_ical::objects::{CalCompType, EventLike};
 use eventix_locale::{DateFlags, Locale};
 use eventix_state::EventixState;
 use serde::Deserialize;
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::comps::occurrence::{OccurrenceMode, OccurrenceTemplate};
 use crate::html::filters;
@@ -58,84 +58,6 @@ struct WeeklyTemplate {
     next_week: String,
 }
 
-#[derive(Debug)]
-struct Rows<'d>(Vec<Row<'d>>);
-
-#[derive(Debug)]
-struct Row<'d>(Vec<Slot<'d>>);
-
-struct Slot<'d>(Vec<&'d DayOccurrence<'d>>);
-
-impl<'d> Rows<'d> {
-    fn get_overlap(&self, occ: &DayOccurrence) -> OccurrenceOverlap {
-        for row in &self.0 {
-            for (s, slot) in row.0.iter().enumerate() {
-                for o in &slot.0 {
-                    if o.id() == occ.id() {
-                        // determine how many slots right of this one are free for us
-                        let mut width = 1;
-                        let mut next = s + 1;
-                        while next < row.0.len() && !row.0[next].overlaps_with(occ) {
-                            width += 1;
-                            next += 1;
-                        }
-                        return OccurrenceOverlap::new(row.0.len(), s, width);
-                    }
-                }
-            }
-        }
-        unreachable!();
-    }
-
-    fn insert(&mut self, occ: &'d DayOccurrence) {
-        for row in &mut self.0 {
-            // if there is any overlap in this row, the occurrence *has* to be put into this row
-            if row.overlaps_with(occ) {
-                for slot in &mut row.0 {
-                    // use the first slot it does not overlap with
-                    if !slot.overlaps_with(occ) {
-                        slot.0.push(occ);
-                        return;
-                    }
-                }
-                // ok, all non-overlapping slots - add a new one
-                row.0.push(Slot(vec![occ]));
-                return;
-            }
-        }
-
-        // no overlapping row - add a new one
-        self.0.push(Row(vec![Slot(vec![occ])]));
-    }
-}
-
-impl<'d> Row<'d> {
-    fn overlaps_with(&self, occ: &DayOccurrence) -> bool {
-        self.0.iter().any(|s| s.overlaps_with(occ))
-    }
-}
-
-impl<'d> Slot<'d> {
-    fn overlaps_with(&self, occ: &DayOccurrence) -> bool {
-        self.0.iter().any(|o| {
-            let ostart = o.occurrence_start().unwrap();
-            let oend = o.occurrence_end().unwrap();
-            occ.overlaps(ostart, oend)
-        })
-    }
-}
-
-impl<'d> fmt::Debug for Slot<'d> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let summaries: Vec<String> = self
-            .0
-            .iter()
-            .filter_map(|occ| occ.summary().cloned())
-            .collect();
-        f.debug_tuple("Slot").field(&summaries).finish()
-    }
-}
-
 /// Builds a map from occurrence ID to its overlap descriptor for all occurrences in a day.
 ///
 /// Occurrences are arranged into rows such that overlapping occurrences share a row. Within each
@@ -143,19 +65,27 @@ impl<'d> fmt::Debug for Slot<'d> {
 /// map encodes, for every occurrence, the total number of columns in its row, its column index,
 /// and the number of adjacent free columns to the right.
 fn get_overlaps(day_occs: &[DayOccurrence]) -> HashMap<u64, OccurrenceOverlap> {
-    // first insert all of them into our rows datastructure that puts occurrences into the same row
-    // if they overlap or in separate rows otherwise.
-    let mut rows = Rows(vec![]);
-    for occ in day_occs {
-        rows.insert(occ);
-    }
-
-    // now determine the overlap for every occurrence
-    let mut overlaps = HashMap::new();
-    for occ in day_occs {
-        overlaps.insert(occ.id(), rows.get_overlap(occ));
-    }
-    overlaps
+    let intervals: Vec<_> = day_occs
+        .iter()
+        .map(|occ| {
+            let start = occ.occurrence_start().unwrap().timestamp();
+            let end = occ
+                .occurrence_end()
+                .map(|end| end.timestamp())
+                .unwrap_or(start);
+            (start, end)
+        })
+        .collect();
+    day_occs
+        .iter()
+        .zip(eventix_view::layout::columns(&intervals))
+        .map(|(occ, columns)| {
+            (
+                occ.id(),
+                OccurrenceOverlap::new(columns.count, columns.offset, columns.span),
+            )
+        })
+        .collect()
 }
 
 /// Renders only the weekly grid fragment for the given week. Used by the AJAX content endpoint.

@@ -16,6 +16,7 @@ eventix-cmd.workspace = true
 eventix-state.workspace = true
 eventix-locale.workspace = true
 eventix-ical.workspace = true
+eventix-view.workspace = true
 formatx.workspace = true
 http-body-util.workspace = true
 hyper-rustls.workspace = true

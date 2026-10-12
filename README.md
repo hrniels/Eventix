@@ -79,6 +79,52 @@ KillMode=process
 WantedBy=default.target
 ```
 
+### Native GTK week-view prototype
+
+`eventix-gtk` is an experimental, read-only GTK4 application. It loads configured local calendars
+directly, without starting the web server or embedding WebKit. It displays all-day and timed events,
+overlaps, recurring occurrences, calendar colors, and daylight-saving transitions. Click an event
+for details, or focus it with Tab and press Enter.
+
+To use the existing development data in `run/` (including the locale links prepared by `./b`):
+
+```bash
+XDG_DATA_HOME="$PWD/run" XDG_CONFIG_HOME="$PWD/run" cargo run -p eventix-gtk
+```
+
+Use `--date YYYY-MM-DD` to open a specific week. Debug builds default to the
+`io.github.hrniels.Eventix-debug` data/config prefix; release builds use `io.github.hrniels.Eventix`.
+The `--data-prefix` option selects a different prefix, for example:
+
+```bash
+cargo run -p eventix-gtk -- --data-prefix io.github.hrniels.Eventix
+```
+
+English and German translations are bundled; installed XDG `locale/` files override them.
+This prototype reads already-downloaded calendar data; it does not synchronize or send alarms.
+The reload button rereads local data and settings. Existing calendar visibility settings apply.
+Hover over the status line to see the configuration file and calendar data directory being used.
+Missing settings are reported with their expected path. Close an existing GTK window before
+relaunching with a different profile or XDG environment: the application is single-instance.
+
+Keyboard shortcuts:
+
+- **Alt+Left / Alt+Right:** previous / next week
+- **Alt+Home:** current week
+- **Ctrl+R / F5:** reload local calendars
+- **Escape:** dismiss event details or the date picker
+
+The native UI is defined by GTK composite templates in `bin/gtk/resources/`: `window.ui`,
+`week_page.ui`, `event_card.ui`, and `event_details.ui`. Static appearance and named timeline colors
+live in `style.css`; Rust supplies translated labels, calendar-specific colors, actions, and event
+geometry. Event cards are updated in place when their occurrence identity survives a refresh.
+Translations use the existing TOML locale system, rather than GtkBuilder's gettext support.
+
+Cargo bundles these files into the executable using GResource. Building requires
+`glib-compile-resources` from the GLib development tools, in addition to the GTK4 development
+libraries. Editing a resource triggers recompilation; no loose `.ui` or CSS files are needed at
+runtime.
+
 ## Relevant Files
 
 Eventix can be configured completely via its web UI. However, in case manual inspection is desired,
@@ -102,12 +148,14 @@ eventix/
 ├── bin/
 │   ├── eventix/        # Core: Axum web server + calendar UI
 │   ├── app/            # GTK desktop wrapper with system tray
+│   ├── gtk/            # Standalone local GTK4 week-view prototype
 │   ├── import/         # GTK dialog for importing .ics files
 │   ├── getpw/          # Helper to access passwords from vdirsyncer
 ├── libs/
 │   ├── ical/           # RFC 5545 iCalendar parser and object model
 │   ├── state/          # Application state: settings, sync backends, alarms
 │   ├── locale/         # Locale/i18n trait and English + German implementations
+│   ├── view/           # Owned week snapshots and shared event overlap layout
 │   └── cmd/            # IPC protocol over a Unix domain socket
 ├── data/               # Runtime assets: icons, locale files, static web files
 ├── flatpak/            # Flatpak build manifests and .desktop files

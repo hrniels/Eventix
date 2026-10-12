@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/io/github/hrniels/Eventix/gtk">
+    <file>window.ui</file>
+    <file>week_page.ui</file>
+    <file>event_card.ui</file>
+    <file>event_details.ui</file>
+    <file>style.css</file>
+  </gresource>
+</gresources>

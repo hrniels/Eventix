@@ -103,12 +103,27 @@ impl Translations {
     /// Reads and parses a translations table from a TOML file at `path`.
     ///
     /// The file must contain a `[table]` section with string key-value pairs. Returns an
-    /// `io::Error` if the file cannot be opened or read.
+    /// `io::Error` if the file cannot be opened, read, or parsed.
     pub(crate) fn new_from_file(path: &Path) -> io::Result<Self> {
         let mut file = OpenOptions::new().read(true).open(path)?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
-        Ok(toml::from_str(&content).unwrap())
+        Self::parse(&content)
+    }
+
+    fn parse(content: &str) -> io::Result<Self> {
+        toml::from_str(content).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+    }
+
+    /// Loads an installed translation table or the bundled table when no path is supplied.
+    fn load(lang: LocaleType, path: Option<&Path>) -> io::Result<Self> {
+        match path {
+            Some(path) => Self::new_from_file(path),
+            None => Self::parse(match lang {
+                LocaleType::English => include_str!("../../../data/locale/English.toml"),
+                LocaleType::German => include_str!("../../../data/locale/German.toml"),
+            }),
+        }
     }
 }
 
@@ -364,8 +379,9 @@ pub fn default() -> Arc<dyn Locale + Send + Sync> {
 /// and detecting the system timezone.
 ///
 /// The translations file is looked up as `locale/<Lang>.toml` under `$XDG_DATA_HOME` (and the
-/// standard XDG data dirs). Returns a [`LocaleError`] if the file is not found, the system
-/// timezone cannot be determined, or the timezone string cannot be parsed.
+/// standard XDG data dirs). If no file is installed, bundled translations are used. Returns a
+/// [`LocaleError`] if translations cannot be read or parsed, the system timezone cannot be
+/// determined, or the timezone string cannot be parsed.
 pub fn new(
     xdg: &BaseDirectories,
     lang: LocaleType,
@@ -378,25 +394,23 @@ pub fn new(
     new_with_timezone(xdg, lang, tz)
 }
 
-/// Creates a locale of the given `lang` type, loading translations from the XDG data directory
-/// and using the explicitly supplied timezone.
+/// Creates a locale of the given language using the explicitly supplied timezone.
+///
+/// Installed XDG translation files take precedence over bundled translations. Returns an error
+/// if the selected translation table cannot be read or parsed.
 pub fn new_with_timezone(
     xdg: &BaseDirectories,
     lang: LocaleType,
     tz: Tz,
 ) -> Result<Arc<dyn Locale + Send + Sync>, LocaleError> {
     let trans_file = format!("locale/{:?}.toml", lang);
-    let translations = xdg
-        .find_data_file(&trans_file)
-        .ok_or(LocaleError::LocaleFile(trans_file))?;
+    let path = xdg.find_data_file(&trans_file);
+    let translations =
+        Translations::load(lang, path.as_deref()).map_err(LocaleError::ReadLocale)?;
 
     Ok(match lang {
-        LocaleType::German => {
-            Arc::new(LocaleDe::new(tz, &translations).map_err(LocaleError::ReadLocale)?)
-        }
-        LocaleType::English => {
-            Arc::new(LocaleEn::new(tz, &translations).map_err(LocaleError::ReadLocale)?)
-        }
+        LocaleType::German => Arc::new(LocaleDe::new(tz, translations)),
+        LocaleType::English => Arc::new(LocaleEn::new(tz, translations)),
     })
 }
 
@@ -688,6 +702,40 @@ mod tests {
     }
 
     // --- Translations ---
+
+    #[test]
+    fn missing_xdg_translations_use_bundled_language_and_requested_timezone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = xdg::BaseDirectories::with_prefix(tmp.path().file_name().unwrap());
+        for (lang, translated) in [
+            (LocaleType::English, "Calendar"),
+            (LocaleType::German, "Kalender"),
+        ] {
+            let locale = crate::new_with_timezone(&xdg, lang, Tz::Europe__Berlin).unwrap();
+            assert_eq!(locale.translate("Calendar"), translated);
+            assert_eq!(
+                locale.translations().table.get("Calendar").unwrap(),
+                translated
+            );
+            assert_eq!(*locale.timezone(), Tz::Europe__Berlin);
+        }
+    }
+
+    #[test]
+    fn installed_translations_override_bundle_and_invalid_files_return_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("German.toml");
+        std::fs::write(&path, "[table]\n\"Calendar\" = \"Custom calendar\"\n").unwrap();
+        let translations = Translations::load(LocaleType::German, Some(&path)).unwrap();
+        assert_eq!(translations.table["Calendar"], "Custom calendar");
+        std::fs::write(&path, "not valid TOML").unwrap();
+        assert_eq!(
+            Translations::load(LocaleType::German, Some(&path))
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidData,
+        );
+    }
 
     #[test]
     fn translations_default_is_empty() {

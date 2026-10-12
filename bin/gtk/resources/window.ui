@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <template class="EventixWindow" parent="GtkApplicationWindow">
+    <property name="title">Eventix</property>
+    <property name="default-width">1200</property>
+    <property name="default-height">850</property>
+    <property name="child">
+      <object class="EventixWeekPage" id="page"/>
+    </property>
+  </template>
+</interface>

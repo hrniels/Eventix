@@ -1,0 +1,15 @@
+[package]
+name = "eventix-view"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+eventix-ical.workspace = true
+eventix-locale.workspace = true
+eventix-state.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

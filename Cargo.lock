@@ -794,6 +794,7 @@ dependencies = [
  "eventix-ical",
  "eventix-locale",
  "eventix-state",
+ "eventix-view",
  "formatx",
  "futures",
  "http-body-util",
@@ -868,6 +869,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "eventix-gtk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "chrono",
+ "clap",
+ "eventix-locale",
+ "eventix-state",
+ "eventix-view",
+ "formatx",
+ "gtk4",
+ "tempfile",
+ "xdg",
+]
+
+[[package]]
 name = "eventix-ical"
 version = "0.1.0"
 dependencies = [
@@ -911,6 +929,7 @@ dependencies = [
  "iana-time-zone",
  "once_cell",
  "serde",
+ "tempfile",
  "thiserror",
  "toml 0.9.12+spec-1.1.0",
  "xdg",
@@ -942,6 +961,19 @@ dependencies = [
  "toml_edit",
  "tracing",
  "xdg",
+]
+
+[[package]]
+name = "eventix-view"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "eventix-ical",
+ "eventix-locale",
+ "eventix-state",
+ "tempfile",
 ]
 
 [[package]]

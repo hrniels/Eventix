@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <template class="EventixEventDetails" parent="GtkPopover">
+    <property name="autohide">true</property>
+    <property name="child">
+      <object class="GtkScrolledWindow">
+        <property name="min-content-width">320</property>
+        <property name="max-content-height">480</property>
+        <property name="propagate-natural-height">true</property>
+        <property name="child">
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">8</property>
+            <style><class name="ev_event_details"/></style>
+            <child>
+              <object class="GtkLabel" id="summary">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="selectable">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="calendar">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="selectable">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="start">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="selectable">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="end">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="selectable">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="timezone">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="selectable">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="location">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="selectable">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel" id="description">
+                <property name="xalign">0</property>
+                <property name="wrap">true</property>
+                <property name="selectable">true</property>
+                <property name="max-width-chars">55</property>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>

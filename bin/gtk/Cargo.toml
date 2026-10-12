@@ -1,0 +1,19 @@
+[package]
+name = "eventix-gtk"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+eventix-locale.workspace = true
+eventix-state.workspace = true
+eventix-view.workspace = true
+formatx.workspace = true
+xdg.workspace = true
+async-channel = "2.5.0"
+gtk = { version = "=0.11.5", package = "gtk4", features = ["v4_10"] }
+
+[dev-dependencies]
+tempfile.workspace = true

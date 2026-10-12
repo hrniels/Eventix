@@ -1,0 +1,51 @@
+/* Copyright (C) 2026 Nils Asmussen
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/* These named colors are also used by the timeline's snapshot drawing. */
+@define-color ev_grid_line alpha(@theme_fg_color, 0.16);
+@define-color ev_today_background alpha(@theme_selected_bg_color, 0.07);
+@define-color ev_dst_fold rgba(128, 77, 204, 0.14);
+@define-color ev_dst_gap rgba(230, 128, 26, 0.14);
+@define-color ev_now rgb(230, 38, 38);
+
+.ev_week_toolbar {
+    padding: 10px 12px;
+}
+
+.ev_day_headers > label {
+    padding: 8px 0;
+}
+
+.ev_today {
+    font-weight: bold;
+    color: @theme_selected_bg_color;
+}
+
+.ev_all_day_label {
+    padding-left: 8px;
+}
+
+.ev_week_status {
+    padding: 6px 12px;
+}
+
+button.ev_event {
+    padding: 0 3px;
+    min-height: 0;
+    min-width: 0;
+    border-radius: 4px;
+}
+
+button.ev_event:hover {
+    box-shadow: inset 0 0 0 1px alpha(@theme_fg_color, 0.35);
+}
+
+button.ev_event:focus-visible {
+    outline: 2px solid @theme_fg_color;
+    outline-offset: -2px;
+}
+
+button.ev_event.ev_cancelled label {
+    text-decoration-line: line-through;
+}
