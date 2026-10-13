@@ -57,9 +57,18 @@ glib::wrapper! {
 impl Window {
     pub fn new(app: &gtk::Application, prefix: String, date: Option<NaiveDate>) -> Self {
         let obj: Self = glib::Object::builder().property("application", app).build();
+        obj.setup_click_controller();
+        obj.setup_key_controller();
+        obj.connect_popover_dismissal();
+        obj.setup_actions(app);
+        obj.imp().page.start(prefix, date);
+        obj
+    }
+
+    fn setup_click_controller(&self) {
         let click = gtk::GestureClick::new();
         click.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let weak = obj.downgrade();
+        let weak = self.downgrade();
         click.connect_pressed(move |_, _, x, y| {
             let Some(window) = weak.upgrade() else { return };
             let inside_card_or_popup =
@@ -82,94 +91,123 @@ impl Window {
                 window.imp().page.dismiss_popovers();
             }
         });
-        obj.add_controller(click);
+        self.add_controller(click);
+    }
+
+    fn setup_key_controller(&self) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let weak = obj.downgrade();
+        let weak = self.downgrade();
         keys.connect_key_pressed(move |_, key, _, modifiers| {
             let Some(window) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
-            // Let popup text, scrolling and nested menus handle their own navigation keys.
-            let mut focused = gtk::prelude::GtkWindowExt::focus(&window);
-            while let Some(widget) = focused {
-                if widget.is::<EventDetails>() {
-                    if key == gtk::gdk::Key::Escape {
-                        // A nested menu gets first refusal; Escape otherwise closes details.
-                        let mut child = gtk::prelude::GtkWindowExt::focus(&window);
-                        while let Some(widget) = child {
-                            if widget.is::<gtk::Popover>() && !widget.is::<EventDetails>() {
-                                return glib::Propagation::Proceed;
-                            }
-                            child = widget.parent();
-                        }
-                        window.imp().page.dismiss_popovers();
-                        return glib::Propagation::Stop;
-                    }
-                    return glib::Propagation::Proceed;
-                }
-                focused = widget.parent();
-            }
-            if key == gtk::gdk::Key::Escape {
-                window.imp().page.dismiss_popovers();
-                return glib::Propagation::Proceed;
-            }
-            if modifiers.contains(gtk::gdk::ModifierType::ALT_MASK)
-                && !modifiers.intersects(
-                    gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SUPER_MASK,
-                )
-            {
-                match key {
-                    gtk::gdk::Key::Left => {
-                        window.imp().page.navigate(-7);
-                        return glib::Propagation::Stop;
-                    }
-                    gtk::gdk::Key::Right => {
-                        window.imp().page.navigate(7);
-                        return glib::Propagation::Stop;
-                    }
-                    _ => {}
-                }
-            }
-            if modifiers.intersects(
-                gtk::gdk::ModifierType::ALT_MASK
-                    | gtk::gdk::ModifierType::CONTROL_MASK
-                    | gtk::gdk::ModifierType::SUPER_MASK,
-            ) {
-                return glib::Propagation::Proceed;
-            }
-            let forward = match key {
-                gtk::gdk::Key::Right | gtk::gdk::Key::Down => true,
-                gtk::gdk::Key::Left | gtk::gdk::Key::Up => false,
-                _ => return glib::Propagation::Proceed,
-            };
-            let mut focused = gtk::prelude::GtkWindowExt::focus(&window);
-            let mut current = None;
-            while let Some(widget) = focused {
-                if let Some(card) = widget.downcast_ref::<EventCard>() {
-                    current = Some(card.clone());
-                    break;
-                }
-                focused = widget.parent();
-            }
-            window.imp().page.focus_event(current.as_ref(), forward);
-            glib::Propagation::Stop
+            window.handle_key_pressed(key, modifiers)
         });
-        obj.add_controller(keys);
-        let weak = obj.downgrade();
-        obj.connect_hide(move |_| {
+        self.add_controller(keys);
+    }
+
+    fn handle_key_pressed(
+        &self,
+        key: gtk::gdk::Key,
+        modifiers: gtk::gdk::ModifierType,
+    ) -> glib::Propagation {
+        if let Some(propagation) = self.handle_details_key(key) {
+            return propagation;
+        }
+        if key == gtk::gdk::Key::Escape {
+            self.imp().page.dismiss_popovers();
+            return glib::Propagation::Proceed;
+        }
+        if modifiers.contains(gtk::gdk::ModifierType::ALT_MASK)
+            && !modifiers.intersects(
+                gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SUPER_MASK,
+            )
+        {
+            match key {
+                gtk::gdk::Key::Left => {
+                    self.imp().page.navigate(-7);
+                    return glib::Propagation::Stop;
+                }
+                gtk::gdk::Key::Right => {
+                    self.imp().page.navigate(7);
+                    return glib::Propagation::Stop;
+                }
+                _ => {}
+            }
+        }
+        if modifiers.intersects(
+            gtk::gdk::ModifierType::ALT_MASK
+                | gtk::gdk::ModifierType::CONTROL_MASK
+                | gtk::gdk::ModifierType::SUPER_MASK,
+        ) {
+            return glib::Propagation::Proceed;
+        }
+        let forward = match key {
+            gtk::gdk::Key::Right | gtk::gdk::Key::Down => true,
+            gtk::gdk::Key::Left | gtk::gdk::Key::Up => false,
+            _ => return glib::Propagation::Proceed,
+        };
+        self.imp()
+            .page
+            .focus_event(self.focused_event_card().as_ref(), forward);
+        glib::Propagation::Stop
+    }
+
+    /// Returns key propagation for focused event details, or `None` when details are not focused.
+    fn handle_details_key(&self, key: gtk::gdk::Key) -> Option<glib::Propagation> {
+        let mut focused = gtk::prelude::GtkWindowExt::focus(self);
+        while let Some(widget) = focused {
+            if widget.is::<EventDetails>() {
+                // Let popup text and scrolling handle their own navigation keys.
+                if key == gtk::gdk::Key::Escape {
+                    // A nested menu gets first refusal; Escape otherwise closes details.
+                    let mut child = gtk::prelude::GtkWindowExt::focus(self);
+                    while let Some(widget) = child {
+                        if widget.is::<gtk::Popover>() && !widget.is::<EventDetails>() {
+                            return Some(glib::Propagation::Proceed);
+                        }
+                        child = widget.parent();
+                    }
+                    self.imp().page.dismiss_popovers();
+                    return Some(glib::Propagation::Stop);
+                }
+                return Some(glib::Propagation::Proceed);
+            }
+            focused = widget.parent();
+        }
+        None
+    }
+
+    fn focused_event_card(&self) -> Option<EventCard> {
+        let mut focused = gtk::prelude::GtkWindowExt::focus(self);
+        while let Some(widget) = focused {
+            if let Some(card) = widget.downcast_ref::<EventCard>() {
+                return Some(card.clone());
+            }
+            focused = widget.parent();
+        }
+        None
+    }
+
+    fn connect_popover_dismissal(&self) {
+        let weak = self.downgrade();
+        self.connect_hide(move |_| {
             if let Some(window) = weak.upgrade() {
                 window.imp().page.dismiss_popovers();
             }
         });
-        let weak = obj.downgrade();
-        obj.connect_is_active_notify(move |window| {
+        let weak = self.downgrade();
+        self.connect_is_active_notify(move |window| {
             if !window.is_active()
                 && let Some(window) = weak.upgrade()
             {
                 window.imp().page.dismiss_popovers();
             }
         });
+    }
+
+    fn setup_actions(&self, app: &gtk::Application) {
         for (name, keys, days) in [
             ("previous", vec!["<Alt>Left"], Some(-7)),
             ("next", vec!["<Alt>Right"], Some(7)),
@@ -177,7 +215,7 @@ impl Window {
             ("reload", vec!["<Primary>r", "F5"], None),
         ] {
             let action = gio::SimpleAction::new(name, None);
-            let page = obj.imp().page.downgrade();
+            let page = self.imp().page.downgrade();
             action.connect_activate(move |_, _| {
                 if let Some(page) = page.upgrade() {
                     if let Some(days) = days {
@@ -189,10 +227,8 @@ impl Window {
                     }
                 }
             });
-            obj.add_action(&action);
+            self.add_action(&action);
             app.set_accels_for_action(&format!("win.{name}"), &keys);
         }
-        obj.imp().page.start(prefix, date);
-        obj
     }
 }
