@@ -94,18 +94,6 @@ impl EventCard {
                 }
             )
         };
-        let indicators = [
-            (event.recurrent, "Recurring event"),
-            (event.exception, "Recurrence exception"),
-            (event.alarm, "Alarms"),
-            (event.cancelled, "Cancelled"),
-        ]
-        .into_iter()
-        .filter(|(on, _)| *on)
-        .map(|(_, key)| locale.translate(key))
-        .collect::<Vec<_>>()
-        .join(" · ");
-        let tooltip = format!("{summary}\n{time}\n{}\n{indicators}", event.calendar);
         let text = if strip {
             summary.to_owned()
         } else if event.minute_end.saturating_sub(event.minute_start) < 38 {
@@ -120,8 +108,6 @@ impl EventCard {
         self.imp()
             .indicators
             .set_visible(event.recurrent || event.exception || event.alarm);
-        self.set_tooltip_text(Some(&tooltip));
-        self.update_property(&[gtk::accessible::Property::Label(&tooltip)]);
         if event.cancelled {
             self.add_css_class("ev_cancelled");
         } else {
