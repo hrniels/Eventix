@@ -38,6 +38,7 @@ mod imp {
 
     impl ObjectImpl for EventCard {
         fn dispose(&self) {
+            self.obj().set_child(None::<&gtk::Widget>);
             self.dispose_template();
         }
     }

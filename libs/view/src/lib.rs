@@ -4,6 +4,7 @@
 
 //! Owned, toolkit-independent data for calendar views.
 
+pub mod details;
 pub mod layout;
 
 use std::sync::Arc;
@@ -38,8 +39,7 @@ pub struct Event {
     pub calendar: String,
     pub foreground: String,
     pub background: String,
-    pub location: String,
-    pub description: String,
+    pub details: Arc<details::Details>,
     pub start: DateTime<Tz>,
     pub end: DateTime<Tz>,
     pub all_day: bool,
@@ -104,6 +104,10 @@ impl WeekSnapshot {
             })
             .filter(|occ| !occ.is_excluded())
             .collect();
+        let details: Vec<_> = occurrences
+            .iter()
+            .map(|occ| details::Details::load(state, occ).map(Arc::new))
+            .collect();
         let mut days = Vec::new();
         for offset in 0..7 {
             let date = start + Duration::days(offset);
@@ -113,8 +117,9 @@ impl WeekSnapshot {
                 timed: Vec::new(),
                 dst: dst_ranges(date, tz),
             };
-            for occ in &occurrences {
-                let Some(event) = project_event(state, occ, date) else {
+            for (occ, details) in occurrences.iter().zip(&details) {
+                let Some(details) = details else { continue };
+                let Some(event) = project_event(state, occ, date, details.clone()) else {
                     continue;
                 };
                 if event.all_day || occ.is_all_day_on(date) {
@@ -157,7 +162,12 @@ impl WeekSnapshot {
     }
 }
 
-fn project_event(state: &State, occ: &Occurrence<'_>, date: NaiveDate) -> Option<Event> {
+fn project_event(
+    state: &State,
+    occ: &Occurrence<'_>,
+    date: NaiveDate,
+    details: Arc<details::Details>,
+) -> Option<Event> {
     let tz = state.timezone();
     let start = occ.occurrence_start()?.with_timezone(tz);
     let end = occ.occurrence_end().unwrap_or(start).with_timezone(tz);
@@ -182,8 +192,7 @@ fn project_event(state: &State, occ: &Occurrence<'_>, date: NaiveDate) -> Option
         calendar: settings.name().clone(),
         foreground: settings.fgcolor().clone(),
         background: settings.bgcolor().clone(),
-        location: occ.location().cloned().unwrap_or_default(),
-        description: occ.description().cloned().unwrap_or_default(),
+        details,
         start,
         end,
         all_day: occ.is_all_day(),
@@ -320,10 +329,12 @@ mod tests {
             concat!(
                 "BEGIN:VEVENT\nUID:series\nDTSTART;TZID=Europe/Berlin:20261005T090000\n",
                 "DTEND;TZID=Europe/Berlin:20261005T100000\nRRULE:FREQ=DAILY;COUNT=3\n",
+                "LOCATION:Original room\nDESCRIPTION:Original description\nSTATUS:CONFIRMED\n",
                 "EXDATE;TZID=Europe/Berlin:20261006T090000\nSUMMARY:Series\nEND:VEVENT\n",
                 "BEGIN:VEVENT\nUID:series\nRECURRENCE-ID;TZID=Europe/Berlin:20261007T090000\n",
                 "DTSTART;TZID=Europe/Berlin:20261007T110000\n",
-                "DTEND;TZID=Europe/Berlin:20261007T120000\nSUMMARY:Moved\nEND:VEVENT",
+                "DTEND;TZID=Europe/Berlin:20261007T120000\nSUMMARY:Moved\n",
+                "LOCATION:New room\nDESCRIPTION:Updated description\nSTATUS:TENTATIVE\nEND:VEVENT",
             ),
             concat!(
                 "BEGIN:VTODO\nUID:todo\nDTSTART;TZID=Europe/Berlin:20261005T130000\n",
@@ -356,10 +367,22 @@ mod tests {
             [2, 0, 1, 0, 0, 0, 0]
         );
         assert_eq!(week.days[0].timed[1].minute_end, 1440);
+        assert!(Arc::ptr_eq(
+            &week.days[0].all_day[0].details,
+            &week.days[1].all_day[0].details
+        ));
+        assert_eq!(
+            week.days[0].all_day[0].details.date,
+            "Oct 05, 2026 ‒ Oct 06, 2026"
+        );
         let moved = &week.days[2].timed[0];
         assert!(moved.exception);
         assert_eq!(moved.summary, "Moved");
         assert_eq!(moved.minute_start, 660);
+        assert!(moved.details.date.contains("11:00"));
+        assert_eq!(moved.details.location, "New room");
+        assert_eq!(moved.details.description, "Updated description");
+        assert_eq!(moved.details.status.as_deref(), Some("TENTATIVE"));
         assert_eq!(moved.background, "#123456");
         assert!(!moved.id.recurrence.is_empty());
         let refreshed = WeekSnapshot::load(&state, date).unwrap();

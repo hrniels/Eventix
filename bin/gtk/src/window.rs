@@ -90,6 +90,26 @@ impl Window {
             let Some(window) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
+            // Let popup text, scrolling and nested menus handle their own navigation keys.
+            let mut focused = gtk::prelude::GtkWindowExt::focus(&window);
+            while let Some(widget) = focused {
+                if widget.is::<EventDetails>() {
+                    if key == gtk::gdk::Key::Escape {
+                        // A nested menu gets first refusal; Escape otherwise closes details.
+                        let mut child = gtk::prelude::GtkWindowExt::focus(&window);
+                        while let Some(widget) = child {
+                            if widget.is::<gtk::Popover>() && !widget.is::<EventDetails>() {
+                                return glib::Propagation::Proceed;
+                            }
+                            child = widget.parent();
+                        }
+                        window.imp().page.dismiss_popovers();
+                        return glib::Propagation::Stop;
+                    }
+                    return glib::Propagation::Proceed;
+                }
+                focused = widget.parent();
+            }
             if key == gtk::gdk::Key::Escape {
                 window.imp().page.dismiss_popovers();
                 return glib::Propagation::Proceed;

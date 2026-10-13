@@ -52,7 +52,7 @@ pub fn calendar_css(week: &WeekSnapshot) -> String {
             .unwrap_or(gdk::RGBA::new(0.8, 0.88, 0.98, 1.0));
         let fg = foreground.parse::<gdk::RGBA>().unwrap_or(gdk::RGBA::BLACK);
         css.push_str(&format!(
-            "button.{} {{ background: {bg}; color: {fg}; }}\n",
+            ".{} {{ background: {bg}; color: {fg}; }}\n",
             calendar_class(background, foreground)
         ));
     }

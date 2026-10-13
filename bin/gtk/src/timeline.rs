@@ -15,6 +15,8 @@ use crate::{event_card::EventCard, event_details::EventDetails, style};
 
 pub const GUTTER: i32 = 64;
 const ROW: i32 = 30;
+const DETAILS_PLACEMENT_MARGIN: i32 = 16;
+const DETAILS_PLACEMENT_HYSTERESIS: i32 = 64;
 
 struct Card {
     button: EventCard,
@@ -34,6 +36,12 @@ mod imp {
         #[property(get, set, construct_only)]
         pub(super) all_day: Cell<bool>,
         pub(super) popover: RefCell<Option<EventDetails>>,
+        pub(super) anchor: RefCell<Option<glib::WeakRef<EventCard>>>,
+        pub(super) details_minimum_height: Cell<i32>,
+        pub(super) details_width: Cell<i32>,
+        pub(super) details_centered: Cell<bool>,
+        pub(super) details_force_centered: Cell<bool>,
+        pub(super) scroll_handlers: RefCell<Vec<(gtk::Adjustment, glib::SignalHandlerId)>>,
         pub(super) peer: RefCell<Option<glib::WeakRef<super::Timeline>>>,
     }
 
@@ -71,16 +79,64 @@ mod imp {
         }
 
         fn dispose(&self) {
+            for (adjustment, handler) in self.scroll_handlers.take() {
+                adjustment.disconnect(handler);
+            }
             if let Some(popover) = self.popover.take() {
-                popover.unparent();
+                popover.popdown();
+                if popover.parent().is_some() {
+                    popover.unparent();
+                }
             }
             for card in self.cards.take() {
                 card.button.unparent();
+            }
+            // Closed popovers can still be parented while their idle cleanup is pending.
+            while let Some(child) = self.obj().first_child() {
+                child.unparent();
             }
         }
     }
 
     impl WidgetImpl for Timeline {
+        fn map(&self) {
+            self.parent_map();
+            let obj = self.obj();
+            let mut ancestor = obj.parent();
+            while let Some(widget) = ancestor {
+                if let Some(scroll) = widget.downcast_ref::<gtk::ScrolledWindow>() {
+                    for adjustment in [scroll.hadjustment(), scroll.vadjustment()] {
+                        let weak = obj.downgrade();
+                        let handler = adjustment.connect_value_changed(move |_| {
+                            if let Some(timeline) = weak.upgrade() {
+                                timeline.queue_allocate();
+                            }
+                        });
+                        self.scroll_handlers
+                            .borrow_mut()
+                            .push((adjustment.clone(), handler));
+                        let weak = obj.downgrade();
+                        let handler = adjustment.connect_changed(move |_| {
+                            if let Some(timeline) = weak.upgrade() {
+                                timeline.queue_allocate();
+                            }
+                        });
+                        self.scroll_handlers
+                            .borrow_mut()
+                            .push((adjustment, handler));
+                    }
+                }
+                ancestor = widget.parent();
+            }
+        }
+
+        fn unmap(&self) {
+            for (adjustment, handler) in self.scroll_handlers.take() {
+                adjustment.disconnect(handler);
+            }
+            self.parent_unmap();
+        }
+
         fn measure(&self, orientation: gtk::Orientation, _: i32) -> (i32, i32, i32, i32) {
             let size = if orientation == gtk::Orientation::Horizontal {
                 840
@@ -131,7 +187,9 @@ mod imp {
                     -1,
                 );
             }
-            if let Some(popover) = self.popover.borrow().as_ref() {
+            let popover = self.popover.borrow().clone();
+            if let Some(popover) = popover {
+                self.obj().place_details(&popover);
                 popover.present();
             }
         }
@@ -286,9 +344,125 @@ impl Timeline {
     }
 
     pub(crate) fn close_details(&self) {
+        self.imp().anchor.take();
         if let Some(popover) = self.imp().popover.take() {
             popover.popdown();
-            popover.unparent();
+            Self::defer_unparent(&popover);
+        }
+    }
+
+    fn defer_unparent(popover: &EventDetails) {
+        // GTK can continue using the popover after emitting `closed`, including on failed
+        // presentation. Keep it alive and parented until that GTK call has returned.
+        let popover = popover.clone();
+        glib::idle_add_local_once(move || {
+            if popover.parent().is_some() {
+                popover.unparent();
+            }
+        });
+    }
+
+    /// Centers the popup when its event is off-screen or anchored placement cannot fit.
+    fn place_details(&self, popover: &EventDetails) {
+        let Some(button) = self
+            .imp()
+            .anchor
+            .borrow()
+            .as_ref()
+            .and_then(|a| a.upgrade())
+        else {
+            return;
+        };
+        let Some(root) = self.root().and_downcast::<gtk::Window>() else {
+            return;
+        };
+        let bounds = button.compute_bounds(&root);
+        // A card can have valid coordinates outside one or more enclosing scroll viewports.
+        // Only its visible intersection is a usable anchor for GTK's native popup layout.
+        let mut visible = Some(graphene::Rect::new(
+            0.0,
+            0.0,
+            root.width() as f32,
+            root.height() as f32,
+        ));
+        let mut ancestor = self.parent();
+        while let Some(widget) = ancestor {
+            if widget.is::<gtk::ScrolledWindow>() {
+                visible = visible.and_then(|clip| {
+                    widget
+                        .compute_bounds(&root)
+                        .and_then(|bounds| clip.intersection(&bounds))
+                });
+            }
+            ancestor = widget.parent();
+        }
+        let visible_anchor = bounds.and_then(|bounds| {
+            visible
+                .and_then(|clip| clip.intersection(&bounds))
+                .filter(|bounds| bounds.width() > 0.0 && bounds.height() > 0.0)
+        });
+        let available = visible_anchor.map_or(0, |bounds| {
+            (bounds.y() as i32).max(root.height() - (bounds.y() + bounds.height()).ceil() as i32)
+        });
+        let imp = self.imp();
+        let centered = visible_anchor.is_none()
+            || imp.details_force_centered.get()
+            || details_should_center(
+                available,
+                imp.details_minimum_height.get(),
+                imp.details_centered.get(),
+            );
+        imp.details_centered.set(centered);
+        if !centered {
+            let Some(bounds) = visible_anchor else { return };
+            let Some(point) =
+                root.compute_point(self, &graphene::Point::new(bounds.x(), bounds.y()))
+            else {
+                return;
+            };
+            let pointing_to = gtk::Allocation::new(
+                point.x().round() as i32,
+                point.y().round() as i32,
+                bounds.width().ceil() as i32,
+                bounds.height().ceil() as i32,
+            );
+            if popover.pointing_to() != (true, pointing_to) {
+                popover.set_pointing_to(Some(&pointing_to));
+            }
+            popover.set_has_arrow(true);
+            popover.set_offset(0, 0);
+            popover.set_position(gtk::PositionType::Bottom);
+        } else {
+            // Vertical popovers can only slide horizontally. GTK dismisses them if the
+            // compositor shrinks them below their minimum height. A side placement can slide
+            // vertically across the entire monitor. Center it on the window rather than the
+            // event, and keep it inside the window horizontally. The panel may overlap the
+            // event, so omit the arrow rather than pointing at an unrelated location.
+            popover.set_has_arrow(false);
+            popover.set_position(gtk::PositionType::Right);
+            let width = imp.details_width.get();
+            let center_x = bounds.map_or(root.width() / 2, |bounds| {
+                (bounds.x() + bounds.width() / 2.0).round() as i32
+            });
+            let x = if width > root.width() {
+                (root.width() - width) / 2
+            } else {
+                (center_x - width / 2).clamp(0, root.width() - width)
+            };
+            // Use an in-window point, even when the event has scrolled off-screen. GDK
+            // clips anchor rectangles to the native surface before applying offsets.
+            let Some(point) = root.compute_point(
+                self,
+                &graphene::Point::new((x + width / 2) as f32, (root.height() / 2) as f32),
+            ) else {
+                return;
+            };
+            let pointing_to =
+                gtk::Allocation::new(point.x().round() as i32, point.y().round() as i32, 1, 1);
+            if popover.pointing_to() != (true, pointing_to) {
+                popover.set_pointing_to(Some(&pointing_to));
+            }
+            popover.set_offset(-width / 2 - 1, 0);
         }
     }
 
@@ -308,21 +482,91 @@ impl Timeline {
         let Some(week) = week.as_ref() else { return };
         let popover = EventDetails::new(&event, week.locale.as_ref());
         popover.set_parent(self);
-        popover.set_pointing_to(Some(&button.allocation()));
+        // Measure once in the default above/below mode. Its arrow and width requests change
+        // in centered mode, so remeasuring it there would feed placement back into sizing.
+        // Allow for wrapping even if the compositor reduces the popup to its minimum width.
+        let (width, minimum_height) = popover.placement_size();
+        self.imp().details_width.set(width);
+        self.imp().details_minimum_height.set(minimum_height);
+        self.imp().details_centered.set(false);
+        self.imp().details_force_centered.set(false);
+        self.imp().anchor.replace(Some(button.downgrade()));
+        self.place_details(&popover);
         let weak = self.downgrade();
         popover.connect_closed(move |closed| {
-            if let Some(timeline) = weak.upgrade() {
-                let mut current = timeline.imp().popover.borrow_mut();
-                if current.as_ref() == Some(closed) {
-                    *current = None;
+            let weak = weak.clone();
+            let closed = closed.clone();
+            glib::idle_add_local_once(move || {
+                if let Some(timeline) = weak.upgrade()
+                    && timeline.imp().popover.borrow().as_ref() == Some(&closed)
+                {
+                    if closed.is_visible() {
+                        return;
+                    }
+                    if closed.take_presentation_failure()
+                        && timeline.retry_details_centered(&closed)
+                    {
+                        return;
+                    }
+                    timeline.imp().popover.take();
+                    timeline.imp().anchor.take();
                 }
-                drop(current);
-                closed.unparent();
-            }
+                if closed.parent().is_some() {
+                    closed.unparent();
+                }
+            });
         });
         self.imp().popover.replace(Some(popover.clone()));
         popover.popup();
+        self.check_details_mapping(&popover);
     }
+
+    fn retry_details_centered(&self, popover: &EventDetails) -> bool {
+        if self.imp().details_force_centered.get()
+            || !self.is_mapped()
+            || self.imp().popover.borrow().as_ref() != Some(popover)
+        {
+            return false;
+        }
+        // Window-relative room is only an estimate: the compositor also constrains popups
+        // to the monitor. Once it rejects an anchored placement, stay centered for this popup.
+        self.imp().details_force_centered.set(true);
+        self.imp().details_centered.set(true);
+        popover.take_presentation_failure();
+        self.place_details(popover);
+        popover.popup();
+        self.check_details_mapping(popover);
+        true
+    }
+
+    fn check_details_mapping(&self, popover: &EventDetails) {
+        let weak = self.downgrade();
+        let popover = popover.clone();
+        glib::idle_add_local_once(move || {
+            let Some(timeline) = weak.upgrade() else {
+                return;
+            };
+            if timeline.imp().popover.borrow().as_ref() == Some(&popover)
+                && !popover.is_mapped()
+                && popover.is_visible()
+                && !timeline.retry_details_centered(&popover)
+            {
+                timeline.close_details();
+            }
+        });
+    }
+}
+
+/// Keeps centered placement until there is clearly enough room beside the event again.
+fn details_should_center(available: i32, minimum: i32, centered: bool) -> bool {
+    let threshold = minimum
+        + DETAILS_PLACEMENT_MARGIN
+        + if centered {
+            DETAILS_PLACEMENT_HYSTERESIS
+        } else {
+            0
+        };
+    available < threshold
 }
 
 fn draw_text(widget: &Timeline, snapshot: &gtk::Snapshot, text: &str, x: f32, y: f32, width: f32) {
@@ -333,4 +577,25 @@ fn draw_text(widget: &Timeline, snapshot: &gtk::Snapshot, text: &str, x: f32, y:
     snapshot.translate(&graphene::Point::new(x, y));
     snapshot.append_layout(&layout, &widget.color());
     snapshot.restore();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::details_should_center;
+
+    #[test]
+    fn placement_requires_extra_room_before_leaving_centered_mode() {
+        let mut centered = false;
+        for available in [515, 520, 514, 530, 516, 560, 579] {
+            centered = details_should_center(available, 500, centered);
+            assert!(centered, "placement changed inside the hysteresis band");
+        }
+        centered = details_should_center(580, 500, centered);
+        assert!(!centered);
+        for available in [579, 530, 516] {
+            centered = details_should_center(available, 500, centered);
+            assert!(!centered, "anchored placement changed while it still fits");
+        }
+        assert!(details_should_center(515, 500, centered));
+    }
 }

@@ -2,9 +2,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use eventix_locale::{DateFlags, Locale};
-use eventix_view::Event;
+use std::{cell::Cell, sync::LazyLock};
+
+use eventix_locale::Locale;
+use eventix_view::{
+    Event,
+    details::{Contact, Response},
+};
 use gtk::{glib, prelude::*, subclass::prelude::*};
+use regex::Regex;
+
+use crate::style;
 
 mod imp {
     use super::*;
@@ -12,20 +20,21 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/hrniels/Eventix/gtk/event_details.ui")]
     pub struct EventDetails {
+        pub(super) presentation_failed: Cell<bool>,
         #[template_child]
         pub summary: gtk::TemplateChild<gtk::Label>,
         #[template_child]
-        pub calendar: gtk::TemplateChild<gtk::Label>,
+        pub tag: gtk::TemplateChild<gtk::Button>,
         #[template_child]
-        pub start: gtk::TemplateChild<gtk::Label>,
+        pub calendar: gtk::TemplateChild<gtk::Box>,
         #[template_child]
-        pub end: gtk::TemplateChild<gtk::Label>,
+        pub rows: gtk::TemplateChild<gtk::Grid>,
         #[template_child]
-        pub timezone: gtk::TemplateChild<gtk::Label>,
+        pub actions: gtk::TemplateChild<gtk::Box>,
         #[template_child]
-        pub location: gtk::TemplateChild<gtk::Label>,
+        pub actions_left: gtk::TemplateChild<gtk::Box>,
         #[template_child]
-        pub description: gtk::TemplateChild<gtk::Label>,
+        pub actions_right: gtk::TemplateChild<gtk::Box>,
     }
 
     #[glib::object_subclass]
@@ -44,10 +53,33 @@ mod imp {
 
     impl ObjectImpl for EventDetails {
         fn dispose(&self) {
+            self.obj().set_child(None::<&gtk::Widget>);
             self.dispose_template();
         }
     }
-    impl WidgetImpl for EventDetails {}
+    impl WidgetImpl for EventDetails {
+        fn realize(&self) {
+            self.parent_realize();
+            let obj = self.obj();
+            if let Some(surface) = obj.surface() {
+                let weak = obj.downgrade();
+                surface.connect_layout(move |_, width, height| {
+                    let Some(popover) = weak.upgrade() else {
+                        return;
+                    };
+                    let imp = popover.imp();
+                    let minimum_width = imp.parent_measure(gtk::Orientation::Horizontal, -1).0;
+                    if width < minimum_width
+                        || height < imp.parent_measure(gtk::Orientation::Vertical, width).0
+                    {
+                        // GTK can emit `closed` before this layout handler runs. The owner
+                        // checks this flag after GTK has finished processing the signal.
+                        imp.presentation_failed.set(true);
+                    }
+                });
+            }
+        }
+    }
     impl PopoverImpl for EventDetails {}
 }
 
@@ -59,37 +91,853 @@ glib::wrapper! {
 }
 
 impl EventDetails {
+    /// Returns and clears whether GTK rejected a popup allocation.
+    pub(crate) fn take_presentation_failure(&self) -> bool {
+        self.imp().presentation_failed.replace(false)
+    }
+
+    /// Measures the natural width and minimum height needed for anchored placement.
+    pub(crate) fn placement_size(&self) -> (i32, i32) {
+        // GtkWidget::measure returns zero for a hidden popover. Calling the parent's measure
+        // vfunc lets us determine placement before showing it for the first time.
+        let imp = self.imp();
+        let (minimum_width, natural_width, _, _) =
+            imp.parent_measure(gtk::Orientation::Horizontal, -1);
+        let minimum_height = imp
+            .parent_measure(gtk::Orientation::Vertical, minimum_width)
+            .0
+            .max(
+                imp.parent_measure(gtk::Orientation::Vertical, natural_width)
+                    .0,
+            );
+        (natural_width, minimum_height)
+    }
+
     pub fn new(event: &Event, locale: &dyn Locale) -> Self {
         let obj: Self = glib::Object::new();
         let imp = obj.imp();
-        let start = if event.all_day {
-            locale.fmt_date(&event.start, DateFlags::NoToday)
-        } else {
-            locale.fmt_datetime(&event.start, DateFlags::NoToday)
-        };
-        let end = if event.all_day {
-            locale.fmt_date(&event.end, DateFlags::NoToday)
-        } else {
-            locale.fmt_datetime(&event.end, DateFlags::NoToday)
-        };
-        let timezone = locale.timezone().to_string();
+        let scrollers =
+            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/detail_scrollers.ui");
+        let attendees_scroll: gtk::ScrolledWindow = scrollers
+            .object("attendees_scroll")
+            .expect("attendee detail scroller is defined in GTK resources");
+        let description_scroll: gtk::ScrolledWindow = scrollers
+            .object("description_scroll")
+            .expect("description detail scroller is defined in GTK resources");
+        let details = &event.details;
         let summary = if event.summary.is_empty() {
             locale.translate("Untitled event")
         } else {
             &event.summary
         };
-        for (label, key, value) in [
-            (&imp.summary, "Summary", summary),
-            (&imp.calendar, "Calendar", &event.calendar),
-            (&imp.start, "Start", &start),
-            (&imp.end, "End", &end),
-            (&imp.timezone, "Timezone", &timezone),
-            (&imp.location, "Location", &event.location),
-            (&imp.description, "Description", &event.description),
-        ] {
-            label.set_visible(!value.is_empty());
-            label.set_text(&format!("{}: {value}", locale.translate(key)));
+        imp.summary.set_text(summary);
+        imp.summary.set_tooltip_text(Some(summary));
+        imp.tag.set_tooltip_text(Some(&event.id.uid));
+        imp.tag.set_cursor_from_name(Some("pointer"));
+        imp.tag
+            .update_property(&[gtk::accessible::Property::Label("UID")]);
+        let uid = event.id.uid.clone();
+        imp.tag.connect_clicked(move |button| {
+            button.clipboard().set_text(&uid);
+        });
+        let tag_image = imp.tag.child().and_downcast::<gtk::Image>().unwrap();
+        let motion = gtk::EventControllerMotion::new();
+        let image = tag_image.downgrade();
+        motion.connect_enter(move |_, _, _| {
+            if let Some(image) = image.upgrade() {
+                image.set_resource(Some(
+                    "/io/github/hrniels/Eventix/gtk/icons/tag-symbolic-hover.svg",
+                ));
+            }
+        });
+        let image = tag_image.downgrade();
+        motion.connect_leave(move |_| {
+            if let Some(image) = image.upgrade() {
+                image.set_resource(Some(
+                    "/io/github/hrniels/Eventix/gtk/icons/tag-symbolic.svg",
+                ));
+            }
+        });
+        imp.tag.add_controller(motion);
+        imp.calendar.set_tooltip_text(Some(&event.calendar));
+        imp.calendar
+            .update_property(&[gtk::accessible::Property::Label(&event.calendar)]);
+        imp.calendar
+            .add_css_class(&style::calendar_class(&event.background, &event.foreground));
+        obj.update_property(&[gtk::accessible::Property::Label(summary)]);
+
+        let mut index = 0;
+        let mut row = |icon_name: &str, key: &str, value: &gtk::Widget| {
+            let image = icon(icon_name);
+            image.set_valign(gtk::Align::Start);
+            let title = gtk::Label::builder()
+                .label(locale.translate(key))
+                .xalign(0.0)
+                .valign(gtk::Align::Start)
+                .build();
+            title.add_css_class("ev_details_label");
+            value.update_relation(&[gtk::accessible::Relation::LabelledBy(&[title.upcast_ref()])]);
+            imp.rows.attach(&image, 0, index, 1, 1);
+            imp.rows.attach(&title, 1, index, 1, 1);
+            imp.rows.attach(value, 2, index, 1, 1);
+            index += 1;
+        };
+        let date = if let Some(source) = &details.source_date {
+            format!("{}\n{source}", details.date)
+        } else {
+            details.date.clone()
+        };
+        row(
+            "calendar-date",
+            details.date_label,
+            label(&date).upcast_ref(),
+        );
+        if !details.location.trim().is_empty() {
+            row(
+                "geo-alt-fill",
+                "Location",
+                linked_label(&details.location).upcast_ref(),
+            );
         }
+        if let Some(status) = &details.status {
+            row("flag", "Status", label(status).upcast_ref());
+        }
+        if let Some(recurrence) = &details.recurrence {
+            row(
+                "arrow-clockwise",
+                "Repeats_short",
+                label(recurrence).upcast_ref(),
+            );
+        }
+        if let Some(reminders) = &details.reminders {
+            let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
+            content.append(&label(reminders));
+            if details.actions.personal_reminders {
+                let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+                for key in if event.recurrent {
+                    &["Edit series", "Edit occ."][..]
+                } else {
+                    &["Edit"][..]
+                } {
+                    buttons.append(&button("pencil", locale.translate(key), ""));
+                }
+                content.append(&buttons);
+            }
+            row("alarm", "Reminder", content.upcast_ref());
+        }
+        if let Some(organizer) = &details.organizer {
+            let text = label("");
+            let mut markup = contact_markup(organizer);
+            if let Some(sent_by) = &details.sent_by {
+                markup.push_str(&format!(
+                    ", {} {}",
+                    glib::markup_escape_text(locale.translate("sent by")),
+                    link_markup(sent_by, sent_by)
+                ));
+            }
+            text.set_markup(&markup);
+            row("person-fill", "Organizer", text.upcast_ref());
+        }
+        if !details.attendees.is_empty() {
+            let people = gtk::Box::new(gtk::Orientation::Vertical, 6);
+            for attendee in &details.attendees {
+                let person = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                let suffix = match attendee.response {
+                    Response::Accepted => "-check",
+                    Response::Declined => "-slash",
+                    Response::Tentative => "-exclamation",
+                    Response::Pending => "",
+                };
+                let image = icon(&format!(
+                    "person{}{suffix}",
+                    if attendee.required { "-fill" } else { "" }
+                ));
+                image.set_valign(gtk::Align::Start);
+                image.set_tooltip_text(Some(&attendee.tooltip));
+                image.update_property(&[gtk::accessible::Property::Label(&attendee.tooltip)]);
+                person.append(&image);
+                let name = label("");
+                name.set_markup(&contact_markup(&attendee.contact));
+                name.set_tooltip_text(Some(&format!(
+                    "{}\n{}",
+                    attendee.contact.address, attendee.tooltip
+                )));
+                person.append(&name);
+                people.append(&person);
+            }
+            attendees_scroll.set_child(Some(&people));
+            row("people-fill", "Attendees", attendees_scroll.upcast_ref());
+        }
+        if !details.description.trim().is_empty() {
+            description_scroll.set_child(Some(&linked_label(details.description.trim())));
+            row(
+                "journal-text",
+                "Description",
+                description_scroll.upcast_ref(),
+            );
+        }
+        obj.add_actions(event, locale);
         obj
+    }
+
+    fn add_actions(&self, event: &Event, locale: &dyn Locale) {
+        let actions = &event.details.actions;
+        let left = &self.imp().actions_left;
+        let right = &self.imp().actions_right;
+        if actions.delete {
+            left.append(&button(
+                "trash",
+                locale.translate(if event.recurrent {
+                    "Delete series"
+                } else {
+                    "Delete"
+                }),
+                "ev_details_critical",
+            ));
+        }
+        if actions.cancel || actions.exclude {
+            left.append(&button(
+                "dash-circle",
+                locale.translate(if actions.cancel {
+                    "Cancel occ."
+                } else {
+                    "Exclude occ."
+                }),
+                if actions.cancel {
+                    "ev_details_critical"
+                } else {
+                    ""
+                },
+            ));
+        }
+        if actions.edit {
+            if event.recurrent {
+                right.append(&menu(
+                    "pencil",
+                    locale.translate("Edit"),
+                    "",
+                    &[
+                        ("calendar-event", locale.translate("This occurrence"), ""),
+                        (
+                            "calendar-range",
+                            locale.translate("This and following occ."),
+                            "",
+                        ),
+                        ("arrow-clockwise", locale.translate("Complete series"), ""),
+                    ],
+                ));
+            } else {
+                right.append(&button("pencil", locale.translate("Edit"), ""));
+            }
+        }
+        for (response, occurrence) in [
+            (actions.series_response, false),
+            (actions.occurrence_response, true),
+        ] {
+            let Some(response) = response else { continue };
+            let (icon, key, class) = match response {
+                Response::Accepted => ("check-lg", "Accepted", "ev_details_good"),
+                Response::Declined => ("x-lg", "Declined", "ev_details_critical"),
+                Response::Tentative => ("question-lg", "Tentative", "ev_details_warn"),
+                Response::Pending => (
+                    "reply",
+                    if event.recurrent {
+                        if occurrence { "Occurrence" } else { "Series" }
+                    } else {
+                        "Respond"
+                    },
+                    "",
+                ),
+            };
+            if actions.read_only && response == Response::Pending {
+                continue;
+            }
+            let text = if event.recurrent && response != Response::Pending {
+                format!(
+                    "{} {}",
+                    locale.translate(key),
+                    locale.translate(if occurrence { "(Occ.)" } else { "(Ser.)" })
+                )
+            } else {
+                locale.translate(key).to_owned()
+            };
+            if actions.read_only {
+                let status = button_content(icon, &text);
+                status.add_css_class(class);
+                right.append(&status);
+            } else {
+                right.append(&menu(
+                    icon,
+                    &text,
+                    class,
+                    &[
+                        ("check-lg", locale.translate("Accept"), "ev_details_good"),
+                        (
+                            "question-lg",
+                            locale.translate("Tentative"),
+                            "ev_details_warn",
+                        ),
+                        ("x-lg", locale.translate("Decline"), "ev_details_critical"),
+                    ],
+                ));
+            }
+        }
+        let has_left = left.first_child().is_some();
+        let has_right = right.first_child().is_some();
+        left.set_visible(has_left);
+        right.set_visible(has_right);
+        self.imp().actions.set_visible(has_left || has_right);
+    }
+}
+
+fn icon(name: &str) -> gtk::Image {
+    gtk::Image::builder()
+        .resource(format!(
+            "/io/github/hrniels/Eventix/gtk/icons/{name}-symbolic.svg"
+        ))
+        .pixel_size(16)
+        .build()
+}
+
+fn label(text: &str) -> gtk::Label {
+    gtk::Label::builder()
+        .label(text)
+        .xalign(0.0)
+        .valign(gtk::Align::Start)
+        .wrap(true)
+        .wrap_mode(gtk::pango::WrapMode::WordChar)
+        .selectable(true)
+        .hexpand(true)
+        .max_width_chars(42)
+        .build()
+}
+
+fn button_content(icon_name: &str, text: &str) -> gtk::Box {
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    content.set_halign(gtk::Align::Center);
+    content.append(&icon(icon_name));
+    content.append(&gtk::Label::new(Some(text)));
+    content
+}
+
+fn button(icon_name: &str, text: &str, class: &str) -> gtk::Button {
+    let button = gtk::Button::builder()
+        .child(&button_content(icon_name, text))
+        .halign(gtk::Align::Start)
+        .build();
+    button.add_css_class("ev_details_button");
+    if !class.is_empty() {
+        button.add_css_class(class);
+    }
+    button.update_property(&[gtk::accessible::Property::Label(text)]);
+    button
+}
+
+/// Builds a working dropdown whose action buttons deliberately have no mutation handlers yet.
+fn menu(icon_name: &str, text: &str, class: &str, items: &[(&str, &str, &str)]) -> gtk::MenuButton {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let popover = gtk::Popover::builder().child(&content).build();
+    for (icon, title, class) in items {
+        let item = button(icon, title, class);
+        let weak = popover.downgrade();
+        item.connect_clicked(move |_| {
+            if let Some(popover) = weak.upgrade() {
+                popover.popdown();
+            }
+        });
+        content.append(&item);
+    }
+    let menu = gtk::MenuButton::builder()
+        .child(&button_content(icon_name, text))
+        .popover(&popover)
+        .halign(gtk::Align::Start)
+        .build();
+    menu.add_css_class("ev_details_button");
+    if !class.is_empty() {
+        menu.add_css_class(class);
+    }
+    menu.update_property(&[gtk::accessible::Property::Label(text)]);
+    menu
+}
+
+fn contact_markup(contact: &Contact) -> String {
+    link_markup(&format!("mailto:{}", contact.address), &contact.name)
+}
+
+fn link_markup(uri: &str, text: &str) -> String {
+    format!(
+        "<a href=\"{}\">{}</a>",
+        glib::markup_escape_text(uri),
+        glib::markup_escape_text(text)
+    )
+}
+
+fn linked_label(text: &str) -> gtk::Label {
+    let label = label("");
+    label.set_markup(&text_markup(text));
+    label
+}
+
+/// Escapes calendar text before adding links, preserving literal markup and line breaks.
+fn text_markup(text: &str) -> String {
+    static LINKS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(concat!(
+            r"(?:https?://|mailto:)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}",
+            r"\.[a-zA-Z0-9]{2,}\b(?:[-a-zA-Z0-9()@:;%_+.~#?&/=]*)"
+        ))
+        .expect("valid link regex")
+    });
+    let mut result = String::new();
+    let mut end = 0;
+    for found in LINKS.find_iter(text) {
+        result.push_str(&glib::markup_escape_text(&text[end..found.start()]));
+        let text = found.as_str().trim_end_matches(['.', ',', ';', ')']);
+        let uri = if text.starts_with("https:")
+            || text.starts_with("http:")
+            || text.starts_with("mailto:")
+        {
+            text.to_owned()
+        } else if text.contains('@') {
+            format!("mailto:{text}")
+        } else {
+            format!("https://{text}")
+        };
+        result.push_str(&link_markup(&uri, text));
+        end = found.start() + text.len();
+    }
+    result.push_str(&glib::markup_escape_text(&text[end..]));
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use chrono::TimeZone;
+    use eventix_view::{
+        Event, EventId,
+        details::{Attendee, Contact, DetailActions, Details, Response},
+    };
+    use gtk::{prelude::*, subclass::prelude::*};
+
+    use super::text_markup;
+
+    /// Exercises template loading, layout, symbolic resources and nested menus on a real display.
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn popup_layout_and_dummy_menus() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let display = gtk::gdk::Display::default().unwrap();
+        crate::style::install(&display);
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        for language in [
+            eventix_locale::LocaleType::English,
+            eventix_locale::LocaleType::German,
+        ] {
+            let locale = eventix_locale::new_with_timezone(
+                &xdg,
+                language,
+                *eventix_locale::default().timezone(),
+            )
+            .unwrap();
+            for variant in ["full", "sparse", "invitation", "read_only"] {
+                let start = locale
+                    .timezone()
+                    .with_ymd_and_hms(2026, 10, 5, 9, 0, 0)
+                    .unwrap();
+                let full = variant != "sparse";
+                let read_only = variant == "read_only";
+                let invitation = variant == "invitation" || read_only;
+                let contact = Contact {
+                    name: "Amy & Zoe <Team>".into(),
+                    address: "amy@example.org".into(),
+                };
+                let event = Event {
+                    id: EventId {
+                        calendar: "cal".into(),
+                        uid: "popup-test".into(),
+                        recurrence: String::new(),
+                        date: start.date_naive(),
+                    },
+                    summary: if full {
+                        "Planning <&> review — a long title which should wrap neatly".into()
+                    } else {
+                        "Short event".into()
+                    },
+                    calendar: "Work".into(),
+                    foreground: "#ffffff".into(),
+                    background: "#336699".into(),
+                    start,
+                    end: start + chrono::Duration::hours(1),
+                    all_day: false,
+                    cancelled: false,
+                    recurrent: full,
+                    exception: false,
+                    alarm: full,
+                    minute_start: 540,
+                    minute_end: 600,
+                    columns: eventix_view::layout::Columns {
+                        count: 1,
+                        offset: 0,
+                        span: 1,
+                    },
+                    details: Arc::new(Details {
+                        date_label: "Date",
+                        date: "Oct 05, 2026, 09:00 ‒ 10:00".into(),
+                        source_date: full
+                            .then(|| "Oct 05, 2026, 11:00 ‒ 12:00 (Europe/Berlin)".into()),
+                        location: if full {
+                            "Meeting room\nhttps://example.org/?a=1&b=2".into()
+                        } else {
+                            String::new()
+                        },
+                        description: if full {
+                            "Long description with literal <markup> & links: https://example.org\n"
+                                .repeat(20)
+                        } else {
+                            String::new()
+                        },
+                        status: full.then(|| locale.translate("CONFIRMED").into()),
+                        recurrence: full.then(|| locale.translate("Daily").to_owned()),
+                        reminders: full.then(|| "15 minutes before start".into()),
+                        organizer: full.then(|| contact.clone()),
+                        sent_by: full.then(|| "mailto:assistant@example.org".into()),
+                        attendees: if full {
+                            (0..20)
+                                .map(|i| Attendee {
+                                    contact: contact.clone(),
+                                    required: i % 2 == 0,
+                                    response: [
+                                        Response::Accepted,
+                                        Response::Declined,
+                                        Response::Tentative,
+                                        Response::Pending,
+                                    ][i % 4],
+                                    tooltip: "Required, Accepted".into(),
+                                })
+                                .collect()
+                        } else {
+                            vec![]
+                        },
+                        actions: DetailActions {
+                            delete: !read_only,
+                            edit: !invitation,
+                            cancel: full && !invitation,
+                            exclude: false,
+                            series_response: invitation.then_some(Response::Accepted),
+                            occurrence_response: invitation.then_some(Response::Tentative),
+                            read_only,
+                            personal_reminders: full,
+                        },
+                    }),
+                };
+                let colors = gtk::CssProvider::new();
+                let week = std::rc::Rc::new(eventix_view::WeekSnapshot {
+                    start: start.date_naive(),
+                    locale: locale.clone(),
+                    days: vec![eventix_view::Day {
+                        date: start.date_naive(),
+                        all_day: if full { vec![] } else { vec![event.clone()] },
+                        timed: if full { vec![event.clone()] } else { vec![] },
+                        dst: vec![],
+                    }],
+                });
+                colors.load_from_data(&crate::style::calendar_css(&week));
+                gtk::style_context_add_provider_for_display(
+                    &display,
+                    &colors,
+                    gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+                );
+                let anchor: crate::timeline::Timeline = gtk::glib::Object::builder()
+                    .property("all-day", !full)
+                    .build();
+                anchor.set_week(week);
+                let scroll = gtk::ScrolledWindow::builder()
+                    .hscrollbar_policy(gtk::PolicyType::Never)
+                    .child(&anchor)
+                    .build();
+                let outer_scroll = gtk::ScrolledWindow::builder()
+                    .vscrollbar_policy(gtk::PolicyType::Never)
+                    .child(&scroll)
+                    .build();
+                let window = gtk::Window::builder()
+                    .default_width(if full { 520 } else { 900 })
+                    .default_height(if full { 430 } else { 750 })
+                    .child(&outer_scroll)
+                    .build();
+                window.present();
+                let drain = || {
+                    for _ in 0..20 {
+                        while gtk::glib::MainContext::default().iteration(false) {}
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                };
+                drain();
+                if full {
+                    scroll.vadjustment().set_value(400.0);
+                    drain();
+                }
+                anchor.event_cards()[0].1.emit_clicked();
+                drain();
+                let mut child = anchor.first_child();
+                let popup = loop {
+                    let widget = child.expect("timeline details popup exists");
+                    if let Some(popup) = widget.downcast_ref::<super::EventDetails>() {
+                        break popup.clone();
+                    }
+                    child = widget.next_sibling();
+                };
+                assert!(
+                    popup.width() > 400 && popup.width() < 850,
+                    "width: {}",
+                    popup.width()
+                );
+                assert!(popup.is_mapped(), "details popup did not map for {variant}");
+                assert!(popup.height() < 1200, "height: {}", popup.height());
+                assert_eq!(popup.imp().rows.child_at(0, 1).is_some(), full);
+                if let Some(directory) = std::env::var_os("EVENTIX_DETAILS_SCREENSHOTS") {
+                    let paintable = gtk::WidgetPaintable::new(Some(&popup));
+                    let snapshot = gtk::Snapshot::new();
+                    paintable.snapshot(&snapshot, popup.width().into(), popup.height().into());
+                    let node = snapshot.to_node().unwrap();
+                    let texture = popup.renderer().unwrap().render_texture(&node, None);
+                    texture
+                        .save_to_png(
+                            std::path::PathBuf::from(directory)
+                                .join(format!("{language:?}-{variant}.png")),
+                        )
+                        .unwrap();
+                }
+                popup.imp().tag.emit_clicked();
+                assert_eq!(popup.imp().actions_left.first_child().is_some(), !read_only);
+                assert_eq!(
+                    popup.imp().actions_right.first_child().is_some(),
+                    !invitation || full
+                );
+                for group in [&popup.imp().actions_left, &popup.imp().actions_right] {
+                    let mut action = group.first_child();
+                    while let Some(widget) = action {
+                        let next = widget.next_sibling();
+                        if let Some(menu) = widget.downcast_ref::<gtk::MenuButton>() {
+                            menu.popup();
+                            drain();
+                            let dropdown = menu.popover().unwrap();
+                            if !dropdown.is_visible() {
+                                action = next;
+                                continue;
+                            }
+                            let first = dropdown
+                                .child()
+                                .unwrap()
+                                .first_child()
+                                .unwrap()
+                                .downcast::<gtk::Button>()
+                                .unwrap();
+                            first.emit_clicked();
+                            assert!(!dropdown.is_visible());
+                        } else if let Some(button) = widget.downcast_ref::<gtk::Button>() {
+                            button.emit_clicked();
+                            assert!(popup.is_visible());
+                        }
+                        action = next;
+                    }
+                }
+                if variant == "full" && language == eventix_locale::LocaleType::English {
+                    window.set_default_size(900, 1000);
+                    scroll.vadjustment().set_value(500.0);
+                    drain();
+                    assert!(popup.is_mapped());
+                    assert!(
+                        popup.has_arrow(),
+                        "roomy windows should retain event anchoring"
+                    );
+                    let (_, minimum_height) = popup.placement_size();
+                    assert!(minimum_height > 0);
+                    window.set_default_size(520, 430);
+                    assert_eq!(popup.position(), gtk::PositionType::Bottom);
+                    assert_eq!(popup.offset(), (0, 0));
+                    drain();
+                    let popup_center = || {
+                        let surface = popup.surface().unwrap();
+                        let position = surface.downcast_ref::<gtk::gdk::Popup>().unwrap();
+                        position.position_y() + surface.height() / 2
+                    };
+                    let center = popup_center();
+                    let popup_x = || {
+                        popup
+                            .surface()
+                            .unwrap()
+                            .downcast::<gtk::gdk::Popup>()
+                            .unwrap()
+                            .position_x()
+                    };
+                    let x = popup_x();
+                    for value in [0, 100, 250, 275, 300, 350, 400, 450, 500, 550, 700, 900] {
+                        scroll.vadjustment().set_value(f64::from(value));
+                        drain();
+                        assert!(
+                            popup.is_mapped(),
+                            "popup disappeared at scroll offset {value}"
+                        );
+                        let current_center = popup_center();
+                        assert_eq!(
+                            popup_x(),
+                            x,
+                            "horizontal position changed at scroll offset {value}"
+                        );
+                        assert!(
+                            (current_center - center).abs() < 2,
+                            "centered popup moved vertically at scroll offset {value}: {} -> {}, position {:?}",
+                            center,
+                            current_center,
+                            popup.position()
+                        );
+                    }
+                    assert_eq!(popup.position(), gtk::PositionType::Right);
+                    assert!(!popup.has_arrow());
+                    outer_scroll.hadjustment().set_value(300.0);
+                    drain();
+                    assert!(popup.is_mapped());
+                    assert!(!popup.has_arrow());
+                    assert!((popup_center() - center).abs() < 2);
+                    outer_scroll.hadjustment().set_value(0.0);
+                    scroll.vadjustment().set_value(500.0);
+                    drain();
+                    let bounds = anchor.event_cards()[0].1.compute_bounds(&window).unwrap();
+                    let event_bottom = (bounds.y() + bounds.height()).ceil() as i32;
+                    for extra in [20, 40, 60, 40, 20] {
+                        window.set_default_size(900, minimum_height + event_bottom + extra);
+                        popup.queue_resize();
+                        drain();
+                        assert!(popup.is_mapped());
+                        assert!(
+                            !popup.has_arrow(),
+                            "centered placement flickered near threshold"
+                        );
+                    }
+                    window.set_default_size(900, minimum_height + event_bottom + 100);
+                    drain();
+                    assert!(popup.is_mapped());
+                    assert!(popup.has_arrow(), "placement did not leave centered mode");
+                    for extra in [79, 40, 20] {
+                        window.set_default_size(900, minimum_height + event_bottom + extra);
+                        popup.queue_resize();
+                        drain();
+                        assert!(popup.is_mapped());
+                        assert!(
+                            popup.has_arrow(),
+                            "anchored placement flickered near threshold"
+                        );
+                    }
+                    window.set_default_size(900, minimum_height + event_bottom + 100);
+                    drain();
+                    scroll
+                        .vadjustment()
+                        .set_value(scroll.vadjustment().upper() - scroll.vadjustment().page_size());
+                    drain();
+                    assert!(popup.is_mapped());
+                    assert!(!popup.has_arrow(), "off-screen event retained its anchor");
+                    scroll.vadjustment().set_value(500.0);
+                    drain();
+                    assert!(popup.is_mapped());
+                    assert!(popup.has_arrow(), "visible event did not regain its anchor");
+                    // GTK's native layout rejects allocations smaller than the minimum,
+                    // even when the window-relative placement estimate predicted enough room.
+                    let surface = popup.surface().unwrap();
+                    surface.emit_by_name::<()>("layout", &[&surface.width(), &1i32]);
+                    drain();
+                    assert!(popup.is_mapped(), "rejected placement was not recovered");
+                    assert!(
+                        !popup.has_arrow(),
+                        "rejected placement did not use centered fallback"
+                    );
+                    window.set_default_size(900, 1000);
+                    drain();
+                    assert!(popup.is_mapped());
+                    assert!(
+                        !popup.has_arrow(),
+                        "rejected placement retried its original mode"
+                    );
+                    window.set_default_size(520, 430);
+                    drain();
+                    assert!(popup.is_mapped());
+                    assert!(!popup.has_arrow());
+                }
+                popup.popdown();
+                assert!(
+                    popup.parent().is_some(),
+                    "cleanup must wait for GTK dismissal"
+                );
+                drain();
+                assert!(popup.parent().is_none());
+                let weak_popup = popup.downgrade();
+                drop(popup);
+                assert!(weak_popup.upgrade().is_none());
+                if variant == "full" && language == eventix_locale::LocaleType::English {
+                    let mut centered_y = None;
+                    for value in [0, 100, 250, 350, 450, 550, 700, 900] {
+                        scroll.vadjustment().set_value(f64::from(value));
+                        drain();
+                        anchor.event_cards()[0].1.emit_clicked();
+                        if value == 350 {
+                            let mut child = anchor.first_child();
+                            while let Some(widget) = child {
+                                if let Some(popup) = widget.downcast_ref::<super::EventDetails>() {
+                                    let surface = popup.surface().unwrap();
+                                    surface
+                                        .emit_by_name::<()>("layout", &[&surface.width(), &1i32]);
+                                }
+                                child = widget.next_sibling();
+                            }
+                        }
+                        drain();
+                        let mut child = anchor.first_child();
+                        let mut mapped = false;
+                        while let Some(widget) = child {
+                            if widget.is::<super::EventDetails>() {
+                                mapped |= widget.is_mapped();
+                                let popup = widget.downcast_ref::<super::EventDetails>().unwrap();
+                                assert!(!popup.has_arrow());
+                                let surface = popup.surface().unwrap();
+                                let position = surface.downcast_ref::<gtk::gdk::Popup>().unwrap();
+                                let y = position.position_y() + surface.height() / 2;
+                                let expected = *centered_y.get_or_insert(y);
+                                assert!(
+                                    (y - expected).abs() < 2,
+                                    "off-screen popup was not centered at scroll offset {value}"
+                                );
+                            }
+                            child = widget.next_sibling();
+                        }
+                        assert!(mapped, "popup did not open at scroll offset {value}");
+                        anchor.close_details();
+                        drain();
+                    }
+                }
+                anchor.event_cards()[0].1.emit_clicked();
+                drain();
+                anchor.close_details();
+                drain();
+                window.close();
+                drain();
+                gtk::style_context_remove_provider_for_display(&display, &colors);
+            }
+        }
+    }
+
+    #[test]
+    fn calendar_text_is_escaped_before_linking() {
+        let markup = text_markup("<b>Meeting</b>\nhttps://example.org/?a=1&b=2. me@example.org");
+        assert_eq!(
+            markup,
+            concat!(
+                "&lt;b&gt;Meeting&lt;/b&gt;\n",
+                "<a href=\"https://example.org/?a=1&amp;b=2\">",
+                "https://example.org/?a=1&amp;b=2</a>. ",
+                "<a href=\"mailto:me@example.org\">me@example.org</a>"
+            )
+        );
     }
 }

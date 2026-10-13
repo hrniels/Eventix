@@ -881,6 +881,7 @@ dependencies = [
  "eventix-view",
  "formatx",
  "gtk4",
+ "regex",
  "tempfile",
  "xdg",
 ]
