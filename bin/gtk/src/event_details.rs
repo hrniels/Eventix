@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use eventix_locale::Locale;
 use eventix_view::{
     Event,
-    details::{Contact, Response},
+    details::{Attendee, Contact, Response},
 };
 use gtk::{glib, prelude::*, subclass::prelude::*};
 use regex::Regex;
@@ -87,16 +87,15 @@ impl EventDetails {
 
     pub fn new(event: &Event, locale: &dyn Locale) -> Self {
         let obj: Self = glib::Object::new();
-        let imp = obj.imp();
-        let scrollers =
-            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/detail_scrollers.ui");
-        let attendees_scroll: gtk::ScrolledWindow = scrollers
-            .object("attendees_scroll")
-            .expect("attendee detail scroller is defined in GTK resources");
-        let description_scroll: gtk::ScrolledWindow = scrollers
-            .object("description_scroll")
-            .expect("description detail scroller is defined in GTK resources");
-        let details = &event.details;
+        obj.setup_header(event, locale);
+        obj.setup_tag(&event.id.uid);
+        obj.add_rows(event, locale);
+        obj.add_actions(event, locale);
+        obj
+    }
+
+    fn setup_header(&self, event: &Event, locale: &dyn Locale) {
+        let imp = self.imp();
         let summary = if event.summary.is_empty() {
             locale.translate("Untitled event")
         } else {
@@ -104,16 +103,28 @@ impl EventDetails {
         };
         imp.summary.set_text(summary);
         imp.summary.set_tooltip_text(Some(summary));
-        imp.tag.set_tooltip_text(Some(&event.id.uid));
+        imp.calendar.set_tooltip_text(Some(&event.calendar));
+        imp.calendar
+            .update_property(&[gtk::accessible::Property::Label(&event.calendar)]);
+        imp.calendar
+            .add_css_class(&style::calendar_class(&event.background, &event.foreground));
+        self.update_property(&[gtk::accessible::Property::Label(summary)]);
+    }
+
+    fn setup_tag(&self, uid: &str) {
+        let imp = self.imp();
+        imp.tag.set_tooltip_text(Some(uid));
         imp.tag.set_cursor_from_name(Some("pointer"));
         imp.tag
             .update_property(&[gtk::accessible::Property::Label("UID")]);
-        let uid = event.id.uid.clone();
+        let uid = uid.to_owned();
         imp.tag.connect_clicked(move |button| {
             button.clipboard().set_text(&uid);
         });
-        let tag_image = imp.tag.child().and_downcast::<gtk::Image>().unwrap();
+
         let motion = gtk::EventControllerMotion::new();
+
+        let tag_image = imp.tag.child().and_downcast::<gtk::Image>().unwrap();
         let image = tag_image.downgrade();
         motion.connect_enter(move |_, _, _| {
             if let Some(image) = image.upgrade() {
@@ -122,6 +133,7 @@ impl EventDetails {
                 ));
             }
         });
+
         let image = tag_image.downgrade();
         motion.connect_leave(move |_| {
             if let Some(image) = image.upgrade() {
@@ -130,30 +142,29 @@ impl EventDetails {
                 ));
             }
         });
+
         imp.tag.add_controller(motion);
-        imp.calendar.set_tooltip_text(Some(&event.calendar));
-        imp.calendar
-            .update_property(&[gtk::accessible::Property::Label(&event.calendar)]);
-        imp.calendar
-            .add_css_class(&style::calendar_class(&event.background, &event.foreground));
-        obj.update_property(&[gtk::accessible::Property::Label(summary)]);
+    }
+
+    fn add_rows(&self, event: &Event, locale: &dyn Locale) {
+        let imp = self.imp();
+        let details = &event.details;
+
+        let scrollers =
+            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/detail_scrollers.ui");
+        let attendees_scroll: gtk::ScrolledWindow = scrollers
+            .object("attendees_scroll")
+            .expect("attendee detail scroller is defined in GTK resources");
+        let description_scroll: gtk::ScrolledWindow = scrollers
+            .object("description_scroll")
+            .expect("description detail scroller is defined in GTK resources");
 
         let mut index = 0;
         let mut row = |icon_name: &str, key: &str, value: &gtk::Widget| {
-            let image = icon(icon_name);
-            image.set_valign(gtk::Align::Start);
-            let title = gtk::Label::builder()
-                .label(locale.translate(key))
-                .xalign(0.0)
-                .valign(gtk::Align::Start)
-                .build();
-            title.add_css_class("ev_details_label");
-            value.update_relation(&[gtk::accessible::Relation::LabelledBy(&[title.upcast_ref()])]);
-            imp.rows.attach(&image, 0, index, 1, 1);
-            imp.rows.attach(&title, 1, index, 1, 1);
-            imp.rows.attach(value, 2, index, 1, 1);
+            attach_row(&imp.rows, index, icon_name, locale.translate(key), value);
             index += 1;
         };
+
         let date = if let Some(source) = &details.source_date {
             format!("{}\n{source}", details.date)
         } else {
@@ -164,6 +175,7 @@ impl EventDetails {
             details.date_label,
             label(&date).upcast_ref(),
         );
+
         if !details.location.trim().is_empty() {
             row(
                 "geo-alt-fill",
@@ -171,9 +183,11 @@ impl EventDetails {
                 linked_label(&details.location).upcast_ref(),
             );
         }
+
         if let Some(status) = &details.status {
             row("flag", "Status", label(status).upcast_ref());
         }
+
         if let Some(recurrence) = &details.recurrence {
             row(
                 "arrow-clockwise",
@@ -181,65 +195,28 @@ impl EventDetails {
                 label(recurrence).upcast_ref(),
             );
         }
+
         if let Some(reminders) = &details.reminders {
-            let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
-            content.append(&label(reminders));
-            if details.actions.personal_reminders {
-                let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-                for key in if event.recurrent {
-                    &["Edit series", "Edit occ."][..]
-                } else {
-                    &["Edit"][..]
-                } {
-                    buttons.append(&button("pencil", locale.translate(key), ""));
-                }
-                content.append(&buttons);
-            }
-            row("alarm", "Reminder", content.upcast_ref());
+            row(
+                "alarm",
+                "Reminder",
+                reminder_content(reminders, event, locale).upcast_ref(),
+            );
         }
+
         if let Some(organizer) = &details.organizer {
-            let text = label("");
-            let mut markup = contact_markup(organizer);
-            if let Some(sent_by) = &details.sent_by {
-                markup.push_str(&format!(
-                    ", {} {}",
-                    glib::markup_escape_text(locale.translate("sent by")),
-                    link_markup(sent_by, sent_by)
-                ));
-            }
-            text.set_markup(&markup);
-            row("person-fill", "Organizer", text.upcast_ref());
+            row(
+                "person-fill",
+                "Organizer",
+                organizer_label(organizer, details.sent_by.as_deref(), locale).upcast_ref(),
+            );
         }
+
         if !details.attendees.is_empty() {
-            let people = gtk::Box::new(gtk::Orientation::Vertical, 6);
-            for attendee in &details.attendees {
-                let person = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-                let suffix = match attendee.response {
-                    Response::Accepted => "-check",
-                    Response::Declined => "-slash",
-                    Response::Tentative => "-exclamation",
-                    Response::Pending => "",
-                };
-                let image = icon(&format!(
-                    "person{}{suffix}",
-                    if attendee.required { "-fill" } else { "" }
-                ));
-                image.set_valign(gtk::Align::Start);
-                image.set_tooltip_text(Some(&attendee.tooltip));
-                image.update_property(&[gtk::accessible::Property::Label(&attendee.tooltip)]);
-                person.append(&image);
-                let name = label("");
-                name.set_markup(&contact_markup(&attendee.contact));
-                name.set_tooltip_text(Some(&format!(
-                    "{}\n{}",
-                    attendee.contact.address, attendee.tooltip
-                )));
-                person.append(&name);
-                people.append(&person);
-            }
-            attendees_scroll.set_child(Some(&people));
+            attendees_scroll.set_child(Some(&attendees_content(&details.attendees)));
             row("people-fill", "Attendees", attendees_scroll.upcast_ref());
         }
+
         if !details.description.trim().is_empty() {
             description_scroll.set_child(Some(&linked_label(details.description.trim())));
             row(
@@ -248,14 +225,13 @@ impl EventDetails {
                 description_scroll.upcast_ref(),
             );
         }
-        obj.add_actions(event, locale);
-        obj
     }
 
     fn add_actions(&self, event: &Event, locale: &dyn Locale) {
         let actions = &event.details.actions;
         let left = &self.imp().actions_left;
         let right = &self.imp().actions_right;
+
         if actions.delete {
             left.append(&button(
                 "trash",
@@ -267,6 +243,7 @@ impl EventDetails {
                 "ev_details_critical",
             ));
         }
+
         if actions.cancel || actions.exclude {
             left.append(&button(
                 "dash-circle",
@@ -282,6 +259,7 @@ impl EventDetails {
                 },
             ));
         }
+
         if actions.edit {
             if event.recurrent {
                 right.append(&menu(
@@ -302,6 +280,7 @@ impl EventDetails {
                 right.append(&button("pencil", locale.translate("Edit"), ""));
             }
         }
+
         for (response, occurrence) in [
             (actions.series_response, false),
             (actions.occurrence_response, true),
@@ -321,9 +300,11 @@ impl EventDetails {
                     "",
                 ),
             };
+
             if actions.read_only && response == Response::Pending {
                 continue;
             }
+
             let text = if event.recurrent && response != Response::Pending {
                 format!(
                     "{} {}",
@@ -333,6 +314,7 @@ impl EventDetails {
             } else {
                 locale.translate(key).to_owned()
             };
+
             if actions.read_only {
                 let status = button_content(icon, &text);
                 status.add_css_class(class);
@@ -354,12 +336,89 @@ impl EventDetails {
                 ));
             }
         }
+
         let has_left = left.first_child().is_some();
         let has_right = right.first_child().is_some();
         left.set_visible(has_left);
         right.set_visible(has_right);
         self.imp().actions.set_visible(has_left || has_right);
     }
+}
+
+fn attach_row(grid: &gtk::Grid, index: i32, icon_name: &str, title: &str, value: &gtk::Widget) {
+    let image = icon(icon_name);
+    image.set_valign(gtk::Align::Start);
+    let title = gtk::Label::builder()
+        .label(title)
+        .xalign(0.0)
+        .valign(gtk::Align::Start)
+        .build();
+    title.add_css_class("ev_details_label");
+    value.update_relation(&[gtk::accessible::Relation::LabelledBy(&[title.upcast_ref()])]);
+    grid.attach(&image, 0, index, 1, 1);
+    grid.attach(&title, 1, index, 1, 1);
+    grid.attach(value, 2, index, 1, 1);
+}
+
+fn reminder_content(reminders: &str, event: &Event, locale: &dyn Locale) -> gtk::Box {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    content.append(&label(reminders));
+    if event.details.actions.personal_reminders {
+        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        for key in if event.recurrent {
+            &["Edit series", "Edit occ."][..]
+        } else {
+            &["Edit"][..]
+        } {
+            buttons.append(&button("pencil", locale.translate(key), ""));
+        }
+        content.append(&buttons);
+    }
+    content
+}
+
+fn organizer_label(organizer: &Contact, sent_by: Option<&str>, locale: &dyn Locale) -> gtk::Label {
+    let text = label("");
+    let mut markup = contact_markup(organizer);
+    if let Some(sent_by) = sent_by {
+        markup.push_str(&format!(
+            ", {} {}",
+            glib::markup_escape_text(locale.translate("sent by")),
+            link_markup(sent_by, sent_by)
+        ));
+    }
+    text.set_markup(&markup);
+    text
+}
+
+fn attendees_content(attendees: &[Attendee]) -> gtk::Box {
+    let people = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    for attendee in attendees {
+        let person = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let suffix = match attendee.response {
+            Response::Accepted => "-check",
+            Response::Declined => "-slash",
+            Response::Tentative => "-exclamation",
+            Response::Pending => "",
+        };
+        let image = icon(&format!(
+            "person{}{suffix}",
+            if attendee.required { "-fill" } else { "" }
+        ));
+        image.set_valign(gtk::Align::Start);
+        image.set_tooltip_text(Some(&attendee.tooltip));
+        image.update_property(&[gtk::accessible::Property::Label(&attendee.tooltip)]);
+        person.append(&image);
+        let name = label("");
+        name.set_markup(&contact_markup(&attendee.contact));
+        name.set_tooltip_text(Some(&format!(
+            "{}\n{}",
+            attendee.contact.address, attendee.tooltip
+        )));
+        person.append(&name);
+        people.append(&person);
+    }
+    people
 }
 
 fn icon(name: &str) -> gtk::Image {
