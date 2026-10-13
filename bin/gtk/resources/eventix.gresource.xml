@@ -32,7 +32,10 @@
     <file>icons/trash-symbolic.svg</file>
     <file>icons/x-lg-symbolic.svg</file>
     <file>style.css</file>
-    <file>view/calendar.ui</file>
+    <file>view/page.ui</file>
+    <file>view/weekly/content.ui</file>
+    <file>view/monthly/grid.ui</file>
+    <file>view/monthly/week_content.ui</file>
     <file>window.ui</file>
   </gresource>
 </gresources>

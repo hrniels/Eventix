@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <!-- User-facing labels are populated through Eventix's TOML locale system in Rust. -->
+  <template class="EventixCalendarPage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkBox">
+        <property name="spacing">8</property>
+        <style><class name="ev_calendar_toolbar"/></style>
+        <child>
+          <object class="GtkButton" id="previous">
+            <property name="icon-name">go-previous-symbolic</property>
+            <property name="action-name">win.previous</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="today">
+            <property name="action-name">win.today</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="next">
+            <property name="icon-name">go-next-symbolic</property>
+            <property name="action-name">win.next</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkMenuButton" id="picker">
+            <property name="icon-name">x-office-calendar-symbolic</property>
+            <property name="popover">
+              <object class="GtkPopover">
+                <property name="child">
+                  <object class="GtkCalendar" id="calendar">
+                    <property name="show-week-numbers">true</property>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="title">
+            <property name="hexpand">true</property>
+            <property name="xalign">0</property>
+            <property name="ellipsize">end</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">0</property>
+            <style><class name="ev_view_switch"/></style>
+            <child>
+              <object class="GtkToggleButton" id="week_view">
+                <property name="active">true</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="month_view">
+                <property name="group">week_view</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="reload">
+            <property name="icon-name">view-refresh-symbolic</property>
+            <property name="action-name">win.reload</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkStack" id="stack">
+        <property name="vexpand">true</property>
+        <property name="vhomogeneous">false</property>
+        <property name="hhomogeneous">false</property>
+        <child>
+          <object class="GtkScrolledWindow" id="weekly_content">
+            <property name="vexpand">true</property>
+            <property name="vscrollbar-policy">never</property>
+            <property name="child">
+              <object class="EventixWeekContent" id="weekly"/>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="monthly_content">
+            <property name="vexpand">true</property>
+            <property name="overlay-scrolling">false</property>
+            <property name="child">
+              <object class="EventixMonthGrid" id="monthly">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <property name="overflow">hidden</property>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="status">
+        <property name="xalign">0</property>
+        <property name="selectable">true</property>
+        <property name="wrap">true</property>
+        <style><class name="ev_calendar_status"/></style>
+      </object>
+    </child>
+  </template>
+</interface>

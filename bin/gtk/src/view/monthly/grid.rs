@@ -278,34 +278,34 @@ impl MonthGrid {
                 scrollbar.unparent();
             }
             for name in WEEKDAYS {
-                let label = gtk::Label::new(Some(month.locale.translate(name)));
-                label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                label.add_css_class("ev_month_weekday");
+                let builder = grid_children(&["weekday"]);
+                let label: gtk::Label = builder
+                    .object("weekday")
+                    .expect("weekday label is defined in GTK resources");
+                label.set_text(month.locale.translate(name));
                 label.set_parent(self);
                 imp.weekdays.borrow_mut().push(label);
             }
             for day in &month.days {
                 if day.date.weekday() == chrono::Weekday::Mon {
-                    let button = gtk::Button::with_label(&day.date.iso_week().week().to_string());
-                    button.set_action_name(Some("win.show-week"));
+                    let builder = grid_children(&["week", "adjustment", "scroll", "scrollbar"]);
+                    let button: gtk::Button = builder
+                        .object("week")
+                        .expect("week button is defined in GTK resources");
+                    button.set_label(&day.date.iso_week().week().to_string());
                     button.set_action_target_value(Some(&day.date.to_string().to_variant()));
-                    button.add_css_class("ev_month_week_number");
-                    button.set_cursor_from_name(Some("pointer"));
                     button.set_parent(self);
                     imp.weeks.borrow_mut().push(button);
-                    let content: WeekContent = glib::Object::new();
+                    let content: WeekContent = builder
+                        .object("content")
+                        .expect("week content is defined in GTK resources");
                     content.set_details(imp.details.borrow().clone());
-                    // Put the scrollbar in the gutter to keep every week's columns header-aligned.
-                    let scroll = gtk::ScrolledWindow::builder()
-                        .hscrollbar_policy(gtk::PolicyType::Never)
-                        .vscrollbar_policy(gtk::PolicyType::External)
-                        .child(&content)
-                        .build();
-                    let scrollbar = gtk::Scrollbar::new(
-                        gtk::Orientation::Vertical,
-                        Some(&scroll.vadjustment()),
-                    );
-                    scrollbar.set_visible(false);
+                    let scroll: gtk::ScrolledWindow = builder
+                        .object("scroll")
+                        .expect("week scroller is defined in GTK resources");
+                    let scrollbar: gtk::Scrollbar = builder
+                        .object("scrollbar")
+                        .expect("week scrollbar is defined in GTK resources");
                     let weak = scrollbar.downgrade();
                     scroll.vadjustment().connect_changed(move |adjustment| {
                         if let Some(scrollbar) = weak.upgrade() {
@@ -318,9 +318,10 @@ impl MonthGrid {
                     imp.scrollers.borrow_mut().push(scroll);
                     imp.contents.borrow_mut().push(content);
                 }
-                let label = gtk::Label::new(None);
-                label.set_xalign(0.0);
-                label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                let builder = grid_children(&["day"]);
+                let label: gtk::Label = builder
+                    .object("day")
+                    .expect("day label is defined in GTK resources");
                 label.add_css_class(if day.current_month {
                     "ev_cur_month"
                 } else {
@@ -384,4 +385,14 @@ impl MonthGrid {
         }
         self.queue_draw();
     }
+}
+
+/// Instantiates the requested monthly grid objects.
+fn grid_children(ids: &[&str]) -> gtk::Builder {
+    WeekContent::ensure_type();
+    let builder = gtk::Builder::new();
+    builder
+        .add_objects_from_resource("/io/github/hrniels/Eventix/gtk/view/monthly/grid.ui", ids)
+        .expect("monthly grid children are defined in GTK resources");
+    builder
 }

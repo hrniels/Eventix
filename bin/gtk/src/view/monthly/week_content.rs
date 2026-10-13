@@ -43,8 +43,22 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
-            for _ in 0..7 {
-                let list: DayList = glib::Object::new();
+            DayList::ensure_type();
+            let builder = gtk::Builder::from_resource(
+                "/io/github/hrniels/Eventix/gtk/view/monthly/week_content.ui",
+            );
+            for name in [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+            ] {
+                let list: DayList = builder
+                    .object(name)
+                    .expect("day list is defined in GTK resources");
                 list.set_parent(&*self.obj());
                 self.lists.borrow_mut().push(list);
             }

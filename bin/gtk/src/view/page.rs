@@ -15,11 +15,10 @@ use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use super::{
     card::EventCard,
-    geometry::GUTTER,
     loader::{CalendarLoader, Request, Response, Snapshot, View},
     monthly::grid::MonthGrid,
     popover::DetailsController,
-    weekly::{all_day_strip::AllDayStrip, timed_grid::TimedGrid},
+    weekly::content::WeekContent,
 };
 use crate::style;
 
@@ -27,7 +26,7 @@ mod imp {
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/calendar.ui")]
+    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/page.ui")]
     pub struct CalendarPage {
         #[template_child]
         pub stack: gtk::TemplateChild<gtk::Stack>,
@@ -47,31 +46,7 @@ mod imp {
         #[template_child]
         pub status: gtk::TemplateChild<gtk::Label>,
         #[template_child]
-        pub headers: gtk::TemplateChild<gtk::Box>,
-        #[template_child]
-        pub gutter: gtk::TemplateChild<gtk::Box>,
-        #[template_child]
-        pub monday: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub tuesday: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub wednesday: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub thursday: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub friday: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub saturday: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub sunday: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub scroll: gtk::TemplateChild<gtk::ScrolledWindow>,
-        #[template_child]
-        pub timed: gtk::TemplateChild<TimedGrid>,
-        #[template_child]
-        pub all_day: gtk::TemplateChild<AllDayStrip>,
-        #[template_child]
-        pub all_day_label: gtk::TemplateChild<gtk::Label>,
+        pub weekly: gtk::TemplateChild<WeekContent>,
         #[template_child]
         pub previous: gtk::TemplateChild<gtk::Button>,
         #[template_child]
@@ -102,8 +77,7 @@ mod imp {
         type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
-            TimedGrid::ensure_type();
-            AllDayStrip::ensure_type();
+            WeekContent::ensure_type();
             MonthGrid::ensure_type();
             klass.bind_template();
         }
@@ -116,8 +90,8 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
-            self.timed.set_details(self.details.clone());
-            self.all_day.set_details(self.details.clone());
+            self.weekly.imp().timed.set_details(self.details.clone());
+            self.weekly.imp().all_day.set_details(self.details.clone());
             self.monthly.set_details(self.details.clone());
             let weak = obj.downgrade();
             self.week_view.connect_toggled(move |button| {
@@ -136,13 +110,6 @@ mod imp {
                 }
             });
             obj.translate_labels();
-            self.gutter.set_size_request(GUTTER, -1);
-            self.headers.set_margin_end(
-                self.scroll
-                    .vscrollbar()
-                    .measure(gtk::Orientation::Horizontal, -1)
-                    .1,
-            );
             let weak = obj.downgrade();
             self.calendar.connect_day_selected(move |calendar| {
                 let Some(page) = weak.upgrade() else { return };
@@ -214,7 +181,10 @@ impl CalendarPage {
             .set_tooltip_text(Some(locale.translate("Reload local calendars")));
         imp.picker
             .set_tooltip_text(Some(locale.translate("Choose date")));
-        imp.all_day_label.set_text(locale.translate("All day"));
+        imp.weekly
+            .imp()
+            .all_day_label
+            .set_text(locale.translate("All day"));
     }
 
     pub fn request(&self, date: Option<NaiveDate>, reload: bool) {
@@ -255,8 +225,8 @@ impl CalendarPage {
         let cards = if imp.view.get() == View::Month {
             imp.monthly.event_cards()
         } else {
-            let mut cards = imp.timed.event_cards();
-            cards.extend(imp.all_day.event_cards());
+            let mut cards = imp.weekly.imp().timed.event_cards();
+            cards.extend(imp.weekly.imp().all_day.event_cards());
             cards.sort_by_key(|(start, _)| *start);
             cards
         };
@@ -436,12 +406,12 @@ impl CalendarPage {
         self.update_picker();
         let reset_scroll = imp.displayed.replace(Some(week.start)) != Some(week.start);
         let week = Rc::new(week);
-        imp.timed.set_week(week.clone());
-        imp.all_day.set_week(week);
+        imp.weekly.imp().timed.set_week(week.clone());
+        imp.weekly.imp().all_day.set_week(week);
         self.update_today();
         if reset_scroll {
-            let scroll = imp.scroll.downgrade();
-            imp.timed.add_tick_callback(move |_, _| {
+            let scroll = imp.weekly.imp().scroll.downgrade();
+            imp.weekly.imp().timed.add_tick_callback(move |_, _| {
                 if let Some(scroll) = scroll.upgrade() {
                     scroll.vadjustment().set_value(480.0);
                 }
@@ -451,7 +421,7 @@ impl CalendarPage {
     }
 
     fn day_labels(&self) -> [&gtk::Label; 7] {
-        let imp = self.imp();
+        let imp = self.imp().weekly.imp();
         [
             &imp.monday,
             &imp.tuesday,
@@ -486,8 +456,8 @@ impl CalendarPage {
                 label.remove_css_class("ev_today");
             }
         }
-        imp.timed.queue_draw();
-        imp.all_day.queue_draw();
+        imp.weekly.imp().timed.queue_draw();
+        imp.weekly.imp().all_day.queue_draw();
     }
 
     pub fn start(&self, prefix: String, date: Option<NaiveDate>) {
@@ -628,7 +598,7 @@ pub(crate) mod tests {
             }
         };
         drain();
-        let imp = page.imp();
+        let imp = page.imp().weekly.imp();
         let cards = imp.all_day.event_cards();
         assert_eq!(cards.len(), 3, "one card is created per span");
         let card = &cards[0].1;
