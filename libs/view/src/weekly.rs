@@ -164,7 +164,7 @@ impl WeekSnapshot {
 }
 
 /// Combines only adjacent strip segments, retaining the existing timed/strip classification.
-fn strip_spans(start: NaiveDate, days: &[Vec<Event>]) -> Vec<AllDaySpan> {
+pub(crate) fn strip_spans(start: NaiveDate, days: &[Vec<Event>]) -> Vec<AllDaySpan> {
     let mut spans: Vec<AllDaySpan> = Vec::new();
     for (day, events) in days.iter().enumerate() {
         for event in events {

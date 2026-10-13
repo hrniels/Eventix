@@ -15,7 +15,7 @@ use crate::view::{
     popover::DetailsController,
 };
 
-use super::day_list::DayList;
+use super::week_content::WeekContent;
 
 const HEADER: i32 = 32;
 const MIN_ROW: i32 = 100;
@@ -41,8 +41,9 @@ mod imp {
         pub weekdays: RefCell<Vec<gtk::Label>>,
         pub days: RefCell<Vec<gtk::Label>>,
         pub weeks: RefCell<Vec<gtk::Button>>,
-        pub cells: RefCell<Vec<gtk::ScrolledWindow>>,
-        pub(super) lists: RefCell<Vec<DayList>>,
+        pub scrollers: RefCell<Vec<gtk::ScrolledWindow>>,
+        pub(super) contents: RefCell<Vec<WeekContent>>,
+        pub scrollbars: RefCell<Vec<gtk::Scrollbar>>,
     }
 
     #[glib::object_subclass]
@@ -61,8 +62,9 @@ mod imp {
             self.weekdays.take();
             self.days.take();
             self.weeks.take();
-            self.cells.take();
-            self.lists.take();
+            self.scrollers.take();
+            self.contents.take();
+            self.scrollbars.take();
         }
     }
 
@@ -99,7 +101,7 @@ mod imp {
                 );
             }
             let mut y = HEADER;
-            let cells = self.cells.borrow();
+            let scrollers = self.scrollers.borrow();
             let labels = self.days.borrow();
             let weeks = self.weeks.borrow();
             for (row, row_height) in rows.into_iter().enumerate() {
@@ -110,6 +112,25 @@ mod imp {
                     GUTTER - 2 * GAP,
                     HEADER,
                 );
+                allocate(
+                    scrollers[row].upcast_ref(),
+                    GUTTER,
+                    y + HEADER,
+                    width - GUTTER,
+                    row_height - HEADER - GAP,
+                );
+                let scrollbars = self.scrollbars.borrow();
+                let scrollbar = &scrollbars[row];
+                if scrollbar.is_visible() {
+                    let w = scrollbar.measure(gtk::Orientation::Horizontal, -1).1;
+                    allocate(
+                        scrollbar.upcast_ref(),
+                        GUTTER - GAP - w,
+                        y + HEADER,
+                        w,
+                        row_height - HEADER - GAP,
+                    );
+                }
                 for col in 0..7 {
                     let index = row * 7 + col;
                     let left = day_x(width, col as f64).round() as i32;
@@ -121,13 +142,6 @@ mod imp {
                         y + GAP,
                         w,
                         HEADER - GAP,
-                    );
-                    allocate(
-                        cells[index].upcast_ref(),
-                        left + GAP,
-                        y + HEADER,
-                        w,
-                        row_height - HEADER - GAP,
                     );
                 }
                 y += row_height;
@@ -192,8 +206,13 @@ mod imp {
             for button in self.weeks.borrow().iter() {
                 obj.snapshot_child(button, snapshot);
             }
-            for cell in self.cells.borrow().iter() {
-                obj.snapshot_child(cell, snapshot);
+            for scroller in self.scrollers.borrow().iter() {
+                obj.snapshot_child(scroller, snapshot);
+            }
+            for scrollbar in self.scrollbars.borrow().iter() {
+                if scrollbar.is_visible() {
+                    obj.snapshot_child(scrollbar, snapshot);
+                }
             }
         }
     }
@@ -208,17 +227,17 @@ glib::wrapper! {
 impl MonthGrid {
     pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
         self.imp().details.replace(details.clone());
-        for list in self.imp().lists.borrow().iter() {
-            list.set_details(details.clone());
+        for content in self.imp().contents.borrow().iter() {
+            content.set_details(details.clone());
         }
     }
 
     pub(crate) fn event_cards(&self) -> Vec<(i64, EventCard)> {
         self.imp()
-            .lists
+            .contents
             .borrow()
             .iter()
-            .flat_map(DayList::event_cards)
+            .flat_map(WeekContent::event_cards)
             .collect()
     }
 
@@ -251,10 +270,13 @@ impl MonthGrid {
             for button in imp.weeks.take() {
                 button.unparent();
             }
-            for cell in imp.cells.take() {
-                cell.unparent();
+            for scroller in imp.scrollers.take() {
+                scroller.unparent();
             }
-            imp.lists.take();
+            imp.contents.take();
+            for scrollbar in imp.scrollbars.take() {
+                scrollbar.unparent();
+            }
             for name in WEEKDAYS {
                 let label = gtk::Label::new(Some(month.locale.translate(name)));
                 label.set_ellipsize(gtk::pango::EllipsizeMode::End);
@@ -271,6 +293,30 @@ impl MonthGrid {
                     button.set_cursor_from_name(Some("pointer"));
                     button.set_parent(self);
                     imp.weeks.borrow_mut().push(button);
+                    let content: WeekContent = glib::Object::new();
+                    content.set_details(imp.details.borrow().clone());
+                    // Put the scrollbar in the gutter to keep every week's columns header-aligned.
+                    let scroll = gtk::ScrolledWindow::builder()
+                        .hscrollbar_policy(gtk::PolicyType::Never)
+                        .vscrollbar_policy(gtk::PolicyType::External)
+                        .child(&content)
+                        .build();
+                    let scrollbar = gtk::Scrollbar::new(
+                        gtk::Orientation::Vertical,
+                        Some(&scroll.vadjustment()),
+                    );
+                    scrollbar.set_visible(false);
+                    let weak = scrollbar.downgrade();
+                    scroll.vadjustment().connect_changed(move |adjustment| {
+                        if let Some(scrollbar) = weak.upgrade() {
+                            scrollbar.set_visible(adjustment.upper() > adjustment.page_size());
+                        }
+                    });
+                    scrollbar.set_parent(self);
+                    scroll.set_parent(self);
+                    imp.scrollbars.borrow_mut().push(scrollbar);
+                    imp.scrollers.borrow_mut().push(scroll);
+                    imp.contents.borrow_mut().push(content);
                 }
                 let label = gtk::Label::new(None);
                 label.set_xalign(0.0);
@@ -282,17 +328,6 @@ impl MonthGrid {
                 });
                 label.set_parent(self);
                 imp.days.borrow_mut().push(label);
-                let list: DayList = glib::Object::new();
-                list.set_details(imp.details.borrow().clone());
-                let scroll = gtk::ScrolledWindow::builder()
-                    .hscrollbar_policy(gtk::PolicyType::Never)
-                    .vscrollbar_policy(gtk::PolicyType::Automatic)
-                    .overlay_scrolling(false)
-                    .child(&list)
-                    .build();
-                scroll.set_parent(self);
-                imp.cells.borrow_mut().push(scroll);
-                imp.lists.borrow_mut().push(list);
             }
         }
         for (label, name) in imp.weekdays.borrow().iter().zip(WEEKDAYS) {
@@ -307,13 +342,7 @@ impl MonthGrid {
                     .fmt_weekdate(&week[0].date, eventix_locale::DateFlags::NoToday)
             )));
         }
-        for ((label, list), day) in imp
-            .days
-            .borrow()
-            .iter()
-            .zip(imp.lists.borrow().iter())
-            .zip(&month.days)
-        {
+        for (label, day) in imp.days.borrow().iter().zip(&month.days) {
             let text = if day.show_month {
                 format!(
                     "{} {}",
@@ -324,7 +353,15 @@ impl MonthGrid {
                 day.date.day().to_string()
             };
             label.set_text(&text);
-            list.set_day(day, month.locale.clone());
+        }
+        for ((content, days), spans) in imp
+            .contents
+            .borrow()
+            .iter()
+            .zip(month.days.chunks(7))
+            .zip(&month.spans)
+        {
+            content.set_week(days, spans, month.locale.clone());
         }
         imp.month.replace(Some(month));
         self.update_today();

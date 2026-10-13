@@ -359,7 +359,8 @@ impl CalendarPage {
                 month
                     .days
                     .iter()
-                    .flat_map(|d| d.events.iter().map(|e| &e.event)),
+                    .flat_map(|d| d.events.iter().map(|e| &e.event))
+                    .chain(month.spans.iter().flatten().map(|span| &span.event)),
             ));
         }
         imp.locale.replace(Some(month.locale.clone()));
@@ -382,7 +383,14 @@ impl CalendarPage {
             .days
             .iter()
             .filter(|d| d.current_month)
-            .all(|d| d.events.is_empty());
+            .all(|d| d.events.is_empty())
+            && !month.spans.iter().enumerate().any(|(week, spans)| {
+                spans.iter().any(|span| {
+                    month.days[week * 7 + span.start_day..week * 7 + span.end_day]
+                        .iter()
+                        .any(|day| day.current_month)
+                })
+            });
         imp.status.set_text(month.locale.translate(if empty {
             "No events this month"
         } else {
@@ -742,6 +750,7 @@ pub(crate) mod tests {
             MonthSnapshot {
                 month: selected.with_day(1).unwrap(),
                 start,
+                spans: vec![vec![]; days.len() / 7],
                 days,
                 locale: week.locale.clone(),
             }
@@ -842,12 +851,12 @@ pub(crate) mod tests {
         let first = cards[0].1.allocation();
         let adjacent = cards[18].1.allocation();
         assert_eq!(adjacent.y(), first.y());
-        let cells = imp.monthly.imp().cells.borrow();
+        let cells = imp.monthly.imp().scrollers.borrow();
         let index = (week.start - make_month().start).num_days() as usize;
-        let busy_cell = cells[index].clone();
-        let neighbor = cells[index + 1].clone();
+        let busy_cell = cells[index / 7].clone();
+        let neighbor = cells[index / 7 + 1].clone();
         let date_header = imp.monthly.imp().days.borrow()[index].allocation();
-        assert!(neighbor.allocation().x() >= busy_cell.allocation().x() + busy_cell.width());
+        assert!(neighbor.allocation().y() >= busy_cell.allocation().y() + busy_cell.height());
         assert!(busy_cell.height() <= crate::view::monthly::grid::MAX_ROW);
         assert!(busy_cell.vadjustment().upper() > busy_cell.vadjustment().page_size());
         drop(cells);
@@ -856,17 +865,17 @@ pub(crate) mod tests {
         assert!(cards[17].1.has_focus());
         assert!(
             busy_cell.vadjustment().value() > 0.0,
-            "keyboard navigation scrolls within the busy day"
+            "keyboard navigation scrolls within the busy week"
         );
         assert_eq!(
             neighbor.vadjustment().value(),
             0.0,
-            "neighboring days scroll independently"
+            "neighboring weeks scroll independently"
         );
         assert_eq!(
             imp.monthly.imp().days.borrow()[index].allocation(),
             date_header,
-            "the date header remains outside the day scroller"
+            "the date header remains outside the week scroller"
         );
         let mut refreshed = make_month();
         let index = (week.start - refreshed.start).num_days() as usize;
@@ -897,9 +906,104 @@ pub(crate) mod tests {
             find_popup().unwrap().is_mapped(),
             "monthly cards open shared details"
         );
+        let mut spanning = make_month();
+        let row = (week.start - spanning.start).num_days() as usize / 7;
+        let mut span = week.all_day[0].clone();
+        span.event.id.uid = "monthly-span".into();
+        span.start_day = 0;
+        span.end_day = 3;
+        span.row = 0;
+        span.continues_after = true;
+        let mut overlap = span.clone();
+        overlap.event.id.uid = "monthly-overlap".into();
+        overlap.start_day = 1;
+        overlap.end_day = 4;
+        overlap.row = 1;
+        let mut continuation = span.clone();
+        continuation.end_day = 2;
+        continuation.continues_before = true;
+        continuation.continues_after = false;
+        spanning.spans[row] = vec![span, overlap];
+        spanning.spans[row + 1] = vec![continuation];
+        page.show_month(spanning);
+        drain();
+        let span_cards: Vec<_> = imp
+            .monthly
+            .event_cards()
+            .into_iter()
+            .filter(|(_, card)| card.event().unwrap().id.uid.starts_with("monthly-s"))
+            .map(|(_, card)| card)
+            .collect();
+        assert_eq!(span_cards.len(), 2, "one card per week-local span");
+        assert_ne!(
+            span_cards[0], span_cards[1],
+            "continuations have separate widgets"
+        );
+        let first_span = &span_cards[0];
+        let allocation = first_span.allocation();
+        let parent = first_span.parent().unwrap();
+        let right =
+            crate::view::geometry::day_x(parent.width() + crate::view::geometry::GUTTER, 3.0)
+                .round() as i32
+                - crate::view::geometry::GUTTER;
+        assert_eq!(allocation.x() + allocation.width(), right - 4);
+        let overlap_card = imp
+            .monthly
+            .event_cards()
+            .into_iter()
+            .find(|(_, card)| card.event().unwrap().id.uid == "monthly-overlap")
+            .unwrap()
+            .1;
+        assert!(overlap_card.allocation().y() >= allocation.y() + allocation.height());
+        assert!(
+            cards[0].1.parent().unwrap().allocation().y()
+                >= overlap_card.allocation().y() + overlap_card.height(),
+            "timed lists start below the shared span lanes"
+        );
+        assert_eq!(
+            parent.width(),
+            imp.monthly.width() - crate::view::geometry::GUTTER,
+            "the scrollbar does not consume day-column width"
+        );
+        assert!(first_span.grab_focus());
+        let mut refreshed = make_month();
+        let mut spans = imp
+            .monthly
+            .imp()
+            .month
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .spans
+            .clone();
+        spans[row][0].end_day = 2;
+        spans[row].swap(0, 1);
+        refreshed.spans = spans;
+        page.show_month(refreshed);
+        drain();
+        assert!(
+            first_span.has_focus(),
+            "refresh retains the focused span card"
+        );
+        assert!(first_span.width() < allocation.width());
+        first_span.emit_clicked();
+        drain();
+        let mut child = parent.first_child();
+        let span_popup = loop {
+            let widget = child.expect("monthly span popup exists");
+            if let Some(popup) = widget.downcast_ref::<crate::view::details::EventDetails>() {
+                break popup.clone();
+            }
+            child = widget.next_sibling();
+        };
+        assert!(span_popup.is_mapped(), "spanning cards open shared details");
         imp.week_view.set_active(true);
         drain();
         assert!(find_popup().is_none(), "switching closes the monthly popup");
+        assert!(
+            span_popup.parent().is_none(),
+            "switching closes span details"
+        );
         assert!(imp.view.get() == View::Week);
         assert_eq!(imp.date.get(), Some(selected));
         page.navigate(1);
@@ -919,6 +1023,31 @@ pub(crate) mod tests {
             imp.date.get(),
             None,
             "Today delegates to the profile's timezone"
+        );
+        let mut all_day_only = make_month();
+        for day in &mut all_day_only.days {
+            day.events.clear();
+        }
+        let mut span = week.all_day[0].clone();
+        span.start_day = 0;
+        span.end_day = 3;
+        all_day_only.spans[row] = vec![span.clone()];
+        let styles = gtk::CssProvider::new();
+        imp.styles
+            .replace(Some((WidgetExt::display(&window), styles.clone())));
+        page.show_month(all_day_only);
+        drain();
+        assert_eq!(
+            imp.status.text(),
+            week.locale.translate("Read-only · Local calendars"),
+            "a month containing only spans is not empty"
+        );
+        assert!(
+            styles.to_string().contains(&crate::style::calendar_class(
+                &span.event.background,
+                &span.event.foreground
+            )),
+            "calendar colors include events present only in span lanes"
         );
         window.close();
         drain();
