@@ -5,10 +5,7 @@
 use chrono::NaiveDate;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
-use crate::view::{
-    details::EventDetails,
-    weekly::{card::EventCard, page::WeekPage},
-};
+use crate::view::{card::EventCard, details::EventDetails, page::CalendarPage};
 
 mod imp {
     use super::*;
@@ -17,7 +14,7 @@ mod imp {
     #[template(resource = "/io/github/hrniels/Eventix/gtk/window.ui")]
     pub struct Window {
         #[template_child]
-        pub page: gtk::TemplateChild<WeekPage>,
+        pub page: gtk::TemplateChild<CalendarPage>,
     }
 
     #[glib::object_subclass]
@@ -27,7 +24,7 @@ mod imp {
         type ParentType = gtk::ApplicationWindow;
 
         fn class_init(klass: &mut Self::Class) {
-            WeekPage::ensure_type();
+            CalendarPage::ensure_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -129,11 +126,11 @@ impl Window {
         {
             match key {
                 gtk::gdk::Key::Left => {
-                    self.imp().page.navigate(-7);
+                    self.imp().page.navigate(-1);
                     return glib::Propagation::Stop;
                 }
                 gtk::gdk::Key::Right => {
-                    self.imp().page.navigate(7);
+                    self.imp().page.navigate(1);
                     return glib::Propagation::Stop;
                 }
                 _ => {}
@@ -212,8 +209,8 @@ impl Window {
 
     fn setup_actions(&self, app: &gtk::Application) {
         for (name, keys, days) in [
-            ("previous", vec!["<Alt>Left"], Some(-7)),
-            ("next", vec!["<Alt>Right"], Some(7)),
+            ("previous", vec!["<Alt>Left"], Some(-1)),
+            ("next", vec!["<Alt>Right"], Some(1)),
             ("today", vec!["<Alt>Home", "period"], None),
             ("reload", vec!["<Primary>r", "F5"], None),
         ] {
@@ -233,5 +230,16 @@ impl Window {
             self.add_action(&action);
             app.set_accels_for_action(&format!("win.{name}"), &keys);
         }
+        let action = gio::SimpleAction::new("show-week", Some(glib::VariantTy::STRING));
+        let page = self.imp().page.downgrade();
+        action.connect_activate(move |_, parameter| {
+            if let Some(page) = page.upgrade()
+                && let Some(date) = parameter.and_then(|p| p.str())
+                && let Ok(date) = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+            {
+                page.show_week_at(date);
+            }
+        });
+        self.add_action(&action);
     }
 }

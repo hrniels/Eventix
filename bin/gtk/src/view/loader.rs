@@ -7,25 +7,38 @@
 use std::{sync::Arc, thread};
 
 use chrono::{NaiveDate, Utc};
-use eventix_view::WeekSnapshot;
+use eventix_view::{MonthSnapshot, WeekSnapshot};
 
-pub(super) struct Request {
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum View {
+    #[default]
+    Week,
+    Month,
+}
+
+pub(crate) enum Snapshot {
+    Week(WeekSnapshot),
+    Month(MonthSnapshot),
+}
+
+pub(crate) struct Request {
     pub generation: u64,
     pub date: Option<NaiveDate>,
     pub reload: bool,
+    pub view: View,
 }
 
-pub(super) struct Response {
+pub(crate) struct Response {
     pub generation: u64,
-    pub result: Result<(WeekSnapshot, String), String>,
+    pub result: Result<(Snapshot, String), String>,
 }
 
 /// Owns the request channel, closing the worker when the page stops or is dropped.
-pub(super) struct WeekLoader {
+pub(crate) struct CalendarLoader {
     requests: async_channel::Sender<Request>,
 }
 
-impl WeekLoader {
+impl CalendarLoader {
     pub fn start(prefix: String) -> (Self, async_channel::Receiver<Response>) {
         let (requests, rx) = async_channel::unbounded::<Request>();
         let (results, responses) = async_channel::unbounded();
@@ -39,7 +52,7 @@ impl WeekLoader {
                     request = newer;
                     request.reload = reload;
                 }
-                let result = (|| -> anyhow::Result<(WeekSnapshot, String)> {
+                let result = (|| -> anyhow::Result<(Snapshot, String)> {
                     if state.is_none() || request.reload {
                         state = Some(load_local_state(xdg.clone())?);
                     }
@@ -47,7 +60,10 @@ impl WeekLoader {
                     let date = request
                         .date
                         .unwrap_or_else(|| Utc::now().with_timezone(state.timezone()).date_naive());
-                    let week = WeekSnapshot::load(state, date)?;
+                    let snapshot = match request.view {
+                        View::Week => Snapshot::Week(WeekSnapshot::load(state, date)?),
+                        View::Month => Snapshot::Month(MonthSnapshot::load(state, date)?),
+                    };
                     let config = xdg
                         .find_config_file("settings.toml")
                         .or_else(|| xdg.get_config_file("settings.toml"))
@@ -67,7 +83,7 @@ impl WeekLoader {
                         formatx::formatx!(state.locale().translate("Calendar data: {}"), data)
                             .unwrap(),
                     );
-                    Ok((week, source))
+                    Ok((snapshot, source))
                 })()
                 .map_err(|e| format!("{e:#}"));
                 if results
@@ -89,7 +105,7 @@ impl WeekLoader {
     }
 }
 
-impl Drop for WeekLoader {
+impl Drop for CalendarLoader {
     fn drop(&mut self) {
         self.requests.close();
     }

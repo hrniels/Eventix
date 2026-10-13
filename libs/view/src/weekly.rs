@@ -7,19 +7,16 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Datelike, Duration, MappedLocalTime, NaiveDate, TimeZone, Timelike};
+use chrono::{Datelike, Duration, MappedLocalTime, NaiveDate, TimeZone};
 use chrono_tz::Tz;
-use eventix_ical::{
-    col::Occurrence,
-    objects::{CalCompType, EventLike},
-    util,
-};
+use eventix_ical::util;
 use eventix_locale::Locale;
 use eventix_state::State;
 
 use crate::{
-    Event, OccurrenceId, details,
+    Event, OccurrenceId,
     layout::{self, Columns},
+    projection::{day_minutes, event_order, events_between},
 };
 
 /// Stable identity of a timed day segment.
@@ -109,22 +106,7 @@ impl WeekSnapshot {
             .checked_add_signed(Duration::days(7))
             .context("week end out of range")?;
         let tz = *state.timezone();
-        let range_start = util::resolve_local_time(&tz, start.and_hms_opt(0, 0, 0).unwrap());
-        let range_end = util::resolve_local_time(&tz, end.and_hms_opt(0, 0, 0).unwrap());
-        let occurrences: Vec<_> = state
-            .store()
-            .directories()
-            .iter()
-            .filter(|dir| !state.misc().calendar_disabled(dir.id()))
-            .flat_map(|dir| {
-                dir.occurrences_between(range_start, range_end, |c| c.ctype() == CalCompType::Event)
-            })
-            .filter(|occ| !occ.is_excluded())
-            .collect();
-        let details: Vec<_> = occurrences
-            .iter()
-            .map(|occ| details::Details::load(state, occ).map(Arc::new))
-            .collect();
+        let occurrences = events_between(state, start, end);
         let mut days = Vec::new();
         let mut strip_days = Vec::new();
         for offset in 0..7 {
@@ -135,10 +117,17 @@ impl WeekSnapshot {
                 dst: dst_ranges(date, tz),
             };
             let mut strip = Vec::new();
-            for (occ, details) in occurrences.iter().zip(&details) {
-                let Some(details) = details else { continue };
-                let Some(segment) = project_event(state, occ, date, details.clone()) else {
+            for (occ, event) in &occurrences {
+                let Some((minute_start, minute_end)) = day_minutes(event.start, event.end, date)
+                else {
                     continue;
+                };
+                let segment = TimedEvent {
+                    event: event.clone(),
+                    date,
+                    minute_start,
+                    minute_end,
+                    columns: Columns::default(),
                 };
                 if segment.event.all_day || occ.is_all_day_on(date) {
                     strip.push(segment.event);
@@ -172,57 +161,6 @@ impl WeekSnapshot {
             locale: state.locale(),
         })
     }
-}
-
-fn project_event(
-    state: &State,
-    occ: &Occurrence<'_>,
-    date: NaiveDate,
-    details: Arc<details::Details>,
-) -> Option<TimedEvent> {
-    let tz = state.timezone();
-    let start = occ.occurrence_start()?.with_timezone(tz);
-    let end = occ.occurrence_end().unwrap_or(start).with_timezone(tz);
-    let (minute_start, minute_end) = day_minutes(start, end, date)?;
-    let (_, settings) = state.settings().calendar(occ.directory())?;
-    let event = Event {
-        id: OccurrenceId {
-            calendar: occ.directory().to_string(),
-            uid: occ.uid().to_string(),
-            recurrence: occ.rid().map(ToString::to_string).unwrap_or_else(|| {
-                if occ.is_recurrent() {
-                    occ.occurrence_startdate()
-                        .map(|d| d.to_string())
-                        .unwrap_or_default()
-                } else {
-                    String::new()
-                }
-            }),
-        },
-        summary: occ.summary().cloned().unwrap_or_default(),
-        calendar: settings.name().clone(),
-        foreground: settings.fgcolor().clone(),
-        background: settings.bgcolor().clone(),
-        details,
-        start,
-        end,
-        all_day: occ.is_all_day(),
-        cancelled: occ.is_cancelled(),
-        recurrent: occ.is_recurrent(),
-        exception: occ.is_overwritten(),
-        alarm: state.personal_alarms().has_alarms(occ, settings.alarms()),
-    };
-    Some(TimedEvent {
-        event,
-        date,
-        minute_start,
-        minute_end,
-        columns: Columns::default(),
-    })
-}
-
-fn event_order(a: &Event, b: &Event) -> std::cmp::Ordering {
-    (a.start, &a.id.calendar, &a.summary, &a.id).cmp(&(b.start, &b.id.calendar, &b.summary, &b.id))
 }
 
 /// Combines only adjacent strip segments, retaining the existing timed/strip classification.
@@ -264,26 +202,6 @@ fn strip_spans(start: NaiveDate, days: &[Vec<Event>]) -> Vec<AllDaySpan> {
             span.event.end > util::resolve_local_time(&tz, to.and_hms_opt(0, 0, 0).unwrap());
     }
     spans
-}
-
-fn day_minutes(start: DateTime<Tz>, end: DateTime<Tz>, date: NaiveDate) -> Option<(u32, u32)> {
-    let midnight = util::resolve_local_time(&start.timezone(), date.and_hms_opt(0, 0, 0)?);
-    let next = util::resolve_local_time(&start.timezone(), date.succ_opt()?.and_hms_opt(0, 0, 0)?);
-    if start >= next || end < midnight || (end == midnight && end != start) {
-        return None;
-    }
-    let from = if start < midnight {
-        0
-    } else {
-        start.hour() * 60 + start.minute()
-    };
-    let to = if end >= next {
-        1440
-    } else {
-        end.hour() * 60 + end.minute()
-    };
-    // An event crossing a backward clock change can have an end earlier on the clock.
-    Some((from.min(to), from.max(to)))
 }
 
 fn dst_ranges(date: NaiveDate, tz: Tz) -> Vec<DstRange> {

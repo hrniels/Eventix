@@ -698,8 +698,7 @@ mod tests {
                     &colors,
                     gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
                 );
-                let details =
-                    std::rc::Rc::new(crate::view::weekly::popover::DetailsController::default());
+                let details = std::rc::Rc::new(crate::view::popover::DetailsController::default());
                 let (anchor, cards): (gtk::Widget, _) = if full {
                     let grid: crate::view::weekly::timed_grid::TimedGrid = gtk::glib::Object::new();
                     grid.set_details(details.clone());
@@ -988,8 +987,18 @@ mod tests {
                 window.close();
                 drain();
                 gtk::style_context_remove_provider_for_display(&display, &colors);
+                if variant == "sparse" {
+                    crate::view::page::tests::assert_month_layout_and_navigation(
+                        eventix_view::WeekSnapshot {
+                            start: week.start,
+                            days: week.days.clone(),
+                            all_day: week.all_day.clone(),
+                            locale: week.locale.clone(),
+                        },
+                    );
+                }
                 if variant == "sparse" && language == eventix_locale::LocaleType::English {
-                    crate::view::weekly::page::tests::assert_span_layout_and_refresh(
+                    crate::view::page::tests::assert_span_layout_and_refresh(
                         eventix_view::WeekSnapshot {
                             start: week.start,
                             days: week.days.clone(),

@@ -16,7 +16,7 @@ use crate::view::details::EventDetails;
 const PLACEMENT_MARGIN: i32 = 16;
 const PLACEMENT_HYSTERESIS: i32 = 64;
 
-/// Owns the single details popup shared by the week's event surfaces.
+/// Owns the single details popup shared by the calendar's event surfaces.
 #[derive(Default)]
 pub(crate) struct DetailsController {
     popover: RefCell<Option<EventDetails>>,

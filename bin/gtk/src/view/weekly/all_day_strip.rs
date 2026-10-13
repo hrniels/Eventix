@@ -2,19 +2,21 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use chrono::Utc;
 use eventix_view::WeekSnapshot;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-use super::{
-    card::EventCard,
-    geometry::{MIN_WIDTH, day_x, rect},
-    popover::DetailsController,
-    surface::{CardKey, Surface},
+use crate::view::geometry::{MIN_WIDTH, day_x, rect};
+use crate::{
+    style,
+    view::{
+        card::EventCard,
+        popover::DetailsController,
+        surface::{CardKey, Surface},
+    },
 };
-use crate::style;
 
 const ROW: i32 = 30;
 
@@ -24,6 +26,7 @@ mod imp {
     #[derive(Default)]
     pub struct AllDayStrip {
         pub(super) surface: Rc<Surface>,
+        pub week: RefCell<Option<Rc<WeekSnapshot>>>,
     }
 
     #[glib::object_subclass]
@@ -59,8 +62,7 @@ mod imp {
             let size = if orientation == gtk::Orientation::Horizontal {
                 MIN_WIDTH
             } else {
-                self.surface
-                    .week
+                self.week
                     .borrow()
                     .as_ref()
                     .and_then(|week| week.all_day.iter().map(|span| span.row + 1).max())
@@ -71,7 +73,7 @@ mod imp {
         }
 
         fn size_allocate(&self, width: i32, _: i32, _: i32) {
-            if let Some(week) = self.surface.week.borrow().as_ref() {
+            if let Some(week) = self.week.borrow().as_ref() {
                 for (card, span) in self.surface.cards.borrow().iter().zip(&week.all_day) {
                     let left = day_x(width, span.start_day as f64).round() as i32;
                     let right = day_x(width, span.end_day as f64).round() as i32;
@@ -96,7 +98,7 @@ mod imp {
             let obj = self.obj();
             let height = obj.height() as f32;
             let line = style::color(&*obj, "ev_grid_line");
-            if let Some(week) = self.surface.week.borrow().as_ref() {
+            if let Some(week) = self.week.borrow().as_ref() {
                 let today = Utc::now()
                     .with_timezone(week.locale.timezone())
                     .date_naive();
@@ -152,10 +154,11 @@ impl AllDayStrip {
             .iter()
             .map(|span| CardKey::Span(span.event.id.clone()))
             .collect();
-        surface.reconcile(self.upcast_ref(), week.clone(), keys);
+        surface.reconcile(self.upcast_ref(), week.locale.clone(), keys);
         for (card, span) in surface.cards.borrow().iter().zip(&week.all_day) {
             card.button.set_span(span, week.locale.as_ref());
         }
+        self.imp().week.replace(Some(week));
         self.queue_resize();
     }
 }

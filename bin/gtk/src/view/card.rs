@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 
 use eventix_locale::{Locale, TimeFlags};
-use eventix_view::{AllDaySpan, Event, TimedEvent};
+use eventix_view::{AllDaySpan, Event, MonthEvent, TimedEvent};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use crate::style;
@@ -14,7 +14,7 @@ mod imp {
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/weekly/card.ui")]
+    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/card.ui")]
     pub struct EventCard {
         #[template_child]
         pub text: gtk::TemplateChild<gtk::Label>,
@@ -106,6 +106,36 @@ impl EventCard {
         self.set_event(event, &text);
     }
 
+    pub fn set_monthly(&self, segment: &MonthEvent, locale: &dyn Locale) {
+        let event = &segment.event;
+        self.imp()
+            .text
+            .set_xalign(if segment.full_day { 0.5 } else { 0.0 });
+        let summary = self.summary(event, locale);
+        let text = if segment.full_day {
+            summary.to_string()
+        } else {
+            let starts = event.start.date_naive() == segment.date;
+            let logical_end = if event.end.time() == chrono::NaiveTime::MIN {
+                event.end.date_naive().pred_opt().unwrap_or(segment.date)
+            } else {
+                event.end.date_naive()
+            };
+            let ends = logical_end == segment.date;
+            let time = match (starts, ends) {
+                (true, false) => format!("→ {}", locale.fmt_time(&event.start, TimeFlags::Short)),
+                (false, true) => format!("← {}", locale.fmt_time(&event.end, TimeFlags::Short)),
+                _ => format!(
+                    "{}–{}",
+                    locale.fmt_time(&event.start, TimeFlags::Short),
+                    locale.fmt_time(&event.end, TimeFlags::Short)
+                ),
+            };
+            format!("{time} {summary}")
+        };
+        self.set_event(event, &text);
+    }
+
     fn summary<'a>(&self, event: &'a Event, locale: &'a dyn Locale) -> &'a str {
         if event.summary.is_empty() {
             locale.translate("Untitled event")
@@ -116,6 +146,7 @@ impl EventCard {
 
     fn set_event(&self, event: &Event, text: &str) {
         self.imp().text.set_text(text);
+        self.set_tooltip_text(Some(text));
         self.imp().recurrence.set_visible(event.recurrent);
         self.imp().exception.set_visible(event.exception);
         self.imp().alarm.set_visible(event.alarm);

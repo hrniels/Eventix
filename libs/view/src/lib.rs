@@ -6,8 +6,11 @@
 
 pub mod details;
 pub mod layout;
+pub mod monthly;
+mod projection;
 pub mod weekly;
 
+pub use monthly::{MonthDay, MonthEvent, MonthSnapshot, month_range, shift_month};
 pub use weekly::{AllDaySpan, Day, DstRange, TimedEvent, TimedSegmentId, WeekSnapshot, week_start};
 
 use std::sync::Arc;

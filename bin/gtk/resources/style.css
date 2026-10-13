@@ -9,12 +9,13 @@
 @define-color ev_dst_gap rgba(230, 128, 26, 0.14);
 @define-color ev_now rgb(230, 38, 38);
 
-.ev_week_toolbar {
+.ev_calendar_toolbar {
     padding: 10px 12px;
 }
 
 .ev_day_headers > label {
     padding: 8px 0;
+    font-weight: bold;
 }
 
 .ev_today {
@@ -26,8 +27,36 @@
     padding-left: 8px;
 }
 
-.ev_week_status {
+.ev_calendar_status {
     padding: 6px 12px;
+}
+
+.ev_month_weekday,
+.ev_cur_month {
+    font-weight: bold;
+}
+
+.ev_view_switch > button:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.ev_view_switch > button:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.ev_other_month {
+    opacity: 0.5;
+}
+
+button.ev_month_week_number {
+    min-width: 0;
+    min-height: 0;
+    padding: 2px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 button.ev_event {

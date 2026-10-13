@@ -6,7 +6,7 @@
     <property name="default-width">1200</property>
     <property name="default-height">850</property>
     <property name="child">
-      <object class="EventixWeekPage" id="page"/>
+      <object class="EventixCalendarPage" id="page"/>
     </property>
   </template>
 </interface>

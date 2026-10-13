@@ -7,7 +7,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use eventix_view::WeekSnapshot;
+use eventix_view::{Event, WeekSnapshot};
 use gtk::{gdk, prelude::*};
 
 pub fn install(display: &gdk::Display) {
@@ -38,12 +38,18 @@ pub fn calendar_class(background: &str, foreground: &str) -> String {
 
 /// Builds only the data-dependent calendar color rules; all other styling lives in style.css.
 pub fn calendar_css(week: &WeekSnapshot) -> String {
+    events_css(
+        week.days
+            .iter()
+            .flat_map(|d| d.timed.iter().map(|segment| &segment.event))
+            .chain(week.all_day.iter().map(|span| &span.event)),
+    )
+}
+
+pub fn events_css<'a>(events: impl IntoIterator<Item = &'a Event>) -> String {
     let mut css = String::new();
-    let colors: BTreeSet<_> = week
-        .days
-        .iter()
-        .flat_map(|d| d.timed.iter().map(|segment| &segment.event))
-        .chain(week.all_day.iter().map(|span| &span.event))
+    let colors: BTreeSet<_> = events
+        .into_iter()
         .map(|e| (&e.background, &e.foreground))
         .collect();
     for (background, foreground) in colors {

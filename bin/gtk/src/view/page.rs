@@ -10,16 +10,16 @@ use std::{
 
 use chrono::{Datelike, NaiveDate, Utc};
 use eventix_locale::{DateFlags, Locale};
-use eventix_view::WeekSnapshot;
+use eventix_view::{MonthSnapshot, WeekSnapshot, shift_month};
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use super::{
-    all_day_strip::AllDayStrip,
     card::EventCard,
     geometry::GUTTER,
-    loader::{Request, WeekLoader},
+    loader::{CalendarLoader, Request, Response, Snapshot, View},
+    monthly::grid::MonthGrid,
     popover::DetailsController,
-    timed_grid::TimedGrid,
+    weekly::{all_day_strip::AllDayStrip, timed_grid::TimedGrid},
 };
 use crate::style;
 
@@ -27,8 +27,21 @@ mod imp {
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/weekly/weekly.ui")]
-    pub struct WeekPage {
+    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/calendar.ui")]
+    pub struct CalendarPage {
+        #[template_child]
+        pub stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub weekly_content: gtk::TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub monthly_content: gtk::TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub monthly: gtk::TemplateChild<MonthGrid>,
+        #[template_child]
+        pub week_view: gtk::TemplateChild<gtk::ToggleButton>,
+        #[template_child]
+        pub month_view: gtk::TemplateChild<gtk::ToggleButton>,
+        pub(super) view: Cell<View>,
         #[template_child]
         pub title: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -72,7 +85,7 @@ mod imp {
         #[template_child]
         pub calendar: gtk::TemplateChild<gtk::Calendar>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
-        pub(super) loader: RefCell<Option<WeekLoader>>,
+        pub(super) loader: RefCell<Option<CalendarLoader>>,
         pub generation: Cell<u64>,
         pub date: Cell<Option<NaiveDate>>,
         pub displayed: Cell<Option<NaiveDate>>,
@@ -83,14 +96,15 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for WeekPage {
-        const NAME: &'static str = "EventixWeekPage";
-        type Type = super::WeekPage;
+    impl ObjectSubclass for CalendarPage {
+        const NAME: &'static str = "EventixCalendarPage";
+        type Type = super::CalendarPage;
         type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
             TimedGrid::ensure_type();
             AllDayStrip::ensure_type();
+            MonthGrid::ensure_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -98,12 +112,29 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for WeekPage {
+    impl ObjectImpl for CalendarPage {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
             self.timed.set_details(self.details.clone());
             self.all_day.set_details(self.details.clone());
+            self.monthly.set_details(self.details.clone());
+            let weak = obj.downgrade();
+            self.week_view.connect_toggled(move |button| {
+                if button.is_active()
+                    && let Some(page) = weak.upgrade()
+                {
+                    page.switch_view(View::Week);
+                }
+            });
+            let weak = obj.downgrade();
+            self.month_view.connect_toggled(move |button| {
+                if button.is_active()
+                    && let Some(page) = weak.upgrade()
+                {
+                    page.switch_view(View::Month);
+                }
+            });
             obj.translate_labels();
             self.gutter.set_size_request(GUTTER, -1);
             self.headers.set_margin_end(
@@ -138,17 +169,17 @@ mod imp {
             self.dispose_template();
         }
     }
-    impl WidgetImpl for WeekPage {}
-    impl BoxImpl for WeekPage {}
+    impl WidgetImpl for CalendarPage {}
+    impl BoxImpl for CalendarPage {}
 }
 
 glib::wrapper! {
-    pub struct WeekPage(ObjectSubclass<imp::WeekPage>)
+    pub struct CalendarPage(ObjectSubclass<imp::CalendarPage>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
-impl WeekPage {
+impl CalendarPage {
     fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
         self.imp()
             .locale
@@ -160,10 +191,24 @@ impl WeekPage {
     fn translate_labels(&self) {
         let imp = self.imp();
         let locale = self.locale();
+        let monthly = imp.view.get() == View::Month;
         imp.previous
-            .set_tooltip_text(Some(locale.translate("Previous week")));
-        imp.next
-            .set_tooltip_text(Some(locale.translate("Next week")));
+            .set_tooltip_text(Some(locale.translate(if monthly {
+                "Previous month"
+            } else {
+                "Previous week"
+            })));
+        imp.next.set_tooltip_text(Some(locale.translate(if monthly {
+            "Next month"
+        } else {
+            "Next week"
+        })));
+        imp.week_view.set_label(locale.translate("Week"));
+        imp.week_view
+            .set_tooltip_text(Some(locale.translate("Weekly View")));
+        imp.month_view.set_label(locale.translate("Month"));
+        imp.month_view
+            .set_tooltip_text(Some(locale.translate("Monthly View")));
         imp.today.set_label(locale.translate("Today"));
         imp.reload
             .set_tooltip_text(Some(locale.translate("Reload local calendars")));
@@ -173,6 +218,7 @@ impl WeekPage {
     }
 
     pub fn request(&self, date: Option<NaiveDate>, reload: bool) {
+        self.dismiss_popovers();
         let imp = self.imp();
         imp.date.set(date);
         let generation = imp.generation.get() + 1;
@@ -184,26 +230,36 @@ impl WeekPage {
                 generation,
                 date,
                 reload,
+                view: imp.view.get(),
             });
         }
     }
 
-    pub fn navigate(&self, days: i64) {
+    pub fn navigate(&self, direction: i32) {
         let date = self.imp().date.get().unwrap_or_else(|| {
             Utc::now()
                 .with_timezone(self.locale().timezone())
                 .date_naive()
         });
-        if let Some(date) = date.checked_add_signed(chrono::Duration::days(days)) {
+        let next = match self.imp().view.get() {
+            View::Week => date.checked_add_signed(chrono::Duration::days(i64::from(direction) * 7)),
+            View::Month => shift_month(date, direction),
+        };
+        if let Some(date) = next {
             self.request(Some(date), false);
         }
     }
 
     pub fn focus_event(&self, current: Option<&EventCard>, forward: bool) {
         let imp = self.imp();
-        let mut cards = imp.timed.event_cards();
-        cards.extend(imp.all_day.event_cards());
-        cards.sort_by_key(|(start, _)| *start);
+        let cards = if imp.view.get() == View::Month {
+            imp.monthly.event_cards()
+        } else {
+            let mut cards = imp.timed.event_cards();
+            cards.extend(imp.all_day.event_cards());
+            cards.sort_by_key(|(start, _)| *start);
+            cards
+        };
         let index = current.and_then(|current| cards.iter().position(|(_, card)| card == current));
         let next = event_focus_index(cards.len(), index, forward);
         if let Some(next) = next {
@@ -244,6 +300,101 @@ impl WeekPage {
         self.request(self.imp().date.get(), true);
     }
 
+    fn switch_view(&self, view: View) {
+        let imp = self.imp();
+        if imp.view.replace(view) == view {
+            return;
+        }
+        self.dismiss_popovers();
+        imp.picker.popdown();
+        imp.week_view.set_active(view == View::Week);
+        imp.month_view.set_active(view == View::Month);
+        if view == View::Month {
+            imp.stack.set_visible_child(&*imp.monthly_content);
+        } else {
+            imp.stack.set_visible_child(&*imp.weekly_content);
+        }
+        // Clear the old period's title until the new snapshot arrives.
+        imp.title.set_text("");
+        imp.displayed.set(None);
+        self.translate_labels();
+        self.request(imp.date.get(), false);
+    }
+
+    pub fn show_week_at(&self, date: NaiveDate) {
+        self.imp().date.set(Some(date));
+        if self.imp().view.get() == View::Week {
+            self.request(Some(date), false);
+        } else {
+            self.switch_view(View::Week);
+        }
+    }
+
+    fn update_picker(&self) {
+        let imp = self.imp();
+        let date = imp.date.get().unwrap_or_else(|| {
+            Utc::now()
+                .with_timezone(self.locale().timezone())
+                .date_naive()
+        });
+        imp.date.set(Some(date));
+        if let Ok(date) = glib::DateTime::from_local(
+            date.year(),
+            date.month() as i32,
+            date.day() as i32,
+            12,
+            0,
+            0.0,
+        ) {
+            imp.updating_picker.set(true);
+            imp.calendar.select_day(&date);
+            imp.updating_picker.set(false);
+        }
+    }
+
+    fn show_month(&self, month: MonthSnapshot) {
+        let imp = self.imp();
+        if let Some((_, styles)) = imp.styles.borrow().as_ref() {
+            styles.load_from_data(&style::events_css(
+                month
+                    .days
+                    .iter()
+                    .flat_map(|d| d.events.iter().map(|e| &e.event)),
+            ));
+        }
+        imp.locale.replace(Some(month.locale.clone()));
+        self.translate_labels();
+        if let Some(window) = self.root().and_downcast::<gtk::Window>() {
+            window.set_title(Some(&format!(
+                "Eventix — {}",
+                month.locale.translate("Monthly View")
+            )));
+        }
+        imp.title.set_text(&format!(
+            "{} {} · {}",
+            month
+                .locale
+                .translate(&month.month.format("%B").to_string()),
+            month.month.year(),
+            month.locale.timezone(),
+        ));
+        let empty = month
+            .days
+            .iter()
+            .filter(|d| d.current_month)
+            .all(|d| d.events.is_empty());
+        imp.status.set_text(month.locale.translate(if empty {
+            "No events this month"
+        } else {
+            "Read-only · Local calendars"
+        }));
+        self.update_picker();
+        if imp.displayed.replace(Some(month.month)) != Some(month.month) {
+            imp.monthly_content.vadjustment().set_value(0.0);
+        }
+        imp.monthly.set_month(Rc::new(month));
+    }
+
     fn show_week(&self, week: WeekSnapshot) {
         let imp = self.imp();
         if let Some((_, styles)) = imp.styles.borrow().as_ref() {
@@ -274,19 +425,7 @@ impl WeekPage {
         } else {
             "Read-only · Local calendars"
         }));
-        imp.date.set(Some(week.start));
-        if let Ok(date) = glib::DateTime::from_local(
-            week.start.year(),
-            week.start.month() as i32,
-            week.start.day() as i32,
-            12,
-            0,
-            0.0,
-        ) {
-            imp.updating_picker.set(true);
-            imp.calendar.select_day(&date);
-            imp.updating_picker.set(false);
-        }
+        self.update_picker();
         let reset_scroll = imp.displayed.replace(Some(week.start)) != Some(week.start);
         let week = Rc::new(week);
         imp.timed.set_week(week.clone());
@@ -322,6 +461,10 @@ impl WeekPage {
 
     fn update_today(&self) {
         let imp = self.imp();
+        if imp.view.get() == View::Month {
+            imp.monthly.update_today();
+            return;
+        }
         let Some(start) = imp.displayed.get() else {
             return;
         };
@@ -340,7 +483,7 @@ impl WeekPage {
     }
 
     pub fn start(&self, prefix: String, date: Option<NaiveDate>) {
-        let (loader, responses) = WeekLoader::start(prefix);
+        let (loader, responses) = CalendarLoader::start(prefix);
         self.imp().loader.replace(Some(loader));
         let provider = gtk::CssProvider::new();
         let display = self.display();
@@ -367,21 +510,28 @@ impl WeekPage {
                 if page.imp().loader.borrow().is_none() {
                     break;
                 }
-                if response.generation != page.imp().generation.get() {
-                    continue;
-                }
-                match response.result {
-                    Ok((week, source)) => {
-                        page.show_week(week);
-                        page.imp().status.set_tooltip_text(Some(&source));
-                    }
-                    Err(error) => page.imp().status.set_text(&format!(
-                        "{}\n{error}",
-                        page.locale().translate("Could not load local calendars")
-                    )),
-                }
+                page.receive_response(response);
             }
         });
+    }
+
+    fn receive_response(&self, response: Response) {
+        if response.generation != self.imp().generation.get() {
+            return;
+        }
+        match response.result {
+            Ok((snapshot, source)) => {
+                match snapshot {
+                    Snapshot::Week(week) => self.show_week(week),
+                    Snapshot::Month(month) => self.show_month(month),
+                }
+                self.imp().status.set_tooltip_text(Some(&source));
+            }
+            Err(error) => self.imp().status.set_text(&format!(
+                "{}\n{error}",
+                self.locale().translate("Could not load local calendars"),
+            )),
+        }
     }
 
     pub fn stop(&self) {
@@ -405,11 +555,14 @@ fn event_focus_index(count: usize, current: Option<usize>, forward: bool) -> Opt
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use eventix_view::{Day, TimedEvent, WeekSnapshot, layout::Columns};
+    use chrono::{Datelike, Duration, TimeZone};
+    use eventix_view::{
+        Day, MonthDay, MonthEvent, MonthSnapshot, TimedEvent, WeekSnapshot, layout::Columns,
+    };
     use gtk::{prelude::*, subclass::prelude::*};
 
-    use super::WeekPage;
     use super::event_focus_index;
+    use super::{CalendarPage, Response, Snapshot, View};
 
     /// Checks real widget allocation, focus retention and cross-surface popup coordination.
     /// Called by the display-backed details test so GTK stays on one test thread.
@@ -452,7 +605,7 @@ pub(crate) mod tests {
         };
         refreshed.all_day[0].end_day = 2;
         refreshed.all_day.swap(0, 1);
-        let page: WeekPage = gtk::glib::Object::new();
+        let page: CalendarPage = gtk::glib::Object::new();
         let window = gtk::Window::builder()
             .default_width(1000)
             .default_height(800)
@@ -472,7 +625,7 @@ pub(crate) mod tests {
         assert_eq!(cards.len(), 3, "one card is created per span");
         let card = &cards[0].1;
         let allocation = card.allocation();
-        let right = super::super::geometry::day_x(imp.all_day.width(), 3.0).round() as i32;
+        let right = crate::view::geometry::day_x(imp.all_day.width(), 3.0).round() as i32;
         assert_eq!(allocation.x() + allocation.width(), right - 2);
         assert_eq!(allocation.y(), cards[1].1.allocation().y());
         assert!(cards[1].1.allocation().x() >= allocation.x() + allocation.width());
@@ -524,6 +677,249 @@ pub(crate) mod tests {
         page.dismiss_popovers();
         drain();
         assert!(find_popup(imp.all_day.upcast_ref()).is_none());
+        window.close();
+        drain();
+    }
+
+    /// Checks monthly scrolling, refresh identity, popups, switching and view-aware navigation.
+    /// Runs on the existing display-backed test's GTK thread.
+    pub(crate) fn assert_month_layout_and_navigation(mut week: WeekSnapshot) {
+        while week.days.len() < 7 {
+            week.days.push(Day {
+                date: week.start + Duration::days(week.days.len() as i64),
+                timed: vec![],
+                dst: vec![],
+            });
+        }
+        let selected = week.start + Duration::days(2);
+        let make_month = || {
+            let (start, end) = eventix_view::month_range(selected).unwrap();
+            let mut days: Vec<_> = (0..(end - start).num_days())
+                .map(|offset| {
+                    let date = start + Duration::days(offset);
+                    MonthDay {
+                        date,
+                        current_month: date.month() == selected.month(),
+                        show_month: date.day() == 1
+                            || date.succ_opt().unwrap().month() != date.month(),
+                        events: vec![],
+                    }
+                })
+                .collect();
+            let index = (week.start - start).num_days() as usize;
+            for number in 0..18 {
+                let mut event = week.all_day[0].event.clone();
+                event.id.uid = format!("monthly-{number}");
+                event.summary = format!("Monthly entry {number}");
+                if number == 0 {
+                    event.all_day = false;
+                    event.start = week
+                        .locale
+                        .timezone()
+                        .with_ymd_and_hms(
+                            week.start.year(),
+                            week.start.month(),
+                            week.start.day(),
+                            12,
+                            0,
+                            0,
+                        )
+                        .unwrap()
+                        - Duration::days(1);
+                    event.end = event.start + Duration::days(2);
+                }
+                days[index].events.push(MonthEvent {
+                    event,
+                    date: week.start,
+                    full_day: true,
+                });
+            }
+            // The same occurrence on a different day must have a distinct live widget.
+            let mut repeated = days[index].events[0].clone();
+            repeated.date = days[index + 1].date;
+            repeated.full_day = false;
+            days[index + 1].events.push(repeated);
+            MonthSnapshot {
+                month: selected.with_day(1).unwrap(),
+                start,
+                days,
+                locale: week.locale.clone(),
+            }
+        };
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1000)
+            .default_height(450)
+            .child(&page)
+            .build();
+        let group = gtk::gio::SimpleActionGroup::new();
+        let action = gtk::gio::SimpleAction::new("show-week", Some(gtk::glib::VariantTy::STRING));
+        let weak = page.downgrade();
+        action.connect_activate(move |_, date| {
+            let page = weak.upgrade().unwrap();
+            page.show_week_at(
+                chrono::NaiveDate::parse_from_str(date.unwrap().str().unwrap(), "%Y-%m-%d")
+                    .unwrap(),
+            );
+        });
+        group.add_action(&action);
+        window.insert_action_group("win", Some(&group));
+        page.request(Some(selected), false);
+        page.show_week(WeekSnapshot {
+            start: week.start,
+            days: week.days.clone(),
+            all_day: week.all_day.clone(),
+            locale: week.locale.clone(),
+        });
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let imp = page.imp();
+        let old_generation = imp.generation.get();
+        imp.month_view.set_active(true);
+        assert!(imp.view.get() == View::Month);
+        assert_eq!(
+            imp.date.get(),
+            Some(selected),
+            "switching retains the selected day"
+        );
+        page.show_month(make_month());
+        drain();
+        assert_eq!(
+            imp.stack.visible_child(),
+            Some(imp.monthly_content.clone().upcast())
+        );
+        assert_eq!(
+            imp.previous.tooltip_text().as_deref(),
+            Some(week.locale.translate("Previous month"))
+        );
+        assert_eq!(
+            imp.monthly.imp().weekdays.borrow()[0].text(),
+            week.locale.translate("Monday")
+        );
+        let title = imp.title.text();
+        page.receive_response(Response {
+            generation: old_generation,
+            result: Ok((
+                Snapshot::Week(WeekSnapshot {
+                    start: week.start,
+                    days: week.days.clone(),
+                    all_day: week.all_day.clone(),
+                    locale: week.locale.clone(),
+                }),
+                "stale".into(),
+            )),
+        });
+        assert_eq!(
+            imp.title.text(),
+            title,
+            "stale weekly response cannot replace the month"
+        );
+        let cards = imp.monthly.event_cards();
+        assert_eq!(cards.len(), 19);
+        assert_ne!(cards[0].1, cards[18].1);
+        assert_eq!(
+            cards[0].1.tooltip_text().as_deref(),
+            Some("Monthly entry 0")
+        );
+        assert_eq!(
+            cards[18].1.tooltip_text().as_deref(),
+            Some("← 12:00 Monthly entry 0")
+        );
+        for pair in cards[..18].windows(2) {
+            let a = pair[0].1.allocation();
+            let b = pair[1].1.allocation();
+            assert!(
+                b.y() >= a.y() + a.height(),
+                "busy-day entries never overlap"
+            );
+        }
+        let first = cards[0].1.allocation();
+        let adjacent = cards[18].1.allocation();
+        assert_eq!(adjacent.y(), first.y());
+        let cells = imp.monthly.imp().cells.borrow();
+        let index = (week.start - make_month().start).num_days() as usize;
+        let busy_cell = cells[index].clone();
+        let neighbor = cells[index + 1].clone();
+        let date_header = imp.monthly.imp().days.borrow()[index].allocation();
+        assert!(neighbor.allocation().x() >= busy_cell.allocation().x() + busy_cell.width());
+        assert!(busy_cell.height() <= crate::view::monthly::grid::MAX_ROW);
+        assert!(busy_cell.vadjustment().upper() > busy_cell.vadjustment().page_size());
+        drop(cells);
+        page.focus_event(Some(&cards[16].1), true);
+        drain();
+        assert!(cards[17].1.has_focus());
+        assert!(
+            busy_cell.vadjustment().value() > 0.0,
+            "keyboard navigation scrolls within the busy day"
+        );
+        assert_eq!(
+            neighbor.vadjustment().value(),
+            0.0,
+            "neighboring days scroll independently"
+        );
+        assert_eq!(
+            imp.monthly.imp().days.borrow()[index].allocation(),
+            date_header,
+            "the date header remains outside the day scroller"
+        );
+        let mut refreshed = make_month();
+        let index = (week.start - refreshed.start).num_days() as usize;
+        refreshed.days[index].events.reverse();
+        page.show_month(refreshed);
+        drain();
+        assert_eq!(imp.monthly.event_cards()[0].1, cards[17].1);
+        assert!(
+            cards[17].1.has_focus(),
+            "refresh reuses the focused occurrence-day card"
+        );
+        let find_popup = || {
+            let parent = cards[17].1.parent().unwrap();
+            let mut child = parent.first_child();
+            while let Some(widget) = child {
+                if let Some(popup) = widget.downcast_ref::<crate::view::details::EventDetails>() {
+                    return Some(popup.clone());
+                }
+                child = widget.next_sibling();
+            }
+            None
+        };
+        page.focus_event(None, true);
+        drain();
+        cards[17].1.emit_clicked();
+        drain();
+        assert!(
+            find_popup().unwrap().is_mapped(),
+            "monthly cards open shared details"
+        );
+        imp.week_view.set_active(true);
+        drain();
+        assert!(find_popup().is_none(), "switching closes the monthly popup");
+        assert!(imp.view.get() == View::Week);
+        assert_eq!(imp.date.get(), Some(selected));
+        page.navigate(1);
+        assert_eq!(imp.date.get(), Some(selected + Duration::days(7)));
+        imp.month_view.set_active(true);
+        page.navigate(1);
+        assert_eq!(
+            imp.date.get(),
+            eventix_view::shift_month(selected + Duration::days(7), 1)
+        );
+        let monday = make_month().start;
+        imp.monthly.imp().weeks.borrow()[0].emit_clicked();
+        assert!(imp.view.get() == View::Week);
+        assert_eq!(imp.date.get(), Some(monday), "week number opens its Monday");
+        page.request(None, false);
+        assert_eq!(
+            imp.date.get(),
+            None,
+            "Today delegates to the profile's timezone"
+        );
         window.close();
         drain();
     }

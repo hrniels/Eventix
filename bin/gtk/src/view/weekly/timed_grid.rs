@@ -2,19 +2,21 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use chrono::{Timelike, Utc};
 use eventix_view::WeekSnapshot;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-use super::{
-    card::EventCard,
-    geometry::{GUTTER, MIN_WIDTH, day_x, draw_text, rect},
-    popover::DetailsController,
-    surface::{CardKey, Surface},
+use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, draw_text, rect};
+use crate::{
+    style,
+    view::{
+        card::EventCard,
+        popover::DetailsController,
+        surface::{CardKey, Surface},
+    },
 };
-use crate::style;
 
 mod imp {
     use super::*;
@@ -22,6 +24,7 @@ mod imp {
     #[derive(Default)]
     pub struct TimedGrid {
         pub(super) surface: Rc<Surface>,
+        pub week: RefCell<Option<Rc<WeekSnapshot>>>,
     }
 
     #[glib::object_subclass]
@@ -63,7 +66,7 @@ mod imp {
         }
 
         fn size_allocate(&self, width: i32, _: i32, _: i32) {
-            if let Some(week) = self.surface.week.borrow().as_ref() {
+            if let Some(week) = self.week.borrow().as_ref() {
                 let segments =
                     week.days.iter().enumerate().flat_map(|(day, data)| {
                         data.timed.iter().map(move |segment| (day, segment))
@@ -105,7 +108,7 @@ mod imp {
             let height = obj.height() as f32;
             let day_width = (width - GUTTER as f32) / 7.0;
             let line = style::color(&*obj, "ev_grid_line");
-            if let Some(week) = self.surface.week.borrow().as_ref() {
+            if let Some(week) = self.week.borrow().as_ref() {
                 let now = Utc::now().with_timezone(week.locale.timezone());
                 for (i, day) in week.days.iter().enumerate() {
                     let x = day_x(obj.width(), i as f64) as f32;
@@ -182,7 +185,7 @@ mod imp {
                 );
             }
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
-            if let Some(week) = self.surface.week.borrow().as_ref() {
+            if let Some(week) = self.week.borrow().as_ref() {
                 let now = Utc::now().with_timezone(week.locale.timezone());
                 let day = (now.date_naive() - week.start).num_days();
                 if (0..7).contains(&day) {
@@ -223,7 +226,7 @@ impl TimedGrid {
             .flat_map(|day| &day.timed)
             .map(|segment| CardKey::Timed(segment.id()))
             .collect();
-        surface.reconcile(self.upcast_ref(), week.clone(), keys);
+        surface.reconcile(self.upcast_ref(), week.locale.clone(), keys);
         for (card, segment) in surface
             .cards
             .borrow()
@@ -232,6 +235,7 @@ impl TimedGrid {
         {
             card.button.set_timed(segment, week.locale.as_ref());
         }
+        self.imp().week.replace(Some(week));
         self.queue_resize();
     }
 }

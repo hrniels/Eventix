@@ -4,29 +4,30 @@
 
 //! Shared card ownership and interaction, independent of each surface's layout.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-use eventix_view::{OccurrenceId, TimedSegmentId, WeekSnapshot};
+use eventix_locale::Locale;
+use eventix_view::{OccurrenceId, TimedSegmentId};
 use gtk::{glib, prelude::*};
 
 use super::{card::EventCard, popover::DetailsController};
 
 #[derive(PartialEq, Eq)]
-pub(super) enum CardKey {
+pub(crate) enum CardKey {
     Timed(TimedSegmentId),
     Span(OccurrenceId),
 }
 
-pub(super) struct Card {
+pub(crate) struct Card {
     pub button: EventCard,
     key: CardKey,
 }
 
 #[derive(Default)]
-pub(super) struct Surface {
-    pub week: RefCell<Option<Rc<WeekSnapshot>>>,
+pub(crate) struct Surface {
     pub cards: RefCell<Vec<Card>>,
     pub details: RefCell<Rc<DetailsController>>,
+    locale: RefCell<Option<Arc<dyn Locale + Send + Sync>>>,
     scroll_handlers: RefCell<Vec<(gtk::Adjustment, glib::SignalHandlerId)>>,
 }
 
@@ -57,7 +58,7 @@ impl Surface {
     pub fn reconcile(
         self: &Rc<Self>,
         widget: &gtk::Widget,
-        week: Rc<WeekSnapshot>,
+        locale: Arc<dyn Locale + Send + Sync>,
         keys: Vec<CardKey>,
     ) {
         self.details.borrow().close_for(widget);
@@ -75,11 +76,11 @@ impl Surface {
                     let (Some(parent), Some(surface)) = (parent.upgrade(), weak.upgrade()) else {
                         return;
                     };
-                    if let Some(week) = surface.week.borrow().as_ref() {
+                    if let Some(locale) = surface.locale.borrow().as_ref() {
                         surface
                             .details
                             .borrow()
-                            .show(&parent, button, week.locale.as_ref());
+                            .show(&parent, button, locale.as_ref());
                     }
                 });
                 button
@@ -92,7 +93,7 @@ impl Surface {
             card.button.unparent();
         }
         self.cards.replace(cards);
-        self.week.replace(Some(week));
+        self.locale.replace(Some(locale));
     }
 
     pub fn event_cards(&self) -> Vec<(i64, EventCard)> {
