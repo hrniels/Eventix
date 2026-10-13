@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 
 use eventix_locale::{Locale, TimeFlags};
-use eventix_view::Event;
+use eventix_view::{AllDaySpan, Event, TimedEvent};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use crate::style;
@@ -69,39 +69,53 @@ impl EventCard {
         self.imp().event.borrow().clone()
     }
 
-    pub fn set_event(&self, event: &Event, locale: &dyn Locale, strip: bool) {
-        let summary = if event.summary.is_empty() {
-            locale.translate("Untitled event")
-        } else {
-            &event.summary
-        };
-        let time = if event.all_day {
-            locale.translate("All day").to_owned()
-        } else {
-            format!(
-                "{}{}–{}{}",
-                if event.start.date_naive() < event.id.date {
-                    "← "
-                } else {
-                    ""
-                },
-                locale.fmt_time(&event.start, TimeFlags::Short),
-                locale.fmt_time(&event.end, TimeFlags::Short),
-                if event.end.date_naive() > event.id.date {
-                    " →"
-                } else {
-                    ""
-                }
-            )
-        };
-        let text = if strip {
-            summary.to_owned()
-        } else if event.minute_end.saturating_sub(event.minute_start) < 38 {
+    pub fn set_span(&self, span: &AllDaySpan, locale: &dyn Locale) {
+        let summary = self.summary(&span.event, locale);
+        let text = format!(
+            "{}{}{}",
+            if span.continues_before { "← " } else { "" },
+            summary,
+            if span.continues_after { " →" } else { "" },
+        );
+        self.set_event(&span.event, &text);
+    }
+
+    pub fn set_timed(&self, segment: &TimedEvent, locale: &dyn Locale) {
+        let event = &segment.event;
+        let summary = self.summary(event, locale);
+        let time = format!(
+            "{}{}–{}{}",
+            if event.start.date_naive() < segment.date {
+                "← "
+            } else {
+                ""
+            },
+            locale.fmt_time(&event.start, TimeFlags::Short),
+            locale.fmt_time(&event.end, TimeFlags::Short),
+            if event.end.date_naive() > segment.date {
+                " →"
+            } else {
+                ""
+            },
+        );
+        let text = if segment.minute_end.saturating_sub(segment.minute_start) < 38 {
             format!("{summary} · {time}")
         } else {
             format!("{summary}\n{time}")
         };
-        self.imp().text.set_text(&text);
+        self.set_event(event, &text);
+    }
+
+    fn summary<'a>(&self, event: &'a Event, locale: &'a dyn Locale) -> &'a str {
+        if event.summary.is_empty() {
+            locale.translate("Untitled event")
+        } else {
+            &event.summary
+        }
+    }
+
+    fn set_event(&self, event: &Event, text: &str) {
+        self.imp().text.set_text(text);
         self.imp().recurrence.set_visible(event.recurrent);
         self.imp().exception.set_visible(event.exception);
         self.imp().alarm.set_visible(event.alarm);

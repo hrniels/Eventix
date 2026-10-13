@@ -7,7 +7,7 @@ use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
 use crate::view::{
     details::EventDetails,
-    weekly::{card::EventCard, weekly::WeekPage},
+    weekly::{card::EventCard, page::WeekPage},
 };
 
 mod imp {

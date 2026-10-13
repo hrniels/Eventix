@@ -42,7 +42,8 @@ pub fn calendar_css(week: &WeekSnapshot) -> String {
     let colors: BTreeSet<_> = week
         .days
         .iter()
-        .flat_map(|d| d.all_day.iter().chain(&d.timed))
+        .flat_map(|d| d.timed.iter().map(|segment| &segment.event))
+        .chain(week.all_day.iter().map(|span| &span.event))
         .map(|e| (&e.background, &e.foreground))
         .collect();
     for (background, foreground) in colors {

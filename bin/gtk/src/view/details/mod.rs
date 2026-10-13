@@ -546,7 +546,7 @@ mod tests {
 
     use chrono::TimeZone;
     use eventix_view::{
-        Event, EventId,
+        AllDaySpan, Event, OccurrenceId, TimedEvent,
         details::{Attendee, Contact, DetailActions, Details, Response},
     };
     use gtk::{prelude::*, subclass::prelude::*};
@@ -586,11 +586,10 @@ mod tests {
                     address: "amy@example.org".into(),
                 };
                 let event = Event {
-                    id: EventId {
+                    id: OccurrenceId {
                         calendar: "cal".into(),
                         uid: "popup-test".into(),
                         recurrence: String::new(),
-                        date: start.date_naive(),
                     },
                     summary: if full {
                         "Planning <&> review — a long title which should wrap neatly".into()
@@ -607,13 +606,6 @@ mod tests {
                     recurrent: full,
                     exception: false,
                     alarm: full,
-                    minute_start: 540,
-                    minute_end: 600,
-                    columns: eventix_view::layout::Columns {
-                        count: 1,
-                        offset: 0,
-                        span: 1,
-                    },
                     details: Arc::new(Details {
                         date_label: "Date",
                         date: "Oct 05, 2026, 09:00 ‒ 10:00".into(),
@@ -670,10 +662,35 @@ mod tests {
                     locale: locale.clone(),
                     days: vec![eventix_view::Day {
                         date: start.date_naive(),
-                        all_day: if full { vec![] } else { vec![event.clone()] },
-                        timed: if full { vec![event.clone()] } else { vec![] },
+                        timed: if full {
+                            vec![TimedEvent {
+                                event: event.clone(),
+                                date: start.date_naive(),
+                                minute_start: 540,
+                                minute_end: 600,
+                                columns: eventix_view::layout::Columns {
+                                    count: 1,
+                                    offset: 0,
+                                    span: 1,
+                                },
+                            }]
+                        } else {
+                            vec![]
+                        },
                         dst: vec![],
                     }],
+                    all_day: if full {
+                        vec![]
+                    } else {
+                        vec![AllDaySpan {
+                            event: event.clone(),
+                            start_day: 0,
+                            end_day: 1,
+                            row: 0,
+                            continues_before: false,
+                            continues_after: false,
+                        }]
+                    },
                 });
                 colors.load_from_data(&crate::style::calendar_css(&week));
                 gtk::style_context_add_provider_for_display(
@@ -681,10 +698,22 @@ mod tests {
                     &colors,
                     gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
                 );
-                let anchor: crate::view::weekly::timeline::Timeline = gtk::glib::Object::builder()
-                    .property("all-day", !full)
-                    .build();
-                anchor.set_week(week);
+                let details =
+                    std::rc::Rc::new(crate::view::weekly::popover::DetailsController::default());
+                let (anchor, cards): (gtk::Widget, _) = if full {
+                    let grid: crate::view::weekly::timed_grid::TimedGrid = gtk::glib::Object::new();
+                    grid.set_details(details.clone());
+                    grid.set_week(week.clone());
+                    let cards = grid.event_cards();
+                    (grid.upcast(), cards)
+                } else {
+                    let strip: crate::view::weekly::all_day_strip::AllDayStrip =
+                        gtk::glib::Object::new();
+                    strip.set_details(details.clone());
+                    strip.set_week(week.clone());
+                    let cards = strip.event_cards();
+                    (strip.upcast(), cards)
+                };
                 let scroll = gtk::ScrolledWindow::builder()
                     .hscrollbar_policy(gtk::PolicyType::Never)
                     .child(&anchor)
@@ -710,11 +739,11 @@ mod tests {
                     scroll.vadjustment().set_value(400.0);
                     drain();
                 }
-                anchor.event_cards()[0].1.emit_clicked();
+                cards[0].1.emit_clicked();
                 drain();
                 let mut child = anchor.first_child();
                 let popup = loop {
-                    let widget = child.expect("timeline details popup exists");
+                    let widget = child.expect("event surface details popup exists");
                     if let Some(popup) = widget.downcast_ref::<super::EventDetails>() {
                         break popup.clone();
                     }
@@ -836,7 +865,7 @@ mod tests {
                     outer_scroll.hadjustment().set_value(0.0);
                     scroll.vadjustment().set_value(500.0);
                     drain();
-                    let bounds = anchor.event_cards()[0].1.compute_bounds(&window).unwrap();
+                    let bounds = cards[0].1.compute_bounds(&window).unwrap();
                     let event_bottom = (bounds.y() + bounds.height()).ceil() as i32;
                     for extra in [20, 40, 60, 40, 20] {
                         window.set_default_size(900, minimum_height + event_bottom + extra);
@@ -879,7 +908,12 @@ mod tests {
                     let surface = popup.surface().unwrap();
                     surface.emit_by_name::<()>("layout", &[&surface.width(), &1i32]);
                     drain();
-                    assert!(popup.is_mapped(), "rejected placement was not recovered");
+                    assert!(
+                        popup.is_mapped(),
+                        "rejected placement was not recovered: visible={}, parented={}",
+                        popup.is_visible(),
+                        popup.parent().is_some()
+                    );
                     assert!(
                         !popup.has_arrow(),
                         "rejected placement did not use centered fallback"
@@ -911,7 +945,7 @@ mod tests {
                     for value in [0, 100, 250, 350, 450, 550, 700, 900] {
                         scroll.vadjustment().set_value(f64::from(value));
                         drain();
-                        anchor.event_cards()[0].1.emit_clicked();
+                        cards[0].1.emit_clicked();
                         if value == 350 {
                             let mut child = anchor.first_child();
                             while let Some(widget) = child {
@@ -943,17 +977,27 @@ mod tests {
                             child = widget.next_sibling();
                         }
                         assert!(mapped, "popup did not open at scroll offset {value}");
-                        anchor.close_details();
+                        details.close();
                         drain();
                     }
                 }
-                anchor.event_cards()[0].1.emit_clicked();
+                cards[0].1.emit_clicked();
                 drain();
-                anchor.close_details();
+                details.close();
                 drain();
                 window.close();
                 drain();
                 gtk::style_context_remove_provider_for_display(&display, &colors);
+                if variant == "sparse" && language == eventix_locale::LocaleType::English {
+                    crate::view::weekly::page::tests::assert_span_layout_and_refresh(
+                        eventix_view::WeekSnapshot {
+                            start: week.start,
+                            days: week.days.clone(),
+                            all_day: week.all_day.clone(),
+                            locale: week.locale.clone(),
+                        },
+                    );
+                }
             }
         }
     }

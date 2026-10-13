@@ -6,7 +6,6 @@ use std::{
     cell::{Cell, RefCell},
     rc::Rc,
     sync::Arc,
-    thread,
 };
 
 use chrono::{Datelike, NaiveDate, Utc};
@@ -15,34 +14,14 @@ use eventix_view::WeekSnapshot;
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use super::{
+    all_day_strip::AllDayStrip,
     card::EventCard,
-    timeline::{GUTTER, Timeline},
+    geometry::GUTTER,
+    loader::{Request, WeekLoader},
+    popover::DetailsController,
+    timed_grid::TimedGrid,
 };
 use crate::style;
-
-/// Loads an existing local profile, reporting missing settings instead of an empty calendar.
-fn load_local_state(xdg: Arc<xdg::BaseDirectories>) -> anyhow::Result<eventix_state::State> {
-    let state = eventix_state::State::new(xdg.clone())?;
-    if xdg.find_config_file("settings.toml").is_none() {
-        let expected = xdg
-            .get_config_file("settings.toml")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "settings.toml".into());
-        anyhow::bail!(
-            formatx::formatx!(state.locale().translate(
-            "No calendar configuration found at {}. Check XDG_CONFIG_HOME and --data-prefix."
-        ), expected)
-            .unwrap()
-        );
-    }
-    Ok(state)
-}
-
-struct Request {
-    generation: u64,
-    date: Option<NaiveDate>,
-    reload: bool,
-}
 
 mod imp {
     use super::*;
@@ -75,9 +54,9 @@ mod imp {
         #[template_child]
         pub scroll: gtk::TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
-        pub timed: gtk::TemplateChild<Timeline>,
+        pub timed: gtk::TemplateChild<TimedGrid>,
         #[template_child]
-        pub all_day: gtk::TemplateChild<Timeline>,
+        pub all_day: gtk::TemplateChild<AllDayStrip>,
         #[template_child]
         pub all_day_label: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -93,13 +72,14 @@ mod imp {
         #[template_child]
         pub calendar: gtk::TemplateChild<gtk::Calendar>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
-        pub(super) requests: RefCell<Option<async_channel::Sender<Request>>>,
+        pub(super) loader: RefCell<Option<WeekLoader>>,
         pub generation: Cell<u64>,
         pub date: Cell<Option<NaiveDate>>,
         pub displayed: Cell<Option<NaiveDate>>,
         pub updating_picker: Cell<bool>,
         pub locale: RefCell<Option<Arc<dyn Locale + Send + Sync>>>,
         pub timer: RefCell<Option<glib::SourceId>>,
+        pub(super) details: Rc<DetailsController>,
     }
 
     #[glib::object_subclass]
@@ -109,7 +89,8 @@ mod imp {
         type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
-            Timeline::ensure_type();
+            TimedGrid::ensure_type();
+            AllDayStrip::ensure_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -121,8 +102,8 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
-            self.timed.set_peer(&self.all_day);
-            self.all_day.set_peer(&self.timed);
+            self.timed.set_details(self.details.clone());
+            self.all_day.set_details(self.details.clone());
             obj.translate_labels();
             self.gutter.set_size_request(GUTTER, -1);
             self.headers.set_margin_end(
@@ -198,8 +179,8 @@ impl WeekPage {
         imp.generation.set(generation);
         imp.status
             .set_text(self.locale().translate("Loading calendar…"));
-        if let Some(requests) = imp.requests.borrow().as_ref() {
-            let _ = requests.try_send(Request {
+        if let Some(loader) = imp.loader.borrow().as_ref() {
+            loader.request(Request {
                 generation,
                 date,
                 reload,
@@ -231,7 +212,7 @@ impl WeekPage {
                 if let Some(window) = self.root().and_downcast::<gtk::Window>() {
                     window.set_focus_visible(true);
                 }
-                // Custom timeline children can lie outside either scroll viewport.
+                // Custom event-surface children can lie outside either scroll viewport.
                 // Reveal the focused card in each enclosing scroller, inside out.
                 let mut ancestor = card.parent();
                 while let Some(widget) = ancestor {
@@ -287,10 +268,7 @@ impl WeekPage {
         for (label, day) in self.day_labels().into_iter().zip(&week.days) {
             label.set_text(&locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday));
         }
-        let empty = week
-            .days
-            .iter()
-            .all(|d| d.timed.is_empty() && d.all_day.is_empty());
+        let empty = week.all_day.is_empty() && week.days.iter().all(|d| d.timed.is_empty());
         imp.status.set_text(locale.translate(if empty {
             "No events this week"
         } else {
@@ -339,8 +317,7 @@ impl WeekPage {
     }
 
     pub fn dismiss_popovers(&self) {
-        self.imp().timed.close_details();
-        self.imp().all_day.close_details();
+        self.imp().details.close();
     }
 
     fn update_today(&self) {
@@ -363,9 +340,8 @@ impl WeekPage {
     }
 
     pub fn start(&self, prefix: String, date: Option<NaiveDate>) {
-        let (requests, rx) = async_channel::unbounded::<Request>();
-        let (results, responses) = async_channel::unbounded();
-        self.imp().requests.replace(Some(requests));
+        let (loader, responses) = WeekLoader::start(prefix);
+        self.imp().loader.replace(Some(loader));
         let provider = gtk::CssProvider::new();
         let display = self.display();
         gtk::style_context_add_provider_for_display(
@@ -374,52 +350,6 @@ impl WeekPage {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
         self.imp().styles.replace(Some((display, provider)));
-        // State loading and recurrence expansion can block; the worker never touches GTK objects.
-        thread::spawn(move || {
-            let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
-            let mut state = None;
-            while let Ok(mut request) = rx.recv_blocking() {
-                while let Ok(newer) = rx.try_recv() {
-                    let reload = request.reload || newer.reload;
-                    request = newer;
-                    request.reload = reload;
-                }
-                let result = (|| -> anyhow::Result<(WeekSnapshot, String)> {
-                    if state.is_none() || request.reload {
-                        state = Some(load_local_state(xdg.clone())?);
-                    }
-                    let state = state.as_ref().expect("state was successfully loaded");
-                    let date = request
-                        .date
-                        .unwrap_or_else(|| Utc::now().with_timezone(state.timezone()).date_naive());
-                    let week = WeekSnapshot::load(state, date)?;
-                    let config = xdg
-                        .find_config_file("settings.toml")
-                        .or_else(|| xdg.get_config_file("settings.toml"))
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default();
-                    let data = xdg
-                        .get_data_home()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default();
-                    let source = format!(
-                        "{}\n{}",
-                        formatx::formatx!(
-                            state.locale().translate("Calendar configuration: {}"),
-                            config
-                        )
-                        .unwrap(),
-                        formatx::formatx!(state.locale().translate("Calendar data: {}"), data)
-                            .unwrap()
-                    );
-                    Ok((week, source))
-                })()
-                .map_err(|e| format!("{e:#}"));
-                if results.send_blocking((request.generation, result)).is_err() {
-                    break;
-                }
-            }
-        });
         let weak = self.downgrade();
         let timer = glib::timeout_add_seconds_local(60, move || {
             let Some(page) = weak.upgrade() else {
@@ -432,15 +362,15 @@ impl WeekPage {
         self.request(date, false);
         let weak = self.downgrade();
         glib::MainContext::default().spawn_local(async move {
-            while let Ok((generation, result)) = responses.recv().await {
+            while let Ok(response) = responses.recv().await {
                 let Some(page) = weak.upgrade() else { break };
-                if page.imp().requests.borrow().is_none() {
+                if page.imp().loader.borrow().is_none() {
                     break;
                 }
-                if generation != page.imp().generation.get() {
+                if response.generation != page.imp().generation.get() {
                     continue;
                 }
-                match result {
+                match response.result {
                     Ok((week, source)) => {
                         page.show_week(week);
                         page.imp().status.set_tooltip_text(Some(&source));
@@ -455,9 +385,8 @@ impl WeekPage {
     }
 
     pub fn stop(&self) {
-        if let Some(requests) = self.imp().requests.take() {
-            requests.close();
-        }
+        self.imp().loader.take();
+        self.dismiss_popovers();
         if let Some(timer) = self.imp().timer.take() {
             timer.remove();
         }
@@ -475,10 +404,129 @@ fn event_focus_index(count: usize, current: Option<usize>, forward: bool) -> Opt
 }
 
 #[cfg(test)]
-mod tests {
-    use std::{fs, sync::Arc};
+pub(crate) mod tests {
+    use eventix_view::{Day, TimedEvent, WeekSnapshot, layout::Columns};
+    use gtk::{prelude::*, subclass::prelude::*};
 
-    use super::{event_focus_index, load_local_state};
+    use super::WeekPage;
+    use super::event_focus_index;
+
+    /// Checks real widget allocation, focus retention and cross-surface popup coordination.
+    /// Called by the display-backed details test so GTK stays on one test thread.
+    pub(crate) fn assert_span_layout_and_refresh(mut week: WeekSnapshot) {
+        let mut span = week.all_day[0].clone();
+        span.end_day = 3;
+        let mut adjacent = span.clone();
+        adjacent.event.id.uid = "adjacent".into();
+        adjacent.start_day = 3;
+        adjacent.end_day = 5;
+        let mut overlapping = span.clone();
+        overlapping.event.id.uid = "overlapping".into();
+        overlapping.start_day = 1;
+        overlapping.row = 1;
+        week.all_day = vec![span, adjacent, overlapping];
+        week.days = (0..7)
+            .map(|day| Day {
+                date: week.start + chrono::Duration::days(day),
+                timed: vec![],
+                dst: vec![],
+            })
+            .collect();
+        week.days[0].timed.push(TimedEvent {
+            event: week.all_day[0].event.clone(),
+            date: week.start,
+            minute_start: 540,
+            minute_end: 600,
+            columns: Columns {
+                count: 1,
+                offset: 0,
+                span: 1,
+            },
+        });
+        // Change placement and order while keeping the occurrence identity unchanged.
+        let mut refreshed = WeekSnapshot {
+            start: week.start,
+            days: week.days.clone(),
+            locale: week.locale.clone(),
+            all_day: week.all_day.clone(),
+        };
+        refreshed.all_day[0].end_day = 2;
+        refreshed.all_day.swap(0, 1);
+        let page: WeekPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1000)
+            .default_height(800)
+            .child(&page)
+            .build();
+        page.show_week(week);
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let imp = page.imp();
+        let cards = imp.all_day.event_cards();
+        assert_eq!(cards.len(), 3, "one card is created per span");
+        let card = &cards[0].1;
+        let allocation = card.allocation();
+        let right = super::super::geometry::day_x(imp.all_day.width(), 3.0).round() as i32;
+        assert_eq!(allocation.x() + allocation.width(), right - 2);
+        assert_eq!(allocation.y(), cards[1].1.allocation().y());
+        assert!(cards[1].1.allocation().x() >= allocation.x() + allocation.width());
+        assert!(cards[2].1.allocation().y() > allocation.y());
+        assert!(card.grab_focus());
+        page.show_week(refreshed);
+        drain();
+        assert_eq!(
+            &imp.all_day.event_cards()[1].1,
+            card,
+            "the live spanning card is reused"
+        );
+        assert!(card.has_focus(), "repacking retains keyboard focus");
+        assert!(
+            card.width() < allocation.width(),
+            "updated spans change their pixel width"
+        );
+
+        let find_popup = |widget: &gtk::Widget| {
+            let mut child = widget.first_child();
+            while let Some(widget) = child {
+                if let Some(popup) = widget.downcast_ref::<crate::view::details::EventDetails>() {
+                    return Some(popup.clone());
+                }
+                child = widget.next_sibling();
+            }
+            None
+        };
+        card.emit_clicked();
+        drain();
+        let strip_popup = find_popup(imp.all_day.upcast_ref()).unwrap();
+        assert!(strip_popup.is_mapped());
+        imp.timed.event_cards()[0].1.emit_clicked();
+        drain();
+        assert!(
+            !strip_popup.is_visible(),
+            "opening timed details closes strip details"
+        );
+        assert!(strip_popup.parent().is_none());
+        let timed_popup = find_popup(imp.timed.upcast_ref()).unwrap();
+        assert!(timed_popup.is_mapped());
+        card.emit_clicked();
+        drain();
+        assert!(
+            !timed_popup.is_visible(),
+            "opening strip details closes timed details"
+        );
+        assert!(timed_popup.parent().is_none());
+        page.dismiss_popovers();
+        drain();
+        assert!(find_popup(imp.all_day.upcast_ref()).is_none());
+        window.close();
+        drain();
+    }
 
     #[test]
     fn arrows_enter_events_from_non_event_focus_and_stop_at_boundaries() {
@@ -490,25 +538,5 @@ mod tests {
         assert_eq!(event_focus_index(3, Some(0), false), None);
         assert_eq!(event_focus_index(0, None, true), None);
         assert_eq!(event_focus_index(0, None, false), None);
-    }
-
-    #[test]
-    fn missing_profile_reports_expected_path_but_explicit_empty_profile_loads() {
-        let tmp = tempfile::tempdir().unwrap();
-        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
-        let error = load_local_state(xdg.clone())
-            .err()
-            .expect("missing profile must fail");
-        assert!(
-            error
-                .to_string()
-                .contains(&tmp.path().join("settings.toml").display().to_string())
-        );
-        let settings = eventix_state::Settings::new(tmp.path().join("settings.toml"));
-        settings.write_to_file().unwrap();
-        let before = fs::read(tmp.path().join("settings.toml")).unwrap();
-        let state = load_local_state(xdg).unwrap();
-        assert!(state.store().directories().is_empty());
-        assert_eq!(fs::read(tmp.path().join("settings.toml")).unwrap(), before);
     }
 }

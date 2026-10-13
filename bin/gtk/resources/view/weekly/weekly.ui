@@ -130,8 +130,7 @@
                 <property name="max-content-height">120</property>
                 <property name="propagate-natural-height">true</property>
                 <property name="child">
-                  <object class="EventixWeekTimeline" id="all_day">
-                    <property name="all-day">true</property>
+                   <object class="EventixAllDayStrip" id="all_day">
                     <property name="hexpand">true</property>
                     <property name="overflow">hidden</property>
                   </object>
@@ -145,7 +144,7 @@
                 <property name="vscrollbar-policy">always</property>
                 <property name="overlay-scrolling">false</property>
                 <property name="child">
-                  <object class="EventixWeekTimeline" id="timed">
+                   <object class="EventixTimedGrid" id="timed">
                     <property name="hexpand">true</property>
                     <property name="overflow">hidden</property>
                   </object>

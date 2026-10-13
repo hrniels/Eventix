@@ -2,6 +2,31 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/// Assigns rows to half-open day ranges, returning placements in input order.
+///
+/// Adjacent spans share a row. Earlier starts are placed first, with longer spans first at
+/// equal starts. Input order breaks remaining ties, so callers should supply a stable order.
+pub fn rows(intervals: &[(usize, usize)]) -> Vec<usize> {
+    let mut order: Vec<_> = (0..intervals.len()).collect();
+    order.sort_by_key(|&i| (intervals[i].0, std::cmp::Reverse(intervals[i].1), i));
+    let mut ends = Vec::new();
+    let mut result = vec![0; intervals.len()];
+    for i in order {
+        let (start, end) = intervals[i];
+        let row = ends
+            .iter()
+            .position(|&end| end <= start)
+            .unwrap_or(ends.len());
+        if row == ends.len() {
+            ends.push(end);
+        } else {
+            ends[row] = end;
+        }
+        result[i] = row;
+    }
+    result
+}
+
 /// Horizontal placement within a group of overlapping events.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Columns {
@@ -67,7 +92,16 @@ fn place_group(group: &[usize], intervals: &[(i64, i64)], result: &mut [Columns]
 
 #[cfg(test)]
 mod tests {
-    use super::columns;
+    use super::{columns, rows};
+
+    #[test]
+    fn span_rows_reuse_adjacency_and_prefer_longer_spans() {
+        assert_eq!(
+            rows(&[(2, 4), (0, 2), (0, 5), (4, 7), (1, 3)]),
+            [1, 1, 0, 1, 2]
+        );
+        assert!(rows(&[]).is_empty());
+    }
 
     #[test]
     fn adjacency_and_unsorted_bridge() {

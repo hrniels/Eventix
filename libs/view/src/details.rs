@@ -255,7 +255,7 @@ mod tests {
         state.store_mut().add(dir);
         let week =
             WeekSnapshot::load(&state, NaiveDate::from_ymd_opt(2026, 10, 5).unwrap()).unwrap();
-        week.days[0].timed[0].details.clone()
+        week.days[0].timed[0].event.details.clone()
     }
 
     const INVITATION: &str = concat!(
