@@ -503,11 +503,6 @@ impl Timeline {
                     if closed.is_visible() {
                         return;
                     }
-                    if closed.take_presentation_failure()
-                        && timeline.retry_details_centered(&closed)
-                    {
-                        return;
-                    }
                     timeline.imp().popover.take();
                     timeline.imp().anchor.take();
                 }
@@ -532,7 +527,6 @@ impl Timeline {
         // to the monitor. Once it rejects an anchored placement, stay centered for this popup.
         self.imp().details_force_centered.set(true);
         self.imp().details_centered.set(true);
-        popover.take_presentation_failure();
         self.place_details(popover);
         popover.popup();
         self.check_details_mapping(popover);

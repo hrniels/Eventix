@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::Cell, sync::LazyLock};
+use std::sync::LazyLock;
 
 use eventix_locale::Locale;
 use eventix_view::{
@@ -20,7 +20,6 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/hrniels/Eventix/gtk/event_details.ui")]
     pub struct EventDetails {
-        pub(super) presentation_failed: Cell<bool>,
         #[template_child]
         pub summary: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -57,29 +56,7 @@ mod imp {
             self.dispose_template();
         }
     }
-    impl WidgetImpl for EventDetails {
-        fn realize(&self) {
-            self.parent_realize();
-            let obj = self.obj();
-            if let Some(surface) = obj.surface() {
-                let weak = obj.downgrade();
-                surface.connect_layout(move |_, width, height| {
-                    let Some(popover) = weak.upgrade() else {
-                        return;
-                    };
-                    let imp = popover.imp();
-                    let minimum_width = imp.parent_measure(gtk::Orientation::Horizontal, -1).0;
-                    if width < minimum_width
-                        || height < imp.parent_measure(gtk::Orientation::Vertical, width).0
-                    {
-                        // GTK can emit `closed` before this layout handler runs. The owner
-                        // checks this flag after GTK has finished processing the signal.
-                        imp.presentation_failed.set(true);
-                    }
-                });
-            }
-        }
-    }
+    impl WidgetImpl for EventDetails {}
     impl PopoverImpl for EventDetails {}
 }
 
@@ -91,11 +68,6 @@ glib::wrapper! {
 }
 
 impl EventDetails {
-    /// Returns and clears whether GTK rejected a popup allocation.
-    pub(crate) fn take_presentation_failure(&self) -> bool {
-        self.imp().presentation_failed.replace(false)
-    }
-
     /// Measures the natural width and minimum height needed for anchored placement.
     pub(crate) fn placement_size(&self) -> (i32, i32) {
         // GtkWidget::measure returns zero for a hidden popover. Calling the parent's measure
