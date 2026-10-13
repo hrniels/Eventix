@@ -14,10 +14,11 @@ use eventix_locale::{DateFlags, Locale};
 use eventix_view::WeekSnapshot;
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
-use crate::{
-    style,
+use super::{
+    card::EventCard,
     timeline::{GUTTER, Timeline},
 };
+use crate::style;
 
 /// Loads an existing local profile, reporting missing settings instead of an empty calendar.
 fn load_local_state(xdg: Arc<xdg::BaseDirectories>) -> anyhow::Result<eventix_state::State> {
@@ -47,7 +48,7 @@ mod imp {
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/week_page.ui")]
+    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/weekly/weekly.ui")]
     pub struct WeekPage {
         #[template_child]
         pub title: gtk::TemplateChild<gtk::Label>,
@@ -217,7 +218,7 @@ impl WeekPage {
         }
     }
 
-    pub fn focus_event(&self, current: Option<&crate::event_card::EventCard>, forward: bool) {
+    pub fn focus_event(&self, current: Option<&EventCard>, forward: bool) {
         let imp = self.imp();
         let mut cards = imp.timed.event_cards();
         cards.extend(imp.all_day.event_cards());

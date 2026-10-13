@@ -14,7 +14,7 @@ mod imp {
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/event_card.ui")]
+    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/weekly/card.ui")]
     pub struct EventCard {
         #[template_child]
         pub text: gtk::TemplateChild<gtk::Label>,

@@ -18,7 +18,7 @@ mod imp {
     use super::*;
 
     #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/event_details.ui")]
+    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/details/details.ui")]
     pub struct EventDetails {
         #[template_child]
         pub summary: gtk::TemplateChild<gtk::Label>,
@@ -151,7 +151,7 @@ impl EventDetails {
         let details = &event.details;
 
         let scrollers =
-            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/detail_scrollers.ui");
+            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/details/scrollers.ui");
         let attendees_scroll: gtk::ScrolledWindow = scrollers
             .object("attendees_scroll")
             .expect("attendee detail scroller is defined in GTK resources");
@@ -681,7 +681,7 @@ mod tests {
                     &colors,
                     gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
                 );
-                let anchor: crate::timeline::Timeline = gtk::glib::Object::builder()
+                let anchor: crate::view::weekly::timeline::Timeline = gtk::glib::Object::builder()
                     .property("all-day", !full)
                     .build();
                 anchor.set_week(week);

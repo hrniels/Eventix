@@ -2,11 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-mod event_card;
-mod event_details;
 mod style;
-mod timeline;
-mod week_page;
+mod view;
 mod window;
 
 use chrono::NaiveDate;

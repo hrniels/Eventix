@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/io/github/hrniels/Eventix/gtk">
-    <file>event_card.ui</file>
-    <file>event_details.ui</file>
-    <file>detail_scrollers.ui</file>
+    <file>view/weekly/card.ui</file>
+    <file>view/details/details.ui</file>
+    <file>view/details/scrollers.ui</file>
     <file>icons/LICENSE</file>
     <file>icons/alarm-symbolic.svg</file>
     <file>icons/arrow-clockwise-symbolic.svg</file>
@@ -32,7 +32,7 @@
     <file>icons/trash-symbolic.svg</file>
     <file>icons/x-lg-symbolic.svg</file>
     <file>style.css</file>
-    <file>week_page.ui</file>
+    <file>view/weekly/weekly.ui</file>
     <file>window.ui</file>
   </gresource>
 </gresources>

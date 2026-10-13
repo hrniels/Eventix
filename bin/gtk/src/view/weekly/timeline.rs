@@ -11,7 +11,8 @@ use chrono::{Timelike, Utc};
 use eventix_view::{Event, WeekSnapshot};
 use gtk::{gdk, glib, graphene, prelude::*, subclass::prelude::*};
 
-use crate::{event_card::EventCard, event_details::EventDetails, style};
+use super::card::EventCard;
+use crate::{style, view::details::EventDetails};
 
 pub const GUTTER: i32 = 64;
 const ROW: i32 = 30;

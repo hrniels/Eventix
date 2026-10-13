@@ -5,7 +5,10 @@
 use chrono::NaiveDate;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
-use crate::{event_card::EventCard, event_details::EventDetails, week_page::WeekPage};
+use crate::view::{
+    details::EventDetails,
+    weekly::{card::EventCard, weekly::WeekPage},
+};
 
 mod imp {
     use super::*;
