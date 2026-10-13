@@ -42,8 +42,9 @@ mod imp {
         pub days: RefCell<Vec<gtk::Label>>,
         pub weeks: RefCell<Vec<gtk::Button>>,
         pub scrollers: RefCell<Vec<gtk::ScrolledWindow>>,
+        pub rows: RefCell<Vec<gtk::Overlay>>,
+        pub scroll_fades: RefCell<Vec<(gtk::Box, gtk::Box)>>,
         pub(super) contents: RefCell<Vec<WeekContent>>,
-        pub scrollbars: RefCell<Vec<gtk::Scrollbar>>,
     }
 
     #[glib::object_subclass]
@@ -63,8 +64,9 @@ mod imp {
             self.days.take();
             self.weeks.take();
             self.scrollers.take();
+            self.rows.take();
+            self.scroll_fades.take();
             self.contents.take();
-            self.scrollbars.take();
         }
     }
 
@@ -83,7 +85,6 @@ mod imp {
             if self.month.borrow().is_none() {
                 return;
             }
-            let rows = obj.allocated_rows(height);
             let allocate = |widget: &gtk::Widget, x: i32, y: i32, w: i32, h: i32| {
                 widget.measure(gtk::Orientation::Horizontal, -1);
                 widget.measure(gtk::Orientation::Vertical, w);
@@ -101,10 +102,10 @@ mod imp {
                 );
             }
             let mut y = HEADER;
-            let scrollers = self.scrollers.borrow();
+            let rows = self.rows.borrow();
             let labels = self.days.borrow();
             let weeks = self.weeks.borrow();
-            for (row, row_height) in rows.into_iter().enumerate() {
+            for (row, row_height) in obj.allocated_rows(height).into_iter().enumerate() {
                 allocate(
                     weeks[row].upcast_ref(),
                     GAP,
@@ -113,24 +114,12 @@ mod imp {
                     HEADER,
                 );
                 allocate(
-                    scrollers[row].upcast_ref(),
+                    rows[row].upcast_ref(),
                     GUTTER,
                     y + HEADER,
                     width - GUTTER,
                     row_height - HEADER - GAP,
                 );
-                let scrollbars = self.scrollbars.borrow();
-                let scrollbar = &scrollbars[row];
-                if scrollbar.is_visible() {
-                    let w = scrollbar.measure(gtk::Orientation::Horizontal, -1).1;
-                    allocate(
-                        scrollbar.upcast_ref(),
-                        GUTTER - GAP - w,
-                        y + HEADER,
-                        w,
-                        row_height - HEADER - GAP,
-                    );
-                }
                 for col in 0..7 {
                     let index = row * 7 + col;
                     let left = day_x(width, col as f64).round() as i32;
@@ -206,13 +195,8 @@ mod imp {
             for button in self.weeks.borrow().iter() {
                 obj.snapshot_child(button, snapshot);
             }
-            for scroller in self.scrollers.borrow().iter() {
-                obj.snapshot_child(scroller, snapshot);
-            }
-            for scrollbar in self.scrollbars.borrow().iter() {
-                if scrollbar.is_visible() {
-                    obj.snapshot_child(scrollbar, snapshot);
-                }
+            for row in self.rows.borrow().iter() {
+                obj.snapshot_child(row, snapshot);
             }
         }
     }
@@ -270,13 +254,15 @@ impl MonthGrid {
             for button in imp.weeks.take() {
                 button.unparent();
             }
-            for scroller in imp.scrollers.take() {
-                scroller.unparent();
+            for row in imp.rows.take() {
+                row.unparent();
+            }
+            imp.scrollers.take();
+            for (top, bottom) in imp.scroll_fades.take() {
+                top.unparent();
+                bottom.unparent();
             }
             imp.contents.take();
-            for scrollbar in imp.scrollbars.take() {
-                scrollbar.unparent();
-            }
             for name in WEEKDAYS {
                 let builder = grid_children(&["weekday"]);
                 let label: gtk::Label = builder
@@ -288,7 +274,13 @@ impl MonthGrid {
             }
             for day in &month.days {
                 if day.date.weekday() == chrono::Weekday::Mon {
-                    let builder = grid_children(&["week", "adjustment", "scroll", "scrollbar"]);
+                    let builder = grid_children(&[
+                        "week",
+                        "row",
+                        "scroll",
+                        "scroll_top_fade",
+                        "scroll_bottom_fade",
+                    ]);
                     let button: gtk::Button = builder
                         .object("week")
                         .expect("week button is defined in GTK resources");
@@ -303,19 +295,37 @@ impl MonthGrid {
                     let scroll: gtk::ScrolledWindow = builder
                         .object("scroll")
                         .expect("week scroller is defined in GTK resources");
-                    let scrollbar: gtk::Scrollbar = builder
-                        .object("scrollbar")
-                        .expect("week scrollbar is defined in GTK resources");
-                    let weak = scrollbar.downgrade();
-                    scroll.vadjustment().connect_changed(move |adjustment| {
-                        if let Some(scrollbar) = weak.upgrade() {
-                            scrollbar.set_visible(adjustment.upper() > adjustment.page_size());
+                    let row_widget: gtk::Overlay = builder
+                        .object("row")
+                        .expect("week row is defined in GTK resources");
+                    let top_fade: gtk::Box = builder
+                        .object("scroll_top_fade")
+                        .expect("week top scroll fade is defined in GTK resources");
+                    let bottom_fade: gtk::Box = builder
+                        .object("scroll_bottom_fade")
+                        .expect("week bottom scroll fade is defined in GTK resources");
+                    let update_fades = {
+                        let top_fade = top_fade.downgrade();
+                        let bottom_fade = bottom_fade.downgrade();
+                        move |adjustment: &gtk::Adjustment| {
+                            let at_top = adjustment.value() <= adjustment.lower();
+                            let at_bottom =
+                                adjustment.value() + adjustment.page_size() >= adjustment.upper();
+                            if let Some(fade) = top_fade.upgrade() {
+                                fade.set_visible(!at_top);
+                            }
+                            if let Some(fade) = bottom_fade.upgrade() {
+                                fade.set_visible(!at_bottom);
+                            }
                         }
-                    });
-                    scrollbar.set_parent(self);
-                    scroll.set_parent(self);
-                    imp.scrollbars.borrow_mut().push(scrollbar);
+                    };
+                    let adjustment = scroll.vadjustment();
+                    adjustment.connect_changed(update_fades.clone());
+                    adjustment.connect_value_changed(update_fades);
+                    row_widget.set_parent(self);
+                    imp.rows.borrow_mut().push(row_widget);
                     imp.scrollers.borrow_mut().push(scroll);
+                    imp.scroll_fades.borrow_mut().push((top_fade, bottom_fade));
                     imp.contents.borrow_mut().push(content);
                 }
                 let builder = grid_children(&["day"]);

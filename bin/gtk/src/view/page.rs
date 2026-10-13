@@ -181,10 +181,6 @@ impl CalendarPage {
             .set_tooltip_text(Some(locale.translate("Reload local calendars")));
         imp.picker
             .set_tooltip_text(Some(locale.translate("Choose date")));
-        imp.weekly
-            .imp()
-            .all_day_label
-            .set_text(locale.translate("All day"));
     }
 
     pub fn request(&self, date: Option<NaiveDate>, reload: bool) {

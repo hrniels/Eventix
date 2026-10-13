@@ -58,33 +58,57 @@
       </object>
     </child>
     <child>
-      <object class="GtkLabel" id="all_day_label">
-        <property name="xalign">0</property>
-        <style><class name="ev_all_day_label"/></style>
+      <object class="GtkOverlay">
+        <property name="hexpand">true</property>
+        <child>
+          <object class="GtkScrolledWindow" id="all_day_scroll">
+            <property name="hscrollbar-policy">never</property>
+            <property name="vscrollbar-policy">automatic</property>
+            <property name="overlay-scrolling">true</property>
+            <property name="min-content-height">30</property>
+            <property name="max-content-height">60</property>
+            <property name="propagate-natural-height">true</property>
+            <property name="child">
+              <object class="EventixAllDayStrip" id="all_day">
+                <property name="hexpand">true</property>
+                <property name="overflow">hidden</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child type="overlay">
+          <object class="GtkBox" id="all_day_top_fade">
+            <property name="height-request">16</property>
+            <property name="valign">start</property>
+            <property name="hexpand">true</property>
+            <property name="can-target">false</property>
+            <property name="visible">false</property>
+            <style><class name="ev_scroll_fade_top"/></style>
+          </object>
+        </child>
+        <child type="overlay">
+          <object class="GtkBox" id="all_day_bottom_fade">
+            <property name="height-request">16</property>
+            <property name="valign">end</property>
+            <property name="hexpand">true</property>
+            <property name="can-target">false</property>
+            <property name="visible">false</property>
+            <style><class name="ev_scroll_fade_bottom"/></style>
+          </object>
+        </child>
       </object>
     </child>
     <child>
-      <object class="GtkScrolledWindow">
-        <property name="hscrollbar-policy">never</property>
-        <property name="vscrollbar-policy">always</property>
-        <property name="overlay-scrolling">false</property>
-        <property name="min-content-height">30</property>
-        <property name="max-content-height">120</property>
-        <property name="propagate-natural-height">true</property>
-        <property name="child">
-          <object class="EventixAllDayStrip" id="all_day">
-            <property name="hexpand">true</property>
-            <property name="overflow">hidden</property>
-          </object>
-        </property>
+      <object class="GtkSeparator">
+        <style><class name="ev_week_separator"/></style>
       </object>
     </child>
     <child>
       <object class="GtkScrolledWindow" id="scroll">
         <property name="vexpand">true</property>
         <property name="hscrollbar-policy">never</property>
-        <property name="vscrollbar-policy">always</property>
-        <property name="overlay-scrolling">false</property>
+        <property name="vscrollbar-policy">automatic</property>
+        <property name="overlay-scrolling">true</property>
         <property name="child">
           <object class="EventixTimedGrid" id="timed">
             <property name="hexpand">true</property>

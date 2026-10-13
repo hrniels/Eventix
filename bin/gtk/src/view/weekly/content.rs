@@ -32,13 +32,17 @@ pub(crate) mod imp {
         #[template_child]
         pub sunday: gtk::TemplateChild<gtk::Label>,
         #[template_child]
+        pub all_day_scroll: gtk::TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub all_day_top_fade: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub all_day_bottom_fade: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
         pub scroll: gtk::TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
         pub timed: gtk::TemplateChild<TimedGrid>,
         #[template_child]
         pub all_day: gtk::TemplateChild<AllDayStrip>,
-        #[template_child]
-        pub all_day_label: gtk::TemplateChild<gtk::Label>,
     }
 
     #[glib::object_subclass]
@@ -68,6 +72,21 @@ pub(crate) mod imp {
                     .measure(gtk::Orientation::Horizontal, -1)
                     .1,
             );
+            let top_fade = self.all_day_top_fade.downgrade();
+            let bottom_fade = self.all_day_bottom_fade.downgrade();
+            let update_fades = move |adjustment: &gtk::Adjustment| {
+                let at_top = adjustment.value() <= adjustment.lower();
+                let at_bottom = adjustment.value() + adjustment.page_size() >= adjustment.upper();
+                if let Some(fade) = top_fade.upgrade() {
+                    fade.set_visible(!at_top);
+                }
+                if let Some(fade) = bottom_fade.upgrade() {
+                    fade.set_visible(!at_bottom);
+                }
+            };
+            let adjustment = self.all_day_scroll.vadjustment();
+            adjustment.connect_changed(update_fades.clone());
+            adjustment.connect_value_changed(update_fades);
         }
 
         fn dispose(&self) {

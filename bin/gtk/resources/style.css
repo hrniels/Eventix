@@ -23,8 +23,9 @@
     color: @theme_selected_bg_color;
 }
 
-.ev_all_day_label {
-    padding-left: 8px;
+.ev_week_separator {
+    margin: 4px 0;
+    opacity: 0.6;
 }
 
 .ev_calendar_status {
@@ -57,6 +58,14 @@ button.ev_month_week_number {
     border: none;
     background: transparent;
     box-shadow: none;
+}
+
+.ev_scroll_fade_top {
+    background: linear-gradient(to top, alpha(@theme_bg_color, 0), alpha(@theme_bg_color, 0.55));
+}
+
+.ev_scroll_fade_bottom {
+    background: linear-gradient(to bottom, alpha(@theme_bg_color, 0), alpha(@theme_bg_color, 0.55));
 }
 
 button.ev_event {
