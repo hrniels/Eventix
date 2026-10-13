@@ -18,6 +18,14 @@ mod imp {
     pub struct EventCard {
         #[template_child]
         pub text: gtk::TemplateChild<gtk::Label>,
+        #[template_child]
+        pub indicators: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub recurrence: gtk::TemplateChild<gtk::Image>,
+        #[template_child]
+        pub exception: gtk::TemplateChild<gtk::Image>,
+        #[template_child]
+        pub alarm: gtk::TemplateChild<gtk::Image>,
         pub color_class: RefCell<String>,
         pub event: RefCell<Option<Event>>,
     }
@@ -98,20 +106,20 @@ impl EventCard {
         .collect::<Vec<_>>()
         .join(" · ");
         let tooltip = format!("{summary}\n{time}\n{}\n{indicators}", event.calendar);
-        let glyphs = format!(
-            "{}{}{}",
-            if event.recurrent { "↻ " } else { "" },
-            if event.exception { "* " } else { "" },
-            if event.alarm { "◷ " } else { "" }
-        );
         let text = if strip {
-            format!("{glyphs}{summary}")
+            summary.to_owned()
         } else if event.minute_end.saturating_sub(event.minute_start) < 38 {
-            format!("{glyphs}{summary} · {time}")
+            format!("{summary} · {time}")
         } else {
-            format!("{glyphs}{summary}\n{time}")
+            format!("{summary}\n{time}")
         };
         self.imp().text.set_text(&text);
+        self.imp().recurrence.set_visible(event.recurrent);
+        self.imp().exception.set_visible(event.exception);
+        self.imp().alarm.set_visible(event.alarm);
+        self.imp()
+            .indicators
+            .set_visible(event.recurrent || event.exception || event.alarm);
         self.set_tooltip_text(Some(&tooltip));
         self.update_property(&[gtk::accessible::Property::Label(&tooltip)]);
         if event.cancelled {
