@@ -4,10 +4,13 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use chrono::{Duration, NaiveDate, NaiveDateTime, Timelike, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Timelike, Utc};
+use chrono_tz::Tz;
+use eventix_locale::TimeFlags;
 use eventix_view::WeekSnapshot;
-use gtk::{glib, prelude::*, subclass::prelude::*};
+use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
+use crate::actions::items::move_event::DraggedEvent;
 use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, draw_text, rect};
 use crate::{
     style,
@@ -25,6 +28,7 @@ mod imp {
     pub struct TimedGrid {
         pub(super) surface: Rc<Surface>,
         pub week: RefCell<Option<Rc<WeekSnapshot>>>,
+        pub(super) drop_preview: RefCell<Option<(DateTime<Tz>, DateTime<Tz>)>>,
     }
 
     #[glib::object_subclass]
@@ -53,6 +57,7 @@ mod imp {
         }
 
         fn unmap(&self) {
+            self.obj().clear_drop_preview();
             self.surface.unmap();
             self.parent_unmap();
         }
@@ -200,6 +205,7 @@ mod imp {
                     );
                 }
             }
+            obj.snapshot_drop_preview(snapshot);
         }
     }
 }
@@ -211,6 +217,84 @@ glib::wrapper! {
 }
 
 impl TimedGrid {
+    fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
+        let preview = self.imp().drop_preview.borrow();
+        let week = self.imp().week.borrow();
+        let (Some((start, end)), Some(week)) = (preview.as_ref(), week.as_ref()) else {
+            return;
+        };
+        for (i, day) in week.days.iter().enumerate() {
+            let Some((y, height)) =
+                preview_bounds(day.date, start.naive_local(), end.naive_local())
+            else {
+                continue;
+            };
+            let x = day_x(self.width(), i as f64) as f32 + 2.0;
+            let w = (self.width() - GUTTER) as f32 / 7.0 - 4.0;
+            let border = style::color(self, "ev_drop_border");
+            rect(
+                snapshot,
+                &style::color(self, "ev_drop_background"),
+                x,
+                y,
+                w,
+                height,
+            );
+            rect(snapshot, &border, x, y, w, 2.0);
+            rect(snapshot, &border, x, y + height - 2.0, w, 2.0);
+            rect(snapshot, &border, x, y, 2.0, height);
+            rect(snapshot, &border, x + w - 2.0, y, 2.0, height);
+            let text = format!(
+                "{}{}–{}{}",
+                if start.date_naive() < day.date {
+                    "← "
+                } else {
+                    ""
+                },
+                week.locale.fmt_time(start, TimeFlags::Short),
+                week.locale.fmt_time(end, TimeFlags::Short),
+                if end.date_naive() > day.date {
+                    " →"
+                } else {
+                    ""
+                },
+            );
+            let layout = self.create_pango_layout(Some(&text));
+            layout.set_width(((w - 8.0).max(0.0) * gtk::pango::SCALE as f32) as i32);
+            layout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            snapshot.save();
+            snapshot.push_clip(&graphene::Rect::new(x, y, w, height));
+            snapshot.translate(&graphene::Point::new(x + 4.0, y + 2.0));
+            snapshot.append_layout(&layout, &style::color(self, "ev_drop_text"));
+            snapshot.pop();
+            snapshot.restore();
+        }
+    }
+
+    pub(crate) fn set_drop_preview(&self, payload: &DraggedEvent, x: f64, y: f64) -> bool {
+        let Some(start) = self.drop_start(x, y, payload.offset_minutes) else {
+            return false;
+        };
+        let week = self.imp().week.borrow();
+        let Some(range) = week
+            .as_ref()
+            .and_then(|week| payload.preview_range(start, week.locale.timezone()))
+        else {
+            return false;
+        };
+        if self.imp().drop_preview.borrow().as_ref() != Some(&range) {
+            self.imp().drop_preview.replace(Some(range));
+            self.queue_draw();
+        }
+        true
+    }
+
+    pub(crate) fn clear_drop_preview(&self) {
+        if self.imp().drop_preview.take().is_some() {
+            self.queue_draw();
+        }
+    }
+
     pub(crate) fn drop_start(&self, x: f64, y: f64, offset: i64) -> Option<NaiveDateTime> {
         let week = self.imp().week.borrow();
         drop_start(week.as_ref()?.start, self.width(), x, y, offset)
@@ -225,6 +309,7 @@ impl TimedGrid {
     }
 
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
+        self.clear_drop_preview();
         let surface = &self.imp().surface;
         let keys = week
             .days
@@ -244,6 +329,19 @@ impl TimedGrid {
         self.imp().week.replace(Some(week));
         self.queue_resize();
     }
+}
+
+/// Clips a destination to one day, retaining the cards' minimum visible height.
+fn preview_bounds(date: NaiveDate, start: NaiveDateTime, end: NaiveDateTime) -> Option<(f32, f32)> {
+    let midnight = date.and_hms_opt(0, 0, 0)?;
+    let next = midnight.checked_add_signed(Duration::days(1))?;
+    if start >= next || end < midnight || (end == midnight && start < midnight) {
+        return None;
+    }
+    let y = (start.max(midnight) - midnight).num_seconds() as f32 / 60.0;
+    let bottom = (end.min(next) - midnight).num_seconds() as f32 / 60.0;
+    let y = y.min(1422.0);
+    Some((y + 1.0, (bottom - y).max(18.0).min(1440.0 - y) - 2.0))
 }
 
 /// Snaps the occurrence start to quarter hours, retaining the grabbed segment's offset.
@@ -267,7 +365,28 @@ fn drop_start(start: NaiveDate, width: i32, x: f64, y: f64, offset: i64) -> Opti
 
 #[cfg(test)]
 mod tests {
-    use super::{GUTTER, drop_start};
+    use super::{GUTTER, drop_start, preview_bounds};
+
+    #[test]
+    fn preview_clips_multiday_events_and_excludes_an_exclusive_midnight_end() {
+        let start = "2026-10-13T23:00:00".parse().unwrap();
+        let end = "2026-10-15T00:00:00".parse().unwrap();
+        for (date, expected) in [
+            ("2026-10-12", None),
+            ("2026-10-13", Some((1381.0, 58.0))),
+            ("2026-10-14", Some((1.0, 1438.0))),
+            ("2026-10-15", None),
+        ] {
+            assert_eq!(preview_bounds(date.parse().unwrap(), start, end), expected);
+        }
+    }
+
+    #[test]
+    fn preview_keeps_short_events_visible_at_the_end_of_the_day() {
+        let date = "2026-10-14".parse().unwrap();
+        let start = "2026-10-14T23:59:00".parse().unwrap();
+        assert_eq!(preview_bounds(date, start, start), Some((1423.0, 16.0)));
+    }
 
     #[test]
     fn drop_coordinates_snap_start_and_preserve_the_grabbed_segment_offset() {
