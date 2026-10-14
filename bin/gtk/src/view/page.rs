@@ -10,17 +10,15 @@ use std::{
 
 use chrono::{Datelike, NaiveDate, Utc};
 use eventix_locale::{DateFlags, Locale};
+use eventix_state::actions::Command;
 use eventix_view::{MonthSnapshot, WeekSnapshot, shift_month};
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use super::{
-    card::EventCard,
-    loader::{CalendarLoader, Request, Response, Snapshot, View},
-    monthly::grid::MonthGrid,
-    popover::DetailsController,
-    sidebar::Sidebar,
+    card::EventCard, monthly::grid::MonthGrid, popover::DetailsController, sidebar::Sidebar,
     weekly::content::WeekContent,
 };
+use crate::model::session::{CalendarSession, Event, Request, Response, Snapshot, View};
 use crate::style;
 
 mod imp {
@@ -68,7 +66,9 @@ mod imp {
         #[template_child]
         pub calendar: gtk::TemplateChild<gtk::Calendar>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
-        pub(super) loader: RefCell<Option<CalendarLoader>>,
+        pub(super) session: RefCell<Option<CalendarSession>>,
+        pub revision: Cell<u64>,
+        pub pending_command: Cell<bool>,
         pub generation: Cell<u64>,
         pub date: Cell<Option<NaiveDate>>,
         pub displayed: Cell<Option<NaiveDate>>,
@@ -210,8 +210,8 @@ impl CalendarPage {
         imp.loading.set(true);
         imp.status
             .set_text(self.locale().translate("Loading calendar…"));
-        if let Some(loader) = imp.loader.borrow().as_ref() {
-            loader.request(Request {
+        if let Some(session) = imp.session.borrow().as_ref() {
+            session.request(Request {
                 generation,
                 date,
                 reload,
@@ -284,6 +284,28 @@ impl CalendarPage {
 
     pub fn reload(&self) {
         self.request(self.imp().date.get(), true);
+    }
+
+    pub(crate) fn can_edit(&self) -> bool {
+        !self.imp().loading.get()
+            && !self.imp().pending_command.get()
+            && self.imp().session.borrow().is_some()
+    }
+
+    pub(crate) fn execute_command(&self, command: Command) -> bool {
+        if !self.can_edit() {
+            return false;
+        }
+        let imp = self.imp();
+        if let Some(session) = imp.session.borrow().as_ref() {
+            imp.pending_command.set(true);
+            imp.status
+                .set_text(self.locale().translate("Applying changes…"));
+            session.execute(command);
+            true
+        } else {
+            false
+        }
     }
 
     fn switch_view(&self, view: View) {
@@ -381,7 +403,7 @@ impl CalendarPage {
         imp.status.set_text(month.locale.translate(if empty {
             "No events this month"
         } else {
-            "Read-only · Local calendars"
+            "Local calendars"
         }));
         self.update_picker();
         if imp.displayed.replace(Some(month.month)) != Some(month.month) {
@@ -419,7 +441,7 @@ impl CalendarPage {
         imp.status.set_text(locale.translate(if empty {
             "No events this week"
         } else {
-            "Read-only · Local calendars"
+            "Local calendars"
         }));
         self.update_picker();
         let reset_scroll = imp.displayed.replace(Some(week.start)) != Some(week.start);
@@ -479,8 +501,8 @@ impl CalendarPage {
     }
 
     pub fn start(&self, prefix: String, date: Option<NaiveDate>) {
-        let (loader, responses) = CalendarLoader::start(prefix);
-        self.imp().loader.replace(Some(loader));
+        let (session, responses) = CalendarSession::start(prefix);
+        self.imp().session.replace(Some(session));
         let provider = gtk::CssProvider::new();
         let display = self.display();
         gtk::style_context_add_provider_for_display(
@@ -497,9 +519,11 @@ impl CalendarPage {
             page.update_today();
             let imp = page.imp();
             if !imp.loading.get()
-                && let Some(loader) = imp.loader.borrow().as_ref()
+                && !imp.pending_command.get()
+                && let Some(session) = imp.session.borrow().as_ref()
             {
-                loader.request(Request {
+                tracing::debug!("updating sidebar");
+                session.request(Request {
                     generation: imp.generation.get(),
                     date: imp.date.get(),
                     reload: false,
@@ -515,10 +539,28 @@ impl CalendarPage {
         glib::MainContext::default().spawn_local(async move {
             while let Ok(response) = responses.recv().await {
                 let Some(page) = weak.upgrade() else { break };
-                if page.imp().loader.borrow().is_none() {
+                if page.imp().session.borrow().is_none() {
                     break;
                 }
-                page.receive_response(response);
+                match response {
+                    Event::Loaded(response) => page.receive_response(response),
+                    Event::Changed(change) => {
+                        page.imp().pending_command.set(false);
+                        page.imp().revision.set(change.revision);
+                        if !change.items.is_empty()
+                            && let Some(session) = page.imp().session.borrow().as_ref()
+                        {
+                            session.refresh(change.affected);
+                        }
+                    }
+                    Event::CommandFailed(error) => {
+                        page.imp().pending_command.set(false);
+                        page.imp().status.set_text(&format!(
+                            "{}\n{error}",
+                            page.locale().translate("Could not apply changes")
+                        ));
+                    }
+                }
             }
         });
     }
@@ -563,7 +605,7 @@ impl CalendarPage {
     }
 
     pub fn stop(&self) {
-        self.imp().loader.take();
+        self.imp().session.take();
         self.dismiss_popovers();
         if let Some(timer) = self.imp().timer.take() {
             timer.remove();
@@ -1279,7 +1321,7 @@ pub(crate) mod tests {
         drain();
         assert_eq!(
             imp.status.text(),
-            week.locale.translate("Read-only · Local calendars"),
+            week.locale.translate("Local calendars"),
             "a month containing only spans is not empty"
         );
         assert!(

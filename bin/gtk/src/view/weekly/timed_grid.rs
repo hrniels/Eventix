@@ -4,7 +4,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use chrono::{Timelike, Utc};
+use chrono::{Duration, NaiveDate, NaiveDateTime, Timelike, Utc};
 use eventix_view::WeekSnapshot;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
@@ -38,6 +38,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
+            crate::actions::items::move_event::install_target(&self.obj());
         }
 
         fn dispose(&self) {
@@ -210,6 +211,11 @@ glib::wrapper! {
 }
 
 impl TimedGrid {
+    pub(crate) fn drop_start(&self, x: f64, y: f64, offset: i64) -> Option<NaiveDateTime> {
+        let week = self.imp().week.borrow();
+        drop_start(week.as_ref()?.start, self.width(), x, y, offset)
+    }
+
     pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
         self.imp().surface.details.replace(details);
     }
@@ -237,5 +243,52 @@ impl TimedGrid {
         }
         self.imp().week.replace(Some(week));
         self.queue_resize();
+    }
+}
+
+/// Snaps the occurrence start to quarter hours, retaining the grabbed segment's offset.
+fn drop_start(start: NaiveDate, width: i32, x: f64, y: f64, offset: i64) -> Option<NaiveDateTime> {
+    if width <= GUTTER
+        || !x.is_finite()
+        || !y.is_finite()
+        || x < f64::from(GUTTER)
+        || x >= f64::from(width)
+        || !(0.0..1440.0).contains(&y)
+    {
+        return None;
+    }
+    let day = ((x - f64::from(GUTTER)) * 7.0 / f64::from(width - GUTTER)).floor() as i64;
+    let minute = ((y - offset as f64) / 15.0).round() as i64 * 15;
+    start
+        .and_hms_opt(0, 0, 0)?
+        .checked_add_signed(Duration::days(day))?
+        .checked_add_signed(Duration::minutes(minute))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GUTTER, drop_start};
+
+    #[test]
+    fn drop_coordinates_snap_start_and_preserve_the_grabbed_segment_offset() {
+        let start = "2026-10-12".parse().unwrap();
+        let width = GUTTER + 700;
+        let x = f64::from(GUTTER + 250);
+        assert_eq!(
+            drop_start(start, width, x, 613.0, 10).unwrap().to_string(),
+            "2026-10-14 10:00:00"
+        );
+        assert_eq!(
+            drop_start(start, width, x, 613.0, 1450)
+                .unwrap()
+                .to_string(),
+            "2026-10-13 10:00:00",
+            "a continuation drags the whole occurrence"
+        );
+        assert!(drop_start(start, width, 10.0, 600.0, 0).is_none());
+        assert!(drop_start(start, width, f64::from(width), 600.0, 0).is_none());
+        assert!(drop_start(start, width, x, -1.0, 0).is_none());
+        assert!(drop_start(start, width, x, 1440.0, 0).is_none());
+        assert!(drop_start(start, width, f64::NAN, 600.0, 0).is_none());
     }
 }

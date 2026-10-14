@@ -9,6 +9,9 @@ mod persalarms;
 mod settings;
 mod sync;
 
+/// Toolkit-independent calendar mutations.
+pub mod actions;
+
 /// Utility helpers exposed to other crates and tests.
 pub mod util;
 

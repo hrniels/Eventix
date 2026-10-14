@@ -6,8 +6,10 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
+chrono-tz.workspace = true
 clap.workspace = true
 eventix-locale.workspace = true
+eventix-ical.workspace = true
 eventix-state.workspace = true
 eventix-view.workspace = true
 formatx.workspace = true
@@ -15,6 +17,8 @@ regex.workspace = true
 xdg.workspace = true
 async-channel = "2.5.0"
 gtk = { version = "=0.11.5", package = "gtk4", features = ["v4_10"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [dev-dependencies]
 tempfile.workspace = true

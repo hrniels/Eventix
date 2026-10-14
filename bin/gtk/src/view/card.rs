@@ -8,6 +8,7 @@ use eventix_locale::{Locale, TimeFlags};
 use eventix_view::{AllDaySpan, Event, MonthEvent, TimedEvent};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
+use crate::actions::items::move_event::{self, DraggedEvent};
 use crate::style;
 
 mod imp {
@@ -28,6 +29,7 @@ mod imp {
         pub alarm: gtk::TemplateChild<gtk::Image>,
         pub color_class: RefCell<String>,
         pub event: RefCell<Option<Event>>,
+        pub(super) drag: RefCell<Option<DraggedEvent>>,
     }
 
     #[glib::object_subclass]
@@ -45,6 +47,11 @@ mod imp {
     }
 
     impl ObjectImpl for EventCard {
+        fn constructed(&self) {
+            self.parent_constructed();
+            move_event::install_source(&self.obj());
+        }
+
         fn dispose(&self) {
             self.obj().set_child(None::<&gtk::Widget>);
             self.dispose_template();
@@ -70,6 +77,7 @@ impl EventCard {
     }
 
     pub fn set_span(&self, span: &AllDaySpan, locale: &dyn Locale) {
+        self.imp().drag.take();
         let summary = self.summary(&span.event, locale);
         let text = format!(
             "{}{}{}",
@@ -81,6 +89,7 @@ impl EventCard {
     }
 
     pub fn set_timed(&self, segment: &TimedEvent, locale: &dyn Locale) {
+        self.imp().drag.replace(DraggedEvent::new(segment));
         let event = &segment.event;
         let summary = self.summary(event, locale);
         let time = format!(
@@ -107,6 +116,7 @@ impl EventCard {
     }
 
     pub fn set_monthly(&self, segment: &MonthEvent, locale: &dyn Locale) {
+        self.imp().drag.take();
         let event = &segment.event;
         self.imp()
             .text
@@ -142,6 +152,12 @@ impl EventCard {
         } else {
             &event.summary
         }
+    }
+
+    pub(crate) fn drag_payload(&self, y: f64) -> Option<DraggedEvent> {
+        let mut payload = self.imp().drag.borrow().clone()?;
+        payload.offset_minutes += y.round() as i64;
+        Some(payload)
     }
 
     fn set_event(&self, event: &Event, text: &str) {

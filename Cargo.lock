@@ -875,7 +875,9 @@ dependencies = [
  "anyhow",
  "async-channel",
  "chrono",
+ "chrono-tz",
  "clap",
+ "eventix-ical",
  "eventix-locale",
  "eventix-state",
  "eventix-view",
@@ -883,6 +885,8 @@ dependencies = [
  "gtk4",
  "regex",
  "tempfile",
+ "tracing",
+ "tracing-subscriber",
  "xdg",
 ]
 
