@@ -18,7 +18,9 @@ use super::{
     card::EventCard, monthly::grid::MonthGrid, popover::DetailsController, sidebar::Sidebar,
     weekly::content::WeekContent,
 };
-use crate::model::session::{CalendarSession, Event, Request, Response, Snapshot, View};
+use crate::model::session::{
+    CalendarSession, ContentRequest, ContentResponse, Event, Snapshot, View,
+};
 use crate::style;
 
 mod imp {
@@ -67,9 +69,11 @@ mod imp {
         pub calendar: gtk::TemplateChild<gtk::Calendar>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
         pub(super) session: RefCell<Option<CalendarSession>>,
-        pub revision: Cell<u64>,
         pub pending_command: Cell<bool>,
+        /// Identifies the latest requested content selection, even while its result is pending.
         pub generation: Cell<u64>,
+        /// Records the last successfully displayed generation for subscription recovery on reload.
+        pub loaded_generation: Cell<Option<u64>>,
         pub date: Cell<Option<NaiveDate>>,
         pub displayed: Cell<Option<NaiveDate>>,
         pub updating_picker: Cell<bool>,
@@ -141,7 +145,7 @@ mod imp {
                     date.day_of_month() as u32,
                 ) {
                     page.imp().picker.popdown();
-                    page.request(Some(date), false);
+                    page.show_content(Some(date));
                 }
             });
         }
@@ -201,7 +205,7 @@ impl CalendarPage {
             .set_tooltip_text(Some(locale.translate("Choose date")));
     }
 
-    pub fn request(&self, date: Option<NaiveDate>, reload: bool) {
+    pub fn show_content(&self, date: Option<NaiveDate>) {
         self.dismiss_popovers();
         let imp = self.imp();
         imp.date.set(date);
@@ -211,12 +215,10 @@ impl CalendarPage {
         imp.status
             .set_text(self.locale().translate("Loading calendar…"));
         if let Some(session) = imp.session.borrow().as_ref() {
-            session.request(Request {
+            session.show_content(ContentRequest {
                 generation,
                 date,
-                reload,
                 view: imp.view.get(),
-                sidebar_only: false,
             });
         }
     }
@@ -232,7 +234,7 @@ impl CalendarPage {
             View::Month => shift_month(date, direction),
         };
         if let Some(date) = next {
-            self.request(Some(date), false);
+            self.show_content(Some(date));
         }
     }
 
@@ -283,7 +285,23 @@ impl CalendarPage {
     }
 
     pub fn reload(&self) {
-        self.request(self.imp().date.get(), true);
+        self.dismiss_popovers();
+        let imp = self.imp();
+        imp.loading.set(true);
+        imp.status
+            .set_text(self.locale().translate("Loading calendar…"));
+        if let Some(session) = imp.session.borrow().as_ref() {
+            session.reload();
+            // A failed initial load or navigation has no subscription for the selected content.
+            if imp.loaded_generation.get() != Some(imp.generation.get()) {
+                session.show_content(ContentRequest {
+                    generation: imp.generation.get(),
+                    date: imp.date.get(),
+                    view: imp.view.get(),
+                });
+                session.refresh_sidebar();
+            }
+        }
     }
 
     pub(crate) fn can_edit(&self) -> bool {
@@ -327,13 +345,13 @@ impl CalendarPage {
         imp.title.set_tooltip_text(None);
         imp.displayed.set(None);
         self.translate_labels();
-        self.request(imp.date.get(), false);
+        self.show_content(imp.date.get());
     }
 
     pub fn show_week_at(&self, date: NaiveDate) {
         self.imp().date.set(Some(date));
         if self.imp().view.get() == View::Week {
-            self.request(Some(date), false);
+            self.show_content(Some(date));
         } else {
             self.switch_view(View::Week);
         }
@@ -523,18 +541,15 @@ impl CalendarPage {
                 && let Some(session) = imp.session.borrow().as_ref()
             {
                 tracing::debug!("updating sidebar");
-                session.request(Request {
-                    generation: imp.generation.get(),
-                    date: imp.date.get(),
-                    reload: false,
-                    view: imp.view.get(),
-                    sidebar_only: true,
-                });
+                session.refresh_sidebar();
             }
             glib::ControlFlow::Continue
         });
         self.imp().timer.replace(Some(timer));
-        self.request(date, false);
+        self.show_content(date);
+        if let Some(session) = self.imp().session.borrow().as_ref() {
+            session.refresh_sidebar();
+        }
         let weak = self.downgrade();
         glib::MainContext::default().spawn_local(async move {
             while let Ok(response) = responses.recv().await {
@@ -543,14 +558,27 @@ impl CalendarPage {
                     break;
                 }
                 match response {
-                    Event::Loaded(response) => page.receive_response(response),
+                    Event::ContentLoaded(response) => page.receive_content(response),
+                    Event::SidebarLoaded(result) => match result {
+                        Ok(sidebar) => {
+                            page.imp().sidebar.set_snapshot(sidebar);
+                            page.update_styles();
+                        }
+                        Err(error) => page.show_error("Could not load sidebar", &error),
+                    },
+                    Event::SourceLoaded(source) => {
+                        page.imp().status.set_tooltip_text(Some(&source))
+                    }
+                    Event::ReloadFailed(error) => {
+                        page.imp().loading.set(false);
+                        page.show_error("Could not load local calendars", &error);
+                    }
                     Event::Changed(change) => {
                         page.imp().pending_command.set(false);
-                        page.imp().revision.set(change.revision);
                         if !change.items.is_empty()
                             && let Some(session) = page.imp().session.borrow().as_ref()
                         {
-                            session.refresh(change.affected);
+                            session.refresh_subscriptions(change.affected);
                         }
                     }
                     Event::CommandFailed(error) => {
@@ -565,32 +593,30 @@ impl CalendarPage {
         });
     }
 
-    fn receive_response(&self, response: Response) {
+    fn receive_content(&self, response: ContentResponse) {
         if response.generation != self.imp().generation.get() {
             return;
         }
         match response.result {
-            Ok((snapshot, source)) => {
-                if let Some(sidebar) = response.sidebar {
-                    self.imp().sidebar.set_snapshot(sidebar);
-                    self.update_styles();
-                }
+            Ok(snapshot) => {
                 match snapshot {
                     Snapshot::Week(week) => self.show_week(week),
                     Snapshot::Month(month) => self.show_month(month),
-                    Snapshot::Sidebar => {}
                 }
+                self.imp().loaded_generation.set(Some(response.generation));
                 self.imp().loading.set(false);
-                self.imp().status.set_tooltip_text(Some(&source));
             }
             Err(error) => {
                 self.imp().loading.set(false);
-                self.imp().status.set_text(&format!(
-                    "{}\n{error}",
-                    self.locale().translate("Could not load local calendars"),
-                ));
+                self.show_error("Could not load local calendars", &error);
             }
         }
+    }
+
+    fn show_error(&self, message: &str, error: &str) {
+        self.imp()
+            .status
+            .set_text(&format!("{}\n{error}", self.locale().translate(message)));
     }
 
     fn update_styles(&self) {
@@ -632,7 +658,7 @@ pub(crate) mod tests {
     use gtk::{prelude::*, subclass::prelude::*};
 
     use super::event_focus_index;
-    use super::{CalendarPage, Response, Snapshot, View};
+    use super::{CalendarPage, ContentResponse, Snapshot, View};
 
     /// Checks real widget allocation, focus retention and cross-surface popup coordination.
     /// Called by the display-backed details test so GTK stays on one test thread.
@@ -1052,7 +1078,7 @@ pub(crate) mod tests {
         });
         group.add_action(&action);
         window.insert_action_group("win", Some(&group));
-        page.request(Some(selected), false);
+        page.show_content(Some(selected));
         page.show_week(WeekSnapshot {
             start: week.start,
             days: week.days.clone(),
@@ -1091,18 +1117,14 @@ pub(crate) mod tests {
             week.locale.translate("Monday")
         );
         let title = imp.title.text();
-        page.receive_response(Response {
+        page.receive_content(ContentResponse {
             generation: old_generation,
-            sidebar: None,
-            result: Ok((
-                Snapshot::Week(WeekSnapshot {
-                    start: week.start,
-                    days: week.days.clone(),
-                    all_day: week.all_day.clone(),
-                    locale: week.locale.clone(),
-                }),
-                "stale".into(),
-            )),
+            result: Ok(Snapshot::Week(WeekSnapshot {
+                start: week.start,
+                days: week.days.clone(),
+                all_day: week.all_day.clone(),
+                locale: week.locale.clone(),
+            })),
         });
         assert_eq!(
             imp.title.text(),
@@ -1300,7 +1322,7 @@ pub(crate) mod tests {
         imp.monthly.imp().weeks.borrow()[0].emit_clicked();
         assert!(imp.view.get() == View::Week);
         assert_eq!(imp.date.get(), Some(monday), "week number opens its Monday");
-        page.request(None, false);
+        page.show_content(None);
         assert_eq!(
             imp.date.get(),
             None,

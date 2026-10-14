@@ -7,10 +7,12 @@ use chrono_tz::Tz;
 use eventix_ical::objects::{CalCompType, CalTodoStatus};
 use eventix_state::{State, actions::items::ItemId};
 
-/// Calendar generations keep invalidations of old queries from refreshing a new period.
+/// Identifies an active query whose snapshot can be refreshed independently.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SubscriptionId {
+    /// Uses the content selection's generation so obsolete invalidations are ignored.
     Calendar(u64),
+    /// The sidebar is independent of calendar navigation and has no generation.
     Sidebar,
 }
 
@@ -70,6 +72,14 @@ impl Query {
 pub(crate) struct Subscriptions(Vec<(SubscriptionId, Query)>);
 
 impl Subscriptions {
+    pub fn ids(&self) -> Vec<SubscriptionId> {
+        self.0.iter().map(|(id, _)| *id).collect()
+    }
+
+    pub fn contains(&self, id: SubscriptionId) -> bool {
+        self.0.iter().any(|(active, _)| *active == id)
+    }
+
     pub fn register(&mut self, id: SubscriptionId, query: Query) {
         self.0.retain(|(old, _)| {
             !matches!(

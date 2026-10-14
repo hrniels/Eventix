@@ -208,6 +208,7 @@
 "Component is not an event" = "Der Kalendereintrag ist kein Termin"
 "Could not apply changes" = "Änderungen konnten nicht angewendet werden"
 "Could not load local calendars" = "Lokale Kalender konnten nicht geladen werden"
+"Could not load sidebar" = "Seitenleiste konnte nicht geladen werden"
 "Create new event in hour slot" = "Neuer Termin in angeklickter Stunde"
 "Create" = "Erstelle"
 "Creation" = "Erstellung"

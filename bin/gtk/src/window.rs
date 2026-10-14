@@ -231,7 +231,7 @@ impl Window {
                     } else if name == "reload" {
                         page.reload();
                     } else {
-                        page.request(None, false);
+                        page.show_content(None);
                     }
                 }
             });

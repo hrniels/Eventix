@@ -209,6 +209,7 @@
 "Component is not an event" = "Component is not an event"
 "Could not apply changes" = "Could not apply changes"
 "Could not load local calendars" = "Could not load local calendars"
+"Could not load sidebar" = "Could not load sidebar"
 "Create new event in hour slot" = "Create new event in hour slot"
 "Create" = "Create"
 "Creation" = "Creation"
