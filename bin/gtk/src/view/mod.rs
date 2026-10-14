@@ -9,5 +9,6 @@ mod loader;
 pub(crate) mod monthly;
 pub(crate) mod page;
 pub(crate) mod popover;
+mod sidebar;
 mod surface;
 pub mod weekly;

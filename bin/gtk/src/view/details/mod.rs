@@ -7,12 +7,22 @@ use std::sync::LazyLock;
 use eventix_locale::Locale;
 use eventix_view::{
     Event,
-    details::{Attendee, Contact, Response},
+    details::{Attendee, Contact, Details, Response},
+    sidebar::SidebarRow,
 };
 use gtk::{glib, prelude::*, subclass::prelude::*};
 use regex::Regex;
 
 use crate::style;
+
+struct DetailItem<'a> {
+    summary: &'a str,
+    calendar: &'a str,
+    background: &'a str,
+    foreground: &'a str,
+    details: &'a Details,
+    recurrent: bool,
+}
 
 mod imp {
     use super::*;
@@ -86,28 +96,58 @@ impl EventDetails {
     }
 
     pub fn new(event: &Event, locale: &dyn Locale) -> Self {
+        Self::from_item(
+            &event.id.uid,
+            &DetailItem {
+                summary: &event.summary,
+                calendar: &event.calendar,
+                background: &event.background,
+                foreground: &event.foreground,
+                details: &event.details,
+                recurrent: event.recurrent,
+            },
+            locale,
+        )
+    }
+
+    pub fn new_sidebar(row: &SidebarRow, locale: &dyn Locale) -> Self {
+        Self::from_item(
+            &row.id.uid,
+            &DetailItem {
+                summary: &row.summary,
+                calendar: &row.calendar,
+                background: &row.background,
+                foreground: &row.foreground,
+                details: &row.details,
+                recurrent: row.recurrent,
+            },
+            locale,
+        )
+    }
+
+    fn from_item(uid: &str, event: &DetailItem<'_>, locale: &dyn Locale) -> Self {
         let obj: Self = glib::Object::new();
         obj.setup_header(event, locale);
-        obj.setup_tag(&event.id.uid);
+        obj.setup_tag(uid);
         obj.add_rows(event, locale);
         obj.add_actions(event, locale);
         obj
     }
 
-    fn setup_header(&self, event: &Event, locale: &dyn Locale) {
+    fn setup_header(&self, event: &DetailItem<'_>, locale: &dyn Locale) {
         let imp = self.imp();
         let summary = if event.summary.is_empty() {
             locale.translate("Untitled event")
         } else {
-            &event.summary
+            event.summary
         };
         imp.summary.set_text(summary);
         imp.summary.set_tooltip_text(Some(summary));
-        imp.calendar.set_tooltip_text(Some(&event.calendar));
+        imp.calendar.set_tooltip_text(Some(event.calendar));
         imp.calendar
-            .update_property(&[gtk::accessible::Property::Label(&event.calendar)]);
+            .update_property(&[gtk::accessible::Property::Label(event.calendar)]);
         imp.calendar
-            .add_css_class(&style::calendar_class(&event.background, &event.foreground));
+            .add_css_class(&style::calendar_class(event.background, event.foreground));
         self.update_property(&[gtk::accessible::Property::Label(summary)]);
     }
 
@@ -146,7 +186,7 @@ impl EventDetails {
         imp.tag.add_controller(motion);
     }
 
-    fn add_rows(&self, event: &Event, locale: &dyn Locale) {
+    fn add_rows(&self, event: &DetailItem<'_>, locale: &dyn Locale) {
         let imp = self.imp();
         let details = &event.details;
 
@@ -227,7 +267,7 @@ impl EventDetails {
         }
     }
 
-    fn add_actions(&self, event: &Event, locale: &dyn Locale) {
+    fn add_actions(&self, event: &DetailItem<'_>, locale: &dyn Locale) {
         let actions = &event.details.actions;
         let left = &self.imp().actions_left;
         let right = &self.imp().actions_right;
@@ -360,7 +400,7 @@ fn attach_row(grid: &gtk::Grid, index: i32, icon_name: &str, title: &str, value:
     grid.attach(value, 2, index, 1, 1);
 }
 
-fn reminder_content(reminders: &str, event: &Event, locale: &dyn Locale) -> gtk::Box {
+fn reminder_content(reminders: &str, event: &DetailItem<'_>, locale: &dyn Locale) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
     content.append(&label(reminders));
     if event.details.actions.personal_reminders {
@@ -988,6 +1028,14 @@ mod tests {
                 drain();
                 gtk::style_context_remove_provider_for_display(&display, &colors);
                 if variant == "sparse" {
+                    crate::view::page::tests::assert_sidebar_layout_and_details(
+                        eventix_view::WeekSnapshot {
+                            start: week.start,
+                            days: week.days.clone(),
+                            all_day: week.all_day.clone(),
+                            locale: week.locale.clone(),
+                        },
+                    );
                     crate::view::page::tests::assert_month_layout_and_navigation(
                         eventix_view::WeekSnapshot {
                             start: week.start,

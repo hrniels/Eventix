@@ -21,7 +21,7 @@ const PLACEMENT_HYSTERESIS: i32 = 64;
 pub(crate) struct DetailsController {
     popover: RefCell<Option<EventDetails>>,
     parent: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
-    anchor: RefCell<Option<glib::WeakRef<EventCard>>>,
+    anchor: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     minimum_height: Cell<i32>,
     width: Cell<i32>,
     centered: Cell<bool>,
@@ -65,9 +65,18 @@ impl DetailsController {
     }
 
     pub fn show(self: &Rc<Self>, parent: &gtk::Widget, button: &EventCard, locale: &dyn Locale) {
-        self.close();
         let Some(event) = button.event() else { return };
         let popover = EventDetails::new(&event, locale);
+        self.show_details(parent, button.upcast_ref(), popover);
+    }
+
+    pub fn show_details(
+        self: &Rc<Self>,
+        parent: &gtk::Widget,
+        button: &gtk::Widget,
+        popover: EventDetails,
+    ) {
+        self.close();
         popover.set_parent(parent);
         // Measure once before changing arrow and width requests for centered placement.
         let (width, minimum_height) = popover.placement_size();

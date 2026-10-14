@@ -161,7 +161,11 @@ impl Details {
             description: occ.description().cloned().unwrap_or_default(),
             status: occ
                 .event_status()
-                .map(|s| locale.translate(&s.to_string()).to_owned()),
+                .map(|s| locale.translate(&s.to_string()).to_owned())
+                .or_else(|| {
+                    occ.todo_status()
+                        .map(|s| locale.translate(&s.to_string()).to_owned())
+                }),
             recurrence: occ.rrule().map(|r| r.human(&*locale).to_string()),
             reminders: alarms
                 .as_ref()

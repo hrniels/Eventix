@@ -71,30 +71,48 @@
       </object>
     </child>
     <child>
-      <object class="GtkStack" id="stack">
+      <object class="GtkGrid">
+        <property name="column-homogeneous">true</property>
+        <property name="column-spacing">8</property>
         <property name="vexpand">true</property>
-        <property name="vhomogeneous">false</property>
-        <property name="hhomogeneous">false</property>
         <child>
-          <object class="GtkScrolledWindow" id="weekly_content">
+          <object class="GtkStack" id="stack">
+            <layout>
+              <property name="column">0</property>
+              <property name="column-span">4</property>
+            </layout>
+            <property name="hexpand">true</property>
             <property name="vexpand">true</property>
-            <property name="vscrollbar-policy">never</property>
-            <property name="child">
-              <object class="EventixWeekContent" id="weekly"/>
-            </property>
+            <property name="vhomogeneous">false</property>
+            <property name="hhomogeneous">false</property>
+            <child>
+              <object class="GtkScrolledWindow" id="weekly_content">
+                <property name="vexpand">true</property>
+                <property name="vscrollbar-policy">never</property>
+                <property name="child">
+                  <object class="EventixWeekContent" id="weekly"/>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow" id="monthly_content">
+                <property name="vexpand">true</property>
+                <property name="overlay-scrolling">false</property>
+                <property name="child">
+                  <object class="EventixMonthGrid" id="monthly">
+                    <property name="hexpand">true</property>
+                    <property name="vexpand">true</property>
+                    <property name="overflow">hidden</property>
+                  </object>
+                </property>
+              </object>
+            </child>
           </object>
         </child>
         <child>
-          <object class="GtkScrolledWindow" id="monthly_content">
+          <object class="EventixSidebar" id="sidebar">
+            <layout><property name="column">4</property></layout>
             <property name="vexpand">true</property>
-            <property name="overlay-scrolling">false</property>
-            <property name="child">
-              <object class="EventixMonthGrid" id="monthly">
-                <property name="hexpand">true</property>
-                <property name="vexpand">true</property>
-                <property name="overflow">hidden</property>
-              </object>
-            </property>
           </object>
         </child>
       </object>

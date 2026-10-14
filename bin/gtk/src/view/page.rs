@@ -18,6 +18,7 @@ use super::{
     loader::{CalendarLoader, Request, Response, Snapshot, View},
     monthly::grid::MonthGrid,
     popover::DetailsController,
+    sidebar::Sidebar,
     weekly::content::WeekContent,
 };
 use crate::style;
@@ -30,6 +31,10 @@ mod imp {
     pub struct CalendarPage {
         #[template_child]
         pub stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub sidebar: gtk::TemplateChild<Sidebar>,
+        pub calendar_css: RefCell<String>,
+        pub loading: Cell<bool>,
         #[template_child]
         pub weekly_content: gtk::TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
@@ -79,6 +84,7 @@ mod imp {
         fn class_init(klass: &mut Self::Class) {
             WeekContent::ensure_type();
             MonthGrid::ensure_type();
+            Sidebar::ensure_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -93,6 +99,7 @@ mod imp {
             self.weekly.imp().timed.set_details(self.details.clone());
             self.weekly.imp().all_day.set_details(self.details.clone());
             self.monthly.set_details(self.details.clone());
+            self.sidebar.set_details(self.details.clone());
             let weak = obj.downgrade();
             self.week_view.connect_toggled(move |button| {
                 if button.is_active()
@@ -189,6 +196,7 @@ impl CalendarPage {
         imp.date.set(date);
         let generation = imp.generation.get() + 1;
         imp.generation.set(generation);
+        imp.loading.set(true);
         imp.status
             .set_text(self.locale().translate("Loading calendar…"));
         if let Some(loader) = imp.loader.borrow().as_ref() {
@@ -197,6 +205,7 @@ impl CalendarPage {
                 date,
                 reload,
                 view: imp.view.get(),
+                sidebar_only: false,
             });
         }
     }
@@ -320,15 +329,14 @@ impl CalendarPage {
 
     fn show_month(&self, month: MonthSnapshot) {
         let imp = self.imp();
-        if let Some((_, styles)) = imp.styles.borrow().as_ref() {
-            styles.load_from_data(&style::events_css(
-                month
-                    .days
-                    .iter()
-                    .flat_map(|d| d.events.iter().map(|e| &e.event))
-                    .chain(month.spans.iter().flatten().map(|span| &span.event)),
-            ));
-        }
+        imp.calendar_css.replace(style::events_css(
+            month
+                .days
+                .iter()
+                .flat_map(|d| d.events.iter().map(|e| &e.event))
+                .chain(month.spans.iter().flatten().map(|span| &span.event)),
+        ));
+        self.update_styles();
         imp.locale.replace(Some(month.locale.clone()));
         self.translate_labels();
         if let Some(window) = self.root().and_downcast::<gtk::Window>() {
@@ -371,9 +379,8 @@ impl CalendarPage {
 
     fn show_week(&self, week: WeekSnapshot) {
         let imp = self.imp();
-        if let Some((_, styles)) = imp.styles.borrow().as_ref() {
-            styles.load_from_data(&style::calendar_css(&week));
-        }
+        imp.calendar_css.replace(style::calendar_css(&week));
+        self.update_styles();
         imp.locale.replace(Some(week.locale.clone()));
         self.translate_labels();
         let locale = &week.locale;
@@ -473,6 +480,18 @@ impl CalendarPage {
                 return glib::ControlFlow::Break;
             };
             page.update_today();
+            let imp = page.imp();
+            if !imp.loading.get()
+                && let Some(loader) = imp.loader.borrow().as_ref()
+            {
+                loader.request(Request {
+                    generation: imp.generation.get(),
+                    date: imp.date.get(),
+                    reload: false,
+                    view: imp.view.get(),
+                    sidebar_only: true,
+                });
+            }
             glib::ControlFlow::Continue
         });
         self.imp().timer.replace(Some(timer));
@@ -495,16 +514,36 @@ impl CalendarPage {
         }
         match response.result {
             Ok((snapshot, source)) => {
+                if let Some(sidebar) = response.sidebar {
+                    self.imp().sidebar.set_snapshot(sidebar);
+                    self.update_styles();
+                }
                 match snapshot {
                     Snapshot::Week(week) => self.show_week(week),
                     Snapshot::Month(month) => self.show_month(month),
+                    Snapshot::Sidebar => {}
                 }
+                self.imp().loading.set(false);
                 self.imp().status.set_tooltip_text(Some(&source));
             }
-            Err(error) => self.imp().status.set_text(&format!(
-                "{}\n{error}",
-                self.locale().translate("Could not load local calendars"),
-            )),
+            Err(error) => {
+                self.imp().loading.set(false);
+                self.imp().status.set_text(&format!(
+                    "{}\n{error}",
+                    self.locale().translate("Could not load local calendars"),
+                ));
+            }
+        }
+    }
+
+    fn update_styles(&self) {
+        let imp = self.imp();
+        if let Some((_, styles)) = imp.styles.borrow().as_ref() {
+            styles.load_from_data(&format!(
+                "{}{}",
+                imp.calendar_css.borrow(),
+                imp.sidebar.colors_css()
+            ));
         }
     }
 
@@ -655,6 +694,216 @@ pub(crate) mod tests {
         drain();
     }
 
+    /// Checks sidebar geometry, independent scrolling, retained rows and task popups.
+    pub(crate) fn assert_sidebar_layout_and_details(mut week: WeekSnapshot) {
+        use eventix_view::sidebar::{SidebarGroup, SidebarRow, SidebarSnapshot};
+
+        while week.days.len() < 7 {
+            week.days.push(Day {
+                date: week.start + Duration::days(week.days.len() as i64),
+                timed: vec![],
+                dst: vec![],
+            });
+        }
+
+        let event = week.all_day[0].event.clone();
+        let row = SidebarRow {
+            id: event.id.clone(),
+            summary: "Sidebar entry with a long summary".into(),
+            calendar: event.calendar.clone(),
+            background: "#803366".into(),
+            foreground: "#ffffff".into(),
+            details: event.details.clone(),
+            start: Some(event.start),
+            due: Some(event.end),
+            full_day: false,
+            time: "09:00".into(),
+            task: false,
+            overdue: false,
+            due_today: false,
+            cancelled: false,
+            recurrent: true,
+            exception: true,
+            alarm: true,
+            response: None,
+        };
+        let make_snapshot = || {
+            let events = (0..40)
+                .map(|index| {
+                    let mut row = row.clone();
+                    row.id.uid = format!("sidebar-event-{index}");
+                    row.full_day = index == 0;
+                    row
+                })
+                .collect();
+            let tasks = (0..40)
+                .map(|index| {
+                    let mut row = row.clone();
+                    row.id.uid = format!("sidebar-task-{index}");
+                    row.task = true;
+                    row.overdue = true;
+                    row.due = None;
+                    row.start = None;
+                    row.time.clear();
+                    row
+                })
+                .collect();
+            SidebarSnapshot {
+                events: vec![SidebarGroup {
+                    date: Some(week.start),
+                    rows: events,
+                }],
+                tasks: vec![SidebarGroup {
+                    date: None,
+                    rows: tasks,
+                }],
+                locale: week.locale.clone(),
+            }
+        };
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        page.show_week(WeekSnapshot {
+            start: week.start,
+            days: week.days.clone(),
+            all_day: week.all_day.clone(),
+            locale: week.locale.clone(),
+        });
+        let imp = page.imp();
+        imp.sidebar.set_snapshot(make_snapshot());
+        let provider = gtk::CssProvider::new();
+        gtk::style_context_add_provider_for_display(
+            &WidgetExt::display(&window),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+        imp.styles
+            .replace(Some((WidgetExt::display(&window), provider.clone())));
+        page.update_styles();
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let events = imp.sidebar.first_child().unwrap();
+        let tasks = imp.sidebar.last_child().unwrap();
+        assert!((events.height() - tasks.height()).abs() <= 1);
+        let stack_bounds = imp.stack.compute_bounds(&page).unwrap();
+        let sidebar_bounds = imp.sidebar.compute_bounds(&page).unwrap();
+        assert!(sidebar_bounds.x() >= stack_bounds.x() + stack_bounds.width());
+        assert!((stack_bounds.width() / sidebar_bounds.width() - 4.0).abs() < 0.5);
+        let event_scroll = events
+            .downcast_ref::<gtk::Frame>()
+            .unwrap()
+            .child()
+            .unwrap()
+            .last_child()
+            .unwrap()
+            .downcast::<gtk::ScrolledWindow>()
+            .unwrap();
+        let task_scroll = tasks
+            .downcast_ref::<gtk::Frame>()
+            .unwrap()
+            .child()
+            .unwrap()
+            .last_child()
+            .unwrap()
+            .downcast::<gtk::ScrolledWindow>()
+            .unwrap();
+        assert!(event_scroll.vadjustment().upper() > event_scroll.vadjustment().page_size());
+        assert!(task_scroll.vadjustment().upper() > task_scroll.vadjustment().page_size());
+        event_scroll.vadjustment().set_value(60.0);
+        assert_eq!(task_scroll.vadjustment().value(), 0.0);
+        let list = task_scroll
+            .child()
+            .unwrap()
+            .downcast::<gtk::Viewport>()
+            .unwrap()
+            .child()
+            .unwrap();
+        let button = list
+            .first_child()
+            .unwrap()
+            .next_sibling()
+            .unwrap()
+            .downcast::<gtk::Button>()
+            .unwrap();
+        assert!(button.grab_focus());
+        imp.sidebar.set_snapshot(make_snapshot());
+        drain();
+        assert!(button.has_focus(), "refresh retains the live focused row");
+        assert_eq!(event_scroll.vadjustment().value(), 60.0);
+        button.emit_clicked();
+        drain();
+        let popup = button
+            .last_child()
+            .unwrap()
+            .downcast::<crate::view::details::EventDetails>()
+            .unwrap();
+        assert!(popup.is_mapped(), "undated tasks open shared details");
+        page.dismiss_popovers();
+        drain();
+        assert!(popup.parent().is_none());
+        assert!(
+            provider
+                .to_string()
+                .contains(&crate::style::calendar_class("#803366", "#ffffff")),
+            "sidebar-only calendar colors are installed"
+        );
+        window.set_default_size(1000, 450);
+        imp.month_view.set_active(true);
+        let (start, end) = eventix_view::month_range(week.start).unwrap();
+        page.show_month(MonthSnapshot {
+            month: week.start.with_day(1).unwrap(),
+            start,
+            days: (0..(end - start).num_days())
+                .map(|offset| MonthDay {
+                    date: start + Duration::days(offset),
+                    current_month: true,
+                    show_month: false,
+                    events: vec![],
+                })
+                .collect(),
+            spans: vec![vec![]; ((end - start).num_days() / 7) as usize],
+            locale: week.locale.clone(),
+        });
+        drain();
+        assert!(
+            (events.height() - tasks.height()).abs() <= 1,
+            "equal split survives resizing and switching"
+        );
+        assert!(button.parent().is_some(), "switching keeps sidebar rows");
+        if let Some(directory) = std::env::var_os("EVENTIX_DETAILS_SCREENSHOTS") {
+            let paintable = gtk::WidgetPaintable::new(Some(&page));
+            let snapshot = gtk::Snapshot::new();
+            paintable.snapshot(&snapshot, page.width().into(), page.height().into());
+            window
+                .renderer()
+                .unwrap()
+                .render_texture(snapshot.to_node().unwrap(), None)
+                .save_to_png(std::path::PathBuf::from(directory).join("sidebar.png"))
+                .unwrap();
+        }
+        imp.sidebar.set_snapshot(SidebarSnapshot {
+            events: vec![],
+            tasks: vec![],
+            locale: week.locale,
+        });
+        drain();
+        assert!(
+            list.first_child().is_none(),
+            "empty panels have no placeholder rows"
+        );
+        window.close();
+        drain();
+    }
+
     /// Checks monthly scrolling, refresh identity, popups, switching and view-aware navigation.
     /// Runs on the existing display-backed test's GTK thread.
     pub(crate) fn assert_month_layout_and_navigation(mut week: WeekSnapshot) {
@@ -780,6 +1029,7 @@ pub(crate) mod tests {
         let title = imp.title.text();
         page.receive_response(Response {
             generation: old_generation,
+            sidebar: None,
             result: Ok((
                 Snapshot::Week(WeekSnapshot {
                     start: week.start,
@@ -822,7 +1072,9 @@ pub(crate) mod tests {
         let busy_cell = cells[index / 7].clone();
         let neighbor = cells[index / 7 + 1].clone();
         let date_header = imp.monthly.imp().days.borrow()[index].allocation();
-        assert!(neighbor.allocation().y() >= busy_cell.allocation().y() + busy_cell.height());
+        let busy_bounds = busy_cell.compute_bounds(&*imp.monthly).unwrap();
+        let neighbor_bounds = neighbor.compute_bounds(&*imp.monthly).unwrap();
+        assert!(neighbor_bounds.y() >= busy_bounds.y() + busy_bounds.height());
         assert!(busy_cell.height() <= crate::view::monthly::grid::MAX_ROW);
         assert!(busy_cell.vadjustment().upper() > busy_cell.vadjustment().page_size());
         drop(cells);

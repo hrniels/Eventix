@@ -47,11 +47,16 @@ pub fn calendar_css(week: &WeekSnapshot) -> String {
 }
 
 pub fn events_css<'a>(events: impl IntoIterator<Item = &'a Event>) -> String {
+    colors_css(
+        events
+            .into_iter()
+            .map(|e| (e.background.as_str(), e.foreground.as_str())),
+    )
+}
+
+pub fn colors_css<'a>(colors: impl IntoIterator<Item = (&'a str, &'a str)>) -> String {
     let mut css = String::new();
-    let colors: BTreeSet<_> = events
-        .into_iter()
-        .map(|e| (&e.background, &e.foreground))
-        .collect();
+    let colors: BTreeSet<_> = colors.into_iter().collect();
     for (background, foreground) in colors {
         // Parse colors before generating CSS, so calendar data cannot inject styling.
         let bg = background
@@ -59,8 +64,8 @@ pub fn events_css<'a>(events: impl IntoIterator<Item = &'a Event>) -> String {
             .unwrap_or(gdk::RGBA::new(0.8, 0.88, 0.98, 1.0));
         let fg = foreground.parse::<gdk::RGBA>().unwrap_or(gdk::RGBA::BLACK);
         css.push_str(&format!(
-            ".{} {{ background: {bg}; color: {fg}; }}\n",
-            calendar_class(background, foreground)
+            ".{class}, button.ev_sidebar_full_day.{class} {{ background: {bg}; color: {fg}; }}\n",
+            class = calendar_class(background, foreground)
         ));
     }
     css

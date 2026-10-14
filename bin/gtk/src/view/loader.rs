@@ -7,6 +7,7 @@
 use std::{sync::Arc, thread};
 
 use chrono::{NaiveDate, Utc};
+use eventix_view::sidebar::SidebarSnapshot;
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -19,6 +20,7 @@ pub(crate) enum View {
 pub(crate) enum Snapshot {
     Week(WeekSnapshot),
     Month(MonthSnapshot),
+    Sidebar,
 }
 
 pub(crate) struct Request {
@@ -26,11 +28,13 @@ pub(crate) struct Request {
     pub date: Option<NaiveDate>,
     pub reload: bool,
     pub view: View,
+    pub sidebar_only: bool,
 }
 
 pub(crate) struct Response {
     pub generation: u64,
     pub result: Result<(Snapshot, String), String>,
+    pub sidebar: Option<SidebarSnapshot>,
 }
 
 /// Owns the request channel, closing the worker when the page stops or is dropped.
@@ -49,9 +53,12 @@ impl CalendarLoader {
                 // Keep the newest date without losing any queued reload request.
                 while let Ok(newer) = rx.try_recv() {
                     let reload = request.reload || newer.reload;
+                    let sidebar_only = request.sidebar_only && newer.sidebar_only;
                     request = newer;
                     request.reload = reload;
+                    request.sidebar_only = sidebar_only;
                 }
+                let mut sidebar = None;
                 let result = (|| -> anyhow::Result<(Snapshot, String)> {
                     if state.is_none() || request.reload {
                         state = Some(load_local_state(xdg.clone())?);
@@ -60,9 +67,17 @@ impl CalendarLoader {
                     let date = request
                         .date
                         .unwrap_or_else(|| Utc::now().with_timezone(state.timezone()).date_naive());
-                    let snapshot = match request.view {
-                        View::Week => Snapshot::Week(WeekSnapshot::load(state, date)?),
-                        View::Month => Snapshot::Month(MonthSnapshot::load(state, date)?),
+                    sidebar = Some(SidebarSnapshot::load(
+                        state,
+                        Utc::now().with_timezone(state.timezone()),
+                    ));
+                    let snapshot = if request.sidebar_only {
+                        Snapshot::Sidebar
+                    } else {
+                        match request.view {
+                            View::Week => Snapshot::Week(WeekSnapshot::load(state, date)?),
+                            View::Month => Snapshot::Month(MonthSnapshot::load(state, date)?),
+                        }
                     };
                     let config = xdg
                         .find_config_file("settings.toml")
@@ -90,6 +105,7 @@ impl CalendarLoader {
                     .send_blocking(Response {
                         generation: request.generation,
                         result,
+                        sidebar,
                     })
                     .is_err()
                 {

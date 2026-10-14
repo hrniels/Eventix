@@ -77,6 +77,7 @@ impl Window {
                     .is_some_and(|mut widget| {
                         loop {
                             if widget.downcast_ref::<EventCard>().is_some()
+                                || widget.has_css_class("ev_sidebar_row")
                                 || widget.downcast_ref::<EventDetails>().is_some()
                             {
                                 break true;
@@ -148,6 +149,13 @@ impl Window {
             gtk::gdk::Key::Left | gtk::gdk::Key::Up => false,
             _ => return glib::Propagation::Proceed,
         };
+        let mut focused = gtk::prelude::GtkWindowExt::focus(self);
+        while let Some(widget) = focused {
+            if widget.has_css_class("ev_sidebar") {
+                return glib::Propagation::Proceed;
+            }
+            focused = widget.parent();
+        }
         self.imp()
             .page
             .focus_event(self.focused_event_card().as_ref(), forward);

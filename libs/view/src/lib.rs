@@ -8,6 +8,7 @@ pub mod details;
 pub mod layout;
 pub mod monthly;
 mod projection;
+pub mod sidebar;
 pub mod weekly;
 
 pub use monthly::{MonthDay, MonthEvent, MonthSnapshot, month_range, shift_month};
