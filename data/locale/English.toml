@@ -370,7 +370,7 @@
 "Untitled event" = "Untitled event"
 "Waiting for authentication..." = "Waiting for authentication..."
 "Week" = "Week"
-"Week {}" = "Week {}"
+"Week {}: {} — {}" = "Week {}: {} — {}"
 "Weekly View" = "Weekly View"
 "Your Name" = "Your Name"
 "day(s)" = "day(s)"

@@ -369,7 +369,7 @@
 "Untitled event" = "Termin ohne Titel"
 "Waiting for authentication..." = "Warte auf Authentifizierung..."
 "Week" = "Woche"
-"Week {}" = "Woche {}"
+"Week {}: {} — {}" = "Woche {}: {} — {}"
 "Weekly View" = "Wöchentliche Ansicht"
 "Yesterday" = "Gestern"
 "Your Name" = "Dein Name"

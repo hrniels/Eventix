@@ -358,12 +358,11 @@ impl CalendarPage {
             )));
         }
         let title = format!(
-            "{} {} · {}",
+            "{} {}",
             month
                 .locale
                 .translate(&month.month.format("%B").to_string()),
             month.month.year(),
-            month.locale.timezone(),
         );
         imp.title.set_text(&title);
         imp.title.set_tooltip_text(Some(&title));
@@ -404,13 +403,13 @@ impl CalendarPage {
                 locale.translate("Weekly View")
             )));
         }
-        let title = format!(
-            "{} — {} · {} · {}",
+        let title = formatx::formatx!(
+            locale.translate("Week {}: {} — {}"),
+            week.start.iso_week().week(),
             locale.fmt_weekdate(&week.start, DateFlags::NoToday),
-            locale.fmt_weekdate(&week.days[6].date, DateFlags::NoToday),
-            formatx::formatx!(locale.translate("Week {}"), week.start.iso_week().week()).unwrap(),
-            locale.timezone()
-        );
+            locale.fmt_weekdate(&week.days[6].date, DateFlags::NoToday)
+        )
+        .unwrap();
         imp.title.set_text(&title);
         imp.title.set_tooltip_text(Some(&title));
         for (label, day) in self.day_labels().into_iter().zip(&week.days) {
