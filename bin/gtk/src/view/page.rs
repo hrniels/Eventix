@@ -32,9 +32,12 @@ mod imp {
         #[template_child]
         pub stack: gtk::TemplateChild<gtk::Stack>,
         #[template_child]
+        pub header: gtk::TemplateChild<gtk::CenterBox>,
+        #[template_child]
         pub sidebar: gtk::TemplateChild<Sidebar>,
         pub calendar_css: RefCell<String>,
         pub loading: Cell<bool>,
+        pub header_group: RefCell<Option<gtk::SizeGroup>>,
         #[template_child]
         pub weekly_content: gtk::TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
@@ -100,6 +103,14 @@ mod imp {
             self.weekly.imp().all_day.set_details(self.details.clone());
             self.monthly.set_details(self.details.clone());
             self.sidebar.set_details(self.details.clone());
+            // Keep the calendar header line as tall as the sidebar panel titles so all
+            // headers line up horizontally.
+            let group = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
+            group.add_widget(&*self.header);
+            for title in self.sidebar.panel_titles() {
+                group.add_widget(&title);
+            }
+            self.header_group.replace(Some(group));
             let weak = obj.downgrade();
             self.week_view.connect_toggled(move |button| {
                 if button.is_active()
@@ -291,6 +302,7 @@ impl CalendarPage {
         }
         // Clear the old period's title until the new snapshot arrives.
         imp.title.set_text("");
+        imp.title.set_tooltip_text(None);
         imp.displayed.set(None);
         self.translate_labels();
         self.request(imp.date.get(), false);
@@ -345,14 +357,16 @@ impl CalendarPage {
                 month.locale.translate("Monthly View")
             )));
         }
-        imp.title.set_text(&format!(
+        let title = format!(
             "{} {} · {}",
             month
                 .locale
                 .translate(&month.month.format("%B").to_string()),
             month.month.year(),
             month.locale.timezone(),
-        ));
+        );
+        imp.title.set_text(&title);
+        imp.title.set_tooltip_text(Some(&title));
         let empty = month
             .days
             .iter()
@@ -390,13 +404,15 @@ impl CalendarPage {
                 locale.translate("Weekly View")
             )));
         }
-        imp.title.set_text(&format!(
+        let title = format!(
             "{} — {} · {} · {}",
             locale.fmt_weekdate(&week.start, DateFlags::NoToday),
             locale.fmt_weekdate(&week.days[6].date, DateFlags::NoToday),
             formatx::formatx!(locale.translate("Week {}"), week.start.iso_week().week()).unwrap(),
             locale.timezone()
-        ));
+        );
+        imp.title.set_text(&title);
+        imp.title.set_tooltip_text(Some(&title));
         for (label, day) in self.day_labels().into_iter().zip(&week.days) {
             label.set_text(&locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday));
         }
@@ -798,6 +814,13 @@ pub(crate) mod tests {
         let sidebar_bounds = imp.sidebar.compute_bounds(&page).unwrap();
         assert!(sidebar_bounds.x() >= stack_bounds.x() + stack_bounds.width());
         assert!((stack_bounds.width() / sidebar_bounds.width() - 4.0).abs() < 0.5);
+        let header_bounds = imp.header.compute_bounds(&page).unwrap();
+        let title_bounds = imp.sidebar.panel_titles()[0].compute_bounds(&page).unwrap();
+        assert!(
+            (header_bounds.y() - title_bounds.y()).abs() < 0.5
+                && (header_bounds.height() - title_bounds.height()).abs() <= 1.0,
+            "the calendar header line aligns with the events panel title"
+        );
         let event_scroll = events
             .downcast_ref::<gtk::Frame>()
             .unwrap()

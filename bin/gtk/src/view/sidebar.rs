@@ -31,11 +31,12 @@ impl Panel {
         panel.set_vexpand(true);
 
         let frame = gtk::Frame::builder().child(&panel).vexpand(true).build();
-        frame.add_css_class("ev_sidebar_panel");
+        frame.add_css_class("ev_panel_frame");
 
         let title = gtk::Label::new(None);
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        title.add_css_class("ev_sidebar_title");
+        title.add_css_class("ev_panel_header");
+        title.add_css_class("ev_panel_title");
 
         panel.append(&title);
         panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
@@ -307,6 +308,16 @@ glib::wrapper! {
 impl Sidebar {
     pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
         self.imp().details.replace(details);
+    }
+
+    /// Returns the title labels of both panels so callers can align header heights with them.
+    pub(crate) fn panel_titles(&self) -> Vec<gtk::Label> {
+        self.imp()
+            .panels
+            .borrow()
+            .as_ref()
+            .map(|(events, tasks)| vec![events.title.clone(), tasks.title.clone()])
+            .unwrap_or_default()
     }
 
     pub fn set_snapshot(&self, snapshot: SidebarSnapshot) {

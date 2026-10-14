@@ -10,7 +10,7 @@
 @define-color ev_now rgb(230, 38, 38);
 
 .ev_calendar_toolbar {
-    padding: 10px 12px;
+    padding: 8px 6px 8px 12px;
 }
 
 .ev_day_headers > label {
@@ -29,7 +29,7 @@
 }
 
 .ev_calendar_status {
-    padding: 6px 12px;
+    padding: 4px 12px;
 }
 
 .ev_month_weekday,
@@ -159,17 +159,35 @@ button.ev_details_uid:hover {
 }
 
 .ev_sidebar {
-    margin-right: 8px;
+    margin-right: 6px;
 }
 
-.ev_sidebar_panel {
+.ev_panel_frame {
     background: @theme_base_color;
 }
 
-.ev_sidebar_title {
+/* The calendar panel is the page's content block and keeps a margin on its left,
+ * matching the outer spacing on the other sides. */
+.ev_calendar_panel {
+    margin-left: 6px;
+}
+
+/* Shared look for the sidebar panel titles and the calendar content header. */
+.ev_panel_header {
     background: @theme_bg_color;
+    padding: 0.3em 0.5em;
+}
+
+.ev_panel_title {
     font-weight: bold;
-    padding: 0.5em;
+}
+
+/* Navigation controls sit inside the calendar header line and must stay compact. */
+.ev_panel_header button,
+.ev_panel_header menubutton {
+    min-height: 0;
+    min-width: 0;
+    padding: 2px 6px;
 }
 
 .ev_sidebar_day {
