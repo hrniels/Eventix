@@ -221,6 +221,8 @@ impl Window {
             ("next", vec!["<Alt>Right"], Some(1)),
             ("today", vec!["<Alt>Home", "period"], None),
             ("reload", vec!["<Primary>r", "F5"], None),
+            ("week-view", vec!["<Alt>w"], None),
+            ("month-view", vec!["<Alt>m"], None),
         ] {
             let action = gio::SimpleAction::new(name, None);
             let page = self.imp().page.downgrade();
@@ -230,6 +232,10 @@ impl Window {
                         page.navigate(days);
                     } else if name == "reload" {
                         page.reload();
+                    } else if name == "week-view" {
+                        page.switch_to_week();
+                    } else if name == "month-view" {
+                        page.switch_to_month();
                     } else {
                         page.show_content(None);
                     }

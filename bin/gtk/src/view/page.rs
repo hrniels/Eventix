@@ -348,6 +348,14 @@ impl CalendarPage {
         self.show_content(imp.date.get());
     }
 
+    pub fn switch_to_week(&self) {
+        self.switch_view(View::Week);
+    }
+
+    pub fn switch_to_month(&self) {
+        self.switch_view(View::Month);
+    }
+
     pub fn show_week_at(&self, date: NaiveDate) {
         self.imp().date.set(Some(date));
         if self.imp().view.get() == View::Week {
