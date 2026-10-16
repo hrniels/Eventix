@@ -500,6 +500,7 @@ impl DateSection {
         let start = DateInput::new(locale, options.start.date());
         let end_value = options.start + Duration::hours(1);
         let end = DateInput::new(locale, end_value.date());
+        Self::connect_dates(&start, &end);
         let start_time = time_entry(options.start.time());
         let end_time = time_entry(end_value.time());
         let all_day = gtk::CheckButton::new();
@@ -523,6 +524,29 @@ impl DateSection {
             end_time,
             all_day,
             timezone,
+        }
+    }
+
+    fn connect_dates(start: &DateInput, end: &DateInput) {
+        for (source, target, is_start) in [
+            (&start.entry, &end.entry, true),
+            (&end.entry, &start.entry, false),
+        ] {
+            let target = target.downgrade();
+            source.connect_text_notify(move |source| {
+                let Some(target) = target.upgrade() else {
+                    return;
+                };
+                let (Ok(date), Ok(other)) = (
+                    NaiveDate::parse_from_str(source.text().as_str(), "%Y-%m-%d"),
+                    NaiveDate::parse_from_str(target.text().as_str(), "%Y-%m-%d"),
+                ) else {
+                    return;
+                };
+                if (is_start && date > other) || (!is_start && date < other) {
+                    target.set_text(&date.to_string());
+                }
+            });
         }
     }
 
@@ -1171,7 +1195,39 @@ mod tests {
     use eventix_view::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
-    use super::{CalDate, CalDateType, ItemEditor};
+    use super::{CalDate, CalDateType, DateInput, DateSection, ItemEditor};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn date_inputs_keep_range_ordered() {
+        gtk::init().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        let locale = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::English,
+            chrono_tz::Europe::Berlin,
+        )
+        .unwrap();
+        let date = "2026-10-15".parse().unwrap();
+        let start = DateInput::new(locale.as_ref(), date);
+        let end = DateInput::new(locale.as_ref(), date);
+        DateSection::connect_dates(&start, &end);
+        start.entry.set_text("2026-10-23");
+        assert_eq!(end.entry.text(), "2026-10-23");
+        end.entry.set_text("2026-10-10");
+        assert_eq!(start.entry.text(), "2026-10-10");
+        end.entry.set_text("2026-10-20");
+        assert_eq!(start.entry.text(), "2026-10-10");
+        start.entry.set_text("2026-10-15");
+        assert_eq!(end.entry.text(), "2026-10-20");
+        start.entry.set_text("2026-10-");
+        assert_eq!(end.entry.text(), "2026-10-20");
+        end.entry.set_text("2026-10-09");
+        assert_eq!(start.entry.text(), "2026-10-");
+        start.entry.set_text("2026-10-08");
+        assert_eq!(end.entry.text(), "2026-10-09");
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]
