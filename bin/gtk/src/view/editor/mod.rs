@@ -59,6 +59,7 @@ pub(crate) struct ItemEditor {
 impl ItemEditor {
     pub fn new(id: u64, options: EditorOptions) -> Rc<Self> {
         let editor = Rc::new(Self::build(id, options));
+        editor.connect_timezone();
         editor.update_previews();
         editor.connect_previews();
         editor
@@ -132,6 +133,58 @@ impl ItemEditor {
             sections,
             _completions: vec![location_completion, attendees.completion],
         }
+    }
+
+    fn connect_timezone(self: &Rc<Self>) {
+        let previous = Cell::new(self.timezone.selected());
+        let weak = Rc::downgrade(self);
+        self.timezone.connect_selected_notify(move |timezone| {
+            let old = previous.replace(timezone.selected());
+            let Some(editor) = weak.upgrade() else {
+                return;
+            };
+            if editor.all_day.is_active() {
+                return;
+            }
+            let (Some(from), Some(to)) = (
+                chrono_tz::TZ_VARIANTS.get(old as usize),
+                chrono_tz::TZ_VARIANTS.get(timezone.selected() as usize),
+            ) else {
+                return;
+            };
+            let Ok((start, end)) = editor.event_dates(from) else {
+                return;
+            };
+            let old_end_date = end.as_naive_date();
+            let context = DateContext::system();
+            let start = context.date(&start).start_in(to);
+            let end = context.date(&end).start_in(to);
+            // Move the later date first when shifting forward so range synchronization
+            // does not replace either converted date with the other endpoint.
+            if start.date_naive() > old_end_date {
+                editor
+                    .end
+                    .entry
+                    .set_text(&end.format("%Y-%m-%d").to_string());
+                editor
+                    .start
+                    .entry
+                    .set_text(&start.format("%Y-%m-%d").to_string());
+            } else {
+                editor
+                    .start
+                    .entry
+                    .set_text(&start.format("%Y-%m-%d").to_string());
+                editor
+                    .end
+                    .entry
+                    .set_text(&end.format("%Y-%m-%d").to_string());
+            }
+            editor
+                .start_time
+                .set_text(&start.format("%H:%M").to_string());
+            editor.end_time.set_text(&end.format("%H:%M").to_string());
+        });
     }
 
     fn connect_previews(self: &Rc<Self>) {
@@ -1196,6 +1249,123 @@ mod tests {
     use gtk::prelude::*;
 
     use super::{CalDate, CalDateType, DateInput, DateSection, ItemEditor};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn timezone_changes_preserve_event_instants() {
+        gtk::init().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        for (from, to, start, end, expected_start, expected_end) in [
+            (
+                chrono_tz::Europe::Berlin,
+                chrono_tz::America::Los_Angeles,
+                "2026-10-15T00:30:00",
+                "2026-10-17T01:30:00",
+                "2026-10-14 15:30",
+                "2026-10-16 16:30",
+            ),
+            (
+                chrono_tz::America::Los_Angeles,
+                chrono_tz::Asia::Tokyo,
+                "2026-10-15T23:30:00",
+                "2026-10-16T00:30:00",
+                "2026-10-16 15:30",
+                "2026-10-16 16:30",
+            ),
+            (
+                chrono_tz::Europe::Berlin,
+                chrono_tz::UTC,
+                "2026-03-29T01:30:00",
+                "2026-03-29T03:30:00",
+                "2026-03-29 00:30",
+                "2026-03-29 01:30",
+            ),
+            (
+                chrono_tz::UTC,
+                chrono_tz::Asia::Kathmandu,
+                "2026-01-15T23:30:00",
+                "2026-01-15T23:45:00",
+                "2026-01-16 05:15",
+                "2026-01-16 05:30",
+            ),
+        ] {
+            let editor = ItemEditor::new(
+                1,
+                EditorOptions {
+                    calendars: vec![EditorCalendar {
+                        id: "test".into(),
+                        name: "Test".into(),
+                        background: "#27c281".into(),
+                        personal: false,
+                    }],
+                    last_calendar: None,
+                    locations: vec![],
+                    contacts: vec![],
+                    start: start.parse().unwrap(),
+                    locale: eventix_locale::new_with_timezone(
+                        &xdg,
+                        eventix_locale::LocaleType::English,
+                        from,
+                    )
+                    .unwrap(),
+                },
+            );
+            editor.summary.set_text("Timezone test");
+            let end: NaiveDateTime = end.parse().unwrap();
+            editor
+                .end
+                .entry
+                .set_text(&end.format("%Y-%m-%d").to_string());
+            editor.end_time.set_text(&end.format("%H:%M").to_string());
+            let original = editor.command().unwrap();
+            let select = |zone| {
+                editor.timezone.set_selected(
+                    chrono_tz::TZ_VARIANTS
+                        .iter()
+                        .position(|tz| *tz == zone)
+                        .unwrap() as u32,
+                );
+            };
+            select(to);
+            assert_eq!(
+                format!("{} {}", editor.start.entry.text(), editor.start_time.text()),
+                expected_start,
+            );
+            assert_eq!(
+                format!("{} {}", editor.end.entry.text(), editor.end_time.text()),
+                expected_end,
+            );
+            let converted = editor.command().unwrap();
+            let context = eventix_ical::objects::DateContext::system();
+            for (before, after) in [
+                (&original.start, &converted.start),
+                (&original.end, &converted.end),
+            ] {
+                assert_eq!(
+                    context.date(before).start_in(&chrono_tz::UTC),
+                    context.date(after).start_in(&chrono_tz::UTC),
+                );
+            }
+            assert!(editor.previews[0].text().contains(to.name()));
+            select(from);
+            assert_eq!(editor.command().unwrap().start, original.start);
+            assert_eq!(editor.command().unwrap().end, original.end);
+
+            editor.all_day.set_active(true);
+            let all_day = editor.command().unwrap();
+            select(to);
+            assert_eq!(editor.command().unwrap().start, all_day.start);
+            assert_eq!(editor.command().unwrap().end, all_day.end);
+            editor.all_day.set_active(false);
+            select(from);
+            editor.start_time.set_text("invalid");
+            let dates = (editor.start.entry.text(), editor.end.entry.text());
+            select(to);
+            assert_eq!((editor.start.entry.text(), editor.end.entry.text()), dates);
+            assert_eq!(editor.start_time.text(), "invalid");
+        }
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]
