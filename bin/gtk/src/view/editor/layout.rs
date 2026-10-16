@@ -66,21 +66,24 @@ impl FormSection {
         header
     }
 
-    fn create_content(child: &impl IsA<gtk::Widget>) -> gtk::Box {
+    fn create_content(child: &impl IsA<gtk::Widget>) -> gtk::Revealer {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.add_css_class("ev_editor_expanded");
         content.append(child);
-        content.set_visible(false);
-        content
+        gtk::Revealer::builder()
+            .child(&content)
+            .transition_type(gtk::RevealerTransitionType::SlideDown)
+            .transition_duration(300)
+            .build()
     }
 
-    fn connect_toggle(&self, arrow: gtk::Label, content: gtk::Box, controls: Option<gtk::Widget>) {
+    fn connect_toggle(&self, arrow: gtk::Label, content: gtk::Revealer, controls: Option<gtk::Widget>) {
         let summary = self.preview.clone();
         self.toggle.connect_toggled(move |button| {
             let expanded = button.is_active();
             summary.set_visible(!expanded);
             arrow.set_visible(!expanded);
-            content.set_visible(expanded);
+            content.set_reveal_child(expanded);
             button.set_hexpand(!expanded || controls.is_none());
             if let Some(controls) = &controls {
                 controls.set_visible(expanded);
