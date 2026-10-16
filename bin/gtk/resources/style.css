@@ -35,7 +35,6 @@
 
 .ev_editor_header,
 .ev_details_header {
-    background: alpha(@theme_selected_bg_color, 0.12);
     border-radius: 11px 11px 0 0;
 }
 
@@ -317,9 +316,15 @@ button.ev_details_uid:hover {
     margin-left: 6px;
 }
 
-/* Shared look for the sidebar panel titles and the calendar content header. */
+/* Shared colors for panel, editor, and details headers. */
+.ev_panel_header,
+.ev_editor_header,
+.ev_details_header {
+    background: shade(@theme_bg_color, 0.9);
+    color: @theme_fg_color;
+}
+
 .ev_panel_header {
-    background: @theme_bg_color;
     padding: 0.3em 0.5em;
 }
 
