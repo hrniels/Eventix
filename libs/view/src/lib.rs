@@ -5,6 +5,7 @@
 //! Owned, toolkit-independent data for calendar views.
 
 pub mod details;
+pub mod editor;
 pub mod layout;
 pub mod monthly;
 mod projection;

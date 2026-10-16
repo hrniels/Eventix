@@ -14,6 +14,7 @@ use eventix_state::actions::Command;
 use eventix_view::{MonthSnapshot, WeekSnapshot, shift_month};
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
+use super::editor::ItemEditor;
 use super::{
     card::EventCard, monthly::grid::MonthGrid, popover::DetailsController, sidebar::Sidebar,
     weekly::content::WeekContent,
@@ -63,6 +64,9 @@ mod imp {
         pub today: gtk::TemplateChild<gtk::Button>,
         #[template_child]
         pub reload: gtk::TemplateChild<gtk::Button>,
+        pub(super) editor: RefCell<Option<Rc<ItemEditor>>>,
+        pub editor_request: Cell<u64>,
+        pub editor_loading: Cell<bool>,
         #[template_child]
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
@@ -169,6 +173,59 @@ glib::wrapper! {
 }
 
 impl CalendarPage {
+    pub fn editor_open(&self) -> bool {
+        self.imp().editor_loading.get() || self.imp().editor.borrow().is_some()
+    }
+
+    pub fn new_event(&self) {
+        if self.editor_open() {
+            return;
+        }
+        if let Some(session) = self.imp().session.borrow().as_ref() {
+            self.dismiss_popovers();
+            let id = self.imp().editor_request.get().wrapping_add(1);
+            self.imp().editor_request.set(id);
+            self.imp().editor_loading.set(true);
+            session.prepare_editor(id);
+        }
+    }
+
+    pub fn close_editor(&self) {
+        let editor = self.imp().editor.borrow().clone();
+        if editor.as_ref().is_some_and(|editor| editor.saving.get()) {
+            return;
+        }
+        if let Some(editor) = self.imp().editor.take() {
+            if let Some(overlay) = editor.layer.parent().and_downcast::<gtk::Overlay>() {
+                overlay.remove_overlay(&editor.layer);
+            }
+            self.set_sensitive(true);
+            self.imp().sidebar.new_event_button().grab_focus();
+        }
+        self.imp().editor_loading.set(false);
+        self.imp()
+            .editor_request
+            .set(self.imp().editor_request.get().wrapping_add(1));
+    }
+
+    pub fn save_editor(&self) {
+        let Some(editor) = self.imp().editor.borrow().clone() else {
+            return;
+        };
+        if editor.saving.get() {
+            return;
+        }
+        match editor.command() {
+            Ok(command) => {
+                if let Some(session) = self.imp().session.borrow().as_ref() {
+                    editor.set_saving(true);
+                    session.create_event(editor.id, command);
+                }
+            }
+            Err(error) => editor.show_error(&format!("{error:#}")),
+        }
+    }
+
     fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
         self.imp()
             .locale
@@ -566,6 +623,67 @@ impl CalendarPage {
                     break;
                 }
                 match response {
+                    Event::EditorLoaded(id, result) => {
+                        if id != page.imp().editor_request.get() {
+                            continue;
+                        }
+                        page.imp().editor_loading.set(false);
+                        match result {
+                            Ok(options) => {
+                                let overlay = page
+                                    .root()
+                                    .and_downcast::<gtk::Window>()
+                                    .and_then(|window| window.child())
+                                    .and_downcast::<gtk::Overlay>();
+                                let Some(overlay) = overlay else {
+                                    continue;
+                                };
+                                let editor = ItemEditor::new(id, options);
+                                let weak = page.downgrade();
+                                editor.cancel.connect_clicked(move |_| {
+                                    if let Some(page) = weak.upgrade() {
+                                        page.close_editor();
+                                    }
+                                });
+                                let weak = page.downgrade();
+                                editor.save.connect_clicked(move |_| {
+                                    if let Some(page) = weak.upgrade() {
+                                        page.save_editor();
+                                    }
+                                });
+                                overlay.add_overlay(&editor.layer);
+                                page.set_sensitive(false);
+                                editor.focus();
+                                page.imp().editor.replace(Some(editor));
+                            }
+                            Err(error) => page.show_error("Could not load local calendars", &error),
+                        }
+                    }
+                    Event::EditorSaved(id, result) => {
+                        let editor = page
+                            .imp()
+                            .editor
+                            .borrow()
+                            .clone()
+                            .filter(|editor| editor.id == id);
+                        match result {
+                            Ok(change) => {
+                                if let Some(editor) = editor {
+                                    editor.set_saving(false);
+                                    page.close_editor();
+                                }
+                                if let Some(session) = page.imp().session.borrow().as_ref() {
+                                    session.refresh_subscriptions(change.affected);
+                                }
+                            }
+                            Err(error) => {
+                                if let Some(editor) = editor {
+                                    editor.set_saving(false);
+                                    editor.show_error(&error);
+                                }
+                            }
+                        }
+                    }
                     Event::ContentLoaded(response) => page.receive_content(response),
                     Event::SidebarLoaded(result) => match result {
                         Ok(sidebar) => {
@@ -639,6 +757,10 @@ impl CalendarPage {
     }
 
     pub fn stop(&self) {
+        if let Some(editor) = self.imp().editor.borrow().as_ref() {
+            editor.set_saving(false);
+        }
+        self.close_editor();
         self.imp().session.take();
         self.dismiss_popovers();
         if let Some(timer) = self.imp().timer.take() {

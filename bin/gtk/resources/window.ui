@@ -6,7 +6,11 @@
     <property name="default-width">1200</property>
     <property name="default-height">850</property>
     <property name="child">
-      <object class="EventixCalendarPage" id="page"/>
+      <object class="GtkOverlay">
+        <property name="child">
+          <object class="EventixCalendarPage" id="page"/>
+        </property>
+      </object>
     </property>
   </template>
 </interface>

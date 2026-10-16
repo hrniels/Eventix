@@ -10,9 +10,12 @@
     <file>icons/calendar-date-symbolic.svg</file>
     <file>icons/calendar-event-symbolic.svg</file>
     <file>icons/calendar-range-symbolic.svg</file>
+    <file>icons/card-heading-symbolic.svg</file>
+    <file>icons/collection-symbolic.svg</file>
     <file>icons/check-lg-symbolic.svg</file>
     <file>icons/dash-circle-symbolic.svg</file>
     <file>icons/flag-symbolic.svg</file>
+    <file>icons/floppy2-fill-symbolic.svg</file>
     <file>icons/geo-alt-fill-symbolic.svg</file>
     <file>icons/journal-text-symbolic.svg</file>
     <file>icons/pencil-symbolic.svg</file>
@@ -31,6 +34,7 @@
     <file>icons/tag-symbolic.svg</file>
     <file>icons/trash-symbolic.svg</file>
     <file>icons/x-lg-symbolic.svg</file>
+    <file>icons/x-circle-symbolic.svg</file>
     <file>style.css</file>
     <file>view/page.ui</file>
     <file>view/weekly/content.ui</file>

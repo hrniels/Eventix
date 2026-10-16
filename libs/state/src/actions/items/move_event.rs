@@ -32,6 +32,7 @@ impl MoveEvent {
     pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let tz = *state.timezone();
+
         let directory = Arc::new(self.item.calendar.clone());
         let (collection, _) = state
             .settings()
@@ -42,6 +43,7 @@ impl MoveEvent {
                     .to_string()
             })?;
         let user_mail = collection.email().map(|email| email.address().clone());
+
         let file = state
             .store_mut()
             .directory_mut(&directory)?
@@ -53,11 +55,13 @@ impl MoveEvent {
                     .translate("Occurrence is no longer available")
                     .to_string()
             })?;
+
         if occurrence.occurrence_start().map(|d| d.with_timezone(&Utc)) != Some(self.expected_start)
             || occurrence.occurrence_end().map(|d| d.with_timezone(&Utc)) != Some(self.expected_end)
         {
             bail!(locale.translate("error.component_was_modified").to_string());
         }
+
         if occurrence.is_all_day() || occurrence.is_excluded() {
             bail!(
                 locale
@@ -97,6 +101,7 @@ impl MoveEvent {
                 .translate("Calendar file has no parent directory")
                 .to_string()
         })?;
+
         let mut output = tempfile::NamedTempFile::new_in(parent)?;
         output
             .as_file()
@@ -105,7 +110,9 @@ impl MoveEvent {
         output.flush()?;
         output.as_file().sync_all()?;
         output.persist(path)?;
+
         *file.calendar_mut() = staged.calendar().clone();
+
         Ok(self.item)
     }
 }

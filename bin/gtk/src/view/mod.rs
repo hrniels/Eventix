@@ -4,6 +4,7 @@
 
 pub(crate) mod card;
 pub mod details;
+pub(crate) mod editor;
 mod geometry;
 pub(crate) mod monthly;
 pub(crate) mod page;

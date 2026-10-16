@@ -18,6 +18,7 @@ use axum::http::{Request, StatusCode};
 use chrono::{MappedLocalTime, NaiveDateTime, TimeZone};
 use eventix::api::HTMLResponse;
 use eventix_ical::col::CalFile;
+use eventix_ical::objects::CalCompType;
 use eventix_state::{
     CalendarSettings, CollectionSettings, EmailAccount, EventixState, Settings, SyncerType,
 };
@@ -91,6 +92,7 @@ pub fn make_state(cal_dir: &Path) -> EventixState {
 
     let mut cal = CalendarSettings::default();
     cal.set_enabled(true);
+    cal.set_types(vec![CalCompType::Event, CalCompType::Todo]);
     // folder is the last component of cal_dir (e.g. "cal1"), which State::new joins onto the
     // collection path to produce the full calendar directory.
     cal.set_folder(cal_dir.file_name().unwrap().to_string_lossy().into_owned());
@@ -113,6 +115,7 @@ pub fn make_state_in_tz(cal_dir: &Path, tz: &str) -> EventixState {
 
     let mut cal = CalendarSettings::default();
     cal.set_enabled(true);
+    cal.set_types(vec![CalCompType::Event, CalCompType::Todo]);
     cal.set_folder(cal_dir.file_name().unwrap().to_string_lossy().into_owned());
     cal.set_name("Test Calendar".to_string());
     col.all_calendars_mut().insert(CAL_ID.to_string(), cal);

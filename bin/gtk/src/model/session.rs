@@ -7,9 +7,12 @@
 use std::{sync::Arc, thread};
 
 use chrono::{Duration, NaiveDate, Utc};
-use eventix_state::actions::{Command, items::ItemId};
-use eventix_view::sidebar::SidebarSnapshot;
+use eventix_state::actions::{
+    Command,
+    items::{CreateEvent, ItemId},
+};
 use eventix_view::{MonthSnapshot, WeekSnapshot};
+use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
 use super::query::{Query, SubscriptionId, Subscriptions};
 
@@ -51,6 +54,8 @@ pub(crate) struct ChangeSet {
 }
 
 pub(crate) enum Event {
+    EditorLoaded(u64, Result<EditorOptions, String>),
+    EditorSaved(u64, Result<ChangeSet, String>),
     ContentLoaded(ContentResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
     SourceLoaded(String),
@@ -61,6 +66,8 @@ pub(crate) enum Event {
 
 #[derive(Debug)]
 enum Message {
+    PrepareEditor(u64),
+    CreateEvent(u64, Box<CreateEvent>),
     ShowContent(ContentRequest),
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
@@ -74,6 +81,14 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn prepare_editor(&self, id: u64) {
+        let _ = self.requests.try_send(Message::PrepareEditor(id));
+    }
+
+    pub fn create_event(&self, id: u64, event: Box<CreateEvent>) {
+        let _ = self.requests.try_send(Message::CreateEvent(id, event));
+    }
+
     pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
         let (requests, rx) = async_channel::unbounded::<Message>();
         let (results, responses) = async_channel::unbounded();
@@ -186,7 +201,10 @@ impl Worker {
 
         // load state first if not already done and the message requires it
         if self.state.is_none()
-            && matches!(message, Message::ShowContent(_) | Message::RefreshSidebar)
+            && matches!(
+                message,
+                Message::ShowContent(_) | Message::RefreshSidebar | Message::PrepareEditor(_)
+            )
         {
             match load_local_state(self.xdg.clone()) {
                 Ok(state) => {
@@ -200,6 +218,7 @@ impl Worker {
                             generation: request.generation,
                             result: Err(error),
                         }),
+                        Message::PrepareEditor(id) => Event::EditorLoaded(id, Err(error)),
                         _ => Event::SidebarLoaded(Err(error)),
                     }];
                 }
@@ -207,6 +226,17 @@ impl Worker {
         }
 
         match message {
+            Message::PrepareEditor(id) => events.push(Event::EditorLoaded(
+                id,
+                self.state()
+                    .and_then(EditorOptions::load)
+                    .map_err(|error| format!("{error:#}")),
+            )),
+            Message::CreateEvent(id, event) => events.push(Event::EditorSaved(
+                id,
+                self.execute(Command::CreateEvent(event))
+                    .map_err(|error| format!("{error:#}")),
+            )),
             Message::ShowContent(request) => {
                 let result = self
                     .show_content(&request)
@@ -432,6 +462,68 @@ mod tests {
             expected_start: occurrence.occurrence_start().unwrap().to_utc(),
             expected_end: occurrence.occurrence_end().unwrap().to_utc(),
         }
+    }
+
+    #[test]
+    fn editor_requests_preserve_identity_and_creation_invalidates_matching_queries() {
+        use eventix_ical::objects::{CalCompType, CalDate, CalDateType};
+        use eventix_state::actions::items::CreateEvent;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state
+            .as_mut()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .all_calendars_mut()
+            .get_mut("test")
+            .unwrap()
+            .set_types(vec![CalCompType::Event]);
+        subscribe(&mut worker, 1, "2026-10-12", View::Week);
+        let Some(Event::EditorLoaded(42, Ok(options))) =
+            worker.handle(Message::PrepareEditor(42)).pop()
+        else {
+            panic!("editor options should echo the request identity");
+        };
+        assert_eq!(options.calendars.len(), 1);
+        assert_eq!(options.calendars[0].id, "test");
+        let make_request = || {
+            Box::new(CreateEvent {
+                calendar: "test".into(),
+                summary: "Created".into(),
+                location: String::new(),
+                description: String::new(),
+                start: CalDate::new_date("2026-10-14".parse().unwrap(), CalDateType::Inclusive),
+                end: CalDate::new_date("2026-10-15".parse().unwrap(), CalDateType::Exclusive),
+                recurrence: None,
+                alarms: Vec::new(),
+                personal_alarms: None,
+                attendees: Vec::new(),
+            })
+        };
+        let mut invalid = make_request();
+        invalid.summary.clear();
+        assert!(matches!(
+            worker.handle(Message::CreateEvent(43, invalid)).as_slice(),
+            [Event::EditorSaved(43, Err(_))]
+        ));
+        let Some(Event::EditorSaved(44, Ok(change))) = worker
+            .handle(Message::CreateEvent(44, make_request()))
+            .pop()
+        else {
+            panic!("successful save must publish the request identity and committed changes");
+        };
+        assert_eq!(change.items.len(), 1);
+        assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
+        assert!(change.affected.contains(&SubscriptionId::Sidebar));
+        assert!(
+            matches!(worker.handle(Message::RefreshSubscriptions(change.affected)).as_slice(),
+            [Event::ContentLoaded(response), Event::SidebarLoaded(Ok(_))] if response.result.is_ok())
+        );
     }
 
     fn subscribe(worker: &mut Worker, generation: u64, date: &str, view: View) {

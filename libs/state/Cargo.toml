@@ -19,6 +19,7 @@ thiserror.workspace = true
 tokio.workspace = true
 toml.workspace = true
 tracing.workspace = true
+uuid = { version = "1.23.1", features = ["v4"] }
 xdg.workspace = true
 ashpd = { version = "0.13.11", default-features = false, features = ["tokio", "secret"] }
 aes-gcm = "0.11.1"

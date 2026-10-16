@@ -16,6 +16,120 @@
     padding: 8px 6px 8px 12px;
 }
 
+.ev_editor_backdrop {
+    background: alpha(black, 0.12);
+    padding: 16px;
+}
+
+.ev_item_editor {
+    background: @theme_base_color;
+    color: @theme_text_color;
+    border-radius: 3px;
+    border: 1px solid #8996a8;
+    box-shadow: 0 4px 16px alpha(black, 0.3);
+}
+
+.ev_editor_form {
+    padding: 8px;
+}
+
+.ev_editor_title {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.ev_editor_row + .ev_editor_row {
+    border-top: 1px solid alpha(@theme_text_color, 0.18);
+}
+
+.ev_editor_row:hover {
+    background: alpha(@theme_text_color, 0.055);
+}
+
+.ev_editor_field_row,
+.ev_editor_row_header {
+    padding: 11px 8px;
+}
+
+.ev_editor_row_header {
+    min-height: 24px;
+}
+
+.ev_editor_caption {
+    min-width: 164px;
+}
+
+.ev_editor_field_label,
+.ev_editor_preview,
+.ev_editor_body_label,
+.ev_editor_expanded checkbutton > label {
+    font-family: serif;
+}
+
+.ev_editor_field_label,
+.ev_editor_subheading,
+.ev_editor_action_label {
+    font-weight: bold;
+}
+
+.ev_editor_preview {
+    color: alpha(@theme_text_color, 0.7);
+}
+
+.ev_editor_expand_hint {
+    color: alpha(@theme_text_color, 0.55);
+}
+
+button.ev_editor_section_toggle,
+button.ev_editor_section_toggle:hover,
+button.ev_editor_section_toggle:checked {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    min-height: 0;
+    border-radius: 0;
+    color: inherit;
+}
+
+.ev_editor_expanded {
+    padding: 0 8px 12px;
+}
+
+.ev_editor_segments > button {
+    padding: 2px 9px;
+    min-height: 20px;
+    border-radius: 0;
+    border-right-width: 0;
+}
+
+.ev_editor_segments > button:first-child {
+    border-radius: 5px 0 0 5px;
+}
+
+.ev_editor_segments > button:last-child {
+    border-radius: 0 5px 5px 0;
+    border-right-width: 1px;
+}
+
+.ev_editor_segments > button:checked {
+    background: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+}
+
+.ev_editor_actions {
+    padding: 14px 12px 12px;
+}
+
+button.ev_editor_action {
+    border-left: 4px solid #45638a;
+}
+
+.ev_editor_error {
+    color: @error_color;
+    padding: 8px 12px;
+}
+
 .ev_day_headers > label {
     padding: 8px 0;
     font-weight: bold;
@@ -192,6 +306,12 @@ button.ev_details_uid:hover {
     min-height: 0;
     min-width: 0;
     padding: 2px 6px;
+}
+
+.ev_sidebar_add_event {
+    min-height: 0;
+    min-width: 0;
+    padding: 0 3px;
 }
 
 .ev_sidebar_day {

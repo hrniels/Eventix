@@ -19,26 +19,38 @@ use crate::style;
 type RowKey = (Option<NaiveDate>, OccurrenceId);
 
 struct Panel {
+    header: gtk::Box,
     title: gtk::Label,
+    new_event: Option<gtk::Button>,
     list: gtk::Box,
     scroll: gtk::ScrolledWindow,
     rows: BTreeMap<RowKey, gtk::Button>,
 }
 
 impl Panel {
-    fn new(parent: &gtk::Box) -> Self {
+    fn new(parent: &gtk::Box, is_events: bool) -> Self {
         let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
         panel.set_vexpand(true);
 
         let frame = gtk::Frame::builder().child(&panel).vexpand(true).build();
         frame.add_css_class("ev_panel_frame");
 
+        let header = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        header.add_css_class("ev_panel_header");
         let title = gtk::Label::new(None);
+        title.set_hexpand(true);
+        title.set_xalign(0.0);
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        title.add_css_class("ev_panel_header");
         title.add_css_class("ev_panel_title");
-
-        panel.append(&title);
+        header.append(&title);
+        let new_event = is_events.then(|| {
+            let button = gtk::Button::from_icon_name("list-add-symbolic");
+            button.set_action_name(Some("win.new-event"));
+            button.add_css_class("ev_sidebar_add_event");
+            header.append(&button);
+            button
+        });
+        panel.append(&header);
         panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
 
         let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -53,7 +65,9 @@ impl Panel {
         parent.append(&frame);
 
         Self {
+            header,
             title,
+            new_event,
             list,
             scroll,
             rows: BTreeMap::new(),
@@ -283,8 +297,8 @@ mod imp {
             obj.set_homogeneous(true);
             obj.set_spacing(12);
             obj.add_css_class("ev_sidebar");
-            let events = Panel::new(obj.upcast_ref());
-            let tasks = Panel::new(obj.upcast_ref());
+            let events = Panel::new(obj.upcast_ref(), true);
+            let tasks = Panel::new(obj.upcast_ref(), false);
             let locale = eventix_locale::default();
             events.title.set_text(locale.translate("Next Events"));
             tasks.title.set_text(locale.translate("Next Tasks"));
@@ -311,12 +325,26 @@ impl Sidebar {
     }
 
     /// Returns the title labels of both panels so callers can align header heights with them.
-    pub(crate) fn panel_titles(&self) -> Vec<gtk::Label> {
+    pub(crate) fn panel_titles(&self) -> Vec<gtk::Widget> {
         self.imp()
             .panels
             .borrow()
             .as_ref()
-            .map(|(events, tasks)| vec![events.title.clone(), tasks.title.clone()])
+            .map(|(events, tasks)| {
+                vec![
+                    events.header.clone().upcast(),
+                    tasks.header.clone().upcast(),
+                ]
+            })
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn new_event_button(&self) -> gtk::Button {
+        self.imp()
+            .panels
+            .borrow()
+            .as_ref()
+            .and_then(|(events, _)| events.new_event.clone())
             .unwrap_or_default()
     }
 
@@ -333,6 +361,9 @@ impl Sidebar {
             events
                 .title
                 .set_text(snapshot.locale.translate("Next Events"));
+            if let Some(button) = &events.new_event {
+                button.set_tooltip_text(Some(snapshot.locale.translate("New Event")));
+            }
             tasks
                 .title
                 .set_text(snapshot.locale.translate("Next Tasks"));

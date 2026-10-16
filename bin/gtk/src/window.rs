@@ -113,6 +113,19 @@ impl Window {
         key: gtk::gdk::Key,
         modifiers: gtk::gdk::ModifierType,
     ) -> glib::Propagation {
+        if self.imp().page.editor_open() {
+            if key == gtk::gdk::Key::Escape
+                && !crate::view::editor::has_nested_popup(self.upcast_ref())
+            {
+                self.imp().page.close_editor();
+                return glib::Propagation::Stop;
+            }
+            if crate::view::editor::is_save_key(key, modifiers) {
+                self.imp().page.save_editor();
+                return glib::Propagation::Stop;
+            }
+            return glib::Propagation::Proceed;
+        }
         if let Some(propagation) = self.handle_details_key(key) {
             return propagation;
         }
@@ -216,6 +229,14 @@ impl Window {
     }
 
     fn setup_actions(&self, app: &gtk::Application) {
+        let action = gio::SimpleAction::new("new-event", None);
+        let page = self.imp().page.downgrade();
+        action.connect_activate(move |_, _| {
+            if let Some(page) = page.upgrade() {
+                page.new_event();
+            }
+        });
+        self.add_action(&action);
         for (name, keys, days) in [
             ("previous", vec!["<Alt>Left"], Some(-1)),
             ("next", vec!["<Alt>Right"], Some(1)),
@@ -228,6 +249,9 @@ impl Window {
             let page = self.imp().page.downgrade();
             action.connect_activate(move |_, _| {
                 if let Some(page) = page.upgrade() {
+                    if page.editor_open() {
+                        return;
+                    }
                     if let Some(days) = days {
                         page.navigate(days);
                     } else if name == "reload" {
