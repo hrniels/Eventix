@@ -47,8 +47,6 @@
         </child>
         <child>
           <object class="GtkGrid" id="rows">
-            <property name="column-spacing">12</property>
-            <property name="row-spacing">12</property>
             <style><class name="ev_details_rows"/></style>
           </object>
         </child>

@@ -24,13 +24,26 @@
 .ev_item_editor {
     background: @theme_base_color;
     color: @theme_text_color;
-    border-radius: 3px;
+    border-radius: 12px;
     border: 1px solid #8996a8;
     box-shadow: 0 4px 16px alpha(black, 0.3);
 }
 
 .ev_editor_form {
-    padding: 8px;
+    padding: 2px 0;
+}
+
+.ev_editor_header,
+.ev_details_header {
+    background: alpha(@theme_selected_bg_color, 0.12);
+    border-radius: 11px 11px 0 0;
+}
+
+.ev_editor_header {
+    min-height: 24px;
+    box-shadow: none;
+    border-bottom: 2px solid alpha(@theme_fg_color, 0.16);
+    padding: 8px 12px;
 }
 
 .ev_editor_title {
@@ -42,13 +55,17 @@
     border-top: 1px solid alpha(@theme_text_color, 0.18);
 }
 
+.ev_editor_row {
+    margin: 0 8px;
+}
+
 .ev_editor_row:hover {
     background: alpha(@theme_text_color, 0.055);
 }
 
 .ev_editor_field_row,
 .ev_editor_row_header {
-    padding: 11px 8px;
+    padding: 11px 4px;
 }
 
 .ev_editor_row_header {
@@ -67,8 +84,7 @@
 }
 
 .ev_editor_field_label,
-.ev_editor_subheading,
-.ev_editor_action_label {
+.ev_editor_subheading {
     font-weight: bold;
 }
 
@@ -93,7 +109,7 @@ button.ev_editor_section_toggle:checked {
 }
 
 .ev_editor_expanded {
-    padding: 0 8px 12px;
+    padding: 0 4px 12px;
 }
 
 .ev_editor_segments > button {
@@ -118,11 +134,8 @@ button.ev_editor_section_toggle:checked {
 }
 
 .ev_editor_actions {
-    padding: 14px 12px 12px;
-}
-
-button.ev_editor_action {
-    border-left: 4px solid #45638a;
+    padding: 10px 12px;
+    border-top: 2px solid alpha(@theme_fg_color, 0.16);
 }
 
 .ev_editor_error {
@@ -207,12 +220,12 @@ button.ev_event.ev_cancelled label {
 }
 
 .ev_event_details > contents {
-    padding: 4px;
+    padding: 0;
 }
 
 .ev_details_header {
-    padding: 8px;
-    border-bottom: 1px solid alpha(@theme_fg_color, 0.16);
+    padding: 8px 12px;
+    border-bottom: 2px solid alpha(@theme_fg_color, 0.16);
 }
 
 .ev_details_summary {
@@ -228,7 +241,20 @@ button.ev_event.ev_cancelled label {
 }
 
 .ev_details_rows {
-    padding: 10px 8px;
+    padding: 2px 0;
+}
+
+.ev_details_row {
+    margin: 0 8px;
+    padding: 9px 4px;
+}
+
+.ev_details_row + .ev_details_row {
+    border-top: 1px solid alpha(@theme_text_color, 0.18);
+}
+
+.ev_details_row:hover {
+    background: alpha(@theme_text_color, 0.055);
 }
 
 .ev_details_label {
@@ -236,10 +262,11 @@ button.ev_event.ev_cancelled label {
 }
 
 .ev_details_actions {
-    padding: 6px 4px;
-    border-top: 1px solid alpha(@theme_fg_color, 0.16);
+    padding: 10px 12px;
+    border-top: 2px solid alpha(@theme_fg_color, 0.16);
 }
 
+button.ev_editor_action,
 button.ev_details_button,
 .ev_details_button > button {
     min-height: 22px;

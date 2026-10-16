@@ -508,9 +508,10 @@ impl EditorShell {
         panel.set_size_request(684, -1);
         let title = gtk::Label::new(Some(locale.translate("New Event")));
         title.add_css_class("ev_editor_title");
-        let header = gtk::HeaderBar::new();
-        header.set_show_title_buttons(false);
-        header.set_title_widget(Some(&title));
+        let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        header.add_css_class("ev_editor_header");
+        title.set_hexpand(true);
+        header.append(&title);
         panel.append(&header);
         panel
     }
@@ -527,8 +528,9 @@ impl EditorShell {
     fn append_actions(panel: &gtk::Box, locale: &dyn Locale) -> (gtk::Button, gtk::Button) {
         let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         actions.add_css_class("ev_editor_actions");
-        actions.set_halign(gtk::Align::End);
         let save = action_button(locale, "Save", "floppy2-fill");
+        save.set_hexpand(true);
+        save.set_halign(gtk::Align::End);
         let cancel = action_button(locale, "Cancel", "x-circle");
         actions.append(&save);
         actions.append(&cancel);

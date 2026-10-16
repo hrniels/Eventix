@@ -199,9 +199,11 @@ impl EventDetails {
             .object("description_scroll")
             .expect("description detail scroller is defined in GTK resources");
 
+        let titles = gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal);
         let mut index = 0;
         let mut row = |icon_name: &str, key: &str, value: &gtk::Widget| {
-            attach_row(&imp.rows, index, icon_name, locale.translate(key), value);
+            let row = detail_row(&titles, icon_name, locale.translate(key), value);
+            imp.rows.attach(&row, 0, index, 1, 1);
             index += 1;
         };
 
@@ -385,7 +387,17 @@ impl EventDetails {
     }
 }
 
-fn attach_row(grid: &gtk::Grid, index: i32, icon_name: &str, title: &str, value: &gtk::Widget) {
+fn detail_row(
+    titles: &gtk::SizeGroup,
+    icon_name: &str,
+    title: &str,
+    value: &gtk::Widget,
+) -> gtk::Grid {
+    let row = gtk::Grid::builder()
+        .column_spacing(12)
+        .hexpand(true)
+        .build();
+    row.add_css_class("ev_details_row");
     let image = icon(icon_name);
     image.set_valign(gtk::Align::Start);
     let title = gtk::Label::builder()
@@ -394,10 +406,12 @@ fn attach_row(grid: &gtk::Grid, index: i32, icon_name: &str, title: &str, value:
         .valign(gtk::Align::Start)
         .build();
     title.add_css_class("ev_details_label");
+    titles.add_widget(&title);
     value.update_relation(&[gtk::accessible::Relation::LabelledBy(&[title.upcast_ref()])]);
-    grid.attach(&image, 0, index, 1, 1);
-    grid.attach(&title, 1, index, 1, 1);
-    grid.attach(value, 2, index, 1, 1);
+    row.attach(&image, 0, 0, 1, 1);
+    row.attach(&title, 1, 0, 1, 1);
+    row.attach(value, 2, 0, 1, 1);
+    row
 }
 
 fn reminder_content(reminders: &str, event: &DetailItem<'_>, locale: &dyn Locale) -> gtk::Box {

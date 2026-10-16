@@ -147,10 +147,11 @@ pub(super) fn image(name: &str) -> gtk::Image {
 pub(super) fn action_button(locale: &dyn Locale, text: &str, icon: &str) -> gtk::Button {
     let button = gtk::Button::new();
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    content.append(&image(icon));
-    let label = body_label(locale, text);
-    label.add_css_class("ev_editor_action_label");
-    content.append(&label);
+    content.set_halign(gtk::Align::Center);
+    let icon = image(icon);
+    icon.set_pixel_size(16);
+    content.append(&icon);
+    content.append(&gtk::Label::new(Some(locale.translate(text))));
     button.set_child(Some(&content));
     button.add_css_class("ev_editor_action");
     button
