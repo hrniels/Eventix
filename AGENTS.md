@@ -53,6 +53,9 @@ General Rust style:
 - Use explicit imports; avoid glob imports unless clearly justified.
 - Group imports: std, external crates, then internal crates.
 - Keep modules small and focused.
+- Avoid long methods; extract focused helpers when a method becomes hard to follow.
+- Group related statements within methods and separate logical groups with blank lines to improve
+  readability.
 - Add comments only when they explain non-obvious decisions; prefer "why" over "what".
 - For larger or complex blocks, add a brief high-level comment describing intent or structure.
 - When a comment applies to the whole function, prefer a doc comment on the function itself.
