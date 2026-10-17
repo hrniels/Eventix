@@ -14,13 +14,14 @@ use eventix_ical::objects::{
     DateContext,
 };
 use eventix_locale::Locale;
-use eventix_state::actions::items::CreateEvent;
 use eventix_view::editor::EditorOptions;
 use gtk::{gdk, glib, prelude::*};
 
 mod completion;
+mod feedback;
 mod layout;
 mod recurrence;
+mod validation;
 use layout::{FormSection, action_button, body_label, calendar_factory, choices, row, segments};
 use recurrence::RecurrenceInput;
 
@@ -53,14 +54,21 @@ pub(crate) struct ItemEditor {
     new_attendee: gtk::Entry,
     previews: Vec<gtk::Label>,
     sections: Vec<FormSection>,
+    feedback: Vec<feedback::FieldFeedback>,
+    summary_touched: Cell<bool>,
+    attendee_save_error: Cell<bool>,
     _completions: Vec<completion::Completion>,
 }
 
 impl ItemEditor {
     pub fn new(id: u64, options: EditorOptions) -> Rc<Self> {
-        let editor = Rc::new(Self::build(id, options));
+        let mut editor = Self::build(id, options);
+        editor.install_feedback();
+        let editor = Rc::new(editor);
         editor.connect_timezone();
+        editor.connect_feedback();
         editor.update_previews();
+        editor.update_feedback();
         editor.connect_previews();
         editor
     }
@@ -131,6 +139,9 @@ impl ItemEditor {
             new_attendee: attendees.new_entry,
             previews,
             sections,
+            feedback: Vec::new(),
+            summary_touched: Cell::new(false),
+            attendee_save_error: Cell::new(false),
             _completions: vec![location_completion, attendees.completion],
         }
     }
@@ -155,31 +166,17 @@ impl ItemEditor {
             let Ok((start, end)) = editor.event_dates(from) else {
                 return;
             };
-            let old_end_date = end.as_naive_date();
             let context = DateContext::system();
             let start = context.date(&start).start_in(to);
             let end = context.date(&end).start_in(to);
-            // Move the later date first when shifting forward so range synchronization
-            // does not replace either converted date with the other endpoint.
-            if start.date_naive() > old_end_date {
-                editor
-                    .end
-                    .entry
-                    .set_text(&end.format("%Y-%m-%d").to_string());
-                editor
-                    .start
-                    .entry
-                    .set_text(&start.format("%Y-%m-%d").to_string());
-            } else {
-                editor
-                    .start
-                    .entry
-                    .set_text(&start.format("%Y-%m-%d").to_string());
-                editor
-                    .end
-                    .entry
-                    .set_text(&end.format("%Y-%m-%d").to_string());
-            }
+            editor
+                .start
+                .entry
+                .set_text(&start.format("%Y-%m-%d").to_string());
+            editor
+                .end
+                .entry
+                .set_text(&end.format("%Y-%m-%d").to_string());
             editor
                 .start_time
                 .set_text(&start.format("%H:%M").to_string());
@@ -192,6 +189,7 @@ impl ItemEditor {
         // Selection models for segmented controls and hidden stack pages are not widget children.
         for selection in [
             &self.recurrence.frequency,
+            &self.recurrence.end,
             &self.alarm_mode,
             &self.alarm.trigger,
             &self.personal_alarm.trigger,
@@ -205,6 +203,12 @@ impl ItemEditor {
         }
         watch_fields(self.alarm.widget.upcast_ref(), self);
         watch_fields(self.personal_alarm.widget.upcast_ref(), self);
+        let weak = Rc::downgrade(self);
+        self.personal_override.connect_toggled(move |_| {
+            if let Some(editor) = weak.upgrade() {
+                editor.update_previews();
+            }
+        });
     }
 
     fn connect_sections(sections: &[FormSection]) {
@@ -368,60 +372,6 @@ impl ItemEditor {
         self.error.set_visible(true);
     }
 
-    pub fn command(&self) -> anyhow::Result<Box<CreateEvent>> {
-        let locale = self.options.locale.as_ref();
-        self.validate_text_fields()?;
-        let calendar = self
-            .options
-            .calendars
-            .get(self.calendar.selected() as usize)
-            .context(locale.translate("error.create_calendar_first").to_string())?;
-        let timezone = chrono_tz::TZ_VARIANTS
-            .get(self.timezone.selected() as usize)
-            .context(locale.translate("error.valid_date_time").to_string())?;
-        let (start, end) = self.event_dates(timezone)?;
-        let recurrence = self.recurrence.value(&start, timezone, locale)?;
-        let alarms = self.alarm.value(timezone, locale)?;
-        let personal_alarms = if calendar.personal && self.personal_override.is_active() {
-            Some(self.personal_alarm.value(timezone, locale)?)
-        } else {
-            None
-        };
-        let attendees = self
-            .attendees
-            .borrow()
-            .iter()
-            .filter(|attendee| attendee.widget.get_visible())
-            .map(AttendeeInput::value)
-            .collect();
-        let buffer = self.description.buffer();
-        Ok(Box::new(CreateEvent {
-            calendar: calendar.id.clone(),
-            summary: self.summary.text().to_string(),
-            location: self.location.text().to_string(),
-            description: buffer
-                .text(&buffer.start_iter(), &buffer.end_iter(), true)
-                .to_string(),
-            start,
-            end,
-            recurrence,
-            alarms,
-            personal_alarms,
-            attendees,
-        }))
-    }
-
-    fn validate_text_fields(&self) -> anyhow::Result<()> {
-        let locale = self.options.locale.as_ref();
-        if self.summary.text().trim().is_empty() {
-            bail!(locale.translate("error.summary_empty").to_string());
-        }
-        if !self.new_attendee.text().trim().is_empty() {
-            bail!(locale.translate("error.new_attendee_not_empty").to_string());
-        }
-        Ok(())
-    }
-
     fn event_dates(&self, timezone: &chrono_tz::Tz) -> anyhow::Result<(CalDate, CalDate)> {
         let locale = self.options.locale.as_ref();
         let start_date = self.start.date(locale)?;
@@ -478,7 +428,6 @@ impl EditorShell {
             .child(form)
             .hscrollbar_policy(gtk::PolicyType::Never)
             .propagate_natural_height(true)
-            .max_content_height(640)
             .build();
         panel.append(&scroll);
         let error = Self::create_error();
@@ -504,7 +453,6 @@ impl EditorShell {
         panel.set_halign(gtk::Align::Center);
         panel.set_valign(gtk::Align::Center);
         panel.set_vexpand(true);
-        // The scroller's natural size is bounded; its minimum can shrink with the app.
         panel.set_size_request(684, -1);
         let title = gtk::Label::new(Some(locale.translate("New Event")));
         title.add_css_class("ev_editor_title");
@@ -563,8 +511,8 @@ impl DateSection {
         let timezone = Self::create_timezone(locale);
         let left = Self::create_column(locale, "Start", &start, &start_time);
         let right = Self::create_column(locale, "End", &end, &end_time);
-        Self::append_field(&left, locale, 1, "All day", all_day.upcast_ref());
-        Self::append_field(&right, locale, 1, "Timezone", timezone.upcast_ref());
+        Self::append_field(&left, locale, "All day", all_day.upcast_ref());
+        Self::append_field(&right, locale, "Timezone", timezone.upcast_ref());
         let dates = gtk::Box::new(gtk::Orientation::Horizontal, 16);
         dates.set_homogeneous(true);
         dates.append(&left);
@@ -583,13 +531,11 @@ impl DateSection {
     }
 
     fn connect_dates(start: &DateInput, end: &DateInput) {
-        for (source, target, is_start) in [
-            (&start.entry, &end.entry, true),
-            (&end.entry, &start.entry, false),
-        ] {
-            let target = target.downgrade();
-            source.connect_text_notify(move |source| {
-                let Some(target) = target.upgrade() else {
+        for (source, target, is_start) in [(start, end, true), (end, start, false)] {
+            let target = target.entry.downgrade();
+            let input = source.entry.downgrade();
+            let synchronize = Rc::new(move || {
+                let (Some(source), Some(target)) = (input.upgrade(), target.upgrade()) else {
                     return;
                 };
                 let (Ok(date), Ok(other)) = (
@@ -602,6 +548,12 @@ impl DateSection {
                     target.set_text(&date.to_string());
                 }
             });
+
+            let on_blur = synchronize.clone();
+            let focus = gtk::EventControllerFocus::new();
+            focus.connect_leave(move |_| on_blur());
+            source.entry.add_controller(focus);
+            source.connect_date_selected(move || synchronize());
         }
     }
 
@@ -610,32 +562,27 @@ impl DateSection {
         name: &str,
         date: &DateInput,
         time: &gtk::Entry,
-    ) -> gtk::Grid {
-        let grid = gtk::Grid::builder()
-            .column_spacing(8)
-            .row_spacing(8)
-            .build();
+    ) -> gtk::Box {
+        let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.append(&date.widget);
         row.append(time);
-        Self::append_field(&grid, locale, 0, name, row.upcast_ref());
-        grid
+        Self::append_field(&column, locale, name, row.upcast_ref());
+        column
     }
 
-    fn append_field(
-        grid: &gtk::Grid,
-        locale: &dyn Locale,
-        index: i32,
-        name: &str,
-        field: &gtk::Widget,
-    ) {
+    fn append_field(column: &gtk::Box, locale: &dyn Locale, name: &str, field: &gtk::Widget) {
         let label = body_label(locale, name);
         label.set_text(&format!("{}:", locale.translate(name)));
         label.set_width_chars(8);
+        label.set_valign(gtk::Align::Start);
+        label.set_margin_top(6);
         label.set_mnemonic_widget(Some(field));
-        grid.attach(&label, 0, index, 1, 1);
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        row.append(&label);
         field.set_hexpand(true);
-        grid.attach(field, 1, index, 1, 1);
+        row.append(field);
+        column.append(&row);
     }
 
     fn create_timezone(locale: &dyn Locale) -> gtk::DropDown {
@@ -902,6 +849,8 @@ fn parse_time(entry: &gtk::Entry, locale: &dyn Locale) -> anyhow::Result<NaiveTi
 struct DateInput {
     widget: gtk::Box,
     entry: gtk::Entry,
+    calendar: gtk::Calendar,
+    syncing: Rc<Cell<bool>>,
 }
 
 impl DateInput {
@@ -916,15 +865,30 @@ impl DateInput {
         let picker = Self::create_picker(locale, &calendar);
         let syncing = Rc::new(Cell::new(false));
         Self::connect_picker_open(&entry, &picker, &calendar, syncing.clone());
-        Self::connect_day_selected(&entry, &picker, &calendar, syncing);
+        Self::connect_day_selected(&entry, &picker, &calendar, syncing.clone());
         widget.append(&entry);
         widget.append(&picker);
-        Self { widget, entry }
+        Self {
+            widget,
+            entry,
+            calendar,
+            syncing,
+        }
+    }
+
+    fn connect_date_selected(&self, callback: impl Fn() + 'static) {
+        let syncing = self.syncing.clone();
+        self.calendar.connect_day_selected(move |_| {
+            if !syncing.get() {
+                callback();
+            }
+        });
     }
 
     fn create_picker(locale: &dyn Locale, calendar: &gtk::Calendar) -> gtk::MenuButton {
         let picker = gtk::MenuButton::builder()
             .icon_name("x-office-calendar-symbolic")
+            .valign(gtk::Align::Start)
             .build();
         picker.set_tooltip_text(Some(locale.translate("Choose date")));
         let popover = gtk::Popover::new();
@@ -1094,9 +1058,13 @@ impl AlarmInput {
             2 => self.absolute_trigger(timezone, locale)?,
             _ => return Ok(Vec::new()),
         };
+        Ok(self.alarms(trigger, locale))
+    }
+
+    fn alarms(&self, trigger: CalTrigger, locale: &dyn Locale) -> Vec<CalAlarm> {
         let mut alarm = CalAlarm::new(CalAction::Display, trigger);
         alarm.set_description(Some(locale.translate("Reminder").to_string()));
-        Ok(vec![alarm])
+        vec![alarm]
     }
 
     fn relative_trigger(&self) -> CalTrigger {
@@ -1371,7 +1339,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn date_inputs_keep_range_ordered() {
+    fn date_inputs_synchronize_on_focus_loss_and_picker_selection() {
         gtk::init().unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
@@ -1385,20 +1353,59 @@ mod tests {
         let start = DateInput::new(locale.as_ref(), date);
         let end = DateInput::new(locale.as_ref(), date);
         DateSection::connect_dates(&start, &end);
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        content.append(&start.widget);
+        content.append(&end.widget);
+        let other = gtk::Entry::new();
+        content.append(&other);
+        let window = gtk::Window::builder().child(&content).build();
+        window.present();
+        while gtk::glib::MainContext::default().iteration(false) {}
+
+        start.entry.grab_focus();
         start.entry.set_text("2026-10-23");
+        assert_eq!(end.entry.text(), "2026-10-15");
+        other.grab_focus();
         assert_eq!(end.entry.text(), "2026-10-23");
+
+        end.entry.grab_focus();
         end.entry.set_text("2026-10-10");
+        assert_eq!(start.entry.text(), "2026-10-23");
+        other.grab_focus();
         assert_eq!(start.entry.text(), "2026-10-10");
+
+        end.entry.grab_focus();
         end.entry.set_text("2026-10-20");
+        other.grab_focus();
         assert_eq!(start.entry.text(), "2026-10-10");
+        start.entry.grab_focus();
         start.entry.set_text("2026-10-15");
+        other.grab_focus();
         assert_eq!(end.entry.text(), "2026-10-20");
+
+        start.entry.grab_focus();
         start.entry.set_text("2026-10-");
+        other.grab_focus();
         assert_eq!(end.entry.text(), "2026-10-20");
+        end.entry.grab_focus();
         end.entry.set_text("2026-10-09");
+        other.grab_focus();
         assert_eq!(start.entry.text(), "2026-10-");
+        start.entry.grab_focus();
         start.entry.set_text("2026-10-08");
+        other.grab_focus();
         assert_eq!(end.entry.text(), "2026-10-09");
+
+        let selected = gtk::glib::DateTime::from_local(2026, 10, 23, 12, 0, 0.0).unwrap();
+        start.calendar.select_day(&selected);
+        assert_eq!(start.entry.text(), "2026-10-23");
+        assert_eq!(end.entry.text(), "2026-10-23");
+
+        let selected = gtk::glib::DateTime::from_local(2026, 10, 10, 12, 0, 0.0).unwrap();
+        end.calendar.select_day(&selected);
+        assert_eq!(start.entry.text(), "2026-10-10");
+        assert_eq!(end.entry.text(), "2026-10-10");
+        window.close();
     }
 
     #[test]
@@ -1453,7 +1460,8 @@ mod tests {
                 .build();
             window.present();
             let drain = || {
-                for _ in 0..20 {
+                // Section revealers animate for 300 ms; wait before focusing their inputs.
+                for _ in 0..40 {
                     while gtk::glib::MainContext::default().iteration(false) {}
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }

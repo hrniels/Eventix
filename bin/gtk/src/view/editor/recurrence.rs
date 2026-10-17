@@ -2,11 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use anyhow::bail;
-use chrono::{Datelike, NaiveDate, NaiveTime, Weekday};
-use eventix_ical::objects::{
-    CalDate, CalDateType, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DateContext, DayDesc,
-};
+use chrono::{Datelike, NaiveDate, Weekday};
+use eventix_ical::objects::{CalDate, CalRRule, CalRRuleFreq, CalRRuleSide, CalWDayDesc, DayDesc};
 use eventix_locale::Locale;
 use gtk::prelude::*;
 
@@ -289,19 +286,14 @@ impl RecurrenceInput {
         });
     }
 
-    pub fn value(
-        &self,
-        start: &CalDate,
-        timezone: &chrono_tz::Tz,
-        locale: &dyn Locale,
-    ) -> anyhow::Result<Option<CalRRule>> {
+    pub fn value(&self, until: Option<CalDate>) -> Option<CalRRule> {
         let frequency = match self.frequency.selected() {
             1 => CalRRuleFreq::Hourly,
             2 => CalRRuleFreq::Daily,
             3 => CalRRuleFreq::Weekly,
             4 => CalRRuleFreq::Monthly,
             5 => CalRRuleFreq::Yearly,
-            _ => return Ok(None),
+            _ => return None,
         };
         let mut rule = CalRRule::default();
         rule.set_frequency(frequency);
@@ -313,8 +305,16 @@ impl RecurrenceInput {
             }
             _ => {}
         }
-        self.apply_range(&mut rule, start, timezone, locale)?;
-        Ok(Some(rule))
+        match self.end.selected() {
+            1 => rule.set_count(self.count.value_as_int() as u64),
+            2 => {
+                if let Some(until) = until {
+                    rule.set_until(until);
+                }
+            }
+            _ => {}
+        }
+        Some(rule)
     }
 
     fn apply_weekdays(&self, rule: &mut CalRRule) {
@@ -351,45 +351,5 @@ impl RecurrenceInput {
         if frequency == CalRRuleFreq::Yearly && self.pattern.selected() != 0 {
             rule.set_by_month(Some(vec![self.month.selected() as u8 + 1]));
         }
-    }
-
-    fn apply_range(
-        &self,
-        rule: &mut CalRRule,
-        start: &CalDate,
-        timezone: &chrono_tz::Tz,
-        locale: &dyn Locale,
-    ) -> anyhow::Result<()> {
-        match self.end.selected() {
-            1 => rule.set_count(self.count.value_as_int() as u64),
-            2 => {
-                rule.set_until(self.until_value(start, timezone, locale)?);
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    fn until_value(
-        &self,
-        start: &CalDate,
-        timezone: &chrono_tz::Tz,
-        locale: &dyn Locale,
-    ) -> anyhow::Result<CalDate> {
-        let date = self.until.date(locale)?;
-        if date < start.as_naive_date() {
-            bail!(locale.translate("error.end_before_start").to_string());
-        }
-        Ok(match start {
-            CalDate::Date(..) => CalDate::new_date(date, CalDateType::Inclusive),
-            _ => {
-                let until = CalDate::new_datetime(
-                    date,
-                    NaiveTime::from_hms_opt(23, 59, 59),
-                    timezone.name(),
-                );
-                DateContext::system().date_to_utc(&until, timezone)
-            }
-        })
     }
 }

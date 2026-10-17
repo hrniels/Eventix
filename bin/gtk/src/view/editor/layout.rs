@@ -10,6 +10,7 @@ use gtk::{gdk, prelude::*};
 pub(super) struct FormSection {
     pub toggle: gtk::ToggleButton,
     pub preview: gtk::Label,
+    error: gtk::Image,
 }
 
 impl FormSection {
@@ -39,6 +40,11 @@ impl FormSection {
         toggle.set_hexpand(true);
         let heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         heading.append(&caption(locale, name));
+        let error = gtk::Image::from_icon_name("dialog-error-symbolic");
+        error.add_css_class("ev_editor_section_error");
+        error.set_visible(false);
+        heading.append(&error);
+
         let preview = gtk::Label::new(None);
         preview.add_css_class("ev_editor_preview");
         preview.set_hexpand(true);
@@ -50,7 +56,24 @@ impl FormSection {
         arrow.add_css_class("ev_editor_expand_hint");
         heading.append(&arrow);
         toggle.set_child(Some(&heading));
-        (Self { toggle, preview }, arrow)
+        (
+            Self {
+                toggle,
+                preview,
+                error,
+            },
+            arrow,
+        )
+    }
+
+    pub fn set_invalid(&self, invalid: bool) {
+        self.error.set_visible(invalid);
+        self.toggle
+            .update_state(&[gtk::accessible::State::Invalid(if invalid {
+                gtk::AccessibleInvalidState::True
+            } else {
+                gtk::AccessibleInvalidState::False
+            })]);
     }
 
     fn create_header(toggle: &gtk::ToggleButton, controls: Option<&gtk::Widget>) -> gtk::Box {
@@ -77,10 +100,16 @@ impl FormSection {
             .build()
     }
 
-    fn connect_toggle(&self, arrow: gtk::Label, content: gtk::Revealer, controls: Option<gtk::Widget>) {
+    fn connect_toggle(
+        &self,
+        arrow: gtk::Label,
+        content: gtk::Revealer,
+        controls: Option<gtk::Widget>,
+    ) {
         let summary = self.preview.clone();
         self.toggle.connect_toggled(move |button| {
             let expanded = button.is_active();
+
             summary.set_visible(!expanded);
             arrow.set_visible(!expanded);
             content.set_reveal_child(expanded);

@@ -142,6 +142,19 @@ button.ev_editor_section_toggle:checked {
     padding: 8px 12px;
 }
 
+.ev_editor_field_error,
+.ev_editor_section_error {
+    color: @error_color;
+}
+
+.ev_editor_field_error {
+    font-size: 0.9em;
+}
+
+.ev_editor_invalid {
+    border-color: @error_color;
+}
+
 .ev_day_headers > label {
     padding: 8px 0;
     font-weight: bold;

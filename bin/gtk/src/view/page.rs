@@ -217,12 +217,13 @@ impl CalendarPage {
         }
         match editor.command() {
             Ok(command) => {
+                editor.clear_errors();
                 if let Some(session) = self.imp().session.borrow().as_ref() {
                     editor.set_saving(true);
                     session.create_event(editor.id, command);
                 }
             }
-            Err(error) => editor.show_error(&format!("{error:#}")),
+            Err(issues) => editor.show_validation_errors(&issues),
         }
     }
 
