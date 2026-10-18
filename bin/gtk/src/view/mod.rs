@@ -12,3 +12,5 @@ pub(crate) mod popover;
 mod sidebar;
 mod surface;
 pub mod weekly;
+
+pub(crate) const ITEM_PANEL_WIDTH: i32 = 600;

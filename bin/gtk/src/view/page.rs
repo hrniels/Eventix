@@ -11,6 +11,8 @@ use std::{
 use chrono::{Datelike, NaiveDate, Utc};
 use eventix_locale::{DateFlags, Locale};
 use eventix_state::actions::Command;
+use eventix_state::actions::items::{EditScope, ItemId, UpdateEvent};
+use eventix_view::editor::EditorOptions;
 use eventix_view::{MonthSnapshot, WeekSnapshot, shift_month};
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
@@ -111,6 +113,18 @@ mod imp {
             self.weekly.imp().all_day.set_details(self.details.clone());
             self.monthly.set_details(self.details.clone());
             self.sidebar.set_details(self.details.clone());
+            let weak = obj.downgrade();
+            self.details.connect_edit(move |item, scope| {
+                if let Some(page) = weak.upgrade() {
+                    page.edit_event(item, scope);
+                }
+            });
+            let weak = obj.downgrade();
+            self.details.connect_dismissed(move || {
+                if let Some(page) = weak.upgrade() {
+                    page.discard_editor();
+                }
+            });
             // Keep the calendar header line as tall as the sidebar panel titles so all
             // headers line up horizontally.
             let group = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
@@ -162,7 +176,12 @@ mod imp {
             self.dispose_template();
         }
     }
-    impl WidgetImpl for CalendarPage {}
+    impl WidgetImpl for CalendarPage {
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.parent_size_allocate(width, height, baseline);
+            self.details.allocate(self.obj().upcast_ref());
+        }
+    }
     impl BoxImpl for CalendarPage {}
 }
 
@@ -173,8 +192,113 @@ glib::wrapper! {
 }
 
 impl CalendarPage {
+    fn edit_event(&self, item: ItemId, scope: EditScope) {
+        if self.editor_open() {
+            return;
+        }
+        if let Some(session) = self.imp().session.borrow().as_ref() {
+            let id = self.imp().editor_request.get().wrapping_add(1);
+            self.imp().editor_request.set(id);
+            self.imp().editor_loading.set(true);
+            session.load_edit(id, item, scope);
+        }
+    }
+
+    fn present_existing_editor(&self, id: u64, options: EditorOptions, edit: UpdateEvent) {
+        self.present_editor(ItemEditor::edit(id, options, edit));
+    }
+
+    fn present_editor(&self, editor: Rc<ItemEditor>) {
+        let weak = self.downgrade();
+        editor.cancel.connect_clicked(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.close_editor();
+            }
+        });
+        let weak = self.downgrade();
+        editor.save.connect_clicked(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.save_editor();
+            }
+        });
+        // Opening a new popup closes the previous one and invalidates pending editor loads.
+        // Install the new editor only after that cleanup has completed.
+        let shown = if editor.existing.borrow().is_some() {
+            self.imp().details.show_editor(&editor.popup_panel())
+        } else {
+            self.imp()
+                .details
+                .show_new_editor(self.upcast_ref(), &editor.popup_panel());
+            true
+        };
+        if shown {
+            self.imp().editor.replace(Some(editor.clone()));
+            editor.focus();
+        }
+    }
+
+    fn discard_editor(&self) {
+        self.imp().editor.take();
+        self.imp().editor_loading.set(false);
+        self.imp()
+            .editor_request
+            .set(self.imp().editor_request.get().wrapping_add(1));
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_existing_editor(
+        &self,
+        options: EditorOptions,
+        edit: UpdateEvent,
+    ) -> Rc<ItemEditor> {
+        self.imp().locale.replace(Some(options.locale.clone()));
+        self.present_existing_editor(1, options, edit);
+        self.imp().editor.borrow().clone().unwrap()
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_new_editor(&self, options: EditorOptions) -> Rc<ItemEditor> {
+        self.present_editor(ItemEditor::new(1, options));
+        self.imp().editor.borrow().clone().unwrap()
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_details(&self) -> Rc<DetailsController> {
+        self.imp().details.clone()
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_saved_editor(&self, event: &eventix_view::Event) {
+        self.finish_editor(Some(event));
+    }
+
     pub fn editor_open(&self) -> bool {
         self.imp().editor_loading.get() || self.imp().editor.borrow().is_some()
+    }
+
+    /// Handles editor shortcuts before either the window or a native popup consumes them.
+    pub fn handle_editor_key(
+        &self,
+        key: gdk::Key,
+        modifiers: gdk::ModifierType,
+    ) -> Option<glib::Propagation> {
+        if !self.editor_open() {
+            return None;
+        }
+        if key == gdk::Key::Escape
+            && self
+                .root()
+                .and_downcast::<gtk::Window>()
+                .is_some_and(|window| !super::editor::has_nested_popup(&window))
+        {
+            self.close_editor();
+            return Some(glib::Propagation::Stop);
+        }
+        if super::editor::is_save_key(key, modifiers) {
+            self.save_editor();
+            return Some(glib::Propagation::Stop);
+        }
+        Some(glib::Propagation::Proceed)
     }
 
     pub fn new_event(&self) {
@@ -191,16 +315,21 @@ impl CalendarPage {
     }
 
     pub fn close_editor(&self) {
+        self.finish_editor(None);
+    }
+
+    fn finish_editor(&self, event: Option<&eventix_view::Event>) {
         let editor = self.imp().editor.borrow().clone();
         if editor.as_ref().is_some_and(|editor| editor.saving.get()) {
             return;
         }
         if let Some(editor) = self.imp().editor.take() {
-            if let Some(overlay) = editor.layer.parent().and_downcast::<gtk::Overlay>() {
-                overlay.remove_overlay(&editor.layer);
+            if editor.existing.borrow().is_some() {
+                self.imp().details.restore(event, self.locale().as_ref());
+            } else {
+                self.imp().details.close();
+                self.imp().sidebar.new_event_button().grab_focus();
             }
-            self.set_sensitive(true);
-            self.imp().sidebar.new_event_button().grab_focus();
         }
         self.imp().editor_loading.set(false);
         self.imp()
@@ -220,7 +349,12 @@ impl CalendarPage {
                 editor.clear_errors();
                 if let Some(session) = self.imp().session.borrow().as_ref() {
                     editor.set_saving(true);
-                    session.create_event(editor.id, command);
+                    if let Some(mut edit) = editor.existing.borrow().clone() {
+                        edit.fields = *command;
+                        session.save_edit(editor.id, Box::new(edit));
+                    } else {
+                        session.create_event(editor.id, command);
+                    }
                 }
             }
             Err(issues) => editor.show_validation_errors(&issues),
@@ -282,6 +416,9 @@ impl CalendarPage {
     }
 
     pub fn navigate(&self, direction: i32) {
+        if self.editor_open() {
+            return;
+        }
         let date = self.imp().date.get().unwrap_or_else(|| {
             Utc::now()
                 .with_timezone(self.locale().timezone())
@@ -385,6 +522,9 @@ impl CalendarPage {
     }
 
     fn switch_view(&self, view: View) {
+        if self.editor_open() {
+            return;
+        }
         let imp = self.imp();
         if imp.view.replace(view) == view {
             return;
@@ -561,6 +701,10 @@ impl CalendarPage {
         self.imp().details.close();
     }
 
+    pub fn set_popup_owner_visible(&self, visible: bool) {
+        self.imp().details.set_owner_visible(visible);
+    }
+
     fn update_today(&self) {
         let imp = self.imp();
         if imp.view.get() == View::Month {
@@ -624,6 +768,45 @@ impl CalendarPage {
                     break;
                 }
                 match response {
+                    Event::EditLoaded(id, result) => {
+                        if id != page.imp().editor_request.get() {
+                            continue;
+                        }
+                        page.imp().editor_loading.set(false);
+                        match result {
+                            Ok((options, edit)) => {
+                                page.present_existing_editor(id, options, *edit);
+                            }
+                            Err(error) => {
+                                page.show_error("Could not apply changes", &error);
+                            }
+                        }
+                    }
+                    Event::EditSaved(id, result) => {
+                        let editor = page
+                            .imp()
+                            .editor
+                            .borrow()
+                            .clone()
+                            .filter(|editor| editor.id == id);
+                        match result {
+                            Ok((change, event)) => {
+                                if let Some(editor) = editor {
+                                    editor.set_saving(false);
+                                    page.finish_editor(Some(&event));
+                                }
+                                if let Some(session) = page.imp().session.borrow().as_ref() {
+                                    session.refresh_subscriptions(change.affected);
+                                }
+                            }
+                            Err(error) => {
+                                if let Some(editor) = editor {
+                                    editor.set_saving(false);
+                                    editor.show_error(&error);
+                                }
+                            }
+                        }
+                    }
                     Event::EditorLoaded(id, result) => {
                         if id != page.imp().editor_request.get() {
                             continue;
@@ -631,31 +814,7 @@ impl CalendarPage {
                         page.imp().editor_loading.set(false);
                         match result {
                             Ok(options) => {
-                                let overlay = page
-                                    .root()
-                                    .and_downcast::<gtk::Window>()
-                                    .and_then(|window| window.child())
-                                    .and_downcast::<gtk::Overlay>();
-                                let Some(overlay) = overlay else {
-                                    continue;
-                                };
-                                let editor = ItemEditor::new(id, options);
-                                let weak = page.downgrade();
-                                editor.cancel.connect_clicked(move |_| {
-                                    if let Some(page) = weak.upgrade() {
-                                        page.close_editor();
-                                    }
-                                });
-                                let weak = page.downgrade();
-                                editor.save.connect_clicked(move |_| {
-                                    if let Some(page) = weak.upgrade() {
-                                        page.save_editor();
-                                    }
-                                });
-                                overlay.add_overlay(&editor.layer);
-                                page.set_sensitive(false);
-                                editor.focus();
-                                page.imp().editor.replace(Some(editor));
+                                page.present_editor(ItemEditor::new(id, options));
                             }
                             Err(error) => page.show_error("Could not load local calendars", &error),
                         }
@@ -871,16 +1030,7 @@ pub(crate) mod tests {
             "updated spans change their pixel width"
         );
 
-        let find_popup = |widget: &gtk::Widget| {
-            let mut child = widget.first_child();
-            while let Some(widget) = child {
-                if let Some(popup) = widget.downcast_ref::<crate::view::details::EventDetails>() {
-                    return Some(popup.clone());
-                }
-                child = widget.next_sibling();
-            }
-            None
-        };
+        let find_popup = |_: &gtk::Widget| page.imp().details.current();
         card.emit_clicked();
         drain();
         let strip_popup = find_popup(imp.all_day.upcast_ref()).unwrap();
@@ -1062,11 +1212,7 @@ pub(crate) mod tests {
         assert_eq!(event_scroll.vadjustment().value(), 60.0);
         button.emit_clicked();
         drain();
-        let popup = button
-            .last_child()
-            .unwrap()
-            .downcast::<crate::view::details::EventDetails>()
-            .unwrap();
+        let popup = page.imp().details.current().unwrap();
         assert!(popup.is_mapped(), "undated tasks open shared details");
         page.dismiss_popovers();
         drain();
@@ -1322,17 +1468,7 @@ pub(crate) mod tests {
             cards[17].1.has_focus(),
             "refresh reuses the focused occurrence-day card"
         );
-        let find_popup = || {
-            let parent = cards[17].1.parent().unwrap();
-            let mut child = parent.first_child();
-            while let Some(widget) = child {
-                if let Some(popup) = widget.downcast_ref::<crate::view::details::EventDetails>() {
-                    return Some(popup.clone());
-                }
-                child = widget.next_sibling();
-            }
-            None
-        };
+        let find_popup = || page.imp().details.current();
         page.focus_event(None, true);
         drain();
         cards[17].1.emit_clicked();
@@ -1423,14 +1559,7 @@ pub(crate) mod tests {
         assert!(first_span.width() < allocation.width());
         first_span.emit_clicked();
         drain();
-        let mut child = parent.first_child();
-        let span_popup = loop {
-            let widget = child.expect("monthly span popup exists");
-            if let Some(popup) = widget.downcast_ref::<crate::view::details::EventDetails>() {
-                break popup.clone();
-            }
-            child = widget.next_sibling();
-        };
+        let span_popup = page.imp().details.current().unwrap();
         assert!(span_popup.is_mapped(), "spanning cards open shared details");
         imp.week_view.set_active(true);
         drain();

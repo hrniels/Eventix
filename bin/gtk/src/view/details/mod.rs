@@ -5,6 +5,7 @@
 use std::sync::LazyLock;
 
 use eventix_locale::Locale;
+use eventix_state::actions::items::{EditScope, ItemId};
 use eventix_view::{
     Event,
     details::{Attendee, Contact, Details, Response},
@@ -30,6 +31,8 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/hrniels/Eventix/gtk/view/details/details.ui")]
     pub struct EventDetails {
+        pub edits: std::cell::RefCell<Vec<(gtk::Button, EditScope)>>,
+        pub item: std::cell::RefCell<Option<ItemId>>,
         #[template_child]
         pub summary: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -96,7 +99,7 @@ impl EventDetails {
     }
 
     pub fn new(event: &Event, locale: &dyn Locale) -> Self {
-        Self::from_item(
+        let obj = Self::from_item(
             &event.id.uid,
             &DetailItem {
                 summary: &event.summary,
@@ -107,11 +110,13 @@ impl EventDetails {
                 recurrent: event.recurrent,
             },
             locale,
-        )
+        );
+        obj.set_identity(&event.id);
+        obj
     }
 
     pub fn new_sidebar(row: &SidebarRow, locale: &dyn Locale) -> Self {
-        Self::from_item(
+        let obj = Self::from_item(
             &row.id.uid,
             &DetailItem {
                 summary: &row.summary,
@@ -122,11 +127,42 @@ impl EventDetails {
                 recurrent: row.recurrent,
             },
             locale,
-        )
+        );
+        obj.set_identity(&row.id);
+        obj
+    }
+
+    fn set_identity(&self, id: &eventix_view::OccurrenceId) {
+        self.imp().item.replace(Some(ItemId {
+            calendar: id.calendar.clone(),
+            uid: id.uid.clone(),
+            recurrence: if id.recurrence.is_empty() {
+                None
+            } else {
+                id.recurrence.parse().ok()
+            },
+        }));
+    }
+
+    pub fn connect_edit(&self, callback: impl Fn(ItemId, EditScope) + 'static) {
+        let callback = std::rc::Rc::new(callback);
+        for (button, scope) in self.imp().edits.borrow().iter() {
+            let item = self.imp().item.borrow().clone();
+            let callback = callback.clone();
+            let scope = *scope;
+            button.connect_clicked(move |_| {
+                if let Some(item) = &item {
+                    callback(item.clone(), scope);
+                }
+            });
+        }
     }
 
     fn from_item(uid: &str, event: &DetailItem<'_>, locale: &dyn Locale) -> Self {
         let obj: Self = glib::Object::new();
+        if let Some(child) = obj.child() {
+            child.set_size_request(super::ITEM_PANEL_WIDTH, -1);
+        }
         obj.setup_header(event, locale);
         obj.setup_tag(uid);
         obj.add_rows(event, locale);
@@ -304,7 +340,7 @@ impl EventDetails {
 
         if actions.edit {
             if event.recurrent {
-                right.append(&menu(
+                let edit_menu = menu(
                     "pencil",
                     locale.translate("Edit"),
                     "",
@@ -317,9 +353,30 @@ impl EventDetails {
                         ),
                         ("arrow-clockwise", locale.translate("Complete series"), ""),
                     ],
-                ));
+                );
+                let content = edit_menu.popover().unwrap().child().unwrap();
+                let mut child = content.first_child();
+                for scope in [
+                    EditScope::Occurrence,
+                    EditScope::Following,
+                    EditScope::Series,
+                ] {
+                    if let Some(widget) = child {
+                        child = widget.next_sibling();
+                        self.imp()
+                            .edits
+                            .borrow_mut()
+                            .push((widget.downcast::<gtk::Button>().unwrap(), scope));
+                    }
+                }
+                right.append(&edit_menu);
             } else {
-                right.append(&button("pencil", locale.translate("Edit"), ""));
+                let edit = button("pencil", locale.translate("Edit"), "");
+                self.imp()
+                    .edits
+                    .borrow_mut()
+                    .push((edit.clone(), EditScope::Series));
+                right.append(&edit);
             }
         }
 

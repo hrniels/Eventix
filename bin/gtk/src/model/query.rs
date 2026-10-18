@@ -4,7 +4,7 @@
 
 use chrono::{DateTime, Duration};
 use chrono_tz::Tz;
-use eventix_ical::objects::{CalCompType, CalTodoStatus};
+use eventix_ical::objects::{CalCompType, CalTodoStatus, EventLike};
 use eventix_state::{State, actions::items::ItemId};
 
 /// Identifies an active query whose snapshot can be refreshed independently.
@@ -33,17 +33,34 @@ impl Query {
             return false;
         }
 
-        let Some(occurrence) = state
+        let Some(file) = state
             .store()
             .directories()
             .iter()
             .find(|dir| dir.id().as_str() == item.calendar)
-            .and_then(|dir| {
-                dir.occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())
-            })
+            .and_then(|dir| dir.file_by_id(&item.uid))
         else {
             return false;
         };
+        let Some(occurrence) =
+            file.occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())
+        else {
+            return false;
+        };
+
+        // A series edit can affect the visible period even when its first occurrence is earlier.
+        if item.recurrence.is_none()
+            && occurrence.is_recurrent()
+            && occurrence.ctype() == CalCompType::Event
+        {
+            let (start, end) = match self {
+                Self::Events { start, end } => (*start, *end),
+                Self::Sidebar { now } => (*now, *now + Duration::days(7)),
+            };
+            return file
+                .occurrences_between(start, end, |component| component.uid() == &item.uid)
+                .any(|occurrence| !occurrence.is_excluded());
+        }
 
         if occurrence.is_excluded() {
             return false;

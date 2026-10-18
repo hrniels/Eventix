@@ -92,7 +92,7 @@ impl ItemEditor {
         };
 
         let buffer = self.description.buffer();
-        Ok(Box::new(CreateEvent {
+        let mut command = Box::new(CreateEvent {
             calendar: calendar.id.clone(),
             summary: self.summary.text().to_string(),
             location: self.location.text().to_string(),
@@ -111,7 +111,31 @@ impl ItemEditor {
                 .filter(|attendee| attendee.widget.get_visible())
                 .map(super::AttendeeInput::value)
                 .collect(),
-        }))
+        });
+        // Preserve precision, custom recurrence clauses, and multiple/extended alarms when
+        // their visible controls have not changed.
+        if let (Some(existing), Some(initial)) = (
+            self.existing.borrow().as_ref(),
+            self.initial.borrow().as_ref(),
+        ) {
+            let original = &existing.fields;
+            if command.start == initial.start {
+                command.start = original.start.clone();
+            }
+            if command.end == initial.end {
+                command.end = original.end.clone();
+            }
+            if command.recurrence == initial.recurrence {
+                command.recurrence = original.recurrence.clone();
+            }
+            if command.alarms == initial.alarms {
+                command.alarms = original.alarms.clone();
+            }
+            if command.personal_alarms == initial.personal_alarms {
+                command.personal_alarms = original.personal_alarms.clone();
+            }
+        }
+        Ok(command)
     }
 }
 

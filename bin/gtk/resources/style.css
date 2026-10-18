@@ -72,7 +72,7 @@
 }
 
 .ev_editor_caption {
-    min-width: 164px;
+    min-width: 128px;
 }
 
 .ev_editor_field_label,
@@ -111,8 +111,15 @@ button.ev_editor_section_toggle:checked {
     padding: 0 4px 12px;
 }
 
+.ev_editor_dates entry {
+    min-width: 0;
+    font-size: 0.9em;
+    padding: 0 5px;
+}
+
 .ev_editor_segments > button {
-    padding: 2px 9px;
+    font-size: 0.9em;
+    padding: 2px 6px;
     min-height: 20px;
     border-radius: 0;
     border-right-width: 0;
@@ -233,6 +240,11 @@ button.ev_event.ev_cancelled label {
 
 .ev_event_details > contents {
     padding: 0;
+}
+
+.ev_event_details .ev_item_editor {
+    border: none;
+    box-shadow: none;
 }
 
 .ev_details_header {

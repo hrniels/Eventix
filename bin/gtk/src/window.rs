@@ -56,43 +56,24 @@ glib::wrapper! {
 
 impl Window {
     pub fn new(app: &gtk::Application, prefix: String, date: Option<NaiveDate>) -> Self {
-        let obj: Self = glib::Object::builder().property("application", app).build();
-        obj.setup_click_controller();
-        obj.setup_key_controller();
-        obj.connect_popover_dismissal();
-        obj.setup_actions(app);
+        let obj = Self::build(app);
         obj.imp().page.start(prefix, date);
         obj
     }
 
-    fn setup_click_controller(&self) {
-        let click = gtk::GestureClick::new();
-        click.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let weak = self.downgrade();
-        click.connect_pressed(move |_, _, x, y| {
-            let Some(window) = weak.upgrade() else { return };
-            let inside_card_or_popup =
-                window
-                    .pick(x, y, gtk::PickFlags::DEFAULT)
-                    .is_some_and(|mut widget| {
-                        loop {
-                            if widget.downcast_ref::<EventCard>().is_some()
-                                || widget.has_css_class("ev_sidebar_row")
-                                || widget.downcast_ref::<EventDetails>().is_some()
-                            {
-                                break true;
-                            }
-                            let Some(parent) = widget.parent() else {
-                                break false;
-                            };
-                            widget = parent;
-                        }
-                    });
-            if !inside_card_or_popup {
-                window.imp().page.dismiss_popovers();
-            }
-        });
-        self.add_controller(click);
+    fn build(app: &gtk::Application) -> Self {
+        let obj: Self = glib::Object::builder().property("application", app).build();
+        obj.setup_key_controller();
+        obj.connect_popover_dismissal();
+        obj.setup_actions(app);
+        obj
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_new(app: &gtk::Application) -> (Self, CalendarPage) {
+        let window = Self::build(app);
+        let page = window.imp().page.get();
+        (window, page)
     }
 
     fn setup_key_controller(&self) {
@@ -113,18 +94,8 @@ impl Window {
         key: gtk::gdk::Key,
         modifiers: gtk::gdk::ModifierType,
     ) -> glib::Propagation {
-        if self.imp().page.editor_open() {
-            if key == gtk::gdk::Key::Escape
-                && !crate::view::editor::has_nested_popup(self.upcast_ref())
-            {
-                self.imp().page.close_editor();
-                return glib::Propagation::Stop;
-            }
-            if crate::view::editor::is_save_key(key, modifiers) {
-                self.imp().page.save_editor();
-                return glib::Propagation::Stop;
-            }
-            return glib::Propagation::Proceed;
+        if let Some(propagation) = self.imp().page.handle_editor_key(key, modifiers) {
+            return propagation;
         }
         if let Some(propagation) = self.handle_details_key(key) {
             return propagation;
@@ -212,20 +183,7 @@ impl Window {
     }
 
     fn connect_popover_dismissal(&self) {
-        let weak = self.downgrade();
-        self.connect_hide(move |_| {
-            if let Some(window) = weak.upgrade() {
-                window.imp().page.dismiss_popovers();
-            }
-        });
-        let weak = self.downgrade();
-        self.connect_is_active_notify(move |window| {
-            if !window.is_active()
-                && let Some(window) = weak.upgrade()
-            {
-                window.imp().page.dismiss_popovers();
-            }
-        });
+        track_popup_dismissal(self.upcast_ref(), &self.imp().page);
     }
 
     fn setup_actions(&self, app: &gtk::Application) {
@@ -279,5 +237,79 @@ impl Window {
             }
         });
         self.add_action(&action);
+    }
+}
+
+/// Dismisses popovers inside Eventix and keeps their visibility with the active owner.
+pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
+    let click = gtk::GestureClick::new();
+    click.set_button(0);
+    click.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak_window = window.downgrade();
+    let weak_page = page.downgrade();
+    click.connect_pressed(move |click, _, _, _| {
+        if let (Some(window), Some(page), Some(surface)) = (
+            weak_window.upgrade(),
+            weak_page.upgrade(),
+            click.current_event().and_then(|event| event.surface()),
+        ) {
+            dismiss_popups_on_surface(&window, &page, &surface);
+        }
+    });
+    window.add_controller(click);
+
+    let weak_page = page.downgrade();
+    window.connect_hide(move |_| {
+        if let Some(page) = weak_page.upgrade() {
+            page.set_popup_owner_visible(false);
+        }
+    });
+    let weak_page = page.downgrade();
+    window.connect_map(move |window| {
+        if let Some(page) = weak_page.upgrade() {
+            sync_popup_visibility(window, &page);
+        }
+    });
+    let weak_page = page.downgrade();
+    window.connect_is_active_notify(move |window| {
+        if let Some(page) = weak_page.upgrade() {
+            sync_popup_visibility(window, &page);
+        }
+    });
+    let weak_page = page.downgrade();
+    window.connect_realize(move |window| {
+        let Some(surface) = window.surface().and_downcast::<gtk::gdk::Toplevel>() else {
+            return;
+        };
+        let weak_page = weak_page.clone();
+        let weak_window = window.downgrade();
+        surface.connect_state_notify(move |_| {
+            if let (Some(window), Some(page)) = (weak_window.upgrade(), weak_page.upgrade()) {
+                sync_popup_visibility(&window, &page);
+            }
+        });
+    });
+}
+
+fn sync_popup_visibility(window: &gtk::Window, page: &CalendarPage) {
+    // Nested popup grabs can temporarily deactivate GTK's window while its native
+    // toplevel remains focused. Switching applications must hide, not dismiss, its popup.
+    let focused = window.is_active()
+        || window
+            .surface()
+            .and_downcast::<gtk::gdk::Toplevel>()
+            .is_some_and(|surface| surface.state().contains(gtk::gdk::ToplevelState::FOCUSED));
+    page.set_popup_owner_visible(window.is_visible() && focused);
+}
+
+pub(crate) fn dismiss_popups_on_surface(
+    window: &gtk::Window,
+    page: &CalendarPage,
+    surface: &gtk::gdk::Surface,
+) {
+    // Popovers and nested menus have native surfaces of their own. Their controls must
+    // remain usable, while every click on the main surface dismisses the current popup.
+    if window.surface().as_ref() == Some(surface) {
+        page.dismiss_popovers();
     }
 }

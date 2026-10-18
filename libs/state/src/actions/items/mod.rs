@@ -5,12 +5,14 @@
 mod create;
 mod create_event;
 mod move_event;
+mod update_event;
 
 use eventix_ical::objects::CalDate;
 
 pub use create::create_component;
 pub use create_event::CreateEvent;
 pub use move_event::MoveEvent;
+pub use update_event::{EditScope, UpdateEvent};
 
 /// Identifies an occurrence independently of its current placement.
 #[derive(Clone, Debug, PartialEq, Eq)]

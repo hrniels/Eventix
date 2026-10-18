@@ -39,6 +39,8 @@ impl FormSection {
         toggle.set_cursor_from_name(Some("pointer"));
         toggle.set_hexpand(true);
         let heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        // Keep the pointer target on the button when expansion hides the preview underneath it.
+        heading.set_can_target(false);
         heading.append(&caption(locale, name));
         let error = gtk::Image::from_icon_name("dialog-error-symbolic");
         error.add_css_class("ev_editor_section_error");
@@ -77,7 +79,7 @@ impl FormSection {
     }
 
     fn create_header(toggle: &gtk::ToggleButton, controls: Option<&gtk::Widget>) -> gtk::Box {
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         header.add_css_class("ev_editor_row_header");
         header.append(toggle);
         if let Some(controls) = controls {
@@ -322,4 +324,66 @@ fn set_calendar_dot_color(dot: &gtk::DrawingArea, color: gdk::RGBA) {
         );
         let _ = cr.fill();
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use gtk::{graphene, prelude::*};
+
+    use super::FormSection;
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn section_preview_keeps_the_button_as_pointer_target_across_toggles() {
+        gtk::init().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        let locale = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::English,
+            chrono_tz::UTC,
+        )
+        .unwrap();
+        let (section, arrow) = FormSection::create_heading(locale.as_ref(), "Description");
+        section.preview.set_text("Event description");
+        section.connect_toggle(arrow, gtk::Revealer::new(), None);
+        let window = gtk::Window::builder()
+            .child(&section.toggle)
+            .default_width(600)
+            .build();
+        window.present();
+        let drain = || {
+            for _ in 0..10 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let point = section
+            .preview
+            .compute_point(
+                &section.toggle,
+                &graphene::Point::new(
+                    section.preview.width() as f32 / 2.0,
+                    section.preview.height() as f32 / 2.0,
+                ),
+            )
+            .unwrap();
+
+        for expanded in [false, true, false, true, false] {
+            section.toggle.set_active(expanded);
+            drain();
+            assert_eq!(
+                section.toggle.pick(
+                    f64::from(point.x()),
+                    f64::from(point.y()),
+                    gtk::PickFlags::DEFAULT,
+                ),
+                Some(section.toggle.clone().upcast()),
+                "the same pointer position must target the toggle, expanded={expanded}",
+            );
+        }
+        window.close();
+        drain();
+    }
 }

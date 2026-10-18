@@ -14,10 +14,12 @@ use eventix_ical::objects::{
     DateContext,
 };
 use eventix_locale::Locale;
+use eventix_state::actions::items::{CreateEvent, UpdateEvent};
 use eventix_view::editor::EditorOptions;
 use gtk::{gdk, glib, prelude::*};
 
 mod completion;
+mod existing;
 mod feedback;
 mod layout;
 mod recurrence;
@@ -32,6 +34,9 @@ pub(crate) struct ItemEditor {
     pub cancel: gtk::Button,
     pub id: u64,
     pub saving: Cell<bool>,
+    pub existing: RefCell<Option<UpdateEvent>>,
+    initial: RefCell<Option<Box<CreateEvent>>>,
+    title: gtk::Label,
     form: gtk::Box,
     error: gtk::Label,
     options: EditorOptions,
@@ -117,6 +122,9 @@ impl ItemEditor {
             cancel: shell.cancel,
             id,
             saving: Cell::new(false),
+            existing: RefCell::new(None),
+            initial: RefCell::new(None),
+            title: shell.title,
             form,
             error: shell.error,
             options,
@@ -362,8 +370,14 @@ impl ItemEditor {
         self.form.set_sensitive(!saving);
         self.save.set_sensitive(!saving);
         self.cancel.set_sensitive(!saving);
-        for section in &self.sections {
-            section.toggle.set_sensitive(!saving);
+        for (index, section) in self.sections.iter().enumerate() {
+            let occurrence_recurrence = index == 3
+                && self.existing.borrow().as_ref().is_some_and(|edit| {
+                    edit.scope == eventix_state::actions::items::EditScope::Occurrence
+                });
+            section
+                .toggle
+                .set_sensitive(!saving && !occurrence_recurrence);
         }
     }
 
@@ -408,6 +422,7 @@ impl ItemEditor {
 }
 
 struct EditorShell {
+    title: gtk::Label,
     layer: gtk::Box,
     save: gtk::Button,
     cancel: gtk::Button,
@@ -423,7 +438,7 @@ impl EditorShell {
         layer.set_halign(gtk::Align::Fill);
         layer.set_valign(gtk::Align::Fill);
         layer.add_css_class("ev_editor_backdrop");
-        let panel = Self::create_panel(locale);
+        let (panel, title) = Self::create_panel(locale);
         let scroll = gtk::ScrolledWindow::builder()
             .child(form)
             .hscrollbar_policy(gtk::PolicyType::Never)
@@ -440,6 +455,7 @@ impl EditorShell {
             save.set_sensitive(false);
         }
         Self {
+            title,
             layer,
             save,
             cancel,
@@ -447,13 +463,13 @@ impl EditorShell {
         }
     }
 
-    fn create_panel(locale: &dyn Locale) -> gtk::Box {
+    fn create_panel(locale: &dyn Locale) -> (gtk::Box, gtk::Label) {
         let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
         panel.add_css_class("ev_item_editor");
         panel.set_halign(gtk::Align::Center);
         panel.set_valign(gtk::Align::Center);
         panel.set_vexpand(true);
-        panel.set_size_request(684, -1);
+        panel.set_size_request(super::ITEM_PANEL_WIDTH, -1);
         let title = gtk::Label::new(Some(locale.translate("New Event")));
         title.add_css_class("ev_editor_title");
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -461,7 +477,7 @@ impl EditorShell {
         title.set_hexpand(true);
         header.append(&title);
         panel.append(&header);
-        panel
+        (panel, title)
     }
 
     fn create_error() -> gtk::Label {
@@ -509,14 +525,24 @@ impl DateSection {
         let all_day = gtk::CheckButton::new();
         all_day.set_halign(gtk::Align::Start);
         let timezone = Self::create_timezone(locale);
-        let left = Self::create_column(locale, "Start", &start, &start_time);
-        let right = Self::create_column(locale, "End", &end, &end_time);
-        Self::append_field(&left, locale, "All day", all_day.upcast_ref());
-        Self::append_field(&right, locale, "Timezone", timezone.upcast_ref());
-        let dates = gtk::Box::new(gtk::Orientation::Horizontal, 16);
-        dates.set_homogeneous(true);
-        dates.append(&left);
-        dates.append(&right);
+        let dates = gtk::Grid::builder()
+            .column_spacing(6)
+            .row_spacing(8)
+            .build();
+        dates.add_css_class("ev_editor_dates");
+        let start_fields = Self::date_fields(&start, &start_time);
+        let end_fields = Self::date_fields(&end, &end_time);
+        Self::attach_label(&dates, locale, "Start", 0, 0, start.entry.upcast_ref());
+        Self::attach_label(&dates, locale, "End", 2, 0, end.entry.upcast_ref());
+        Self::attach_label(&dates, locale, "All day", 0, 1, all_day.upcast_ref());
+        Self::attach_label(&dates, locale, "Timezone", 2, 1, timezone.upcast_ref());
+        dates.attach(&start_fields, 1, 0, 1, 1);
+        dates.attach(&end_fields, 3, 0, 1, 1);
+        dates.attach(&all_day, 1, 1, 1, 1);
+        let timezone_field = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        timezone_field.set_hexpand(true);
+        timezone_field.append(&timezone);
+        dates.attach(&timezone_field, 3, 1, 1, 1);
         Self::connect_all_day(&all_day, &start_time, &end_time, &timezone);
         let section = FormSection::new(form, locale, "Date", &dates, None);
         Self {
@@ -557,37 +583,41 @@ impl DateSection {
         }
     }
 
-    fn create_column(
+    fn attach_label(
+        grid: &gtk::Grid,
         locale: &dyn Locale,
         name: &str,
-        date: &DateInput,
-        time: &gtk::Entry,
-    ) -> gtk::Box {
-        let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        row.append(&date.widget);
-        row.append(time);
-        Self::append_field(&column, locale, name, row.upcast_ref());
-        column
-    }
-
-    fn append_field(column: &gtk::Box, locale: &dyn Locale, name: &str, field: &gtk::Widget) {
+        column: i32,
+        row: i32,
+        field: &gtk::Widget,
+    ) {
         let label = body_label(locale, name);
         label.set_text(&format!("{}:", locale.translate(name)));
-        label.set_width_chars(8);
-        label.set_valign(gtk::Align::Start);
-        label.set_margin_top(6);
         label.set_mnemonic_widget(Some(field));
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        row.append(&label);
-        field.set_hexpand(true);
-        row.append(field);
-        column.append(&row);
+        field.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
+        grid.attach(&label, column, row, 1, 1);
+    }
+
+    fn date_fields(date: &DateInput, time: &gtk::Entry) -> gtk::Box {
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        row.set_hexpand(true);
+        date.widget.set_valign(gtk::Align::Center);
+        date.entry.set_width_chars(10);
+        date.entry.set_max_width_chars(10);
+        time.set_hexpand(true);
+        time.set_valign(gtk::Align::Center);
+        time.set_max_width_chars(5);
+        row.append(&date.widget);
+        row.append(time);
+        row
     }
 
     fn create_timezone(locale: &dyn Locale) -> gtk::DropDown {
         let zones: Vec<_> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.name()).collect();
         let timezone = gtk::DropDown::from_strings(&zones);
+        timezone.set_hexpand(true);
+        timezone.set_factory(Some(&Self::timezone_factory(true)));
+        timezone.set_list_factory(Some(&Self::timezone_factory(false)));
         timezone.set_expression(Some(gtk::PropertyExpression::new(
             gtk::StringObject::static_type(),
             None::<gtk::Expression>,
@@ -605,6 +635,35 @@ impl DateSection {
             timezone.set_selected(index as u32);
         }
         timezone
+    }
+
+    fn timezone_factory(compact: bool) -> gtk::SignalListItemFactory {
+        let factory = gtk::SignalListItemFactory::new();
+        factory.connect_setup(move |_, item| {
+            let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
+                return;
+            };
+            let label = gtk::Label::builder().xalign(0.0).build();
+            if compact {
+                label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                label.set_width_chars(1);
+                label.set_max_width_chars(18);
+            }
+            item.set_child(Some(&label));
+        });
+        factory.connect_bind(|_, item| {
+            let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
+                return;
+            };
+            if let (Some(label), Some(zone)) = (
+                item.child().and_downcast::<gtk::Label>(),
+                item.item().and_downcast::<gtk::StringObject>(),
+            ) {
+                label.set_text(&zone.string());
+                label.set_tooltip_text(Some(&zone.string()));
+            }
+        });
+        factory
     }
 
     fn connect_all_day(
@@ -1106,6 +1165,7 @@ impl AlarmInput {
 }
 
 struct AttendeeInput {
+    original: Option<CalAttendee>,
     widget: gtk::Box,
     name: String,
     role: gtk::ToggleButton,
@@ -1130,6 +1190,7 @@ impl AttendeeInput {
             }
         });
         Self {
+            original: None,
             widget,
             name: name.to_string(),
             role,
@@ -1174,15 +1235,22 @@ impl AttendeeInput {
                     .map(|address| (Some(name.trim()), address.trim()))
             })
             .unwrap_or((None, self.name.trim()));
-        let mut attendee = CalAttendee::new(format!("mailto:{address}"));
+        let mut attendee = self
+            .original
+            .clone()
+            .unwrap_or_else(|| CalAttendee::new(format!("mailto:{address}")));
         if let Some(name) = name {
             attendee.set_common_name(name.to_string());
         }
-        attendee.set_role(if self.role.is_active() {
-            CalRole::Optional
-        } else {
-            CalRole::Required
-        });
+        if self.original.as_ref().is_none_or(|original| {
+            (original.role() == Some(CalRole::Optional)) != self.role.is_active()
+        }) {
+            attendee.set_role(if self.role.is_active() {
+                CalRole::Optional
+            } else {
+                CalRole::Required
+            });
+        }
         attendee
     }
 }
@@ -1193,12 +1261,18 @@ pub(crate) fn has_nested_popup(window: &gtk::Window) -> bool {
     while let Some(widget) = focused {
         let mut child = widget.first_child();
         while let Some(current) = child {
-            if current.is::<gtk::Popover>() && current.is_visible() {
+            if current.is::<gtk::Popover>()
+                && !current.is::<super::details::EventDetails>()
+                && current.is_visible()
+            {
                 return true;
             }
             child = current.next_sibling();
         }
-        if widget.is::<gtk::Popover>() {
+        if widget.is::<gtk::Popover>()
+            && !widget.is::<super::details::EventDetails>()
+            && widget.is_visible()
+        {
             return true;
         }
         focused = widget.parent();
@@ -1492,7 +1566,7 @@ mod tests {
             };
             let bounds = panel.compute_bounds(&overlay).unwrap();
             assert!(
-                panel.width() >= 682 && panel.height() > 350,
+                panel.width() >= crate::view::ITEM_PANEL_WIDTH - 2 && panel.height() > 350,
                 "panel: {} × {}",
                 panel.width(),
                 panel.height()

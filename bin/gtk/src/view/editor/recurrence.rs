@@ -45,6 +45,57 @@ pub(super) struct RecurrenceInput {
 }
 
 impl RecurrenceInput {
+    pub fn load(&self, rule: Option<&CalRRule>, timezone: &chrono_tz::Tz) {
+        let Some(rule) = rule else { return };
+        self.frequency.set_selected(match rule.frequency() {
+            CalRRuleFreq::Hourly => 1,
+            CalRRuleFreq::Daily => 2,
+            CalRRuleFreq::Weekly => 3,
+            CalRRuleFreq::Monthly => 4,
+            CalRRuleFreq::Yearly => 5,
+            _ => 0,
+        });
+        self.interval
+            .set_value(f64::from(rule.interval().unwrap_or(1)));
+        if let Some(days) = rule.by_day() {
+            for day in days {
+                self.weekdays[day.day().num_days_from_monday() as usize].set_active(true);
+            }
+            if let Some(day) = days.first()
+                && let Some((nth, side)) = day.nth()
+            {
+                self.pattern.set_selected(2);
+                self.nth.set_selected(if side == CalRRuleSide::End {
+                    3
+                } else {
+                    u32::from(nth.saturating_sub(1)).min(2)
+                });
+                self.weekday.set_selected(day.day().num_days_from_monday());
+            }
+        }
+        if let Some(day) = rule.by_mon_day().and_then(|days| days.first()) {
+            self.pattern.set_selected(1);
+            self.day.set_value(f64::from(day.num()));
+        }
+        if let Some(month) = rule.by_month().and_then(|months| months.first()) {
+            self.month.set_selected(u32::from(month.saturating_sub(1)));
+        }
+        if let Some(count) = rule.count() {
+            self.end.set_selected(1);
+            self.count.set_value(count as f64);
+        }
+        if let Some(until) = rule.until() {
+            self.end.set_selected(2);
+            self.until.entry.set_text(
+                &eventix_ical::objects::DateContext::system()
+                    .date(until)
+                    .start_in(timezone)
+                    .date_naive()
+                    .to_string(),
+            );
+        }
+    }
+
     pub fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
         let frequency = dropdown(
             locale,

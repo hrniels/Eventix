@@ -9,7 +9,7 @@ use std::{sync::Arc, thread};
 use chrono::{Duration, NaiveDate, Utc};
 use eventix_state::actions::{
     Command,
-    items::{CreateEvent, ItemId},
+    items::{CreateEvent, EditScope, ItemId, UpdateEvent},
 };
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
@@ -56,6 +56,8 @@ pub(crate) struct ChangeSet {
 pub(crate) enum Event {
     EditorLoaded(u64, Result<EditorOptions, String>),
     EditorSaved(u64, Result<ChangeSet, String>),
+    EditLoaded(u64, Result<(EditorOptions, Box<UpdateEvent>), String>),
+    EditSaved(u64, Result<(ChangeSet, eventix_view::Event), String>),
     ContentLoaded(ContentResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
     SourceLoaded(String),
@@ -68,6 +70,8 @@ pub(crate) enum Event {
 enum Message {
     PrepareEditor(u64),
     CreateEvent(u64, Box<CreateEvent>),
+    LoadEdit(u64, ItemId, EditScope),
+    SaveEdit(u64, Box<UpdateEvent>),
     ShowContent(ContentRequest),
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
@@ -81,6 +85,14 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn load_edit(&self, id: u64, item: ItemId, scope: EditScope) {
+        let _ = self.requests.try_send(Message::LoadEdit(id, item, scope));
+    }
+
+    pub fn save_edit(&self, id: u64, edit: Box<UpdateEvent>) {
+        let _ = self.requests.try_send(Message::SaveEdit(id, edit));
+    }
+
     pub fn prepare_editor(&self, id: u64) {
         let _ = self.requests.try_send(Message::PrepareEditor(id));
     }
@@ -206,11 +218,8 @@ impl Worker {
                 Message::ShowContent(_) | Message::RefreshSidebar | Message::PrepareEditor(_)
             )
         {
-            match load_local_state(self.xdg.clone()) {
-                Ok(state) => {
-                    events.push(Event::SourceLoaded(self.source_description(&state)));
-                    self.state = Some(state);
-                }
+            match self.load_state() {
+                Ok(event) => events.push(event),
                 Err(error) => {
                     let error = format!("{error:#}");
                     return vec![match message {
@@ -225,43 +234,67 @@ impl Worker {
             }
         }
 
-        match message {
-            Message::PrepareEditor(id) => events.push(Event::EditorLoaded(
+        events.extend(self.handle_request(message));
+        events
+    }
+
+    fn handle_request(&mut self, message: Message) -> Vec<Event> {
+        let event = match message {
+            Message::LoadEdit(id, item, scope) => Event::EditLoaded(
+                id,
+                self.load_edit(item, scope)
+                    .map_err(|error| format!("{error:#}")),
+            ),
+            Message::SaveEdit(id, edit) => Event::EditSaved(
+                id,
+                self.save_edit(edit).map_err(|error| format!("{error:#}")),
+            ),
+            Message::PrepareEditor(id) => Event::EditorLoaded(
                 id,
                 self.state()
                     .and_then(EditorOptions::load)
                     .map_err(|error| format!("{error:#}")),
-            )),
-            Message::CreateEvent(id, event) => events.push(Event::EditorSaved(
+            ),
+            Message::CreateEvent(id, event) => Event::EditorSaved(
                 id,
                 self.execute(Command::CreateEvent(event))
                     .map_err(|error| format!("{error:#}")),
-            )),
+            ),
             Message::ShowContent(request) => {
                 let result = self
                     .show_content(&request)
                     .map_err(|error| format!("{error:#}"));
-                events.push(Event::ContentLoaded(ContentResponse {
+                Event::ContentLoaded(ContentResponse {
                     generation: request.generation,
                     result,
-                }));
+                })
             }
-            Message::RefreshSidebar => events.push(self.refresh_sidebar()),
-            Message::RefreshSubscriptions(ids) => events.extend(self.refresh_subscriptions(&ids)),
-            Message::Reload => match load_local_state(self.xdg.clone()) {
-                Ok(state) => {
-                    events.push(Event::SourceLoaded(self.source_description(&state)));
-                    self.state = Some(state);
-                    let ids = self.subscriptions.ids();
-                    events.extend(self.refresh_subscriptions(&ids));
-                }
-                Err(error) => events.push(Event::ReloadFailed(format!("{error:#}"))),
-            },
-            Message::Execute(command) => events.push(match self.execute(command) {
+            Message::RefreshSidebar => self.refresh_sidebar(),
+            Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
+            Message::Reload => return self.reload(),
+            Message::Execute(command) => match self.execute(command) {
                 Ok(change) => Event::Changed(change),
                 Err(error) => Event::CommandFailed(format!("{error:#}")),
-            }),
-        }
+            },
+        };
+        vec![event]
+    }
+
+    fn load_state(&mut self) -> anyhow::Result<Event> {
+        let state = load_local_state(self.xdg.clone())?;
+        let event = Event::SourceLoaded(self.source_description(&state));
+        self.state = Some(state);
+        Ok(event)
+    }
+
+    fn reload(&mut self) -> Vec<Event> {
+        let event = match self.load_state() {
+            Ok(event) => event,
+            Err(error) => return vec![Event::ReloadFailed(format!("{error:#}"))],
+        };
+        let mut events = vec![event];
+        let ids = self.subscriptions.ids();
+        events.extend(self.refresh_subscriptions(&ids));
         events
     }
 
@@ -269,6 +302,35 @@ impl Worker {
         self.state
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No loaded state"))
+    }
+
+    fn load_edit(
+        &self,
+        item: ItemId,
+        scope: EditScope,
+    ) -> anyhow::Result<(EditorOptions, Box<UpdateEvent>)> {
+        let state = self.state()?;
+        Ok((
+            EditorOptions::load(state)?,
+            Box::new(UpdateEvent::load(state, item, scope)?),
+        ))
+    }
+
+    fn save_edit(
+        &mut self,
+        edit: Box<UpdateEvent>,
+    ) -> anyhow::Result<(ChangeSet, eventix_view::Event)> {
+        let change = self.execute(Command::UpdateEvent(edit))?;
+        let state = self.state()?;
+        let event = eventix_view::Event::load(state, &change.items[0]).ok_or_else(|| {
+            anyhow::anyhow!(
+                state
+                    .locale()
+                    .translate("Occurrence is no longer available")
+                    .to_string()
+            )
+        })?;
+        Ok((change, event))
     }
 
     fn show_content(&mut self, request: &ContentRequest) -> anyhow::Result<Snapshot> {
@@ -539,6 +601,90 @@ mod tests {
         worker
             .subscriptions
             .register(SubscriptionId::Sidebar, Query::Sidebar { now });
+    }
+
+    #[test]
+    fn edit_requests_return_saved_details_and_invalidate_old_and_new_query_membership() {
+        use eventix_state::actions::items::EditScope;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        subscribe(&mut worker, 8, "2026-10-12", View::Week);
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: Some("TU2026-10-13T09:00:00".parse().unwrap()),
+        };
+        let Some(Event::EditLoaded(42, Ok((_, mut edit)))) = worker
+            .handle(Message::LoadEdit(42, item.clone(), EditScope::Occurrence))
+            .pop()
+        else {
+            panic!("expected edit draft");
+        };
+        assert_eq!(edit.fields.summary, "Move me");
+        let stale = edit.clone();
+        edit.fields.summary = "Edited occurrence".into();
+        edit.fields.start = "TU2026-11-10T09:00:00".parse().unwrap();
+        edit.fields.end = "TU2026-11-10T10:00:00".parse().unwrap();
+        let Some(Event::EditSaved(42, Ok((change, event)))) =
+            worker.handle(Message::SaveEdit(42, edit)).pop()
+        else {
+            panic!("expected saved details");
+        };
+        assert_eq!(change.items, vec![item]);
+        assert!(change.affected.contains(&SubscriptionId::Calendar(8)));
+        assert_eq!(event.summary, "Edited occurrence");
+        assert_eq!(event.start.date_naive().to_string(), "2026-11-10");
+        assert!(matches!(
+            worker.handle(Message::SaveEdit(43, stale)).as_slice(),
+            [Event::EditSaved(43, Err(_))]
+        ));
+        let responses = worker.handle(Message::RefreshSubscriptions(change.affected));
+        let Some(Event::ContentLoaded(response)) = responses.first() else {
+            panic!("expected calendar refresh");
+        };
+        let Ok(Snapshot::Week(week)) = &response.result else {
+            panic!("expected week");
+        };
+        assert!(week.days[1].timed.is_empty());
+    }
+
+    #[test]
+    fn series_edits_refresh_periods_containing_later_occurrences() {
+        use eventix_ical::objects::{EventLike, UpdatableEventLike};
+        use eventix_state::actions::items::EditScope;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state
+            .as_mut()
+            .unwrap()
+            .store_mut()
+            .file_by_id_mut("move-me")
+            .unwrap()
+            .component_with_mut(|component| component.rid().is_none())
+            .unwrap()
+            .set_rrule(Some("FREQ=DAILY;COUNT=20".parse().unwrap()));
+        subscribe(&mut worker, 9, "2026-10-19", View::Week);
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: None,
+        };
+        let Some(Event::EditLoaded(1, Ok((_, mut edit)))) = worker
+            .handle(Message::LoadEdit(1, item, EditScope::Series))
+            .pop()
+        else {
+            panic!("expected series draft");
+        };
+        edit.fields.summary = "Edited series".into();
+        let Some(Event::EditSaved(1, Ok((change, _)))) =
+            worker.handle(Message::SaveEdit(1, edit)).pop()
+        else {
+            panic!("expected saved series");
+        };
+        assert!(change.affected.contains(&SubscriptionId::Calendar(9)));
     }
 
     #[test]

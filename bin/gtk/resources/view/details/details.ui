@@ -7,7 +7,6 @@
     <property name="child">
       <object class="GtkBox">
         <property name="orientation">vertical</property>
-        <property name="width-request">440</property>
         <child>
           <object class="GtkBox" id="header">
             <property name="spacing">12</property>

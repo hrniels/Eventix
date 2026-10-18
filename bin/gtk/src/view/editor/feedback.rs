@@ -163,8 +163,8 @@ impl ItemEditor {
 
     fn connect_focus_feedback(self: &Rc<Self>) {
         let weak = Rc::downgrade(self);
-        self.layer.connect_root_notify(move |layer| {
-            let Some(window) = layer.root().and_downcast::<gtk::Window>() else {
+        self.form.connect_root_notify(move |form| {
+            let Some(window) = form.root().and_downcast::<gtk::Window>() else {
                 return;
             };
 
@@ -176,7 +176,7 @@ impl ItemEditor {
 
                 // Date range synchronization must finish before the errors are checked.
                 gtk::glib::idle_add_local_once(move || {
-                    if editor.layer.is_mapped() {
+                    if editor.form.is_mapped() {
                         editor.update_feedback();
                     }
                 });

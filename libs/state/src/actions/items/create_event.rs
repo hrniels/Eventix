@@ -12,7 +12,7 @@ use super::{ItemId, create_component};
 use crate::{CalendarAlarmType, State};
 
 /// Creates an event from frontend-independent, already parsed field values.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CreateEvent {
     pub calendar: String,
     pub summary: String,
@@ -29,6 +29,11 @@ pub struct CreateEvent {
 impl CreateEvent {
     /// Validates and persists an event, returning its new identity.
     pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+        self.validate(state)?;
+        self.create(state)
+    }
+
+    pub(super) fn validate(&self, state: &State) -> anyhow::Result<()> {
         let locale = state.locale();
 
         if self.summary.trim().is_empty() {
@@ -67,6 +72,11 @@ impl CreateEvent {
             }
         }
 
+        Ok(())
+    }
+
+    fn create(self, state: &mut State) -> anyhow::Result<ItemId> {
+        let locale = state.locale();
         let personal_alarms = self.personal_alarms;
         let identity = create_component(
             state,
