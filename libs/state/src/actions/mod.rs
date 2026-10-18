@@ -8,7 +8,7 @@ pub mod items;
 
 use crate::State;
 
-use items::{CreateItem, ItemId, MoveEvent, UpdateItem};
+use items::{CreateItem, DeleteItem, ItemId, MoveEvent, UpdateItem};
 
 /// A validated application operation to execute against the authoritative state.
 #[derive(Debug)]
@@ -16,6 +16,7 @@ pub enum Command {
     MoveEvent(MoveEvent),
     CreateItem(Box<CreateItem>),
     UpdateItem(Box<UpdateItem>),
+    DeleteItem(DeleteItem),
 }
 
 impl Command {
@@ -25,6 +26,7 @@ impl Command {
             Self::MoveEvent(command) => std::slice::from_ref(&command.item),
             Self::CreateItem(_) => &[],
             Self::UpdateItem(command) => std::slice::from_ref(&command.item),
+            Self::DeleteItem(command) => std::slice::from_ref(&command.item),
         }
     }
 
@@ -34,6 +36,7 @@ impl Command {
             Self::MoveEvent(command) => command.execute(state).map(|item| vec![item]),
             Self::CreateItem(command) => command.execute(state).map(|item| vec![item]),
             Self::UpdateItem(command) => command.execute(state).map(|item| vec![item]),
+            Self::DeleteItem(command) => command.execute(state).map(|item| vec![item]),
         }
     }
 }

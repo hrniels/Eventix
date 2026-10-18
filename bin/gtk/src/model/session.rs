@@ -848,6 +848,39 @@ mod tests {
     }
 
     #[test]
+    fn deletion_invalidates_old_calendar_and_sidebar_membership() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        subscribe(&mut worker, 1, "2026-10-12", View::Week);
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: None,
+        };
+        let change = worker
+            .execute(Command::DeleteItem(
+                eventix_state::actions::items::DeleteItem { item: item.clone() },
+            ))
+            .unwrap();
+        assert_eq!(change.items, vec![item]);
+        assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
+        assert!(change.affected.contains(&SubscriptionId::Sidebar));
+        let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+        let week = events
+            .iter()
+            .find_map(|event| match event {
+                Event::ContentLoaded(response) => match response.result.as_ref().unwrap() {
+                    Snapshot::Week(week) => Some(week),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .unwrap();
+        assert!(week.days.iter().all(|day| day.timed.is_empty()));
+        assert!(!tmp.path().join("event.ics").exists());
+    }
+
+    #[test]
     fn navigation_replaces_queries_and_obsolete_invalidations_do_not_restore_old_views() {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());

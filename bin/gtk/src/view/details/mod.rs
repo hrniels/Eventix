@@ -16,6 +16,8 @@ use regex::Regex;
 
 use crate::style;
 
+pub(crate) mod delete;
+
 struct DetailItem<'a> {
     summary: &'a str,
     calendar: &'a str,
@@ -32,7 +34,9 @@ mod imp {
     #[template(resource = "/io/github/hrniels/Eventix/gtk/view/details/details.ui")]
     pub struct EventDetails {
         pub edits: std::cell::RefCell<Vec<(gtk::Button, EditScope)>>,
+        pub delete: std::cell::RefCell<Option<gtk::Button>>,
         pub item: std::cell::RefCell<Option<ItemId>>,
+        pub recurrent: std::cell::Cell<bool>,
         #[template_child]
         pub summary: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -158,6 +162,26 @@ impl EventDetails {
         }
     }
 
+    pub fn connect_delete(&self, callback: impl Fn(ItemId, bool, String) + 'static) {
+        if let Some(button) = self.imp().delete.borrow().as_ref() {
+            let item = self.imp().item.borrow().clone();
+            let recurrent = self.imp().recurrent.get();
+            let summary = self.imp().summary.text().to_string();
+            button.connect_clicked(move |_| {
+                if let Some(item) = &item {
+                    callback(
+                        ItemId {
+                            recurrence: None,
+                            ..item.clone()
+                        },
+                        recurrent,
+                        summary.clone(),
+                    );
+                }
+            });
+        }
+    }
+
     fn from_item(uid: &str, event: &DetailItem<'_>, locale: &dyn Locale) -> Self {
         let obj: Self = glib::Object::new();
         if let Some(child) = obj.child() {
@@ -167,6 +191,7 @@ impl EventDetails {
         obj.setup_tag(uid);
         obj.add_rows(event, locale);
         obj.add_actions(event, locale);
+        obj.imp().recurrent.set(event.recurrent);
         obj
     }
 
@@ -311,7 +336,7 @@ impl EventDetails {
         let right = &self.imp().actions_right;
 
         if actions.delete {
-            left.append(&button(
+            let delete = button(
                 "trash",
                 locale.translate(if event.recurrent {
                     "Delete series"
@@ -319,7 +344,9 @@ impl EventDetails {
                     "Delete"
                 }),
                 "ev_details_critical",
-            ));
+            );
+            left.append(&delete);
+            self.imp().delete.replace(Some(delete));
         }
 
         if actions.cancel || actions.exclude {

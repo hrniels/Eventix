@@ -220,6 +220,8 @@
 "Default" = "Standard"
 "Delete series" = "Serie löschen"
 "Delete" = "Löschen"
+"Deletes the item \"{}\"." = "Löscht das Element „{}“."
+"Deletes the series \"{}\"." = "Löscht die Serie „{}“."
 "Description" = "Beschreibung"
 "Discover" = "Aufdecken"
 "Due date" = "Due date"

@@ -221,6 +221,8 @@
 "Default" = "Default"
 "Delete series" = "Delete series"
 "Delete" = "Delete"
+"Deletes the item \"{}\"." = "Deletes the item \"{}\"."
+"Deletes the series \"{}\"." = "Deletes the series \"{}\"."
 "Description" = "Description"
 "Discover" = "Discover"
 "Due date" = "Due date"

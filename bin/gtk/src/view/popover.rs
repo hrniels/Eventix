@@ -19,11 +19,13 @@ const PLACEMENT_HYSTERESIS: i32 = 64;
 const TRANSITION_DURATION: u32 = 180;
 
 type EditHandler = Rc<dyn Fn(ItemId, EditScope)>;
+type DeleteHandler = Rc<dyn Fn(ItemId, bool, String)>;
 
 /// Owns the shared details and event-editor popup for the calendar.
 #[derive(Default)]
 pub(crate) struct DetailsController {
     edit: RefCell<Option<EditHandler>>,
+    delete: RefCell<Option<DeleteHandler>>,
     dismissed: RefCell<Option<Box<dyn Fn()>>>,
     original: RefCell<Option<gtk::Widget>>,
     editor_scroll: RefCell<Option<gtk::ScrolledWindow>>,
@@ -45,13 +47,21 @@ impl DetailsController {
         self.edit.replace(Some(Rc::new(callback)));
     }
 
+    pub fn connect_delete(&self, callback: impl Fn(ItemId, bool, String) + 'static) {
+        self.delete.replace(Some(Rc::new(callback)));
+    }
+
     pub fn connect_dismissed(&self, callback: impl Fn() + 'static) {
         self.dismissed.replace(Some(Box::new(callback)));
     }
 
-    fn bind_edit(&self, popover: &EventDetails) {
+    fn bind_actions(&self, popover: &EventDetails) {
         if let Some(callback) = self.edit.borrow().clone() {
             popover.connect_edit(move |item, scope| callback(item, scope));
+        }
+        if let Some(callback) = self.delete.borrow().clone() {
+            popover
+                .connect_delete(move |item, recurrent, summary| callback(item, recurrent, summary));
         }
     }
 
@@ -102,7 +112,7 @@ impl DetailsController {
             popover.update_property(&[gtk::accessible::Property::Label(
                 &updated.imp().summary.text(),
             )]);
-            self.bind_edit(&updated);
+            self.bind_actions(&updated);
             let child = updated.child();
             updated.set_child(None::<&gtk::Widget>);
             child
@@ -310,7 +320,7 @@ impl DetailsController {
             self.set_editor_scroll(panel);
             self.retained.set(true);
         }
-        self.bind_edit(&popover);
+        self.bind_actions(&popover);
         Self::content_stack(&popover);
         self.connect_keys(&popover);
         self.source.replace(Some(parent.downgrade()));

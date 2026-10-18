@@ -12,7 +12,7 @@ use chrono::{Datelike, NaiveDate, Utc};
 use eventix_ical::objects::CalCompType;
 use eventix_locale::{DateFlags, Locale};
 use eventix_state::actions::Command;
-use eventix_state::actions::items::{EditScope, ItemId, UpdateItem};
+use eventix_state::actions::items::{DeleteItem, EditScope, ItemId, UpdateItem};
 use eventix_view::editor::EditorOptions;
 use eventix_view::{MonthSnapshot, WeekSnapshot, shift_month};
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
@@ -120,6 +120,13 @@ mod imp {
                     page.edit_item(item, scope);
                 }
             });
+            let weak = obj.downgrade();
+            self.details
+                .connect_delete(move |item, recurrent, summary| {
+                    if let Some(page) = weak.upgrade() {
+                        page.confirm_delete(item, recurrent, &summary);
+                    }
+                });
             let weak = obj.downgrade();
             self.details.connect_dismissed(move || {
                 if let Some(page) = weak.upgrade() {
@@ -540,6 +547,24 @@ impl CalendarPage {
         } else {
             false
         }
+    }
+
+    fn confirm_delete(&self, item: ItemId, recurrent: bool, summary: &str) {
+        if !self.can_edit() {
+            return;
+        }
+        let Some(window) = self.root().and_downcast::<gtk::Window>() else {
+            return;
+        };
+        let locale = self.locale();
+        let weak = self.downgrade();
+        super::details::delete::confirm(&window, locale.as_ref(), recurrent, summary, move || {
+            if let Some(page) = weak.upgrade()
+                && page.execute_command(Command::DeleteItem(DeleteItem { item }))
+            {
+                page.dismiss_popovers();
+            }
+        });
     }
 
     fn switch_view(&self, view: View) {
