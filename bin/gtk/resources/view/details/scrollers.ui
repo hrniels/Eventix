@@ -9,6 +9,8 @@
   </object>
   <object class="GtkScrolledWindow" id="description_scroll">
     <property name="hscrollbar-policy">never</property>
+    <!-- Keep scrolling without imposing the scrollbar's minimum height. -->
+    <property name="vscrollbar-policy">external</property>
     <property name="propagate-natural-height">true</property>
     <property name="max-content-height">150</property>
     <property name="valign">start</property>
