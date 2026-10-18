@@ -354,7 +354,13 @@ impl EventDetails {
                         ("arrow-clockwise", locale.translate("Complete series"), ""),
                     ],
                 );
-                let content = edit_menu.popover().unwrap().child().unwrap();
+                let popover = edit_menu.popover().unwrap();
+                popover.add_css_class("ev_details_edit_menu");
+                popover.set_has_arrow(false);
+                popover.set_position(gtk::PositionType::Bottom);
+                popover.set_halign(gtk::Align::Start);
+                let content = popover.child().unwrap().downcast::<gtk::Box>().unwrap();
+                content.set_spacing(0);
                 let mut child = content.first_child();
                 for scope in [
                     EditScope::Occurrence,
@@ -363,6 +369,10 @@ impl EventDetails {
                 ] {
                     if let Some(widget) = child {
                         child = widget.next_sibling();
+                        widget.set_halign(gtk::Align::Fill);
+                        if let Some(content) = widget.first_child() {
+                            content.set_halign(gtk::Align::Start);
+                        }
                         self.imp()
                             .edits
                             .borrow_mut()

@@ -35,8 +35,13 @@ impl ItemEditor {
     }
 
     fn populate_existing(&self, edit: &UpdateEvent) {
-        self.title
-            .set_text(self.options.locale.translate("Edit Event"));
+        let title = match edit.scope {
+            EditScope::Occurrence => "Edit Event Occurrence",
+            EditScope::Following => "Edit Following Event Occurrences",
+            EditScope::Series if edit.fields.recurrence.is_some() => "Edit Event Series",
+            EditScope::Series => "Edit Event",
+        };
+        self.title.set_text(self.options.locale.translate(title));
         let fields = &edit.fields;
         self.summary.set_text(&fields.summary);
         self.location.set_text(&fields.location);
