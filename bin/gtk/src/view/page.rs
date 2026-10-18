@@ -9,9 +9,10 @@ use std::{
 };
 
 use chrono::{Datelike, NaiveDate, Utc};
+use eventix_ical::objects::CalCompType;
 use eventix_locale::{DateFlags, Locale};
 use eventix_state::actions::Command;
-use eventix_state::actions::items::{EditScope, ItemId, UpdateEvent};
+use eventix_state::actions::items::{EditScope, ItemId, UpdateItem};
 use eventix_view::editor::EditorOptions;
 use eventix_view::{MonthSnapshot, WeekSnapshot, shift_month};
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
@@ -22,7 +23,7 @@ use super::{
     weekly::content::WeekContent,
 };
 use crate::model::session::{
-    CalendarSession, ContentRequest, ContentResponse, Event, Snapshot, View,
+    CalendarSession, ContentRequest, ContentResponse, Event, SavedItem, Snapshot, View,
 };
 use crate::style;
 
@@ -116,7 +117,7 @@ mod imp {
             let weak = obj.downgrade();
             self.details.connect_edit(move |item, scope| {
                 if let Some(page) = weak.upgrade() {
-                    page.edit_event(item, scope);
+                    page.edit_item(item, scope);
                 }
             });
             let weak = obj.downgrade();
@@ -192,7 +193,7 @@ glib::wrapper! {
 }
 
 impl CalendarPage {
-    fn edit_event(&self, item: ItemId, scope: EditScope) {
+    fn edit_item(&self, item: ItemId, scope: EditScope) {
         if self.editor_open() {
             return;
         }
@@ -204,7 +205,7 @@ impl CalendarPage {
         }
     }
 
-    fn present_existing_editor(&self, id: u64, options: EditorOptions, edit: UpdateEvent) {
+    fn present_existing_editor(&self, id: u64, options: EditorOptions, edit: UpdateItem) {
         self.present_editor(ItemEditor::edit(id, options, edit));
     }
 
@@ -249,7 +250,7 @@ impl CalendarPage {
     pub(super) fn test_existing_editor(
         &self,
         options: EditorOptions,
-        edit: UpdateEvent,
+        edit: UpdateItem,
     ) -> Rc<ItemEditor> {
         self.imp().locale.replace(Some(options.locale.clone()));
         self.present_existing_editor(1, options, edit);
@@ -268,8 +269,8 @@ impl CalendarPage {
     }
 
     #[cfg(test)]
-    pub(super) fn test_saved_editor(&self, event: &eventix_view::Event) {
-        self.finish_editor(Some(event));
+    pub(super) fn test_saved_editor(&self, item: SavedItem) {
+        self.finish_editor(Some(&item));
     }
 
     pub fn editor_open(&self) -> bool {
@@ -302,6 +303,14 @@ impl CalendarPage {
     }
 
     pub fn new_event(&self) {
+        self.new_item(CalCompType::Event);
+    }
+
+    pub fn new_task(&self) {
+        self.new_item(CalCompType::Todo);
+    }
+
+    fn new_item(&self, kind: CalCompType) {
         if self.editor_open() {
             return;
         }
@@ -310,7 +319,7 @@ impl CalendarPage {
             let id = self.imp().editor_request.get().wrapping_add(1);
             self.imp().editor_request.set(id);
             self.imp().editor_loading.set(true);
-            session.prepare_editor(id);
+            session.prepare_editor(id, kind);
         }
     }
 
@@ -318,17 +327,29 @@ impl CalendarPage {
         self.finish_editor(None);
     }
 
-    fn finish_editor(&self, event: Option<&eventix_view::Event>) {
+    fn finish_editor(&self, item: Option<&SavedItem>) {
         let editor = self.imp().editor.borrow().clone();
         if editor.as_ref().is_some_and(|editor| editor.saving.get()) {
             return;
         }
         if let Some(editor) = self.imp().editor.take() {
             if editor.existing.borrow().is_some() {
-                self.imp().details.restore(event, self.locale().as_ref());
+                let locale = self.locale();
+                let updated = item.map(|item| match item {
+                    SavedItem::Event(event) => {
+                        super::details::EventDetails::new(event, locale.as_ref())
+                    }
+                    SavedItem::Task(task) => {
+                        super::details::EventDetails::new_sidebar(task, locale.as_ref())
+                    }
+                });
+                self.imp().details.restore_details(updated);
             } else {
                 self.imp().details.close();
-                self.imp().sidebar.new_event_button().grab_focus();
+                self.imp()
+                    .sidebar
+                    .new_item_button(editor.kind())
+                    .grab_focus();
             }
         }
         self.imp().editor_loading.set(false);
@@ -353,7 +374,7 @@ impl CalendarPage {
                         edit.fields = *command;
                         session.save_edit(editor.id, Box::new(edit));
                     } else {
-                        session.create_event(editor.id, command);
+                        session.create_item(editor.id, command);
                     }
                 }
             }

@@ -114,6 +114,13 @@ impl ItemEditor {
             ),
             FieldFeedback::new(Field::NewAttendee, &self.new_attendee, Some(4)),
         ];
+        if let Some(status) = &self.task_status {
+            self.feedback.push(FieldFeedback::new(
+                Field::CompletedDate,
+                &status.completed.entry,
+                None,
+            ));
+        }
     }
 
     /// Presents all field errors and reveals the first invalid control on Save.
@@ -137,12 +144,19 @@ impl ItemEditor {
             }
             // The revealer must finish opening before focus can scroll the entry into view.
             let input = feedback.input.downgrade();
+            let target = if first.field == Field::StartDate && !self.has_start.is_active() {
+                self.has_start.clone().upcast::<gtk::Widget>()
+            } else {
+                feedback.input.clone()
+            }
+            .downgrade();
             gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(310), move || {
                 if let Some(input) = input.upgrade()
                     && input.is_mapped()
                     && input.has_css_class("ev_editor_invalid")
+                    && let Some(target) = target.upgrade()
                 {
-                    input.grab_focus();
+                    target.grab_focus();
                 }
             });
         }
@@ -260,6 +274,7 @@ mod tests {
             let editor = ItemEditor::new(
                 1,
                 EditorOptions {
+                    kind: eventix_ical::objects::CalCompType::Event,
                     calendars: vec![EditorCalendar {
                         id: "test".into(),
                         name: "Test".into(),

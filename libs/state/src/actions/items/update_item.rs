@@ -13,10 +13,10 @@ use eventix_ical::{
 };
 use eventix_locale::Locale;
 
-use super::{CreateEvent, ItemId};
+use super::{CreateItem, ItemId, TaskStatus};
 use crate::State;
 
-/// Selects which part of an event series is edited.
+/// Selects which part of an event or task series is edited.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditScope {
     Occurrence,
@@ -26,15 +26,15 @@ pub enum EditScope {
 
 /// An owned edit draft with the file revision against which it was prepared.
 #[derive(Clone, Debug)]
-pub struct UpdateEvent {
+pub struct UpdateItem {
     pub item: ItemId,
     pub scope: EditScope,
-    pub fields: CreateEvent,
+    pub fields: CreateItem,
     revision: SystemTime,
 }
 
-impl UpdateEvent {
-    /// Loads an editable event, rejecting unavailable calendars and events without edit permission.
+impl UpdateItem {
+    /// Loads an editable item, rejecting unavailable calendars and items without edit permission.
     pub fn load(state: &State, mut item: ItemId, scope: EditScope) -> anyhow::Result<Self> {
         let locale = state.locale();
         let (collection, _) = state.settings().calendar(&item.calendar).context(
@@ -64,7 +64,6 @@ impl UpdateEvent {
         if collection.is_read_only()
             || file.directory().as_str() != item.calendar
             || !occ.is_owned_by(mail.as_ref())
-            || occ.ctype() != eventix_ical::objects::CalCompType::Event
         {
             bail!(locale.translate("Could not apply changes").to_string());
         }
@@ -87,24 +86,29 @@ impl UpdateEvent {
         item: &ItemId,
         scope: EditScope,
         occ: &Occurrence<'_>,
-    ) -> anyhow::Result<CreateEvent> {
-        let locale = state.locale();
+    ) -> anyhow::Result<CreateItem> {
         let personal_alarms = state
             .personal_alarms()
             .get(&item.calendar)
             .and_then(|alarms| alarms.get(&item.uid, item.recurrence.as_ref()))
             .map(|alarms| alarms.alarms().to_vec());
-        Ok(CreateEvent {
+        Ok(CreateItem {
+            kind: occ.ctype(),
+            task_status: (occ.ctype() == eventix_ical::objects::CalCompType::Todo).then(|| {
+                TaskStatus {
+                    status: occ
+                        .todo_status()
+                        .unwrap_or(eventix_ical::objects::CalTodoStatus::NeedsAction),
+                    percent: occ.todo_percent(),
+                    completed: occ.todo_completed().cloned(),
+                }
+            }),
             calendar: item.calendar.clone(),
             summary: occ.summary().cloned().unwrap_or_default(),
             location: occ.location().cloned().unwrap_or_default(),
             description: occ.description().cloned().unwrap_or_default(),
-            start: occ
-                .occurrence_startdate()
-                .context(locale.translate("error.valid_date_time").to_string())?,
-            end: occ
-                .occurrence_enddate()
-                .context(locale.translate("error.valid_date_time").to_string())?,
+            start: occ.occurrence_startdate(),
+            end: occ.occurrence_enddate(),
             recurrence: if scope == EditScope::Occurrence {
                 None
             } else {
@@ -120,7 +124,7 @@ impl UpdateEvent {
         state: &State,
         file: &CalFile,
         item: &ItemId,
-        fields: &mut CreateEvent,
+        fields: &mut CreateItem,
     ) -> anyhow::Result<()> {
         let locale = state.locale();
         if let Some(rule) = fields.recurrence.as_mut()
@@ -264,6 +268,9 @@ impl UpdateEvent {
         self.fields.validate(state)?;
         let current = Self::load(state, self.item.clone(), self.scope)?;
         let locale = state.locale();
+        if current.fields.kind != self.fields.kind {
+            bail!(locale.translate("Could not apply changes").to_string());
+        }
         if current.revision != self.revision {
             bail!(locale.translate("error.component_was_modified").to_string());
         }
@@ -274,10 +281,7 @@ impl UpdateEvent {
         if self.fields.calendar != self.item.calendar {
             let target = state.settings().calendar(&self.fields.calendar);
             if !target.is_some_and(|(collection, calendar)| {
-                !collection.is_read_only()
-                    && calendar
-                        .types()
-                        .contains(&eventix_ical::objects::CalCompType::Event)
+                !collection.is_read_only() && calendar.types().contains(&self.fields.kind)
             }) {
                 bail!(locale.translate("Could not apply changes").to_string());
             }
@@ -289,7 +293,7 @@ impl UpdateEvent {
     fn apply_fields(
         &self,
         component: &mut CalComponent,
-        current: &CreateEvent,
+        current: &CreateItem,
         organizer: Option<&CalOrganizer>,
     ) {
         let occurrence = self.scope == EditScope::Occurrence;
@@ -302,9 +306,19 @@ impl UpdateEvent {
         if !occurrence || self.fields.description != current.description {
             component.set_description(Some(self.fields.description.clone()));
         }
-        component.set_start(Some(self.fields.start.clone()));
+        component.set_start(self.fields.start.clone());
         if let Some(event) = component.as_event_mut() {
-            event.set_end(Some(self.fields.end.clone()));
+            event.set_end(self.fields.end.clone());
+        } else if let Some(task) = component.as_todo_mut() {
+            task.set_due(self.fields.end.clone());
+            if self.fields.task_status != current.task_status
+                && let Some(status) = &self.fields.task_status
+            {
+                status.apply(task);
+                if task.priority().is_none() {
+                    task.set_priority(Some(eventix_ical::objects::PRIORITY_MEDIUM));
+                }
+            }
         }
         if !occurrence || self.fields.alarms != current.alarms {
             component.set_alarms(Some(self.fields.alarms.clone()));
@@ -321,16 +335,14 @@ impl UpdateEvent {
     fn update_series(
         &self,
         staged: &mut CalFile,
-        current: &CreateEvent,
+        current: &CreateItem,
         apply: impl Fn(&mut CalComponent),
         locale: &dyn Locale,
     ) -> anyhow::Result<()> {
-        if self.fields.start != current.start || self.fields.end != current.end {
-            staged.change_series_range(
-                &self.item.uid,
-                self.fields.start.clone(),
-                Some(self.fields.end.clone()),
-            )?;
+        if (self.fields.start != current.start || self.fields.end != current.end)
+            && let Some(start) = &self.fields.start
+        {
+            staged.change_series_range(&self.item.uid, start.clone(), self.fields.end.clone())?;
         }
         let component = staged
             .component_with_mut(|c| c.uid() == &self.item.uid && c.rid().is_none())
@@ -491,26 +503,35 @@ mod tests {
         objects::{CalCompType, CalDate, CalPartStat, EventLike},
     };
 
-    use super::{EditScope, ItemId, UpdateEvent};
+    use super::{EditScope, ItemId, UpdateItem};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, recurrent: bool) -> State {
+        fixture_kind(path, recurrent, false)
+    }
+
+    fn fixture_kind(path: &Path, recurrent: bool, task: bool) -> State {
         let recurrence = if recurrent {
             "RRULE:FREQ=DAILY;COUNT=5\r\n"
         } else {
             ""
         };
-        fs::write(
-            path.join("event.ics"),
-            format!(
-                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:edit-me\r\n\
+        let content = format!(
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:edit-me\r\n\
              DTSTART:20261012T090000Z\r\nDTEND:20261012T100000Z\r\n{recurrence}\
              SUMMARY:Original\r\nSTATUS:CONFIRMED\r\nX-CUSTOM:keep-me\r\n\
              ATTENDEE;CN=Guest;PARTSTAT=ACCEPTED:mailto:guest@example.org\r\n\
              END:VEVENT\r\nEND:VCALENDAR\r\n"
-            ),
-        )
-        .unwrap();
+        );
+        let content = if task {
+            content
+                .replace("VEVENT", "VTODO")
+                .replace("DTEND", "DUE")
+                .replace("STATUS:CONFIRMED", "STATUS:NEEDS-ACTION")
+        } else {
+            content
+        };
+        fs::write(path.join("event.ics"), content).unwrap();
         let xdg = Arc::new(crate::with_test_xdg(path, path));
         let mut state = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
         state.store_mut().add(
@@ -568,6 +589,81 @@ mod tests {
     }
 
     #[test]
+    fn task_edits_save_status_progress_completion_and_optional_dates() {
+        use super::TaskStatus;
+        use eventix_ical::objects::CalTodoStatus;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = fixture_kind(tmp.path(), false, true);
+        let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
+        assert_eq!(edit.fields.kind, CalCompType::Todo);
+        edit.fields.start = None;
+        edit.fields.end = None;
+        edit.fields.task_status = Some(TaskStatus {
+            status: CalTodoStatus::InProcess,
+            percent: Some(35),
+            completed: None,
+        });
+        edit.execute(&mut state).unwrap();
+        let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
+        assert!(edit.fields.start.is_none() && edit.fields.end.is_none());
+        assert_eq!(edit.fields.task_status.as_ref().unwrap().percent, Some(35));
+        edit.fields.task_status = Some(TaskStatus {
+            status: CalTodoStatus::Completed,
+            percent: None,
+            completed: Some("TU2026-10-15T00:00:00".parse().unwrap()),
+        });
+        edit.execute(&mut state).unwrap();
+        let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
+        assert!(disk.contains("STATUS:COMPLETED"));
+        assert!(disk.contains("PERCENT-COMPLETE:100"));
+        assert!(disk.contains("COMPLETED:20261015T000000Z"));
+        assert!(disk.contains("X-CUSTOM:keep-me"));
+        let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
+        edit.fields.task_status.as_mut().unwrap().status = CalTodoStatus::NeedsAction;
+        edit.execute(&mut state).unwrap();
+        let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
+        assert!(!disk.contains("PERCENT-COMPLETE"));
+        assert!(!disk.contains("COMPLETED:"));
+    }
+
+    #[test]
+    fn recurring_tasks_support_occurrence_following_and_series_edits() {
+        for scope in [
+            EditScope::Occurrence,
+            EditScope::Following,
+            EditScope::Series,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = fixture_kind(tmp.path(), true, true);
+            let target = item(Some("TU2026-10-14T09:00:00"));
+            let mut edit = UpdateItem::load(&state, target, scope).unwrap();
+            edit.fields.summary = "Changed task".into();
+            edit.execute(&mut state).unwrap();
+            let start = chrono_tz::UTC
+                .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
+                .unwrap();
+            let mut tasks: Vec<_> = state.store().directories()[0]
+                .occurrences_between(start, start + chrono::Duration::days(7), |_| true)
+                .collect();
+            tasks.sort_by_key(|task| task.occurrence_start());
+            assert_eq!(tasks.len(), 5);
+            for (index, task) in tasks.iter().enumerate() {
+                let changed = match scope {
+                    EditScope::Occurrence => index == 2,
+                    EditScope::Following => index >= 2,
+                    EditScope::Series => true,
+                };
+                assert_eq!(
+                    task.summary().unwrap(),
+                    if changed { "Changed task" } else { "Original" }
+                );
+                assert_eq!(task.ctype(), CalCompType::Todo);
+            }
+        }
+    }
+
+    #[test]
     fn series_edit_moves_standalone_events_and_complete_series_with_exceptions() {
         for recurrent in [false, true] {
             let source = tempfile::tempdir().unwrap();
@@ -577,11 +673,11 @@ mod tests {
             let rid = "TU2026-10-13T09:00:00";
             if recurrent {
                 let mut exception =
-                    UpdateEvent::load(&state, item(Some(rid)), EditScope::Occurrence).unwrap();
+                    UpdateItem::load(&state, item(Some(rid)), EditScope::Occurrence).unwrap();
                 exception.fields.summary = "Exception".into();
                 exception.execute(&mut state).unwrap();
             }
-            let mut edit = UpdateEvent::load(&state, item(None), EditScope::Series).unwrap();
+            let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
             edit.fields.calendar = "target".into();
             edit.fields.summary = "Moved".into();
             let result = edit.execute(&mut state).unwrap();
@@ -594,7 +690,7 @@ mod tests {
             let file = state.store().file_by_id("edit-me").unwrap();
             assert_eq!(file.directory().as_str(), "target");
             assert_eq!(file.path(), &target.path().join("event.ics"));
-            assert!(UpdateEvent::load(&state, result, EditScope::Series).is_ok());
+            assert!(UpdateItem::load(&state, result, EditScope::Series).is_ok());
             if recurrent {
                 let occurrence = state
                     .store()
@@ -612,7 +708,7 @@ mod tests {
             let target = tempfile::tempdir().unwrap();
             let mut state = fixture(source.path(), true);
             add_target(&mut state, target.path(), false);
-            let mut edit = UpdateEvent::load(
+            let mut edit = UpdateItem::load(
                 &state,
                 item(Some(&format!("TU2026-10-{day}T09:00:00"))),
                 EditScope::Following,
@@ -624,7 +720,7 @@ mod tests {
             assert_eq!(result.calendar, "target");
             assert_ne!(result.uid, "edit-me");
             assert!(result.recurrence.is_none());
-            assert!(UpdateEvent::load(&state, result, EditScope::Series).is_ok());
+            assert!(UpdateItem::load(&state, result, EditScope::Series).is_ok());
 
             let start = chrono_tz::UTC
                 .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
@@ -668,7 +764,7 @@ mod tests {
             let target = tempfile::tempdir().unwrap();
             let mut state = fixture(source.path(), true);
             add_target(&mut state, &target.path().join("missing"), false);
-            let mut edit = UpdateEvent::load(
+            let mut edit = UpdateItem::load(
                 &state,
                 item(Some(&format!("TU2026-10-{day}T09:00:00"))),
                 EditScope::Following,
@@ -720,7 +816,7 @@ mod tests {
                 _ => EditScope::Series,
             };
             let mut edit =
-                UpdateEvent::load(&state, item(Some("TU2026-10-13T09:00:00")), scope).unwrap();
+                UpdateItem::load(&state, item(Some("TU2026-10-13T09:00:00")), scope).unwrap();
             edit.fields.calendar = if case == "missing" {
                 "missing"
             } else {
@@ -758,7 +854,7 @@ mod tests {
     fn saves_existing_event_preserving_identity_metadata_and_attendee_responses() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), false);
-        let mut edit = UpdateEvent::load(&state, item(None), EditScope::Series).unwrap();
+        let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         let stale = edit.clone();
         edit.fields.summary = "Edited".into();
         edit.fields.location = "Office".into();
@@ -787,10 +883,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), true);
         let target = item(Some("TU2026-10-13T09:00:00"));
-        let mut edit = UpdateEvent::load(&state, target.clone(), EditScope::Occurrence).unwrap();
+        let mut edit = UpdateItem::load(&state, target.clone(), EditScope::Occurrence).unwrap();
         edit.fields.summary = "Exception".into();
-        edit.fields.start = "TU2026-10-13T12:00:00".parse().unwrap();
-        edit.fields.end = "TU2026-10-13T13:00:00".parse().unwrap();
+        edit.fields.start = Some("TU2026-10-13T12:00:00".parse().unwrap());
+        edit.fields.end = Some("TU2026-10-13T13:00:00".parse().unwrap());
         assert_eq!(edit.execute(&mut state).unwrap(), target);
         let occurrence = state
             .store()
@@ -811,7 +907,7 @@ mod tests {
             .unwrap();
         assert_eq!(other.summary().unwrap(), "Original");
         assert_eq!(other.rrule().unwrap().count(), Some(5));
-        let mut series = UpdateEvent::load(&state, item(None), EditScope::Series).unwrap();
+        let mut series = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         series.fields.description = "Inherited description".into();
         series.execute(&mut state).unwrap();
         let occurrence = state
@@ -828,7 +924,7 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(tmp.path(), true);
             let target = item(Some(&format!("TU2026-10-{day}T09:00:00")));
-            let mut edit = UpdateEvent::load(&state, target, EditScope::Following).unwrap();
+            let mut edit = UpdateItem::load(&state, target, EditScope::Following).unwrap();
             assert_eq!(
                 edit.fields.recurrence.as_ref().unwrap().count(),
                 Some(5 - (day - 12))
@@ -873,12 +969,12 @@ mod tests {
     fn invalid_edits_and_changed_files_do_not_modify_live_state_or_disk() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), false);
-        let mut edit = UpdateEvent::load(&state, item(None), EditScope::Series).unwrap();
+        let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         let original = fs::read(tmp.path().join("event.ics")).unwrap();
         edit.fields.summary.clear();
         assert!(edit.execute(&mut state).is_err());
         assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
-        let edit = UpdateEvent::load(&state, item(None), EditScope::Series).unwrap();
+        let edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         fs::write(tmp.path().join("event.ics"), b"external change").unwrap();
         assert!(edit.execute(&mut state).is_err());
         assert_eq!(

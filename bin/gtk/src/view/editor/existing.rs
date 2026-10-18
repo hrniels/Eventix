@@ -7,20 +7,22 @@ use std::rc::Rc;
 use eventix_ical::objects::{
     CalAttendee, CalDate, CalDateTime, CalRelated, CalRole, CalTrigger, DateContext,
 };
-use eventix_state::actions::items::{CreateEvent, EditScope, UpdateEvent};
+use eventix_state::actions::items::{CreateItem, EditScope, UpdateItem};
 use eventix_view::editor::EditorOptions;
 use gtk::prelude::*;
 
 use super::{AlarmInput, AttendeeInput, AttendeeSection, ItemEditor};
 
 impl ItemEditor {
-    pub fn edit(id: u64, mut options: EditorOptions, edit: UpdateEvent) -> Rc<Self> {
+    pub fn edit(id: u64, mut options: EditorOptions, edit: UpdateItem) -> Rc<Self> {
         // Populate before connecting timezone conversion and validation signals.
         options.last_calendar = Some(edit.item.calendar.clone());
-        options.start = DateContext::system()
-            .date(&edit.fields.start)
-            .start_in(options.locale.timezone())
-            .naive_local();
+        if let Some(start) = edit.fields.start.as_ref().or(edit.fields.end.as_ref()) {
+            options.start = DateContext::system()
+                .date(start)
+                .start_in(options.locale.timezone())
+                .naive_local();
+        }
         let mut editor = Self::build(id, options);
         editor.populate_existing(&edit);
         editor.install_feedback();
@@ -32,18 +34,34 @@ impl ItemEditor {
         editor.update_previews();
         editor.update_feedback();
         editor.connect_previews();
+        editor.connect_task_dates();
         editor
     }
 
-    fn populate_existing(&self, edit: &UpdateEvent) {
-        let title = match edit.scope {
-            EditScope::Occurrence => "Edit Event Occurrence",
-            EditScope::Following => "Edit Following Event Occurrences",
-            EditScope::Series if edit.fields.recurrence.is_some() => "Edit Event Series",
-            EditScope::Series => "Edit Event",
+    fn populate_existing(&self, edit: &UpdateItem) {
+        let title = match (edit.fields.kind, edit.scope) {
+            (eventix_ical::objects::CalCompType::Todo, EditScope::Occurrence) => {
+                "Edit Task Occurrence"
+            }
+            (eventix_ical::objects::CalCompType::Todo, EditScope::Following) => {
+                "Edit Following Task Occurrences"
+            }
+            (eventix_ical::objects::CalCompType::Todo, EditScope::Series)
+                if edit.fields.recurrence.is_some() =>
+            {
+                "Edit Task Series"
+            }
+            (eventix_ical::objects::CalCompType::Todo, EditScope::Series) => "Edit Task",
+            (_, EditScope::Occurrence) => "Edit Event Occurrence",
+            (_, EditScope::Following) => "Edit Following Event Occurrences",
+            (_, EditScope::Series) if edit.fields.recurrence.is_some() => "Edit Event Series",
+            (_, EditScope::Series) => "Edit Event",
         };
         self.title.set_text(self.options.locale.translate(title));
         let fields = &edit.fields;
+        if let (Some(input), Some(status)) = (&self.task_status, &fields.task_status) {
+            input.load(status);
+        }
         self.summary.set_text(&fields.summary);
         self.location.set_text(&fields.location);
         self.description.buffer().set_text(&fields.description);
@@ -67,10 +85,13 @@ impl ItemEditor {
         self.load_existing_attendees(&fields.attendees);
     }
 
-    fn load_existing_dates(&self, fields: &CreateEvent) -> chrono_tz::Tz {
-        let timezone = match &fields.start {
-            CalDate::DateTime(CalDateTime::Timezone(_, name)) => name.parse().ok(),
-            CalDate::DateTime(CalDateTime::Utc(_)) => Some(chrono_tz::UTC),
+    fn load_existing_dates(&self, fields: &CreateItem) -> chrono_tz::Tz {
+        self.has_start.set_active(fields.start.is_some());
+        self.has_due.set_active(fields.end.is_some());
+        let first = fields.start.as_ref().or(fields.end.as_ref());
+        let timezone = match first {
+            Some(CalDate::DateTime(CalDateTime::Timezone(_, name))) => name.parse().ok(),
+            Some(CalDate::DateTime(CalDateTime::Utc(_))) => Some(chrono_tz::UTC),
             _ => None,
         }
         .unwrap_or(*self.options.locale.timezone());
@@ -81,23 +102,29 @@ impl ItemEditor {
             self.timezone.set_selected(index as u32);
         }
         let context = DateContext::system();
-        let start = context.date(&fields.start).start_in(&timezone);
-        let end = context.date(&fields.end).start_in(&timezone);
         self.all_day
-            .set_active(matches!(fields.start, CalDate::Date(..)));
-        self.start.entry.set_text(&start.date_naive().to_string());
-        let end_date = if self.all_day.is_active() {
-            end.date_naive().pred_opt().unwrap_or(end.date_naive())
-        } else {
-            end.date_naive()
-        };
-        self.end.entry.set_text(&end_date.to_string());
-        self.start_time.set_text(&start.format("%H:%M").to_string());
-        self.end_time.set_text(&end.format("%H:%M").to_string());
+            .set_active(first.is_none_or(|date| matches!(date, CalDate::Date(..))));
+        if let Some(start) = &fields.start {
+            let start = context.date(start).start_in(&timezone);
+            self.start.entry.set_text(&start.date_naive().to_string());
+            self.start_time.set_text(&start.format("%H:%M").to_string());
+        }
+        if let Some(end) = &fields.end {
+            let end = context.date(end).start_in(&timezone);
+            let end_date = if self.all_day.is_active()
+                && fields.kind == eventix_ical::objects::CalCompType::Event
+            {
+                end.date_naive().pred_opt().unwrap_or(end.date_naive())
+            } else {
+                end.date_naive()
+            };
+            self.end.entry.set_text(&end_date.to_string());
+            self.end_time.set_text(&end.format("%H:%M").to_string());
+        }
         timezone
     }
 
-    fn load_existing_alarms(&self, fields: &CreateEvent, timezone: &chrono_tz::Tz) {
+    fn load_existing_alarms(&self, fields: &CreateItem, timezone: &chrono_tz::Tz) {
         self.alarm.load(fields.alarms.first(), timezone);
         self.personal_override
             .set_active(fields.personal_alarms.is_some());
@@ -201,7 +228,7 @@ mod tests {
     };
     use eventix_state::{
         CalendarSettings, CollectionSettings, State, SyncerType,
-        actions::items::{CreateEvent, EditScope, UpdateEvent},
+        actions::items::{CreateItem, EditScope, UpdateItem},
     };
     use eventix_view::{Event, editor::EditorOptions};
     use gtk::prelude::*;
@@ -273,13 +300,15 @@ mod tests {
             .settings_mut()
             .collections_mut()
             .insert("local".into(), collection);
-        let fields = CreateEvent {
+        let fields = CreateItem {
+            kind: CalCompType::Event,
+            task_status: None,
             calendar: "current".into(),
             summary: "Event".into(),
             location: String::new(),
             description: String::new(),
-            start: "TU2026-10-12T09:00:00".parse().unwrap(),
-            end: "TU2026-10-12T10:00:00".parse().unwrap(),
+            start: Some("TU2026-10-12T09:00:00".parse().unwrap()),
+            end: Some("TU2026-10-12T10:00:00".parse().unwrap()),
             recurrence: None,
             alarms: vec![],
             personal_alarms: None,
@@ -287,7 +316,7 @@ mod tests {
         };
         let item = fields.execute(&mut state).unwrap();
         for recurrent in [false, true] {
-            let mut edit = UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap();
+            let mut edit = UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap();
             if recurrent {
                 edit.fields.recurrence = Some("FREQ=DAILY;COUNT=5".parse().unwrap());
             }
@@ -382,21 +411,23 @@ mod tests {
                 .settings_mut()
                 .collections_mut()
                 .insert("local".into(), collection);
-            let fields = CreateEvent {
+            let fields = CreateItem {
+                kind: CalCompType::Event,
+                task_status: None,
                 calendar: "test".into(),
                 summary: "Original".into(),
                 location: "Office".into(),
                 description: "Details\nSecond line".into(),
-                start: if all_day {
+                start: Some(if all_day {
                     CalDate::new_date("2026-10-12".parse().unwrap(), CalDateType::Inclusive)
                 } else {
                     "TTEurope/Berlin;2026-10-12T10:15:30".parse().unwrap()
-                },
-                end: if all_day {
+                }),
+                end: Some(if all_day {
                     CalDate::new_date("2026-10-15".parse().unwrap(), CalDateType::Exclusive)
                 } else {
                     "TTEurope/Berlin;2026-10-12T11:15:30".parse().unwrap()
-                },
+                }),
                 recurrence: None,
                 alarms: vec![],
                 personal_alarms: None,
@@ -504,7 +535,7 @@ mod tests {
             assert!(clicked.get());
             let editor = parent.test_existing_editor(
                 options(),
-                UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap(),
+                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
             );
             assert!(stack.is_transition_running());
             assert!(parent.editor_open());
@@ -697,7 +728,7 @@ mod tests {
             assert_eq!(popup.width(), width);
             let nested_editor = parent.test_existing_editor(
                 options(),
-                UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap(),
+                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
             );
             nested_editor.sections[0].toggle.set_active(true);
             drain();
@@ -733,7 +764,7 @@ mod tests {
             assert!(popup.is_mapped());
             let editor = parent.test_existing_editor(
                 options(),
-                UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap(),
+                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
             );
             assert_eq!(editor.summary.text(), "Original");
             editor.summary.set_text("Saved");
@@ -743,14 +774,16 @@ mod tests {
             let mut edit = editor.existing.borrow().clone().unwrap();
             edit.fields = *fields;
             edit.execute(&mut state).unwrap();
-            parent.test_saved_editor(&Event::load(&state, &item).unwrap());
+            parent.test_saved_editor(crate::model::session::SavedItem::Event(Box::new(
+                Event::load(&state, &item).unwrap(),
+            )));
             assert!(stack.is_transition_running());
             drain();
             let mut options = EditorOptions::load(&state).unwrap();
             options.locale = locale.clone();
             parent.test_existing_editor(
                 options,
-                UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap(),
+                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
             );
             assert!(stack.is_transition_running());
             assert!(
@@ -768,7 +801,7 @@ mod tests {
             options.locale = locale.clone();
             parent.test_existing_editor(
                 options,
-                UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap(),
+                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
             );
             assert!(!stack.is_transition_running());
             assert!(press_escape(&popup));
@@ -825,7 +858,7 @@ mod tests {
                     options.locale = locale.clone();
                     let editor = parent.test_existing_editor(
                         options,
-                        UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap(),
+                        UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
                     );
                     editor.summary.set_text("Discarded draft");
                     drain();

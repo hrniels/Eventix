@@ -51,6 +51,12 @@ impl Query {
         // A series edit can affect the visible period even when its first occurrence is earlier.
         if item.recurrence.is_none()
             && occurrence.is_recurrent()
+            && occurrence.ctype() == CalCompType::Todo
+        {
+            return matches!(self, Self::Sidebar { .. });
+        }
+        if item.recurrence.is_none()
+            && occurrence.is_recurrent()
             && occurrence.ctype() == CalCompType::Event
         {
             let (start, end) = match self {

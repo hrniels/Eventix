@@ -7,14 +7,14 @@ use std::{
     rc::Rc,
 };
 
-use anyhow::{Context, bail};
+use anyhow::bail;
 use chrono::{Datelike, Duration, NaiveDate, NaiveTime};
 use eventix_ical::objects::{
-    CalAction, CalAlarm, CalAttendee, CalDate, CalDateType, CalRelated, CalRole, CalTrigger,
+    CalAction, CalAlarm, CalAttendee, CalCompType, CalDate, CalRelated, CalRole, CalTrigger,
     DateContext,
 };
 use eventix_locale::Locale;
-use eventix_state::actions::items::{CreateEvent, UpdateEvent};
+use eventix_state::actions::items::{CreateItem, UpdateItem};
 use eventix_view::editor::EditorOptions;
 use gtk::{gdk, glib, prelude::*};
 
@@ -23,6 +23,7 @@ mod existing;
 mod feedback;
 mod layout;
 mod recurrence;
+mod task_status;
 mod validation;
 use layout::{FormSection, action_button, body_label, calendar_factory, choices, row, segments};
 use recurrence::RecurrenceInput;
@@ -34,8 +35,8 @@ pub(crate) struct ItemEditor {
     pub cancel: gtk::Button,
     pub id: u64,
     pub saving: Cell<bool>,
-    pub existing: RefCell<Option<UpdateEvent>>,
-    initial: RefCell<Option<Box<CreateEvent>>>,
+    pub existing: RefCell<Option<UpdateItem>>,
+    initial: RefCell<Option<Box<CreateItem>>>,
     title: gtk::Label,
     form: gtk::Box,
     error: gtk::Label,
@@ -44,11 +45,14 @@ pub(crate) struct ItemEditor {
     summary: gtk::Entry,
     location: gtk::Entry,
     description: gtk::TextView,
+    task_status: Option<task_status::TaskStatusInput>,
     start: DateInput,
     end: DateInput,
     start_time: gtk::Entry,
     end_time: gtk::Entry,
     all_day: gtk::CheckButton,
+    has_start: gtk::CheckButton,
+    has_due: gtk::CheckButton,
     timezone: gtk::DropDown,
     alarm: AlarmInput,
     personal_alarm: AlarmInput,
@@ -75,6 +79,7 @@ impl ItemEditor {
         editor.update_previews();
         editor.update_feedback();
         editor.connect_previews();
+        editor.connect_task_dates();
         editor
     }
 
@@ -89,6 +94,9 @@ impl ItemEditor {
         let location = gtk::Entry::new();
         row(&form, locale, "Location", &location);
         let location_completion = completion::Completion::new(&location, options.locations.clone());
+
+        let task_status = (options.kind == CalCompType::Todo)
+            .then(|| task_status::TaskStatusInput::new(&form, &options));
 
         let dates = DateSection::new(&form, &options);
         let reminders = ReminderSection::new(&form, &options, &calendar);
@@ -132,11 +140,14 @@ impl ItemEditor {
             summary,
             location,
             description,
+            task_status,
             start: dates.start,
             end: dates.end,
             start_time: dates.start_time,
             end_time: dates.end_time,
             all_day: dates.all_day,
+            has_start: dates.has_start,
+            has_due: dates.has_due,
             timezone: dates.timezone,
             alarm: reminders.alarm,
             personal_alarm: reminders.personal_alarm,
@@ -171,24 +182,28 @@ impl ItemEditor {
             ) else {
                 return;
             };
-            let Ok((start, end)) = editor.event_dates(from) else {
+            let Ok((start, end)) = editor.timed_dates(from) else {
                 return;
             };
             let context = DateContext::system();
-            let start = context.date(&start).start_in(to);
-            let end = context.date(&end).start_in(to);
-            editor
-                .start
-                .entry
-                .set_text(&start.format("%Y-%m-%d").to_string());
-            editor
-                .end
-                .entry
-                .set_text(&end.format("%Y-%m-%d").to_string());
-            editor
-                .start_time
-                .set_text(&start.format("%H:%M").to_string());
-            editor.end_time.set_text(&end.format("%H:%M").to_string());
+            if let Some(start) = start {
+                let start = context.date(&start).start_in(to);
+                editor
+                    .start
+                    .entry
+                    .set_text(&start.format("%Y-%m-%d").to_string());
+                editor
+                    .start_time
+                    .set_text(&start.format("%H:%M").to_string());
+            }
+            if let Some(end) = end {
+                let end = context.date(&end).start_in(to);
+                editor
+                    .end
+                    .entry
+                    .set_text(&end.format("%Y-%m-%d").to_string());
+                editor.end_time.set_text(&end.format("%H:%M").to_string());
+            }
         });
     }
 
@@ -280,6 +295,36 @@ impl ItemEditor {
         self.summary.grab_focus();
     }
 
+    pub fn kind(&self) -> CalCompType {
+        self.options.kind
+    }
+
+    fn connect_task_dates(self: &Rc<Self>) {
+        if self.kind() != CalCompType::Todo {
+            return;
+        }
+        self.update_task_reminders();
+        for toggle in [&self.has_start, &self.has_due] {
+            let weak = Rc::downgrade(self);
+            toggle.connect_toggled(move |_| {
+                if let Some(editor) = weak.upgrade() {
+                    editor.update_task_reminders();
+                    editor.update_feedback();
+                }
+            });
+        }
+    }
+
+    fn update_task_reminders(&self) {
+        for alarm in [&self.alarm, &self.personal_alarm] {
+            alarm.set_dates(
+                self.has_start.is_active(),
+                self.has_due.is_active(),
+                self.options.locale.as_ref(),
+            );
+        }
+    }
+
     fn update_previews(&self) {
         self.update_date_preview();
         self.update_alarm_preview();
@@ -296,6 +341,36 @@ impl ItemEditor {
         let locale = self.options.locale.as_ref();
         let start = self.start.entry.text();
         let end = self.end.entry.text();
+        if self.kind() == CalCompType::Todo {
+            let date = |date: &DateInput, time: &gtk::Entry| {
+                if self.all_day.is_active() {
+                    date.entry.text().to_string()
+                } else {
+                    format!("{} {}", date.entry.text(), time.text())
+                }
+            };
+            let mut dates = Vec::new();
+            if self.has_start.is_active() {
+                dates.push(format!(
+                    "{}: {}",
+                    locale.translate("Start"),
+                    date(&self.start, &self.start_time)
+                ));
+            }
+            if self.has_due.is_active() {
+                dates.push(format!(
+                    "{}: {}",
+                    locale.translate("Due"),
+                    date(&self.end, &self.end_time)
+                ));
+            }
+            self.previews[0].set_text(&if dates.is_empty() {
+                locale.translate("Unplanned").to_string()
+            } else {
+                dates.join(" – ")
+            });
+            return;
+        }
         self.previews[0].set_text(&if self.all_day.is_active() {
             format!("{start} – {end} · {}", locale.translate("All day"))
         } else {
@@ -386,35 +461,38 @@ impl ItemEditor {
         self.error.set_visible(true);
     }
 
-    fn event_dates(&self, timezone: &chrono_tz::Tz) -> anyhow::Result<(CalDate, CalDate)> {
+    fn timed_dates(
+        &self,
+        timezone: &chrono_tz::Tz,
+    ) -> anyhow::Result<(Option<CalDate>, Option<CalDate>)> {
         let locale = self.options.locale.as_ref();
-        let start_date = self.start.date(locale)?;
-        let end_date = self.end.date(locale)?;
-        let (start, end) = if self.all_day.is_active() {
-            (
-                CalDate::new_date(start_date, CalDateType::Inclusive),
-                CalDate::new_date(
-                    end_date
-                        .succ_opt()
-                        .context(locale.translate("error.valid_date_time").to_string())?,
-                    CalDateType::Exclusive,
-                ),
-            )
-        } else {
-            (
-                CalDate::new_datetime(
-                    start_date,
-                    Some(parse_time(&self.start_time, locale)?),
-                    timezone.name(),
-                ),
-                CalDate::new_datetime(
-                    end_date,
-                    Some(parse_time(&self.end_time, locale)?),
-                    timezone.name(),
-                ),
-            )
-        };
-        if end_date < start_date || start > end {
+        let start_date = self
+            .has_start
+            .is_active()
+            .then(|| self.start.date(locale))
+            .transpose()?;
+        let end_date = self
+            .has_due
+            .is_active()
+            .then(|| self.end.date(locale))
+            .transpose()?;
+        let (start, end) = (
+            start_date
+                .map(|date| {
+                    parse_time(&self.start_time, locale)
+                        .map(|time| CalDate::new_datetime(date, Some(time), timezone.name()))
+                })
+                .transpose()?,
+            end_date
+                .map(|date| {
+                    parse_time(&self.end_time, locale)
+                        .map(|time| CalDate::new_datetime(date, Some(time), timezone.name()))
+                })
+                .transpose()?,
+        );
+        if let (Some(start), Some(end)) = (&start, &end)
+            && start > end
+        {
             bail!(locale.translate("error.end_before_start").to_string());
         }
         Ok((start, end))
@@ -439,6 +517,9 @@ impl EditorShell {
         layer.set_valign(gtk::Align::Fill);
         layer.add_css_class("ev_editor_backdrop");
         let (panel, title) = Self::create_panel(locale);
+        if options.kind == CalCompType::Todo {
+            title.set_text(locale.translate("New Task"));
+        }
         let scroll = gtk::ScrolledWindow::builder()
             .child(form)
             .hscrollbar_policy(gtk::PolicyType::Never)
@@ -510,6 +591,8 @@ struct DateSection {
     start_time: gtk::Entry,
     end_time: gtk::Entry,
     all_day: gtk::CheckButton,
+    has_start: gtk::CheckButton,
+    has_due: gtk::CheckButton,
     timezone: gtk::DropDown,
 }
 
@@ -532,8 +615,23 @@ impl DateSection {
         dates.add_css_class("ev_editor_dates");
         let start_fields = Self::date_fields(&start, &start_time);
         let end_fields = Self::date_fields(&end, &end_time);
-        Self::attach_label(&dates, locale, "Start", 0, 0, start.entry.upcast_ref());
-        Self::attach_label(&dates, locale, "End", 2, 0, end.entry.upcast_ref());
+        let has_start = gtk::CheckButton::with_label(locale.translate("Start"));
+        let has_due = gtk::CheckButton::with_label(locale.translate("Due"));
+        if options.kind == CalCompType::Todo {
+            dates.attach(&has_start, 0, 0, 1, 1);
+            dates.attach(&has_due, 2, 0, 1, 1);
+            start_fields.set_sensitive(false);
+            end_fields.set_sensitive(false);
+            let fields = start_fields.clone();
+            has_start.connect_toggled(move |button| fields.set_sensitive(button.is_active()));
+            let fields = end_fields.clone();
+            has_due.connect_toggled(move |button| fields.set_sensitive(button.is_active()));
+        } else {
+            has_start.set_active(true);
+            has_due.set_active(true);
+            Self::attach_label(&dates, locale, "Start", 0, 0, start.entry.upcast_ref());
+            Self::attach_label(&dates, locale, "End", 2, 0, end.entry.upcast_ref());
+        }
         Self::attach_label(&dates, locale, "All day", 0, 1, all_day.upcast_ref());
         Self::attach_label(&dates, locale, "Timezone", 2, 1, timezone.upcast_ref());
         dates.attach(&start_fields, 1, 0, 1, 1);
@@ -544,6 +642,7 @@ impl DateSection {
         timezone_field.append(&timezone);
         dates.attach(&timezone_field, 3, 1, 1, 1);
         Self::connect_all_day(&all_day, &start_time, &end_time, &timezone);
+        all_day.set_active(options.kind == CalCompType::Todo);
         let section = FormSection::new(form, locale, "Date", &dates, None);
         Self {
             section,
@@ -552,6 +651,8 @@ impl DateSection {
             start_time,
             end_time,
             all_day,
+            has_start,
+            has_due,
             timezone,
         }
     }
@@ -1020,6 +1121,8 @@ struct AlarmInput {
     duration: gtk::SpinButton,
     unit: gtk::DropDown,
     relation: gtk::DropDown,
+    relations: RefCell<Vec<u32>>,
+    relative_row: gtk::Widget,
     date: DateInput,
     time: gtk::Entry,
 }
@@ -1032,6 +1135,7 @@ impl AlarmInput {
         widget.append(&buttons[0]);
         let (relative, duration, unit, relation) = Self::create_relative(locale);
         Self::append_mode_row(&widget, &buttons[1], &relative);
+        let relative_row = buttons[1].parent().unwrap();
         let (absolute, date, time) = Self::create_absolute(locale, date, time);
         Self::append_mode_row(&widget, &buttons[2], &absolute);
         trigger.connect_selected_notify(move |combo| {
@@ -1044,6 +1148,8 @@ impl AlarmInput {
             duration,
             unit,
             relation,
+            relations: RefCell::new(vec![0, 1, 2, 3]),
+            relative_row,
             date,
             time,
         }
@@ -1127,8 +1233,14 @@ impl AlarmInput {
     }
 
     fn relative_trigger(&self) -> CalTrigger {
+        let relation = self
+            .relations
+            .borrow()
+            .get(self.relation.selected() as usize)
+            .copied()
+            .unwrap_or(0);
         let amount = i64::from(self.duration.value_as_int());
-        let amount = if self.relation.selected().is_multiple_of(2) {
+        let amount = if relation.is_multiple_of(2) {
             -amount
         } else {
             amount
@@ -1140,11 +1252,37 @@ impl AlarmInput {
         };
         CalTrigger::Relative {
             duration: duration.into(),
-            related: if self.relation.selected() < 2 {
+            related: if relation < 2 {
                 CalRelated::Start
             } else {
                 CalRelated::End
             },
+        }
+    }
+
+    fn set_dates(&self, start: bool, due: bool, locale: &dyn Locale) {
+        let current = self
+            .relations
+            .borrow()
+            .get(self.relation.selected() as usize)
+            .copied();
+        let available: Vec<_> = (0..4)
+            .filter(|index| if *index < 2 { start } else { due })
+            .collect();
+        let labels = ["BeforeStart", "AfterStart", "BeforeEnd", "AfterEnd"];
+        let names: Vec<_> = available
+            .iter()
+            .map(|index| locale.translate(labels[*index as usize]))
+            .collect();
+        let selected = current
+            .and_then(|current| available.iter().position(|index| *index == current))
+            .unwrap_or(0);
+        *self.relations.borrow_mut() = available;
+        self.relation.set_model(Some(&gtk::StringList::new(&names)));
+        self.relation.set_selected(selected as u32);
+        self.relative_row.set_visible(start || due);
+        if !start && !due && self.trigger.selected() == 1 {
+            self.trigger.set_selected(0);
         }
     }
 
@@ -1288,11 +1426,201 @@ pub(crate) fn is_save_key(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDateTime;
-    use eventix_ical::objects::CalRRuleFreq;
+    use eventix_ical::objects::{CalDateType, CalRRuleFreq};
     use eventix_view::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
-    use super::{CalDate, CalDateType, DateInput, DateSection, ItemEditor};
+    use super::{CalDate, DateInput, DateSection, ItemEditor};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn task_editor_supports_optional_dates_status_and_date_aware_reminders() {
+        use std::{cell::Cell, rc::Rc, sync::Arc};
+
+        use eventix_ical::{
+            col::CalDir,
+            objects::{CalCompType, CalRelated, CalTodoStatus, CalTrigger},
+        };
+        use eventix_state::{
+            CalendarSettings, CollectionSettings, State, SyncerType,
+            actions::items::{EditScope, UpdateItem},
+        };
+
+        use gtk::subclass::prelude::ObjectSubclassIsExt;
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
+        let mut state = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+        state.store_mut().add(CalDir::new_empty(
+            Arc::new("tasks".into()),
+            tmp.path().into(),
+            "Tasks".into(),
+            false,
+        ));
+        let mut collection = CollectionSettings::new(SyncerType::FileSystem {
+            path: tmp.path().display().to_string(),
+        });
+        let mut calendar = CalendarSettings::default();
+        calendar.set_enabled(true);
+        calendar.set_types(vec![CalCompType::Todo]);
+        collection
+            .all_calendars_mut()
+            .insert("tasks".into(), calendar);
+        state
+            .settings_mut()
+            .collections_mut()
+            .insert("local".into(), collection);
+        assert!(EditorOptions::load(&state).unwrap().calendars.is_empty());
+        let options = || EditorOptions::load_for(&state, CalCompType::Todo).unwrap();
+        let editor = ItemEditor::new(1, options());
+        assert_eq!(editor.title.text(), "New Task");
+        assert!(editor.all_day.is_active());
+        assert!(!editor.has_start.is_active() && !editor.has_due.is_active());
+        assert!(!editor.alarm.relative_row.is_visible());
+        editor.summary.set_text("Task");
+        editor.start.entry.set_text("ignored while disabled");
+        editor.end.entry.set_text("ignored while disabled");
+        let fields = editor.command().unwrap();
+        assert!(fields.start.is_none() && fields.end.is_none());
+        assert_eq!(
+            fields.task_status.as_ref().unwrap().status,
+            CalTodoStatus::NeedsAction
+        );
+        let item = fields.execute(&mut state).unwrap();
+
+        let options = || EditorOptions::load_for(&state, CalCompType::Todo).unwrap();
+        let editor = ItemEditor::edit(
+            2,
+            options(),
+            UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
+        );
+        assert_eq!(editor.title.text(), "Edit Task");
+        assert!(!editor.has_start.is_active() && !editor.has_due.is_active());
+        editor.has_due.set_active(true);
+        editor.end.entry.set_text("2026-10-15");
+        assert!(editor.alarm.relative_row.is_visible());
+        editor.alarm.trigger.set_selected(1);
+        let status = editor.task_status.as_ref().unwrap();
+        status.status.set_selected(2);
+        let fields = editor.command().unwrap();
+        assert!(fields.start.is_none());
+        assert!(
+            matches!(fields.end, Some(CalDate::Date(date, CalDateType::Inclusive)) if date.to_string() == "2026-10-15")
+        );
+        assert!(matches!(
+            fields.alarms[0].trigger(),
+            CalTrigger::Relative {
+                related: CalRelated::End,
+                ..
+            }
+        ));
+        assert_eq!(
+            fields.task_status.as_ref().unwrap().status,
+            CalTodoStatus::InProcess
+        );
+        let mut edit = editor.existing.borrow().clone().unwrap();
+        edit.fields = *fields;
+        edit.execute(&mut state).unwrap();
+
+        let editor = ItemEditor::edit(
+            3,
+            EditorOptions::load_for(&state, CalCompType::Todo).unwrap(),
+            UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
+        );
+        assert!(editor.has_due.is_active());
+        assert_eq!(editor.end.entry.text(), "2026-10-15");
+        editor.recurrence.frequency.set_selected(2);
+        assert!(
+            editor
+                .command()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.field == super::validation::Field::StartDate)
+        );
+        editor.recurrence.frequency.set_selected(0);
+        let status = editor.task_status.as_ref().unwrap();
+        status.status.set_selected(1);
+        status.has_completed.set_active(true);
+        status.completed.entry.set_text("invalid");
+        assert!(
+            editor
+                .command()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.field == super::validation::Field::CompletedDate)
+        );
+        status.completed.entry.set_text("2026-10-16");
+        let fields = editor.command().unwrap();
+        assert_eq!(fields.task_status.as_ref().unwrap().percent, Some(100));
+        assert_eq!(
+            fields
+                .task_status
+                .as_ref()
+                .unwrap()
+                .completed
+                .as_ref()
+                .unwrap()
+                .to_string(),
+            "TU2026-10-16T00:00:00"
+        );
+        editor.has_due.set_active(false);
+        assert_eq!(editor.alarm.trigger.selected(), 0);
+        assert!(editor.command().unwrap().alarms.is_empty());
+
+        let parent: crate::view::page::CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .child(&parent)
+            .default_width(1000)
+            .default_height(900)
+            .build();
+        let anchor = gtk::Button::with_label("Task");
+        parent.append(&anchor);
+        window.present();
+        let drain = || {
+            for _ in 0..30 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let task = eventix_view::sidebar::SidebarRow::load(&state, &item).unwrap();
+        let controller = parent.test_details();
+        let clicked = Rc::new(Cell::new(false));
+        let flag = clicked.clone();
+        let identity = item.clone();
+        controller.connect_edit(move |item, scope| {
+            assert_eq!(item, identity);
+            assert_eq!(scope, EditScope::Series);
+            flag.set(true);
+        });
+        let popup = crate::view::details::EventDetails::new_sidebar(&task, state.locale().as_ref());
+        controller.show_details(anchor.upcast_ref(), anchor.upcast_ref(), popup.clone());
+        drain();
+        popup.imp().edits.borrow()[0].0.emit_clicked();
+        assert!(clicked.get());
+        let editor = parent.test_existing_editor(
+            EditorOptions::load_for(&state, CalCompType::Todo).unwrap(),
+            UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
+        );
+        assert!(parent.editor_open());
+        assert_eq!(editor.summary.text(), "Task");
+        assert!(editor.has_due.is_active());
+        editor.summary.set_text("Edited task");
+        let mut edit = editor.existing.borrow().clone().unwrap();
+        edit.fields = *editor.command().unwrap();
+        edit.execute(&mut state).unwrap();
+        let saved = eventix_view::sidebar::SidebarRow::load(&state, &item).unwrap();
+        assert_eq!(saved.summary, "Edited task");
+        parent.test_saved_editor(crate::model::session::SavedItem::Task(Box::new(saved)));
+        drain();
+        assert!(!parent.editor_open());
+        assert_eq!(controller.current(), Some(popup));
+        controller.close();
+        window.close();
+        drain();
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]
@@ -1337,6 +1665,7 @@ mod tests {
             let editor = ItemEditor::new(
                 1,
                 EditorOptions {
+                    kind: eventix_ical::objects::CalCompType::Event,
                     calendars: vec![EditorCalendar {
                         id: "test".into(),
                         name: "Test".into(),
@@ -1387,8 +1716,12 @@ mod tests {
                 (&original.end, &converted.end),
             ] {
                 assert_eq!(
-                    context.date(before).start_in(&chrono_tz::UTC),
-                    context.date(after).start_in(&chrono_tz::UTC),
+                    context
+                        .date(before.as_ref().unwrap())
+                        .start_in(&chrono_tz::UTC),
+                    context
+                        .date(after.as_ref().unwrap())
+                        .start_in(&chrono_tz::UTC),
                 );
             }
             assert!(editor.previews[0].text().contains(to.name()));
@@ -1495,6 +1828,7 @@ mod tests {
             eventix_locale::LocaleType::German,
         ] {
             let options = EditorOptions {
+                kind: eventix_ical::objects::CalCompType::Event,
                 calendars: vec![
                     EditorCalendar {
                         id: "test".into(),
@@ -1732,12 +2066,15 @@ mod tests {
             let request = editor.command().unwrap();
             assert_eq!(request.summary, "New event");
             assert_eq!(request.description, "Some details");
-            assert_eq!(request.start.as_naive_date().to_string(), "2026-10-15");
+            assert_eq!(
+                request.start.as_ref().unwrap().as_naive_date().to_string(),
+                "2026-10-15"
+            );
             assert!(request.personal_alarms.is_none());
             editor.all_day.set_active(true);
             let request = editor.command().unwrap();
             assert!(
-                matches!(request.end, CalDate::Date(date, CalDateType::Exclusive) if date.to_string() == "2026-10-16")
+                matches!(request.end, Some(CalDate::Date(date, CalDateType::Exclusive)) if date.to_string() == "2026-10-16")
             );
             editor.recurrence.frequency.set_selected(3);
             editor.recurrence.weekdays[3].set_active(true);

@@ -21,7 +21,7 @@ type RowKey = (Option<NaiveDate>, OccurrenceId);
 struct Panel {
     header: gtk::Box,
     title: gtk::Label,
-    new_event: Option<gtk::Button>,
+    new_item: gtk::Button,
     list: gtk::Box,
     scroll: gtk::ScrolledWindow,
     rows: BTreeMap<RowKey, gtk::Button>,
@@ -43,13 +43,17 @@ impl Panel {
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         title.add_css_class("ev_panel_title");
         header.append(&title);
-        let new_event = is_events.then(|| {
+        let new_item = {
             let button = gtk::Button::from_icon_name("list-add-symbolic");
-            button.set_action_name(Some("win.new-event"));
-            button.add_css_class("ev_sidebar_add_event");
+            button.set_action_name(Some(if is_events {
+                "win.new-event"
+            } else {
+                "win.new-task"
+            }));
+            button.add_css_class("ev_sidebar_add_item");
             header.append(&button);
             button
-        });
+        };
         panel.append(&header);
         panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
 
@@ -67,7 +71,7 @@ impl Panel {
         Self {
             header,
             title,
-            new_event,
+            new_item,
             list,
             scroll,
             rows: BTreeMap::new(),
@@ -339,12 +343,20 @@ impl Sidebar {
             .unwrap_or_default()
     }
 
-    pub(crate) fn new_event_button(&self) -> gtk::Button {
+    pub(crate) fn new_item_button(&self, kind: eventix_ical::objects::CalCompType) -> gtk::Button {
         self.imp()
             .panels
             .borrow()
             .as_ref()
-            .and_then(|(events, _)| events.new_event.clone())
+            .map(|(events, tasks)| {
+                if kind == eventix_ical::objects::CalCompType::Event {
+                    events
+                } else {
+                    tasks
+                }
+                .new_item
+                .clone()
+            })
             .unwrap_or_default()
     }
 
@@ -361,9 +373,12 @@ impl Sidebar {
             events
                 .title
                 .set_text(snapshot.locale.translate("Next Events"));
-            if let Some(button) = &events.new_event {
-                button.set_tooltip_text(Some(snapshot.locale.translate("New Event")));
-            }
+            events
+                .new_item
+                .set_tooltip_text(Some(snapshot.locale.translate("New Event")));
+            tasks
+                .new_item
+                .set_tooltip_text(Some(snapshot.locale.translate("New Task")));
             tasks
                 .title
                 .set_text(snapshot.locale.translate("Next Tasks"));

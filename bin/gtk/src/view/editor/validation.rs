@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use chrono::{NaiveDate, NaiveTime};
-use eventix_ical::objects::{CalAlarm, CalDate, CalDateType, CalTrigger, DateContext};
+use eventix_ical::objects::{CalAlarm, CalCompType, CalDate, CalDateType, CalTrigger, DateContext};
 use eventix_locale::Locale;
-use eventix_state::actions::items::CreateEvent;
+use eventix_state::actions::items::CreateItem;
 use gtk::prelude::*;
 
 use super::{AlarmInput, ItemEditor, recurrence::RecurrenceInput};
@@ -14,6 +14,7 @@ use super::{AlarmInput, ItemEditor, recurrence::RecurrenceInput};
 pub(crate) enum Field {
     Calendar,
     Summary,
+    CompletedDate,
     StartDate,
     StartTime,
     EndDate,
@@ -40,7 +41,7 @@ impl ItemEditor {
     }
 
     /// Builds a command from parsed inputs or returns all actionable field errors.
-    pub fn command(&self) -> Result<Box<CreateEvent>, Vec<Issue>> {
+    pub fn command(&self) -> Result<Box<CreateItem>, Vec<Issue>> {
         let locale = self.options.locale.as_ref();
         let mut check = Checks {
             locale,
@@ -62,11 +63,32 @@ impl ItemEditor {
         }
 
         let all_day = self.all_day.is_active();
-        let start = check.date(&self.start.entry, Field::StartDate);
-        let end = check.date(&self.end.entry, Field::EndDate);
+        let start = self
+            .has_start
+            .is_active()
+            .then(|| check.date(&self.start.entry, Field::StartDate))
+            .flatten();
+        let end = self
+            .has_due
+            .is_active()
+            .then(|| check.date(&self.end.entry, Field::EndDate))
+            .flatten();
+        if self.recurrence.frequency.selected() != 0 && !self.has_start.is_active() {
+            check.report(Field::StartDate, "error.repeating_event_start");
+        }
         let timezone = check.timezone(self.timezone.selected(), all_day);
         let dates = check.event_dates(self, start, end, timezone);
         let until = check.recurrence_until(&self.recurrence, start, all_day, timezone);
+        let task_status = self.task_status.as_ref().map(|status| {
+            let completed = if status.status.selected() == 1 && status.has_completed.is_active() {
+                check
+                    .date(&status.completed.entry, Field::CompletedDate)
+                    .map(|date| status.completion_date(date))
+            } else {
+                None
+            };
+            status.value(completed)
+        });
 
         let alarms = check.alarm(&self.alarm, Field::AlarmDate, Field::AlarmTime, timezone);
         let personal_alarms = if calendar.is_some_and(|calendar| calendar.personal)
@@ -87,12 +109,15 @@ impl ItemEditor {
             return Err(check.issues);
         }
         // Every missing required value has already produced a field issue above.
-        let (Some(calendar), Some((start, end))) = (calendar, dates) else {
+        let Some(calendar) = calendar else {
             return Err(check.issues);
         };
+        let (start, end) = dates;
 
         let buffer = self.description.buffer();
-        let mut command = Box::new(CreateEvent {
+        let mut command = Box::new(CreateItem {
+            kind: self.kind(),
+            task_status,
             calendar: calendar.id.clone(),
             summary: self.summary.text().to_string(),
             location: self.location.text().to_string(),
@@ -134,6 +159,9 @@ impl ItemEditor {
             if command.personal_alarms == initial.personal_alarms {
                 command.personal_alarms = original.personal_alarms.clone();
             }
+            if command.task_status == initial.task_status {
+                command.task_status = original.task_status.clone();
+            }
         }
         Ok(command)
     }
@@ -161,14 +189,22 @@ impl<'a> Checks<'a> {
         start: Option<NaiveDate>,
         end: Option<NaiveDate>,
         timezone: &chrono_tz::Tz,
-    ) -> Option<(CalDate, CalDate)> {
+    ) -> (Option<CalDate>, Option<CalDate>) {
         let all_day = editor.all_day.is_active();
         let (start_time, end_time) = if all_day {
             (None, None)
         } else {
             (
-                self.time(&editor.start_time, Field::StartTime),
-                self.time(&editor.end_time, Field::EndTime),
+                editor
+                    .has_start
+                    .is_active()
+                    .then(|| self.time(&editor.start_time, Field::StartTime))
+                    .flatten(),
+                editor
+                    .has_due
+                    .is_active()
+                    .then(|| self.time(&editor.end_time, Field::EndTime))
+                    .flatten(),
             )
         };
 
@@ -177,23 +213,32 @@ impl<'a> Checks<'a> {
         }
 
         // Check end overflow independently of start parsing so both errors can be shown.
-        let exclusive_end = end.and_then(|date| date.succ_opt());
+        let event = editor.kind() == CalCompType::Event;
+        let exclusive_end = end.and_then(|date| if event { date.succ_opt() } else { Some(date) });
         if all_day && end.is_some() && exclusive_end.is_none() {
             self.report(Field::EndDate, "Please enter a valid date (YYYY-MM-DD).");
         }
 
-        let (start, end) = (start?, end?);
-        Some(if all_day {
+        if all_day {
             (
-                CalDate::new_date(start, CalDateType::Inclusive),
-                CalDate::new_date(exclusive_end?, CalDateType::Exclusive),
+                start.map(|date| CalDate::new_date(date, CalDateType::Inclusive)),
+                exclusive_end.map(|date| {
+                    CalDate::new_date(
+                        date,
+                        if event {
+                            CalDateType::Exclusive
+                        } else {
+                            CalDateType::Inclusive
+                        },
+                    )
+                }),
             )
         } else {
             (
-                CalDate::new_datetime(start, start_time, timezone.name()),
-                CalDate::new_datetime(end, end_time, timezone.name()),
+                start.map(|date| CalDate::new_datetime(date, start_time, timezone.name())),
+                end.map(|date| CalDate::new_datetime(date, end_time, timezone.name())),
             )
-        })
+        }
     }
 
     fn date_range(

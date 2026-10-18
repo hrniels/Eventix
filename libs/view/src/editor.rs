@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Owned calendar choices, completions, and defaults for the event editor.
+//! Owned calendar choices, completions, and defaults for event and task editors.
 
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::State;
 
-/// A writable calendar available for creating events.
+/// A writable calendar available for creating items.
 pub struct EditorCalendar {
     pub id: String,
     pub name: String,
@@ -19,8 +19,9 @@ pub struct EditorCalendar {
     pub personal: bool,
 }
 
-/// Owned choices and initial defaults for a new event, independent of UI widgets.
+/// Owned choices and initial defaults for an item, independent of UI widgets.
 pub struct EditorOptions {
+    pub kind: CalCompType,
     pub calendars: Vec<EditorCalendar>,
     pub last_calendar: Option<String>,
     pub locations: Vec<String>,
@@ -36,13 +37,18 @@ impl EditorOptions {
     /// and ID. The initial start is the next whole hour in the configured timezone; returns
     /// an error if that date and time cannot be represented.
     pub fn load(state: &State) -> anyhow::Result<Self> {
+        Self::load_for(state, CalCompType::Event)
+    }
+
+    /// Loads writable calendars and defaults for the requested component type.
+    pub fn load_for(state: &State, kind: CalCompType) -> anyhow::Result<Self> {
         let mut calendars = Vec::new();
         for collection in state.settings().collections().values() {
             if collection.is_read_only() {
                 continue;
             }
             for (id, settings) in collection.calendars() {
-                if settings.types().contains(&CalCompType::Event) {
+                if settings.types().contains(&kind) {
                     calendars.push(EditorCalendar {
                         id: id.clone(),
                         name: settings.name().clone(),
@@ -87,12 +93,13 @@ impl EditorOptions {
             .collect();
         contacts.sort();
         Ok(Self {
+            kind,
             calendars,
             locations,
             contacts,
             start,
             locale: state.locale(),
-            last_calendar: state.misc().last_calendar(CalCompType::Event).cloned(),
+            last_calendar: state.misc().last_calendar(kind).cloned(),
         })
     }
 }

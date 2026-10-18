@@ -7,9 +7,10 @@
 use std::{sync::Arc, thread};
 
 use chrono::{Duration, NaiveDate, Utc};
+use eventix_ical::objects::CalCompType;
 use eventix_state::actions::{
     Command,
-    items::{CreateEvent, EditScope, ItemId, UpdateEvent},
+    items::{CreateItem, EditScope, ItemId, UpdateItem},
 };
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
@@ -56,8 +57,8 @@ pub(crate) struct ChangeSet {
 pub(crate) enum Event {
     EditorLoaded(u64, Result<EditorOptions, String>),
     EditorSaved(u64, Result<ChangeSet, String>),
-    EditLoaded(u64, Result<(EditorOptions, Box<UpdateEvent>), String>),
-    EditSaved(u64, Result<(ChangeSet, eventix_view::Event), String>),
+    EditLoaded(u64, Result<(EditorOptions, Box<UpdateItem>), String>),
+    EditSaved(u64, Result<(ChangeSet, SavedItem), String>),
     ContentLoaded(ContentResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
     SourceLoaded(String),
@@ -66,12 +67,17 @@ pub(crate) enum Event {
     CommandFailed(String),
 }
 
+pub(crate) enum SavedItem {
+    Event(Box<eventix_view::Event>),
+    Task(Box<eventix_view::sidebar::SidebarRow>),
+}
+
 #[derive(Debug)]
 enum Message {
-    PrepareEditor(u64),
-    CreateEvent(u64, Box<CreateEvent>),
+    PrepareEditor(u64, CalCompType),
+    CreateItem(u64, Box<CreateItem>),
     LoadEdit(u64, ItemId, EditScope),
-    SaveEdit(u64, Box<UpdateEvent>),
+    SaveEdit(u64, Box<UpdateItem>),
     ShowContent(ContentRequest),
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
@@ -89,16 +95,16 @@ impl CalendarSession {
         let _ = self.requests.try_send(Message::LoadEdit(id, item, scope));
     }
 
-    pub fn save_edit(&self, id: u64, edit: Box<UpdateEvent>) {
+    pub fn save_edit(&self, id: u64, edit: Box<UpdateItem>) {
         let _ = self.requests.try_send(Message::SaveEdit(id, edit));
     }
 
-    pub fn prepare_editor(&self, id: u64) {
-        let _ = self.requests.try_send(Message::PrepareEditor(id));
+    pub fn prepare_editor(&self, id: u64, kind: CalCompType) {
+        let _ = self.requests.try_send(Message::PrepareEditor(id, kind));
     }
 
-    pub fn create_event(&self, id: u64, event: Box<CreateEvent>) {
-        let _ = self.requests.try_send(Message::CreateEvent(id, event));
+    pub fn create_item(&self, id: u64, item: Box<CreateItem>) {
+        let _ = self.requests.try_send(Message::CreateItem(id, item));
     }
 
     pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
@@ -215,7 +221,7 @@ impl Worker {
         if self.state.is_none()
             && matches!(
                 message,
-                Message::ShowContent(_) | Message::RefreshSidebar | Message::PrepareEditor(_)
+                Message::ShowContent(_) | Message::RefreshSidebar | Message::PrepareEditor(_, _)
             )
         {
             match self.load_state() {
@@ -227,7 +233,7 @@ impl Worker {
                             generation: request.generation,
                             result: Err(error),
                         }),
-                        Message::PrepareEditor(id) => Event::EditorLoaded(id, Err(error)),
+                        Message::PrepareEditor(id, _) => Event::EditorLoaded(id, Err(error)),
                         _ => Event::SidebarLoaded(Err(error)),
                     }];
                 }
@@ -249,15 +255,15 @@ impl Worker {
                 id,
                 self.save_edit(edit).map_err(|error| format!("{error:#}")),
             ),
-            Message::PrepareEditor(id) => Event::EditorLoaded(
+            Message::PrepareEditor(id, kind) => Event::EditorLoaded(
                 id,
                 self.state()
-                    .and_then(EditorOptions::load)
+                    .and_then(|state| EditorOptions::load_for(state, kind))
                     .map_err(|error| format!("{error:#}")),
             ),
-            Message::CreateEvent(id, event) => Event::EditorSaved(
+            Message::CreateItem(id, item) => Event::EditorSaved(
                 id,
-                self.execute(Command::CreateEvent(event))
+                self.execute(Command::CreateItem(item))
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::ShowContent(request) => {
@@ -308,21 +314,26 @@ impl Worker {
         &self,
         item: ItemId,
         scope: EditScope,
-    ) -> anyhow::Result<(EditorOptions, Box<UpdateEvent>)> {
+    ) -> anyhow::Result<(EditorOptions, Box<UpdateItem>)> {
         let state = self.state()?;
+        let edit = UpdateItem::load(state, item, scope)?;
         Ok((
-            EditorOptions::load(state)?,
-            Box::new(UpdateEvent::load(state, item, scope)?),
+            EditorOptions::load_for(state, edit.fields.kind)?,
+            Box::new(edit),
         ))
     }
 
-    fn save_edit(
-        &mut self,
-        edit: Box<UpdateEvent>,
-    ) -> anyhow::Result<(ChangeSet, eventix_view::Event)> {
-        let change = self.execute(Command::UpdateEvent(edit))?;
+    fn save_edit(&mut self, edit: Box<UpdateItem>) -> anyhow::Result<(ChangeSet, SavedItem)> {
+        let kind = edit.fields.kind;
+        let change = self.execute(Command::UpdateItem(edit))?;
         let state = self.state()?;
-        let event = eventix_view::Event::load(state, &change.items[0]).ok_or_else(|| {
+        let event = match kind {
+            CalCompType::Event => eventix_view::Event::load(state, &change.items[0])
+                .map(|event| SavedItem::Event(Box::new(event))),
+            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(state, &change.items[0])
+                .map(|task| SavedItem::Task(Box::new(task))),
+        }
+        .ok_or_else(|| {
             anyhow::anyhow!(
                 state
                     .locale()
@@ -527,9 +538,85 @@ mod tests {
     }
 
     #[test]
+    fn undated_task_creation_and_completion_refresh_sidebar_and_return_task_details() {
+        use eventix_ical::objects::{CalCompType, CalTodoStatus};
+        use eventix_state::actions::items::{EditScope, TaskStatus, UpdateItem};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state
+            .as_mut()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .all_calendars_mut()
+            .get_mut("test")
+            .unwrap()
+            .set_types(vec![CalCompType::Event, CalCompType::Todo]);
+        subscribe(&mut worker, 1, "2026-10-12", View::Week);
+        let Some(Event::EditorLoaded(1, Ok(options))) = worker
+            .handle(Message::PrepareEditor(1, CalCompType::Todo))
+            .pop()
+        else {
+            panic!("expected task editor options");
+        };
+        assert_eq!(options.kind, CalCompType::Todo);
+        assert_eq!(options.calendars.len(), 1);
+        let source = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: None,
+        };
+        let mut fields = UpdateItem::load(worker.state().unwrap(), source, EditScope::Series)
+            .unwrap()
+            .fields;
+        fields.kind = CalCompType::Todo;
+        fields.summary = "Undated task".into();
+        fields.start = None;
+        fields.end = None;
+        fields.recurrence = None;
+        fields.task_status = Some(TaskStatus {
+            status: CalTodoStatus::NeedsAction,
+            percent: None,
+            completed: None,
+        });
+        let Some(Event::EditorSaved(2, Ok(change))) = worker
+            .handle(Message::CreateItem(2, Box::new(fields)))
+            .pop()
+        else {
+            panic!("expected task creation");
+        };
+        assert_eq!(change.affected, vec![SubscriptionId::Sidebar]);
+        let item = change.items[0].clone();
+        let Some(Event::EditLoaded(3, Ok((options, mut edit)))) = worker
+            .handle(Message::LoadEdit(3, item, EditScope::Series))
+            .pop()
+        else {
+            panic!("expected task edit");
+        };
+        assert_eq!(options.kind, CalCompType::Todo);
+        edit.fields.task_status.as_mut().unwrap().status = CalTodoStatus::Completed;
+        let Some(Event::EditSaved(3, Ok((change, super::SavedItem::Task(task))))) =
+            worker.handle(Message::SaveEdit(3, edit)).pop()
+        else {
+            panic!("expected saved task details");
+        };
+        assert_eq!(task.summary, "Undated task");
+        assert!(task.start.is_none() && task.due.is_none());
+        assert_eq!(change.affected, vec![SubscriptionId::Sidebar]);
+        let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+        assert!(
+            matches!(events.as_slice(), [Event::SidebarLoaded(Ok(snapshot))] if snapshot.tasks.is_empty())
+        );
+    }
+
+    #[test]
     fn editor_requests_preserve_identity_and_creation_invalidates_matching_queries() {
         use eventix_ical::objects::{CalCompType, CalDate, CalDateType};
-        use eventix_state::actions::items::CreateEvent;
+        use eventix_state::actions::items::CreateItem;
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -546,21 +633,30 @@ mod tests {
             .unwrap()
             .set_types(vec![CalCompType::Event]);
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
-        let Some(Event::EditorLoaded(42, Ok(options))) =
-            worker.handle(Message::PrepareEditor(42)).pop()
+        let Some(Event::EditorLoaded(42, Ok(options))) = worker
+            .handle(Message::PrepareEditor(42, CalCompType::Event))
+            .pop()
         else {
             panic!("editor options should echo the request identity");
         };
         assert_eq!(options.calendars.len(), 1);
         assert_eq!(options.calendars[0].id, "test");
         let make_request = || {
-            Box::new(CreateEvent {
+            Box::new(CreateItem {
+                kind: CalCompType::Event,
+                task_status: None,
                 calendar: "test".into(),
                 summary: "Created".into(),
                 location: String::new(),
                 description: String::new(),
-                start: CalDate::new_date("2026-10-14".parse().unwrap(), CalDateType::Inclusive),
-                end: CalDate::new_date("2026-10-15".parse().unwrap(), CalDateType::Exclusive),
+                start: Some(CalDate::new_date(
+                    "2026-10-14".parse().unwrap(),
+                    CalDateType::Inclusive,
+                )),
+                end: Some(CalDate::new_date(
+                    "2026-10-15".parse().unwrap(),
+                    CalDateType::Exclusive,
+                )),
                 recurrence: None,
                 alarms: Vec::new(),
                 personal_alarms: None,
@@ -570,12 +666,11 @@ mod tests {
         let mut invalid = make_request();
         invalid.summary.clear();
         assert!(matches!(
-            worker.handle(Message::CreateEvent(43, invalid)).as_slice(),
+            worker.handle(Message::CreateItem(43, invalid)).as_slice(),
             [Event::EditorSaved(43, Err(_))]
         ));
-        let Some(Event::EditorSaved(44, Ok(change))) = worker
-            .handle(Message::CreateEvent(44, make_request()))
-            .pop()
+        let Some(Event::EditorSaved(44, Ok(change))) =
+            worker.handle(Message::CreateItem(44, make_request())).pop()
         else {
             panic!("successful save must publish the request identity and committed changes");
         };
@@ -624,9 +719,9 @@ mod tests {
         assert_eq!(edit.fields.summary, "Move me");
         let stale = edit.clone();
         edit.fields.summary = "Edited occurrence".into();
-        edit.fields.start = "TU2026-11-10T09:00:00".parse().unwrap();
-        edit.fields.end = "TU2026-11-10T10:00:00".parse().unwrap();
-        let Some(Event::EditSaved(42, Ok((change, event)))) =
+        edit.fields.start = Some("TU2026-11-10T09:00:00".parse().unwrap());
+        edit.fields.end = Some("TU2026-11-10T10:00:00".parse().unwrap());
+        let Some(Event::EditSaved(42, Ok((change, super::SavedItem::Event(event))))) =
             worker.handle(Message::SaveEdit(42, edit)).pop()
         else {
             panic!("expected saved details");

@@ -195,6 +195,14 @@ impl Window {
             }
         });
         self.add_action(&action);
+        let action = gio::SimpleAction::new("new-task", None);
+        let page = self.imp().page.downgrade();
+        action.connect_activate(move |_, _| {
+            if let Some(page) = page.upgrade() {
+                page.new_task();
+            }
+        });
+        self.add_action(&action);
         for (name, keys, days) in [
             ("previous", vec!["<Alt>Left"], Some(-1)),
             ("next", vec!["<Alt>Right"], Some(1)),

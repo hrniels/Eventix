@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 mod create;
-mod create_event;
+mod create_item;
 mod move_event;
-mod update_event;
+mod update_item;
 
 use eventix_ical::objects::CalDate;
 
 pub use create::create_component;
-pub use create_event::CreateEvent;
+pub use create_item::{CreateItem, TaskStatus};
 pub use move_event::MoveEvent;
-pub use update_event::{EditScope, UpdateEvent};
+pub use update_item::{EditScope, UpdateItem};
 
 /// Identifies an occurrence independently of its current placement.
 #[derive(Clone, Debug, PartialEq, Eq)]

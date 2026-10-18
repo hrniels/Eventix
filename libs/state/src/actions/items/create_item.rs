@@ -4,30 +4,58 @@
 
 use anyhow::bail;
 use eventix_ical::objects::{
-    CalAlarm, CalAttendee, CalCompType, CalDate, CalDateTime, CalRRule, DateContext,
+    CalAlarm, CalAttendee, CalCompType, CalDate, CalDateTime, CalRRule, CalTodoStatus, DateContext,
     UpdatableEventLike,
 };
 
 use super::{ItemId, create_component};
 use crate::{CalendarAlarmType, State};
 
-/// Creates an event from frontend-independent, already parsed field values.
+/// Creates an event or task from frontend-independent, already parsed field values.
 #[derive(Clone, Debug)]
-pub struct CreateEvent {
+pub struct CreateItem {
+    pub kind: CalCompType,
+    pub task_status: Option<TaskStatus>,
     pub calendar: String,
     pub summary: String,
     pub location: String,
     pub description: String,
-    pub start: CalDate,
-    pub end: CalDate,
+    /// Required for events and recurring tasks; optional for other tasks.
+    pub start: Option<CalDate>,
+    /// The exclusive event end or inclusive task due date, which is optional for tasks.
+    pub end: Option<CalDate>,
     pub recurrence: Option<CalRRule>,
     pub alarms: Vec<CalAlarm>,
     pub personal_alarms: Option<Vec<CalAlarm>>,
     pub attendees: Vec<CalAttendee>,
 }
 
-impl CreateEvent {
-    /// Validates and persists an event, returning its new identity.
+/// Editable task status, progress, and completion date.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TaskStatus {
+    pub status: CalTodoStatus,
+    pub percent: Option<u8>,
+    pub completed: Option<CalDate>,
+}
+
+impl TaskStatus {
+    pub(super) fn apply(&self, task: &mut eventix_ical::objects::CalTodo) {
+        task.set_status(Some(self.status));
+        task.set_percent(match self.status {
+            CalTodoStatus::Completed => Some(100),
+            CalTodoStatus::InProcess => self.percent,
+            _ => None,
+        });
+        task.set_completed(if self.status == CalTodoStatus::Completed {
+            self.completed.as_ref().map(CalDate::to_utc)
+        } else {
+            None
+        });
+    }
+}
+
+impl CreateItem {
+    /// Validates and persists an event or task, returning its new identity.
     pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
         self.validate(state)?;
         self.create(state)
@@ -40,11 +68,16 @@ impl CreateEvent {
             bail!(locale.translate("error.summary_empty").to_string());
         }
 
-        if matches!(self.start, CalDate::Date(..)) != matches!(self.end, CalDate::Date(..)) {
+        if self.kind == CalCompType::Event && (self.start.is_none() || self.end.is_none()) {
+            bail!(locale.translate("error.valid_date_time").to_string());
+        }
+        if let (Some(start), Some(end)) = (&self.start, &self.end)
+            && matches!(start, CalDate::Date(..)) != matches!(end, CalDate::Date(..))
+        {
             bail!(locale.translate("error.time_for_both_or_none").to_string());
         }
 
-        for date in [&self.start, &self.end] {
+        for date in [&self.start, &self.end].into_iter().flatten() {
             if let CalDate::DateTime(CalDateTime::Timezone(_, name)) = date {
                 name.parse::<chrono_tz::Tz>().map_err(|_| {
                     anyhow::anyhow!(locale.translate("error.valid_date_time").to_string())
@@ -53,25 +86,36 @@ impl CreateEvent {
         }
 
         let context = DateContext::system();
-        if context.date_to_utc(&self.start, state.timezone())
-            > context.date_to_utc(&self.end, state.timezone())
+        if let (Some(start), Some(end)) = (&self.start, &self.end)
+            && context.date_to_utc(start, state.timezone())
+                > context.date_to_utc(end, state.timezone())
         {
             bail!(locale.translate("error.end_before_start").to_string());
         }
 
         if let Some(rule) = &self.recurrence {
+            let Some(start) = &self.start else {
+                bail!(locale.translate("Invalid recurrence").to_string());
+            };
             if rule.interval() == Some(0) || rule.count() == Some(0) {
                 bail!(locale.translate("Invalid recurrence").to_string());
             }
 
             if let Some(until) = rule.until()
                 && context.date_to_utc(until, state.timezone())
-                    < context.date_to_utc(&self.start, state.timezone())
+                    < context.date_to_utc(start, state.timezone())
             {
                 bail!(locale.translate("error.end_before_start").to_string());
             }
         }
 
+        if self
+            .task_status
+            .as_ref()
+            .is_some_and(|status| status.percent.is_some_and(|percent| percent > 100))
+        {
+            bail!(locale.translate("Could not apply changes").to_string());
+        }
         Ok(())
     }
 
@@ -82,15 +126,21 @@ impl CreateEvent {
             state,
             &locale,
             &self.calendar,
-            CalCompType::Event,
+            self.kind,
             |_, _, component, _, organizer, _, _| {
                 component.set_summary(Some(self.summary));
                 component.set_location((!self.location.is_empty()).then_some(self.location));
                 component
                     .set_description((!self.description.is_empty()).then_some(self.description));
-                component.set_start(Some(self.start));
+                component.set_start(self.start);
                 if let Some(event) = component.as_event_mut() {
-                    event.set_end(Some(self.end));
+                    event.set_end(self.end);
+                } else if let Some(task) = component.as_todo_mut() {
+                    task.set_due(self.end);
+                    if let Some(status) = &self.task_status {
+                        status.apply(task);
+                    }
+                    task.set_priority(Some(eventix_ical::objects::PRIORITY_MEDIUM));
                 }
                 component.set_rrule(self.recurrence);
                 component.set_alarms((!self.alarms.is_empty()).then_some(self.alarms));
@@ -133,7 +183,7 @@ mod tests {
         objects::{CalCompType, CalDateType, CalRole, EventLike},
     };
 
-    use super::{CalAlarm, CalAttendee, CalDate, CalRRule, CreateEvent, State};
+    use super::{CalAlarm, CalAttendee, CalDate, CalRRule, CreateItem, State};
     use crate::{CalendarSettings, CollectionSettings, SyncerType};
 
     fn state(path: &Path, read_only: bool) -> State {
@@ -161,19 +211,75 @@ mod tests {
         state
     }
 
-    fn command() -> CreateEvent {
-        CreateEvent {
+    fn command() -> CreateItem {
+        CreateItem {
+            kind: CalCompType::Event,
+            task_status: None,
             calendar: "test".into(),
             summary: "New event".into(),
             location: "Office".into(),
             description: "Some details\nSecond line".into(),
-            start: "TTEurope/Berlin;2026-10-15T10:00:00".parse().unwrap(),
-            end: "TTEurope/Berlin;2026-10-15T11:00:00".parse().unwrap(),
+            start: Some("TTEurope/Berlin;2026-10-15T10:00:00".parse().unwrap()),
+            end: Some("TTEurope/Berlin;2026-10-15T11:00:00".parse().unwrap()),
             recurrence: None,
             alarms: Vec::new(),
             personal_alarms: None,
             attendees: Vec::new(),
         }
+    }
+
+    #[test]
+    fn tasks_allow_independent_dates_and_persist_inclusive_due_dates_and_status() {
+        for (has_start, has_due) in [(false, false), (true, false), (false, true), (true, true)] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = state(tmp.path(), false);
+            let mut request = command();
+            request.kind = CalCompType::Todo;
+            request.start = has_start
+                .then(|| CalDate::new_date("2026-10-15".parse().unwrap(), CalDateType::Inclusive));
+            request.end = has_due
+                .then(|| CalDate::new_date("2026-10-15".parse().unwrap(), CalDateType::Inclusive));
+            request.task_status = Some(super::TaskStatus {
+                status: super::CalTodoStatus::InProcess,
+                percent: Some(40),
+                completed: None,
+            });
+            let item = request.execute(&mut state).unwrap();
+            let file = state.store().file_by_id(&item.uid).unwrap();
+            let task = file.components()[0].as_todo().unwrap();
+            assert_eq!(task.start().is_some(), has_start);
+            assert_eq!(task.due().is_some(), has_due);
+            assert_eq!(task.percent(), Some(40));
+            let disk = fs::read_to_string(file.path()).unwrap();
+            assert!(disk.contains("BEGIN:VTODO"));
+            assert_eq!(disk.contains("DUE;VALUE=DATE:20261015"), has_due);
+            assert!(!disk.contains("DTEND"));
+            assert_eq!(
+                state.misc().last_calendar(CalCompType::Todo),
+                Some(&"test".into())
+            );
+        }
+    }
+
+    #[test]
+    fn recurring_tasks_require_a_start_and_events_require_both_dates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = state(tmp.path(), false);
+        let mut task = command();
+        task.kind = CalCompType::Todo;
+        task.start = None;
+        task.recurrence = Some("FREQ=DAILY;COUNT=3".parse().unwrap());
+        assert!(task.execute(&mut state).is_err());
+        for start in [true, false] {
+            let mut event = command();
+            if start {
+                event.start = None;
+            } else {
+                event.end = None;
+            }
+            assert!(event.execute(&mut state).is_err());
+        }
+        assert_eq!(state.store().files().count(), 0);
     }
 
     #[test]
@@ -238,8 +344,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = state(tmp.path(), false);
         let mut request = command();
-        request.start = CalDate::new_date("2026-10-15".parse().unwrap(), CalDateType::Inclusive);
-        request.end = CalDate::new_date("2026-10-16".parse().unwrap(), CalDateType::Exclusive);
+        request.start = Some(CalDate::new_date(
+            "2026-10-15".parse().unwrap(),
+            CalDateType::Inclusive,
+        ));
+        request.end = Some(CalDate::new_date(
+            "2026-10-16".parse().unwrap(),
+            CalDateType::Exclusive,
+        ));
         let identity = request.execute(&mut state).unwrap();
         let content = fs::read_to_string(tmp.path().join(format!("{}.ics", identity.uid))).unwrap();
         assert!(content.contains("DTSTART;VALUE=DATE:20261015"));
@@ -255,12 +367,14 @@ mod tests {
             match case {
                 0 => request.summary = "  ".into(),
                 1 => request.calendar = "missing".into(),
-                2 => request.end = "TTEurope/Berlin;2026-10-14T11:00:00".parse().unwrap(),
+                2 => request.end = Some("TTEurope/Berlin;2026-10-14T11:00:00".parse().unwrap()),
                 3 => {
-                    request.end =
-                        CalDate::new_date("2026-10-16".parse().unwrap(), CalDateType::Exclusive)
+                    request.end = Some(CalDate::new_date(
+                        "2026-10-16".parse().unwrap(),
+                        CalDateType::Exclusive,
+                    ))
                 }
-                4 => request.start = "TTInvalid/Zone;2026-10-15T10:00:00".parse().unwrap(),
+                4 => request.start = Some("TTInvalid/Zone;2026-10-15T10:00:00".parse().unwrap()),
                 _ => {
                     let mut rule = CalRRule::default();
                     rule.set_interval(0);

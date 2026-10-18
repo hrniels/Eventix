@@ -9,7 +9,7 @@ use std::{
 
 use eventix_locale::Locale;
 use eventix_state::actions::items::{EditScope, ItemId};
-use gtk::{glib, graphene, prelude::*};
+use gtk::{glib, graphene, prelude::*, subclass::prelude::ObjectSubclassIsExt};
 
 use super::card::EventCard;
 use crate::view::details::EventDetails;
@@ -89,7 +89,7 @@ impl DetailsController {
         );
     }
 
-    pub fn restore(&self, event: Option<&eventix_view::Event>, locale: &dyn Locale) {
+    pub fn restore_details(&self, updated: Option<EventDetails>) {
         let Some(popover) = self.popover.borrow().clone() else {
             return;
         };
@@ -98,9 +98,10 @@ impl DetailsController {
         let Some(stack) = popover.child().and_downcast::<gtk::Stack>() else {
             return;
         };
-        let child = if let Some(event) = event {
-            popover.update_property(&[gtk::accessible::Property::Label(&event.summary)]);
-            let updated = EventDetails::new(event, locale);
+        let child = if let Some(updated) = updated {
+            popover.update_property(&[gtk::accessible::Property::Label(
+                &updated.imp().summary.text(),
+            )]);
             self.bind_edit(&updated);
             let child = updated.child();
             updated.set_child(None::<&gtk::Widget>);
@@ -654,7 +655,7 @@ fn editor_position(
 
 #[cfg(test)]
 mod tests {
-    use std::{rc::Rc, sync::Arc, time::Duration};
+    use std::{rc::Rc, time::Duration};
 
     use gtk::prelude::*;
 
@@ -668,14 +669,6 @@ mod tests {
         gtk::Settings::default()
             .unwrap()
             .set_gtk_enable_animations(true);
-        let tmp = tempfile::tempdir().unwrap();
-        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
-        let locale = eventix_locale::new_with_timezone(
-            &xdg,
-            eventix_locale::LocaleType::English,
-            chrono_tz::Europe::Berlin,
-        )
-        .unwrap();
         let parent: crate::view::page::CalendarPage = gtk::glib::Object::new();
         let window = gtk::Window::builder()
             .child(&parent)
@@ -704,7 +697,7 @@ mod tests {
             panel.append(&gtk::Button::with_label("Editor"));
             assert!(controller.show_editor(panel.upcast_ref()));
             drain();
-            controller.restore(None, locale.as_ref());
+            controller.restore_details(None);
             if !during_transition {
                 drain();
             }
