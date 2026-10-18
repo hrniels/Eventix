@@ -246,9 +246,6 @@ impl ItemEditor {
                 .map(|cal| cal.name.as_str())
                 .collect::<Vec<_>>(),
         );
-        let factory = calendar_factory(&options.calendars);
-        calendar.set_factory(Some(&factory));
-        calendar.set_list_factory(Some(&factory));
         if let Some(index) = options
             .calendars
             .iter()
@@ -256,6 +253,9 @@ impl ItemEditor {
         {
             calendar.set_selected(index as u32);
         }
+        let factory = calendar_factory(&options.calendars, &calendar.model().unwrap());
+        calendar.set_factory(Some(&factory));
+        calendar.set_list_factory(Some(&factory));
         calendar
     }
 

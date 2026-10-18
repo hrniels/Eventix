@@ -164,8 +164,18 @@ impl UpdateEvent {
         let locale = state.locale();
         let tz = *state.timezone();
         let collection = state.settings().calendar(&self.item.calendar).unwrap().0;
-        let organizer = collection.build_organizer();
         let mail = collection.email().map(|email| email.address().clone());
+        let organizer = state
+            .settings()
+            .calendar(&self.fields.calendar)
+            .unwrap()
+            .0
+            .build_organizer();
+        let target_path = state
+            .store_mut()
+            .directory_mut(&Arc::new(self.fields.calendar.clone()))?
+            .path()
+            .clone();
 
         let file = state
             .store_mut()
@@ -198,8 +208,13 @@ impl UpdateEvent {
                 )?;
             }
             EditScope::Following if self.item.recurrence.is_some() => {
-                following =
-                    self.split_following(&mut staged, &mut result, apply, locale.as_ref())?;
+                following = self.split_following(
+                    &mut staged,
+                    &mut result,
+                    &target_path,
+                    apply,
+                    locale.as_ref(),
+                )?;
             }
             _ => {
                 self.update_series(&mut staged, &current.fields, apply, locale.as_ref())?;
@@ -208,8 +223,32 @@ impl UpdateEvent {
         }
 
         staged.calendar_mut().populate_timezones();
-        persist(&staged, following.as_ref(), locale.as_ref())?;
-        *file.calendar_mut() = staged.calendar().clone();
+        result.calendar = self.fields.calendar.clone();
+        if self.fields.calendar != self.item.calendar && following.is_none() {
+            let original = file.calendar().clone();
+            let path = file.path().clone();
+            let name = path
+                .file_name()
+                .context(locale.translate("Could not apply changes").to_string())?;
+            if target_path.join(name).exists() {
+                bail!(locale.translate("Could not apply changes").to_string());
+            }
+            *file.calendar_mut() = staged.calendar().clone();
+            let source = Arc::new(self.item.calendar.clone());
+            let target = Arc::new(self.fields.calendar.clone());
+            if let Err(error) = state.store_mut().switch_directory(path, &source, &target) {
+                let file = state
+                    .store_mut()
+                    .directory_mut(&source)?
+                    .file_by_id_mut(&result.uid)?;
+                *file.calendar_mut() = original;
+                persist(file, None, locale.as_ref())?;
+                return Err(error.into());
+            }
+        } else {
+            persist(&staged, following.as_ref(), locale.as_ref())?;
+            *file.calendar_mut() = staged.calendar().clone();
+        }
         if let Some(next) = following {
             state
                 .store_mut()
@@ -228,9 +267,20 @@ impl UpdateEvent {
         if current.revision != self.revision {
             bail!(locale.translate("error.component_was_modified").to_string());
         }
-        // Calendar relocation is a separate operation; occurrence edits stay in their calendar.
-        if self.fields.calendar != self.item.calendar {
+        // A single occurrence must remain in the calendar of its parent series.
+        if self.fields.calendar != self.item.calendar && self.scope == EditScope::Occurrence {
             bail!(locale.translate("Could not apply changes").to_string());
+        }
+        if self.fields.calendar != self.item.calendar {
+            let target = state.settings().calendar(&self.fields.calendar);
+            if !target.is_some_and(|(collection, calendar)| {
+                !collection.is_read_only()
+                    && calendar
+                        .types()
+                        .contains(&eventix_ical::objects::CalCompType::Event)
+            }) {
+                bail!(locale.translate("Could not apply changes").to_string());
+            }
         }
         Ok(current)
     }
@@ -311,6 +361,7 @@ impl UpdateEvent {
         &self,
         staged: &mut CalFile,
         result: &mut ItemId,
+        target_path: &Path,
         apply: impl Fn(&mut CalComponent),
         locale: &dyn Locale,
     ) -> anyhow::Result<Option<CalFile>> {
@@ -350,16 +401,8 @@ impl UpdateEvent {
         calendar.add_component(next);
         calendar.populate_timezones();
         Ok(Some(CalFile::new(
-            staged.directory().clone(),
-            staged
-                .path()
-                .parent()
-                .context(
-                    locale
-                        .translate("Calendar file has no parent directory")
-                        .to_string(),
-                )?
-                .join(format!("{}.ics", result.uid)),
+            Arc::new(self.fields.calendar.clone()),
+            target_path.join(format!("{}.ics", result.uid)),
             calendar,
         )))
     }
@@ -417,13 +460,13 @@ fn persist(
     Ok(())
 }
 
-/// Writes and syncs a temporary calendar file using the original file's directory and permissions.
+/// Writes and syncs a temporary calendar file beside its destination with the original permissions.
 fn stage_file(
     file: &CalFile,
     original_path: &Path,
     locale: &dyn Locale,
 ) -> anyhow::Result<tempfile::NamedTempFile> {
-    let parent = original_path.parent().context(
+    let parent = file.path().parent().context(
         locale
             .translate("Calendar file has no parent directory")
             .to_string(),
@@ -445,7 +488,7 @@ mod tests {
     use chrono::TimeZone;
     use eventix_ical::{
         col::CalDir,
-        objects::{CalDate, CalPartStat, EventLike},
+        objects::{CalCompType, CalDate, CalPartStat, EventLike},
     };
 
     use super::{EditScope, ItemId, UpdateEvent};
@@ -494,6 +537,220 @@ mod tests {
             calendar: "test".into(),
             uid: "edit-me".into(),
             recurrence: recurrence.map(|rid| rid.parse().unwrap()),
+        }
+    }
+
+    fn add_target(state: &mut State, path: &Path, read_only: bool) {
+        state.store_mut().add(CalDir::new_empty(
+            Arc::new("target".into()),
+            path.into(),
+            "Target".into(),
+            read_only,
+        ));
+        let mut calendar = CalendarSettings::default();
+        calendar.set_enabled(true);
+        calendar.set_types(vec![CalCompType::Event]);
+        let mut collection = CollectionSettings::new(SyncerType::VDirSyncer {
+            email: crate::EmailAccount::new("Owner".into(), "owner@example.org".into()),
+            url: "https://example.org".into(),
+            read_only,
+            username: None,
+            password: None,
+            time_span: Default::default(),
+        });
+        collection
+            .all_calendars_mut()
+            .insert("target".into(), calendar);
+        state
+            .settings_mut()
+            .collections_mut()
+            .insert("target".into(), collection);
+    }
+
+    #[test]
+    fn series_edit_moves_standalone_events_and_complete_series_with_exceptions() {
+        for recurrent in [false, true] {
+            let source = tempfile::tempdir().unwrap();
+            let target = tempfile::tempdir().unwrap();
+            let mut state = fixture(source.path(), recurrent);
+            add_target(&mut state, target.path(), false);
+            let rid = "TU2026-10-13T09:00:00";
+            if recurrent {
+                let mut exception =
+                    UpdateEvent::load(&state, item(Some(rid)), EditScope::Occurrence).unwrap();
+                exception.fields.summary = "Exception".into();
+                exception.execute(&mut state).unwrap();
+            }
+            let mut edit = UpdateEvent::load(&state, item(None), EditScope::Series).unwrap();
+            edit.fields.calendar = "target".into();
+            edit.fields.summary = "Moved".into();
+            let result = edit.execute(&mut state).unwrap();
+            assert_eq!(result.calendar, "target");
+            assert_eq!(result.uid, "edit-me");
+            assert!(!source.path().join("event.ics").exists());
+            let disk = fs::read_to_string(target.path().join("event.ics")).unwrap();
+            assert!(disk.contains("SUMMARY:Moved"));
+            assert!(disk.contains("X-CUSTOM:keep-me"));
+            let file = state.store().file_by_id("edit-me").unwrap();
+            assert_eq!(file.directory().as_str(), "target");
+            assert_eq!(file.path(), &target.path().join("event.ics"));
+            assert!(UpdateEvent::load(&state, result, EditScope::Series).is_ok());
+            if recurrent {
+                let occurrence = state
+                    .store()
+                    .occurrence_by_id("edit-me", Some(&rid.parse().unwrap()), state.timezone())
+                    .unwrap();
+                assert_eq!(occurrence.summary().unwrap(), "Exception");
+            }
+        }
+    }
+
+    #[test]
+    fn following_edit_moves_only_selected_and_later_occurrences_to_target_calendar() {
+        for day in [12, 14] {
+            let source = tempfile::tempdir().unwrap();
+            let target = tempfile::tempdir().unwrap();
+            let mut state = fixture(source.path(), true);
+            add_target(&mut state, target.path(), false);
+            let mut edit = UpdateEvent::load(
+                &state,
+                item(Some(&format!("TU2026-10-{day}T09:00:00"))),
+                EditScope::Following,
+            )
+            .unwrap();
+            edit.fields.calendar = "target".into();
+            edit.fields.summary = "Moved following".into();
+            let result = edit.execute(&mut state).unwrap();
+            assert_eq!(result.calendar, "target");
+            assert_ne!(result.uid, "edit-me");
+            assert!(result.recurrence.is_none());
+            assert!(UpdateEvent::load(&state, result, EditScope::Series).is_ok());
+
+            let start = chrono_tz::UTC
+                .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
+                .unwrap();
+            let end = start + chrono::Duration::days(10);
+            for (id, path, expected) in [
+                ("test", source.path(), day - 12),
+                ("target", target.path(), 17 - day),
+            ] {
+                let directory = state.store().directory(&Arc::new(id.into())).unwrap();
+                let occurrences: Vec<_> = directory
+                    .occurrences_between(start, end, |_| true)
+                    .collect();
+                assert_eq!(occurrences.len(), expected as usize);
+                for occurrence in occurrences {
+                    let date = occurrence.occurrence_start().unwrap().date_naive();
+                    let selected = format!("2026-10-{day}").parse().unwrap();
+                    if id == "test" {
+                        assert!(date < selected);
+                        assert_eq!(occurrence.summary().unwrap(), "Original");
+                    } else {
+                        assert!(date >= selected);
+                        assert_eq!(occurrence.summary().unwrap(), "Moved following");
+                    }
+                }
+                let reloaded =
+                    CalDir::new_from_dir(Arc::new(id.into()), path.into(), id.into(), false)
+                        .unwrap();
+                assert_eq!(
+                    reloaded.occurrences_between(start, end, |_| true).count(),
+                    expected as usize
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn failed_following_calendar_move_preserves_the_original_series() {
+        for day in [12, 14] {
+            let source = tempfile::tempdir().unwrap();
+            let target = tempfile::tempdir().unwrap();
+            let mut state = fixture(source.path(), true);
+            add_target(&mut state, &target.path().join("missing"), false);
+            let mut edit = UpdateEvent::load(
+                &state,
+                item(Some(&format!("TU2026-10-{day}T09:00:00"))),
+                EditScope::Following,
+            )
+            .unwrap();
+            edit.fields.calendar = "target".into();
+            edit.fields.summary = "Must not be saved".into();
+            assert!(edit.execute(&mut state).is_err());
+            let file = state.store().file_by_id("edit-me").unwrap();
+            assert_eq!(file.directory().as_str(), "test");
+            assert_eq!(
+                file.component_with(|c| c.rid().is_none())
+                    .unwrap()
+                    .rrule()
+                    .unwrap()
+                    .count(),
+                Some(5)
+            );
+            let disk = fs::read_to_string(source.path().join("event.ics")).unwrap();
+            assert!(disk.contains("SUMMARY:Original"));
+            assert!(disk.contains("COUNT=5"));
+            assert!(!disk.contains("Must not be saved"));
+        }
+    }
+
+    #[test]
+    fn rejected_calendar_moves_preserve_the_event() {
+        for case in [
+            "occurrence",
+            "read_only",
+            "missing",
+            "collision",
+            "save_failure",
+        ] {
+            let source = tempfile::tempdir().unwrap();
+            let target = tempfile::tempdir().unwrap();
+            let mut state = fixture(source.path(), true);
+            let target_path = if case == "save_failure" {
+                target.path().join("missing")
+            } else {
+                target.path().to_path_buf()
+            };
+            add_target(&mut state, &target_path, case == "read_only");
+            if case == "collision" {
+                fs::write(target.path().join("event.ics"), "existing file").unwrap();
+            }
+            let scope = match case {
+                "occurrence" => EditScope::Occurrence,
+                _ => EditScope::Series,
+            };
+            let mut edit =
+                UpdateEvent::load(&state, item(Some("TU2026-10-13T09:00:00")), scope).unwrap();
+            edit.fields.calendar = if case == "missing" {
+                "missing"
+            } else {
+                "target"
+            }
+            .into();
+            edit.fields.summary = "Must not be saved".into();
+            assert!(edit.execute(&mut state).is_err(), "{case}");
+            let file = state
+                .store()
+                .file_by_id("edit-me")
+                .unwrap_or_else(|| panic!("{case}"));
+            assert_eq!(file.directory().as_str(), "test", "{case}");
+            assert_eq!(
+                file.component_with(|c| c.rid().is_none())
+                    .unwrap()
+                    .summary()
+                    .unwrap(),
+                "Original",
+                "{case}"
+            );
+            let disk = fs::read_to_string(source.path().join("event.ics")).unwrap();
+            assert!(disk.contains("SUMMARY:Original"), "{case}");
+            assert!(!disk.contains("Must not be saved"), "{case}");
+            if case == "collision" {
+                assert_eq!(
+                    fs::read_to_string(target.path().join("event.ics")).unwrap(),
+                    "existing file"
+                );
+            }
         }
     }
 

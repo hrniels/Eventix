@@ -16,6 +16,7 @@ use super::{AlarmInput, AttendeeInput, AttendeeSection, ItemEditor};
 impl ItemEditor {
     pub fn edit(id: u64, mut options: EditorOptions, edit: UpdateEvent) -> Rc<Self> {
         // Populate before connecting timezone conversion and validation signals.
+        options.last_calendar = Some(edit.item.calendar.clone());
         options.start = DateContext::system()
             .date(&edit.fields.start)
             .start_in(options.locale.timezone())
@@ -46,15 +47,15 @@ impl ItemEditor {
         self.summary.set_text(&fields.summary);
         self.location.set_text(&fields.location);
         self.description.buffer().set_text(&fields.description);
-        if let Some(index) = self
+        let selection = self
             .options
             .calendars
             .iter()
             .position(|cal| cal.id == fields.calendar)
-        {
-            self.calendar.set_selected(index as u32);
-        }
-        self.calendar.set_sensitive(false);
+            .map_or(gtk::INVALID_LIST_POSITION, |index| index as u32);
+        self.calendar.set_selected(selection);
+        self.calendar
+            .set_sensitive(edit.scope != EditScope::Occurrence);
 
         let timezone = self.load_existing_dates(fields);
         self.load_existing_alarms(fields, &timezone);
@@ -222,6 +223,110 @@ mod tests {
                 &gtk::gdk::ModifierType::empty(),
             ],
         )
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn existing_calendar_overrides_creation_default_and_can_be_changed_for_whole_events() {
+        fn displayed_label(widget: &gtk::Widget) -> Option<String> {
+            if !widget.is_visible() || !widget.is_child_visible() {
+                return None;
+            }
+            if let Some(label) = widget.downcast_ref::<gtk::Label>() {
+                return Some(label.text().to_string());
+            }
+            let mut child = widget.first_child();
+            while let Some(widget) = child {
+                if let Some(text) = displayed_label(&widget) {
+                    return Some(text);
+                }
+                child = widget.next_sibling();
+            }
+            None
+        }
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
+        let mut state = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+        state.store_mut().add(CalDir::new_empty(
+            Arc::new("current".into()),
+            tmp.path().into(),
+            "Current".into(),
+            false,
+        ));
+        let mut collection = CollectionSettings::new(SyncerType::FileSystem {
+            path: tmp.path().display().to_string(),
+        });
+        for (id, name) in [
+            ("other", "A default calendar"),
+            ("current", "Z current calendar"),
+        ] {
+            let mut settings = CalendarSettings::default();
+            settings.set_enabled(true);
+            settings.set_types(vec![CalCompType::Event]);
+            settings.set_name(name.into());
+            collection.all_calendars_mut().insert(id.into(), settings);
+        }
+        state
+            .settings_mut()
+            .collections_mut()
+            .insert("local".into(), collection);
+        let fields = CreateEvent {
+            calendar: "current".into(),
+            summary: "Event".into(),
+            location: String::new(),
+            description: String::new(),
+            start: "TU2026-10-12T09:00:00".parse().unwrap(),
+            end: "TU2026-10-12T10:00:00".parse().unwrap(),
+            recurrence: None,
+            alarms: vec![],
+            personal_alarms: None,
+            attendees: vec![],
+        };
+        let item = fields.execute(&mut state).unwrap();
+        for recurrent in [false, true] {
+            let mut edit = UpdateEvent::load(&state, item.clone(), EditScope::Series).unwrap();
+            if recurrent {
+                edit.fields.recurrence = Some("FREQ=DAILY;COUNT=5".parse().unwrap());
+            }
+            let mut options = EditorOptions::load(&state).unwrap();
+            options.last_calendar = Some("other".into());
+            let editor = super::ItemEditor::edit(1, options, edit.clone());
+            let window = gtk::Window::builder().child(&editor.layer).build();
+            window.present();
+            while gtk::glib::MainContext::default().iteration(false) {}
+            assert_eq!(editor.calendar.selected(), 1);
+            assert_eq!(
+                displayed_label(&editor.calendar.first_child().unwrap()).as_deref(),
+                Some("Z current calendar")
+            );
+            assert_eq!(editor.command().unwrap().calendar, "current");
+            assert!(editor.calendar.is_sensitive());
+            editor.calendar.set_selected(0);
+            assert_eq!(
+                displayed_label(&editor.calendar.first_child().unwrap()).as_deref(),
+                Some("A default calendar")
+            );
+            assert_eq!(editor.command().unwrap().calendar, "other");
+            window.close();
+
+            for scope in [EditScope::Occurrence, EditScope::Following] {
+                edit.scope = scope;
+                let editor =
+                    super::ItemEditor::edit(2, EditorOptions::load(&state).unwrap(), edit.clone());
+                assert_eq!(editor.command().unwrap().calendar, "current");
+                assert_eq!(
+                    editor.calendar.is_sensitive(),
+                    scope == EditScope::Following
+                );
+                if scope == EditScope::Following {
+                    editor.calendar.set_selected(0);
+                    assert_eq!(editor.command().unwrap().calendar, "other");
+                }
+            }
+        }
     }
 
     #[test]

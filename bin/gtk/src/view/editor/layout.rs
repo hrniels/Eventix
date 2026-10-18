@@ -256,7 +256,10 @@ fn bind_choice(button: &gtk::CheckButton, model: &gtk::DropDown, index: u32) {
     });
 }
 
-pub(super) fn calendar_factory(calendars: &[EditorCalendar]) -> gtk::SignalListItemFactory {
+pub(super) fn calendar_factory(
+    calendars: &[EditorCalendar],
+    model: &gtk::gio::ListModel,
+) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     factory.connect_setup(|_, item| {
         let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
@@ -268,11 +271,12 @@ pub(super) fn calendar_factory(calendars: &[EditorCalendar]) -> gtk::SignalListI
         .iter()
         .map(|calendar| calendar.background.clone())
         .collect();
+    let model = model.clone();
     factory.connect_bind(move |_, item| {
         let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
             return;
         };
-        bind_calendar_item(item, &colors);
+        bind_calendar_item(item, &colors, &model);
     });
     factory
 }
@@ -289,7 +293,7 @@ fn setup_calendar_item(item: &gtk::ListItem) {
     item.set_child(Some(&content));
 }
 
-fn bind_calendar_item(item: &gtk::ListItem, colors: &[String]) {
+fn bind_calendar_item(item: &gtk::ListItem, colors: &[String], model: &gtk::gio::ListModel) {
     let Some(content) = item.child() else {
         return;
     };
@@ -299,8 +303,11 @@ fn bind_calendar_item(item: &gtk::ListItem, colors: &[String]) {
         label.set_text(&text.string());
     }
     if let Some(dot) = content.first_child().and_downcast::<gtk::DrawingArea>() {
-        let color = colors
-            .get(item.position() as usize)
+        // The collapsed dropdown uses a one-item model, so its position is always zero.
+        // Resolve the original object instead, which also handles duplicate calendar names.
+        let position = (0..model.n_items()).find(|&index| model.item(index) == item.item());
+        let color = position
+            .and_then(|index| colors.get(index as usize))
             .and_then(|color| gdk::RGBA::parse(color).ok())
             .unwrap_or(gdk::RGBA::TRANSPARENT);
         set_calendar_dot_color(&dot, color);
