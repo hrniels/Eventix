@@ -378,8 +378,7 @@ button.ev_details_uid:hover {
 }
 
 /* Navigation controls sit inside the calendar header line and must stay compact. */
-.ev_panel_header button,
-.ev_panel_header menubutton {
+.ev_panel_header button {
     min-height: 0;
     min-width: 0;
     padding: 2px 6px;
