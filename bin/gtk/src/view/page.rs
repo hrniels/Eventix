@@ -23,7 +23,7 @@ use super::{
     weekly::content::WeekContent,
 };
 use crate::model::session::{
-    CalendarSession, ContentRequest, ContentResponse, Event, SavedItem, Snapshot, View,
+    CalendarSession, ChangeSet, ContentRequest, ContentResponse, Event, SavedItem, Snapshot, View,
 };
 use crate::style;
 
@@ -39,9 +39,6 @@ mod imp {
         pub header: gtk::TemplateChild<gtk::CenterBox>,
         #[template_child]
         pub sidebar: gtk::TemplateChild<Sidebar>,
-        pub calendar_css: RefCell<String>,
-        pub loading: Cell<bool>,
-        pub header_group: RefCell<Option<gtk::SizeGroup>>,
         #[template_child]
         pub weekly_content: gtk::TemplateChild<gtk::ScrolledWindow>,
         #[template_child]
@@ -52,7 +49,6 @@ mod imp {
         pub week_view: gtk::TemplateChild<gtk::ToggleButton>,
         #[template_child]
         pub month_view: gtk::TemplateChild<gtk::ToggleButton>,
-        pub(super) view: Cell<View>,
         #[template_child]
         pub title: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -67,25 +63,18 @@ mod imp {
         pub today: gtk::TemplateChild<gtk::Button>,
         #[template_child]
         pub reload: gtk::TemplateChild<gtk::Button>,
-        pub(super) editor: RefCell<Option<Rc<ItemEditor>>>,
-        pub editor_request: Cell<u64>,
-        pub editor_loading: Cell<bool>,
         #[template_child]
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub calendar: gtk::TemplateChild<gtk::Calendar>,
+
+        pub(super) editor: PageEditor,
+        pub(super) content: PageContent,
+        pub(super) session: PageSession,
+        pub calendar_css: RefCell<String>,
+        pub header_group: RefCell<Option<gtk::SizeGroup>>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
-        pub(super) session: RefCell<Option<CalendarSession>>,
-        pub pending_command: Cell<bool>,
-        /// Identifies the latest requested content selection, even while its result is pending.
-        pub generation: Cell<u64>,
-        /// Records the last successfully displayed generation for subscription recovery on reload.
-        pub loaded_generation: Cell<Option<u64>>,
-        pub date: Cell<Option<NaiveDate>>,
-        pub displayed: Cell<Option<NaiveDate>>,
-        pub updating_picker: Cell<bool>,
         pub locale: RefCell<Option<Arc<dyn Locale + Send + Sync>>>,
-        pub timer: RefCell<Option<glib::SourceId>>,
         pub(super) details: Rc<DetailsController>,
     }
 
@@ -99,8 +88,10 @@ mod imp {
             WeekContent::ensure_type();
             MonthGrid::ensure_type();
             Sidebar::ensure_type();
+
             klass.bind_template();
         }
+
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
             obj.init_template();
         }
@@ -109,71 +100,11 @@ mod imp {
     impl ObjectImpl for CalendarPage {
         fn constructed(&self) {
             self.parent_constructed();
+
             let obj = self.obj();
-            self.weekly.imp().timed.set_details(self.details.clone());
-            self.weekly.imp().all_day.set_details(self.details.clone());
-            self.monthly.set_details(self.details.clone());
-            self.sidebar.set_details(self.details.clone());
-            let weak = obj.downgrade();
-            self.details.connect_edit(move |item, scope| {
-                if let Some(page) = weak.upgrade() {
-                    page.edit_item(item, scope);
-                }
-            });
-            let weak = obj.downgrade();
-            self.details
-                .connect_delete(move |item, recurrent, summary| {
-                    if let Some(page) = weak.upgrade() {
-                        page.confirm_delete(item, recurrent, &summary);
-                    }
-                });
-            let weak = obj.downgrade();
-            self.details.connect_dismissed(move || {
-                if let Some(page) = weak.upgrade() {
-                    page.discard_editor();
-                }
-            });
-            // Keep the calendar header line as tall as the sidebar panel titles so all
-            // headers line up horizontally.
-            let group = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
-            group.add_widget(&*self.header);
-            for title in self.sidebar.panel_titles() {
-                group.add_widget(&title);
-            }
-            self.header_group.replace(Some(group));
-            let weak = obj.downgrade();
-            self.week_view.connect_toggled(move |button| {
-                if button.is_active()
-                    && let Some(page) = weak.upgrade()
-                {
-                    page.switch_view(View::Week);
-                }
-            });
-            let weak = obj.downgrade();
-            self.month_view.connect_toggled(move |button| {
-                if button.is_active()
-                    && let Some(page) = weak.upgrade()
-                {
-                    page.switch_view(View::Month);
-                }
-            });
-            obj.translate_labels();
-            let weak = obj.downgrade();
-            self.calendar.connect_day_selected(move |calendar| {
-                let Some(page) = weak.upgrade() else { return };
-                if page.imp().updating_picker.get() || !page.imp().picker.is_active() {
-                    return;
-                }
-                let date = calendar.date();
-                if let Some(date) = NaiveDate::from_ymd_opt(
-                    date.year(),
-                    date.month() as u32,
-                    date.day_of_month() as u32,
-                ) {
-                    page.imp().picker.popdown();
-                    page.show_content(Some(date));
-                }
-            });
+            obj.setup_details();
+            obj.align_headers();
+            self.content.connect_controls(&obj);
         }
 
         fn dispose(&self) {
@@ -181,15 +112,18 @@ mod imp {
             if let Some((display, provider)) = self.styles.take() {
                 gtk::style_context_remove_provider_for_display(&display, &provider);
             }
+
             self.dispose_template();
         }
     }
+
     impl WidgetImpl for CalendarPage {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
             self.details.allocate(self.obj().upcast_ref());
         }
     }
+
     impl BoxImpl for CalendarPage {}
 }
 
@@ -199,149 +133,134 @@ glib::wrapper! {
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
-impl CalendarPage {
-    fn edit_item(&self, item: ItemId, scope: EditScope) {
+/// Owns editor requests and the active editor's lifecycle.
+#[derive(Default)]
+struct PageEditor {
+    current: RefCell<Option<Rc<ItemEditor>>>,
+    request: Cell<u64>,
+    loading: Cell<bool>,
+}
+
+impl PageEditor {
+    fn edit_item(&self, page: &CalendarPage, item: ItemId, scope: EditScope) {
         if self.editor_open() {
             return;
         }
-        if let Some(session) = self.imp().session.borrow().as_ref() {
-            let id = self.imp().editor_request.get().wrapping_add(1);
-            self.imp().editor_request.set(id);
-            self.imp().editor_loading.set(true);
+
+        if let Some(session) = page.imp().session.current.borrow().as_ref() {
+            let id = self.begin_request();
             session.load_edit(id, item, scope);
         }
     }
 
-    fn present_existing_editor(&self, id: u64, options: EditorOptions, edit: UpdateItem) {
-        self.present_editor(ItemEditor::edit(id, options, edit));
+    fn begin_request(&self) -> u64 {
+        let id = self.request.get().wrapping_add(1);
+        self.request.set(id);
+        self.loading.set(true);
+        id
     }
 
-    fn present_editor(&self, editor: Rc<ItemEditor>) {
-        let weak = self.downgrade();
+    fn present_existing_editor(
+        &self,
+        page: &CalendarPage,
+        id: u64,
+        options: EditorOptions,
+        edit: UpdateItem,
+    ) {
+        self.present_editor(page, ItemEditor::edit(id, options, edit));
+    }
+
+    fn present_editor(&self, page: &CalendarPage, editor: Rc<ItemEditor>) {
+        let weak = page.downgrade();
         editor.cancel.connect_clicked(move |_| {
             if let Some(page) = weak.upgrade() {
                 page.close_editor();
             }
         });
-        let weak = self.downgrade();
+
+        let weak = page.downgrade();
         editor.save.connect_clicked(move |_| {
             if let Some(page) = weak.upgrade() {
                 page.save_editor();
             }
         });
+
         // Opening a new popup closes the previous one and invalidates pending editor loads.
         // Install the new editor only after that cleanup has completed.
         let shown = if editor.existing.borrow().is_some() {
-            self.imp().details.show_editor(&editor.popup_panel())
+            page.imp().details.show_editor(&editor.popup_panel())
         } else {
-            self.imp()
+            page.imp()
                 .details
-                .show_new_editor(self.upcast_ref(), &editor.popup_panel());
+                .show_new_editor(page.upcast_ref(), &editor.popup_panel());
             true
         };
         if shown {
-            self.imp().editor.replace(Some(editor.clone()));
+            self.current.replace(Some(editor.clone()));
             editor.focus();
         }
     }
 
     fn discard_editor(&self) {
-        self.imp().editor.take();
-        self.imp().editor_loading.set(false);
-        self.imp()
-            .editor_request
-            .set(self.imp().editor_request.get().wrapping_add(1));
+        self.current.take();
+        self.loading.set(false);
+        self.request.set(self.request.get().wrapping_add(1));
     }
 
-    #[cfg(test)]
-    pub(super) fn test_existing_editor(
-        &self,
-        options: EditorOptions,
-        edit: UpdateItem,
-    ) -> Rc<ItemEditor> {
-        self.imp().locale.replace(Some(options.locale.clone()));
-        self.present_existing_editor(1, options, edit);
-        self.imp().editor.borrow().clone().unwrap()
-    }
-
-    #[cfg(test)]
-    pub(super) fn test_new_editor(&self, options: EditorOptions) -> Rc<ItemEditor> {
-        self.present_editor(ItemEditor::new(1, options));
-        self.imp().editor.borrow().clone().unwrap()
-    }
-
-    #[cfg(test)]
-    pub(super) fn test_details(&self) -> Rc<DetailsController> {
-        self.imp().details.clone()
-    }
-
-    #[cfg(test)]
-    pub(super) fn test_saved_editor(&self, item: SavedItem) {
-        self.finish_editor(Some(&item));
-    }
-
-    pub fn editor_open(&self) -> bool {
-        self.imp().editor_loading.get() || self.imp().editor.borrow().is_some()
+    fn editor_open(&self) -> bool {
+        self.loading.get() || self.current.borrow().is_some()
     }
 
     /// Handles editor shortcuts before either the window or a native popup consumes them.
-    pub fn handle_editor_key(
+    fn handle_editor_key(
         &self,
+        page: &CalendarPage,
         key: gdk::Key,
         modifiers: gdk::ModifierType,
     ) -> Option<glib::Propagation> {
         if !self.editor_open() {
             return None;
         }
+
         if key == gdk::Key::Escape
-            && self
+            && page
                 .root()
                 .and_downcast::<gtk::Window>()
                 .is_some_and(|window| !super::editor::has_nested_popup(&window))
         {
-            self.close_editor();
+            self.finish_editor(page, None);
             return Some(glib::Propagation::Stop);
         }
+
         if super::editor::is_save_key(key, modifiers) {
-            self.save_editor();
+            self.save_editor(page);
             return Some(glib::Propagation::Stop);
         }
+
         Some(glib::Propagation::Proceed)
     }
 
-    pub fn new_event(&self) {
-        self.new_item(CalCompType::Event);
-    }
-
-    pub fn new_task(&self) {
-        self.new_item(CalCompType::Todo);
-    }
-
-    fn new_item(&self, kind: CalCompType) {
+    fn new_item(&self, page: &CalendarPage, kind: CalCompType) {
         if self.editor_open() {
             return;
         }
-        if let Some(session) = self.imp().session.borrow().as_ref() {
-            self.dismiss_popovers();
-            let id = self.imp().editor_request.get().wrapping_add(1);
-            self.imp().editor_request.set(id);
-            self.imp().editor_loading.set(true);
+
+        if let Some(session) = page.imp().session.current.borrow().as_ref() {
+            page.dismiss_popovers();
+            let id = self.begin_request();
             session.prepare_editor(id, kind);
         }
     }
 
-    pub fn close_editor(&self) {
-        self.finish_editor(None);
-    }
-
-    fn finish_editor(&self, item: Option<&SavedItem>) {
-        let editor = self.imp().editor.borrow().clone();
+    fn finish_editor(&self, page: &CalendarPage, item: Option<&SavedItem>) {
+        let editor = self.current.borrow().clone();
         if editor.as_ref().is_some_and(|editor| editor.saving.get()) {
             return;
         }
-        if let Some(editor) = self.imp().editor.take() {
+
+        if let Some(editor) = self.current.take() {
             if editor.existing.borrow().is_some() {
-                let locale = self.locale();
+                let locale = page.locale();
                 let updated = item.map(|item| match item {
                     SavedItem::Event(event) => {
                         super::details::EventDetails::new(event, locale.as_ref())
@@ -350,32 +269,32 @@ impl CalendarPage {
                         super::details::EventDetails::new_sidebar(task, locale.as_ref())
                     }
                 });
-                self.imp().details.restore_details(updated);
+                page.imp().details.restore_details(updated);
             } else {
-                self.imp().details.close();
-                self.imp()
+                page.imp().details.close();
+                page.imp()
                     .sidebar
                     .new_item_button(editor.kind())
                     .grab_focus();
             }
         }
-        self.imp().editor_loading.set(false);
-        self.imp()
-            .editor_request
-            .set(self.imp().editor_request.get().wrapping_add(1));
+
+        self.loading.set(false);
+        self.request.set(self.request.get().wrapping_add(1));
     }
 
-    pub fn save_editor(&self) {
-        let Some(editor) = self.imp().editor.borrow().clone() else {
+    fn save_editor(&self, page: &CalendarPage) {
+        let Some(editor) = self.current.borrow().clone() else {
             return;
         };
         if editor.saving.get() {
             return;
         }
+
         match editor.command() {
             Ok(command) => {
                 editor.clear_errors();
-                if let Some(session) = self.imp().session.borrow().as_ref() {
+                if let Some(session) = page.imp().session.current.borrow().as_ref() {
                     editor.set_saving(true);
                     if let Some(mut edit) = editor.existing.borrow().clone() {
                         edit.fields = *command;
@@ -389,18 +308,136 @@ impl CalendarPage {
         }
     }
 
-    fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
-        self.imp()
-            .locale
-            .borrow()
-            .clone()
-            .unwrap_or_else(eventix_locale::default)
+    fn edit_loaded(
+        &self,
+        page: &CalendarPage,
+        id: u64,
+        result: Result<(EditorOptions, Box<UpdateItem>), String>,
+    ) {
+        if id != self.request.get() {
+            return;
+        }
+
+        self.loading.set(false);
+        match result {
+            Ok((options, edit)) => self.present_existing_editor(page, id, options, *edit),
+            Err(error) => page.show_error("Could not apply changes", &error),
+        }
     }
 
-    fn translate_labels(&self) {
-        let imp = self.imp();
-        let locale = self.locale();
-        let monthly = imp.view.get() == View::Month;
+    fn editor_loaded(&self, page: &CalendarPage, id: u64, result: Result<EditorOptions, String>) {
+        if id != self.request.get() {
+            return;
+        }
+
+        self.loading.set(false);
+        match result {
+            Ok(options) => self.present_editor(page, ItemEditor::new(id, options)),
+            Err(error) => page.show_error("Could not load local calendars", &error),
+        }
+    }
+
+    fn saved(
+        &self,
+        page: &CalendarPage,
+        id: u64,
+        result: Result<(ChangeSet, Option<SavedItem>), String>,
+    ) -> Option<ChangeSet> {
+        let editor = self
+            .current
+            .borrow()
+            .clone()
+            .filter(|editor| editor.id == id);
+
+        match result {
+            Ok((change, item)) => {
+                if let Some(editor) = editor {
+                    editor.set_saving(false);
+                    self.finish_editor(page, item.as_ref());
+                }
+                Some(change)
+            }
+            Err(error) => {
+                if let Some(editor) = editor {
+                    editor.set_saving(false);
+                    editor.show_error(&error);
+                }
+                None
+            }
+        }
+    }
+
+    fn stop(&self, page: &CalendarPage) {
+        if let Some(editor) = self.current.borrow().as_ref() {
+            editor.set_saving(false);
+        }
+
+        self.finish_editor(page, None);
+    }
+}
+
+/// Owns the selected period and the state of calendar content requests.
+#[derive(Default)]
+struct PageContent {
+    view: Cell<View>,
+    loading: Cell<bool>,
+    /// Identifies the latest requested content selection, even while its result is pending.
+    generation: Cell<u64>,
+    /// Records the last successfully displayed generation for subscription recovery on reload.
+    loaded_generation: Cell<Option<u64>>,
+    date: Cell<Option<NaiveDate>>,
+    displayed: Cell<Option<NaiveDate>>,
+    updating_picker: Cell<bool>,
+}
+
+impl PageContent {
+    fn connect_controls(&self, page: &CalendarPage) {
+        let imp = page.imp();
+
+        let weak = page.downgrade();
+        imp.week_view.connect_toggled(move |button| {
+            if button.is_active()
+                && let Some(page) = weak.upgrade()
+            {
+                page.switch_to_week();
+            }
+        });
+
+        let weak = page.downgrade();
+        imp.month_view.connect_toggled(move |button| {
+            if button.is_active()
+                && let Some(page) = weak.upgrade()
+            {
+                page.switch_to_month();
+            }
+        });
+
+        self.translate_labels(page);
+
+        let weak = page.downgrade();
+        imp.calendar.connect_day_selected(move |calendar| {
+            let Some(page) = weak.upgrade() else { return };
+            if page.imp().content.updating_picker.get() || !page.imp().picker.is_active() {
+                return;
+            }
+
+            let date = calendar.date();
+            if let Some(date) = NaiveDate::from_ymd_opt(
+                date.year(),
+                date.month() as u32,
+                date.day_of_month() as u32,
+            ) {
+                page.imp().picker.popdown();
+                page.show_content(Some(date));
+            }
+        });
+    }
+
+    fn translate_labels(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        let locale = page.locale();
+        let monthly = self.view.get() == View::Month;
+
         imp.previous
             .set_tooltip_text(Some(locale.translate(if monthly {
                 "Previous month"
@@ -412,12 +449,15 @@ impl CalendarPage {
         } else {
             "Next week"
         })));
+
         imp.week_view.set_label(locale.translate("Week"));
         imp.week_view
             .set_tooltip_text(Some(locale.translate("Weekly View")));
+
         imp.month_view.set_label(locale.translate("Month"));
         imp.month_view
             .set_tooltip_text(Some(locale.translate("Monthly View")));
+
         imp.today.set_label(locale.translate("Today"));
         imp.reload
             .set_tooltip_text(Some(locale.translate("Reload local calendars")));
@@ -425,45 +465,48 @@ impl CalendarPage {
             .set_tooltip_text(Some(locale.translate("Choose date")));
     }
 
-    pub fn show_content(&self, date: Option<NaiveDate>) {
-        self.dismiss_popovers();
-        let imp = self.imp();
-        imp.date.set(date);
-        let generation = imp.generation.get() + 1;
-        imp.generation.set(generation);
-        imp.loading.set(true);
+    fn show_content(&self, page: &CalendarPage, date: Option<NaiveDate>) {
+        page.dismiss_popovers();
+
+        let imp = page.imp();
+        self.date.set(date);
+        let generation = self.generation.get() + 1;
+        self.generation.set(generation);
+        self.loading.set(true);
         imp.status
-            .set_text(self.locale().translate("Loading calendar…"));
-        if let Some(session) = imp.session.borrow().as_ref() {
+            .set_text(page.locale().translate("Loading calendar…"));
+
+        if let Some(session) = imp.session.current.borrow().as_ref() {
             session.show_content(ContentRequest {
                 generation,
                 date,
-                view: imp.view.get(),
+                view: self.view.get(),
             });
         }
     }
 
-    pub fn navigate(&self, direction: i32) {
-        if self.editor_open() {
+    fn navigate(&self, page: &CalendarPage, direction: i32) {
+        if page.editor_open() {
             return;
         }
-        let date = self.imp().date.get().unwrap_or_else(|| {
+
+        let date = self.date.get().unwrap_or_else(|| {
             Utc::now()
-                .with_timezone(self.locale().timezone())
+                .with_timezone(page.locale().timezone())
                 .date_naive()
         });
-        let next = match self.imp().view.get() {
+        let next = match self.view.get() {
             View::Week => date.checked_add_signed(chrono::Duration::days(i64::from(direction) * 7)),
             View::Month => shift_month(date, direction),
         };
         if let Some(date) = next {
-            self.show_content(Some(date));
+            self.show_content(page, Some(date));
         }
     }
 
-    pub fn focus_event(&self, current: Option<&EventCard>, forward: bool) {
-        let imp = self.imp();
-        let cards = if imp.view.get() == View::Month {
+    fn focus_event(&self, page: &CalendarPage, current: Option<&EventCard>, forward: bool) {
+        let imp = page.imp();
+        let cards = if self.view.get() == View::Month {
             imp.monthly.event_cards()
         } else {
             let mut cards = imp.weekly.imp().timed.event_cards();
@@ -471,14 +514,16 @@ impl CalendarPage {
             cards.sort_by_key(|(start, _)| *start);
             cards
         };
+
         let index = current.and_then(|current| cards.iter().position(|(_, card)| card == current));
         let next = event_focus_index(cards.len(), index, forward);
         if let Some(next) = next {
             let card = &cards[next].1;
             if card.grab_focus() {
-                if let Some(window) = self.root().and_downcast::<gtk::Window>() {
+                if let Some(window) = page.root().and_downcast::<gtk::Window>() {
                     window.set_focus_visible(true);
                 }
+
                 // Custom event-surface children can lie outside either scroll viewport.
                 // Reveal the focused card in each enclosing scroller, inside out.
                 let mut ancestor = card.parent();
@@ -501,81 +546,24 @@ impl CalendarPage {
                             );
                         }
                     }
+
                     ancestor = widget.parent();
                 }
             }
         }
     }
 
-    pub fn reload(&self) {
-        self.dismiss_popovers();
-        let imp = self.imp();
-        imp.loading.set(true);
-        imp.status
-            .set_text(self.locale().translate("Loading calendar…"));
-        if let Some(session) = imp.session.borrow().as_ref() {
-            session.reload();
-            // A failed initial load or navigation has no subscription for the selected content.
-            if imp.loaded_generation.get() != Some(imp.generation.get()) {
-                session.show_content(ContentRequest {
-                    generation: imp.generation.get(),
-                    date: imp.date.get(),
-                    view: imp.view.get(),
-                });
-                session.refresh_sidebar();
-            }
-        }
-    }
-
-    pub(crate) fn can_edit(&self) -> bool {
-        !self.imp().loading.get()
-            && !self.imp().pending_command.get()
-            && self.imp().session.borrow().is_some()
-    }
-
-    pub(crate) fn execute_command(&self, command: Command) -> bool {
-        if !self.can_edit() {
-            return false;
-        }
-        let imp = self.imp();
-        if let Some(session) = imp.session.borrow().as_ref() {
-            imp.pending_command.set(true);
-            imp.status
-                .set_text(self.locale().translate("Applying changes…"));
-            session.execute(command);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn confirm_delete(&self, item: ItemId, recurrent: bool, summary: &str) {
-        if !self.can_edit() {
+    fn switch_view(&self, page: &CalendarPage, view: View) {
+        if page.editor_open() {
             return;
         }
-        let Some(window) = self.root().and_downcast::<gtk::Window>() else {
-            return;
-        };
-        let locale = self.locale();
-        let weak = self.downgrade();
-        super::details::delete::confirm(&window, locale.as_ref(), recurrent, summary, move || {
-            if let Some(page) = weak.upgrade()
-                && page.execute_command(Command::DeleteItem(DeleteItem { item }))
-            {
-                page.dismiss_popovers();
-            }
-        });
-    }
 
-    fn switch_view(&self, view: View) {
-        if self.editor_open() {
+        let imp = page.imp();
+        if self.view.replace(view) == view {
             return;
         }
-        let imp = self.imp();
-        if imp.view.replace(view) == view {
-            return;
-        }
-        self.dismiss_popovers();
+
+        page.dismiss_popovers();
         imp.picker.popdown();
         imp.week_view.set_active(view == View::Week);
         imp.month_view.set_active(view == View::Month);
@@ -584,39 +572,34 @@ impl CalendarPage {
         } else {
             imp.stack.set_visible_child(&*imp.weekly_content);
         }
+
         // Clear the old period's title until the new snapshot arrives.
         imp.title.set_text("");
         imp.title.set_tooltip_text(None);
-        imp.displayed.set(None);
-        self.translate_labels();
-        self.show_content(imp.date.get());
+        self.displayed.set(None);
+
+        self.translate_labels(page);
+        self.show_content(page, self.date.get());
     }
 
-    pub fn switch_to_week(&self) {
-        self.switch_view(View::Week);
-    }
-
-    pub fn switch_to_month(&self) {
-        self.switch_view(View::Month);
-    }
-
-    pub fn show_week_at(&self, date: NaiveDate) {
-        self.imp().date.set(Some(date));
-        if self.imp().view.get() == View::Week {
-            self.show_content(Some(date));
+    fn show_week_at(&self, page: &CalendarPage, date: NaiveDate) {
+        self.date.set(Some(date));
+        if self.view.get() == View::Week {
+            self.show_content(page, Some(date));
         } else {
-            self.switch_view(View::Week);
+            self.switch_view(page, View::Week);
         }
     }
 
-    fn update_picker(&self) {
-        let imp = self.imp();
-        let date = imp.date.get().unwrap_or_else(|| {
+    fn update_picker(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        let date = self.date.get().unwrap_or_else(|| {
             Utc::now()
-                .with_timezone(self.locale().timezone())
+                .with_timezone(page.locale().timezone())
                 .date_naive()
         });
-        imp.date.set(Some(date));
+        self.date.set(Some(date));
+
         if let Ok(date) = glib::DateTime::from_local(
             date.year(),
             date.month() as i32,
@@ -625,14 +608,15 @@ impl CalendarPage {
             0,
             0.0,
         ) {
-            imp.updating_picker.set(true);
+            self.updating_picker.set(true);
             imp.calendar.select_day(&date);
-            imp.updating_picker.set(false);
+            self.updating_picker.set(false);
         }
     }
 
-    fn show_month(&self, month: MonthSnapshot) {
-        let imp = self.imp();
+    fn show_month(&self, page: &CalendarPage, month: MonthSnapshot) {
+        let imp = page.imp();
+
         imp.calendar_css.replace(style::events_css(
             month
                 .days
@@ -640,15 +624,18 @@ impl CalendarPage {
                 .flat_map(|d| d.events.iter().map(|e| &e.event))
                 .chain(month.spans.iter().flatten().map(|span| &span.event)),
         ));
-        self.update_styles();
+        page.update_styles();
+
         imp.locale.replace(Some(month.locale.clone()));
-        self.translate_labels();
-        if let Some(window) = self.root().and_downcast::<gtk::Window>() {
+        self.translate_labels(page);
+
+        if let Some(window) = page.root().and_downcast::<gtk::Window>() {
             window.set_title(Some(&format!(
                 "Eventix — {}",
                 month.locale.translate("Monthly View")
             )));
         }
+
         let title = format!(
             "{} {}",
             month
@@ -658,6 +645,7 @@ impl CalendarPage {
         );
         imp.title.set_text(&title);
         imp.title.set_tooltip_text(Some(&title));
+
         let empty = month
             .days
             .iter()
@@ -675,26 +663,31 @@ impl CalendarPage {
         } else {
             "Local calendars"
         }));
-        self.update_picker();
-        if imp.displayed.replace(Some(month.month)) != Some(month.month) {
+
+        self.update_picker(page);
+        if self.displayed.replace(Some(month.month)) != Some(month.month) {
             imp.monthly_content.vadjustment().set_value(0.0);
         }
         imp.monthly.set_month(Rc::new(month));
     }
 
-    fn show_week(&self, week: WeekSnapshot) {
-        let imp = self.imp();
+    fn show_week(&self, page: &CalendarPage, week: WeekSnapshot) {
+        let imp = page.imp();
+
         imp.calendar_css.replace(style::calendar_css(&week));
-        self.update_styles();
+        page.update_styles();
+
         imp.locale.replace(Some(week.locale.clone()));
-        self.translate_labels();
+        self.translate_labels(page);
+
         let locale = &week.locale;
-        if let Some(window) = self.root().and_downcast::<gtk::Window>() {
+        if let Some(window) = page.root().and_downcast::<gtk::Window>() {
             window.set_title(Some(&format!(
                 "Eventix — {}",
                 locale.translate("Weekly View")
             )));
         }
+
         let title = formatx::formatx!(
             locale.translate("Week {}: {} — {}"),
             week.start.iso_week().week(),
@@ -704,21 +697,25 @@ impl CalendarPage {
         .unwrap();
         imp.title.set_text(&title);
         imp.title.set_tooltip_text(Some(&title));
-        for (label, day) in self.day_labels().into_iter().zip(&week.days) {
+        for (label, day) in Self::day_labels(page).into_iter().zip(&week.days) {
             label.set_text(&locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday));
         }
+
         let empty = week.all_day.is_empty() && week.days.iter().all(|d| d.timed.is_empty());
         imp.status.set_text(locale.translate(if empty {
             "No events this week"
         } else {
             "Local calendars"
         }));
-        self.update_picker();
-        let reset_scroll = imp.displayed.replace(Some(week.start)) != Some(week.start);
+
+        self.update_picker(page);
+
+        let reset_scroll = self.displayed.replace(Some(week.start)) != Some(week.start);
         let week = Rc::new(week);
         imp.weekly.imp().timed.set_week(week.clone());
         imp.weekly.imp().all_day.set_week(week);
-        self.update_today();
+        self.update_today(page);
+
         if reset_scroll {
             let scroll = imp.weekly.imp().scroll.downgrade();
             imp.weekly.imp().timed.add_tick_callback(move |_, _| {
@@ -730,8 +727,8 @@ impl CalendarPage {
         }
     }
 
-    fn day_labels(&self) -> [&gtk::Label; 7] {
-        let imp = self.imp().weekly.imp();
+    fn day_labels(page: &CalendarPage) -> [&gtk::Label; 7] {
+        let imp = page.imp().weekly.imp();
         [
             &imp.monday,
             &imp.tuesday,
@@ -743,206 +740,285 @@ impl CalendarPage {
         ]
     }
 
-    pub fn dismiss_popovers(&self) {
-        self.imp().details.close();
-    }
-
-    pub fn set_popup_owner_visible(&self, visible: bool) {
-        self.imp().details.set_owner_visible(visible);
-    }
-
-    fn update_today(&self) {
-        let imp = self.imp();
-        if imp.view.get() == View::Month {
+    fn update_today(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        if self.view.get() == View::Month {
             imp.monthly.update_today();
             return;
         }
-        let Some(start) = imp.displayed.get() else {
+        let Some(start) = self.displayed.get() else {
             return;
         };
+
         let today = Utc::now()
-            .with_timezone(self.locale().timezone())
+            .with_timezone(page.locale().timezone())
             .date_naive();
-        for (i, label) in self.day_labels().into_iter().enumerate() {
+        for (i, label) in Self::day_labels(page).into_iter().enumerate() {
             if (today - start).num_days() == i as i64 {
                 label.add_css_class("ev_today");
             } else {
                 label.remove_css_class("ev_today");
             }
         }
+
         imp.weekly.imp().timed.queue_draw();
         imp.weekly.imp().all_day.queue_draw();
     }
 
-    pub fn start(&self, prefix: String, date: Option<NaiveDate>) {
-        let (session, responses) = CalendarSession::start(prefix);
-        self.imp().session.replace(Some(session));
-        let provider = gtk::CssProvider::new();
-        let display = self.display();
-        gtk::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-        self.imp().styles.replace(Some((display, provider)));
-        let weak = self.downgrade();
-        let timer = glib::timeout_add_seconds_local(60, move || {
-            let Some(page) = weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-            page.update_today();
-            let imp = page.imp();
-            if !imp.loading.get()
-                && !imp.pending_command.get()
-                && let Some(session) = imp.session.borrow().as_ref()
-            {
-                tracing::debug!("updating sidebar");
+    fn receive_content(&self, page: &CalendarPage, response: ContentResponse) {
+        if response.generation != self.generation.get() {
+            return;
+        }
+
+        match response.result {
+            Ok(snapshot) => {
+                match snapshot {
+                    Snapshot::Week(week) => self.show_week(page, week),
+                    Snapshot::Month(month) => self.show_month(page, month),
+                }
+
+                self.loaded_generation.set(Some(response.generation));
+                self.loading.set(false);
+            }
+            Err(error) => {
+                self.loading.set(false);
+                page.show_error("Could not load local calendars", &error);
+            }
+        }
+    }
+}
+
+/// Owns the model connection, command state, and periodic refresh lifecycle.
+#[derive(Default)]
+struct PageSession {
+    current: RefCell<Option<CalendarSession>>,
+    pending_command: Cell<bool>,
+    timer: RefCell<Option<glib::SourceId>>,
+}
+
+impl PageSession {
+    fn reload(&self, page: &CalendarPage) {
+        page.dismiss_popovers();
+
+        let imp = page.imp();
+        let content = &imp.content;
+        content.loading.set(true);
+        imp.status
+            .set_text(page.locale().translate("Loading calendar…"));
+
+        if let Some(session) = self.current.borrow().as_ref() {
+            session.reload();
+
+            // A failed initial load or navigation has no subscription for the selected content.
+            if content.loaded_generation.get() != Some(content.generation.get()) {
+                session.show_content(ContentRequest {
+                    generation: content.generation.get(),
+                    date: content.date.get(),
+                    view: content.view.get(),
+                });
                 session.refresh_sidebar();
             }
-            glib::ControlFlow::Continue
-        });
-        self.imp().timer.replace(Some(timer));
-        self.show_content(date);
-        if let Some(session) = self.imp().session.borrow().as_ref() {
-            session.refresh_sidebar();
         }
-        let weak = self.downgrade();
-        glib::MainContext::default().spawn_local(async move {
-            while let Ok(response) = responses.recv().await {
-                let Some(page) = weak.upgrade() else { break };
-                if page.imp().session.borrow().is_none() {
-                    break;
-                }
-                match response {
-                    Event::EditLoaded(id, result) => {
-                        if id != page.imp().editor_request.get() {
-                            continue;
-                        }
-                        page.imp().editor_loading.set(false);
-                        match result {
-                            Ok((options, edit)) => {
-                                page.present_existing_editor(id, options, *edit);
-                            }
-                            Err(error) => {
-                                page.show_error("Could not apply changes", &error);
-                            }
-                        }
-                    }
-                    Event::EditSaved(id, result) => {
-                        let editor = page
-                            .imp()
-                            .editor
-                            .borrow()
-                            .clone()
-                            .filter(|editor| editor.id == id);
-                        match result {
-                            Ok((change, event)) => {
-                                if let Some(editor) = editor {
-                                    editor.set_saving(false);
-                                    page.finish_editor(Some(&event));
-                                }
-                                if let Some(session) = page.imp().session.borrow().as_ref() {
-                                    session.refresh_subscriptions(change.affected);
-                                }
-                            }
-                            Err(error) => {
-                                if let Some(editor) = editor {
-                                    editor.set_saving(false);
-                                    editor.show_error(&error);
-                                }
-                            }
-                        }
-                    }
-                    Event::EditorLoaded(id, result) => {
-                        if id != page.imp().editor_request.get() {
-                            continue;
-                        }
-                        page.imp().editor_loading.set(false);
-                        match result {
-                            Ok(options) => {
-                                page.present_editor(ItemEditor::new(id, options));
-                            }
-                            Err(error) => page.show_error("Could not load local calendars", &error),
-                        }
-                    }
-                    Event::EditorSaved(id, result) => {
-                        let editor = page
-                            .imp()
-                            .editor
-                            .borrow()
-                            .clone()
-                            .filter(|editor| editor.id == id);
-                        match result {
-                            Ok(change) => {
-                                if let Some(editor) = editor {
-                                    editor.set_saving(false);
-                                    page.close_editor();
-                                }
-                                if let Some(session) = page.imp().session.borrow().as_ref() {
-                                    session.refresh_subscriptions(change.affected);
-                                }
-                            }
-                            Err(error) => {
-                                if let Some(editor) = editor {
-                                    editor.set_saving(false);
-                                    editor.show_error(&error);
-                                }
-                            }
-                        }
-                    }
-                    Event::ContentLoaded(response) => page.receive_content(response),
-                    Event::SidebarLoaded(result) => match result {
-                        Ok(sidebar) => {
-                            page.imp().sidebar.set_snapshot(sidebar);
-                            page.update_styles();
-                        }
-                        Err(error) => page.show_error("Could not load sidebar", &error),
-                    },
-                    Event::SourceLoaded(source) => {
-                        page.imp().status.set_tooltip_text(Some(&source))
-                    }
-                    Event::ReloadFailed(error) => {
-                        page.imp().loading.set(false);
-                        page.show_error("Could not load local calendars", &error);
-                    }
-                    Event::Changed(change) => {
-                        page.imp().pending_command.set(false);
-                        if !change.items.is_empty()
-                            && let Some(session) = page.imp().session.borrow().as_ref()
-                        {
-                            session.refresh_subscriptions(change.affected);
-                        }
-                    }
-                    Event::CommandFailed(error) => {
-                        page.imp().pending_command.set(false);
-                        page.imp().status.set_text(&format!(
-                            "{}\n{error}",
-                            page.locale().translate("Could not apply changes")
-                        ));
-                    }
-                }
+    }
+
+    fn can_edit(&self, page: &CalendarPage) -> bool {
+        !page.imp().content.loading.get()
+            && !self.pending_command.get()
+            && self.current.borrow().is_some()
+    }
+
+    fn execute_command(&self, page: &CalendarPage, command: Command) -> bool {
+        if !self.can_edit(page) {
+            return false;
+        }
+
+        let imp = page.imp();
+        if let Some(session) = self.current.borrow().as_ref() {
+            self.pending_command.set(true);
+            imp.status
+                .set_text(page.locale().translate("Applying changes…"));
+            session.execute(command);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn confirm_delete(&self, page: &CalendarPage, item: ItemId, recurrent: bool, summary: &str) {
+        if !self.can_edit(page) {
+            return;
+        }
+
+        let Some(window) = page.root().and_downcast::<gtk::Window>() else {
+            return;
+        };
+
+        let locale = page.locale();
+        let weak = page.downgrade();
+        super::details::delete::confirm(&window, locale.as_ref(), recurrent, summary, move || {
+            if let Some(page) = weak.upgrade()
+                && page.execute_command(Command::DeleteItem(DeleteItem { item }))
+            {
+                page.dismiss_popovers();
             }
         });
     }
 
-    fn receive_content(&self, response: ContentResponse) {
-        if response.generation != self.imp().generation.get() {
-            return;
+    fn start(&self, page: &CalendarPage, prefix: String, date: Option<NaiveDate>) {
+        let (session, responses) = CalendarSession::start(prefix);
+        self.current.replace(Some(session));
+        page.install_styles();
+
+        let weak = page.downgrade();
+        let timer = glib::timeout_add_seconds_local(60, move || {
+            let Some(page) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            page.imp().session.refresh(&page);
+            glib::ControlFlow::Continue
+        });
+        self.timer.replace(Some(timer));
+
+        page.show_content(date);
+        if let Some(session) = self.current.borrow().as_ref() {
+            session.refresh_sidebar();
         }
-        match response.result {
-            Ok(snapshot) => {
-                match snapshot {
-                    Snapshot::Week(week) => self.show_week(week),
-                    Snapshot::Month(month) => self.show_month(month),
+
+        let weak = page.downgrade();
+        glib::MainContext::default().spawn_local(async move {
+            while let Ok(response) = responses.recv().await {
+                let Some(page) = weak.upgrade() else { break };
+                if page.imp().session.current.borrow().is_none() {
+                    break;
                 }
-                self.imp().loaded_generation.set(Some(response.generation));
-                self.imp().loading.set(false);
+
+                page.imp().session.handle_event(&page, response);
             }
-            Err(error) => {
-                self.imp().loading.set(false);
-                self.show_error("Could not load local calendars", &error);
+        });
+    }
+
+    fn refresh(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        imp.content.update_today(page);
+
+        if !imp.content.loading.get()
+            && !self.pending_command.get()
+            && let Some(session) = self.current.borrow().as_ref()
+        {
+            tracing::debug!("updating sidebar");
+            session.refresh_sidebar();
+        }
+    }
+
+    fn handle_event(&self, page: &CalendarPage, event: Event) {
+        let imp = page.imp();
+        match event {
+            Event::EditLoaded(id, result) => imp.editor.edit_loaded(page, id, result),
+            Event::EditorLoaded(id, result) => imp.editor.editor_loaded(page, id, result),
+            Event::EditSaved(id, result) => {
+                let result = result.map(|(change, item)| (change, Some(item)));
+                if let Some(change) = imp.editor.saved(page, id, result) {
+                    self.refresh_subscriptions(change);
+                }
+            }
+            Event::EditorSaved(id, result) => {
+                let result = result.map(|change| (change, None));
+                if let Some(change) = imp.editor.saved(page, id, result) {
+                    self.refresh_subscriptions(change);
+                }
+            }
+            Event::ContentLoaded(response) => imp.content.receive_content(page, response),
+            Event::SidebarLoaded(result) => match result {
+                Ok(sidebar) => {
+                    imp.sidebar.set_snapshot(sidebar);
+                    page.update_styles();
+                }
+                Err(error) => page.show_error("Could not load sidebar", &error),
+            },
+            Event::SourceLoaded(source) => imp.status.set_tooltip_text(Some(&source)),
+            Event::ReloadFailed(error) => {
+                imp.content.loading.set(false);
+                page.show_error("Could not load local calendars", &error);
+            }
+            Event::Changed(change) => {
+                self.pending_command.set(false);
+                if !change.items.is_empty() {
+                    self.refresh_subscriptions(change);
+                }
+            }
+            Event::CommandFailed(error) => {
+                self.pending_command.set(false);
+                page.show_error("Could not apply changes", &error);
             }
         }
+    }
+
+    fn refresh_subscriptions(&self, change: ChangeSet) {
+        if let Some(session) = self.current.borrow().as_ref() {
+            session.refresh_subscriptions(change.affected);
+        }
+    }
+
+    fn stop(&self, page: &CalendarPage) {
+        page.imp().editor.stop(page);
+        self.current.take();
+        page.dismiss_popovers();
+
+        if let Some(timer) = self.timer.take() {
+            timer.remove();
+        }
+    }
+}
+
+impl CalendarPage {
+    fn setup_details(&self) {
+        let imp = self.imp();
+        imp.weekly.imp().timed.set_details(imp.details.clone());
+        imp.weekly.imp().all_day.set_details(imp.details.clone());
+        imp.monthly.set_details(imp.details.clone());
+        imp.sidebar.set_details(imp.details.clone());
+
+        let weak = self.downgrade();
+        imp.details.connect_edit(move |item, scope| {
+            if let Some(page) = weak.upgrade() {
+                page.imp().editor.edit_item(&page, item, scope);
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_delete(move |item, recurrent, summary| {
+            if let Some(page) = weak.upgrade() {
+                page.imp()
+                    .session
+                    .confirm_delete(&page, item, recurrent, &summary);
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_dismissed(move || {
+            if let Some(page) = weak.upgrade() {
+                page.imp().editor.discard_editor();
+            }
+        });
+    }
+
+    /// Aligns the calendar header with the sidebar panel titles.
+    fn align_headers(&self) {
+        let imp = self.imp();
+        let group = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
+        group.add_widget(&*imp.header);
+        for title in imp.sidebar.panel_titles() {
+            group.add_widget(&title);
+        }
+        imp.header_group.replace(Some(group));
+    }
+
+    fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
+        self.imp()
+            .locale
+            .borrow()
+            .clone()
+            .unwrap_or_else(eventix_locale::default)
     }
 
     fn show_error(&self, message: &str, error: &str) {
@@ -962,16 +1038,96 @@ impl CalendarPage {
         }
     }
 
+    fn install_styles(&self) {
+        let provider = gtk::CssProvider::new();
+        let display = self.display();
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+        self.imp().styles.replace(Some((display, provider)));
+    }
+
+    pub fn editor_open(&self) -> bool {
+        self.imp().editor.editor_open()
+    }
+
+    /// Handles editor shortcuts before either the window or a native popup consumes them.
+    pub fn handle_editor_key(
+        &self,
+        key: gdk::Key,
+        modifiers: gdk::ModifierType,
+    ) -> Option<glib::Propagation> {
+        self.imp().editor.handle_editor_key(self, key, modifiers)
+    }
+
+    pub fn new_event(&self) {
+        self.imp().editor.new_item(self, CalCompType::Event);
+    }
+
+    pub fn new_task(&self) {
+        self.imp().editor.new_item(self, CalCompType::Todo);
+    }
+
+    pub fn close_editor(&self) {
+        self.imp().editor.finish_editor(self, None);
+    }
+
+    pub fn save_editor(&self) {
+        self.imp().editor.save_editor(self);
+    }
+
+    pub fn show_content(&self, date: Option<NaiveDate>) {
+        self.imp().content.show_content(self, date);
+    }
+
+    pub fn navigate(&self, direction: i32) {
+        self.imp().content.navigate(self, direction);
+    }
+
+    pub fn focus_event(&self, current: Option<&EventCard>, forward: bool) {
+        self.imp().content.focus_event(self, current, forward);
+    }
+
+    pub fn switch_to_week(&self) {
+        self.imp().content.switch_view(self, View::Week);
+    }
+
+    pub fn switch_to_month(&self) {
+        self.imp().content.switch_view(self, View::Month);
+    }
+
+    pub fn show_week_at(&self, date: NaiveDate) {
+        self.imp().content.show_week_at(self, date);
+    }
+
+    pub fn dismiss_popovers(&self) {
+        self.imp().details.close();
+    }
+
+    pub fn set_popup_owner_visible(&self, visible: bool) {
+        self.imp().details.set_owner_visible(visible);
+    }
+
+    pub(crate) fn can_edit(&self) -> bool {
+        self.imp().session.can_edit(self)
+    }
+
+    pub(crate) fn execute_command(&self, command: Command) -> bool {
+        self.imp().session.execute_command(self, command)
+    }
+
+    pub fn reload(&self) {
+        self.imp().session.reload(self);
+    }
+
+    pub fn start(&self, prefix: String, date: Option<NaiveDate>) {
+        self.imp().session.start(self, prefix, date);
+    }
+
     pub fn stop(&self) {
-        if let Some(editor) = self.imp().editor.borrow().as_ref() {
-            editor.set_saving(false);
-        }
-        self.close_editor();
-        self.imp().session.take();
-        self.dismiss_popovers();
-        if let Some(timer) = self.imp().timer.take() {
-            timer.remove();
-        }
+        self.imp().session.stop(self);
     }
 }
 
@@ -987,14 +1143,61 @@ fn event_focus_index(count: usize, current: Option<usize>, forward: bool) -> Opt
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::rc::Rc;
+
     use chrono::{Datelike, Duration, TimeZone};
+    use eventix_state::actions::items::UpdateItem;
+    use eventix_view::editor::EditorOptions;
     use eventix_view::{
         Day, MonthDay, MonthEvent, MonthSnapshot, TimedEvent, WeekSnapshot, layout::Columns,
     };
     use gtk::{prelude::*, subclass::prelude::*};
 
     use super::event_focus_index;
-    use super::{CalendarPage, ContentResponse, Snapshot, View};
+    use super::{
+        CalendarPage, ContentResponse, DetailsController, ItemEditor, SavedItem, Snapshot, View,
+    };
+
+    impl CalendarPage {
+        fn show_week(&self, week: WeekSnapshot) {
+            self.imp().content.show_week(self, week);
+        }
+
+        fn show_month(&self, month: MonthSnapshot) {
+            self.imp().content.show_month(self, month);
+        }
+
+        fn receive_content(&self, response: ContentResponse) {
+            self.imp().content.receive_content(self, response);
+        }
+
+        pub(in crate::view) fn test_existing_editor(
+            &self,
+            options: EditorOptions,
+            edit: UpdateItem,
+        ) -> Rc<ItemEditor> {
+            self.imp().locale.replace(Some(options.locale.clone()));
+            self.imp()
+                .editor
+                .present_existing_editor(self, 1, options, edit);
+            self.imp().editor.current.borrow().clone().unwrap()
+        }
+
+        pub(in crate::view) fn test_new_editor(&self, options: EditorOptions) -> Rc<ItemEditor> {
+            self.imp()
+                .editor
+                .present_editor(self, ItemEditor::new(1, options));
+            self.imp().editor.current.borrow().clone().unwrap()
+        }
+
+        pub(in crate::view) fn test_details(&self) -> Rc<DetailsController> {
+            self.imp().details.clone()
+        }
+
+        pub(in crate::view) fn test_saved_editor(&self, item: SavedItem) {
+            self.imp().editor.finish_editor(self, Some(&item));
+        }
+    }
 
     /// Checks real widget allocation, focus retention and cross-surface popup coordination.
     /// Called by the display-backed details test so GTK stays on one test thread.
@@ -1417,11 +1620,11 @@ pub(crate) mod tests {
         };
         drain();
         let imp = page.imp();
-        let old_generation = imp.generation.get();
+        let old_generation = imp.content.generation.get();
         imp.month_view.set_active(true);
-        assert!(imp.view.get() == View::Month);
+        assert!(imp.content.view.get() == View::Month);
         assert_eq!(
-            imp.date.get(),
+            imp.content.date.get(),
             Some(selected),
             "switching retains the selected day"
         );
@@ -1614,23 +1817,27 @@ pub(crate) mod tests {
             span_popup.parent().is_none(),
             "switching closes span details"
         );
-        assert!(imp.view.get() == View::Week);
-        assert_eq!(imp.date.get(), Some(selected));
+        assert!(imp.content.view.get() == View::Week);
+        assert_eq!(imp.content.date.get(), Some(selected));
         page.navigate(1);
-        assert_eq!(imp.date.get(), Some(selected + Duration::days(7)));
+        assert_eq!(imp.content.date.get(), Some(selected + Duration::days(7)));
         imp.month_view.set_active(true);
         page.navigate(1);
         assert_eq!(
-            imp.date.get(),
+            imp.content.date.get(),
             eventix_view::shift_month(selected + Duration::days(7), 1)
         );
         let monday = make_month().start;
         imp.monthly.imp().weeks.borrow()[0].emit_clicked();
-        assert!(imp.view.get() == View::Week);
-        assert_eq!(imp.date.get(), Some(monday), "week number opens its Monday");
+        assert!(imp.content.view.get() == View::Week);
+        assert_eq!(
+            imp.content.date.get(),
+            Some(monday),
+            "week number opens its Monday"
+        );
         page.show_content(None);
         assert_eq!(
-            imp.date.get(),
+            imp.content.date.get(),
             None,
             "Today delegates to the profile's timezone"
         );
