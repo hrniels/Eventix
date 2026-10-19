@@ -297,8 +297,8 @@ button.ev_details_button,
     padding: 2px 8px;
 }
 
-.ev_details_edit_menu,
-.ev_details_edit_menu > contents {
+.ev_details_menu,
+.ev_details_menu > contents {
     background: transparent;
     padding: 0;
     border: none;
@@ -306,14 +306,14 @@ button.ev_details_button,
     box-shadow: none;
 }
 
-.ev_details_edit_menu button.ev_details_button {
+.ev_details_menu button.ev_details_button {
     margin: 0;
     border: 1px solid alpha(@theme_fg_color, 0.3);
     border-radius: 5px;
     box-shadow: none;
 }
 
-.ev_details_edit_menu button.ev_details_button + button.ev_details_button {
+.ev_details_menu button.ev_details_button + button.ev_details_button {
     margin-top: 2px;
 }
 
@@ -345,6 +345,21 @@ button.ev_details_uid:hover {
 .ev_details_warn,
 .ev_details_warn > button {
     color: @warning_color;
+}
+
+.ev_details_menu button.ev_details_good:hover {
+    background-image: linear-gradient(#198754, #13653f);
+    color: white;
+}
+
+.ev_details_menu button.ev_details_warn:hover {
+    background-image: linear-gradient(#f57c00, #c66400);
+    color: white;
+}
+
+.ev_details_menu button.ev_details_critical:hover {
+    background-image: linear-gradient(#ff0000, #e00000);
+    color: white;
 }
 
 .ev_sidebar {

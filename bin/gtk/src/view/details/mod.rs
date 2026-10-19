@@ -382,12 +382,7 @@ impl EventDetails {
                     ],
                 );
                 let popover = edit_menu.popover().unwrap();
-                popover.add_css_class("ev_details_edit_menu");
-                popover.set_has_arrow(false);
-                popover.set_position(gtk::PositionType::Bottom);
-                popover.set_halign(gtk::Align::Start);
                 let content = popover.child().unwrap().downcast::<gtk::Box>().unwrap();
-                content.set_spacing(0);
                 let mut child = content.first_child();
                 for scope in [
                     EditScope::Occurrence,
@@ -396,10 +391,6 @@ impl EventDetails {
                 ] {
                     if let Some(widget) = child {
                         child = widget.next_sibling();
-                        widget.set_halign(gtk::Align::Fill);
-                        if let Some(content) = widget.first_child() {
-                            content.set_halign(gtk::Align::Start);
-                        }
                         self.imp()
                             .edits
                             .borrow_mut()
@@ -612,12 +603,22 @@ fn button(icon_name: &str, text: &str, class: &str) -> gtk::Button {
     button
 }
 
-/// Builds a working dropdown whose action buttons deliberately have no mutation handlers yet.
+/// Builds a consistently styled dropdown with caller-defined action options.
 fn menu(icon_name: &str, text: &str, class: &str, items: &[(&str, &str, &str)]) -> gtk::MenuButton {
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    let popover = gtk::Popover::builder().child(&content).build();
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let popover = gtk::Popover::builder()
+        .child(&content)
+        .has_arrow(false)
+        .position(gtk::PositionType::Bottom)
+        .halign(gtk::Align::Start)
+        .build();
+    popover.add_css_class("ev_details_menu");
     for (icon, title, class) in items {
         let item = button(icon, title, class);
+        item.set_halign(gtk::Align::Fill);
+        if let Some(content) = item.child() {
+            content.set_halign(gtk::Align::Start);
+        }
         let weak = popover.downgrade();
         item.connect_clicked(move |_| {
             if let Some(popover) = weak.upgrade() {
