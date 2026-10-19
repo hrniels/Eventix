@@ -7,7 +7,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 use chrono::NaiveDate;
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
-use eventix_state::actions::Command;
+use eventix_state::actions::{Command, items::RespondItem};
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use self::{content::PageContent, editor::PageEditor, session::PageSession};
@@ -148,6 +148,15 @@ impl CalendarPage {
                 page.imp()
                     .session
                     .confirm_delete(&page, item, recurrent, &summary);
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_respond(move |item, response| {
+            if let Some(page) = weak.upgrade()
+                && page.execute_command(Command::RespondItem(RespondItem { item, response }))
+            {
+                page.dismiss_popovers();
             }
         });
 

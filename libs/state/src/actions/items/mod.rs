@@ -6,6 +6,7 @@ mod create;
 mod create_item;
 mod delete_item;
 mod move_event;
+mod respond_item;
 mod update_item;
 
 use eventix_ical::objects::CalDate;
@@ -14,6 +15,7 @@ pub use create::create_component;
 pub use create_item::{CreateItem, TaskStatus};
 pub use delete_item::DeleteItem;
 pub use move_event::MoveEvent;
+pub use respond_item::RespondItem;
 pub use update_item::{EditScope, UpdateItem};
 
 /// Identifies an occurrence independently of its current placement.

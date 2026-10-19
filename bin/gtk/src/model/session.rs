@@ -848,6 +848,79 @@ mod tests {
     }
 
     #[test]
+    fn responses_invalidate_visible_series_and_refresh_attendee_status() {
+        use eventix_ical::objects::{CalOrganizer, CalPartStat, EventLike, UpdatableEventLike};
+        use eventix_state::{EmailAccount, actions::items::RespondItem};
+        use eventix_view::details::Response;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state
+            .as_mut()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .set_syncer(SyncerType::VDirSyncer {
+                email: EmailAccount::new("Guest".into(), "guest@example.org".into()),
+                url: "https://example.org".into(),
+                read_only: false,
+                username: None,
+                password: None,
+                time_span: Default::default(),
+            });
+        worker
+            .state
+            .as_mut()
+            .unwrap()
+            .store_mut()
+            .file_by_id_mut("move-me")
+            .unwrap()
+            .component_with_mut(|component| component.rid().is_none())
+            .unwrap()
+            .set_organizer(Some(CalOrganizer::new_named("Host", "host@example.org")));
+        for recurrence in [None, Some("TU2026-10-13T09:00:00".parse().unwrap())] {
+            subscribe(&mut worker, 1, "2026-10-12", View::Week);
+            let item = ItemId {
+                calendar: "test".into(),
+                uid: "move-me".into(),
+                recurrence,
+            };
+            let Some(Event::Changed(change)) = worker
+                .handle(Message::Execute(Command::RespondItem(RespondItem {
+                    item: item.clone(),
+                    response: CalPartStat::Accepted,
+                })))
+                .pop()
+            else {
+                panic!("expected response notification")
+            };
+            assert_eq!(change.items, vec![item]);
+            assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
+            assert!(change.affected.contains(&SubscriptionId::Sidebar));
+            let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+            let week = events
+                .iter()
+                .find_map(|event| match event {
+                    Event::ContentLoaded(response) => match response.result.as_ref().unwrap() {
+                        Snapshot::Week(week) => Some(week),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .unwrap();
+            let event = &week.days[1].timed[0].event;
+            assert_eq!(
+                event.details.actions.series_response,
+                Some(Response::Accepted)
+            );
+            assert_eq!(event.details.attendees[0].response, Response::Accepted);
+        }
+    }
+
+    #[test]
     fn deletion_invalidates_old_calendar_and_sidebar_membership() {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());

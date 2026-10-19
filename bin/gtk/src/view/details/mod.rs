@@ -4,6 +4,7 @@
 
 use std::sync::LazyLock;
 
+use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
 use eventix_state::actions::items::{EditScope, ItemId};
 use eventix_view::{
@@ -34,6 +35,7 @@ mod imp {
     #[template(resource = "/io/github/hrniels/Eventix/gtk/view/details/details.ui")]
     pub struct EventDetails {
         pub edits: std::cell::RefCell<Vec<(gtk::Button, EditScope)>>,
+        pub responses: std::cell::RefCell<Vec<(gtk::Button, CalPartStat, bool)>>,
         pub delete: std::cell::RefCell<Option<gtk::Button>>,
         pub item: std::cell::RefCell<Option<ItemId>>,
         pub recurrent: std::cell::Cell<bool>,
@@ -177,6 +179,23 @@ impl EventDetails {
                         recurrent,
                         summary.clone(),
                     );
+                }
+            });
+        }
+    }
+
+    pub fn connect_respond(&self, callback: impl Fn(ItemId, CalPartStat) + 'static) {
+        let callback = std::rc::Rc::new(callback);
+        for (button, response, occurrence) in self.imp().responses.borrow().iter() {
+            let mut item = self.imp().item.borrow().clone();
+            if !occurrence && let Some(item) = &mut item {
+                item.recurrence = None;
+            }
+            let callback = callback.clone();
+            let response = *response;
+            button.connect_clicked(move |_| {
+                if let Some(item) = &item {
+                    callback(item.clone(), response);
                 }
             });
         }
@@ -367,7 +386,7 @@ impl EventDetails {
 
         if actions.edit {
             if event.recurrent {
-                let edit_menu = menu(
+                let (edit_menu, options) = menu(
                     "pencil",
                     locale.translate("Edit"),
                     "",
@@ -381,21 +400,12 @@ impl EventDetails {
                         ("arrow-clockwise", locale.translate("Complete series"), ""),
                     ],
                 );
-                let popover = edit_menu.popover().unwrap();
-                let content = popover.child().unwrap().downcast::<gtk::Box>().unwrap();
-                let mut child = content.first_child();
-                for scope in [
+                for (button, scope) in options.into_iter().zip([
                     EditScope::Occurrence,
                     EditScope::Following,
                     EditScope::Series,
-                ] {
-                    if let Some(widget) = child {
-                        child = widget.next_sibling();
-                        self.imp()
-                            .edits
-                            .borrow_mut()
-                            .push((widget.downcast::<gtk::Button>().unwrap(), scope));
-                    }
+                ]) {
+                    self.imp().edits.borrow_mut().push((button, scope));
                 }
                 right.append(&edit_menu);
             } else {
@@ -447,7 +457,7 @@ impl EventDetails {
                 status.add_css_class(class);
                 right.append(&status);
             } else {
-                right.append(&menu(
+                let (response_menu, options) = menu(
                     icon,
                     &text,
                     class,
@@ -460,7 +470,18 @@ impl EventDetails {
                         ),
                         ("x-lg", locale.translate("Decline"), "ev_details_critical"),
                     ],
-                ));
+                );
+                for (button, response) in options.into_iter().zip([
+                    CalPartStat::Accepted,
+                    CalPartStat::Tentative,
+                    CalPartStat::Declined,
+                ]) {
+                    self.imp()
+                        .responses
+                        .borrow_mut()
+                        .push((button, response, occurrence));
+                }
+                right.append(&response_menu);
             }
         }
 
@@ -604,7 +625,12 @@ fn button(icon_name: &str, text: &str, class: &str) -> gtk::Button {
 }
 
 /// Builds a consistently styled dropdown with caller-defined action options.
-fn menu(icon_name: &str, text: &str, class: &str, items: &[(&str, &str, &str)]) -> gtk::MenuButton {
+fn menu(
+    icon_name: &str,
+    text: &str,
+    class: &str,
+    items: &[(&str, &str, &str)],
+) -> (gtk::MenuButton, Vec<gtk::Button>) {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let popover = gtk::Popover::builder()
         .child(&content)
@@ -613,6 +639,7 @@ fn menu(icon_name: &str, text: &str, class: &str, items: &[(&str, &str, &str)]) 
         .halign(gtk::Align::Start)
         .build();
     popover.add_css_class("ev_details_menu");
+    let mut options = Vec::with_capacity(items.len());
     for (icon, title, class) in items {
         let item = button(icon, title, class);
         item.set_halign(gtk::Align::Fill);
@@ -626,6 +653,7 @@ fn menu(icon_name: &str, text: &str, class: &str, items: &[(&str, &str, &str)]) 
             }
         });
         content.append(&item);
+        options.push(item);
     }
     let menu = gtk::MenuButton::builder()
         .child(&button_content(icon_name, text))
@@ -637,7 +665,7 @@ fn menu(icon_name: &str, text: &str, class: &str, items: &[(&str, &str, &str)]) 
         menu.add_css_class(class);
     }
     menu.update_property(&[gtk::accessible::Property::Label(text)]);
-    menu
+    (menu, options)
 }
 
 fn contact_markup(contact: &Contact) -> String {
@@ -805,6 +833,36 @@ mod tests {
                         },
                     }),
                 };
+                let mut response_event = event.clone();
+                response_event.id.recurrence = "TU2026-10-05T09:00:00".into();
+                let response_details = super::EventDetails::new(&response_event, locale.as_ref());
+                let responses = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+                let received = responses.clone();
+                response_details.connect_respond(move |item, response| {
+                    received.borrow_mut().push((item, response));
+                });
+                for (button, _, _) in response_details.imp().responses.borrow().iter() {
+                    button.emit_clicked();
+                }
+                let responses = responses.borrow();
+                if invitation && !read_only {
+                    assert_eq!(responses.len(), 6);
+                    for (index, (item, response)) in responses.iter().enumerate() {
+                        assert_eq!(item.calendar, "cal");
+                        assert_eq!(item.uid, "popup-test");
+                        assert_eq!(item.recurrence.is_some(), index >= 3);
+                        assert_eq!(
+                            *response,
+                            [
+                                eventix_ical::objects::CalPartStat::Accepted,
+                                eventix_ical::objects::CalPartStat::Tentative,
+                                eventix_ical::objects::CalPartStat::Declined,
+                            ][index % 3]
+                        );
+                    }
+                } else {
+                    assert!(responses.is_empty());
+                }
                 let colors = gtk::CssProvider::new();
                 let week = std::rc::Rc::new(eventix_view::WeekSnapshot {
                     start: start.date_naive(),

@@ -7,6 +7,7 @@ use std::{
     rc::Rc,
 };
 
+use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
 use eventix_state::actions::items::{EditScope, ItemId};
 use gtk::{glib, graphene, prelude::*, subclass::prelude::ObjectSubclassIsExt};
@@ -20,12 +21,14 @@ const TRANSITION_DURATION: u32 = 180;
 
 type EditHandler = Rc<dyn Fn(ItemId, EditScope)>;
 type DeleteHandler = Rc<dyn Fn(ItemId, bool, String)>;
+type RespondHandler = Rc<dyn Fn(ItemId, CalPartStat)>;
 
 /// Owns the shared details and event-editor popup for the calendar.
 #[derive(Default)]
 pub(crate) struct DetailsController {
     edit: RefCell<Option<EditHandler>>,
     delete: RefCell<Option<DeleteHandler>>,
+    respond: RefCell<Option<RespondHandler>>,
     dismissed: RefCell<Option<Box<dyn Fn()>>>,
     original: RefCell<Option<gtk::Widget>>,
     editor_scroll: RefCell<Option<gtk::ScrolledWindow>>,
@@ -55,7 +58,14 @@ impl DetailsController {
         self.dismissed.replace(Some(Box::new(callback)));
     }
 
+    pub fn connect_respond(&self, callback: impl Fn(ItemId, CalPartStat) + 'static) {
+        self.respond.replace(Some(Rc::new(callback)));
+    }
+
     fn bind_actions(&self, popover: &EventDetails) {
+        if let Some(callback) = self.respond.borrow().clone() {
+            popover.connect_respond(move |item, response| callback(item, response));
+        }
         if let Some(callback) = self.edit.borrow().clone() {
             popover.connect_edit(move |item, scope| callback(item, scope));
         }
