@@ -4,11 +4,12 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use chrono::Utc;
+use chrono::{NaiveDate, NaiveDateTime, Utc};
 use eventix_view::WeekSnapshot;
-use gtk::{glib, prelude::*, subclass::prelude::*};
+use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
-use crate::view::geometry::{MIN_WIDTH, day_x, rect};
+use crate::actions::items::move_event::{self, DraggedEvent, MoveTarget};
+use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, rect};
 use crate::{
     style,
     view::{
@@ -27,6 +28,7 @@ mod imp {
     pub struct AllDayStrip {
         pub(super) surface: Rc<Surface>,
         pub week: RefCell<Option<Rc<WeekSnapshot>>>,
+        pub(super) drop_preview: RefCell<Option<(NaiveDate, NaiveDate)>>,
     }
 
     #[glib::object_subclass]
@@ -40,6 +42,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
+            move_event::install_target(&*self.obj());
         }
 
         fn dispose(&self) {
@@ -54,6 +57,7 @@ mod imp {
         }
 
         fn unmap(&self) {
+            self.obj().clear_drop_preview();
             self.surface.unmap();
             self.parent_unmap();
         }
@@ -128,6 +132,7 @@ mod imp {
                 );
             }
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
+            obj.snapshot_drop_preview(snapshot);
         }
     }
 }
@@ -139,6 +144,52 @@ glib::wrapper! {
 }
 
 impl AllDayStrip {
+    fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
+        let preview = self.imp().drop_preview.borrow();
+        let week = self.imp().week.borrow();
+        let (Some((start, end)), Some(week)) = (preview.as_ref(), week.as_ref()) else {
+            return;
+        };
+        let border = style::color(self, "ev_drop_border");
+        for (col, day) in week.days.iter().enumerate() {
+            if day.date < *start || day.date > *end {
+                continue;
+            }
+            let x = day_x(self.width(), col as f64) as f32 + 2.0;
+            let w = (day_x(self.width(), (col + 1) as f64) as f32 - x - 2.0).max(1.0);
+            let h = (self.height() as f32 - 4.0).max(1.0);
+            rect(
+                snapshot,
+                &style::color(self, "ev_drop_background"),
+                x,
+                2.0,
+                w,
+                h,
+            );
+            rect(snapshot, &border, x, 2.0, w, 2.0);
+            rect(snapshot, &border, x, h, w, 2.0);
+            rect(snapshot, &border, x, 2.0, 2.0, h);
+            rect(snapshot, &border, x + w - 2.0, 2.0, 2.0, h);
+            // Keep the label legible over existing all-day cards.
+            let label_y = self.height() as f32 - ROW as f32;
+            rect(
+                snapshot,
+                &border,
+                x + 2.0,
+                label_y,
+                (w - 4.0).max(1.0),
+                26.0,
+            );
+            let layout = self.create_pango_layout(Some(week.locale.translate("All day")));
+            layout.set_width(((w - 12.0).max(0.0) * gtk::pango::SCALE as f32) as i32);
+            layout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            snapshot.save();
+            snapshot.translate(&graphene::Point::new(x + 6.0, label_y + 3.0));
+            snapshot.append_layout(&layout, &style::color(self, "ev_drop_text"));
+            snapshot.restore();
+        }
+    }
+
     pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
         self.imp().surface.details.replace(details);
     }
@@ -148,6 +199,7 @@ impl AllDayStrip {
     }
 
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
+        self.clear_drop_preview();
         let surface = &self.imp().surface;
         let keys = week
             .all_day
@@ -157,8 +209,83 @@ impl AllDayStrip {
         surface.reconcile(self.upcast_ref(), week.locale.clone(), keys);
         for (card, span) in surface.cards.borrow().iter().zip(&week.all_day) {
             card.button.set_span(span, week.locale.as_ref());
+            card.button.enable_date_drag();
         }
         self.imp().week.replace(Some(week));
         self.queue_resize();
+    }
+}
+
+impl MoveTarget for AllDayStrip {
+    fn move_start(&self, payload: &DraggedEvent, x: f64, y: f64) -> Option<NaiveDateTime> {
+        if !payload.all_day {
+            return None;
+        }
+        let col = drop_day(self.width(), self.height(), x, y)?;
+        let week = self.imp().week.borrow();
+        Some(payload.on_date(week.as_ref()?.days.get(col)?.date))
+    }
+
+    fn show_move_preview(&self, payload: &DraggedEvent, x: f64, y: f64) -> bool {
+        let Some(start) = self.move_start(payload, x, y) else {
+            return false;
+        };
+        let week = self.imp().week.borrow();
+        let Some((start, end)) = week
+            .as_ref()
+            .and_then(|week| payload.preview_range(start, week.locale.timezone()))
+        else {
+            return false;
+        };
+        let preview = (start.date_naive(), end.date_naive());
+        if self.imp().drop_preview.borrow().as_ref() != Some(&preview) {
+            self.imp().drop_preview.replace(Some(preview));
+            self.queue_draw();
+        }
+        true
+    }
+
+    fn clear_drop_preview(&self) {
+        if self.imp().drop_preview.take().is_some() {
+            self.queue_draw();
+        }
+    }
+}
+
+fn drop_day(width: i32, height: i32, x: f64, y: f64) -> Option<usize> {
+    if width <= GUTTER
+        || !x.is_finite()
+        || !y.is_finite()
+        || x < f64::from(GUTTER)
+        || x >= f64::from(width)
+        || y < 0.0
+        || y >= f64::from(height)
+    {
+        return None;
+    }
+    Some(((x - f64::from(GUTTER)) * 7.0 / f64::from(width - GUTTER)).floor() as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GUTTER, drop_day};
+
+    #[test]
+    fn drop_days_cover_all_rows_and_exclude_the_gutter_and_outside_coordinates() {
+        let width = GUTTER + 700;
+        assert_eq!(drop_day(width, 60, f64::from(GUTTER), 0.0), Some(0));
+        assert_eq!(drop_day(width, 60, f64::from(GUTTER + 250), 45.0), Some(2));
+        assert_eq!(drop_day(width, 60, f64::from(width - 1), 59.0), Some(6));
+        for (x, y) in [
+            (f64::from(GUTTER - 1), 0.0),
+            (f64::from(width), 0.0),
+            (100.0, -1.0),
+            (100.0, 60.0),
+            (f64::NAN, 0.0),
+            (100.0, f64::NAN),
+        ] {
+            assert_eq!(drop_day(width, 60, x, y), None);
+        }
+        assert_eq!(drop_day(GUTTER, 60, 100.0, 0.0), None);
     }
 }

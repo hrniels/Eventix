@@ -209,7 +209,7 @@ impl WeekContent {
         );
         for (card, span) in surface.cards.borrow().iter().zip(spans) {
             card.button.set_span(span, locale.as_ref());
-            card.button.enable_month_drag();
+            card.button.enable_date_drag();
         }
         for (list, day) in self.imp().lists.borrow().iter().zip(days) {
             list.set_day(day, locale.clone());

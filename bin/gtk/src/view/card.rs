@@ -180,7 +180,7 @@ impl EventCard {
         self.imp().resize.borrow().clone()
     }
 
-    pub(crate) fn enable_month_drag(&self) {
+    pub(crate) fn enable_date_drag(&self) {
         self.imp()
             .drag
             .replace(self.event().as_ref().and_then(DraggedEvent::for_month));
