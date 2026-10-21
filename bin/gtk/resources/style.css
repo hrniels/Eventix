@@ -333,12 +333,24 @@ button.ev_details_button,
 .ev_details_menu button.ev_details_button {
     margin: 0;
     border: 1px solid alpha(@theme_fg_color, 0.3);
-    border-radius: 5px;
+    background-color: @theme_bg_color;
+    background-clip: border-box;
+    border-radius: 0;
     box-shadow: none;
 }
 
 .ev_details_menu button.ev_details_button + button.ev_details_button {
-    margin-top: 2px;
+    border-top-width: 0;
+}
+
+.ev_details_menu button.ev_details_button:first-child {
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+.ev_details_menu button.ev_details_button:last-child {
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
 }
 
 button.ev_details_uid {

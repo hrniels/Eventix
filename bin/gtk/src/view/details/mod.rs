@@ -740,6 +740,12 @@ fn menu(
         menu.add_css_class(class);
     }
     menu.update_property(&[gtk::accessible::Property::Label(text)]);
+    let weak = menu.downgrade();
+    popover.connect_show(move |popover| {
+        if let Some(menu) = weak.upgrade() {
+            popover.set_width_request(menu.width());
+        }
+    });
     (menu, options)
 }
 
