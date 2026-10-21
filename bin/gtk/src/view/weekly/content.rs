@@ -66,12 +66,6 @@ pub(crate) mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.gutter.set_size_request(GUTTER, -1);
-            self.headers.set_margin_end(
-                self.scroll
-                    .vscrollbar()
-                    .measure(gtk::Orientation::Horizontal, -1)
-                    .1,
-            );
             let top_fade = self.all_day_top_fade.downgrade();
             let bottom_fade = self.all_day_bottom_fade.downgrade();
             let update_fades = move |adjustment: &gtk::Adjustment| {
