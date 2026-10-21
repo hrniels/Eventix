@@ -5,6 +5,7 @@
 use std::cell::RefCell;
 
 use eventix_locale::{Locale, TimeFlags};
+use eventix_view::details::Response;
 use eventix_view::{AllDaySpan, Event, MonthEvent, TimedEvent};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
@@ -17,6 +18,8 @@ mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/hrniels/Eventix/gtk/view/card.ui")]
     pub struct EventCard {
+        #[template_child]
+        pub response: gtk::TemplateChild<gtk::Box>,
         #[template_child]
         pub text: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -163,6 +166,18 @@ impl EventCard {
     fn set_event(&self, event: &Event, text: &str) {
         self.imp().text.set_text(text);
         self.set_tooltip_text(Some(text));
+        let actions = &event.details.actions;
+        let response = actions.occurrence_response.or(actions.series_response);
+        self.imp().response.set_visible(response.is_some());
+        self.imp().response.set_css_classes(&[
+            "ev_response_bar",
+            match response {
+                Some(Response::Accepted) => "ev_response_accepted",
+                Some(Response::Tentative) => "ev_response_tentative",
+                Some(Response::Declined) => "ev_response_declined",
+                _ => "ev_response_pending",
+            },
+        ]);
         self.imp().recurrence.set_visible(event.recurrent);
         self.imp().exception.set_visible(event.exception);
         self.imp().alarm.set_visible(event.alarm);

@@ -238,6 +238,28 @@ button.ev_event.ev_cancelled label {
     text-decoration-line: line-through;
 }
 
+.ev_response_bar {
+    min-width: 3px;
+    margin: 2px 0;
+    border: 1px solid white;
+}
+
+.ev_response_pending {
+    background: white;
+}
+
+.ev_response_accepted {
+    background: #198754;
+}
+
+.ev_response_tentative {
+    background: #d56c05;
+}
+
+.ev_response_declined {
+    background: red;
+}
+
 .ev_event_details > contents {
     padding: 0;
     /* GTK draws the arrow over the content border; keep its base outside the body. */
