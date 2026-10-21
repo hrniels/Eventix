@@ -29,6 +29,9 @@ pub(crate) struct DraggedEvent {
 impl DraggedEvent {
     pub fn new(segment: &TimedEvent) -> Option<Self> {
         let event = &segment.event;
+        if !event.details.actions.edit {
+            return None;
+        }
         let recurrence = if event.id.recurrence.is_empty() {
             None
         } else {
