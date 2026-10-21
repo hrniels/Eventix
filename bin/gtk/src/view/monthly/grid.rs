@@ -4,10 +4,13 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use chrono::{Datelike, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, Utc};
+use chrono_tz::Tz;
+use eventix_locale::TimeFlags;
 use eventix_view::MonthSnapshot;
-use gtk::{glib, prelude::*, subclass::prelude::*};
+use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
+use crate::actions::items::move_event::{self, DraggedEvent, MoveTarget};
 use crate::style;
 use crate::view::{
     card::EventCard,
@@ -21,6 +24,14 @@ const HEADER: i32 = 32;
 const MIN_ROW: i32 = 100;
 pub(crate) const MAX_ROW: i32 = 180;
 const GAP: i32 = 4;
+
+#[derive(PartialEq)]
+struct DropPreview {
+    start: DateTime<Tz>,
+    end: DateTime<Tz>,
+    all_day: bool,
+}
+
 const WEEKDAYS: [&str; 7] = [
     "Monday",
     "Tuesday",
@@ -45,6 +56,7 @@ mod imp {
         pub rows: RefCell<Vec<gtk::Overlay>>,
         pub scroll_fades: RefCell<Vec<(gtk::Box, gtk::Box)>>,
         pub(super) contents: RefCell<Vec<WeekContent>>,
+        pub(super) drop_preview: RefCell<Option<DropPreview>>,
     }
 
     #[glib::object_subclass]
@@ -55,6 +67,11 @@ mod imp {
     }
 
     impl ObjectImpl for MonthGrid {
+        fn constructed(&self) {
+            self.parent_constructed();
+            move_event::install_target(&*self.obj());
+        }
+
         fn dispose(&self) {
             self.details.borrow().close();
             while let Some(child) = self.obj().first_child() {
@@ -71,6 +88,11 @@ mod imp {
     }
 
     impl WidgetImpl for MonthGrid {
+        fn unmap(&self) {
+            self.obj().clear_drop_preview();
+            self.parent_unmap();
+        }
+
         fn measure(&self, orientation: gtk::Orientation, _: i32) -> (i32, i32, i32, i32) {
             if orientation == gtk::Orientation::Horizontal {
                 (MIN_WIDTH, MIN_WIDTH, -1, -1)
@@ -208,6 +230,7 @@ mod imp {
             for row in self.rows.borrow().iter() {
                 obj.snapshot_child(row, snapshot);
             }
+            obj.snapshot_drop_preview(snapshot);
         }
     }
 }
@@ -219,6 +242,91 @@ glib::wrapper! {
 }
 
 impl MonthGrid {
+    fn drop_date(&self, x: f64, y: f64) -> Option<NaiveDate> {
+        let index = drop_day(
+            self.width(),
+            self.weekday_header_height(),
+            &self.allocated_rows(self.height()),
+            x,
+            y,
+        )?;
+        self.imp()
+            .month
+            .borrow()
+            .as_ref()?
+            .days
+            .get(index)
+            .map(|day| day.date)
+    }
+
+    fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
+        let preview = self.imp().drop_preview.borrow();
+        let month = self.imp().month.borrow();
+        let (
+            Some(DropPreview {
+                start,
+                end,
+                all_day,
+            }),
+            Some(month),
+        ) = (preview.as_ref(), month.as_ref())
+        else {
+            return;
+        };
+        let text = if *all_day {
+            month.locale.translate("All day").to_string()
+        } else {
+            format!(
+                "{}–{}",
+                month.locale.fmt_time(start, TimeFlags::Short),
+                month.locale.fmt_time(end, TimeFlags::Short)
+            )
+        };
+        let border = style::color(self, "ev_drop_border");
+        let mut y = self.weekday_header_height() as f32;
+        for (row, height) in self.allocated_rows(self.height()).into_iter().enumerate() {
+            for col in 0..7 {
+                let date = month.days[row * 7 + col].date;
+                if !preview_contains(date, start.naive_local(), end.naive_local()) {
+                    continue;
+                }
+                let x = day_x(self.width(), col as f64) as f32 + 2.0;
+                let w = (day_x(self.width(), (col + 1) as f64) as f32 - x - 2.0).max(1.0);
+                let h = height as f32 - 4.0;
+                rect(
+                    snapshot,
+                    &style::color(self, "ev_drop_background"),
+                    x,
+                    y + 2.0,
+                    w,
+                    h,
+                );
+                rect(snapshot, &border, x, y + 2.0, w, 2.0);
+                rect(snapshot, &border, x, y + h, w, 2.0);
+                rect(snapshot, &border, x, y + 2.0, 2.0, h);
+                rect(snapshot, &border, x + w - 2.0, y + 2.0, 2.0, h);
+                // A solid label stays legible over existing events in busy day cells.
+                let label_y = y + height as f32 - 30.0;
+                rect(
+                    snapshot,
+                    &border,
+                    x + 2.0,
+                    label_y,
+                    (w - 4.0).max(1.0),
+                    26.0,
+                );
+                let layout = self.create_pango_layout(Some(&text));
+                layout.set_width(((w - 12.0).max(0.0) * gtk::pango::SCALE as f32) as i32);
+                layout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                snapshot.save();
+                snapshot.translate(&graphene::Point::new(x + 6.0, label_y + 3.0));
+                snapshot.append_layout(&layout, &style::color(self, "ev_drop_text"));
+                snapshot.restore();
+            }
+            y += height as f32;
+        }
+    }
+
     pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
         self.imp().details.replace(details.clone());
         for content in self.imp().contents.borrow().iter() {
@@ -262,6 +370,7 @@ impl MonthGrid {
     }
 
     pub fn set_month(&self, month: Rc<MonthSnapshot>) {
+        self.clear_drop_preview();
         let imp = self.imp();
         let changed = imp
             .month
@@ -419,6 +528,69 @@ impl MonthGrid {
     }
 }
 
+impl MoveTarget for MonthGrid {
+    fn move_start(&self, payload: &DraggedEvent, x: f64, y: f64) -> Option<NaiveDateTime> {
+        Some(payload.on_date(self.drop_date(x, y)?))
+    }
+
+    fn show_move_preview(&self, payload: &DraggedEvent, x: f64, y: f64) -> bool {
+        let Some(start) = self.move_start(payload, x, y) else {
+            return false;
+        };
+        let month = self.imp().month.borrow();
+        let Some((start, end)) = month
+            .as_ref()
+            .and_then(|month| payload.preview_range(start, month.locale.timezone()))
+        else {
+            return false;
+        };
+        let preview = DropPreview {
+            start,
+            end,
+            all_day: payload.all_day,
+        };
+        if self.imp().drop_preview.borrow().as_ref() != Some(&preview) {
+            self.imp().drop_preview.replace(Some(preview));
+            self.queue_draw();
+        }
+        true
+    }
+
+    fn clear_drop_preview(&self) {
+        if self.imp().drop_preview.take().is_some() {
+            self.queue_draw();
+        }
+    }
+}
+
+/// Finds a day cell, excluding the weekday header, week numbers, and unused space.
+fn drop_day(width: i32, header: i32, rows: &[i32], x: f64, y: f64) -> Option<usize> {
+    if width <= GUTTER
+        || !x.is_finite()
+        || !y.is_finite()
+        || x < f64::from(GUTTER)
+        || x >= f64::from(width)
+        || y < f64::from(header)
+    {
+        return None;
+    }
+    let col = ((x - f64::from(GUTTER)) * 7.0 / f64::from(width - GUTTER)).floor() as usize;
+    let mut bottom = header;
+    for (row, height) in rows.iter().enumerate() {
+        bottom += height;
+        if y < f64::from(bottom) {
+            return Some(row * 7 + col);
+        }
+    }
+    None
+}
+
+fn preview_contains(date: NaiveDate, start: NaiveDateTime, end: NaiveDateTime) -> bool {
+    date >= start.date()
+        && (date < end.date()
+            || (date == end.date() && (end.time() != chrono::NaiveTime::MIN || start == end)))
+}
+
 /// Instantiates the requested monthly grid objects.
 fn grid_children(ids: &[&str]) -> gtk::Builder {
     WeekContent::ensure_type();
@@ -427,4 +599,52 @@ fn grid_children(ids: &[&str]) -> gtk::Builder {
         .add_objects_from_resource("/io/github/hrniels/Eventix/gtk/view/monthly/grid.ui", ids)
         .expect("monthly grid children are defined in GTK resources");
     builder
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GUTTER, drop_day, preview_contains};
+
+    #[test]
+    fn drop_cells_include_headers_and_padding_days_but_exclude_grid_chrome() {
+        let width = GUTTER + 700;
+        let rows = [100, 101, 100, 100, 100];
+        assert_eq!(drop_day(width, 32, &rows, f64::from(GUTTER), 32.0), Some(0));
+        assert_eq!(
+            drop_day(width, 32, &rows, f64::from(width - 1), 532.0),
+            Some(34)
+        );
+        assert_eq!(
+            drop_day(width, 32, &rows, f64::from(GUTTER + 250), 132.0),
+            Some(9)
+        );
+        for (x, y) in [
+            (0.0, 40.0),
+            (f64::from(width), 40.0),
+            (100.0, 31.0),
+            (100.0, 533.0),
+            (f64::NAN, 40.0),
+            (100.0, f64::NAN),
+        ] {
+            assert_eq!(drop_day(width, 32, &rows, x, y), None);
+        }
+    }
+
+    #[test]
+    fn preview_excludes_midnight_end_and_includes_zero_duration_events() {
+        let start = "2026-10-14T23:00:00".parse().unwrap();
+        let end = "2026-10-16T00:00:00".parse().unwrap();
+        for (date, included) in [
+            ("2026-10-13", false),
+            ("2026-10-14", true),
+            ("2026-10-15", true),
+            ("2026-10-16", false),
+        ] {
+            assert_eq!(
+                preview_contains(date.parse().unwrap(), start, end),
+                included
+            );
+        }
+        assert!(preview_contains(start.date(), start, start));
+    }
 }

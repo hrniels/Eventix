@@ -124,7 +124,9 @@ impl EventCard {
     }
 
     pub fn set_monthly(&self, segment: &MonthEvent, locale: &dyn Locale) {
-        self.imp().drag.take();
+        self.imp()
+            .drag
+            .replace(DraggedEvent::for_month(&segment.event));
         self.imp().resize.take();
         let event = &segment.event;
         self.imp()
@@ -168,12 +170,20 @@ impl EventCard {
             return None;
         }
         let mut payload = self.imp().drag.borrow().clone()?;
-        payload.offset_minutes += y.round() as i64;
+        if self.imp().resize.borrow().is_some() {
+            payload.offset_minutes += y.round() as i64;
+        }
         Some(payload)
     }
 
     pub(crate) fn resize_segment(&self) -> Option<TimedEvent> {
         self.imp().resize.borrow().clone()
+    }
+
+    pub(crate) fn enable_month_drag(&self) {
+        self.imp()
+            .drag
+            .replace(self.event().as_ref().and_then(DraggedEvent::for_month));
     }
 
     pub(crate) fn resize_edge(&self, y: f64) -> Option<RangeEdge> {

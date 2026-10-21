@@ -4,14 +4,14 @@
 
 use std::{cell::Cell, rc::Rc};
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalDate, CalDateTime, CalendarTimeZoneResolver};
 use eventix_state::actions::{
     Command,
     items::{ItemId, MoveEvent},
 };
-use eventix_view::TimedEvent;
+use eventix_view::{Event, TimedEvent};
 use gtk::{gdk, glib, prelude::*};
 
 use crate::view::{card::EventCard, page::CalendarPage, weekly::timed_grid::TimedGrid};
@@ -24,11 +24,22 @@ pub(crate) struct DraggedEvent {
     expected_start: DateTime<Utc>,
     expected_end: DateTime<Utc>,
     pub offset_minutes: i64,
+    pub all_day: bool,
+    original_start: NaiveDateTime,
+    original_end: NaiveDateTime,
 }
 
 impl DraggedEvent {
     pub fn new(segment: &TimedEvent) -> Option<Self> {
-        let event = &segment.event;
+        let mut payload = Self::for_month(&segment.event)?;
+        let displayed_start = segment.date.and_hms_opt(0, 0, 0)?
+            + chrono::Duration::minutes(i64::from(segment.minute_start.min(1422)));
+        payload.offset_minutes =
+            (displayed_start - segment.event.start.naive_local()).num_minutes();
+        Some(payload)
+    }
+
+    pub fn for_month(event: &Event) -> Option<Self> {
         if !event.details.actions.edit {
             return None;
         }
@@ -37,8 +48,6 @@ impl DraggedEvent {
         } else {
             Some(event.id.recurrence.parse().ok()?)
         };
-        let displayed_start = segment.date.and_hms_opt(0, 0, 0)?
-            + chrono::Duration::minutes(i64::from(segment.minute_start.min(1422)));
         Some(Self {
             item: ItemId {
                 calendar: event.id.calendar.clone(),
@@ -47,8 +56,16 @@ impl DraggedEvent {
             },
             expected_start: event.start.with_timezone(&Utc),
             expected_end: event.end.with_timezone(&Utc),
-            offset_minutes: (displayed_start - event.start.naive_local()).num_minutes(),
+            offset_minutes: 0,
+            all_day: event.all_day,
+            original_start: event.start.naive_local(),
+            original_end: event.end.naive_local(),
         })
+    }
+
+    /// Moves the occurrence's start date while retaining its exact local time of day.
+    pub fn on_date(&self, date: NaiveDate) -> NaiveDateTime {
+        date.and_time(self.original_start.time())
     }
 
     /// Returns the destination bounds with the same gap/fold and duration semantics as a move.
@@ -61,7 +78,16 @@ impl DraggedEvent {
         let start = date
             .as_start_with_resolver(timezone, &CalendarTimeZoneResolver::default())
             .with_timezone(timezone);
-        let end = start.checked_add_signed(self.expected_end - self.expected_start)?;
+        let end = if self.all_day {
+            let end = start
+                .naive_local()
+                .checked_add_signed(self.original_end - self.original_start)?;
+            CalDate::DateTime(CalDateTime::Timezone(end, timezone.name().into()))
+                .as_end_with_resolver(timezone, &CalendarTimeZoneResolver::default())
+                .with_timezone(timezone)
+        } else {
+            start.checked_add_signed(self.expected_end - self.expected_start)?
+        };
         Some((start, end))
     }
 
@@ -80,7 +106,7 @@ pub(crate) fn install_source(card: &EventCard) {
         .actions(gdk::DragAction::MOVE)
         .build();
     let weak = card.downgrade();
-    source.connect_prepare(move |_, _, y| {
+    source.connect_prepare(move |source, x, y| {
         let card = weak.upgrade()?;
         let page = card
             .ancestor(CalendarPage::static_type())?
@@ -91,12 +117,40 @@ pub(crate) fn install_source(card: &EventCard) {
         }
         let payload = card.drag_payload(y)?;
         page.dismiss_popovers();
+        source.set_icon(
+            Some(&gtk::WidgetPaintable::new(Some(&card))),
+            x as i32,
+            y as i32,
+        );
         Some(gdk::ContentProvider::for_value(&payload.to_value()))
     });
     card.add_controller(source);
 }
 
-pub(crate) fn install_target(grid: &TimedGrid) {
+pub(crate) trait MoveTarget: IsA<gtk::Widget> + Clone + 'static {
+    fn move_start(&self, payload: &DraggedEvent, x: f64, y: f64) -> Option<NaiveDateTime>;
+    fn show_move_preview(&self, payload: &DraggedEvent, x: f64, y: f64) -> bool;
+    fn clear_drop_preview(&self);
+}
+
+impl MoveTarget for TimedGrid {
+    fn move_start(&self, payload: &DraggedEvent, x: f64, y: f64) -> Option<NaiveDateTime> {
+        if payload.all_day {
+            return None;
+        }
+        self.drop_start(x, y, payload.offset_minutes)
+    }
+
+    fn show_move_preview(&self, payload: &DraggedEvent, x: f64, y: f64) -> bool {
+        !payload.all_day && self.set_drop_preview(payload, x, y)
+    }
+
+    fn clear_drop_preview(&self) {
+        self.clear_drop_preview();
+    }
+}
+
+pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
     let target = gtk::DropTarget::new(DraggedEvent::static_type(), gdk::DragAction::MOVE);
     target.set_preload(true);
     let position = Rc::new(Cell::new(None));
@@ -144,7 +198,7 @@ pub(crate) fn install_target(grid: &TimedGrid) {
         let Ok(payload) = value.get::<DraggedEvent>() else {
             return false;
         };
-        let Some(start) = grid.drop_start(x, y, payload.offset_minutes) else {
+        let Some(start) = grid.move_start(&payload, x, y) else {
             return false;
         };
         let Some(page) = grid
@@ -158,12 +212,11 @@ pub(crate) fn install_target(grid: &TimedGrid) {
     grid.add_controller(target);
 }
 
-fn preview(grid: &TimedGrid, target: &gtk::DropTarget, x: f64, y: f64) -> gdk::DragAction {
+fn preview<T: MoveTarget>(grid: &T, target: &gtk::DropTarget, x: f64, y: f64) -> gdk::DragAction {
     if !grid
         .ancestor(CalendarPage::static_type())
         .and_downcast::<CalendarPage>()
         .is_some_and(|page| page.can_edit())
-        || grid.drop_start(x, y, 0).is_none()
     {
         grid.clear_drop_preview();
         return gdk::DragAction::empty();
@@ -175,7 +228,7 @@ fn preview(grid: &TimedGrid, target: &gtk::DropTarget, x: f64, y: f64) -> gdk::D
         grid.clear_drop_preview();
         return gdk::DragAction::MOVE;
     };
-    if grid.set_drop_preview(&payload, x, y) {
+    if grid.show_move_preview(&payload, x, y) {
         return gdk::DragAction::MOVE;
     }
     grid.clear_drop_preview();
@@ -202,6 +255,9 @@ mod tests {
             expected_start,
             expected_end: expected_start + Duration::hours(1),
             offset_minutes: 0,
+            all_day: false,
+            original_start: expected_start.naive_utc(),
+            original_end: (expected_start + Duration::hours(1)).naive_utc(),
         };
         for (destination, expected_start, expected_end) in [
             (
@@ -227,5 +283,51 @@ mod tests {
             assert_eq!(end.to_rfc3339(), expected_end);
             assert_eq!(end - start, Duration::hours(1));
         }
+    }
+
+    #[test]
+    fn monthly_moves_preserve_local_time_including_seconds_across_dst() {
+        let start = Berlin.with_ymd_and_hms(2026, 10, 24, 23, 17, 42).unwrap();
+        let payload = DraggedEvent {
+            item: ItemId {
+                calendar: String::new(),
+                uid: String::new(),
+                recurrence: None,
+            },
+            expected_start: start.to_utc(),
+            expected_end: (start + Duration::hours(2)).to_utc(),
+            offset_minutes: 1440,
+            all_day: false,
+            original_start: start.naive_local(),
+            original_end: (start + Duration::hours(2)).naive_local(),
+        };
+        let destination = payload.on_date("2026-10-25".parse().unwrap());
+        assert_eq!(destination.to_string(), "2026-10-25 23:17:42");
+        let (start, end) = payload.preview_range(destination, &Berlin).unwrap();
+        assert_eq!(start.to_rfc3339(), "2026-10-25T23:17:42+01:00");
+        assert_eq!(end - start, Duration::hours(2));
+    }
+
+    #[test]
+    fn all_day_preview_preserves_calendar_days_across_dst() {
+        let start = Berlin.with_ymd_and_hms(2026, 10, 20, 0, 0, 0).unwrap();
+        let end = start + Duration::days(2) - Duration::seconds(1);
+        let payload = DraggedEvent {
+            item: ItemId {
+                calendar: String::new(),
+                uid: String::new(),
+                recurrence: None,
+            },
+            expected_start: start.to_utc(),
+            expected_end: end.to_utc(),
+            offset_minutes: 0,
+            all_day: true,
+            original_start: start.naive_local(),
+            original_end: end.naive_local(),
+        };
+        let destination = payload.on_date("2026-10-24".parse().unwrap());
+        let (start, end) = payload.preview_range(destination, &Berlin).unwrap();
+        assert_eq!(start.to_rfc3339(), "2026-10-24T00:00:00+02:00");
+        assert_eq!(end.to_rfc3339(), "2026-10-25T23:59:59+01:00");
     }
 }

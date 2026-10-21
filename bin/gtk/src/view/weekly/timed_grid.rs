@@ -42,7 +42,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
-            crate::actions::items::move_event::install_target(&self.obj());
+            crate::actions::items::move_event::install_target(&*self.obj());
         }
 
         fn dispose(&self) {

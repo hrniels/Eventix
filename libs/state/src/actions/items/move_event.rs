@@ -14,10 +14,11 @@ use eventix_ical::{
 use super::ItemId;
 use crate::State;
 
-/// Moves one timed occurrence to a display-local time, preserving elapsed duration.
+/// Moves one occurrence to a display-local time, preserving its span.
 ///
 /// Recurring items retain their original recurrence identity. DST gaps and folds follow
-/// `CalEvent::shift_to` semantics. Expected bounds reject stale moves. The calendar is staged
+/// `CalEvent::shift_to` semantics. Timed events preserve elapsed duration; all-day events preserve
+/// their number of calendar days. Expected bounds reject stale moves. The calendar is staged
 /// and atomically replaced on disk before the in-memory calendar is changed.
 #[derive(Debug)]
 pub struct MoveEvent {
@@ -89,15 +90,8 @@ impl MoveEvent {
             bail!(locale.translate("error.component_was_modified").to_string());
         }
 
-        if occurrence.is_all_day() || occurrence.is_excluded() {
-            if edge.is_some() {
-                bail!(locale.translate("Could not apply changes").to_string());
-            }
-            bail!(
-                locale
-                    .translate("Only timed events can be moved here")
-                    .to_string()
-            );
+        if occurrence.is_excluded() || (edge.is_some() && occurrence.is_all_day()) {
+            bail!(locale.translate("Could not apply changes").to_string());
         }
 
         // Staging isolates both callback errors and persistence failures from live state.
@@ -164,15 +158,24 @@ mod tests {
 
     use chrono::{Duration, TimeZone, Timelike};
     use eventix_ical::col::{CalDir, CalFile};
-    use eventix_ical::objects::RangeEdge;
+    use eventix_ical::objects::{EventLike, RangeEdge};
 
     use super::{ItemId, MoveEvent, ResizeEvent};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, recurrence: &str, read_only: bool) -> State {
+        fixture_with_dates(
+            path,
+            recurrence,
+            read_only,
+            "DTSTART:20261012T090000Z\r\nDTEND:20261012T100000Z\r\n",
+        )
+    }
+
+    fn fixture_with_dates(path: &Path, recurrence: &str, read_only: bool, dates: &str) -> State {
         let calendar = format!(
             "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n\
-            UID:move-me\r\nDTSTART:20261012T090000Z\r\nDTEND:20261012T100000Z\r\n\
+            UID:move-me\r\n{dates}\
             {recurrence}SUMMARY:Move me\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
         );
         fs::write(path.join("event.ics"), calendar).unwrap();
@@ -217,6 +220,45 @@ mod tests {
             expected_start: occurrence.occurrence_start().unwrap().to_utc(),
             expected_end: occurrence.occurrence_end().unwrap().to_utc(),
         }
+    }
+
+    #[test]
+    fn all_day_moves_preserve_date_values_and_span_and_still_reject_resizing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = fixture_with_dates(
+            tmp.path(),
+            "",
+            false,
+            "DTSTART;VALUE=DATE:20261012\r\nDTEND;VALUE=DATE:20261014\r\n",
+        );
+        assert!(
+            resize(&state, None, RangeEdge::End, "2026-10-16T00:00:00")
+                .execute(&mut state)
+                .is_err()
+        );
+        command(&state, None).execute(&mut state).unwrap();
+        let disk =
+            CalFile::new_from_file(Arc::new("test".into()), tmp.path().join("event.ics")).unwrap();
+        let occurrence = disk
+            .occurrence_by_id("move-me", None, state.timezone())
+            .unwrap();
+        assert!(occurrence.is_all_day());
+        assert_eq!(
+            occurrence
+                .occurrence_start()
+                .unwrap()
+                .date_naive()
+                .to_string(),
+            "2026-10-15"
+        );
+        assert_eq!(
+            occurrence
+                .occurrence_end()
+                .unwrap()
+                .naive_local()
+                .to_string(),
+            "2026-10-16 23:59:59"
+        );
     }
 
     #[test]
