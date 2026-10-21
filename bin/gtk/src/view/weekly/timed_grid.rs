@@ -328,6 +328,11 @@ impl TimedGrid {
         }
     }
 
+    pub(crate) fn set_resize_preview(&self, range: (DateTime<Tz>, DateTime<Tz>)) {
+        self.imp().drop_preview.replace(Some(range));
+        self.queue_draw();
+    }
+
     pub(crate) fn drop_start(&self, x: f64, y: f64, offset: i64) -> Option<NaiveDateTime> {
         let week = self.imp().week.borrow();
         drop_start(week.as_ref()?.start, self.width(), x, y, offset)

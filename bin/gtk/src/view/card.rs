@@ -4,6 +4,7 @@
 
 use std::cell::RefCell;
 
+use eventix_ical::objects::RangeEdge;
 use eventix_locale::{Locale, TimeFlags};
 use eventix_view::details::Response;
 use eventix_view::{AllDaySpan, Event, MonthEvent, TimedEvent};
@@ -33,6 +34,7 @@ mod imp {
         pub color_class: RefCell<String>,
         pub event: RefCell<Option<Event>>,
         pub(super) drag: RefCell<Option<DraggedEvent>>,
+        pub resize: RefCell<Option<TimedEvent>>,
     }
 
     #[glib::object_subclass]
@@ -53,6 +55,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             move_event::install_source(&self.obj());
+            crate::actions::items::resize_event::install(&self.obj());
         }
 
         fn dispose(&self) {
@@ -81,6 +84,7 @@ impl EventCard {
 
     pub fn set_span(&self, span: &AllDaySpan, locale: &dyn Locale) {
         self.imp().drag.take();
+        self.imp().resize.take();
         let summary = self.summary(&span.event, locale);
         let text = format!(
             "{}{}{}",
@@ -93,6 +97,7 @@ impl EventCard {
 
     pub fn set_timed(&self, segment: &TimedEvent, locale: &dyn Locale) {
         self.imp().drag.replace(DraggedEvent::new(segment));
+        self.imp().resize.replace(Some(segment.clone()));
         let event = &segment.event;
         let summary = self.summary(event, locale);
         let time = format!(
@@ -120,6 +125,7 @@ impl EventCard {
 
     pub fn set_monthly(&self, segment: &MonthEvent, locale: &dyn Locale) {
         self.imp().drag.take();
+        self.imp().resize.take();
         let event = &segment.event;
         self.imp()
             .text
@@ -158,9 +164,33 @@ impl EventCard {
     }
 
     pub(crate) fn drag_payload(&self, y: f64) -> Option<DraggedEvent> {
+        if self.resize_edge(y).is_some() {
+            return None;
+        }
         let mut payload = self.imp().drag.borrow().clone()?;
         payload.offset_minutes += y.round() as i64;
         Some(payload)
+    }
+
+    pub(crate) fn resize_segment(&self) -> Option<TimedEvent> {
+        self.imp().resize.borrow().clone()
+    }
+
+    pub(crate) fn resize_edge(&self, y: f64) -> Option<RangeEdge> {
+        let segment = self.imp().resize.borrow();
+        let segment = segment.as_ref()?;
+        if !segment.event.details.actions.edit {
+            return None;
+        }
+        if y < 5.0 && segment.event.start.date_naive() == segment.date {
+            Some(RangeEdge::Start)
+        } else if y >= f64::from(self.height()) - 5.0
+            && segment.event.end.naive_local() <= segment.date.succ_opt()?.and_hms_opt(0, 0, 0)?
+        {
+            Some(RangeEdge::End)
+        } else {
+            None
+        }
     }
 
     fn set_event(&self, event: &Event, text: &str) {

@@ -9,14 +9,15 @@ pub mod items;
 use crate::State;
 
 use items::{
-    ChangeOccurrence, ChangeTask, CreateItem, DeleteItem, ItemId, MoveEvent, RespondItem,
-    UpdateItem,
+    ChangeOccurrence, ChangeTask, CreateItem, DeleteItem, ItemId, MoveEvent, ResizeEvent,
+    RespondItem, UpdateItem,
 };
 
 /// A validated application operation to execute against the authoritative state.
 #[derive(Debug)]
 pub enum Command {
     MoveEvent(MoveEvent),
+    ResizeEvent(ResizeEvent),
     CreateItem(Box<CreateItem>),
     UpdateItem(Box<UpdateItem>),
     DeleteItem(DeleteItem),
@@ -30,6 +31,7 @@ impl Command {
     pub fn affected_items(&self) -> &[ItemId] {
         match self {
             Self::MoveEvent(command) => std::slice::from_ref(&command.item),
+            Self::ResizeEvent(command) => std::slice::from_ref(&command.item),
             Self::CreateItem(_) => &[],
             Self::UpdateItem(command) => std::slice::from_ref(&command.item),
             Self::DeleteItem(command) => std::slice::from_ref(&command.item),
@@ -43,6 +45,7 @@ impl Command {
     pub fn execute(self, state: &mut State) -> anyhow::Result<Vec<ItemId>> {
         match self {
             Self::MoveEvent(command) => command.execute(state).map(|item| vec![item]),
+            Self::ResizeEvent(command) => command.execute(state).map(|item| vec![item]),
             Self::CreateItem(command) => command.execute(state).map(|item| vec![item]),
             Self::UpdateItem(command) => command.execute(state).map(|item| vec![item]),
             Self::DeleteItem(command) => command.execute(state).map(|item| vec![item]),

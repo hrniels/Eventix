@@ -18,7 +18,7 @@ pub use change_task::{ChangeTask, TaskAction};
 pub use create::create_component;
 pub use create_item::{CreateItem, TaskStatus};
 pub use delete_item::DeleteItem;
-pub use move_event::MoveEvent;
+pub use move_event::{MoveEvent, ResizeEvent};
 pub use respond_item::RespondItem;
 pub use update_item::{EditScope, UpdateItem};
 

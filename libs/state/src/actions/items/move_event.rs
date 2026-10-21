@@ -8,7 +8,7 @@ use anyhow::{Context, bail};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use eventix_ical::{
     col::CalFile,
-    objects::{CalDate, CalDateTime, EventLike, UpdatableEventLike},
+    objects::{CalDate, CalDateTime, EventLike, RangeEdge, UpdatableEventLike},
 };
 
 use super::ItemId;
@@ -27,9 +27,36 @@ pub struct MoveEvent {
     pub expected_end: DateTime<Utc>,
 }
 
+/// Resizes one edge of a timed occurrence, rejecting stale bounds and invalid ranges.
+#[derive(Debug)]
+pub struct ResizeEvent {
+    pub item: ItemId,
+    pub edge: RangeEdge,
+    pub value: NaiveDateTime,
+    pub expected_start: DateTime<Utc>,
+    pub expected_end: DateTime<Utc>,
+}
+
+impl ResizeEvent {
+    /// Persists the resize and returns the identity to invalidate after a successful commit.
+    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+        MoveEvent {
+            item: self.item,
+            start: self.value,
+            expected_start: self.expected_start,
+            expected_end: self.expected_end,
+        }
+        .execute_change(state, Some(self.edge))
+    }
+}
+
 impl MoveEvent {
     /// Persists the move and returns the identity to invalidate after a successful commit.
     pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+        self.execute_change(state, None)
+    }
+
+    fn execute_change(self, state: &mut State, edge: Option<RangeEdge>) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let tz = *state.timezone();
 
@@ -63,6 +90,9 @@ impl MoveEvent {
         }
 
         if occurrence.is_all_day() || occurrence.is_excluded() {
+            if edge.is_some() {
+                bail!(locale.translate("Could not apply changes").to_string());
+            }
             bail!(
                 locale
                     .translate("Only timed events can be moved here")
@@ -83,13 +113,24 @@ impl MoveEvent {
                 let event = component
                     .as_event_mut()
                     .ok_or_else(|| locale.translate("Component is not an event").to_string())?;
-                event
-                    .shift_to(
-                        &ctx,
-                        CalDate::DateTime(CalDateTime::Timezone(self.start, tz.name().into())),
-                        &tz,
-                    )
-                    .map_err(|error| error.to_string())?;
+                let value = CalDate::DateTime(CalDateTime::Timezone(self.start, tz.name().into()));
+                if let Some(edge) = edge {
+                    let instant = match edge {
+                        RangeEdge::Start => value.as_start_with_resolver(&tz, ctx.resolver()),
+                        RangeEdge::End => value.as_end_with_resolver(&tz, ctx.resolver()),
+                    };
+                    let valid = match edge {
+                        RangeEdge::Start => instant.with_timezone(&Utc) < self.expected_end,
+                        RangeEdge::End => instant.with_timezone(&Utc) > self.expected_start,
+                    };
+                    if !valid {
+                        return Err(locale.translate("Could not apply changes").to_string());
+                    }
+                    event.resize(&ctx, edge, value, &tz)
+                } else {
+                    event.shift_to(&ctx, value, &tz)
+                }
+                .map_err(|error| error.to_string())?;
                 component.touch();
                 Ok(())
             },
@@ -123,8 +164,9 @@ mod tests {
 
     use chrono::{Duration, TimeZone, Timelike};
     use eventix_ical::col::{CalDir, CalFile};
+    use eventix_ical::objects::RangeEdge;
 
-    use super::{ItemId, MoveEvent};
+    use super::{ItemId, MoveEvent, ResizeEvent};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, recurrence: &str, read_only: bool) -> State {
@@ -324,5 +366,118 @@ mod tests {
         assert!(command(&state, None).execute(&mut state).is_err());
         drop(protection);
         command(&state, None).execute(&mut state).unwrap();
+    }
+
+    fn resize(
+        state: &State,
+        recurrence: Option<eventix_ical::objects::CalDate>,
+        edge: RangeEdge,
+        value: &str,
+    ) -> ResizeEvent {
+        let original = command(state, recurrence);
+        ResizeEvent {
+            item: original.item,
+            edge,
+            value: value.parse().unwrap(),
+            expected_start: original.expected_start,
+            expected_end: original.expected_end,
+        }
+    }
+
+    #[test]
+    fn resizing_persists_each_edge_and_rejects_stale_or_inverted_ranges() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = fixture(tmp.path(), "", false);
+        let stale = resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00");
+        resize(&state, None, RangeEdge::Start, "2026-10-12T09:15:00")
+            .execute(&mut state)
+            .unwrap();
+        let before = fs::read(tmp.path().join("event.ics")).unwrap();
+        assert!(stale.execute(&mut state).is_err());
+        for (edge, value) in [
+            (RangeEdge::Start, "2026-10-12T10:00:00"),
+            (RangeEdge::End, "2026-10-12T09:00:00"),
+        ] {
+            assert!(
+                resize(&state, None, edge, value)
+                    .execute(&mut state)
+                    .is_err()
+            );
+        }
+        assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), before);
+        resize(&state, None, RangeEdge::End, "2026-10-13T00:00:00")
+            .execute(&mut state)
+            .unwrap();
+        let disk =
+            CalFile::new_from_file(Arc::new("test".into()), tmp.path().join("event.ics")).unwrap();
+        let occurrence = disk
+            .occurrence_by_id("move-me", None, state.timezone())
+            .unwrap();
+        assert_eq!(
+            occurrence
+                .occurrence_start()
+                .unwrap()
+                .naive_local()
+                .to_string(),
+            "2026-10-12 09:15:00"
+        );
+        assert_eq!(
+            occurrence
+                .occurrence_end()
+                .unwrap()
+                .naive_local()
+                .to_string(),
+            "2026-10-13 00:00:00"
+        );
+    }
+
+    #[test]
+    fn resizing_recurring_events_changes_only_the_selected_occurrence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = fixture(tmp.path(), "RRULE:FREQ=DAILY;COUNT=5\r\n", false);
+        let rid = "TU2026-10-13T09:00:00".parse().unwrap();
+        let item = resize(&state, Some(rid), RangeEdge::End, "2026-10-13T10:15:00")
+            .execute(&mut state)
+            .unwrap();
+        let disk =
+            CalFile::new_from_file(Arc::new("test".into()), tmp.path().join("event.ics")).unwrap();
+        let changed = disk
+            .occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())
+            .unwrap();
+        assert!(changed.is_overwritten());
+        assert_eq!(
+            changed.occurrence_end().unwrap().naive_local().to_string(),
+            "2026-10-13 10:15:00"
+        );
+        let next = "TU2026-10-14T09:00:00".parse().unwrap();
+        let unchanged = disk
+            .occurrence_by_id(&item.uid, Some(&next), state.timezone())
+            .unwrap();
+        assert!(!unchanged.is_overwritten());
+        assert_eq!(unchanged.occurrence_end().unwrap().hour(), 10);
+    }
+
+    #[test]
+    fn read_only_and_sync_protected_calendars_reject_resizing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = fixture(tmp.path(), "", true);
+        let before = fs::read(tmp.path().join("event.ics")).unwrap();
+        assert!(
+            resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00")
+                .execute(&mut state)
+                .is_err()
+        );
+        assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), before);
+        let mut state = fixture(tmp.path(), "", false);
+        let protection = state
+            .store_mut()
+            .protect_directories([Arc::new("test".into())])
+            .unwrap();
+        assert!(
+            resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00")
+                .execute(&mut state)
+                .is_err()
+        );
+        drop(protection);
     }
 }
