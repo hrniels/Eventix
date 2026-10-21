@@ -375,7 +375,7 @@ button.ev_details_uid:hover {
 
 .ev_details_good,
 .ev_details_good > button {
-    color: @success_color;
+    color: shade(@success_color, 0.8);
 }
 
 .ev_details_warn,
