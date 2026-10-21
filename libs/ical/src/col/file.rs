@@ -747,7 +747,14 @@ impl CalFile {
                 )))
             }
             (Some(chrono_dur), Some(CalDate::Date(date, _))) => {
-                Some(CalDate::Date(*date + chrono_dur, base.ctype().into()))
+                // Event date ends are exclusive, but resolved durations end one second earlier.
+                // Restore that second before truncating to days for the overwrite's DATE end.
+                let duration = if base.ctype() == CalCompType::Event {
+                    chrono_dur + Duration::seconds(1)
+                } else {
+                    chrono_dur
+                };
+                Some(CalDate::Date(*date + duration, base.ctype().into()))
             }
             _ => None,
         };

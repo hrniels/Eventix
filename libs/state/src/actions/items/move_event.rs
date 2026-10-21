@@ -262,6 +262,56 @@ mod tests {
     }
 
     #[test]
+    fn recurring_all_day_moves_preserve_span_in_memory_and_on_disk() {
+        for (dates, days) in [
+            (
+                "DTSTART;VALUE=DATE:20261012\r\nDTEND;VALUE=DATE:20261013\r\n",
+                1,
+            ),
+            (
+                "DTSTART;VALUE=DATE:20261012\r\nDTEND;VALUE=DATE:20261015\r\n",
+                3,
+            ),
+            ("DTSTART;VALUE=DATE:20261012\r\nDURATION:P1D\r\n", 1),
+        ] {
+            for destination in ["2026-10-13T00:00:00", "2026-10-24T00:00:00"] {
+                let tmp = tempfile::tempdir().unwrap();
+                let mut state =
+                    fixture_with_dates(tmp.path(), "RRULE:FREQ=DAILY;COUNT=5\r\n", false, dates);
+                let rid = "D2026-10-13;Exclusive".parse().unwrap();
+                let mut request = command(&state, Some(rid));
+                request.start = destination.parse().unwrap();
+                let start = request.start;
+                let item = request.execute(&mut state).unwrap();
+                let disk =
+                    CalFile::new_from_file(Arc::new("test".into()), tmp.path().join("event.ics"))
+                        .unwrap();
+                for file in [state.store().file_by_id(&item.uid).unwrap(), &disk] {
+                    let occurrence = file
+                        .occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())
+                        .unwrap();
+                    assert!(occurrence.is_all_day());
+                    assert!(occurrence.is_overwritten());
+                    assert_eq!(occurrence.occurrence_start().unwrap().naive_local(), start);
+                    assert_eq!(
+                        occurrence.occurrence_end().unwrap().naive_local(),
+                        start + Duration::days(days) - Duration::seconds(1),
+                    );
+                    let next_rid = "D2026-10-14;Exclusive".parse().unwrap();
+                    let next = file
+                        .occurrence_by_id(&item.uid, Some(&next_rid), state.timezone())
+                        .unwrap();
+                    assert!(!next.is_overwritten());
+                    assert_eq!(
+                        next.occurrence_start().unwrap().date_naive().to_string(),
+                        "2026-10-14",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn moves_and_persists_only_the_target_calendar_and_rejects_stale_moves() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), "", false);
