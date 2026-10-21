@@ -29,6 +29,11 @@ pub(crate) struct DraggedEvent {
     original_end: NaiveDateTime,
 }
 
+// No drop target accepts this type, so GTK displays its disallowed-drag cursor.
+#[derive(Clone, glib::Boxed)]
+#[boxed_type(name = "EventixBlockedEvent")]
+struct BlockedEvent;
+
 impl DraggedEvent {
     pub fn new(segment: &TimedEvent) -> Option<Self> {
         let mut payload = Self::for_month(&segment.event)?;
@@ -106,23 +111,27 @@ pub(crate) fn install_source(card: &EventCard) {
         .actions(gdk::DragAction::MOVE)
         .build();
     let weak = card.downgrade();
-    source.connect_prepare(move |source, x, y| {
+    source.connect_prepare(move |source, _, y| {
         let card = weak.upgrade()?;
         let page = card
             .ancestor(CalendarPage::static_type())?
             .downcast::<CalendarPage>()
             .ok()?;
-        if !page.can_edit() {
+        if page.can_edit() && card.resize_edge(y).is_some() {
             return None;
         }
-        let payload = card.drag_payload(y)?;
+        let payload = if page.can_edit() {
+            card.drag_payload(y)
+        } else {
+            None
+        };
+        let content = match payload {
+            Some(payload) => payload.to_value(),
+            None => BlockedEvent.to_value(),
+        };
+        source.set_icon(Some(&gdk::Paintable::new_empty(1, 1)), 0, 0);
         page.dismiss_popovers();
-        source.set_icon(
-            Some(&gtk::WidgetPaintable::new(Some(&card))),
-            x as i32,
-            y as i32,
-        );
-        Some(gdk::ContentProvider::for_value(&payload.to_value()))
+        Some(gdk::ContentProvider::for_value(&content))
     });
     card.add_controller(source);
 }
