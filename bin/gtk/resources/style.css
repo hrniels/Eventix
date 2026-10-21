@@ -162,7 +162,8 @@ button.ev_editor_section_toggle:checked {
     border-color: @error_color;
 }
 
-.ev_day_headers > label {
+.ev_day_headers > label,
+.ev_month_weekday {
     padding: 8px 0;
     font-weight: bold;
 }
@@ -181,7 +182,6 @@ button.ev_editor_section_toggle:checked {
     padding: 4px 12px;
 }
 
-.ev_month_weekday,
 .ev_cur_month {
     font-weight: bold;
 }

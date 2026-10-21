@@ -58,6 +58,9 @@
       </object>
     </child>
     <child>
+      <object class="GtkSeparator"/>
+    </child>
+    <child>
       <object class="GtkOverlay">
         <property name="hexpand">true</property>
         <child>

@@ -76,7 +76,8 @@ mod imp {
                 (MIN_WIDTH, MIN_WIDTH, -1, -1)
             } else {
                 let count = self.weeks.borrow().len() as i32;
-                (HEADER + count * MIN_ROW, HEADER + count * MAX_ROW, -1, -1)
+                let header = self.obj().weekday_header_height();
+                (header + count * MIN_ROW, header + count * MAX_ROW, -1, -1)
             }
         }
 
@@ -90,6 +91,7 @@ mod imp {
                 widget.measure(gtk::Orientation::Vertical, w);
                 widget.size_allocate(&gtk::Allocation::new(x, y, w.max(1), h.max(1)), -1);
             };
+            let header = obj.weekday_header_height();
             for (day, label) in self.weekdays.borrow().iter().enumerate() {
                 let left = day_x(width, day as f64).round() as i32;
                 let right = day_x(width, (day + 1) as f64).round() as i32;
@@ -98,10 +100,10 @@ mod imp {
                     left + GAP,
                     0,
                     right - left - 2 * GAP,
-                    HEADER,
+                    header - 1,
                 );
             }
-            let mut y = HEADER;
+            let mut y = header;
             let rows = self.rows.borrow();
             let labels = self.days.borrow();
             let weeks = self.weeks.borrow();
@@ -146,7 +148,8 @@ mod imp {
                 .with_timezone(month.locale.timezone())
                 .date_naive();
             let line = style::color(&*obj, "ev_grid_line");
-            let mut y = HEADER;
+            let header = obj.weekday_header_height();
+            let mut y = header;
             for (row, height) in obj.allocated_rows(obj.height()).into_iter().enumerate() {
                 for col in 0..7 {
                     let day = &month.days[row * 7 + col];
@@ -163,7 +166,14 @@ mod imp {
                         );
                     }
                 }
-                rect(snapshot, &line, 0.0, y as f32, obj.width() as f32, 1.0);
+                rect(
+                    snapshot,
+                    &line,
+                    0.0,
+                    (y - 1) as f32,
+                    obj.width() as f32,
+                    1.0,
+                );
                 y += height;
             }
             rect(
@@ -179,9 +189,9 @@ mod imp {
                     snapshot,
                     &line,
                     day_x(obj.width(), day as f64) as f32,
-                    HEADER as f32,
+                    header as f32,
                     1.0,
-                    (y - HEADER) as f32,
+                    (y - header) as f32,
                 );
             }
             for label in self
@@ -231,12 +241,24 @@ impl MonthGrid {
         if count == 0 {
             return Vec::new();
         }
-        let available = (height - HEADER).max(0);
+        let available = (height - self.weekday_header_height()).max(0);
         (0..count)
             .map(|row| {
                 (available / count + i32::from(row < available % count)).clamp(MIN_ROW, MAX_ROW)
             })
             .collect()
+    }
+
+    /// Matches the weekly labels' natural height, including the separator below them.
+    fn weekday_header_height(&self) -> i32 {
+        self.imp()
+            .weekdays
+            .borrow()
+            .iter()
+            .map(|label| label.measure(gtk::Orientation::Vertical, -1).1)
+            .max()
+            .unwrap_or(0)
+            + 1
     }
 
     pub fn set_month(&self, month: Rc<MonthSnapshot>) {
