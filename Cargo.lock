@@ -953,6 +953,7 @@ dependencies = [
  "chrono-tz",
  "eventix-ical",
  "eventix-locale",
+ "formatx",
  "hkdf",
  "once_cell",
  "percent-encoding",

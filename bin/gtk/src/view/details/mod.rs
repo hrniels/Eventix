@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
-use eventix_state::actions::items::{EditScope, ItemId};
+use eventix_state::actions::items::{EditScope, ItemId, OccurrenceAction};
 use eventix_view::{
     Event,
     details::{Attendee, Contact, Details, Response},
@@ -37,6 +37,7 @@ mod imp {
         pub edits: std::cell::RefCell<Vec<(gtk::Button, EditScope)>>,
         pub responses: std::cell::RefCell<Vec<(gtk::Button, CalPartStat, bool)>>,
         pub delete: std::cell::RefCell<Option<gtk::Button>>,
+        pub occurrence: std::cell::RefCell<Option<(gtk::Button, OccurrenceAction)>>,
         pub item: std::cell::RefCell<Option<ItemId>>,
         pub recurrent: std::cell::Cell<bool>,
         #[template_child]
@@ -179,6 +180,18 @@ impl EventDetails {
                         recurrent,
                         summary.clone(),
                     );
+                }
+            });
+        }
+    }
+
+    pub fn connect_occurrence(&self, callback: impl Fn(ItemId, OccurrenceAction) + 'static) {
+        if let Some((button, action)) = self.imp().occurrence.borrow().as_ref() {
+            let item = self.imp().item.borrow().clone();
+            let action = *action;
+            button.connect_clicked(move |_| {
+                if let Some(item) = &item {
+                    callback(item.clone(), action);
                 }
             });
         }
@@ -369,7 +382,7 @@ impl EventDetails {
         }
 
         if actions.cancel || actions.exclude {
-            left.append(&button(
+            let occurrence = button(
                 "dash-circle",
                 locale.translate(if actions.cancel {
                     "Cancel occ."
@@ -381,7 +394,16 @@ impl EventDetails {
                 } else {
                     ""
                 },
-            ));
+            );
+            left.append(&occurrence);
+            self.imp().occurrence.replace(Some((
+                occurrence,
+                if actions.cancel {
+                    OccurrenceAction::Cancel
+                } else {
+                    OccurrenceAction::Exclude
+                },
+            )));
         }
 
         if actions.edit {
@@ -729,6 +751,77 @@ mod tests {
     use gtk::{prelude::*, subclass::prelude::*};
 
     use super::text_markup;
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn occurrence_buttons_forward_the_selected_identity_and_action() {
+        use eventix_state::actions::items::OccurrenceAction;
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let locale = eventix_locale::default();
+        let id = OccurrenceId {
+            calendar: "cal".into(),
+            uid: "meeting".into(),
+            recurrence: "TU2026-10-13T09:00:00".into(),
+        };
+        for action in [
+            None,
+            Some(OccurrenceAction::Exclude),
+            Some(OccurrenceAction::Cancel),
+        ] {
+            let details = Details {
+                date_label: "Date",
+                date: String::new(),
+                source_date: None,
+                location: String::new(),
+                description: String::new(),
+                status: None,
+                recurrence: None,
+                reminders: None,
+                organizer: None,
+                sent_by: None,
+                attendees: vec![],
+                actions: DetailActions {
+                    exclude: action == Some(OccurrenceAction::Exclude),
+                    cancel: action == Some(OccurrenceAction::Cancel),
+                    ..Default::default()
+                },
+            };
+            let popup = super::EventDetails::from_item(
+                &id.uid,
+                &super::DetailItem {
+                    summary: "Meeting",
+                    calendar: "Test",
+                    background: "#336699",
+                    foreground: "#ffffff",
+                    details: &details,
+                    recurrent: true,
+                },
+                locale.as_ref(),
+            );
+            popup.set_identity(&id);
+            let received = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+            let result = received.clone();
+            popup.connect_occurrence(move |item, action| result.borrow_mut().push((item, action)));
+            if let Some((button, _)) = popup.imp().occurrence.borrow().as_ref() {
+                button.emit_clicked();
+            }
+            let received = received.borrow();
+            if let Some(action) = action {
+                assert_eq!(received.len(), 1);
+                assert_eq!(received[0].0.calendar, id.calendar);
+                assert_eq!(received[0].0.uid, id.uid);
+                assert_eq!(
+                    received[0].0.recurrence.as_ref().unwrap().to_string(),
+                    id.recurrence
+                );
+                assert_eq!(received[0].1, action);
+            } else {
+                assert!(received.is_empty());
+            }
+        }
+    }
 
     /// Exercises template loading, layout, symbolic resources and nested menus on a real display.
     #[test]

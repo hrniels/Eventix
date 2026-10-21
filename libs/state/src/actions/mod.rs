@@ -8,7 +8,7 @@ pub mod items;
 
 use crate::State;
 
-use items::{CreateItem, DeleteItem, ItemId, MoveEvent, RespondItem, UpdateItem};
+use items::{ChangeOccurrence, CreateItem, DeleteItem, ItemId, MoveEvent, RespondItem, UpdateItem};
 
 /// A validated application operation to execute against the authoritative state.
 #[derive(Debug)]
@@ -18,6 +18,7 @@ pub enum Command {
     UpdateItem(Box<UpdateItem>),
     DeleteItem(DeleteItem),
     RespondItem(RespondItem),
+    ChangeOccurrence(ChangeOccurrence),
 }
 
 impl Command {
@@ -29,6 +30,7 @@ impl Command {
             Self::UpdateItem(command) => std::slice::from_ref(&command.item),
             Self::DeleteItem(command) => std::slice::from_ref(&command.item),
             Self::RespondItem(command) => std::slice::from_ref(&command.item),
+            Self::ChangeOccurrence(command) => std::slice::from_ref(&command.item),
         }
     }
 
@@ -40,6 +42,7 @@ impl Command {
             Self::UpdateItem(command) => command.execute(state).map(|item| vec![item]),
             Self::DeleteItem(command) => command.execute(state).map(|item| vec![item]),
             Self::RespondItem(command) => command.execute(state).map(|item| vec![item]),
+            Self::ChangeOccurrence(command) => command.execute(state).map(|item| vec![item]),
         }
     }
 }

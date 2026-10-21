@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod change_occurrence;
 mod create;
 mod create_item;
 mod delete_item;
@@ -11,6 +12,7 @@ mod update_item;
 
 use eventix_ical::objects::CalDate;
 
+pub use change_occurrence::{ChangeOccurrence, OccurrenceAction};
 pub use create::create_component;
 pub use create_item::{CreateItem, TaskStatus};
 pub use delete_item::DeleteItem;
