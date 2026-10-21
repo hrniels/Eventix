@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::cell::RefCell;
+
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::{all_day_strip::AllDayStrip, timed_grid::TimedGrid};
@@ -13,6 +15,7 @@ pub(crate) mod imp {
     #[derive(Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/hrniels/Eventix/gtk/view/weekly/content.ui")]
     pub struct WeekContent {
+        pub time_change_icons: RefCell<Vec<gtk::Image>>,
         #[template_child]
         pub headers: gtk::TemplateChild<gtk::Box>,
         #[template_child]
@@ -66,6 +69,33 @@ pub(crate) mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.gutter.set_size_request(GUTTER, -1);
+            for label in [
+                &self.monday,
+                &self.tuesday,
+                &self.wednesday,
+                &self.thursday,
+                &self.friday,
+                &self.saturday,
+                &self.sunday,
+            ] {
+                self.headers.remove(&**label);
+                label.set_hexpand(false);
+                let header = gtk::Box::builder()
+                    .spacing(6)
+                    .halign(gtk::Align::Center)
+                    .hexpand(true)
+                    .build();
+                header.append(&**label);
+                let icon = gtk::Image::from_resource(
+                    "/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg",
+                );
+                icon.set_pixel_size(18);
+                icon.set_valign(gtk::Align::Center);
+                icon.set_visible(false);
+                header.append(&icon);
+                self.headers.append(&header);
+                self.time_change_icons.borrow_mut().push(icon);
+            }
             let top_fade = self.all_day_top_fade.downgrade();
             let bottom_fade = self.all_day_bottom_fade.downgrade();
             let update_fades = move |adjustment: &gtk::Adjustment| {

@@ -340,8 +340,17 @@ impl PageContent {
         .unwrap();
         imp.title.set_text(&title);
         imp.title.set_tooltip_text(Some(&title));
-        for (label, day) in Self::day_labels(page).into_iter().zip(&week.days) {
-            label.set_text(&locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday));
+        for ((label, icon), day) in Self::day_labels(page)
+            .into_iter()
+            .zip(imp.weekly.imp().time_change_icons.borrow().iter())
+            .zip(&week.days)
+        {
+            let text = locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday);
+            let time_change = !day.dst.is_empty();
+            label.set_text(&text);
+            icon.set_visible(time_change);
+            icon.set_tooltip_text(time_change.then(|| locale.translate("Time change")));
+            label.set_tooltip_text(time_change.then(|| locale.translate("Time change")));
         }
 
         let empty = week.all_day.is_empty() && week.days.iter().all(|d| d.timed.is_empty());

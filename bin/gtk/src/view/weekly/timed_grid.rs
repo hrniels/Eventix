@@ -145,19 +145,6 @@ mod imp {
                             day_width,
                             (range.end - range.start) as f32,
                         );
-                        let text = week.locale.translate(if range.fold {
-                            "Repeated hour"
-                        } else {
-                            "Skipped hour"
-                        });
-                        draw_text(
-                            obj.upcast_ref(),
-                            snapshot,
-                            text,
-                            x + 4.0,
-                            range.start as f32,
-                            day_width - 8.0,
-                        );
                     }
                 }
             }
@@ -191,6 +178,14 @@ mod imp {
                 );
             }
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
+            // Keep time changes visible over event cards, as in the HTML weekly view.
+            if let Some(week) = self.week.borrow().as_ref() {
+                for (i, day) in week.days.iter().enumerate() {
+                    for range in &day.dst {
+                        obj.snapshot_dst_overlay(snapshot, i, range);
+                    }
+                }
+            }
             if let Some(week) = self.week.borrow().as_ref() {
                 let now = Utc::now().with_timezone(week.locale.timezone());
                 let day = (now.date_naive() - week.start).num_days();
@@ -217,6 +212,44 @@ glib::wrapper! {
 }
 
 impl TimedGrid {
+    fn snapshot_dst_overlay(
+        &self,
+        snapshot: &gtk::Snapshot,
+        day: usize,
+        range: &eventix_view::DstRange,
+    ) {
+        let x = day_x(self.width(), day as f64) as f32;
+        let width = (self.width() - GUTTER) as f32 / 7.0;
+        let y = range.start as f32;
+        let height = (range.end - range.start) as f32;
+        let mut color = self.color();
+
+        snapshot.save();
+        snapshot.push_clip(&graphene::Rect::new(x, y, width, height));
+        snapshot.translate(&graphene::Point::new(x, y));
+        snapshot.save();
+        snapshot.rotate(-45.0);
+        color.set_alpha(0.05);
+        let mut stripe = -height;
+        while stripe < width {
+            rect(snapshot, &color, stripe, 0.0, 14.0, width + height);
+            stripe += 28.0;
+        }
+        snapshot.restore();
+
+        let layout = self.create_pango_layout(Some(if range.fold { "↑" } else { "↓" }));
+        layout.set_font_description(Some(&gtk::pango::FontDescription::from_string("20")));
+        let (text_width, text_height) = layout.pixel_size();
+        snapshot.translate(&graphene::Point::new(
+            (width - text_width as f32) / 2.0,
+            (height - text_height as f32) / 2.0,
+        ));
+        color.set_alpha(0.5);
+        snapshot.append_layout(&layout, &color);
+        snapshot.pop();
+        snapshot.restore();
+    }
+
     fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
         let preview = self.imp().drop_preview.borrow();
         let week = self.imp().week.borrow();
