@@ -9,7 +9,7 @@ use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::actions::{
     Command,
-    items::{ChangeOccurrence, RespondItem},
+    items::{ChangeOccurrence, ChangeTask, RespondItem},
 };
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
@@ -177,6 +177,15 @@ impl CalendarPage {
         imp.details.connect_dismissed(move || {
             if let Some(page) = weak.upgrade() {
                 page.imp().editor.discard_editor();
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_task(move |item, action| {
+            if let Some(page) = weak.upgrade()
+                && page.execute_command(Command::ChangeTask(ChangeTask { item, action }))
+            {
+                page.dismiss_popovers();
             }
         });
     }

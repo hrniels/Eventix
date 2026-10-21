@@ -6,7 +6,7 @@
 
 use eventix_ical::{
     col::Occurrence,
-    objects::{CalPartStat, CalRole, DateContext, EventLike},
+    objects::{CalCompType, CalPartStat, CalRole, DateContext, EventLike},
 };
 use eventix_state::{CalendarAlarmType, State};
 
@@ -53,6 +53,8 @@ pub struct DetailActions {
     pub edit: bool,
     pub cancel: bool,
     pub exclude: bool,
+    pub complete: bool,
+    pub postpone: bool,
     pub series_response: Option<Response>,
     pub occurrence_response: Option<Response>,
     pub read_only: bool,
@@ -196,6 +198,11 @@ impl Details {
                     && occ.organizer().is_some()
                     && !occ.is_cancelled(),
                 exclude: !read_only && owner && occ.is_recurrent() && occ.organizer().is_none(),
+                complete: !read_only && owner && occ.ctype() == CalCompType::Todo,
+                postpone: !read_only
+                    && owner
+                    && occ.ctype() == CalCompType::Todo
+                    && occ.end_or_due().is_some(),
                 series_response,
                 occurrence_response,
                 read_only,

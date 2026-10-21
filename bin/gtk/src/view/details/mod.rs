@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
-use eventix_state::actions::items::{EditScope, ItemId, OccurrenceAction};
+use eventix_state::actions::items::{EditScope, ItemId, OccurrenceAction, TaskAction};
 use eventix_view::{
     Event,
     details::{Attendee, Contact, Details, Response},
@@ -38,6 +38,7 @@ mod imp {
         pub responses: std::cell::RefCell<Vec<(gtk::Button, CalPartStat, bool)>>,
         pub delete: std::cell::RefCell<Option<gtk::Button>>,
         pub occurrence: std::cell::RefCell<Option<(gtk::Button, OccurrenceAction)>>,
+        pub tasks: std::cell::RefCell<Vec<(gtk::Button, TaskAction)>>,
         pub item: std::cell::RefCell<Option<ItemId>>,
         pub recurrent: std::cell::Cell<bool>,
         #[template_child]
@@ -188,6 +189,20 @@ impl EventDetails {
     pub fn connect_occurrence(&self, callback: impl Fn(ItemId, OccurrenceAction) + 'static) {
         if let Some((button, action)) = self.imp().occurrence.borrow().as_ref() {
             let item = self.imp().item.borrow().clone();
+            let action = *action;
+            button.connect_clicked(move |_| {
+                if let Some(item) = &item {
+                    callback(item.clone(), action);
+                }
+            });
+        }
+    }
+
+    pub fn connect_task(&self, callback: impl Fn(ItemId, TaskAction) + 'static) {
+        let callback = std::rc::Rc::new(callback);
+        for (button, action) in self.imp().tasks.borrow().iter() {
+            let item = self.imp().item.borrow().clone();
+            let callback = callback.clone();
             let action = *action;
             button.connect_clicked(move |_| {
                 if let Some(item) = &item {
@@ -404,6 +419,42 @@ impl EventDetails {
                     OccurrenceAction::Exclude
                 },
             )));
+        }
+
+        if actions.complete {
+            let complete = button("check-lg", locale.translate("Complete"), "ev_details_good");
+            right.append(&complete);
+            self.imp()
+                .tasks
+                .borrow_mut()
+                .push((complete, TaskAction::Complete));
+        }
+
+        if actions.postpone {
+            let choices = [
+                ("1day", 1),
+                ("2days", 2),
+                ("3days", 3),
+                ("5days", 5),
+                ("1week", 7),
+            ];
+            let items: Vec<_> = choices
+                .iter()
+                .map(|(key, _)| ("", locale.translate(key), ""))
+                .collect();
+            let (postpone, options) = menu(
+                "skip-forward-fill",
+                locale.translate("Postpone"),
+                "",
+                &items,
+            );
+            for (button, (_, days)) in options.into_iter().zip(choices) {
+                self.imp()
+                    .tasks
+                    .borrow_mut()
+                    .push((button, TaskAction::Postpone { days }));
+            }
+            right.append(&postpone);
         }
 
         if actions.edit {
@@ -628,7 +679,9 @@ fn label(text: &str) -> gtk::Label {
 fn button_content(icon_name: &str, text: &str) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     content.set_halign(gtk::Align::Center);
-    content.append(&icon(icon_name));
+    if !icon_name.is_empty() {
+        content.append(&icon(icon_name));
+    }
     content.append(&gtk::Label::new(Some(text)));
     content
 }
@@ -755,7 +808,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn occurrence_buttons_forward_the_selected_identity_and_action() {
-        use eventix_state::actions::items::OccurrenceAction;
+        use eventix_state::actions::items::{OccurrenceAction, TaskAction};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -785,6 +838,8 @@ mod tests {
                 actions: DetailActions {
                     exclude: action == Some(OccurrenceAction::Exclude),
                     cancel: action == Some(OccurrenceAction::Cancel),
+                    complete: true,
+                    postpone: true,
                     ..Default::default()
                 },
             };
@@ -801,6 +856,28 @@ mod tests {
                 locale.as_ref(),
             );
             popup.set_identity(&id);
+            let tasks = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+            let result = tasks.clone();
+            popup.connect_task(move |item, action| result.borrow_mut().push((item, action)));
+            for (button, _) in popup.imp().tasks.borrow().iter() {
+                button.emit_clicked();
+            }
+            let tasks = tasks.borrow();
+            let expected = [
+                TaskAction::Complete,
+                TaskAction::Postpone { days: 1 },
+                TaskAction::Postpone { days: 2 },
+                TaskAction::Postpone { days: 3 },
+                TaskAction::Postpone { days: 5 },
+                TaskAction::Postpone { days: 7 },
+            ];
+            assert_eq!(tasks.len(), expected.len());
+            for ((item, action), expected) in tasks.iter().zip(expected) {
+                assert_eq!(item.calendar, id.calendar);
+                assert_eq!(item.uid, id.uid);
+                assert_eq!(item.recurrence.as_ref().unwrap().to_string(), id.recurrence);
+                assert_eq!(*action, expected);
+            }
             let received = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
             let result = received.clone();
             popup.connect_occurrence(move |item, action| result.borrow_mut().push((item, action)));
@@ -923,6 +1000,7 @@ mod tests {
                             occurrence_response: invitation.then_some(Response::Tentative),
                             read_only,
                             personal_reminders: full,
+                            ..Default::default()
                         },
                     }),
                 };
