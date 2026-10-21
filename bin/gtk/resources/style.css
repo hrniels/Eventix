@@ -240,6 +240,8 @@ button.ev_event.ev_cancelled label {
 
 .ev_event_details > contents {
     padding: 0;
+    /* GTK draws the arrow over the content border; keep its base outside the body. */
+    margin-top: 1px;
 }
 
 .ev_event_details .ev_item_editor {
