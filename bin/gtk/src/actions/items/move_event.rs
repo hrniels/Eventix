@@ -9,7 +9,7 @@ use chrono_tz::Tz;
 use eventix_ical::objects::{CalDate, CalDateTime, CalendarTimeZoneResolver};
 use eventix_state::actions::{
     Command,
-    items::{ItemId, MoveEvent},
+    items::{CopyEvent, ItemId, MoveEvent},
 };
 use eventix_view::{Event, TimedEvent};
 use gtk::{gdk, glib, prelude::*};
@@ -96,7 +96,15 @@ impl DraggedEvent {
         Some((start, end))
     }
 
-    fn command(&self, start: NaiveDateTime) -> Command {
+    fn command(&self, start: NaiveDateTime, copy: bool) -> Command {
+        if copy {
+            return Command::CopyEvent(CopyEvent {
+                item: self.item.clone(),
+                start,
+                expected_start: self.expected_start,
+                expected_end: self.expected_end,
+            });
+        }
         Command::MoveEvent(MoveEvent {
             item: self.item.clone(),
             start,
@@ -108,7 +116,7 @@ impl DraggedEvent {
 
 pub(crate) fn install_source(card: &EventCard) {
     let source = gtk::DragSource::builder()
-        .actions(gdk::DragAction::MOVE)
+        .actions(gdk::DragAction::MOVE | gdk::DragAction::COPY)
         .build();
     let weak = card.downgrade();
     source.connect_prepare(move |source, _, y| {
@@ -126,7 +134,14 @@ pub(crate) fn install_source(card: &EventCard) {
             None
         };
         let content = match payload {
-            Some(payload) => payload.to_value(),
+            Some(payload) => {
+                source.set_actions(if payload.item.recurrence.is_none() {
+                    gdk::DragAction::MOVE | gdk::DragAction::COPY
+                } else {
+                    gdk::DragAction::MOVE
+                });
+                payload.to_value()
+            }
             None => BlockedEvent.to_value(),
         };
         source.set_icon(Some(&gdk::Paintable::new_empty(1, 1)), 0, 0);
@@ -160,7 +175,10 @@ impl MoveTarget for TimedGrid {
 }
 
 pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
-    let target = gtk::DropTarget::new(DraggedEvent::static_type(), gdk::DragAction::MOVE);
+    let target = gtk::DropTarget::new(
+        DraggedEvent::static_type(),
+        gdk::DragAction::MOVE | gdk::DragAction::COPY,
+    );
     target.set_preload(true);
     let position = Rc::new(Cell::new(None));
     let last_position = position.clone();
@@ -198,7 +216,7 @@ pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
         }
     });
     let weak = grid.downgrade();
-    target.connect_drop(move |_, value, x, y| {
+    target.connect_drop(move |target, value, x, y| {
         position.set(None);
         let Some(grid) = weak.upgrade() else {
             return false;
@@ -216,7 +234,11 @@ pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
         else {
             return false;
         };
-        page.execute_command(payload.command(start))
+        let copy = target
+            .current_drop()
+            .and_then(|drop| drop.drag())
+            .is_some_and(|drag| drag.selected_action() == gdk::DragAction::COPY);
+        page.execute_command(payload.command(start, copy))
     });
     grid.add_controller(target);
 }
@@ -235,13 +257,28 @@ fn preview<T: MoveTarget>(grid: &T, target: &gtk::DropTarget, x: f64, y: f64) ->
         .and_then(|value| value.get::<DraggedEvent>().ok());
     let Some(payload) = payload else {
         grid.clear_drop_preview();
-        return gdk::DragAction::MOVE;
+        return drag_action(target);
     };
     if grid.show_move_preview(&payload, x, y) {
-        return gdk::DragAction::MOVE;
+        return drag_action(target);
     }
     grid.clear_drop_preview();
     gdk::DragAction::empty()
+}
+
+fn drag_action(target: &gtk::DropTarget) -> gdk::DragAction {
+    let allows_copy = target
+        .current_drop()
+        .is_some_and(|drop| drop.actions().contains(gdk::DragAction::COPY));
+    if allows_copy
+        && target
+            .current_event_state()
+            .contains(gdk::ModifierType::CONTROL_MASK)
+    {
+        gdk::DragAction::COPY
+    } else {
+        gdk::DragAction::MOVE
+    }
 }
 
 #[cfg(test)]

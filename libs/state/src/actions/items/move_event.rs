@@ -161,6 +161,7 @@ mod tests {
     use eventix_ical::objects::{EventLike, RangeEdge};
 
     use super::{ItemId, MoveEvent, ResizeEvent};
+    use crate::actions::items::CopyEvent;
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, recurrence: &str, read_only: bool) -> State {
@@ -195,6 +196,7 @@ mod tests {
         });
         let mut settings = CalendarSettings::default();
         settings.set_enabled(true);
+        settings.set_types(vec![eventix_ical::objects::CalCompType::Event]);
         collection
             .all_calendars_mut()
             .insert("test".into(), settings);
@@ -219,6 +221,72 @@ mod tests {
             start: "2026-10-15T14:30:00".parse().unwrap(),
             expected_start: occurrence.occurrence_start().unwrap().to_utc(),
             expected_end: occurrence.occurrence_end().unwrap().to_utc(),
+        }
+    }
+
+    fn copy(request: MoveEvent) -> CopyEvent {
+        CopyEvent {
+            item: request.item,
+            start: request.start,
+            expected_start: request.expected_start,
+            expected_end: request.expected_end,
+        }
+    }
+
+    #[test]
+    fn copying_preserves_source_details_and_span_in_memory_and_on_disk() {
+        for dates in [
+            "DTSTART:20261012T090000Z\r\nDTEND:20261012T100000Z\r\n",
+            "DTSTART;VALUE=DATE:20261012\r\nDTEND;VALUE=DATE:20261014\r\n",
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = fixture_with_dates(tmp.path(), "", false, dates);
+            let original = fs::read(tmp.path().join("event.ics")).unwrap();
+            let request = command(&state, None);
+            let span = request.expected_end - request.expected_start;
+            let item = copy(request).execute(&mut state).unwrap();
+            assert_ne!(item.uid, "move-me");
+            assert!(item.recurrence.is_none());
+            assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
+            let disk = CalFile::new_from_file(
+                Arc::new("test".into()),
+                tmp.path().join(format!("{}.ics", item.uid)),
+            )
+            .unwrap();
+            for file in [state.store().file_by_id(&item.uid).unwrap(), &disk] {
+                let occurrence = file
+                    .occurrence_by_id(&item.uid, None, state.timezone())
+                    .unwrap();
+                assert_eq!(occurrence.summary().map(String::as_str), Some("Move me"));
+                let start = occurrence.occurrence_start().unwrap();
+                let end = occurrence.occurrence_end().unwrap();
+                assert_eq!(start.date_naive().to_string(), "2026-10-15");
+                assert_eq!(end - start, span);
+                if !occurrence.is_all_day() {
+                    assert_eq!(start.time().to_string(), "14:30:00");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn copying_rejects_stale_read_only_and_recurring_events_without_creating_files() {
+        for (recurrence, read_only, stale) in [
+            ("", false, true),
+            ("", true, false),
+            ("RRULE:FREQ=DAILY;COUNT=5\r\n", false, false),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = fixture(tmp.path(), recurrence, read_only);
+            let mut request = copy(command(&state, None));
+            if stale {
+                request.expected_start += Duration::minutes(1);
+            }
+            let original = fs::read(tmp.path().join("event.ics")).unwrap();
+            let files = fs::read_dir(tmp.path()).unwrap().count();
+            assert!(request.execute(&mut state).is_err());
+            assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), files);
+            assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
         }
     }
 

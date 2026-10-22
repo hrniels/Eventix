@@ -4,6 +4,7 @@
 
 mod change_occurrence;
 mod change_task;
+mod copy_event;
 mod create;
 mod create_item;
 mod delete_item;
@@ -15,6 +16,7 @@ use eventix_ical::objects::CalDate;
 
 pub use change_occurrence::{ChangeOccurrence, OccurrenceAction};
 pub use change_task::{ChangeTask, TaskAction};
+pub use copy_event::CopyEvent;
 pub use create::create_component;
 pub use create_item::{CreateItem, TaskStatus};
 pub use delete_item::DeleteItem;
