@@ -479,8 +479,24 @@ impl FixedObservance {
             // Embedded observance rules are expanded as local wall-clock transition starts. The
             // resolver later interprets these starts together with offset_from/offset_to to detect
             // gaps and folds.
-            for year in start_year..=end_year {
-                starts.extend(expand_observance_rrule(self.dtstart, rrule, year));
+            let until = rrule.until().map(|until| match until {
+                CalDate::Date(day, _) => day.and_hms_opt(23, 59, 59).unwrap(),
+                CalDate::DateTime(CalDateTime::Floating(local))
+                | CalDate::DateTime(CalDateTime::Timezone(local, _)) => *local,
+                // Transition starts use the offset before the change, including during folds
+                // and gaps. Accept local UNTIL values too, as emitted by some calendar clients.
+                CalDate::DateTime(CalDateTime::Utc(utc)) => {
+                    utc.naive_utc() + Duration::seconds(i64::from(self.offset_from.as_seconds()))
+                }
+            });
+            for year in start_year.max(self.dtstart.year())..=end_year {
+                starts.extend(
+                    expand_observance_rrule(self.dtstart, rrule, year)
+                        .into_iter()
+                        .filter(|start| {
+                            *start >= self.dtstart && until.is_none_or(|until| *start <= until)
+                        }),
+                );
             }
         }
 
@@ -583,6 +599,99 @@ mod tests {
     use chrono_tz::Tz;
 
     use super::*;
+
+    #[test]
+    fn expired_observance_rule_does_not_override_current_berlin_summer_time() {
+        use crate::objects::EventLike;
+
+        let calendar: Calendar = "BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+BEGIN:STANDARD
+DTSTART:19431004T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1MO;UNTIL=19441002T030000
+END:STANDARD
+BEGIN:STANDARD
+DTSTART:19971026T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19970330T020000
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:expired-observance
+DTSTAMP:20261021T065852Z
+DTSTART;TZID=Europe/Berlin:20261022T110000
+DTEND;TZID=Europe/Berlin:20261022T123000
+END:VEVENT
+END:VCALENDAR
+"
+        .parse()
+        .unwrap();
+        let resolver = calendar.timezone_resolver();
+        let event = &calendar.components()[0];
+        let berlin = Tz::Europe__Berlin;
+        let start = resolver.resolve_date_start(event.start().unwrap(), &berlin);
+        let end = resolver.resolve_date_end(event.end_or_due().unwrap(), &berlin);
+
+        assert_eq!(start.to_rfc3339(), "2026-10-22T11:00:00+02:00");
+        assert_eq!(
+            start.with_timezone(&berlin).to_rfc3339(),
+            "2026-10-22T11:00:00+02:00"
+        );
+        assert_eq!(end.to_rfc3339(), "2026-10-22T12:30:00+02:00");
+    }
+
+    #[test]
+    fn observance_until_is_inclusive_and_only_limits_rrule_starts() {
+        for (until, includes_last) in [
+            ("20261025T030000", true),
+            ("20261025T025959", false),
+            ("20261025T010000Z", true),
+            ("20261025T005959Z", false),
+        ] {
+            let calendar: Calendar = format!(
+                "BEGIN:VCALENDAR
+BEGIN:VTIMEZONE
+TZID:Test/Until
+BEGIN:STANDARD
+DTSTART:20241027T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU;UNTIL={until}
+RDATE:20271031T030000
+END:STANDARD
+END:VTIMEZONE
+END:VCALENDAR
+"
+            )
+            .parse()
+            .unwrap();
+            let observance =
+                FixedObservance::compile(&calendar.timezones()[0].observances()[0]).unwrap();
+            let starts = observance.transition_starts(2023, 2028);
+            let mut expected = vec!["2024-10-27T03:00:00", "2025-10-26T03:00:00"];
+            if includes_last {
+                expected.push("2026-10-25T03:00:00");
+            }
+            expected.push("2027-10-31T03:00:00");
+            let expected: Vec<NaiveDateTime> = expected
+                .into_iter()
+                .map(|date| date.parse().unwrap())
+                .collect();
+
+            assert_eq!(starts, expected, "UNTIL={until}");
+        }
+    }
 
     #[test]
     fn observance_byday_without_ordinal_expands_all_matching_weekdays() {
