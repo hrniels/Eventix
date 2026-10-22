@@ -138,7 +138,7 @@ pub(crate) fn install(card: &EventCard) {
             }
         }
         if let Some(card) = weak.upgrade() {
-            card.set_cursor_from_name(None);
+            card.set_cursor_from_name(Some("pointer"));
         }
     });
     let state = active.clone();
@@ -148,7 +148,7 @@ pub(crate) fn install(card: &EventCard) {
             resize.grid.clear_drop_preview();
         }
         if let Some(card) = weak.upgrade() {
-            card.set_cursor_from_name(None);
+            card.set_cursor_from_name(Some("pointer"));
         }
     });
     let keys = gtk::EventControllerKey::new();
@@ -171,11 +171,12 @@ pub(crate) fn install(card: &EventCard) {
         if let Some(resize) = active.take() {
             resize.grid.clear_drop_preview();
         }
-        card.set_cursor_from_name(None);
+        card.set_cursor_from_name(Some("pointer"));
     });
 }
 
 fn install_cursor(card: &EventCard) {
+    card.set_cursor_from_name(Some("pointer"));
     let motion = gtk::EventControllerMotion::new();
     let weak = card.downgrade();
     motion.connect_motion(move |_, _, y| {
@@ -184,20 +185,18 @@ fn install_cursor(card: &EventCard) {
                 .ancestor(CalendarPage::static_type())
                 .and_downcast::<CalendarPage>()
                 .is_some_and(|page| page.can_edit());
-            card.set_cursor_from_name(if editable {
-                card.resize_edge(y).map(|edge| match edge {
-                    RangeEdge::Start => "n-resize",
-                    RangeEdge::End => "s-resize",
-                })
-            } else {
-                None
-            });
+            let edge = editable.then(|| card.resize_edge(y)).flatten();
+            card.set_cursor_from_name(Some(match edge {
+                Some(RangeEdge::Start) => "n-resize",
+                Some(RangeEdge::End) => "s-resize",
+                None => "pointer",
+            }));
         }
     });
     let weak = card.downgrade();
     motion.connect_leave(move |_| {
         if let Some(card) = weak.upgrade() {
-            card.set_cursor_from_name(None);
+            card.set_cursor_from_name(Some("pointer"));
         }
     });
     card.add_controller(motion);

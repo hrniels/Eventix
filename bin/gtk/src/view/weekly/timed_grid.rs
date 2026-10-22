@@ -16,6 +16,7 @@ use crate::{
     style,
     view::{
         card::EventCard,
+        creation_hint::{CreationHint, snapshot_hint},
         popover::DetailsController,
         surface::{CardKey, Surface},
     },
@@ -28,6 +29,7 @@ mod imp {
     pub struct TimedGrid {
         pub(super) surface: Rc<Surface>,
         pub week: RefCell<Option<Rc<WeekSnapshot>>>,
+        pub(super) creation_hint: Rc<CreationHint>,
         pub(super) drop_preview: RefCell<Option<(DateTime<Tz>, DateTime<Tz>)>>,
     }
 
@@ -43,6 +45,9 @@ mod imp {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
             crate::actions::items::move_event::install_target(&*self.obj());
+            self.creation_hint.install(&*self.obj(), |grid, x, y| {
+                grid.drop_start(x, y, 0).is_some()
+            });
         }
 
         fn dispose(&self) {
@@ -201,6 +206,9 @@ mod imp {
                 }
             }
             obj.snapshot_drop_preview(snapshot);
+            if self.drop_preview.borrow().is_none() {
+                obj.snapshot_creation_hint(snapshot);
+            }
         }
     }
 }
@@ -212,6 +220,25 @@ glib::wrapper! {
 }
 
 impl TimedGrid {
+    fn snapshot_creation_hint(&self, snapshot: &gtk::Snapshot) {
+        let Some((x, y)) = self.imp().creation_hint.position() else {
+            return;
+        };
+        let Some(start) = self.drop_start(x, (y / 60.0).floor() * 60.0, 0) else {
+            return;
+        };
+        let week = self.imp().week.borrow();
+        let Some(week) = week.as_ref() else { return };
+        let col = (start.date() - week.start).num_days();
+        let left = day_x(self.width(), col as f64) as f32;
+        let right = day_x(self.width(), (col + 1) as f64) as f32;
+        snapshot_hint(
+            self,
+            snapshot,
+            graphene::Rect::new(left, (start.hour() * 60) as f32, right - left, 60.0),
+        );
+    }
+
     fn snapshot_dst_overlay(
         &self,
         snapshot: &gtk::Snapshot,
@@ -347,6 +374,7 @@ impl TimedGrid {
     }
 
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
+        self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
         let surface = &self.imp().surface;
         let keys = week

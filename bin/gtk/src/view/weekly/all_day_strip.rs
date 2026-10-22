@@ -14,6 +14,7 @@ use crate::{
     style,
     view::{
         card::EventCard,
+        creation_hint::{CreationHint, snapshot_hint},
         popover::DetailsController,
         surface::{CardKey, Surface},
     },
@@ -28,6 +29,7 @@ mod imp {
     pub struct AllDayStrip {
         pub(super) surface: Rc<Surface>,
         pub week: RefCell<Option<Rc<WeekSnapshot>>>,
+        pub(super) creation_hint: Rc<CreationHint>,
         pub(super) drop_preview: RefCell<Option<(NaiveDate, NaiveDate)>>,
     }
 
@@ -43,6 +45,8 @@ mod imp {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
             move_event::install_target(&*self.obj());
+            self.creation_hint
+                .install(&*self.obj(), |strip, x, y| strip.date_at(x, y).is_some());
         }
 
         fn dispose(&self) {
@@ -133,6 +137,9 @@ mod imp {
             }
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
             obj.snapshot_drop_preview(snapshot);
+            if self.drop_preview.borrow().is_none() {
+                obj.snapshot_creation_hint(snapshot);
+            }
         }
     }
 }
@@ -144,6 +151,25 @@ glib::wrapper! {
 }
 
 impl AllDayStrip {
+    fn snapshot_creation_hint(&self, snapshot: &gtk::Snapshot) {
+        let Some((x, y)) = self.imp().creation_hint.position() else {
+            return;
+        };
+        let Some(col) = drop_day(self.width(), self.height(), x, y) else {
+            return;
+        };
+        if self.imp().week.borrow().is_none() {
+            return;
+        }
+        let left = day_x(self.width(), col as f64) as f32;
+        let right = day_x(self.width(), (col + 1) as f64) as f32;
+        snapshot_hint(
+            self,
+            snapshot,
+            graphene::Rect::new(left, 0.0, right - left, self.height() as f32),
+        );
+    }
+
     pub(crate) fn date_at(&self, x: f64, y: f64) -> Option<NaiveDate> {
         let col = drop_day(self.width(), self.height(), x, y)?;
         Some(self.imp().week.borrow().as_ref()?.days.get(col)?.date)
@@ -204,6 +230,7 @@ impl AllDayStrip {
     }
 
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
+        self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
         let surface = &self.imp().surface;
         let keys = week

@@ -6,7 +6,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
-use crate::view::card::EventCard;
+use crate::view::creation_hint::is_creation_target;
 
 #[derive(Clone, Copy)]
 pub(super) struct EventSlot {
@@ -74,18 +74,8 @@ impl CalendarPage {
             let Some(widget) = gesture.widget() else {
                 return;
             };
-            // Observe card presses before their buttons consume them, while excluding controls.
-            let mut picked = widget.pick(x, y, gtk::PickFlags::DEFAULT);
-            while let Some(child) = picked {
-                if (child.is::<gtk::Button>() && !child.is::<EventCard>())
-                    || child.is::<gtk::Scrollbar>()
-                {
-                    return;
-                }
-                if child == widget {
-                    break;
-                }
-                picked = child.parent();
+            if !is_creation_target(&widget, x, y) {
+                return;
             }
             if let Some(page) = weak.upgrade()
                 && let Some(slot) = slot_at(&page, x, y)

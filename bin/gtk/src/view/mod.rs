@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub(crate) mod card;
+mod creation_hint;
 pub mod details;
 pub(crate) mod editor;
 mod geometry;

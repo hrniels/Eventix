@@ -14,6 +14,7 @@ use crate::actions::items::move_event::{self, DraggedEvent, MoveTarget};
 use crate::style;
 use crate::view::{
     card::EventCard,
+    creation_hint::{CreationHint, snapshot_hint},
     geometry::{GUTTER, MIN_WIDTH, day_x, rect},
     popover::DetailsController,
 };
@@ -48,6 +49,7 @@ mod imp {
     #[derive(Default)]
     pub struct MonthGrid {
         pub(super) details: RefCell<Rc<DetailsController>>,
+        pub(super) creation_hint: Rc<CreationHint>,
         pub month: RefCell<Option<Rc<MonthSnapshot>>>,
         pub weekdays: RefCell<Vec<gtk::Label>>,
         pub days: RefCell<Vec<gtk::Label>>,
@@ -70,6 +72,8 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             move_event::install_target(&*self.obj());
+            self.creation_hint
+                .install(&*self.obj(), |grid, x, y| grid.drop_date(x, y).is_some());
         }
 
         fn dispose(&self) {
@@ -231,6 +235,9 @@ mod imp {
                 obj.snapshot_child(row, snapshot);
             }
             obj.snapshot_drop_preview(snapshot);
+            if self.drop_preview.borrow().is_none() {
+                obj.snapshot_creation_hint(snapshot);
+            }
         }
     }
 }
@@ -242,6 +249,31 @@ glib::wrapper! {
 }
 
 impl MonthGrid {
+    fn snapshot_creation_hint(&self, snapshot: &gtk::Snapshot) {
+        let Some((x, y)) = self.imp().creation_hint.position() else {
+            return;
+        };
+        let rows = self.allocated_rows(self.height());
+        let header = self.weekday_header_height();
+        let Some(index) = drop_day(self.width(), header, &rows, x, y) else {
+            return;
+        };
+        let row = index / 7;
+        let col = index % 7;
+        let left = day_x(self.width(), col as f64) as f32;
+        let right = day_x(self.width(), (col + 1) as f64) as f32;
+        snapshot_hint(
+            self,
+            snapshot,
+            graphene::Rect::new(
+                left,
+                (header + rows[..row].iter().sum::<i32>()) as f32,
+                right - left,
+                rows[row] as f32,
+            ),
+        );
+    }
+
     pub(crate) fn drop_date(&self, x: f64, y: f64) -> Option<NaiveDate> {
         let index = drop_day(
             self.width(),
@@ -370,6 +402,7 @@ impl MonthGrid {
     }
 
     pub fn set_month(&self, month: Rc<MonthSnapshot>) {
+        self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
         let imp = self.imp();
         let changed = imp
