@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792672035442,
+  "lastUpdate": 1792672100086,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -12373,6 +12373,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 14946220.714285713,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "32a58c3f78fc73dbd393e511bae5a7669d05ecf0",
+          "message": "Handle UNTIL in VTIMEZONE properly",
+          "timestamp": "2026-10-03T06:31:44Z",
+          "url": "https://github.com/hrniels/Eventix/pull/66/commits/32a58c3f78fc73dbd393e511bae5a7669d05ecf0"
+        },
+        "date": 1792672099418,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 19762658.949999996,
             "unit": "ns"
           }
         ]
