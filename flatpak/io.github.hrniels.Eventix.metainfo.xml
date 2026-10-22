@@ -88,6 +88,13 @@
   </screenshots>
 
   <releases>
+    <release version="1.2.1" date="2026-10-22">
+      <description>
+        <ul>
+          <li>Handle UNTIL in VTIMEZONE properly.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-10-03">
       <description>
         <ul>
