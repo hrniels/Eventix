@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1792671958046,
+  "lastUpdate": 1792672035442,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -10004,6 +10004,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/weekly/content/explicit_week",
             "value": 32375701.344444443,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "32a58c3f78fc73dbd393e511bae5a7669d05ecf0",
+          "message": "Handle UNTIL in VTIMEZONE properly",
+          "timestamp": "2026-10-03T06:31:44Z",
+          "url": "https://github.com/hrniels/Eventix/pull/66/commits/32a58c3f78fc73dbd393e511bae5a7669d05ecf0"
+        },
+        "date": 1792672034729,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/weekly/content/current_week",
+            "value": 1275600.9494573295,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/dense_week",
+            "value": 1781002.9360377768,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/weekly/content/explicit_week",
+            "value": 42240465.199999996,
             "unit": "ns"
           }
         ]
