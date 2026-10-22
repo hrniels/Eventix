@@ -15,7 +15,7 @@ use super::{AlarmInput, AttendeeInput, AttendeeSection, ItemEditor};
 
 impl ItemEditor {
     pub fn edit(id: u64, mut options: EditorOptions, edit: UpdateItem) -> Rc<Self> {
-        // Populate before connecting timezone conversion and validation signals.
+        // Populate before connecting timezone conversion signals.
         options.last_calendar = Some(edit.item.calendar.clone());
         if let Some(start) = edit.fields.start.as_ref().or(edit.fields.end.as_ref()) {
             options.start = DateContext::system()
@@ -30,9 +30,7 @@ impl ItemEditor {
         editor.initial.replace(editor.command().ok());
         editor.existing.replace(Some(edit));
         editor.connect_timezone();
-        editor.connect_feedback();
         editor.update_previews();
-        editor.update_feedback();
         editor.connect_previews();
         editor.connect_task_dates();
         editor

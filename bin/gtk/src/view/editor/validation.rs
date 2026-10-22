@@ -35,11 +35,6 @@ pub(crate) struct Issue {
 }
 
 impl ItemEditor {
-    /// Collects independent input failures before running dependent range checks.
-    pub(super) fn validate(&self) -> Vec<Issue> {
-        self.command().err().unwrap_or_default()
-    }
-
     /// Builds a command from parsed inputs or returns all actionable field errors.
     pub fn command(&self) -> Result<Box<CreateItem>, Vec<Issue>> {
         let locale = self.options.locale.as_ref();

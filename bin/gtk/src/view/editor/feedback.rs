@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::rc::Rc;
-
 use gtk::{accessible, prelude::*};
 
 use super::{
@@ -125,9 +123,6 @@ impl ItemEditor {
 
     /// Presents all field errors and reveals the first invalid control on Save.
     pub fn show_validation_errors(&self, issues: &[Issue]) {
-        self.summary_touched.set(true);
-        self.attendee_save_error
-            .set(issues.iter().any(|issue| issue.field == Field::NewAttendee));
         self.error.set_visible(false);
         self.present_issues(issues);
         if let Some(first) = issues.first()
@@ -160,57 +155,6 @@ impl ItemEditor {
                 }
             });
         }
-    }
-
-    pub(super) fn connect_feedback(self: &Rc<Self>) {
-        let focus = gtk::EventControllerFocus::new();
-        let weak = Rc::downgrade(self);
-        focus.connect_leave(move |_| {
-            if let Some(editor) = weak.upgrade() {
-                editor.summary_touched.set(true);
-            }
-        });
-        self.summary.add_controller(focus);
-
-        self.connect_focus_feedback();
-    }
-
-    fn connect_focus_feedback(self: &Rc<Self>) {
-        let weak = Rc::downgrade(self);
-        self.form.connect_root_notify(move |form| {
-            let Some(window) = form.root().and_downcast::<gtk::Window>() else {
-                return;
-            };
-
-            let weak = weak.clone();
-            window.connect_focus_widget_notify(move |_| {
-                let Some(editor) = weak.upgrade() else {
-                    return;
-                };
-
-                // Date range synchronization must finish before the errors are checked.
-                gtk::glib::idle_add_local_once(move || {
-                    if editor.form.is_mapped() {
-                        editor.update_feedback();
-                    }
-                });
-            });
-        });
-    }
-
-    pub(super) fn update_feedback(&self) {
-        let mut issues = self.validate();
-        if !self.summary_touched.get() {
-            issues.retain(|issue| issue.field != Field::Summary);
-        }
-        if self.new_attendee.text().trim().is_empty() {
-            self.attendee_save_error.set(false);
-        }
-        if !self.attendee_save_error.get() {
-            issues.retain(|issue| issue.field != Field::NewAttendee);
-        }
-
-        self.present_issues(&issues);
     }
 
     fn present_issues(&self, issues: &[Issue]) {
@@ -261,7 +205,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn field_errors_update_on_focus_changes_and_save_reveals_first_error() {
+    fn field_errors_update_only_on_save_and_reveal_first_error() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         crate::style::install(&gtk::gdk::Display::default().unwrap());
@@ -318,17 +262,17 @@ mod tests {
             assert!(!editor.summary.has_css_class("ev_editor_invalid"));
             editor.location.grab_focus();
             drain();
-            assert!(editor.summary.has_css_class("ev_editor_invalid"));
+            assert!(!editor.summary.has_css_class("ev_editor_invalid"));
             editor.summary.set_text("Meeting");
             drain();
-            assert!(editor.summary.has_css_class("ev_editor_invalid"));
+            assert!(!editor.summary.has_css_class("ev_editor_invalid"));
             change_focus(&editor);
             assert!(!editor.summary.has_css_class("ev_editor_invalid"));
             editor.summary.set_text("");
             drain();
             assert!(!editor.summary.has_css_class("ev_editor_invalid"));
             change_focus(&editor);
-            assert!(editor.summary.has_css_class("ev_editor_invalid"));
+            assert!(!editor.summary.has_css_class("ev_editor_invalid"));
 
             editor.start.entry.set_text("bad date");
             editor.end.entry.set_text("bad date");
@@ -348,14 +292,14 @@ mod tests {
             assert!(!editor.new_attendee.has_css_class("ev_editor_invalid"));
             assert!(!editor.start.entry.has_css_class("ev_editor_invalid"));
             change_focus(&editor);
-            assert!(editor.start.entry.has_css_class("ev_editor_invalid"));
-            assert!(
+            assert!(!editor.start.entry.has_css_class("ev_editor_invalid"));
+            assert_eq!(
                 editor
                     .feedback
                     .iter()
                     .filter(|field| field.message.is_visible())
-                    .count()
-                    == 10
+                    .count(),
+                0
             );
             assert!(
                 editor
@@ -404,10 +348,11 @@ mod tests {
             editor.summary.set_text("Meeting");
             assert!(editor.summary.has_css_class("ev_editor_invalid"));
             change_focus(&editor);
-            assert!(!editor.summary.has_css_class("ev_editor_invalid"));
-            // A different invalid section is opened only by Save, never by live validation.
+            assert!(editor.summary.has_css_class("ev_editor_invalid"));
+            // The next Save refreshes all errors and reveals the next invalid section.
             assert!(!editor.sections[0].toggle.is_active());
             editor.show_validation_errors(&editor.command().unwrap_err());
+            assert!(!editor.summary.has_css_class("ev_editor_invalid"));
             assert!(editor.sections[0].toggle.is_active());
             drain();
             if let Some(directory) = std::env::var_os("EVENTIX_EDITOR_SCREENSHOTS") {
@@ -432,13 +377,24 @@ mod tests {
             editor.end.entry.set_text("2026-10-15");
             editor.all_day.set_active(true);
             change_focus(&editor);
+            assert!(editor.start_time.has_css_class("ev_editor_invalid"));
+            editor.show_validation_errors(&editor.command().unwrap_err());
             assert!(!editor.start_time.has_css_class("ev_editor_invalid"));
             assert!(!editor.end_time.has_css_class("ev_editor_invalid"));
             editor.alarm.trigger.set_selected(0);
             change_focus(&editor);
+            assert!(editor.alarm.date.entry.has_css_class("ev_editor_invalid"));
+            editor.show_validation_errors(&editor.command().unwrap_err());
             assert!(!editor.alarm.date.entry.has_css_class("ev_editor_invalid"));
             editor.personal_override.set_active(false);
             change_focus(&editor);
+            assert!(
+                editor
+                    .personal_alarm
+                    .time
+                    .has_css_class("ev_editor_invalid")
+            );
+            editor.show_validation_errors(&editor.command().unwrap_err());
             assert!(
                 !editor
                     .personal_alarm
@@ -448,6 +404,14 @@ mod tests {
             editor.recurrence.frequency.set_selected(0);
             change_focus(&editor);
             assert!(
+                editor
+                    .recurrence
+                    .until
+                    .entry
+                    .has_css_class("ev_editor_invalid")
+            );
+            editor.show_validation_errors(&editor.command().unwrap_err());
+            assert!(
                 !editor
                     .recurrence
                     .until
@@ -456,6 +420,9 @@ mod tests {
             );
             editor.new_attendee.set_text("");
             change_focus(&editor);
+            assert!(editor.new_attendee.has_css_class("ev_editor_invalid"));
+            assert!(editor.command().is_ok());
+            editor.clear_errors();
             assert!(!editor.new_attendee.has_css_class("ev_editor_invalid"));
             editor.new_attendee.set_text("Bob <bob@example.org>");
             assert!(!editor.new_attendee.has_css_class("ev_editor_invalid"));

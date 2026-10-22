@@ -64,8 +64,6 @@ pub(crate) struct ItemEditor {
     previews: Vec<gtk::Label>,
     sections: Vec<FormSection>,
     feedback: Vec<feedback::FieldFeedback>,
-    summary_touched: Cell<bool>,
-    attendee_save_error: Cell<bool>,
     _completions: Vec<completion::Completion>,
 }
 
@@ -86,9 +84,7 @@ impl ItemEditor {
         editor.install_feedback();
         let editor = Rc::new(editor);
         editor.connect_timezone();
-        editor.connect_feedback();
         editor.update_previews();
-        editor.update_feedback();
         editor.connect_previews();
         editor.connect_task_dates();
         editor
@@ -170,8 +166,6 @@ impl ItemEditor {
             previews,
             sections,
             feedback: Vec::new(),
-            summary_touched: Cell::new(false),
-            attendee_save_error: Cell::new(false),
             _completions: vec![location_completion, attendees.completion],
         }
     }
@@ -320,7 +314,6 @@ impl ItemEditor {
             toggle.connect_toggled(move |_| {
                 if let Some(editor) = weak.upgrade() {
                     editor.update_task_reminders();
-                    editor.update_feedback();
                 }
             });
         }
