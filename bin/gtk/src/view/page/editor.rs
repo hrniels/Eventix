@@ -13,6 +13,7 @@ use eventix_view::editor::EditorOptions;
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
+use super::create::EventSlot;
 use crate::model::session::{ChangeSet, SavedItem};
 use crate::view::details::EventDetails;
 use crate::view::editor::{ItemEditor, has_nested_popup, is_save_key};
@@ -23,6 +24,7 @@ pub(super) struct PageEditor {
     pub(super) current: RefCell<Option<Rc<ItemEditor>>>,
     request: Cell<u64>,
     loading: Cell<bool>,
+    slot: Cell<Option<EventSlot>>,
 }
 
 impl PageEditor {
@@ -88,6 +90,7 @@ impl PageEditor {
     pub(super) fn discard_editor(&self) {
         self.current.take();
         self.loading.set(false);
+        self.slot.set(None);
         self.request.set(self.request.get().wrapping_add(1));
     }
 
@@ -125,6 +128,14 @@ impl PageEditor {
     }
 
     pub(super) fn new_item(&self, page: &CalendarPage, kind: CalCompType) {
+        self.new_item_at(page, kind, None);
+    }
+
+    pub(super) fn new_event_at(&self, page: &CalendarPage, slot: EventSlot) {
+        self.new_item_at(page, CalCompType::Event, Some(slot));
+    }
+
+    fn new_item_at(&self, page: &CalendarPage, kind: CalCompType, slot: Option<EventSlot>) {
         if self.editor_open() {
             return;
         }
@@ -132,6 +143,7 @@ impl PageEditor {
         if let Some(session) = page.imp().session.current.borrow().as_ref() {
             page.dismiss_popovers();
             let id = self.begin_request();
+            self.slot.set(slot);
             session.prepare_editor(id, kind);
         }
     }
@@ -217,7 +229,18 @@ impl PageEditor {
 
         self.loading.set(false);
         match result {
-            Ok(options) => self.present_editor(page, ItemEditor::new(id, options)),
+            Ok(mut options) => {
+                let slot = self.slot.take();
+                if let Some(slot) = slot {
+                    options.start = slot.start;
+                }
+                let editor = if slot.is_some_and(|slot| slot.all_day) {
+                    ItemEditor::new_at(id, options, true)
+                } else {
+                    ItemEditor::new(id, options)
+                };
+                self.present_editor(page, editor);
+            }
             Err(error) => page.show_error("Could not load local calendars", &error),
         }
     }

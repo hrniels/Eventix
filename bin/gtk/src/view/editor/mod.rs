@@ -71,7 +71,18 @@ pub(crate) struct ItemEditor {
 
 impl ItemEditor {
     pub fn new(id: u64, options: EditorOptions) -> Rc<Self> {
+        Self::new_at(id, options, false)
+    }
+
+    pub(crate) fn new_at(id: u64, options: EditorOptions, all_day: bool) -> Rc<Self> {
         let mut editor = Self::build(id, options);
+        if all_day {
+            editor
+                .end
+                .entry
+                .set_text(&editor.options.start.date().to_string());
+            editor.all_day.set_active(true);
+        }
         editor.install_feedback();
         let editor = Rc::new(editor);
         editor.connect_timezone();
@@ -1432,6 +1443,45 @@ mod tests {
 
     use super::{CalDate, DateInput, DateSection, ItemEditor};
 
+    fn assert_slot_creation_defaults() {
+        for (start, all_day, expected_end) in [
+            ("2026-10-22T10:00:00", false, "2026-10-22T11:00:00"),
+            ("2026-10-22T23:00:00", false, "2026-10-23T00:00:00"),
+            ("2026-10-22T00:00:00", true, "2026-10-23T00:00:00"),
+        ] {
+            let options = EditorOptions {
+                kind: eventix_ical::objects::CalCompType::Event,
+                calendars: vec![EditorCalendar {
+                    id: "test".into(),
+                    name: "Test".into(),
+                    background: "#27c281".into(),
+                    personal: false,
+                }],
+                last_calendar: None,
+                locations: vec![],
+                contacts: vec![],
+                start: start.parse().unwrap(),
+                locale: eventix_locale::default(),
+            };
+            let timezone = *options.locale.timezone();
+            let editor = ItemEditor::new_at(1, options, all_day);
+            editor.summary.set_text("Slot creation");
+            let command = editor.command().unwrap();
+            let context = eventix_ical::objects::DateContext::system();
+            assert_eq!(editor.all_day.is_active(), all_day);
+            for (date, expected) in [
+                (command.start.as_ref().unwrap(), start),
+                (command.end.as_ref().unwrap(), expected_end),
+            ] {
+                assert_eq!(
+                    context.date(date).start_in(&timezone).naive_local(),
+                    expected.parse::<chrono::NaiveDateTime>().unwrap(),
+                );
+                assert_eq!(matches!(date, CalDate::Date(..)), all_day);
+            }
+        }
+    }
+
     #[test]
     #[ignore = "requires a GTK display"]
     fn task_editor_supports_optional_dates_status_and_date_aware_reminders() {
@@ -1450,6 +1500,7 @@ mod tests {
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        assert_slot_creation_defaults();
         let tmp = tempfile::tempdir().unwrap();
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
         let mut state = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();

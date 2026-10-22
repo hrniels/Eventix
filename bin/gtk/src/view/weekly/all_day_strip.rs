@@ -144,6 +144,11 @@ glib::wrapper! {
 }
 
 impl AllDayStrip {
+    pub(crate) fn date_at(&self, x: f64, y: f64) -> Option<NaiveDate> {
+        let col = drop_day(self.width(), self.height(), x, y)?;
+        Some(self.imp().week.borrow().as_ref()?.days.get(col)?.date)
+    }
+
     fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
         let preview = self.imp().drop_preview.borrow();
         let week = self.imp().week.borrow();

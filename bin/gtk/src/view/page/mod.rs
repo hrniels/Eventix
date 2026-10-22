@@ -21,6 +21,7 @@ use super::{
 use crate::model::session::View;
 
 mod content;
+mod create;
 mod editor;
 mod session;
 
@@ -102,6 +103,7 @@ mod imp {
             obj.setup_details();
             obj.align_headers();
             self.content.connect_controls(&obj);
+            obj.connect_event_creation();
         }
 
         fn dispose(&self) {

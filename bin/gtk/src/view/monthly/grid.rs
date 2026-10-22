@@ -242,7 +242,7 @@ glib::wrapper! {
 }
 
 impl MonthGrid {
-    fn drop_date(&self, x: f64, y: f64) -> Option<NaiveDate> {
+    pub(crate) fn drop_date(&self, x: f64, y: f64) -> Option<NaiveDate> {
         let index = drop_day(
             self.width(),
             self.weekday_header_height(),
