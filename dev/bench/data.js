@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791008473769,
+  "lastUpdate": 1792671880752,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -3321,6 +3321,41 @@ window.BENCHMARK_DATA = {
           {
             "name": "pages/list/results/content/keyword_or",
             "value": 398877.8849694697,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "32a58c3f78fc73dbd393e511bae5a7669d05ecf0",
+          "message": "Handle UNTIL in VTIMEZONE properly",
+          "timestamp": "2026-10-03T06:31:44Z",
+          "url": "https://github.com/hrniels/Eventix/pull/66/commits/32a58c3f78fc73dbd393e511bae5a7669d05ecf0"
+        },
+        "date": 1792671879958,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pages/list/results/content/all_items",
+            "value": 4156883.108240283,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_and",
+            "value": 4127068.54941397,
+            "unit": "ns"
+          },
+          {
+            "name": "pages/list/results/content/keyword_or",
+            "value": 533126.2100160293,
             "unit": "ns"
           }
         ]
