@@ -69,10 +69,9 @@ mod imp {
     }
     impl WidgetImpl for EventCard {
         fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
-            let (_, natural, minimum_baseline, natural_baseline) =
-                self.content.measure(orientation, for_size);
+            let (_, natural, _, _) = self.content.measure(orientation, for_size);
             // Calendar geometry determines card sizes, even below the content's minimum size.
-            (0, natural, minimum_baseline, natural_baseline)
+            (0, natural, -1, -1)
         }
 
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {

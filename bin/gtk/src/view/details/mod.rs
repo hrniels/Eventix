@@ -26,6 +26,8 @@ struct DetailItem<'a> {
     foreground: &'a str,
     details: &'a Details,
     recurrent: bool,
+    exception: bool,
+    alarm: bool,
 }
 
 mod imp {
@@ -47,6 +49,8 @@ mod imp {
         pub tag: gtk::TemplateChild<gtk::Button>,
         #[template_child]
         pub calendar: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub indicators: gtk::TemplateChild<gtk::Box>,
         #[template_child]
         pub rows: gtk::TemplateChild<gtk::Grid>,
         #[template_child]
@@ -116,6 +120,8 @@ impl EventDetails {
                 foreground: &event.foreground,
                 details: &event.details,
                 recurrent: event.recurrent,
+                exception: event.exception,
+                alarm: event.alarm,
             },
             locale,
         );
@@ -133,6 +139,8 @@ impl EventDetails {
                 foreground: &row.foreground,
                 details: &row.details,
                 recurrent: row.recurrent,
+                exception: row.exception,
+                alarm: row.alarm,
             },
             locale,
         );
@@ -251,6 +259,21 @@ impl EventDetails {
         };
         imp.summary.set_text(summary);
         imp.summary.set_tooltip_text(Some(summary));
+        for (present, name, title) in [
+            (event.recurrent, "arrow-clockwise", "Recurring event"),
+            (event.exception, "pencil", "Recurrence exception"),
+            (event.alarm, "alarm", "Reminder"),
+        ] {
+            if present {
+                let image = icon(name);
+                let title = locale.translate(title);
+                image.set_tooltip_text(Some(title));
+                image.update_property(&[gtk::accessible::Property::Label(title)]);
+                imp.indicators.append(&image);
+            }
+        }
+        imp.indicators
+            .set_visible(event.recurrent || event.exception || event.alarm);
         imp.calendar.set_tooltip_text(Some(event.calendar));
         imp.calendar
             .update_property(&[gtk::accessible::Property::Label(event.calendar)]);
@@ -858,9 +881,32 @@ mod tests {
                     foreground: "#ffffff",
                     details: &details,
                     recurrent: true,
+                    exception: action.is_some(),
+                    alarm: action.is_some(),
                 },
                 locale.as_ref(),
             );
+            let indicators = &popup.imp().indicators;
+            assert!(indicators.property::<bool>("visible"));
+            assert_eq!(
+                indicators.next_sibling(),
+                Some(popup.imp().calendar.clone().upcast())
+            );
+            let titles = if action.is_some() {
+                vec!["Recurring event", "Recurrence exception", "Reminder"]
+            } else {
+                vec!["Recurring event"]
+            };
+            let mut child = indicators.first_child();
+            for title in titles {
+                let image = child.take().unwrap().downcast::<gtk::Image>().unwrap();
+                assert_eq!(
+                    image.tooltip_text().as_deref(),
+                    Some(locale.translate(title))
+                );
+                child = image.next_sibling();
+            }
+            assert!(child.is_none());
             popup.set_identity(&id);
             let tasks = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
             let result = tasks.clone();
