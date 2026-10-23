@@ -20,6 +20,8 @@ mod imp {
     #[template(resource = "/io/github/hrniels/Eventix/gtk/view/card.ui")]
     pub struct EventCard {
         #[template_child]
+        pub content: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
         pub response: gtk::TemplateChild<gtk::Box>,
         #[template_child]
         pub text: gtk::TemplateChild<gtk::Label>,
@@ -54,6 +56,8 @@ mod imp {
     impl ObjectImpl for EventCard {
         fn constructed(&self) {
             self.parent_constructed();
+            // Allocate the content ourselves so indicators adapt before the box lays them out.
+            self.obj().set_layout_manager(None::<gtk::LayoutManager>);
             move_event::install_source(&self.obj());
             crate::actions::items::resize_event::install(&self.obj());
         }
@@ -63,7 +67,19 @@ mod imp {
             self.dispose_template();
         }
     }
-    impl WidgetImpl for EventCard {}
+    impl WidgetImpl for EventCard {
+        fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
+            let (_, natural, minimum_baseline, natural_baseline) =
+                self.content.measure(orientation, for_size);
+            // Calendar geometry determines card sizes, even below the content's minimum size.
+            (0, natural, minimum_baseline, natural_baseline)
+        }
+
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.obj().fit_indicators(width, height);
+            self.content.allocate(width, height, baseline, None);
+        }
+    }
     impl ButtonImpl for EventCard {}
 }
 
@@ -238,5 +254,162 @@ impl EventCard {
             self.add_css_class(&color_class);
         }
         self.imp().event.replace(Some(event.clone()));
+    }
+
+    /// Keeps only indicators that fit alongside the label in the card's content area.
+    fn fit_indicators(&self, width: i32, height: i32) {
+        let imp = self.imp();
+        let event = imp.event.borrow();
+        let Some(event) = event.as_ref() else {
+            return;
+        };
+        let spacing = imp.content.spacing();
+        let mut available = width - imp.text.measure(gtk::Orientation::Horizontal, -1).0;
+        if imp.response.is_visible() {
+            available -= imp.response.measure(gtk::Orientation::Horizontal, -1).1 + spacing;
+        }
+        available -= spacing + imp.indicators.margin_start() + imp.indicators.margin_end();
+        let available_height =
+            height - imp.indicators.margin_top() - imp.indicators.margin_bottom();
+
+        let mut count = 0;
+        for (icon, present) in [
+            (&*imp.recurrence, event.recurrent),
+            (&*imp.exception, event.exception),
+            (&*imp.alarm, event.alarm),
+        ] {
+            // Restore visibility before measuring so omitted icons can reappear on resize.
+            icon.set_visible(present);
+            if !present {
+                continue;
+            }
+            let icon_width = icon.measure(gtk::Orientation::Horizontal, -1).1;
+            let icon_height = icon.measure(gtk::Orientation::Vertical, -1).1;
+            let needed = icon_width
+                + if count > 0 {
+                    imp.indicators.spacing()
+                } else {
+                    0
+                };
+            let fits = needed <= available && icon_height <= available_height;
+            icon.set_visible(fits);
+            if fits {
+                available -= needed;
+                count += 1;
+            }
+        }
+        imp.indicators.set_visible(count > 0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use eventix_view::{
+        OccurrenceId,
+        details::{DetailActions, Details},
+    };
+
+    use gtk::{glib, prelude::*, subclass::prelude::*};
+
+    use super::{Event, EventCard, Response};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn indicators_fit_and_reappear_when_cards_resize() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let start = chrono::DateTime::from_timestamp(0, 0)
+            .unwrap()
+            .with_timezone(&chrono_tz::UTC);
+        let mut event = Event {
+            id: OccurrenceId {
+                calendar: "test".into(),
+                uid: "test".into(),
+                recurrence: String::new(),
+            },
+            summary: "Event with indicators".into(),
+            calendar: "Test".into(),
+            foreground: "#ffffff".into(),
+            background: "#336699".into(),
+            start,
+            end: start + chrono::Duration::hours(1),
+            all_day: false,
+            cancelled: false,
+            recurrent: true,
+            exception: true,
+            alarm: true,
+            details: Arc::new(Details {
+                date_label: "Date",
+                date: String::new(),
+                source_date: None,
+                location: String::new(),
+                description: String::new(),
+                status: None,
+                recurrence: None,
+                reminders: None,
+                organizer: None,
+                sent_by: None,
+                attendees: vec![],
+                actions: DetailActions {
+                    occurrence_response: Some(Response::Accepted),
+                    ..Default::default()
+                },
+            }),
+        };
+        let card = EventCard::new();
+        card.set_event(&event, &event.summary);
+        let window = gtk::Window::builder().child(&card).build();
+        window.present();
+        while glib::MainContext::default().iteration(false) {}
+
+        let icons = [
+            &*card.imp().recurrence,
+            &*card.imp().exception,
+            &*card.imp().alarm,
+        ];
+        let mut saw_partial = false;
+        for width in (10..=160).rev() {
+            card.allocate(width, 30, -1, None);
+            let visible = icons.iter().filter(|icon| icon.is_visible()).count();
+            saw_partial |= visible > 0 && visible < icons.len();
+            for icon in icons.iter().filter(|icon| icon.is_visible()) {
+                let bounds = icon.compute_bounds(&*card.imp().content).unwrap();
+                assert!(bounds.x() >= 0.0 && bounds.y() >= 0.0);
+                assert!(
+                    bounds.x() + bounds.width() <= card.imp().content.width() as f32,
+                    "requested {width}, card {}, content {}, bounds {bounds:?}",
+                    card.width(),
+                    card.imp().content.width(),
+                );
+                assert!(bounds.y() + bounds.height() <= card.imp().content.height() as f32);
+            }
+        }
+        assert!(saw_partial);
+        assert!(icons.iter().all(|icon| !icon.is_visible()));
+        card.allocate(200, 10, -1, None);
+        assert!(icons.iter().all(|icon| !icon.is_visible()));
+        card.allocate(200, 30, -1, None);
+        assert!(icons.iter().all(|icon| icon.is_visible()));
+
+        event.recurrent = false;
+        event.exception = false;
+        card.set_event(&event, &event.summary);
+        card.allocate(200, 30, -1, None);
+        assert!(!icons[0].is_visible());
+        assert!(!icons[1].is_visible());
+        assert!(icons[2].is_visible());
+
+        card.set_event(&event, "Event\n09:00–10:00");
+        for width in (10..=160).rev() {
+            card.allocate(width, 40, -1, None);
+            if icons[2].is_visible() {
+                let bounds = icons[2].compute_bounds(&*card.imp().content).unwrap();
+                assert!(bounds.x() + bounds.width() <= card.imp().content.width() as f32);
+            }
+        }
+        window.close();
     }
 }

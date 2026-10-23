@@ -2,9 +2,10 @@
 <interface>
   <requires lib="gtk" version="4.10"/>
   <template class="EventixEventCard" parent="GtkButton">
+    <property name="overflow">hidden</property>
     <style><class name="ev_event"/></style>
     <property name="child">
-      <object class="GtkBox">
+      <object class="GtkBox" id="content">
         <property name="spacing">4</property>
         <child>
           <object class="GtkBox" id="response">
