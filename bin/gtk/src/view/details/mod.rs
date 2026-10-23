@@ -17,6 +17,7 @@ use regex::Regex;
 
 use crate::style;
 
+mod arrow;
 pub(crate) mod delete;
 
 struct DetailItem<'a> {
@@ -81,7 +82,17 @@ mod imp {
             self.dispose_template();
         }
     }
-    impl WidgetImpl for EventDetails {}
+    impl WidgetImpl for EventDetails {
+        fn snapshot(&self, snapshot: &gtk::Snapshot) {
+            let obj = self.obj();
+            let Some(contents) = obj.first_child().filter(|_| obj.has_arrow()) else {
+                self.parent_snapshot(snapshot);
+                return;
+            };
+            super::arrow::snapshot(&obj, &contents, snapshot);
+            obj.snapshot_child(&contents, snapshot);
+        }
+    }
     impl PopoverImpl for EventDetails {}
 }
 
