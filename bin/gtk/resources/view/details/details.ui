@@ -27,12 +27,9 @@
               <object class="GtkLabel" id="summary">
                 <property name="xalign">0</property>
                 <property name="hexpand">true</property>
-                <property name="wrap">true</property>
-                <property name="wrap-mode">word-char</property>
-                <property name="lines">3</property>
                 <property name="ellipsize">end</property>
                 <property name="selectable">true</property>
-                <property name="max-width-chars">48</property>
+                <property name="max-width-chars">1</property>
                 <style><class name="ev_details_summary"/></style>
               </object>
             </child>
