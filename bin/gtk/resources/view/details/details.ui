@@ -39,13 +39,12 @@
             <child>
               <object class="GtkBox" id="indicators">
                 <property name="spacing">3</property>
-                <property name="valign">start</property>
-                <property name="margin-top">2</property>
+                <property name="valign">center</property>
               </object>
             </child>
             <child>
               <object class="GtkBox" id="calendar">
-                <property name="valign">start</property>
+                <property name="valign">center</property>
                 <style><class name="ev_details_calendar"/></style>
               </object>
             </child>
