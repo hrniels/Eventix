@@ -17,6 +17,8 @@ use regex::Regex;
 
 use crate::style;
 
+use super::indicators::EventIndicators;
+
 mod arrow;
 pub(crate) mod delete;
 
@@ -51,7 +53,7 @@ mod imp {
         #[template_child]
         pub calendar: gtk::TemplateChild<gtk::Box>,
         #[template_child]
-        pub indicators: gtk::TemplateChild<gtk::Box>,
+        pub indicators: gtk::TemplateChild<EventIndicators>,
         #[template_child]
         pub rows: gtk::TemplateChild<gtk::Grid>,
         #[template_child]
@@ -69,6 +71,7 @@ mod imp {
         type ParentType = gtk::Popover;
 
         fn class_init(klass: &mut Self::Class) {
+            EventIndicators::static_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -270,21 +273,8 @@ impl EventDetails {
         };
         imp.summary.set_text(summary);
         imp.summary.set_tooltip_text(Some(summary));
-        for (present, name, title) in [
-            (event.recurrent, "arrow-clockwise", "Recurring event"),
-            (event.exception, "pencil", "Recurrence exception"),
-            (event.alarm, "alarm", "Reminder"),
-        ] {
-            if present {
-                let image = icon(name);
-                let title = locale.translate(title);
-                image.set_tooltip_text(Some(title));
-                image.update_property(&[gtk::accessible::Property::Label(title)]);
-                imp.indicators.append(&image);
-            }
-        }
         imp.indicators
-            .set_visible(event.recurrent || event.exception || event.alarm);
+            .set_state(event.recurrent, event.exception, event.alarm, locale);
         imp.calendar.set_tooltip_text(Some(event.calendar));
         imp.calendar
             .update_property(&[gtk::accessible::Property::Label(event.calendar)]);
@@ -908,16 +898,20 @@ mod tests {
             } else {
                 vec!["Recurring event"]
             };
-            let mut child = indicators.first_child();
-            for title in titles {
-                let image = child.take().unwrap().downcast::<gtk::Image>().unwrap();
+            let images: Vec<gtk::Image> = indicators
+                .observe_children()
+                .snapshot()
+                .into_iter()
+                .map(|child| child.downcast::<gtk::Image>().unwrap())
+                .filter(|image| image.property::<bool>("visible"))
+                .collect();
+            assert_eq!(images.len(), titles.len());
+            for (image, title) in images.iter().zip(titles) {
                 assert_eq!(
                     image.tooltip_text().as_deref(),
                     Some(locale.translate(title))
                 );
-                child = image.next_sibling();
             }
-            assert!(child.is_none());
             popup.set_identity(&id);
             let tasks = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
             let result = tasks.clone();

@@ -7,6 +7,7 @@ mod creation_hint;
 pub mod details;
 pub(crate) mod editor;
 mod geometry;
+mod indicators;
 pub(crate) mod monthly;
 pub(crate) mod page;
 pub(crate) mod popover;

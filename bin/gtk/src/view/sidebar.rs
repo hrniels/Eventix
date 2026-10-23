@@ -13,7 +13,7 @@ use eventix_view::{
 };
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-use super::{details::EventDetails, popover::DetailsController};
+use super::{details::EventDetails, indicators::EventIndicators, popover::DetailsController};
 use crate::style;
 
 type RowKey = (Option<NaiveDate>, OccurrenceId);
@@ -128,7 +128,7 @@ impl Panel {
             for row in &group.rows {
                 let key = (group.date, row.id.clone());
                 let button = self.rows.remove(&key).unwrap_or_default();
-                update_row(&button, row);
+                update_row(&button, row, &**locale);
                 bind_details_action(&button, row, locale, details);
                 self.place_child(button.upcast_ref(), previous.as_ref());
                 previous = Some(button.clone().upcast());
@@ -167,12 +167,12 @@ fn group_heading(group: &SidebarGroup, locale: &dyn Locale) -> gtk::Label {
     label
 }
 
-fn update_row(button: &gtk::Button, row: &SidebarRow) {
+fn update_row(button: &gtk::Button, row: &SidebarRow, locale: &dyn Locale) {
     for class in button.css_classes() {
         button.remove_css_class(&class);
     }
     button.add_css_class("ev_sidebar_row");
-    button.set_child(Some(&row_content(row)));
+    button.set_child(Some(&row_content(row, locale)));
     if row.full_day && !row.task {
         button.add_css_class("ev_sidebar_full_day");
         button.add_css_class(&style::calendar_class(&row.background, &row.foreground));
@@ -222,7 +222,7 @@ fn bind_details_action(
     button.set_action_name(Some("row.details"));
 }
 
-fn row_content(row: &SidebarRow) -> gtk::Box {
+fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
     if !row.full_day || row.task {
         let marker = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -257,15 +257,11 @@ fn row_content(row: &SidebarRow) -> gtk::Box {
         .hexpand(true)
         .build();
     content.append(&summary);
-    for (visible, name) in [
-        (row.recurrent, "arrow-clockwise"),
-        (row.exception, "pencil"),
-        (row.alarm, "alarm"),
-    ] {
-        if visible {
-            content.append(&icon(name));
-        }
-    }
+    let indicators: EventIndicators = glib::Object::new();
+    indicators.set_spacing(content.spacing());
+    indicators.set_pixel_size(14);
+    indicators.set_state(row.recurrent, row.exception, row.alarm, locale);
+    content.append(&indicators);
     content
 }
 

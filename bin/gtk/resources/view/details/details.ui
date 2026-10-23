@@ -34,7 +34,7 @@
               </object>
             </child>
             <child>
-              <object class="GtkBox" id="indicators">
+              <object class="EventixEventIndicators" id="indicators">
                 <property name="spacing">3</property>
                 <property name="valign">center</property>
               </object>

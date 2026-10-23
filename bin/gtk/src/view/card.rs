@@ -13,6 +13,8 @@ use gtk::{glib, prelude::*, subclass::prelude::*};
 use crate::actions::items::move_event::{self, DraggedEvent};
 use crate::style;
 
+use super::indicators::EventIndicators;
+
 mod imp {
     use super::*;
 
@@ -26,13 +28,7 @@ mod imp {
         #[template_child]
         pub text: gtk::TemplateChild<gtk::Label>,
         #[template_child]
-        pub indicators: gtk::TemplateChild<gtk::Box>,
-        #[template_child]
-        pub recurrence: gtk::TemplateChild<gtk::Image>,
-        #[template_child]
-        pub exception: gtk::TemplateChild<gtk::Image>,
-        #[template_child]
-        pub alarm: gtk::TemplateChild<gtk::Image>,
+        pub indicators: gtk::TemplateChild<EventIndicators>,
         pub color_class: RefCell<String>,
         pub event: RefCell<Option<Event>>,
         pub(super) drag: RefCell<Option<DraggedEvent>>,
@@ -46,6 +42,7 @@ mod imp {
         type ParentType = gtk::Button;
 
         fn class_init(klass: &mut Self::Class) {
+            EventIndicators::static_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -107,7 +104,7 @@ impl EventCard {
             summary,
             if span.continues_after { " →" } else { "" },
         );
-        self.set_event(&span.event, &text);
+        self.set_event(&span.event, &text, locale);
     }
 
     pub fn set_timed(&self, segment: &TimedEvent, locale: &dyn Locale) {
@@ -135,7 +132,7 @@ impl EventCard {
         } else {
             format!("{summary}\n{time}")
         };
-        self.set_event(event, &text);
+        self.set_event(event, &text, locale);
     }
 
     pub fn set_monthly(&self, segment: &MonthEvent, locale: &dyn Locale) {
@@ -169,7 +166,7 @@ impl EventCard {
             };
             format!("{time} {summary}")
         };
-        self.set_event(event, &text);
+        self.set_event(event, &text, locale);
     }
 
     fn summary<'a>(&self, event: &'a Event, locale: &'a dyn Locale) -> &'a str {
@@ -218,7 +215,7 @@ impl EventCard {
         }
     }
 
-    fn set_event(&self, event: &Event, text: &str) {
+    fn set_event(&self, event: &Event, text: &str, locale: &dyn Locale) {
         self.imp().text.set_text(text);
         self.set_tooltip_text(Some(text));
         let actions = &event.details.actions;
@@ -233,12 +230,9 @@ impl EventCard {
                 _ => "ev_response_pending",
             },
         ]);
-        self.imp().recurrence.set_visible(event.recurrent);
-        self.imp().exception.set_visible(event.exception);
-        self.imp().alarm.set_visible(event.alarm);
         self.imp()
             .indicators
-            .set_visible(event.recurrent || event.exception || event.alarm);
+            .set_state(event.recurrent, event.exception, event.alarm, locale);
         if event.cancelled {
             self.add_css_class("ev_cancelled");
         } else {
@@ -258,10 +252,6 @@ impl EventCard {
     /// Keeps only indicators that fit alongside the label in the card's content area.
     fn fit_indicators(&self, width: i32, height: i32) {
         let imp = self.imp();
-        let event = imp.event.borrow();
-        let Some(event) = event.as_ref() else {
-            return;
-        };
         let spacing = imp.content.spacing();
         let mut available = width - imp.text.measure(gtk::Orientation::Horizontal, -1).0;
         if imp.response.is_visible() {
@@ -271,33 +261,7 @@ impl EventCard {
         let available_height =
             height - imp.indicators.margin_top() - imp.indicators.margin_bottom();
 
-        let mut count = 0;
-        for (icon, present) in [
-            (&*imp.recurrence, event.recurrent),
-            (&*imp.exception, event.exception),
-            (&*imp.alarm, event.alarm),
-        ] {
-            // Restore visibility before measuring so omitted icons can reappear on resize.
-            icon.set_visible(present);
-            if !present {
-                continue;
-            }
-            let icon_width = icon.measure(gtk::Orientation::Horizontal, -1).1;
-            let icon_height = icon.measure(gtk::Orientation::Vertical, -1).1;
-            let needed = icon_width
-                + if count > 0 {
-                    imp.indicators.spacing()
-                } else {
-                    0
-                };
-            let fits = needed <= available && icon_height <= available_height;
-            icon.set_visible(fits);
-            if fits {
-                available -= needed;
-                count += 1;
-            }
-        }
-        imp.indicators.set_visible(count > 0);
+        imp.indicators.fit(available, available_height);
     }
 }
 
@@ -359,16 +323,20 @@ mod tests {
             }),
         };
         let card = EventCard::new();
-        card.set_event(&event, &event.summary);
+        let locale = eventix_locale::default();
+        card.set_event(&event, &event.summary, &*locale);
         let window = gtk::Window::builder().child(&card).build();
         window.present();
         while glib::MainContext::default().iteration(false) {}
 
-        let icons = [
-            &*card.imp().recurrence,
-            &*card.imp().exception,
-            &*card.imp().alarm,
-        ];
+        let icons: Vec<gtk::Image> = card
+            .imp()
+            .indicators
+            .observe_children()
+            .snapshot()
+            .into_iter()
+            .map(|child| child.downcast().unwrap())
+            .collect();
         let mut saw_partial = false;
         for width in (10..=160).rev() {
             card.allocate(width, 30, -1, None);
@@ -395,13 +363,13 @@ mod tests {
 
         event.recurrent = false;
         event.exception = false;
-        card.set_event(&event, &event.summary);
+        card.set_event(&event, &event.summary, &*locale);
         card.allocate(200, 30, -1, None);
         assert!(!icons[0].is_visible());
         assert!(!icons[1].is_visible());
         assert!(icons[2].is_visible());
 
-        card.set_event(&event, "Event\n09:00–10:00");
+        card.set_event(&event, "Event\n09:00–10:00", &*locale);
         for width in (10..=160).rev() {
             card.allocate(width, 40, -1, None);
             if icons[2].is_visible() {
