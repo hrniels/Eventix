@@ -673,7 +673,7 @@ fn grid_children(ids: &[&str]) -> gtk::Builder {
     WeekContent::ensure_type();
     let builder = gtk::Builder::new();
     builder
-        .add_objects_from_resource("/io/github/hrniels/Eventix/gtk/view/monthly/grid.ui", ids)
+        .add_objects_from_resource(resource_path!("view/monthly/grid.ui"), ids)
         .expect("monthly grid children are defined in GTK resources");
     builder
 }

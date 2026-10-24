@@ -45,9 +45,8 @@ mod imp {
             self.surface.construct(self.obj().upcast_ref());
 
             DayList::ensure_type();
-            let builder = gtk::Builder::from_resource(
-                "/io/github/hrniels/Eventix/gtk/view/monthly/week_content.ui",
-            );
+            let builder =
+                gtk::Builder::from_resource(resource_path!("view/monthly/week_content.ui"));
             for name in [
                 "monday",
                 "tuesday",

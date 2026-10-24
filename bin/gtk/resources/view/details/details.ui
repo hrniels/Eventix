@@ -17,7 +17,7 @@
                 <style><class name="ev_details_uid"/></style>
                 <property name="child">
                   <object class="GtkImage">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/tag-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/tag-symbolic.svg</property>
                     <property name="pixel-size">20</property>
                   </object>
                 </property>

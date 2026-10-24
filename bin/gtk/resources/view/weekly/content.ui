@@ -24,7 +24,7 @@
                 </child>
                 <child>
                   <object class="GtkImage" id="monday_time_change">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/clock-history-symbolic.svg</property>
                     <property name="pixel-size">18</property>
                     <property name="valign">center</property>
                     <property name="visible">false</property>
@@ -45,7 +45,7 @@
                 </child>
                 <child>
                   <object class="GtkImage" id="tuesday_time_change">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/clock-history-symbolic.svg</property>
                     <property name="pixel-size">18</property>
                     <property name="valign">center</property>
                     <property name="visible">false</property>
@@ -66,7 +66,7 @@
                 </child>
                 <child>
                   <object class="GtkImage" id="wednesday_time_change">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/clock-history-symbolic.svg</property>
                     <property name="pixel-size">18</property>
                     <property name="valign">center</property>
                     <property name="visible">false</property>
@@ -87,7 +87,7 @@
                 </child>
                 <child>
                   <object class="GtkImage" id="thursday_time_change">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/clock-history-symbolic.svg</property>
                     <property name="pixel-size">18</property>
                     <property name="valign">center</property>
                     <property name="visible">false</property>
@@ -108,7 +108,7 @@
                 </child>
                 <child>
                   <object class="GtkImage" id="friday_time_change">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/clock-history-symbolic.svg</property>
                     <property name="pixel-size">18</property>
                     <property name="valign">center</property>
                     <property name="visible">false</property>
@@ -129,7 +129,7 @@
                 </child>
                 <child>
                   <object class="GtkImage" id="saturday_time_change">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/clock-history-symbolic.svg</property>
                     <property name="pixel-size">18</property>
                     <property name="valign">center</property>
                     <property name="visible">false</property>
@@ -150,7 +150,7 @@
                 </child>
                 <child>
                   <object class="GtkImage" id="sunday_time_change">
-                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="resource">@RESOURCE_PREFIX@/icons/clock-history-symbolic.svg</property>
                     <property name="pixel-size">18</property>
                     <property name="valign">center</property>
                     <property name="visible">false</property>

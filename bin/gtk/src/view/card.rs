@@ -18,8 +18,7 @@ use super::indicators::EventIndicators;
 mod imp {
     use super::*;
 
-    #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/card.ui")]
+    resource_template! { "view/card.ui",
     pub struct EventCard {
         #[template_child]
         pub content: gtk::TemplateChild<gtk::Box>,
@@ -33,6 +32,7 @@ mod imp {
         pub event: RefCell<Option<Event>>,
         pub(super) drag: RefCell<Option<DraggedEvent>>,
         pub resize: RefCell<Option<TimedEvent>>,
+    }
     }
 
     #[glib::object_subclass]

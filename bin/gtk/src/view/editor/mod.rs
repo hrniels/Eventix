@@ -301,9 +301,7 @@ impl ItemEditor {
     }
 
     fn create_description(form: &gtk::Box, locale: &dyn Locale) -> (gtk::TextView, FormSection) {
-        let builder = gtk::Builder::from_resource(
-            "/io/github/hrniels/Eventix/gtk/view/editor/description.ui",
-        );
+        let builder = gtk::Builder::from_resource(resource_path!("view/editor/description.ui"));
         let description = builder
             .object("description")
             .expect("description input is defined in GTK resources");
@@ -543,8 +541,7 @@ struct EditorShell {
 impl EditorShell {
     fn new(options: &EditorOptions) -> Self {
         let locale = options.locale.as_ref();
-        let builder =
-            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/shell.ui");
+        let builder = gtk::Builder::from_resource(resource_path!("view/editor/shell.ui"));
         let shell = Self {
             title: builder.object("title").expect("editor title"),
             layer: builder.object("layer").expect("editor backdrop"),
@@ -1029,8 +1026,7 @@ fn spin(min: f64, max: f64, value: f64) -> gtk::SpinButton {
 }
 
 fn time_entry(time: NaiveTime) -> gtk::Entry {
-    let builder =
-        gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/time_entry.ui");
+    let builder = gtk::Builder::from_resource(resource_path!("view/editor/time_entry.ui"));
     let entry: gtk::Entry = builder.object("time").expect("editor time entry");
     entry.set_text(&time.format("%H:%M").to_string());
 
@@ -1051,8 +1047,7 @@ struct DateInput {
 
 impl DateInput {
     fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
-        let builder =
-            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/date_input.ui");
+        let builder = gtk::Builder::from_resource(resource_path!("view/editor/date_input.ui"));
         let widget = builder.object("date_input").expect("editor date input");
         let entry: gtk::Entry = builder.object("entry").expect("editor date entry");
         entry.set_text(&date.to_string());
@@ -1154,9 +1149,7 @@ struct AlarmInput {
 
 impl AlarmInput {
     fn new(locale: &dyn Locale, date: NaiveDate, time: NaiveTime) -> Self {
-        let builder = gtk::Builder::from_resource(
-            "/io/github/hrniels/Eventix/gtk/view/editor/alarm_input.ui",
-        );
+        let builder = gtk::Builder::from_resource(resource_path!("view/editor/alarm_input.ui"));
         let widget = builder.object("alarm_input").expect("editor alarm input");
         let trigger = dropdown(locale, &["None", "Relative", "Absolute"]);
         for (index, (id, label)) in [

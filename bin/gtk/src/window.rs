@@ -10,11 +10,11 @@ use crate::view::{card::EventCard, details::EventDetails, page::CalendarPage};
 mod imp {
     use super::*;
 
-    #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/window.ui")]
+    resource_template! { "window.ui",
     pub struct Window {
         #[template_child]
         pub page: gtk::TemplateChild<CalendarPage>,
+    }
     }
 
     #[glib::object_subclass]

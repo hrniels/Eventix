@@ -36,8 +36,7 @@ struct DetailItem<'a> {
 mod imp {
     use super::*;
 
-    #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/details/details.ui")]
+    resource_template! { "view/details/details.ui",
     pub struct EventDetails {
         pub edits: std::cell::RefCell<Vec<(gtk::Button, EditScope)>>,
         pub responses: std::cell::RefCell<Vec<(gtk::Button, CalPartStat, bool)>>,
@@ -62,6 +61,7 @@ mod imp {
         pub actions_left: gtk::TemplateChild<gtk::Box>,
         #[template_child]
         pub actions_right: gtk::TemplateChild<gtk::Box>,
+    }
     }
 
     #[glib::object_subclass]
@@ -312,18 +312,14 @@ impl EventDetails {
         let image = tag_image.downgrade();
         motion.connect_enter(move |_, _, _| {
             if let Some(image) = image.upgrade() {
-                image.set_resource(Some(
-                    "/io/github/hrniels/Eventix/gtk/icons/tag-symbolic-hover.svg",
-                ));
+                image.set_resource(Some(resource_path!("icons/tag-symbolic-hover.svg")));
             }
         });
 
         let image = tag_image.downgrade();
         motion.connect_leave(move |_| {
             if let Some(image) = image.upgrade() {
-                image.set_resource(Some(
-                    "/io/github/hrniels/Eventix/gtk/icons/tag-symbolic.svg",
-                ));
+                image.set_resource(Some(resource_path!("icons/tag-symbolic.svg")));
             }
         });
 
@@ -334,8 +330,7 @@ impl EventDetails {
         let imp = self.imp();
         let details = &event.details;
 
-        let scrollers =
-            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/details/scrollers.ui");
+        let scrollers = gtk::Builder::from_resource(resource_path!("view/details/scrollers.ui"));
         let attendees_scroll: gtk::ScrolledWindow = scrollers
             .object("attendees_scroll")
             .expect("attendee detail scroller is defined in GTK resources");
@@ -704,7 +699,8 @@ fn attendees_content(attendees: &[Attendee]) -> gtk::Box {
 fn icon(name: &str) -> gtk::Image {
     gtk::Image::builder()
         .resource(format!(
-            "/io/github/hrniels/Eventix/gtk/icons/{name}-symbolic.svg"
+            "{}/icons/{name}-symbolic.svg",
+            crate::RESOURCE_PREFIX
         ))
         .pixel_size(16)
         .build()

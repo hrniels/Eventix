@@ -10,8 +10,7 @@ use crate::view::geometry::GUTTER;
 pub(crate) mod imp {
     use super::*;
 
-    #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/weekly/content.ui")]
+    resource_template! { "view/weekly/content.ui",
     pub struct WeekContent {
         #[template_child]
         pub headers: gtk::TemplateChild<gtk::Box>,
@@ -57,6 +56,7 @@ pub(crate) mod imp {
         pub timed: gtk::TemplateChild<TimedGrid>,
         #[template_child]
         pub all_day: gtk::TemplateChild<AllDayStrip>,
+    }
     }
 
     impl WeekContent {

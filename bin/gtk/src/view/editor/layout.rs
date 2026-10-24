@@ -21,8 +21,7 @@ impl FormSection {
         child: &impl IsA<gtk::Widget>,
         controls: Option<&gtk::Widget>,
     ) -> Self {
-        let builder =
-            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/section.ui");
+        let builder = gtk::Builder::from_resource(resource_path!("view/editor/section.ui"));
         let widget: gtk::Box = builder.object("section").expect("editor section");
         let caption_slot: gtk::Box = builder
             .object("caption_slot")
@@ -85,8 +84,7 @@ impl FormSection {
 }
 
 fn caption(locale: &dyn Locale, name: &str) -> gtk::Box {
-    let builder =
-        gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/caption.ui");
+    let builder = gtk::Builder::from_resource(resource_path!("view/editor/caption.ui"));
     let widget = builder.object("caption").expect("editor caption");
     let icon = match name {
         "Calendar" => "collection",
@@ -103,7 +101,8 @@ fn caption(locale: &dyn Locale, name: &str) -> gtk::Box {
         .object::<gtk::Image>("icon")
         .expect("editor caption icon")
         .set_resource(Some(&format!(
-            "/io/github/hrniels/Eventix/gtk/icons/{icon}-symbolic.svg"
+            "{}/icons/{icon}-symbolic.svg",
+            crate::RESOURCE_PREFIX
         )));
     builder
         .object::<gtk::Label>("label")
@@ -119,8 +118,7 @@ pub(super) fn row(
     name: &str,
     child: &impl IsA<gtk::Widget>,
 ) {
-    let builder =
-        gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/field_row.ui");
+    let builder = gtk::Builder::from_resource(resource_path!("view/editor/field_row.ui"));
     let widget: gtk::Box = builder.object("row").expect("editor field row");
     widget.append(&caption(locale, name));
     child.set_hexpand(true);
@@ -138,7 +136,8 @@ pub(super) fn body_label(locale: &dyn Locale, text: &str) -> gtk::Label {
 
 pub(super) fn image(name: &str) -> gtk::Image {
     let icon = gtk::Image::from_resource(&format!(
-        "/io/github/hrniels/Eventix/gtk/icons/{name}-symbolic.svg"
+        "{}/icons/{name}-symbolic.svg",
+        crate::RESOURCE_PREFIX
     ));
     icon.set_pixel_size(19);
 

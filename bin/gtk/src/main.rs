@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+include!(concat!(env!("OUT_DIR"), "/resources.rs"));
+
 mod actions;
 mod model;
 mod style;
@@ -16,19 +18,12 @@ use gtk::{gio, glib, prelude::*};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::prelude::*;
 
-const APP_ID: &str = "io.github.hrniels.Eventix.Gtk";
-const DATA_PREFIX: &str = if cfg!(debug_assertions) {
-    "io.github.hrniels.Eventix-debug"
-} else {
-    "io.github.hrniels.Eventix"
-};
-
 /// A local GTK calendar for Eventix.
 #[derive(Parser, Clone)]
 #[command(version, about)]
 struct Args {
     /// XDG data/config prefix used by the existing Eventix installation.
-    #[arg(long, default_value = DATA_PREFIX)]
+    #[arg(long, default_value = APP_ID)]
     data_prefix: String,
     /// Initially displayed date (YYYY-MM-DD); defaults to today in the calendar timezone.
     #[arg(long)]

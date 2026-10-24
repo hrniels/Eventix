@@ -46,9 +46,8 @@ mod imp {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
             for hour in 0..24 {
-                let builder = gtk::Builder::from_resource(
-                    "/io/github/hrniels/Eventix/gtk/view/weekly/hour_label.ui",
-                );
+                let builder =
+                    gtk::Builder::from_resource(resource_path!("view/weekly/hour_label.ui"));
                 let label: gtk::Label = builder.object("hour").expect("weekly hour label");
                 label.set_text(&format!("{hour:02}:00"));
                 label.set_parent(&*self.obj());

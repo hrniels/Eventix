@@ -281,7 +281,8 @@ fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
 
 fn icon(name: &str) -> gtk::Image {
     let image = gtk::Image::from_resource(&format!(
-        "/io/github/hrniels/Eventix/gtk/icons/{name}-symbolic.svg"
+        "{}/icons/{name}-symbolic.svg",
+        crate::RESOURCE_PREFIX
     ));
     image.set_pixel_size(14);
 

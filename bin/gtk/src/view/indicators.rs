@@ -12,8 +12,7 @@ const TITLES: [&str; 3] = ["Recurring event", "Recurrence exception", "Reminder"
 mod imp {
     use super::*;
 
-    #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/indicators.ui")]
+    resource_template! { "view/indicators.ui",
     pub struct EventIndicators {
         #[template_child]
         pub recurrent: gtk::TemplateChild<gtk::Image>,
@@ -22,6 +21,7 @@ mod imp {
         #[template_child]
         pub alarm: gtk::TemplateChild<gtk::Image>,
         pub present: Cell<[bool; 3]>,
+    }
     }
 
     #[glib::object_subclass]

@@ -38,7 +38,7 @@ pub(crate) fn confirm(
         .default_width(560)
         .build();
 
-    let icon = gtk::Image::from_resource("/io/github/hrniels/Eventix/gtk/icons/trash-symbolic.svg");
+    let icon = gtk::Image::from_resource(resource_path!("icons/trash-symbolic.svg"));
     icon.set_pixel_size(32);
     icon.set_valign(gtk::Align::Center);
 

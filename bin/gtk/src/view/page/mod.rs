@@ -28,8 +28,7 @@ mod session;
 mod imp {
     use super::*;
 
-    #[derive(Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/page.ui")]
+    resource_template! { "view/page.ui",
     pub struct CalendarPage {
         #[template_child]
         pub stack: gtk::TemplateChild<gtk::Stack>,
@@ -74,6 +73,7 @@ mod imp {
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
         pub locale: RefCell<Option<Arc<dyn Locale + Send + Sync>>>,
         pub(super) details: Rc<DetailsController>,
+    }
     }
 
     #[glib::object_subclass]

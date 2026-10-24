@@ -62,7 +62,7 @@
                     <property name="halign">center</property>
                     <child>
                       <object class="GtkImage">
-                        <property name="resource">/io/github/hrniels/Eventix/gtk/icons/floppy2-fill-symbolic.svg</property>
+                        <property name="resource">@RESOURCE_PREFIX@/icons/floppy2-fill-symbolic.svg</property>
                         <property name="pixel-size">16</property>
                       </object>
                     </child>
@@ -80,7 +80,7 @@
                     <property name="halign">center</property>
                     <child>
                       <object class="GtkImage">
-                        <property name="resource">/io/github/hrniels/Eventix/gtk/icons/x-circle-symbolic.svg</property>
+                        <property name="resource">@RESOURCE_PREFIX@/icons/x-circle-symbolic.svg</property>
                         <property name="pixel-size">16</property>
                       </object>
                     </child>

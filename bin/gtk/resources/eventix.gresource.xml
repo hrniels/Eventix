@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/io/github/hrniels/Eventix/gtk">
+  <gresource prefix="@RESOURCE_PREFIX@">
     <file>view/card.ui</file>
     <file>view/indicators.ui</file>
     <file>view/details/details.ui</file>
