@@ -49,6 +49,7 @@
     <file>style.css</file>
     <file>view/page.ui</file>
     <file>view/weekly/content.ui</file>
+    <file>view/weekly/hour_label.ui</file>
     <file>view/monthly/grid.ui</file>
     <file>view/monthly/week_content.ui</file>
     <file>window.ui</file>

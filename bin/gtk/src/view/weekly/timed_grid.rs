@@ -11,7 +11,7 @@ use eventix_view::WeekSnapshot;
 use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
 use crate::actions::items::move_event::DraggedEvent;
-use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, draw_text, rect};
+use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, rect};
 use crate::{
     style,
     view::{
@@ -28,6 +28,7 @@ mod imp {
     #[derive(Default)]
     pub struct TimedGrid {
         pub(super) surface: Rc<Surface>,
+        pub(super) hours: RefCell<Vec<gtk::Label>>,
         pub week: RefCell<Option<Rc<WeekSnapshot>>>,
         pub(super) creation_hint: Rc<CreationHint>,
         pub(super) drop_preview: RefCell<Option<(DateTime<Tz>, DateTime<Tz>)>>,
@@ -44,6 +45,16 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
+            for hour in 0..24 {
+                let builder = gtk::Builder::from_resource(
+                    "/io/github/hrniels/Eventix/gtk/view/weekly/hour_label.ui",
+                );
+                let label: gtk::Label = builder.object("hour").expect("weekly hour label");
+                label.set_text(&format!("{hour:02}:00"));
+                label.set_parent(&*self.obj());
+                self.hours.borrow_mut().push(label);
+            }
+
             crate::actions::items::move_event::install_target(&*self.obj());
             self.creation_hint.install(&*self.obj(), |grid, x, y| {
                 grid.drop_start(x, y, 0).is_some()
@@ -51,6 +62,10 @@ mod imp {
         }
 
         fn dispose(&self) {
+            for label in self.hours.take() {
+                label.unparent();
+            }
+
             self.surface.dispose(self.obj().upcast_ref());
         }
     }
@@ -78,6 +93,12 @@ mod imp {
         }
 
         fn size_allocate(&self, width: i32, _: i32, _: i32) {
+            for (hour, label) in self.hours.borrow().iter().enumerate() {
+                label.measure(gtk::Orientation::Horizontal, -1);
+                label.measure(gtk::Orientation::Vertical, GUTTER);
+                label.size_allocate(&gtk::Allocation::new(0, hour as i32 * 60, GUTTER, 60), -1);
+            }
+
             if let Some(week) = self.week.borrow().as_ref() {
                 let segments =
                     week.days.iter().enumerate().flat_map(|(day, data)| {
@@ -181,14 +202,10 @@ mod imp {
                     width - GUTTER as f32,
                     1.0,
                 );
-                draw_text(
-                    obj.upcast_ref(),
-                    snapshot,
-                    &format!("{hour:02}:00"),
-                    7.0,
-                    y + 2.0,
-                    52.0,
-                );
+            }
+
+            for label in self.hours.borrow().iter() {
+                obj.snapshot_child(label, snapshot);
             }
 
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
@@ -464,7 +481,57 @@ fn drop_start(start: NaiveDate, width: i32, x: f64, y: f64, offset: i64) -> Opti
 
 #[cfg(test)]
 mod tests {
-    use super::{GUTTER, drop_start, preview_bounds};
+    use gtk::{prelude::*, subclass::prelude::*};
+
+    use super::{GUTTER, TimedGrid, drop_start, preview_bounds};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn styled_hour_labels_follow_time_geometry_without_taking_pointer_targets() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+
+        let grid: TimedGrid = gtk::glib::Object::new();
+        let scroll = gtk::ScrolledWindow::builder().child(&grid).build();
+        let window = gtk::Window::builder()
+            .child(&scroll)
+            .default_width(900)
+            .default_height(600)
+            .build();
+        window.present();
+        for _ in 0..30 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+
+        let hours = grid.imp().hours.borrow();
+        assert_eq!(hours.len(), 24);
+        for (hour, label) in hours.iter().enumerate() {
+            assert_eq!(label.text(), format!("{hour:02}:00"));
+            let bounds = label.compute_bounds(&grid).unwrap();
+            assert_eq!(bounds.x(), 0.0);
+            assert_eq!(bounds.y(), hour as f32 * 60.0);
+            assert_eq!(bounds.width(), GUTTER as f32);
+            assert_eq!(bounds.height(), 60.0);
+            let (x, y) = label.layout_offsets();
+            let text_origin = label
+                .compute_point(&grid, &gtk::graphene::Point::new(x as f32, y as f32))
+                .unwrap();
+            assert_eq!(text_origin.x(), 7.0);
+            assert_eq!(text_origin.y(), hour as f32 * 60.0 + 2.0);
+            assert_eq!(
+                grid.pick(10.0, hour as f64 * 60.0 + 5.0, gtk::PickFlags::DEFAULT),
+                Some(grid.clone().upcast()),
+            );
+        }
+
+        let paintable = gtk::WidgetPaintable::new(Some(&grid));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(&snapshot, f64::from(grid.width()), f64::from(grid.height()));
+        assert!(snapshot.to_node().is_some());
+        window.close();
+    }
 
     #[test]
     fn preview_clips_multiday_events_and_excludes_an_exclusive_midnight_end() {

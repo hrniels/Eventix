@@ -185,6 +185,10 @@ button.ev_editor_section_toggle:checked {
     opacity: 0.6;
 }
 
+.ev_hour_label {
+    padding: 2px 5px 0 7px;
+}
+
 .ev_calendar_status {
     padding: 4px 12px;
 }
