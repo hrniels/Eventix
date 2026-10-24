@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GdkCursor" id="pointer">
+    <property name="name">pointer</property>
+  </object>
+  <object class="GtkBox" id="section">
+    <property name="orientation">vertical</property>
+    <style><class name="ev_editor_row"/></style>
+    <child>
+      <object class="GtkBox" id="header">
+        <property name="spacing">6</property>
+        <style><class name="ev_editor_row_header"/></style>
+        <child>
+          <object class="GtkToggleButton" id="toggle">
+            <property name="hexpand">true</property>
+            <property name="cursor">pointer</property>
+            <style><class name="ev_editor_section_toggle"/></style>
+            <property name="child">
+              <object class="GtkBox" id="heading">
+                <property name="spacing">8</property>
+                <!-- Keep the pointer target on the button as the preview disappears. -->
+                <property name="can-target">false</property>
+                <child>
+                  <object class="GtkBox" id="caption_slot"/>
+                </child>
+                <child>
+                  <object class="GtkImage" id="error">
+                    <property name="icon-name">dialog-error-symbolic</property>
+                    <property name="visible">false</property>
+                    <style><class name="ev_editor_section_error"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="preview">
+                    <property name="hexpand">true</property>
+                    <property name="xalign">0</property>
+                    <property name="ellipsize">end</property>
+                    <property name="width-chars">1</property>
+                    <style><class name="ev_editor_preview"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="arrow">
+                    <property name="label">▸</property>
+                    <style><class name="ev_editor_expand_hint"/></style>
+                  </object>
+                </child>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="controls_slot">
+            <property name="visible">false</property>
+            <property name="halign">end</property>
+            <property name="hexpand">true</property>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkRevealer" id="revealer">
+        <property name="transition-type">slide-down</property>
+        <property name="transition-duration">300</property>
+        <property name="child">
+          <object class="GtkBox" id="content">
+            <property name="orientation">vertical</property>
+            <style><class name="ev_editor_expanded"/></style>
+          </object>
+        </property>
+      </object>
+    </child>
+  </object>
+</interface>

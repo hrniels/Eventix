@@ -178,19 +178,14 @@ impl ItemEditor {
     }
 
     pub fn popup_panel(&self) -> gtk::Widget {
-        let panel = self.layer.first_child().unwrap();
-        self.layer.remove(&panel);
-        panel.set_vexpand(false);
-
-        if let Some(scroll) = panel
-            .first_child()
-            .and_then(|header| header.next_sibling())
-            .and_downcast::<gtk::ScrolledWindow>()
-        {
-            scroll.set_max_content_height(500);
+        // The same editor can be hosted standalone or moved into the details popup.
+        if self.panel.parent().as_ref() == Some(self.layer.upcast_ref()) {
+            self.layer.remove(&self.panel);
         }
+        self.panel.set_vexpand(false);
+        self.scroll.set_max_content_height(500);
 
-        panel
+        self.panel.clone().upcast()
     }
 }
 

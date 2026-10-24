@@ -21,56 +21,36 @@ impl FormSection {
         child: &impl IsA<gtk::Widget>,
         controls: Option<&gtk::Widget>,
     ) -> Self {
-        let widget = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        widget.add_css_class("ev_editor_row");
+        let builder =
+            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/section.ui");
+        let widget: gtk::Box = builder.object("section").expect("editor section");
+        let caption_slot: gtk::Box = builder
+            .object("caption_slot")
+            .expect("section caption slot");
+        caption_slot.append(&caption(locale, name));
+        let content: gtk::Box = builder.object("content").expect("section content");
+        content.append(child);
 
-        let (section, arrow) = Self::create_heading(locale, name);
-        let header = Self::create_header(&section.toggle, controls);
-        widget.append(&header);
-        let content = Self::create_content(child);
-        widget.append(&content);
-        section.connect_toggle(arrow, content, controls.cloned());
+        let controls_slot: gtk::Box = builder
+            .object("controls_slot")
+            .expect("section controls slot");
+        if let Some(controls) = controls {
+            controls_slot.append(controls);
+        }
+
+        let section = Self {
+            toggle: builder.object("toggle").expect("section toggle"),
+            preview: builder.object("preview").expect("section preview"),
+            error: builder.object("error").expect("section error icon"),
+        };
+        section.connect_toggle(
+            builder.object("arrow").expect("section expansion hint"),
+            builder.object("revealer").expect("section revealer"),
+            controls.map(|_| controls_slot.upcast()),
+        );
         parent.append(&widget);
 
         section
-    }
-
-    fn create_heading(locale: &dyn Locale, name: &str) -> (Self, gtk::Label) {
-        let toggle = gtk::ToggleButton::new();
-        toggle.add_css_class("ev_editor_section_toggle");
-        toggle.set_cursor_from_name(Some("pointer"));
-        toggle.set_hexpand(true);
-
-        let heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        // Keep the pointer target on the button when expansion hides the preview underneath it.
-        heading.set_can_target(false);
-        heading.append(&caption(locale, name));
-        let error = gtk::Image::from_icon_name("dialog-error-symbolic");
-        error.add_css_class("ev_editor_section_error");
-        error.set_visible(false);
-        heading.append(&error);
-
-        let preview = gtk::Label::new(None);
-        preview.add_css_class("ev_editor_preview");
-        preview.set_hexpand(true);
-        preview.set_xalign(0.0);
-        preview.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        preview.set_width_chars(1);
-        heading.append(&preview);
-
-        let arrow = gtk::Label::new(Some("▸"));
-        arrow.add_css_class("ev_editor_expand_hint");
-        heading.append(&arrow);
-        toggle.set_child(Some(&heading));
-
-        (
-            Self {
-                toggle,
-                preview,
-                error,
-            },
-            arrow,
-        )
     }
 
     pub fn set_invalid(&self, invalid: bool) {
@@ -81,32 +61,6 @@ impl FormSection {
             } else {
                 gtk::AccessibleInvalidState::False
             })]);
-    }
-
-    fn create_header(toggle: &gtk::ToggleButton, controls: Option<&gtk::Widget>) -> gtk::Box {
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        header.add_css_class("ev_editor_row_header");
-        header.append(toggle);
-        if let Some(controls) = controls {
-            controls.set_visible(false);
-            controls.set_halign(gtk::Align::End);
-            controls.set_hexpand(true);
-            header.append(controls);
-        }
-
-        header
-    }
-
-    fn create_content(child: &impl IsA<gtk::Widget>) -> gtk::Revealer {
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        content.add_css_class("ev_editor_expanded");
-        content.append(child);
-
-        gtk::Revealer::builder()
-            .child(&content)
-            .transition_type(gtk::RevealerTransitionType::SlideDown)
-            .transition_duration(300)
-            .build()
     }
 
     fn connect_toggle(
@@ -131,8 +85,9 @@ impl FormSection {
 }
 
 fn caption(locale: &dyn Locale, name: &str) -> gtk::Box {
-    let widget = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-    widget.add_css_class("ev_editor_caption");
+    let builder =
+        gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/caption.ui");
+    let widget = builder.object("caption").expect("editor caption");
     let icon = match name {
         "Calendar" => "collection",
         "Summary" => "card-heading",
@@ -144,12 +99,16 @@ fn caption(locale: &dyn Locale, name: &str) -> gtk::Box {
         "Attendees" => "people-fill",
         _ => "journal-text",
     };
-    widget.append(&image(icon));
-
-    let label = gtk::Label::new(Some(locale.translate(name)));
-    label.set_xalign(0.0);
-    label.add_css_class("ev_editor_field_label");
-    widget.append(&label);
+    builder
+        .object::<gtk::Image>("icon")
+        .expect("editor caption icon")
+        .set_resource(Some(&format!(
+            "/io/github/hrniels/Eventix/gtk/icons/{icon}-symbolic.svg"
+        )));
+    builder
+        .object::<gtk::Label>("label")
+        .expect("editor caption label")
+        .set_text(locale.translate(name));
 
     widget
 }
@@ -160,9 +119,9 @@ pub(super) fn row(
     name: &str,
     child: &impl IsA<gtk::Widget>,
 ) {
-    let widget = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    widget.add_css_class("ev_editor_row");
-    widget.add_css_class("ev_editor_field_row");
+    let builder =
+        gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/field_row.ui");
+    let widget: gtk::Box = builder.object("row").expect("editor field row");
     widget.append(&caption(locale, name));
     child.set_hexpand(true);
     widget.append(child);
@@ -184,20 +143,6 @@ pub(super) fn image(name: &str) -> gtk::Image {
     icon.set_pixel_size(19);
 
     icon
-}
-
-pub(super) fn action_button(locale: &dyn Locale, text: &str, icon: &str) -> gtk::Button {
-    let button = gtk::Button::new();
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    content.set_halign(gtk::Align::Center);
-    let icon = image(icon);
-    icon.set_pixel_size(16);
-    content.append(&icon);
-    content.append(&gtk::Label::new(Some(locale.translate(text))));
-    button.set_child(Some(&content));
-    button.add_css_class("ev_editor_action");
-
-    button
 }
 
 /// Binds grouped native toggles to the same selection model used by draft conversion.
@@ -365,6 +310,7 @@ mod tests {
     #[ignore = "requires a GTK display"]
     fn section_preview_keeps_the_button_as_pointer_target_across_toggles() {
         gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
         let locale = eventix_locale::new_with_timezone(
@@ -373,11 +319,17 @@ mod tests {
             chrono_tz::UTC,
         )
         .unwrap();
-        let (section, arrow) = FormSection::create_heading(locale.as_ref(), "Description");
+        let form = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let section = FormSection::new(
+            &form,
+            locale.as_ref(),
+            "Description",
+            &gtk::TextView::new(),
+            None,
+        );
         section.preview.set_text("Event description");
-        section.connect_toggle(arrow, gtk::Revealer::new(), None);
         let window = gtk::Window::builder()
-            .child(&section.toggle)
+            .child(&form)
             .default_width(600)
             .build();
         window.present();

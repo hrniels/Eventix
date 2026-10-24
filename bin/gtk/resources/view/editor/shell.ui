@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <!-- User-facing text is populated through the application's TOML locale in Rust. -->
+  <object class="GtkBox" id="layer">
+    <property name="orientation">vertical</property>
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <property name="halign">fill</property>
+    <property name="valign">fill</property>
+    <style><class name="ev_editor_backdrop"/></style>
+    <child>
+      <object class="GtkBox" id="panel">
+        <property name="orientation">vertical</property>
+        <property name="halign">center</property>
+        <property name="valign">center</property>
+        <property name="vexpand">true</property>
+        <style><class name="ev_item_editor"/></style>
+        <child>
+          <object class="GtkBox">
+            <style><class name="ev_editor_header"/></style>
+            <child>
+              <object class="GtkLabel" id="title">
+                <property name="hexpand">true</property>
+                <style><class name="ev_editor_title"/></style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkScrolledWindow" id="scroll">
+            <property name="hscrollbar-policy">never</property>
+            <property name="propagate-natural-height">true</property>
+            <property name="child">
+              <object class="GtkBox" id="form">
+                <property name="orientation">vertical</property>
+                <style><class name="ev_editor_form"/></style>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="error">
+            <property name="wrap">true</property>
+            <property name="xalign">0</property>
+            <property name="visible">false</property>
+            <style><class name="ev_editor_error"/></style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">8</property>
+            <style><class name="ev_editor_actions"/></style>
+            <child>
+              <object class="GtkButton" id="save">
+                <property name="hexpand">true</property>
+                <property name="halign">end</property>
+                <style><class name="ev_editor_action"/></style>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <property name="halign">center</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="resource">/io/github/hrniels/Eventix/gtk/icons/floppy2-fill-symbolic.svg</property>
+                        <property name="pixel-size">16</property>
+                      </object>
+                    </child>
+                    <child><object class="GtkLabel" id="save_label"/></child>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="cancel">
+                <style><class name="ev_editor_action"/></style>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">6</property>
+                    <property name="halign">center</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="resource">/io/github/hrniels/Eventix/gtk/icons/x-circle-symbolic.svg</property>
+                        <property name="pixel-size">16</property>
+                      </object>
+                    </child>
+                    <child><object class="GtkLabel" id="cancel_label"/></child>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

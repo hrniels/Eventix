@@ -5,6 +5,11 @@
     <file>view/indicators.ui</file>
     <file>view/details/details.ui</file>
     <file>view/details/scrollers.ui</file>
+    <file>view/editor/caption.ui</file>
+    <file>view/editor/description.ui</file>
+    <file>view/editor/field_row.ui</file>
+    <file>view/editor/section.ui</file>
+    <file>view/editor/shell.ui</file>
     <file>icons/LICENSE</file>
     <file>icons/alarm-symbolic.svg</file>
     <file>icons/arrow-clockwise-symbolic.svg</file>

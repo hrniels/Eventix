@@ -25,12 +25,14 @@ mod layout;
 mod recurrence;
 mod task_status;
 mod validation;
-use layout::{FormSection, action_button, body_label, calendar_factory, choices, row, segments};
+use layout::{FormSection, body_label, calendar_factory, choices, row, segments};
 use recurrence::RecurrenceInput;
 
 /// Owns the draft independently of calendar refreshes and the details popup.
 pub(crate) struct ItemEditor {
     pub layer: gtk::Box,
+    panel: gtk::Box,
+    scroll: gtk::ScrolledWindow,
     pub save: gtk::Button,
     pub cancel: gtk::Button,
     pub id: u64,
@@ -95,8 +97,8 @@ impl ItemEditor {
 
     fn build(id: u64, options: EditorOptions) -> Self {
         let locale = options.locale.as_ref();
-        let form = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        form.add_css_class("ev_editor_form");
+        let shell = EditorShell::new(&options);
+        let form = shell.form.clone();
 
         let calendar = Self::create_calendar(&options);
         row(&form, locale, "Calendar", &calendar);
@@ -125,7 +127,6 @@ impl ItemEditor {
         );
 
         let attendees = AttendeeSection::new(&form, &options);
-        let shell = EditorShell::new(&form, &options);
         let sections = vec![
             dates.section,
             reminders.section,
@@ -141,6 +142,8 @@ impl ItemEditor {
 
         Self {
             layer: shell.layer,
+            panel: shell.panel,
+            scroll: shell.scroll,
             save: shell.save,
             cancel: shell.cancel,
             id,
@@ -298,19 +301,15 @@ impl ItemEditor {
     }
 
     fn create_description(form: &gtk::Box, locale: &dyn Locale) -> (gtk::TextView, FormSection) {
-        let description = gtk::TextView::new();
-        description.set_wrap_mode(gtk::WrapMode::WordChar);
-        description.set_top_margin(6);
-        description.set_bottom_margin(6);
-        description.set_left_margin(6);
-        description.set_right_margin(6);
-
-        let scroll = gtk::ScrolledWindow::builder()
-            .min_content_height(100)
-            .max_content_height(180)
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .child(&description)
-            .build();
+        let builder = gtk::Builder::from_resource(
+            "/io/github/hrniels/Eventix/gtk/view/editor/description.ui",
+        );
+        let description = builder
+            .object("description")
+            .expect("description input is defined in GTK resources");
+        let scroll: gtk::ScrolledWindow = builder
+            .object("scroll")
+            .expect("description scroller is defined in GTK resources");
         let section = FormSection::new(form, locale, "Description", &scroll, None);
 
         (description, section)
@@ -533,98 +532,54 @@ impl ItemEditor {
 struct EditorShell {
     title: gtk::Label,
     layer: gtk::Box,
+    panel: gtk::Box,
+    scroll: gtk::ScrolledWindow,
+    form: gtk::Box,
     save: gtk::Button,
     cancel: gtk::Button,
     error: gtk::Label,
 }
 
 impl EditorShell {
-    fn new(form: &gtk::Box, options: &EditorOptions) -> Self {
+    fn new(options: &EditorOptions) -> Self {
         let locale = options.locale.as_ref();
-        let layer = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        layer.set_hexpand(true);
-        layer.set_vexpand(true);
-        layer.set_halign(gtk::Align::Fill);
-        layer.set_valign(gtk::Align::Fill);
-        layer.add_css_class("ev_editor_backdrop");
-
-        let (panel, title) = Self::create_panel(locale);
-        if options.kind == CalCompType::Todo {
-            title.set_text(locale.translate("New Task"));
+        let builder =
+            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/shell.ui");
+        let shell = Self {
+            title: builder.object("title").expect("editor title"),
+            layer: builder.object("layer").expect("editor backdrop"),
+            panel: builder.object("panel").expect("editor panel"),
+            scroll: builder.object("scroll").expect("editor scroller"),
+            form: builder.object("form").expect("editor form"),
+            save: builder.object("save").expect("editor save button"),
+            cancel: builder.object("cancel").expect("editor cancel button"),
+            error: builder.object("error").expect("editor error label"),
+        };
+        // Editor and details widths share the same popup-placement contract.
+        shell.panel.set_size_request(super::ITEM_PANEL_WIDTH, -1);
+        shell
+            .title
+            .set_text(locale.translate(if options.kind == CalCompType::Todo {
+                "New Task"
+            } else {
+                "New Event"
+            }));
+        for (id, text) in [("save_label", "Save"), ("cancel_label", "Cancel")] {
+            builder
+                .object::<gtk::Label>(id)
+                .expect("editor action label")
+                .set_text(locale.translate(text));
         }
-
-        let scroll = gtk::ScrolledWindow::builder()
-            .child(form)
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .propagate_natural_height(true)
-            .build();
-        panel.append(&scroll);
-
-        let error = Self::create_error();
-        panel.append(&error);
-
-        let (save, cancel) = Self::append_actions(&panel, locale);
-        layer.append(&panel);
 
         if options.calendars.is_empty() {
-            error.set_text(locale.translate("error.create_calendar_first"));
-            error.set_visible(true);
-            save.set_sensitive(false);
+            shell
+                .error
+                .set_text(locale.translate("error.create_calendar_first"));
+            shell.error.set_visible(true);
+            shell.save.set_sensitive(false);
         }
 
-        Self {
-            title,
-            layer,
-            save,
-            cancel,
-            error,
-        }
-    }
-
-    fn create_panel(locale: &dyn Locale) -> (gtk::Box, gtk::Label) {
-        let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        panel.add_css_class("ev_item_editor");
-        panel.set_halign(gtk::Align::Center);
-        panel.set_valign(gtk::Align::Center);
-        panel.set_vexpand(true);
-        panel.set_size_request(super::ITEM_PANEL_WIDTH, -1);
-
-        let title = gtk::Label::new(Some(locale.translate("New Event")));
-        title.add_css_class("ev_editor_title");
-
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        header.add_css_class("ev_editor_header");
-        title.set_hexpand(true);
-        header.append(&title);
-        panel.append(&header);
-
-        (panel, title)
-    }
-
-    fn create_error() -> gtk::Label {
-        let error = gtk::Label::new(None);
-        error.set_wrap(true);
-        error.set_xalign(0.0);
-        error.set_visible(false);
-        error.add_css_class("ev_editor_error");
-
-        error
-    }
-
-    fn append_actions(panel: &gtk::Box, locale: &dyn Locale) -> (gtk::Button, gtk::Button) {
-        let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        actions.add_css_class("ev_editor_actions");
-
-        let save = action_button(locale, "Save", "floppy2-fill");
-        save.set_hexpand(true);
-        save.set_halign(gtk::Align::End);
-
-        let cancel = action_button(locale, "Cancel", "x-circle");
-        actions.append(&save);
-        actions.append(&cancel);
-        panel.append(&actions);
-
-        (save, cancel)
+        shell
     }
 }
 
@@ -1772,6 +1727,7 @@ mod tests {
     #[ignore = "requires a GTK display"]
     fn timezone_changes_preserve_event_instants() {
         gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
         for (from, to, start, end, expected_start, expected_end) in [
