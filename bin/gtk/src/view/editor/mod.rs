@@ -25,8 +25,10 @@ mod layout;
 mod recurrence;
 mod task_status;
 mod validation;
-use layout::{FormSection, bind_choice, body_label, calendar_factory, row, segments};
+use layout::{FormSection, bind_choice, body_label, row, segments};
 use recurrence::RecurrenceInput;
+
+use super::calendar_selector::CalendarSelector;
 
 /// Owns the draft independently of calendar refreshes and the details popup.
 pub(crate) struct ItemEditor {
@@ -43,7 +45,7 @@ pub(crate) struct ItemEditor {
     form: gtk::Box,
     error: gtk::Label,
     options: EditorOptions,
-    calendar: gtk::DropDown,
+    calendar: CalendarSelector,
     summary: gtk::Entry,
     location: gtk::Entry,
     description: gtk::TextView,
@@ -100,8 +102,9 @@ impl ItemEditor {
         let shell = EditorShell::new(&options);
         let form = shell.form.clone();
 
-        let calendar = Self::create_calendar(&options);
-        row(&form, locale, "Calendar", &calendar);
+        let calendar =
+            CalendarSelector::new(&options.calendars, options.last_calendar.as_deref(), false);
+        row(&form, locale, "Calendar", &calendar.widget);
 
         let summary = gtk::Entry::new();
         row(&form, locale, "Summary", &summary);
@@ -114,7 +117,7 @@ impl ItemEditor {
             .then(|| task_status::TaskStatusInput::new(&form, &options));
 
         let dates = DateSection::new(&form, &options);
-        let reminders = ReminderSection::new(&form, &options, &calendar);
+        let reminders = ReminderSection::new(&form, &options, &calendar.widget);
         let (description, description_section) = Self::create_description(&form, locale);
 
         let recurrence = RecurrenceInput::new(locale, options.start.date());
@@ -275,29 +278,6 @@ impl ItemEditor {
                 }
             });
         }
-    }
-
-    fn create_calendar(options: &EditorOptions) -> gtk::DropDown {
-        let calendar = gtk::DropDown::from_strings(
-            &options
-                .calendars
-                .iter()
-                .map(|cal| cal.name.as_str())
-                .collect::<Vec<_>>(),
-        );
-        if let Some(index) = options
-            .calendars
-            .iter()
-            .position(|cal| Some(&cal.id) == options.last_calendar.as_ref())
-        {
-            calendar.set_selected(index as u32);
-        }
-
-        let factory = calendar_factory(&options.calendars, &calendar.model().unwrap());
-        calendar.set_factory(Some(&factory));
-        calendar.set_list_factory(Some(&factory));
-
-        calendar
     }
 
     fn create_description(form: &gtk::Box, locale: &dyn Locale) -> (gtk::TextView, FormSection) {
@@ -1038,15 +1018,94 @@ fn parse_time(entry: &gtk::Entry, locale: &dyn Locale) -> anyhow::Result<NaiveTi
         .map_err(|_| anyhow::anyhow!(locale.translate("error.valid_date_time").to_string()))
 }
 
-struct DateInput {
-    widget: gtk::Box,
-    entry: gtk::Entry,
+pub(crate) struct DateInput {
+    pub(super) widget: gtk::Box,
+    pub(super) entry: gtk::Entry,
+    pub(super) picker: gtk::MenuButton,
     calendar: gtk::Calendar,
     syncing: Rc<Cell<bool>>,
 }
 
 impl DateInput {
-    fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
+    /// Creates a date input whose picker opens the calendar and entry together.
+    pub(super) fn new_popup(locale: &dyn Locale, date: NaiveDate) -> Self {
+        let input = Self::new(locale, date);
+        let popover = input.picker.popover().expect("editor date popover");
+        popover.set_child(None::<&gtk::Widget>);
+        input.widget.remove(&input.picker);
+        input.widget.set_orientation(gtk::Orientation::Vertical);
+        input.widget.append(&input.calendar);
+        popover.set_child(Some(&input.widget));
+        let picker = input.picker.downgrade();
+        input.entry.connect_activate(move |_| {
+            if let Some(picker) = picker.upgrade() {
+                picker.popdown();
+            }
+        });
+        let calendar = input.calendar.downgrade();
+        popover.connect_map(move |_| {
+            if let Some(calendar) = calendar.upgrade() {
+                calendar.grab_focus();
+            }
+        });
+        input.connect_popup_navigation();
+        input
+    }
+
+    /// Keeps keyboard navigation uncommitted until the user presses Enter or Space.
+    fn connect_popup_navigation(&self) {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let calendar = self.calendar.downgrade();
+        let syncing = self.syncing.clone();
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            let Some(calendar) = calendar.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            if !calendar.has_focus()
+                || modifiers.intersects(
+                    gdk::ModifierType::CONTROL_MASK
+                        | gdk::ModifierType::ALT_MASK
+                        | gdk::ModifierType::SUPER_MASK
+                        | gdk::ModifierType::META_MASK,
+                )
+            {
+                return glib::Propagation::Proceed;
+            }
+
+            if matches!(
+                key,
+                gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space | gdk::Key::KP_Space
+            ) {
+                calendar.emit_by_name::<()>("day-selected", &[]);
+                return glib::Propagation::Stop;
+            }
+
+            let forward = if calendar.direction() == gtk::TextDirection::Rtl {
+                -1
+            } else {
+                1
+            };
+            let days = match key {
+                gdk::Key::Left | gdk::Key::KP_Left => -forward,
+                gdk::Key::Right | gdk::Key::KP_Right => forward,
+                gdk::Key::Up | gdk::Key::KP_Up => -7,
+                gdk::Key::Down | gdk::Key::KP_Down => 7,
+                _ => return glib::Propagation::Proceed,
+            };
+            if let Ok(date) = calendar.date().add_days(days) {
+                // GTK's built-in calendar only confirms with Space and does not expose its
+                // focused day. Use the selected date as the cursor without saving the input.
+                syncing.set(true);
+                calendar.select_day(&date);
+                syncing.set(false);
+            }
+            glib::Propagation::Stop
+        });
+        self.calendar.add_controller(keys);
+    }
+
+    pub(super) fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
         let builder = gtk::Builder::from_resource(resource_path!("view/editor/date_input.ui"));
         let widget = builder.object("date_input").expect("editor date input");
         let entry: gtk::Entry = builder.object("entry").expect("editor date entry");
@@ -1061,6 +1120,7 @@ impl DateInput {
         Self {
             widget,
             entry,
+            picker,
             calendar,
             syncing,
         }
@@ -1129,7 +1189,7 @@ impl DateInput {
         });
     }
 
-    fn date(&self, locale: &dyn Locale) -> anyhow::Result<NaiveDate> {
+    pub(super) fn date(&self, locale: &dyn Locale) -> anyhow::Result<NaiveDate> {
         NaiveDate::parse_from_str(self.entry.text().as_str(), "%Y-%m-%d")
             .map_err(|_| anyhow::anyhow!(locale.translate("error.valid_date_time").to_string()))
     }
@@ -2253,10 +2313,10 @@ mod tests {
                     .text()
                     .starts_with(editor.options.locale.translate("Personal"))
             );
-            editor.calendar.set_selected(1);
+            editor.calendar.widget.set_selected(1);
             assert_eq!(editor.alarm_mode.selected(), 0);
             assert!(editor.command().unwrap().personal_alarms.is_none());
-            editor.calendar.set_selected(0);
+            editor.calendar.widget.set_selected(0);
             editor.set_saving(true);
             assert!(!editor.save.is_sensitive());
             editor.set_saving(false);

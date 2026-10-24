@@ -74,8 +74,9 @@ impl ItemEditor {
             .iter()
             .position(|cal| cal.id == fields.calendar)
             .map_or(gtk::INVALID_LIST_POSITION, |index| index as u32);
-        self.calendar.set_selected(selection);
+        self.calendar.widget.set_selected(selection);
         self.calendar
+            .widget
             .set_sensitive(edit.scope != EditScope::Occurrence);
 
         let timezone = self.load_existing_dates(fields);
@@ -342,16 +343,16 @@ mod tests {
             let window = gtk::Window::builder().child(&editor.layer).build();
             window.present();
             while gtk::glib::MainContext::default().iteration(false) {}
-            assert_eq!(editor.calendar.selected(), 1);
+            assert_eq!(editor.calendar.widget.selected(), 1);
             assert_eq!(
-                displayed_label(&editor.calendar.first_child().unwrap()).as_deref(),
+                displayed_label(&editor.calendar.widget.first_child().unwrap()).as_deref(),
                 Some("Z current calendar")
             );
             assert_eq!(editor.command().unwrap().calendar, "current");
-            assert!(editor.calendar.is_sensitive());
-            editor.calendar.set_selected(0);
+            assert!(editor.calendar.widget.is_sensitive());
+            editor.calendar.widget.set_selected(0);
             assert_eq!(
-                displayed_label(&editor.calendar.first_child().unwrap()).as_deref(),
+                displayed_label(&editor.calendar.widget.first_child().unwrap()).as_deref(),
                 Some("A default calendar")
             );
             assert_eq!(editor.command().unwrap().calendar, "other");
@@ -363,11 +364,11 @@ mod tests {
                     super::ItemEditor::edit(2, EditorOptions::load(&state).unwrap(), edit.clone());
                 assert_eq!(editor.command().unwrap().calendar, "current");
                 assert_eq!(
-                    editor.calendar.is_sensitive(),
+                    editor.calendar.widget.is_sensitive(),
                     scope == EditScope::Following
                 );
                 if scope == EditScope::Following {
-                    editor.calendar.set_selected(0);
+                    editor.calendar.widget.set_selected(0);
                     assert_eq!(editor.command().unwrap().calendar, "other");
                 }
             }

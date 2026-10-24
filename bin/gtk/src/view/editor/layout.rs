@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use eventix_locale::Locale;
-use eventix_view::editor::EditorCalendar;
-use gtk::{gdk, prelude::*};
+use gtk::prelude::*;
 
 /// A full-width form row whose header swaps its summary for optional inline controls.
 pub(super) struct FormSection {
@@ -213,89 +212,6 @@ pub(super) fn bind_choice(button: &gtk::CheckButton, model: &gtk::DropDown, inde
         if let Some(button) = weak.upgrade() {
             button.set_active(model.selected() == index);
         }
-    });
-}
-
-pub(super) fn calendar_factory(
-    calendars: &[EditorCalendar],
-    model: &gtk::gio::ListModel,
-) -> gtk::SignalListItemFactory {
-    let factory = gtk::SignalListItemFactory::new();
-    factory.connect_setup(|_, item| {
-        let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
-            return;
-        };
-
-        setup_calendar_item(item);
-    });
-
-    let colors: Vec<_> = calendars
-        .iter()
-        .map(|calendar| calendar.background.clone())
-        .collect();
-    let model = model.clone();
-    factory.connect_bind(move |_, item| {
-        let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
-            return;
-        };
-
-        bind_calendar_item(item, &colors, &model);
-    });
-
-    factory
-}
-
-fn setup_calendar_item(item: &gtk::ListItem) {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-    let dot = gtk::DrawingArea::new();
-    dot.set_size_request(18, 18);
-    let label = gtk::Label::new(None);
-    label.set_xalign(0.0);
-    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    content.append(&dot);
-    content.append(&label);
-    item.set_child(Some(&content));
-}
-
-fn bind_calendar_item(item: &gtk::ListItem, colors: &[String], model: &gtk::gio::ListModel) {
-    let Some(content) = item.child() else {
-        return;
-    };
-
-    if let Some(label) = content.last_child().and_downcast::<gtk::Label>()
-        && let Some(text) = item.item().and_downcast::<gtk::StringObject>()
-    {
-        label.set_text(&text.string());
-    }
-
-    if let Some(dot) = content.first_child().and_downcast::<gtk::DrawingArea>() {
-        // The collapsed dropdown uses a one-item model, so its position is always zero.
-        // Resolve the original object instead, which also handles duplicate calendar names.
-        let position = (0..model.n_items()).find(|&index| model.item(index) == item.item());
-        let color = position
-            .and_then(|index| colors.get(index as usize))
-            .and_then(|color| gdk::RGBA::parse(color).ok())
-            .unwrap_or(gdk::RGBA::TRANSPARENT);
-        set_calendar_dot_color(&dot, color);
-    }
-}
-
-fn set_calendar_dot_color(dot: &gtk::DrawingArea, color: gdk::RGBA) {
-    dot.set_draw_func(move |_, cr, width, height| {
-        cr.set_source_rgba(
-            color.red().into(),
-            color.green().into(),
-            color.blue().into(),
-            color.alpha().into(),
-        );
-        cr.arc(
-            f64::from(width) / 2.0,
-            f64::from(height) / 2.0,
-            f64::from(width.min(height)) / 2.0 - 1.0,
-            0.0,
-            std::f64::consts::TAU,
-        );
-        let _ = cr.fill();
     });
 }
 

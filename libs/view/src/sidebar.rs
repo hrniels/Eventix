@@ -19,6 +19,7 @@ use eventix_state::State;
 use crate::{
     OccurrenceId,
     details::{Details, Response},
+    editor::EditorCalendar,
 };
 
 /// One read-only sidebar placement, including tasks without start or due dates.
@@ -65,6 +66,8 @@ pub struct SidebarGroup {
 pub struct SidebarSnapshot {
     pub events: Vec<SidebarGroup>,
     pub tasks: Vec<SidebarGroup>,
+    pub task_calendars: Vec<EditorCalendar>,
+    pub last_task_calendar: Option<String>,
     pub locale: Arc<dyn Locale + Send + Sync>,
 }
 
@@ -84,6 +87,8 @@ impl SidebarSnapshot {
         Self {
             events,
             tasks,
+            task_calendars: EditorCalendar::load(state, CalCompType::Todo),
+            last_task_calendar: state.misc().last_calendar(CalCompType::Todo).cloned(),
             locale: state.locale(),
         }
     }

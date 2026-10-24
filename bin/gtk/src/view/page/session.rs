@@ -20,11 +20,44 @@ use crate::view::details::{EventDetails, delete};
 pub(super) struct PageSession {
     pub(super) current: RefCell<Option<CalendarSession>>,
     pending_command: Cell<bool>,
+    pending_quick_task: Cell<bool>,
     pending_reminders: RefCell<Option<glib::WeakRef<EventDetails>>>,
     timer: RefCell<Option<glib::SourceId>>,
 }
 
 impl PageSession {
+    pub(super) fn connect_quick_task(&self, page: &CalendarPage) {
+        let quick = page.imp().sidebar.quick_task();
+        let weak = page.downgrade();
+        quick.add.connect_clicked(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.imp().session.add_quick_task(&page);
+            }
+        });
+        let weak = page.downgrade();
+        quick.summary.connect_activate(move |_| {
+            if let Some(page) = weak.upgrade() {
+                page.imp().session.add_quick_task(&page);
+            }
+        });
+    }
+
+    fn add_quick_task(&self, page: &CalendarPage) {
+        if !self.can_edit(page) || self.pending_quick_task.get() {
+            return;
+        }
+        let quick = page.imp().sidebar.quick_task();
+        match quick.command(page.locale().as_ref()) {
+            Ok(command) => {
+                if self.execute_command(page, command) {
+                    self.pending_quick_task.set(true);
+                    quick.set_saving();
+                }
+            }
+            Err(error) => page.show_error("Could not apply changes", &error.to_string()),
+        }
+    }
+
     pub(super) fn save_reminders(&self, page: &CalendarPage, command: UpdatePersonalAlarms) {
         if !self.can_edit(page) {
             return;
@@ -217,10 +250,16 @@ impl PageSession {
             }
             Event::Changed(change) => {
                 self.pending_command.set(false);
+                if self.pending_quick_task.replace(false) {
+                    imp.sidebar.quick_task().finish(true);
+                }
                 self.refresh_subscriptions(change);
             }
             Event::CommandFailed(error) => {
                 self.pending_command.set(false);
+                if self.pending_quick_task.replace(false) {
+                    imp.sidebar.quick_task().finish(false);
+                }
                 page.show_error("Could not apply changes", &error);
             }
         }
@@ -235,6 +274,9 @@ impl PageSession {
     pub(super) fn stop(&self, page: &CalendarPage) {
         page.imp().editor.stop(page);
         self.current.take();
+        if self.pending_quick_task.replace(false) {
+            page.imp().sidebar.quick_task().finish(false);
+        }
         self.pending_reminders.take();
         page.dismiss_popovers();
 

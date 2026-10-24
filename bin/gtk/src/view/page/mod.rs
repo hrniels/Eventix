@@ -104,6 +104,7 @@ mod imp {
             obj.align_headers();
             self.content.connect_controls(&obj);
             obj.connect_event_creation();
+            self.session.connect_quick_task(&obj);
         }
 
         fn dispose(&self) {
@@ -387,6 +388,128 @@ pub(crate) mod tests {
         }
     }
 
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn quick_task_row_fits_beneath_the_task_list() {
+        use eventix_view::{editor::EditorCalendar, sidebar::SidebarSnapshot};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let locale = eventix_locale::default();
+        let start = "2026-10-19".parse().unwrap();
+        let page: CalendarPage = gtk::glib::Object::new();
+        page.show_week(WeekSnapshot {
+            start,
+            days: (0..7)
+                .map(|offset| Day {
+                    date: start + Duration::days(offset),
+                    timed: vec![],
+                    dst: vec![],
+                })
+                .collect(),
+            all_day: vec![],
+            locale: locale.clone(),
+        });
+        page.imp().sidebar.set_snapshot(SidebarSnapshot {
+            events: vec![],
+            tasks: vec![],
+            task_calendars: vec![EditorCalendar {
+                id: "tasks".into(),
+                name: "Tasks".into(),
+                background: "#ffffff".into(),
+                personal: false,
+            }],
+            last_task_calendar: None,
+            locale,
+        });
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let quick = page.imp().sidebar.quick_task();
+        assert!(quick.widget.is_mapped());
+        assert!(quick.summary.width() >= 40);
+        let sidebar = page.imp().sidebar.compute_bounds(&page).unwrap();
+        let add = quick.add.compute_bounds(&page).unwrap();
+        assert!(add.x() + add.width() <= sidebar.x() + sidebar.width());
+        quick.due.entry.set_text("2026-10-24");
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(quick.summary.width() >= 40);
+        quick.due.picker.popup();
+        while gtk::glib::MainContext::default().iteration(false) {}
+        let calendar = quick
+            .due
+            .widget
+            .last_child()
+            .and_downcast::<gtk::Calendar>()
+            .unwrap();
+        assert!(
+            calendar.is_mapped(),
+            "the due button opens the calendar directly"
+        );
+        assert!(
+            calendar.has_focus(),
+            "opening the picker focuses the selected day"
+        );
+        assert_eq!(quick.due.entry.text(), "2026-10-24");
+        calendar.select_day(&gtk::glib::DateTime::from_local(2026, 10, 25, 12, 0, 0.0).unwrap());
+        assert_eq!(quick.due.entry.text(), "2026-10-25");
+        assert!(!quick.due.picker.is_active());
+        quick.due.picker.popup();
+        quick.due.entry.set_text("2026-10-26");
+        quick.due.entry.emit_activate();
+        assert!(!quick.due.picker.is_active());
+        assert_eq!(quick.due.entry.text(), "2026-10-26");
+
+        quick.due.picker.popup();
+        while gtk::glib::MainContext::default().iteration(false) {}
+        assert!(calendar.has_focus());
+        let controllers = calendar.observe_controllers();
+        let keys = (0..controllers.n_items())
+            .filter_map(|index| {
+                controllers
+                    .item(index)
+                    .and_downcast::<gtk::EventControllerKey>()
+            })
+            .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+            .unwrap();
+        let press = |key: gtk::gdk::Key| {
+            keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[&key, &0u32, &gtk::gdk::ModifierType::empty()],
+            )
+        };
+        assert!(press(gtk::gdk::Key::Right));
+        assert!(press(gtk::gdk::Key::Down));
+        assert_eq!(quick.due.entry.text(), "2026-10-26");
+        assert!(
+            quick.due.picker.is_active(),
+            "arrow keys do not commit the date"
+        );
+        assert!(press(gtk::gdk::Key::KP_Enter));
+        assert_eq!(quick.due.entry.text(), "2026-11-03");
+        assert!(!quick.due.picker.is_active());
+
+        for key in [gtk::gdk::Key::Return, gtk::gdk::Key::space] {
+            quick.due.picker.popup();
+            while gtk::glib::MainContext::default().iteration(false) {}
+            assert!(press(key));
+            assert!(!quick.due.picker.is_active());
+            assert_eq!(quick.due.entry.text(), "2026-11-03");
+        }
+        window.close();
+    }
+
     /// Checks real widget allocation, focus retention and cross-surface popup coordination.
     /// Called by the display-backed details test so GTK stays on one test thread.
     pub(crate) fn assert_span_layout_and_refresh(mut week: WeekSnapshot) {
@@ -550,6 +673,13 @@ pub(crate) mod tests {
                 })
                 .collect();
             SidebarSnapshot {
+                task_calendars: vec![eventix_view::editor::EditorCalendar {
+                    id: event.calendar.clone(),
+                    name: "Task calendar".into(),
+                    background: "#803366".into(),
+                    personal: false,
+                }],
+                last_task_calendar: None,
                 events: vec![SidebarGroup {
                     date: Some(week.start),
                     rows: events,
@@ -622,8 +752,16 @@ pub(crate) mod tests {
             .unwrap()
             .last_child()
             .unwrap()
+            .prev_sibling()
+            .unwrap()
             .downcast::<gtk::ScrolledWindow>()
             .unwrap();
+        let quick = imp.sidebar.quick_task();
+        assert!(quick.widget.is_mapped());
+        let quick_bounds = quick.widget.compute_bounds(&page).unwrap();
+        let task_bounds = task_scroll.compute_bounds(&page).unwrap();
+        assert!(quick_bounds.y() >= task_bounds.y() + task_bounds.height());
+        assert!(quick.summary.width() > 0);
         assert!(event_scroll.vadjustment().upper() > event_scroll.vadjustment().page_size());
         assert!(task_scroll.vadjustment().upper() > task_scroll.vadjustment().page_size());
         event_scroll.vadjustment().set_value(60.0);
@@ -695,6 +833,8 @@ pub(crate) mod tests {
                 .unwrap();
         }
         imp.sidebar.set_snapshot(SidebarSnapshot {
+            task_calendars: vec![],
+            last_task_calendar: None,
             events: vec![],
             tasks: vec![],
             locale: week.locale,

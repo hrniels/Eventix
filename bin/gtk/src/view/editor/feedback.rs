@@ -90,7 +90,7 @@ impl ItemEditor {
 
     pub(super) fn install_feedback(&mut self) {
         self.feedback = vec![
-            FieldFeedback::new(Field::Calendar, &self.calendar, None),
+            FieldFeedback::new(Field::Calendar, &self.calendar.widget, None),
             FieldFeedback::new(Field::Summary, &self.summary, None),
             FieldFeedback::new(Field::StartDate, &self.start.entry, Some(0)),
             FieldFeedback::new(Field::StartTime, &self.start_time, Some(0)),

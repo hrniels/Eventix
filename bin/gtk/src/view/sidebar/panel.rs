@@ -2,33 +2,36 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use chrono::NaiveDate;
 use eventix_locale::{DateFlags, Locale};
 use eventix_view::{
     OccurrenceId,
     details::Response,
-    sidebar::{SidebarGroup, SidebarRow, SidebarSnapshot},
+    sidebar::{SidebarGroup, SidebarRow},
 };
-use gtk::{glib, prelude::*, subclass::prelude::*};
+use gtk::{glib, prelude::*};
 
-use super::{details::EventDetails, indicators::EventIndicators, popover::DetailsController};
+use super::super::{
+    details::EventDetails, indicators::EventIndicators, popover::DetailsController,
+};
 use crate::style;
 
 type RowKey = (Option<NaiveDate>, OccurrenceId);
 
-struct Panel {
-    header: gtk::Box,
-    title: gtk::Label,
-    new_item: gtk::Button,
+pub(super) struct Panel {
+    pub(super) content: gtk::Box,
+    pub(super) header: gtk::Box,
+    pub(super) title: gtk::Label,
+    pub(super) new_item: gtk::Button,
     list: gtk::Box,
     scroll: gtk::ScrolledWindow,
     rows: BTreeMap<RowKey, gtk::Button>,
 }
 
 impl Panel {
-    fn new(parent: &gtk::Box, is_events: bool) -> Self {
+    pub(super) fn new(parent: &gtk::Box, is_events: bool) -> Self {
         let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
         panel.set_vexpand(true);
 
@@ -70,6 +73,7 @@ impl Panel {
         parent.append(&frame);
 
         Self {
+            content: panel,
             header,
             title,
             new_item,
@@ -79,7 +83,7 @@ impl Panel {
         }
     }
 
-    fn update(
+    pub(super) fn update(
         &mut self,
         groups: &[SidebarGroup],
         locale: &Arc<dyn Locale + Send + Sync>,
@@ -287,126 +291,4 @@ fn icon(name: &str) -> gtk::Image {
     image.set_pixel_size(14);
 
     image
-}
-
-mod imp {
-    use super::*;
-
-    #[derive(Default)]
-    pub struct Sidebar {
-        pub(super) panels: RefCell<Option<(Panel, Panel)>>,
-        pub(super) details: RefCell<Rc<DetailsController>>,
-        pub colors: RefCell<String>,
-    }
-
-    #[glib::object_subclass]
-    impl ObjectSubclass for Sidebar {
-        const NAME: &'static str = "EventixSidebar";
-        type Type = super::Sidebar;
-        type ParentType = gtk::Box;
-    }
-
-    impl ObjectImpl for Sidebar {
-        fn constructed(&self) {
-            self.parent_constructed();
-
-            let obj = self.obj();
-            obj.set_orientation(gtk::Orientation::Vertical);
-            obj.set_homogeneous(true);
-            obj.set_spacing(12);
-            obj.add_css_class("ev_sidebar");
-
-            let events = Panel::new(obj.upcast_ref(), true);
-            let tasks = Panel::new(obj.upcast_ref(), false);
-            let locale = eventix_locale::default();
-            events.title.set_text(locale.translate("Next Events"));
-            tasks.title.set_text(locale.translate("Next Tasks"));
-            self.panels.replace(Some((events, tasks)));
-        }
-
-        fn dispose(&self) {
-            self.details.borrow().close();
-            self.panels.take();
-        }
-    }
-
-    impl WidgetImpl for Sidebar {}
-
-    impl BoxImpl for Sidebar {}
-}
-
-glib::wrapper! {
-    pub struct Sidebar(ObjectSubclass<imp::Sidebar>)
-        @extends gtk::Box, gtk::Widget,
-        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
-}
-
-impl Sidebar {
-    pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
-        self.imp().details.replace(details);
-    }
-
-    /// Returns the title labels of both panels so callers can align header heights with them.
-    pub(crate) fn panel_titles(&self) -> Vec<gtk::Widget> {
-        self.imp()
-            .panels
-            .borrow()
-            .as_ref()
-            .map(|(events, tasks)| {
-                vec![
-                    events.header.clone().upcast(),
-                    tasks.header.clone().upcast(),
-                ]
-            })
-            .unwrap_or_default()
-    }
-
-    pub(crate) fn new_item_button(&self, kind: eventix_ical::objects::CalCompType) -> gtk::Button {
-        self.imp()
-            .panels
-            .borrow()
-            .as_ref()
-            .map(|(events, tasks)| {
-                if kind == eventix_ical::objects::CalCompType::Event {
-                    events
-                } else {
-                    tasks
-                }
-                .new_item
-                .clone()
-            })
-            .unwrap_or_default()
-    }
-
-    pub fn set_snapshot(&self, snapshot: SidebarSnapshot) {
-        let imp = self.imp();
-        let colors = snapshot
-            .events
-            .iter()
-            .chain(&snapshot.tasks)
-            .flat_map(|group| &group.rows)
-            .map(|row| (row.background.as_str(), row.foreground.as_str()));
-        imp.colors.replace(style::colors_css(colors));
-
-        if let Some((events, tasks)) = imp.panels.borrow_mut().as_mut() {
-            events
-                .title
-                .set_text(snapshot.locale.translate("Next Events"));
-            events
-                .new_item
-                .set_tooltip_text(Some(snapshot.locale.translate("New Event")));
-            tasks
-                .new_item
-                .set_tooltip_text(Some(snapshot.locale.translate("New Task")));
-            tasks
-                .title
-                .set_text(snapshot.locale.translate("Next Tasks"));
-            events.update(&snapshot.events, &snapshot.locale, &imp.details.borrow());
-            tasks.update(&snapshot.tasks, &snapshot.locale, &imp.details.borrow());
-        }
-    }
-
-    pub fn colors_css(&self) -> String {
-        self.imp().colors.borrow().clone()
-    }
 }

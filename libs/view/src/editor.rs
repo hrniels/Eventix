@@ -19,6 +19,33 @@ pub struct EditorCalendar {
     pub personal: bool,
 }
 
+impl EditorCalendar {
+    /// Returns writable calendars supporting the requested component type, sorted by name and ID.
+    pub fn load(state: &State, kind: CalCompType) -> Vec<Self> {
+        let mut calendars = Vec::new();
+        for collection in state.settings().collections().values() {
+            if collection.is_read_only() {
+                continue;
+            }
+            for (id, settings) in collection.calendars() {
+                if settings.types().contains(&kind) {
+                    calendars.push(Self {
+                        id: id.clone(),
+                        name: settings.name().clone(),
+                        background: settings.bgcolor().clone(),
+                        personal: matches!(
+                            settings.alarms(),
+                            eventix_state::CalendarAlarmType::Personal { .. }
+                        ),
+                    });
+                }
+            }
+        }
+        calendars.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+        calendars
+    }
+}
+
 /// Owned choices and initial defaults for an item, independent of UI widgets.
 pub struct EditorOptions {
     pub kind: CalCompType,
@@ -42,26 +69,7 @@ impl EditorOptions {
 
     /// Loads writable calendars and defaults for the requested component type.
     pub fn load_for(state: &State, kind: CalCompType) -> anyhow::Result<Self> {
-        let mut calendars = Vec::new();
-        for collection in state.settings().collections().values() {
-            if collection.is_read_only() {
-                continue;
-            }
-            for (id, settings) in collection.calendars() {
-                if settings.types().contains(&kind) {
-                    calendars.push(EditorCalendar {
-                        id: id.clone(),
-                        name: settings.name().clone(),
-                        background: settings.bgcolor().clone(),
-                        personal: matches!(
-                            settings.alarms(),
-                            eventix_state::CalendarAlarmType::Personal { .. }
-                        ),
-                    });
-                }
-            }
-        }
-        calendars.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+        let calendars = EditorCalendar::load(state, kind);
         let now = Utc::now().with_timezone(state.timezone());
         let start = now
             .with_minute(0)

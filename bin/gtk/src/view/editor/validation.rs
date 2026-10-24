@@ -46,7 +46,7 @@ impl ItemEditor {
         let calendar = self
             .options
             .calendars
-            .get(self.calendar.selected() as usize);
+            .get(self.calendar.widget.selected() as usize);
         if calendar.is_none() {
             check.report(Field::Calendar, "error.create_calendar_first");
         }

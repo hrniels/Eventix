@@ -456,6 +456,21 @@ button.ev_details_uid:hover {
     padding: 0 3px;
 }
 
+.ev_calendar_selector popover contents {
+    min-width: 240px;
+}
+
+.ev_quick_task {
+    padding: 4px;
+    border-top: 1px solid alpha(@theme_fg_color, 0.16);
+}
+
+.ev_quick_task button {
+    min-width: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
 .ev_sidebar_day {
     background: @theme_bg_color;
     font-weight: bold;
