@@ -190,8 +190,15 @@ impl ItemEditor {
 }
 
 impl AlarmInput {
-    fn load(&self, alarm: Option<&eventix_ical::objects::CalAlarm>, timezone: &chrono_tz::Tz) {
-        let Some(alarm) = alarm else { return };
+    pub(in crate::view) fn load(
+        &self,
+        alarm: Option<&eventix_ical::objects::CalAlarm>,
+        timezone: &chrono_tz::Tz,
+    ) {
+        let Some(alarm) = alarm else {
+            self.trigger.set_selected(0);
+            return;
+        };
 
         match alarm.trigger() {
             CalTrigger::Relative { duration, related } => {

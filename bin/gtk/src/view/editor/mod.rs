@@ -1135,8 +1135,8 @@ impl DateInput {
     }
 }
 
-struct AlarmInput {
-    widget: gtk::Box,
+pub(super) struct AlarmInput {
+    pub(super) widget: gtk::Box,
     trigger: gtk::DropDown,
     duration: gtk::SpinButton,
     unit: gtk::DropDown,
@@ -1148,7 +1148,7 @@ struct AlarmInput {
 }
 
 impl AlarmInput {
-    fn new(locale: &dyn Locale, date: NaiveDate, time: NaiveTime) -> Self {
+    pub(super) fn new(locale: &dyn Locale, date: NaiveDate, time: NaiveTime) -> Self {
         let builder = gtk::Builder::from_resource(resource_path!("view/editor/alarm_input.ui"));
         let widget = builder.object("alarm_input").expect("editor alarm input");
         let trigger = dropdown(locale, &["None", "Relative", "Absolute"]);
@@ -1225,18 +1225,31 @@ impl AlarmInput {
         timezone: &chrono_tz::Tz,
         locale: &dyn Locale,
     ) -> anyhow::Result<Vec<CalAlarm>> {
+        self.value_with_text(
+            timezone,
+            locale.translate("error.valid_date_time"),
+            locale.translate("Reminder"),
+        )
+    }
+
+    pub(super) fn value_with_text(
+        &self,
+        timezone: &chrono_tz::Tz,
+        invalid: &str,
+        description: &str,
+    ) -> anyhow::Result<Vec<CalAlarm>> {
         let trigger = match self.trigger.selected() {
             1 => self.relative_trigger(),
-            2 => self.absolute_trigger(timezone, locale)?,
+            2 => self.absolute_trigger(timezone, invalid)?,
             _ => return Ok(Vec::new()),
         };
 
-        Ok(self.alarms(trigger, locale))
+        Ok(self.alarms(trigger, description))
     }
 
-    fn alarms(&self, trigger: CalTrigger, locale: &dyn Locale) -> Vec<CalAlarm> {
+    fn alarms(&self, trigger: CalTrigger, description: &str) -> Vec<CalAlarm> {
         let mut alarm = CalAlarm::new(CalAction::Display, trigger);
-        alarm.set_description(Some(locale.translate("Reminder").to_string()));
+        alarm.set_description(Some(description.to_owned()));
 
         vec![alarm]
     }
@@ -1300,13 +1313,13 @@ impl AlarmInput {
     fn absolute_trigger(
         &self,
         timezone: &chrono_tz::Tz,
-        locale: &dyn Locale,
+        invalid: &str,
     ) -> anyhow::Result<CalTrigger> {
-        let date = CalDate::new_datetime(
-            self.date.date(locale)?,
-            Some(parse_time(&self.time, locale)?),
-            timezone.name(),
-        );
+        let date = NaiveDate::parse_from_str(&self.date.entry.text(), "%Y-%m-%d")
+            .map_err(|_| anyhow::anyhow!(invalid.to_owned()))?;
+        let time = NaiveTime::parse_from_str(&self.time.text(), "%H:%M")
+            .map_err(|_| anyhow::anyhow!(invalid.to_owned()))?;
+        let date = CalDate::new_datetime(date, Some(time), timezone.name());
         Ok(CalTrigger::Absolute(
             DateContext::system().date_to_utc(&date, timezone),
         ))

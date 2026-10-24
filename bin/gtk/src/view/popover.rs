@@ -9,7 +9,9 @@ use std::{
 
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
-use eventix_state::actions::items::{EditScope, ItemId, OccurrenceAction, TaskAction};
+use eventix_state::actions::items::{
+    EditScope, ItemId, OccurrenceAction, TaskAction, UpdatePersonalAlarms,
+};
 use gtk::{glib, graphene, prelude::*, subclass::prelude::ObjectSubclassIsExt};
 
 use super::card::EventCard;
@@ -24,6 +26,7 @@ type DeleteHandler = Rc<dyn Fn(ItemId, bool, String)>;
 type RespondHandler = Rc<dyn Fn(ItemId, CalPartStat)>;
 type OccurrenceHandler = Rc<dyn Fn(ItemId, OccurrenceAction)>;
 type TaskHandler = Rc<dyn Fn(ItemId, TaskAction)>;
+type ReminderHandler = Rc<dyn Fn(UpdatePersonalAlarms)>;
 
 /// Owns the shared details and event-editor popup for the calendar.
 #[derive(Default)]
@@ -33,10 +36,12 @@ pub(crate) struct DetailsController {
     respond: RefCell<Option<RespondHandler>>,
     occurrence: RefCell<Option<OccurrenceHandler>>,
     task: RefCell<Option<TaskHandler>>,
+    reminders: RefCell<Option<ReminderHandler>>,
     dismissed: RefCell<Option<Box<dyn Fn()>>>,
     original: RefCell<Option<gtk::Widget>>,
     editor_scroll: RefCell<Option<gtk::ScrolledWindow>>,
     popover: RefCell<Option<EventDetails>>,
+    presentation: RefCell<Option<EventDetails>>,
     parent: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     source: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
     retained: Cell<bool>,
@@ -67,6 +72,9 @@ impl DetailsController {
     }
 
     fn bind_actions(&self, popover: &EventDetails) {
+        if let Some(callback) = self.reminders.borrow().clone() {
+            popover.connect_reminders(move |command| callback(command));
+        }
         if let Some(callback) = self.task.borrow().clone() {
             popover.connect_task(move |item, action| callback(item, action));
         }
@@ -101,6 +109,20 @@ impl DetailsController {
 
     pub fn connect_task(&self, callback: impl Fn(ItemId, TaskAction) + 'static) {
         self.task.replace(Some(Rc::new(callback)));
+    }
+
+    pub fn connect_reminders(&self, callback: impl Fn(UpdatePersonalAlarms) + 'static) {
+        self.reminders.replace(Some(Rc::new(callback)));
+    }
+
+    pub fn retain_reminders(&self) -> Option<EventDetails> {
+        let popover = self.presentation.borrow().clone()?;
+        self.retained.set(true);
+        Some(popover)
+    }
+
+    pub fn is_current(&self, popover: &EventDetails) -> bool {
+        self.presentation.borrow().as_ref() == Some(popover)
     }
 
     pub fn show_editor(&self, panel: &gtk::Widget) -> bool {
@@ -146,6 +168,7 @@ impl DetailsController {
         };
 
         let child = if let Some(updated) = updated {
+            self.presentation.replace(Some(updated.clone()));
             popover.update_property(&[gtk::accessible::Property::Label(
                 &updated.imp().summary.text(),
             )]);
@@ -266,6 +289,7 @@ impl DetailsController {
     }
 
     pub fn close(&self) {
+        self.presentation.take();
         self.original.take();
         self.editor_scroll.take();
         self.anchor.take();
@@ -423,6 +447,7 @@ impl DetailsController {
                     }
 
                     controller.popover.take();
+                    controller.presentation.take();
                     controller.anchor.take();
                     controller.parent.take();
                     controller.source.take();
@@ -439,6 +464,7 @@ impl DetailsController {
         });
 
         self.popover.replace(Some(popover.clone()));
+        self.presentation.replace(Some(popover.clone()));
 
         let weak = Rc::downgrade(self);
         let previous_layout = Cell::new(None);
@@ -464,6 +490,12 @@ impl DetailsController {
                             root.width(),
                             root.height(),
                         )
+                    })
+                })
+                .or_else(|| {
+                    popover.root().map(|root| {
+                        let (width, height) = popover.placement_size();
+                        (height, width, root.height())
                     })
                 });
             let transitioning = popover

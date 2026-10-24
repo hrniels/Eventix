@@ -190,6 +190,13 @@ impl CalendarPage {
                 page.dismiss_popovers();
             }
         });
+
+        let weak = self.downgrade();
+        imp.details.connect_reminders(move |command| {
+            if let Some(page) = weak.upgrade() {
+                page.imp().session.save_reminders(&page, command);
+            }
+        });
     }
 
     /// Aligns the calendar header with the sidebar panel titles.

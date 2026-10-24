@@ -6,7 +6,9 @@ use std::sync::LazyLock;
 
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
-use eventix_state::actions::items::{EditScope, ItemId, OccurrenceAction, TaskAction};
+use eventix_state::actions::items::{
+    EditScope, ItemId, OccurrenceAction, TaskAction, UpdatePersonalAlarms,
+};
 use eventix_view::{
     Event,
     details::{Attendee, Contact, Details, Response},
@@ -21,6 +23,10 @@ use super::indicators::EventIndicators;
 
 mod arrow;
 pub(crate) mod delete;
+mod reminders;
+mod size_transition;
+
+type ReminderHandler = std::rc::Rc<dyn Fn(UpdatePersonalAlarms)>;
 
 struct DetailItem<'a> {
     summary: &'a str,
@@ -45,6 +51,7 @@ mod imp {
         pub tasks: std::cell::RefCell<Vec<(gtk::Button, TaskAction)>>,
         pub item: std::cell::RefCell<Option<ItemId>>,
         pub recurrent: std::cell::Cell<bool>,
+        pub(super) reminders: std::cell::RefCell<Vec<reminders::ReminderEditor>>,
         #[template_child]
         pub summary: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -193,6 +200,41 @@ impl EventDetails {
                 }
             });
         }
+    }
+
+    pub fn connect_reminders(&self, callback: impl Fn(UpdatePersonalAlarms) + 'static) {
+        let callback: ReminderHandler = std::rc::Rc::new(callback);
+        for editor in self.imp().reminders.borrow().iter() {
+            editor.connect_save(self.imp().item.borrow().clone(), callback.clone());
+        }
+    }
+
+    pub(crate) fn selected_item(&self) -> Option<ItemId> {
+        self.imp().item.borrow().clone()
+    }
+
+    pub(crate) fn reminders_saved(
+        &self,
+        item: &crate::model::session::SavedItem,
+        locale: &dyn Locale,
+    ) {
+        let (details, recurrent, exception, alarm) = match item {
+            crate::model::session::SavedItem::Event(event) => (
+                &event.details,
+                event.recurrent,
+                event.exception,
+                event.alarm,
+            ),
+            crate::model::session::SavedItem::Task(task) => {
+                (&task.details, task.recurrent, task.exception, task.alarm)
+            }
+        };
+        for editor in self.imp().reminders.borrow().iter() {
+            editor.saved(details);
+        }
+        self.imp()
+            .indicators
+            .set_state(recurrent, exception, alarm, locale);
     }
 
     pub fn connect_delete(&self, callback: impl Fn(ItemId, bool, String) + 'static) {
@@ -378,11 +420,9 @@ impl EventDetails {
         }
 
         if let Some(reminders) = &details.reminders {
-            row(
-                "alarm",
-                "Reminder",
-                reminder_content(reminders, event, locale).upcast_ref(),
-            );
+            let (content, editors) = reminders::content(reminders, event, locale);
+            self.imp().reminders.replace(editors);
+            row("alarm", "Reminder", content.upcast_ref());
         }
 
         if let Some(organizer) = &details.organizer {
@@ -631,24 +671,6 @@ fn detail_row(
     row
 }
 
-fn reminder_content(reminders: &str, event: &DetailItem<'_>, locale: &dyn Locale) -> gtk::Box {
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
-    content.append(&label(reminders));
-    if event.details.actions.personal_reminders {
-        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        for key in if event.recurrent {
-            &["Edit series", "Edit occ."][..]
-        } else {
-            &["Edit"][..]
-        } {
-            buttons.append(&button("pencil", locale.translate(key), ""));
-        }
-        content.append(&buttons);
-    }
-
-    content
-}
-
 fn organizer_label(organizer: &Contact, sent_by: Option<&str>, locale: &dyn Locale) -> gtk::Label {
     let text = label("");
     let mut markup = contact_markup(organizer);
@@ -892,6 +914,7 @@ mod tests {
                 status: None,
                 recurrence: None,
                 reminders: None,
+                personal_reminders: Default::default(),
                 organizer: None,
                 sent_by: None,
                 attendees: vec![],
@@ -1059,6 +1082,7 @@ mod tests {
                         status: full.then(|| locale.translate("CONFIRMED").into()),
                         recurrence: full.then(|| locale.translate("Daily").to_owned()),
                         reminders: full.then(|| "15 minutes before start".into()),
+                        personal_reminders: Default::default(),
                         organizer: full.then(|| contact.clone()),
                         sent_by: full.then(|| "mailto:assistant@example.org".into()),
                         attendees: if full {
@@ -1221,6 +1245,48 @@ mod tests {
                 assert!(popup.is_mapped(), "details popup did not map for {variant}");
                 assert!(popup.height() < 1200, "height: {}", popup.height());
                 assert_eq!(popup.imp().rows.child_at(0, 1).is_some(), full);
+                if full {
+                    let reminder_row = popup.imp().rows.child_at(0, 4).unwrap();
+                    let reminder_content = reminder_row
+                        .downcast::<gtk::Grid>()
+                        .unwrap()
+                        .child_at(2, 0)
+                        .unwrap();
+                    let area = reminder_content
+                        .first_child()
+                        .unwrap()
+                        .downcast::<super::size_transition::SizeTransition>()
+                        .unwrap();
+                    let stack = area.stack();
+                    let display = stack.visible_child().unwrap();
+                    let animate = |expected: &gtk::Widget| {
+                        for _ in 0..25 {
+                            while gtk::glib::MainContext::default().iteration(false) {}
+                            assert_eq!(stack.visible_child().as_ref(), Some(expected));
+                            assert!(popup.is_mapped());
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                        }
+                    };
+                    let buttons = display.last_child().unwrap();
+                    buttons
+                        .first_child()
+                        .unwrap()
+                        .downcast::<gtk::Button>()
+                        .unwrap()
+                        .emit_clicked();
+                    let panel = stack.visible_child().unwrap();
+                    assert_ne!(panel, display);
+                    animate(&panel);
+                    panel
+                        .last_child()
+                        .unwrap()
+                        .last_child()
+                        .unwrap()
+                        .downcast::<gtk::Button>()
+                        .unwrap()
+                        .emit_clicked();
+                    animate(&display);
+                }
                 if let Some(directory) = std::env::var_os("EVENTIX_DETAILS_SCREENSHOTS") {
                     let paintable = gtk::WidgetPaintable::new(Some(&popup));
                     let snapshot = gtk::Snapshot::new();

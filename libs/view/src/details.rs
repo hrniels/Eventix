@@ -6,7 +6,7 @@
 
 use eventix_ical::{
     col::Occurrence,
-    objects::{CalCompType, CalPartStat, CalRole, DateContext, EventLike},
+    objects::{CalAlarm, CalCompType, CalPartStat, CalRole, DateContext, EventLike},
 };
 use eventix_state::{CalendarAlarmType, State};
 
@@ -72,10 +72,20 @@ pub struct Details {
     pub status: Option<String>,
     pub recurrence: Option<String>,
     pub reminders: Option<String>,
+    pub personal_reminders: PersonalReminders,
     pub organizer: Option<Contact>,
     pub sent_by: Option<String>,
     pub attendees: Vec<Attendee>,
     pub actions: DetailActions,
+}
+
+/// Personal overrides used to initialize series and occurrence reminder editors.
+#[derive(Debug, Default)]
+pub struct PersonalReminders {
+    /// The series override; an empty list explicitly disables reminders.
+    pub series: Option<Vec<CalAlarm>>,
+    /// The occurrence override, falling back to the series override when absent.
+    pub occurrence: Option<Vec<CalAlarm>>,
 }
 
 impl Details {
@@ -180,6 +190,18 @@ impl Details {
                         .join("\n")
                 })
                 .or_else(|| personal_reminders.then(|| "−".into())),
+            personal_reminders: {
+                let personal = state.personal_alarms().get(occ.directory());
+                let rid = occ.rid().cloned().or_else(|| occ.occurrence_startdate());
+                PersonalReminders {
+                    series: personal
+                        .and_then(|p| p.get(occ.uid(), None))
+                        .map(|a| a.alarms().to_vec()),
+                    occurrence: personal
+                        .and_then(|p| p.get(occ.uid(), rid.as_ref()))
+                        .map(|a| a.alarms().to_vec()),
+                }
+            },
             organizer: occ.organizer().map(|org| Contact {
                 name: org
                     .common_name()

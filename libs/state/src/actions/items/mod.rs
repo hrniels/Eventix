@@ -10,6 +10,7 @@ mod delete_item;
 mod move_event;
 mod respond_item;
 mod update_item;
+mod update_personal_alarms;
 
 use eventix_ical::objects::CalDate;
 
@@ -21,6 +22,7 @@ pub use delete_item::DeleteItem;
 pub use move_event::{MoveEvent, ResizeEvent};
 pub use respond_item::RespondItem;
 pub use update_item::{EditScope, UpdateItem};
+pub use update_personal_alarms::UpdatePersonalAlarms;
 
 /// Identifies an occurrence independently of its current placement.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -141,7 +141,7 @@ impl PersonalAlarms {
 /// Associates a set of [`CalAlarm`] values with a particular UID and optional recurrence ID. When
 /// `rid` is `None`, the override applies to the base event and serves as the default for all its
 /// occurrences that have no more-specific override.
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AlarmOverwrite {
     uid: String,
     #[serde(default)]
@@ -161,7 +161,7 @@ impl AlarmOverwrite {
 /// Each entry overrides the alarms for a specific event UID, optionally scoped to a single
 /// occurrence via a recurrence ID. An empty alarm list in an entry explicitly disables all alarms
 /// for that event or occurrence.
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PersonalCalendarAlarms {
     #[serde(default)]
     version: u32,

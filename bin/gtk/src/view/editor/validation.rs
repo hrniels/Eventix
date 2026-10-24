@@ -341,6 +341,6 @@ impl<'a> Checks<'a> {
             _ => return Vec::new(),
         };
 
-        input.alarms(trigger, self.locale)
+        input.alarms(trigger, self.locale.translate("Reminder"))
     }
 }

@@ -7,23 +7,44 @@ use std::cell::{Cell, RefCell};
 use chrono::NaiveDate;
 use eventix_state::actions::{
     Action,
-    items::{DeleteItem, ItemId},
+    items::{DeleteItem, ItemId, UpdatePersonalAlarms},
 };
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::session::{CalendarSession, ChangeSet, ContentRequest, Event};
-use crate::view::details::delete;
+use crate::view::details::{EventDetails, delete};
 
 /// Owns the model connection, command state, and periodic refresh lifecycle.
 #[derive(Default)]
 pub(super) struct PageSession {
     pub(super) current: RefCell<Option<CalendarSession>>,
     pending_command: Cell<bool>,
+    pending_reminders: RefCell<Option<glib::WeakRef<EventDetails>>>,
     timer: RefCell<Option<glib::SourceId>>,
 }
 
 impl PageSession {
+    pub(super) fn save_reminders(&self, page: &CalendarPage, command: UpdatePersonalAlarms) {
+        if !self.can_edit(page) {
+            return;
+        }
+        let Some(popover) = page.imp().details.retain_reminders() else {
+            return;
+        };
+        let Some(selected) = popover.selected_item() else {
+            return;
+        };
+        if let Some(session) = self.current.borrow().as_ref() {
+            self.pending_command.set(true);
+            self.pending_reminders.replace(Some(popover.downgrade()));
+            page.imp()
+                .status
+                .set_text(page.locale().translate("Applying changes…"));
+            session.save_reminders(selected, command);
+        }
+    }
+
     pub(super) fn reload(&self, page: &CalendarPage) {
         page.dismiss_popovers();
 
@@ -150,6 +171,23 @@ impl PageSession {
     fn handle_event(&self, page: &CalendarPage, event: Event) {
         let imp = page.imp();
         match event {
+            Event::RemindersSaved(result) => {
+                self.pending_command.set(false);
+                let popover = self
+                    .pending_reminders
+                    .take()
+                    .and_then(|weak| weak.upgrade())
+                    .filter(|popover| imp.details.is_current(popover));
+                match result {
+                    Ok((change, item)) => {
+                        if let Some(popover) = popover {
+                            popover.reminders_saved(&item, page.locale().as_ref());
+                        }
+                        self.refresh_subscriptions(change);
+                    }
+                    Err(error) => page.show_error("Could not apply changes", &error),
+                }
+            }
             Event::EditLoaded(id, result) => imp.editor.edit_loaded(page, id, result),
             Event::EditorLoaded(id, result) => imp.editor.editor_loaded(page, id, result),
             Event::EditSaved(id, result) => {
@@ -197,6 +235,7 @@ impl PageSession {
     pub(super) fn stop(&self, page: &CalendarPage) {
         page.imp().editor.stop(page);
         self.current.take();
+        self.pending_reminders.take();
         page.dismiss_popovers();
 
         if let Some(timer) = self.timer.take() {

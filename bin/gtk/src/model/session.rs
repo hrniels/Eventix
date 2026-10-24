@@ -10,7 +10,7 @@ use chrono::{Duration, NaiveDate, Utc};
 use eventix_ical::objects::CalCompType;
 use eventix_state::actions::{
     Action,
-    items::{CreateItem, EditScope, ItemId, UpdateItem},
+    items::{CreateItem, EditScope, ItemId, UpdateItem, UpdatePersonalAlarms},
 };
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
@@ -59,6 +59,7 @@ pub(crate) enum Event {
     EditorSaved(u64, Result<ChangeSet, String>),
     EditLoaded(u64, Result<(EditorOptions, Box<UpdateItem>), String>),
     EditSaved(u64, Result<(ChangeSet, SavedItem), String>),
+    RemindersSaved(Result<(ChangeSet, SavedItem), String>),
     ContentLoaded(ContentResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
     SourceLoaded(String),
@@ -78,6 +79,7 @@ enum Message {
     CreateItem(u64, Box<CreateItem>),
     LoadEdit(u64, ItemId, EditScope),
     SaveEdit(u64, Box<UpdateItem>),
+    SaveReminders(ItemId, UpdatePersonalAlarms),
     ShowContent(ContentRequest),
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
@@ -91,6 +93,12 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn save_reminders(&self, selected: ItemId, command: UpdatePersonalAlarms) {
+        let _ = self
+            .requests
+            .try_send(Message::SaveReminders(selected, command));
+    }
+
     pub fn load_edit(&self, id: u64, item: ItemId, scope: EditScope) {
         let _ = self.requests.try_send(Message::LoadEdit(id, item, scope));
     }
@@ -253,6 +261,10 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
+            Message::SaveReminders(selected, command) => Event::RemindersSaved(
+                self.save_reminders(selected, command)
+                    .map_err(|error| format!("{error:#}")),
+            ),
             Message::LoadEdit(id, item, scope) => Event::EditLoaded(
                 id,
                 self.load_edit(item, scope)
@@ -337,11 +349,47 @@ impl Worker {
     fn save_edit(&mut self, edit: Box<UpdateItem>) -> anyhow::Result<(ChangeSet, SavedItem)> {
         let kind = edit.fields.kind;
         let change = self.execute(edit)?;
+        let event = self.saved_item(&change.item, kind)?;
+
+        Ok((change, event))
+    }
+
+    fn save_reminders(
+        &mut self,
+        selected: ItemId,
+        command: UpdatePersonalAlarms,
+    ) -> anyhow::Result<(ChangeSet, SavedItem)> {
+        let state = self.state()?;
+        let kind = state
+            .store()
+            .file_by_id(&selected.uid)
+            .and_then(|file| {
+                file.occurrence_by_id(
+                    &selected.uid,
+                    selected.recurrence.as_ref(),
+                    state.timezone(),
+                )
+            })
+            .map(|occ| occ.ctype())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    state
+                        .locale()
+                        .translate("Occurrence is no longer available")
+                        .to_string()
+                )
+            })?;
+        let change = self.execute(Box::new(command))?;
+        let item = self.saved_item(&selected, kind)?;
+        Ok((change, item))
+    }
+
+    fn saved_item(&self, item: &ItemId, kind: CalCompType) -> anyhow::Result<SavedItem> {
         let state = self.state()?;
         let event = match kind {
-            CalCompType::Event => eventix_view::Event::load(state, &change.item)
+            CalCompType::Event => eventix_view::Event::load(state, item)
                 .map(|event| SavedItem::Event(Box::new(event))),
-            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(state, &change.item)
+            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(state, item)
                 .map(|task| SavedItem::Task(Box::new(task))),
         }
         .ok_or_else(|| {
@@ -353,7 +401,7 @@ impl Worker {
             )
         })?;
 
-        Ok((change, event))
+        Ok(event)
     }
 
     fn show_content(&mut self, request: &ContentRequest) -> anyhow::Result<Snapshot> {
@@ -970,6 +1018,55 @@ mod tests {
             );
             assert_eq!(event.details.attendees[0].response, Response::Accepted);
         }
+    }
+
+    #[test]
+    fn reminder_saves_return_the_selected_occurrence_and_refresh_series_membership() {
+        use super::SavedItem;
+        use eventix_state::{CalendarAlarmType, actions::items::UpdatePersonalAlarms};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state
+            .as_mut()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .all_calendars_mut()
+            .get_mut("test")
+            .unwrap()
+            .set_alarms(CalendarAlarmType::Personal { default: None });
+        subscribe(&mut worker, 1, "2026-10-12", View::Week);
+        let selected = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: Some("TU2026-10-13T09:00:00".parse().unwrap()),
+        };
+        let command = UpdatePersonalAlarms {
+            item: ItemId {
+                recurrence: None,
+                ..selected.clone()
+            },
+            alarms: Some(vec![]),
+        };
+        let Some(Event::RemindersSaved(Ok((change, SavedItem::Event(event))))) = worker
+            .handle(Message::SaveReminders(selected.clone(), command))
+            .pop()
+        else {
+            panic!("expected saved reminder details")
+        };
+        assert!(change.item.recurrence.is_none());
+        assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
+        assert!(change.affected.contains(&SubscriptionId::Sidebar));
+        assert_eq!(
+            event.id.recurrence,
+            selected.recurrence.unwrap().to_string()
+        );
+        assert_eq!(event.details.reminders.as_deref(), Some("−"));
+        assert_eq!(event.details.personal_reminders.series, Some(vec![]));
     }
 
     #[test]

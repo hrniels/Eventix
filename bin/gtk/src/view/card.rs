@@ -338,6 +338,7 @@ mod tests {
                 status: None,
                 recurrence: None,
                 reminders: None,
+                personal_reminders: Default::default(),
                 organizer: None,
                 sent_by: None,
                 attendees: vec![],
