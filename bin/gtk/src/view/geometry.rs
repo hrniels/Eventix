@@ -27,6 +27,7 @@ pub(super) fn draw_text(
     let layout = widget.create_pango_layout(Some(text));
     layout.set_width((width * gtk::pango::SCALE as f32) as i32);
     layout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+
     snapshot.save();
     snapshot.translate(&graphene::Point::new(x, y));
     snapshot.append_layout(&layout, &widget.color());

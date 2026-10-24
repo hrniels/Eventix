@@ -23,6 +23,7 @@ impl FormSection {
     ) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 0);
         widget.add_css_class("ev_editor_row");
+
         let (section, arrow) = Self::create_heading(locale, name);
         let header = Self::create_header(&section.toggle, controls);
         widget.append(&header);
@@ -30,6 +31,7 @@ impl FormSection {
         widget.append(&content);
         section.connect_toggle(arrow, content, controls.cloned());
         parent.append(&widget);
+
         section
     }
 
@@ -38,6 +40,7 @@ impl FormSection {
         toggle.add_css_class("ev_editor_section_toggle");
         toggle.set_cursor_from_name(Some("pointer"));
         toggle.set_hexpand(true);
+
         let heading = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         // Keep the pointer target on the button when expansion hides the preview underneath it.
         heading.set_can_target(false);
@@ -54,10 +57,12 @@ impl FormSection {
         preview.set_ellipsize(gtk::pango::EllipsizeMode::End);
         preview.set_width_chars(1);
         heading.append(&preview);
+
         let arrow = gtk::Label::new(Some("▸"));
         arrow.add_css_class("ev_editor_expand_hint");
         heading.append(&arrow);
         toggle.set_child(Some(&heading));
+
         (
             Self {
                 toggle,
@@ -88,6 +93,7 @@ impl FormSection {
             controls.set_hexpand(true);
             header.append(controls);
         }
+
         header
     }
 
@@ -95,6 +101,7 @@ impl FormSection {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.add_css_class("ev_editor_expanded");
         content.append(child);
+
         gtk::Revealer::builder()
             .child(&content)
             .transition_type(gtk::RevealerTransitionType::SlideDown)
@@ -138,10 +145,12 @@ fn caption(locale: &dyn Locale, name: &str) -> gtk::Box {
         _ => "journal-text",
     };
     widget.append(&image(icon));
+
     let label = gtk::Label::new(Some(locale.translate(name)));
     label.set_xalign(0.0);
     label.add_css_class("ev_editor_field_label");
     widget.append(&label);
+
     widget
 }
 
@@ -164,6 +173,7 @@ pub(super) fn body_label(locale: &dyn Locale, text: &str) -> gtk::Label {
     let label = gtk::Label::new(Some(locale.translate(text)));
     label.add_css_class("ev_editor_body_label");
     label.set_xalign(0.0);
+
     label
 }
 
@@ -172,6 +182,7 @@ pub(super) fn image(name: &str) -> gtk::Image {
         "/io/github/hrniels/Eventix/gtk/icons/{name}-symbolic.svg"
     ));
     icon.set_pixel_size(19);
+
     icon
 }
 
@@ -185,6 +196,7 @@ pub(super) fn action_button(locale: &dyn Locale, text: &str, icon: &str) -> gtk:
     content.append(&gtk::Label::new(Some(locale.translate(text))));
     button.set_child(Some(&content));
     button.add_css_class("ev_editor_action");
+
     button
 }
 
@@ -203,6 +215,7 @@ pub(super) fn segments(locale: &dyn Locale, model: &gtk::DropDown, labels: &[&st
         bind_segment(&button, model, index as u32);
         widget.append(&button);
     }
+
     widget
 }
 
@@ -215,6 +228,7 @@ fn bind_segment(button: &gtk::ToggleButton, model: &gtk::DropDown, index: u32) {
             model.set_selected(index);
         }
     });
+
     let weak = button.downgrade();
     model.connect_selected_notify(move |model| {
         if let Some(button) = weak.upgrade() {
@@ -236,6 +250,7 @@ pub(super) fn choices(
         bind_choice(&button, model, index as u32);
         buttons.push(button);
     }
+
     buttons
 }
 
@@ -248,6 +263,7 @@ fn bind_choice(button: &gtk::CheckButton, model: &gtk::DropDown, index: u32) {
             model.set_selected(index);
         }
     });
+
     let weak = button.downgrade();
     model.connect_selected_notify(move |model| {
         if let Some(button) = weak.upgrade() {
@@ -265,8 +281,10 @@ pub(super) fn calendar_factory(
         let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
             return;
         };
+
         setup_calendar_item(item);
     });
+
     let colors: Vec<_> = calendars
         .iter()
         .map(|calendar| calendar.background.clone())
@@ -276,8 +294,10 @@ pub(super) fn calendar_factory(
         let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
             return;
         };
+
         bind_calendar_item(item, &colors, &model);
     });
+
     factory
 }
 
@@ -297,11 +317,13 @@ fn bind_calendar_item(item: &gtk::ListItem, colors: &[String], model: &gtk::gio:
     let Some(content) = item.child() else {
         return;
     };
+
     if let Some(label) = content.last_child().and_downcast::<gtk::Label>()
         && let Some(text) = item.item().and_downcast::<gtk::StringObject>()
     {
         label.set_text(&text.string());
     }
+
     if let Some(dot) = content.first_child().and_downcast::<gtk::DrawingArea>() {
         // The collapsed dropdown uses a one-item model, so its position is always zero.
         // Resolve the original object instead, which also handles duplicate calendar names.

@@ -41,6 +41,7 @@ impl DraggedEvent {
             + chrono::Duration::minutes(i64::from(segment.minute_start.min(1422)));
         payload.offset_minutes =
             (displayed_start - segment.event.start.naive_local()).num_minutes();
+
         Some(payload)
     }
 
@@ -48,11 +49,13 @@ impl DraggedEvent {
         if !event.details.actions.edit {
             return None;
         }
+
         let recurrence = if event.id.recurrence.is_empty() {
             None
         } else {
             Some(event.id.recurrence.parse().ok()?)
         };
+
         Some(Self {
             item: ItemId {
                 calendar: event.id.calendar.clone(),
@@ -93,6 +96,7 @@ impl DraggedEvent {
         } else {
             start.checked_add_signed(self.expected_end - self.expected_start)?
         };
+
         Some((start, end))
     }
 
@@ -105,6 +109,7 @@ impl DraggedEvent {
                 expected_end: self.expected_end,
             });
         }
+
         Box::new(MoveEvent {
             item: self.item.clone(),
             start,
@@ -128,11 +133,13 @@ pub(crate) fn install_source(card: &EventCard) {
         if page.can_edit() && card.resize_edge(y).is_some() {
             return None;
         }
+
         let payload = if page.can_edit() {
             card.drag_payload(y)
         } else {
             None
         };
+
         let content = match payload {
             Some(payload) => {
                 source.set_actions(if payload.item.recurrence.is_none() {
@@ -144,8 +151,10 @@ pub(crate) fn install_source(card: &EventCard) {
             }
             None => BlockedEvent.to_value(),
         };
+
         source.set_icon(Some(&gdk::Paintable::new_empty(1, 1)), 0, 0);
         page.dismiss_popovers();
+
         Some(gdk::ContentProvider::for_value(&content))
     });
     card.add_controller(source);
@@ -181,6 +190,7 @@ pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
     );
     target.set_preload(true);
     let position = Rc::new(Cell::new(None));
+
     let last_position = position.clone();
     let weak = grid.downgrade();
     target.connect_enter(move |target, x, y| {
@@ -189,6 +199,7 @@ pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
             preview(&grid, target, x, y)
         })
     });
+
     let last_position = position.clone();
     let weak = grid.downgrade();
     target.connect_motion(move |target, x, y| {
@@ -197,6 +208,7 @@ pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
             preview(&grid, target, x, y)
         })
     });
+
     // Preloading can finish after enter, even when the pointer is already stationary.
     let last_position = position.clone();
     let weak = grid.downgrade();
@@ -207,6 +219,7 @@ pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
             preview(&grid, target, x, y);
         }
     });
+
     let last_position = position.clone();
     let weak = grid.downgrade();
     target.connect_leave(move |_| {
@@ -215,31 +228,37 @@ pub(crate) fn install_target<T: MoveTarget>(grid: &T) {
             grid.clear_drop_preview();
         }
     });
+
     let weak = grid.downgrade();
     target.connect_drop(move |target, value, x, y| {
         position.set(None);
         let Some(grid) = weak.upgrade() else {
             return false;
         };
+
         grid.clear_drop_preview();
+
         let Ok(payload) = value.get::<DraggedEvent>() else {
             return false;
         };
         let Some(start) = grid.move_start(&payload, x, y) else {
             return false;
         };
+
         let Some(page) = grid
             .ancestor(CalendarPage::static_type())
             .and_downcast::<CalendarPage>()
         else {
             return false;
         };
+
         let copy = target
             .current_drop()
             .and_then(|drop| drop.drag())
             .is_some_and(|drag| drag.selected_action() == gdk::DragAction::COPY);
         page.execute_command(payload.command(start, copy))
     });
+
     grid.add_controller(target);
 }
 
@@ -252,6 +271,7 @@ fn preview<T: MoveTarget>(grid: &T, target: &gtk::DropTarget, x: f64, y: f64) ->
         grid.clear_drop_preview();
         return gdk::DragAction::empty();
     }
+
     let payload = target
         .value()
         .and_then(|value| value.get::<DraggedEvent>().ok());
@@ -259,10 +279,13 @@ fn preview<T: MoveTarget>(grid: &T, target: &gtk::DropTarget, x: f64, y: f64) ->
         grid.clear_drop_preview();
         return drag_action(target);
     };
+
     if grid.show_move_preview(&payload, x, y) {
         return drag_action(target);
     }
+
     grid.clear_drop_preview();
+
     gdk::DragAction::empty()
 }
 

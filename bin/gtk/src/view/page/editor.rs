@@ -43,6 +43,7 @@ impl PageEditor {
         let id = self.request.get().wrapping_add(1);
         self.request.set(id);
         self.loading.set(true);
+
         id
     }
 
@@ -79,8 +80,10 @@ impl PageEditor {
             page.imp()
                 .details
                 .show_new_editor(page.upcast_ref(), &editor.popup_panel());
+
             true
         };
+
         if shown {
             self.current.replace(Some(editor.clone()));
             editor.focus();
@@ -179,6 +182,7 @@ impl PageEditor {
         let Some(editor) = self.current.borrow().clone() else {
             return;
         };
+
         if editor.saving.get() {
             return;
         }
@@ -186,8 +190,10 @@ impl PageEditor {
         match editor.command() {
             Ok(command) => {
                 editor.clear_errors();
+
                 if let Some(session) = page.imp().session.current.borrow().as_ref() {
                     editor.set_saving(true);
+
                     if let Some(mut edit) = editor.existing.borrow().clone() {
                         edit.fields = *command;
                         session.save_edit(editor.id, Box::new(edit));
@@ -234,6 +240,7 @@ impl PageEditor {
                 if let Some(slot) = slot {
                     options.start = slot.start;
                 }
+
                 let editor = if slot.is_some_and(|slot| slot.all_day) {
                     ItemEditor::new_at(id, options, true)
                 } else {
@@ -263,6 +270,7 @@ impl PageEditor {
                     editor.set_saving(false);
                     self.finish_editor(page, item.as_ref());
                 }
+
                 Some(change)
             }
             Err(error) => {
@@ -270,6 +278,7 @@ impl PageEditor {
                     editor.set_saving(false);
                     editor.show_error(&error);
                 }
+
                 None
             }
         }

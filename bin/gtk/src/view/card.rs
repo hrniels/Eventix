@@ -45,6 +45,7 @@ mod imp {
             EventIndicators::static_type();
             klass.bind_template();
         }
+
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
             obj.init_template();
         }
@@ -53,6 +54,7 @@ mod imp {
     impl ObjectImpl for EventCard {
         fn constructed(&self) {
             self.parent_constructed();
+
             // Allocate the content ourselves so indicators adapt before the box lays them out.
             self.obj().set_layout_manager(None::<gtk::LayoutManager>);
             move_event::install_source(&self.obj());
@@ -64,9 +66,11 @@ mod imp {
             self.dispose_template();
         }
     }
+
     impl WidgetImpl for EventCard {
         fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
             let (_, natural, _, _) = self.content.measure(orientation, for_size);
+
             // Calendar geometry determines card sizes, even below the content's minimum size.
             (0, natural, -1, -1)
         }
@@ -76,6 +80,7 @@ mod imp {
             self.content.allocate(width, height, baseline, None);
         }
     }
+
     impl ButtonImpl for EventCard {}
 }
 
@@ -97,6 +102,7 @@ impl EventCard {
     pub fn set_span(&self, span: &AllDaySpan, locale: &dyn Locale) {
         self.imp().drag.take();
         self.imp().resize.take();
+
         let summary = self.summary(&span.event, locale);
         let text = format!(
             "{}{}{}",
@@ -104,12 +110,14 @@ impl EventCard {
             summary,
             if span.continues_after { " →" } else { "" },
         );
+
         self.set_event(&span.event, &text, locale);
     }
 
     pub fn set_timed(&self, segment: &TimedEvent, locale: &dyn Locale) {
         self.imp().drag.replace(DraggedEvent::new(segment));
         self.imp().resize.replace(Some(segment.clone()));
+
         let event = &segment.event;
         let summary = self.summary(event, locale);
         let time = format!(
@@ -127,11 +135,13 @@ impl EventCard {
                 ""
             },
         );
+
         let text = if segment.minute_end.saturating_sub(segment.minute_start) < 38 {
             format!("{summary} · {time}")
         } else {
             format!("{summary}\n{time}")
         };
+
         self.set_event(event, &text, locale);
     }
 
@@ -140,10 +150,12 @@ impl EventCard {
             .drag
             .replace(DraggedEvent::for_month(&segment.event));
         self.imp().resize.take();
+
         let event = &segment.event;
         self.imp()
             .text
             .set_xalign(if segment.full_day { 0.5 } else { 0.0 });
+
         let summary = self.summary(event, locale);
         let text = if segment.full_day {
             summary.to_string()
@@ -154,6 +166,7 @@ impl EventCard {
             } else {
                 event.end.date_naive()
             };
+
             let ends = logical_end == segment.date;
             let time = match (starts, ends) {
                 (true, false) => format!("→ {}", locale.fmt_time(&event.start, TimeFlags::Short)),
@@ -164,8 +177,10 @@ impl EventCard {
                     locale.fmt_time(&event.end, TimeFlags::Short)
                 ),
             };
+
             format!("{time} {summary}")
         };
+
         self.set_event(event, &text, locale);
     }
 
@@ -181,10 +196,12 @@ impl EventCard {
         if self.resize_edge(y).is_some() {
             return None;
         }
+
         let mut payload = self.imp().drag.borrow().clone()?;
         if self.imp().resize.borrow().is_some() {
             payload.offset_minutes += y.round() as i64;
         }
+
         Some(payload)
     }
 
@@ -204,6 +221,7 @@ impl EventCard {
         if !segment.event.details.actions.edit {
             return None;
         }
+
         if y < 5.0 && segment.event.start.date_naive() == segment.date {
             Some(RangeEdge::Start)
         } else if y >= f64::from(self.height()) - 5.0
@@ -218,6 +236,7 @@ impl EventCard {
     fn set_event(&self, event: &Event, text: &str, locale: &dyn Locale) {
         self.imp().text.set_text(text);
         self.set_tooltip_text(Some(text));
+
         let actions = &event.details.actions;
         let response = actions.occurrence_response.or(actions.series_response);
         self.imp().response.set_visible(response.is_some());
@@ -230,22 +249,27 @@ impl EventCard {
                 _ => "ev_response_pending",
             },
         ]);
+
         self.imp()
             .indicators
             .set_state(event.recurrent, event.exception, event.alarm, locale);
+
         if event.cancelled {
             self.add_css_class("ev_cancelled");
         } else {
             self.remove_css_class("ev_cancelled");
         }
+
         let color_class = style::calendar_class(&event.background, &event.foreground);
         let old = self.imp().color_class.replace(color_class.clone());
         if old != color_class {
             if !old.is_empty() {
                 self.remove_css_class(&old);
             }
+
             self.add_css_class(&color_class);
         }
+
         self.imp().event.replace(Some(event.clone()));
     }
 
@@ -257,6 +281,7 @@ impl EventCard {
         if imp.response.is_visible() {
             available -= imp.response.measure(gtk::Orientation::Horizontal, -1).1 + spacing;
         }
+
         available -= spacing + imp.indicators.margin_start() + imp.indicators.margin_end();
         let available_height =
             height - imp.indicators.margin_top() - imp.indicators.margin_bottom();

@@ -35,11 +35,13 @@ impl Surface {
     pub fn construct(self: &Rc<Self>, widget: &gtk::Widget) {
         let gesture = gtk::GestureClick::new();
         gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
+
         let weak = Rc::downgrade(self);
         gesture.connect_pressed(move |_, _, x, y| {
             let Some(surface) = weak.upgrade() else {
                 return;
             };
+
             let on_event = surface.cards.borrow().iter().any(|card| {
                 let allocation = card.button.allocation();
                 x >= f64::from(allocation.x())
@@ -51,6 +53,7 @@ impl Surface {
                 surface.details.borrow().close();
             }
         });
+
         widget.add_controller(gesture);
     }
 
@@ -65,6 +68,7 @@ impl Surface {
         let mut old_cards = self.cards.take();
         let mut cards = Vec::new();
         let mut previous: Option<EventCard> = None;
+
         for key in keys {
             let button = if let Some(index) = old_cards.iter().position(|card| card.key == key) {
                 old_cards.remove(index).button
@@ -76,6 +80,7 @@ impl Surface {
                     let (Some(parent), Some(surface)) = (parent.upgrade(), weak.upgrade()) else {
                         return;
                     };
+
                     if let Some(locale) = surface.locale.borrow().as_ref() {
                         surface
                             .details
@@ -83,15 +88,18 @@ impl Surface {
                             .show(&parent, button, locale.as_ref());
                     }
                 });
+
                 button
             };
             button.insert_after(widget, previous.as_ref());
             previous = Some(button.clone());
             cards.push(Card { button, key });
         }
+
         for card in old_cards {
             card.button.unparent();
         }
+
         self.cards.replace(cards);
         self.locale.replace(Some(locale));
     }
@@ -128,6 +136,7 @@ impl Surface {
                     self.scroll_handlers
                         .borrow_mut()
                         .push((adjustment.clone(), handler));
+
                     let weak = widget.downgrade();
                     let handler = adjustment.connect_changed(move |_| {
                         if let Some(widget) = weak.upgrade() {
@@ -139,6 +148,7 @@ impl Surface {
                         .push((adjustment, handler));
                 }
             }
+
             ancestor = parent.parent();
         }
     }
@@ -152,9 +162,11 @@ impl Surface {
     pub fn dispose(&self, widget: &gtk::Widget) {
         self.unmap();
         self.details.borrow().close_for(widget);
+
         for card in self.cards.take() {
             card.button.unparent();
         }
+
         // Closed popovers can still be parented while their idle cleanup is pending.
         while let Some(child) = widget.first_child() {
             child.unparent();

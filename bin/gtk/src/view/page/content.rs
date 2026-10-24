@@ -55,6 +55,7 @@ impl PageContent {
         let weak = page.downgrade();
         imp.calendar.connect_day_selected(move |calendar| {
             let Some(page) = weak.upgrade() else { return };
+
             if page.imp().content.updating_picker.get() || !page.imp().picker.is_active() {
                 return;
             }
@@ -210,6 +211,7 @@ impl PageContent {
         imp.picker.popdown();
         imp.week_view.set_active(view == View::Week);
         imp.month_view.set_active(view == View::Month);
+
         if view == View::Month {
             imp.stack.set_visible_child(&*imp.monthly_content);
         } else {
@@ -311,6 +313,7 @@ impl PageContent {
         if self.displayed.replace(Some(month.month)) != Some(month.month) {
             imp.monthly_content.vadjustment().set_value(0.0);
         }
+
         imp.monthly.set_month(Rc::new(month));
     }
 
@@ -340,6 +343,7 @@ impl PageContent {
         .unwrap();
         imp.title.set_text(&title);
         imp.title.set_tooltip_text(Some(&title));
+
         for ((label, icon), day) in Self::day_labels(page)
             .into_iter()
             .zip(imp.weekly.imp().time_change_icons.borrow().iter())
@@ -374,6 +378,7 @@ impl PageContent {
                 if let Some(scroll) = scroll.upgrade() {
                     scroll.vadjustment().set_value(480.0);
                 }
+
                 glib::ControlFlow::Break
             });
         }
@@ -398,6 +403,7 @@ impl PageContent {
             imp.monthly.update_today();
             return;
         }
+
         let Some(start) = self.displayed.get() else {
             return;
         };

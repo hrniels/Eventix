@@ -23,9 +23,11 @@ impl ItemEditor {
                 .start_in(options.locale.timezone())
                 .naive_local();
         }
+
         let mut editor = Self::build(id, options);
         editor.populate_existing(&edit);
         editor.install_feedback();
+
         let editor = Rc::new(editor);
         editor.initial.replace(editor.command().ok());
         editor.existing.replace(Some(edit));
@@ -33,6 +35,7 @@ impl ItemEditor {
         editor.update_previews();
         editor.connect_previews();
         editor.connect_task_dates();
+
         editor
     }
 
@@ -56,10 +59,12 @@ impl ItemEditor {
             (_, EditScope::Series) => "Edit Event",
         };
         self.title.set_text(self.options.locale.translate(title));
+
         let fields = &edit.fields;
         if let (Some(input), Some(status)) = (&self.task_status, &fields.task_status) {
             input.load(status);
         }
+
         self.summary.set_text(&fields.summary);
         self.location.set_text(&fields.location);
         self.description.buffer().set_text(&fields.description);
@@ -80,6 +85,7 @@ impl ItemEditor {
             self.sections[3].toggle.set_sensitive(false);
             self.recurrence.segments.set_sensitive(false);
         }
+
         self.load_existing_attendees(&fields.attendees);
     }
 
@@ -99,6 +105,7 @@ impl ItemEditor {
         {
             self.timezone.set_selected(index as u32);
         }
+
         let context = DateContext::system();
         self.all_day
             .set_active(first.is_none_or(|date| matches!(date, CalDate::Date(..))));
@@ -107,6 +114,7 @@ impl ItemEditor {
             self.start.entry.set_text(&start.date_naive().to_string());
             self.start_time.set_text(&start.format("%H:%M").to_string());
         }
+
         if let Some(end) = &fields.end {
             let end = context.date(end).start_in(&timezone);
             let end_date = if self.all_day.is_active()
@@ -119,6 +127,7 @@ impl ItemEditor {
             self.end.entry.set_text(&end_date.to_string());
             self.end_time.set_text(&end.format("%H:%M").to_string());
         }
+
         timezone
     }
 
@@ -143,6 +152,7 @@ impl ItemEditor {
             .and_then(|widget| widget.first_child())
             .and_downcast::<gtk::Box>()
             .unwrap();
+
         for attendee in attendees {
             let full_address = attendee.address();
             let address = full_address
@@ -171,6 +181,7 @@ impl ItemEditor {
         let panel = self.layer.first_child().unwrap();
         self.layer.remove(&panel);
         panel.set_vexpand(false);
+
         if let Some(scroll) = panel
             .first_child()
             .and_then(|header| header.next_sibling())
@@ -178,6 +189,7 @@ impl ItemEditor {
         {
             scroll.set_max_content_height(500);
         }
+
         panel
     }
 }
@@ -185,6 +197,7 @@ impl ItemEditor {
 impl AlarmInput {
     fn load(&self, alarm: Option<&eventix_ical::objects::CalAlarm>, timezone: &chrono_tz::Tz) {
         let Some(alarm) = alarm else { return };
+
         match alarm.trigger() {
             CalTrigger::Relative { duration, related } => {
                 let seconds = duration.num_seconds();

@@ -47,6 +47,7 @@ pub(super) struct RecurrenceInput {
 impl RecurrenceInput {
     pub fn load(&self, rule: Option<&CalRRule>, timezone: &chrono_tz::Tz) {
         let Some(rule) = rule else { return };
+
         self.frequency.set_selected(match rule.frequency() {
             CalRRuleFreq::Hourly => 1,
             CalRRuleFreq::Daily => 2,
@@ -57,10 +58,12 @@ impl RecurrenceInput {
         });
         self.interval
             .set_value(f64::from(rule.interval().unwrap_or(1)));
+
         if let Some(days) = rule.by_day() {
             for day in days {
                 self.weekdays[day.day().num_days_from_monday() as usize].set_active(true);
             }
+
             if let Some(day) = days.first()
                 && let Some((nth, side)) = day.nth()
             {
@@ -73,17 +76,21 @@ impl RecurrenceInput {
                 self.weekday.set_selected(day.day().num_days_from_monday());
             }
         }
+
         if let Some(day) = rule.by_mon_day().and_then(|days| days.first()) {
             self.pattern.set_selected(1);
             self.day.set_value(f64::from(day.num()));
         }
+
         if let Some(month) = rule.by_month().and_then(|months| months.first()) {
             self.month.set_selected(u32::from(month.saturating_sub(1)));
         }
+
         if let Some(count) = rule.count() {
             self.end.set_selected(1);
             self.count.set_value(count as f64);
         }
+
         if let Some(until) = rule.until() {
             self.end.set_selected(2);
             self.until.entry.set_text(
@@ -120,6 +127,7 @@ impl RecurrenceInput {
             ],
         );
         weekday.set_selected(date.weekday().num_days_from_monday());
+
         let input = Self {
             widget: gtk::Box::new(gtk::Orientation::Vertical, 12),
             frequency,
@@ -139,6 +147,7 @@ impl RecurrenceInput {
             until: DateInput::new(locale, date),
         };
         input.create_settings(locale);
+
         input
     }
 
@@ -161,6 +170,7 @@ impl RecurrenceInput {
             ],
         );
         month.set_selected(date.month0());
+
         month
     }
 
@@ -170,6 +180,7 @@ impl RecurrenceInput {
         every.append(&self.interval);
         let unit = body_label(locale, "day(s)");
         every.append(&unit);
+
         (every, unit)
     }
 
@@ -182,6 +193,7 @@ impl RecurrenceInput {
             weekly.append(button);
         }
         weekly.set_visible(false);
+
         weekly
     }
 
@@ -202,6 +214,7 @@ impl RecurrenceInput {
         widget.append(&pattern_box);
         widget.set_visible(false);
         self.connect_pattern(&weekday_month);
+
         PatternWidgets {
             widget,
             day_button: pattern_buttons[1].clone(),
@@ -222,6 +235,7 @@ impl RecurrenceInput {
         day_row.append(&self.day);
         let month_suffix = body_label(locale, "of the month");
         day_row.append(&month_suffix);
+
         (day_row, month_suffix)
     }
 
@@ -243,6 +257,7 @@ impl RecurrenceInput {
             .build();
         nth_row.append(&in_month);
         nth_row.append(&weekday_month);
+
         (nth_row, in_month, weekday_month)
     }
 
@@ -259,6 +274,7 @@ impl RecurrenceInput {
             day_month_widget.set_sensitive(combo.selected() == 1);
             weekday_month_widget.set_sensitive(combo.selected() == 2);
         });
+
         self.day.set_sensitive(false);
         self.nth.set_sensitive(false);
         self.weekday.set_sensitive(false);
@@ -283,6 +299,7 @@ impl RecurrenceInput {
         count_row.append(&self.count);
         count_row.append(&body_label(locale, "Repetitions"));
         settings.append(&count_row);
+
         self.until.widget.set_hexpand(false);
         self.until.widget.set_halign(gtk::Align::Start);
         self.until.widget.set_sensitive(false);
@@ -290,6 +307,7 @@ impl RecurrenceInput {
         until_row.append(&end_buttons[2]);
         until_row.append(&self.until.widget);
         settings.append(&until_row);
+
         let count_widget = self.count.clone();
         let until_widget = self.until.widget.clone();
         self.end.connect_selected_notify(move |combo| {
@@ -309,6 +327,7 @@ impl RecurrenceInput {
         settings.append(&patterns.widget);
         settings.append(&every);
         self.create_range(locale, &settings);
+
         let units: Vec<_> = ["hour(s)", "day(s)", "week(s)", "month(s)", "year(s)"]
             .iter()
             .map(|key| locale.translate(key).to_string())
@@ -319,6 +338,7 @@ impl RecurrenceInput {
             settings.set_visible(combo.selected() != 0);
             weekly.set_visible(combo.selected() == 3);
             patterns.widget.set_visible(combo.selected() >= 4);
+
             let yearly = combo.selected() == 5;
             month_widget.set_visible(yearly);
             patterns.in_month.set_visible(yearly);
@@ -327,6 +347,7 @@ impl RecurrenceInput {
             patterns
                 .day_button
                 .set_label((!yearly).then_some(day_label.as_str()));
+
             if let Some(text) = combo
                 .selected()
                 .checked_sub(1)
@@ -346,9 +367,11 @@ impl RecurrenceInput {
             5 => CalRRuleFreq::Yearly,
             _ => return None,
         };
+
         let mut rule = CalRRule::default();
         rule.set_frequency(frequency);
         rule.set_interval(self.interval.value_as_int() as u8);
+
         match frequency {
             CalRRuleFreq::Weekly => self.apply_weekdays(&mut rule),
             CalRRuleFreq::Monthly | CalRRuleFreq::Yearly => {
@@ -356,6 +379,7 @@ impl RecurrenceInput {
             }
             _ => {}
         }
+
         match self.end.selected() {
             1 => rule.set_count(self.count.value_as_int() as u64),
             2 => {
@@ -365,6 +389,7 @@ impl RecurrenceInput {
             }
             _ => {}
         }
+
         Some(rule)
     }
 

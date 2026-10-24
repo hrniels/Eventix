@@ -27,6 +27,7 @@ mod imp {
             CalendarPage::ensure_type();
             klass.bind_template();
         }
+
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
             obj.init_template();
         }
@@ -37,13 +38,16 @@ mod imp {
             self.dispose_template();
         }
     }
+
     impl WidgetImpl for Window {}
+
     impl WindowImpl for Window {
         fn close_request(&self) -> glib::Propagation {
             self.page.stop();
             self.parent_close_request()
         }
     }
+
     impl ApplicationWindowImpl for Window {}
 }
 
@@ -58,6 +62,7 @@ impl Window {
     pub fn new(app: &gtk::Application, prefix: String, date: Option<NaiveDate>) -> Self {
         let obj = Self::build(app);
         obj.imp().page.start(prefix, date);
+
         obj
     }
 
@@ -66,6 +71,7 @@ impl Window {
         obj.setup_key_controller();
         obj.connect_popover_dismissal();
         obj.setup_actions(app);
+
         obj
     }
 
@@ -73,19 +79,23 @@ impl Window {
     pub(crate) fn test_new(app: &gtk::Application) -> (Self, CalendarPage) {
         let window = Self::build(app);
         let page = window.imp().page.get();
+
         (window, page)
     }
 
     fn setup_key_controller(&self) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+
         let weak = self.downgrade();
         keys.connect_key_pressed(move |_, key, _, modifiers| {
             let Some(window) = weak.upgrade() else {
                 return glib::Propagation::Proceed;
             };
+
             window.handle_key_pressed(key, modifiers)
         });
+
         self.add_controller(keys);
     }
 
@@ -97,13 +107,16 @@ impl Window {
         if let Some(propagation) = self.imp().page.handle_editor_key(key, modifiers) {
             return propagation;
         }
+
         if let Some(propagation) = self.handle_details_key(key) {
             return propagation;
         }
+
         if key == gtk::gdk::Key::Escape {
             self.imp().page.dismiss_popovers();
             return glib::Propagation::Proceed;
         }
+
         if modifiers.contains(gtk::gdk::ModifierType::ALT_MASK)
             && !modifiers.intersects(
                 gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SUPER_MASK,
@@ -121,6 +134,7 @@ impl Window {
                 _ => {}
             }
         }
+
         if modifiers.intersects(
             gtk::gdk::ModifierType::ALT_MASK
                 | gtk::gdk::ModifierType::CONTROL_MASK
@@ -128,21 +142,26 @@ impl Window {
         ) {
             return glib::Propagation::Proceed;
         }
+
         let forward = match key {
             gtk::gdk::Key::Right | gtk::gdk::Key::Down => true,
             gtk::gdk::Key::Left | gtk::gdk::Key::Up => false,
             _ => return glib::Propagation::Proceed,
         };
+
         let mut focused = gtk::prelude::GtkWindowExt::focus(self);
         while let Some(widget) = focused {
             if widget.has_css_class("ev_sidebar") {
                 return glib::Propagation::Proceed;
             }
+
             focused = widget.parent();
         }
+
         self.imp()
             .page
             .focus_event(self.focused_event_card().as_ref(), forward);
+
         glib::Propagation::Stop
     }
 
@@ -159,15 +178,20 @@ impl Window {
                         if widget.is::<gtk::Popover>() && !widget.is::<EventDetails>() {
                             return Some(glib::Propagation::Proceed);
                         }
+
                         child = widget.parent();
                     }
+
                     self.imp().page.dismiss_popovers();
                     return Some(glib::Propagation::Stop);
                 }
+
                 return Some(glib::Propagation::Proceed);
             }
+
             focused = widget.parent();
         }
+
         None
     }
 
@@ -177,8 +201,10 @@ impl Window {
             if let Some(card) = widget.downcast_ref::<EventCard>() {
                 return Some(card.clone());
             }
+
             focused = widget.parent();
         }
+
         None
     }
 
@@ -195,6 +221,7 @@ impl Window {
             }
         });
         self.add_action(&action);
+
         let action = gio::SimpleAction::new("new-task", None);
         let page = self.imp().page.downgrade();
         action.connect_activate(move |_, _| {
@@ -203,6 +230,7 @@ impl Window {
             }
         });
         self.add_action(&action);
+
         for (name, keys, days) in [
             ("previous", vec!["<Alt>Left"], Some(-1)),
             ("next", vec!["<Alt>Right"], Some(1)),
@@ -218,6 +246,7 @@ impl Window {
                     if page.editor_open() {
                         return;
                     }
+
                     if let Some(days) = days {
                         page.navigate(days);
                     } else if name == "reload" {
@@ -234,6 +263,7 @@ impl Window {
             self.add_action(&action);
             app.set_accels_for_action(&format!("win.{name}"), &keys);
         }
+
         let action = gio::SimpleAction::new("show-week", Some(glib::VariantTy::STRING));
         let page = self.imp().page.downgrade();
         action.connect_activate(move |_, parameter| {
@@ -253,6 +283,7 @@ pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
     let click = gtk::GestureClick::new();
     click.set_button(0);
     click.set_propagation_phase(gtk::PropagationPhase::Capture);
+
     let weak_window = window.downgrade();
     let weak_page = page.downgrade();
     click.connect_pressed(move |click, _, _, _| {
@@ -272,23 +303,27 @@ pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
             page.set_popup_owner_visible(false);
         }
     });
+
     let weak_page = page.downgrade();
     window.connect_map(move |window| {
         if let Some(page) = weak_page.upgrade() {
             sync_popup_visibility(window, &page);
         }
     });
+
     let weak_page = page.downgrade();
     window.connect_is_active_notify(move |window| {
         if let Some(page) = weak_page.upgrade() {
             sync_popup_visibility(window, &page);
         }
     });
+
     let weak_page = page.downgrade();
     window.connect_realize(move |window| {
         let Some(surface) = window.surface().and_downcast::<gtk::gdk::Toplevel>() else {
             return;
         };
+
         let weak_page = weak_page.clone();
         let weak_window = window.downgrade();
         surface.connect_state_notify(move |_| {
@@ -307,6 +342,7 @@ fn sync_popup_visibility(window: &gtk::Window, page: &CalendarPage) {
             .surface()
             .and_downcast::<gtk::gdk::Toplevel>()
             .is_some_and(|surface| surface.state().contains(gtk::gdk::ToplevelState::FOCUSED));
+
     page.set_popup_owner_visible(window.is_visible() && focused);
 }
 

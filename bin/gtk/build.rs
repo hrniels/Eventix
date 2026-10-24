@@ -6,6 +6,7 @@ use std::{env, io, path::PathBuf, process::Command};
 
 fn main() -> io::Result<()> {
     println!("cargo:rerun-if-changed=resources");
+
     let target = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo sets OUT_DIR"))
         .join("eventix.gresource");
     let status = Command::new("glib-compile-resources")
@@ -17,5 +18,6 @@ fn main() -> io::Result<()> {
     if !status.success() {
         return Err(io::Error::other("compiling GTK resources failed"));
     }
+
     Ok(())
 }

@@ -108,6 +108,7 @@ mod imp {
 
         fn dispose(&self) {
             self.obj().stop();
+
             if let Some((display, provider)) = self.styles.take() {
                 gtk::style_context_remove_provider_for_display(&display, &provider);
             }
@@ -199,6 +200,7 @@ impl CalendarPage {
         for title in imp.sidebar.panel_titles() {
             group.add_widget(&title);
         }
+
         imp.header_group.replace(Some(group));
     }
 

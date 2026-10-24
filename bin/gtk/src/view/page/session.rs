@@ -65,6 +65,7 @@ impl PageSession {
             imp.status
                 .set_text(page.locale().translate("Applying changes…"));
             session.execute(command);
+
             true
         } else {
             false
@@ -107,7 +108,9 @@ impl PageSession {
             let Some(page) = weak.upgrade() else {
                 return glib::ControlFlow::Break;
             };
+
             page.imp().session.refresh(&page);
+
             glib::ControlFlow::Continue
         });
         self.timer.replace(Some(timer));
@@ -121,6 +124,7 @@ impl PageSession {
         glib::MainContext::default().spawn_local(async move {
             while let Ok(response) = responses.recv().await {
                 let Some(page) = weak.upgrade() else { break };
+
                 if page.imp().session.current.borrow().is_none() {
                     break;
                 }

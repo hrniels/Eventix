@@ -73,6 +73,7 @@ mod imp {
             } else {
                 1440
             };
+
             (size, size, -1, -1)
         }
 
@@ -82,6 +83,7 @@ mod imp {
                     week.days.iter().enumerate().flat_map(|(day, data)| {
                         data.timed.iter().map(move |segment| (day, segment))
                     });
+
                 for (card, (day, segment)) in self.surface.cards.borrow().iter().zip(segments) {
                     let columns = segment.columns;
                     let y = segment.minute_start.min(1422) as i32;
@@ -96,6 +98,7 @@ mod imp {
                         day as f64 + (columns.offset + columns.span) as f64 / columns.count as f64,
                     )
                     .round() as i32;
+
                     card.button.size_allocate(
                         &gtk::Allocation::new(
                             left + 2,
@@ -107,6 +110,7 @@ mod imp {
                     );
                 }
             }
+
             self.surface
                 .details
                 .borrow()
@@ -119,6 +123,7 @@ mod imp {
             let height = obj.height() as f32;
             let day_width = (width - GUTTER as f32) / 7.0;
             let line = style::color(&*obj, "ev_grid_line");
+
             if let Some(week) = self.week.borrow().as_ref() {
                 let now = Utc::now().with_timezone(week.locale.timezone());
                 for (i, day) in week.days.iter().enumerate() {
@@ -133,6 +138,7 @@ mod imp {
                             height,
                         );
                     }
+
                     for range in &day.dst {
                         let color = style::color(
                             &*obj,
@@ -153,6 +159,7 @@ mod imp {
                     }
                 }
             }
+
             for day in 0..=7 {
                 rect(
                     snapshot,
@@ -163,6 +170,7 @@ mod imp {
                     height,
                 );
             }
+
             for hour in 0..24 {
                 let y = hour as f32 * 60.0;
                 rect(
@@ -182,7 +190,9 @@ mod imp {
                     52.0,
                 );
             }
+
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
+
             // Keep time changes visible over event cards, as in the HTML weekly view.
             if let Some(week) = self.week.borrow().as_ref() {
                 for (i, day) in week.days.iter().enumerate() {
@@ -191,6 +201,7 @@ mod imp {
                     }
                 }
             }
+
             if let Some(week) = self.week.borrow().as_ref() {
                 let now = Utc::now().with_timezone(week.locale.timezone());
                 let day = (now.date_naive() - week.start).num_days();
@@ -205,6 +216,7 @@ mod imp {
                     );
                 }
             }
+
             obj.snapshot_drop_preview(snapshot);
             if self.drop_preview.borrow().is_none() {
                 obj.snapshot_creation_hint(snapshot);
@@ -224,14 +236,18 @@ impl TimedGrid {
         let Some((x, y)) = self.imp().creation_hint.position() else {
             return;
         };
+
         let Some(start) = self.drop_start(x, (y / 60.0).floor() * 60.0, 0) else {
             return;
         };
+
         let week = self.imp().week.borrow();
         let Some(week) = week.as_ref() else { return };
+
         let col = (start.date() - week.start).num_days();
         let left = day_x(self.width(), col as f64) as f32;
         let right = day_x(self.width(), (col + 1) as f64) as f32;
+
         snapshot_hint(
             self,
             snapshot,
@@ -257,11 +273,13 @@ impl TimedGrid {
         snapshot.save();
         snapshot.rotate(-45.0);
         color.set_alpha(0.05);
+
         let mut stripe = -height;
         while stripe < width {
             rect(snapshot, &color, stripe, 0.0, 14.0, width + height);
             stripe += 28.0;
         }
+
         snapshot.restore();
 
         let layout = self.create_pango_layout(Some(if range.fold { "↑" } else { "↓" }));
@@ -283,15 +301,18 @@ impl TimedGrid {
         let (Some((start, end)), Some(week)) = (preview.as_ref(), week.as_ref()) else {
             return;
         };
+
         for (i, day) in week.days.iter().enumerate() {
             let Some((y, height)) =
                 preview_bounds(day.date, start.naive_local(), end.naive_local())
             else {
                 continue;
             };
+
             let x = day_x(self.width(), i as f64) as f32 + 2.0;
             let w = (self.width() - GUTTER) as f32 / 7.0 - 4.0;
             let border = style::color(self, "ev_drop_border");
+
             rect(
                 snapshot,
                 &style::color(self, "ev_drop_background"),
@@ -304,6 +325,7 @@ impl TimedGrid {
             rect(snapshot, &border, x, y + height - 2.0, w, 2.0);
             rect(snapshot, &border, x, y, 2.0, height);
             rect(snapshot, &border, x + w - 2.0, y, 2.0, height);
+
             let text = format!(
                 "{}{}–{}{}",
                 if start.date_naive() < day.date {
@@ -322,6 +344,7 @@ impl TimedGrid {
             let layout = self.create_pango_layout(Some(&text));
             layout.set_width(((w - 8.0).max(0.0) * gtk::pango::SCALE as f32) as i32);
             layout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+
             snapshot.save();
             snapshot.push_clip(&graphene::Rect::new(x, y, w, height));
             snapshot.translate(&graphene::Point::new(x + 4.0, y + 2.0));
@@ -335,6 +358,7 @@ impl TimedGrid {
         let Some(start) = self.drop_start(x, y, payload.offset_minutes) else {
             return false;
         };
+
         let week = self.imp().week.borrow();
         let Some(range) = week
             .as_ref()
@@ -342,10 +366,12 @@ impl TimedGrid {
         else {
             return false;
         };
+
         if self.imp().drop_preview.borrow().as_ref() != Some(&range) {
             self.imp().drop_preview.replace(Some(range));
             self.queue_draw();
         }
+
         true
     }
 
@@ -376,6 +402,7 @@ impl TimedGrid {
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
         self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
+
         let surface = &self.imp().surface;
         let keys = week
             .days
@@ -384,6 +411,7 @@ impl TimedGrid {
             .map(|segment| CardKey::Timed(segment.id()))
             .collect();
         surface.reconcile(self.upcast_ref(), week.locale.clone(), keys);
+
         for (card, segment) in surface
             .cards
             .borrow()
@@ -392,6 +420,7 @@ impl TimedGrid {
         {
             card.button.set_timed(segment, week.locale.as_ref());
         }
+
         self.imp().week.replace(Some(week));
         self.queue_resize();
     }
@@ -404,9 +433,11 @@ fn preview_bounds(date: NaiveDate, start: NaiveDateTime, end: NaiveDateTime) -> 
     if start >= next || end < midnight || (end == midnight && start < midnight) {
         return None;
     }
+
     let y = (start.max(midnight) - midnight).num_seconds() as f32 / 60.0;
     let bottom = (end.min(next) - midnight).num_seconds() as f32 / 60.0;
     let y = y.min(1422.0);
+
     Some((y + 1.0, (bottom - y).max(18.0).min(1440.0 - y) - 2.0))
 }
 
@@ -421,8 +452,10 @@ fn drop_start(start: NaiveDate, width: i32, x: f64, y: f64, offset: i64) -> Opti
     {
         return None;
     }
+
     let day = ((x - f64::from(GUTTER)) * 7.0 / f64::from(width - GUTTER)).floor() as i64;
     let minute = ((y - offset as f64) / 15.0).round() as i64 * 15;
+
     start
         .and_hms_opt(0, 0, 0)?
         .checked_add_signed(Duration::days(day))?

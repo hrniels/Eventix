@@ -77,6 +77,7 @@ mod imp {
                     .unwrap_or(1) as i32
                     * ROW
             };
+
             (size, size, -1, -1)
         }
 
@@ -85,6 +86,7 @@ mod imp {
                 for (card, span) in self.surface.cards.borrow().iter().zip(&week.all_day) {
                     let left = day_x(width, span.start_day as f64).round() as i32;
                     let right = day_x(width, span.end_day as f64).round() as i32;
+
                     card.button.size_allocate(
                         &gtk::Allocation::new(
                             left + 2,
@@ -96,6 +98,7 @@ mod imp {
                     );
                 }
             }
+
             self.surface
                 .details
                 .borrow()
@@ -106,6 +109,7 @@ mod imp {
             let obj = self.obj();
             let height = obj.height() as f32;
             let line = style::color(&*obj, "ev_grid_line");
+
             if let Some(week) = self.week.borrow().as_ref() {
                 let today = Utc::now()
                     .with_timezone(week.locale.timezone())
@@ -125,6 +129,7 @@ mod imp {
                     }
                 }
             }
+
             for day in 0..=7 {
                 rect(
                     snapshot,
@@ -135,6 +140,7 @@ mod imp {
                     height,
                 );
             }
+
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
             obj.snapshot_drop_preview(snapshot);
             if self.drop_preview.borrow().is_none() {
@@ -155,14 +161,18 @@ impl AllDayStrip {
         let Some((x, y)) = self.imp().creation_hint.position() else {
             return;
         };
+
         let Some(col) = drop_day(self.width(), self.height(), x, y) else {
             return;
         };
+
         if self.imp().week.borrow().is_none() {
             return;
         }
+
         let left = day_x(self.width(), col as f64) as f32;
         let right = day_x(self.width(), (col + 1) as f64) as f32;
+
         snapshot_hint(
             self,
             snapshot,
@@ -181,14 +191,17 @@ impl AllDayStrip {
         let (Some((start, end)), Some(week)) = (preview.as_ref(), week.as_ref()) else {
             return;
         };
+
         let border = style::color(self, "ev_drop_border");
         for (col, day) in week.days.iter().enumerate() {
             if day.date < *start || day.date > *end {
                 continue;
             }
+
             let x = day_x(self.width(), col as f64) as f32 + 2.0;
             let w = (day_x(self.width(), (col + 1) as f64) as f32 - x - 2.0).max(1.0);
             let h = (self.height() as f32 - 4.0).max(1.0);
+
             rect(
                 snapshot,
                 &style::color(self, "ev_drop_background"),
@@ -201,6 +214,7 @@ impl AllDayStrip {
             rect(snapshot, &border, x, h, w, 2.0);
             rect(snapshot, &border, x, 2.0, 2.0, h);
             rect(snapshot, &border, x + w - 2.0, 2.0, 2.0, h);
+
             // Keep the label legible over existing all-day cards.
             let label_y = self.height() as f32 - ROW as f32;
             rect(
@@ -214,6 +228,7 @@ impl AllDayStrip {
             let layout = self.create_pango_layout(Some(week.locale.translate("All day")));
             layout.set_width(((w - 12.0).max(0.0) * gtk::pango::SCALE as f32) as i32);
             layout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+
             snapshot.save();
             snapshot.translate(&graphene::Point::new(x + 6.0, label_y + 3.0));
             snapshot.append_layout(&layout, &style::color(self, "ev_drop_text"));
@@ -232,6 +247,7 @@ impl AllDayStrip {
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
         self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
+
         let surface = &self.imp().surface;
         let keys = week
             .all_day
@@ -239,10 +255,12 @@ impl AllDayStrip {
             .map(|span| CardKey::Span(span.event.id.clone()))
             .collect();
         surface.reconcile(self.upcast_ref(), week.locale.clone(), keys);
+
         for (card, span) in surface.cards.borrow().iter().zip(&week.all_day) {
             card.button.set_span(span, week.locale.as_ref());
             card.button.enable_date_drag();
         }
+
         self.imp().week.replace(Some(week));
         self.queue_resize();
     }
@@ -253,8 +271,10 @@ impl MoveTarget for AllDayStrip {
         if !payload.all_day {
             return None;
         }
+
         let col = drop_day(self.width(), self.height(), x, y)?;
         let week = self.imp().week.borrow();
+
         Some(payload.on_date(week.as_ref()?.days.get(col)?.date))
     }
 
@@ -262,6 +282,7 @@ impl MoveTarget for AllDayStrip {
         let Some(start) = self.move_start(payload, x, y) else {
             return false;
         };
+
         let week = self.imp().week.borrow();
         let Some((start, end)) = week
             .as_ref()
@@ -269,11 +290,13 @@ impl MoveTarget for AllDayStrip {
         else {
             return false;
         };
+
         let preview = (start.date_naive(), end.date_naive());
         if self.imp().drop_preview.borrow().as_ref() != Some(&preview) {
             self.imp().drop_preview.replace(Some(preview));
             self.queue_draw();
         }
+
         true
     }
 
@@ -295,6 +318,7 @@ fn drop_day(width: i32, height: i32, x: f64, y: f64) -> Option<usize> {
     {
         return None;
     }
+
     Some(((x - f64::from(GUTTER)) * 7.0 / f64::from(width - GUTTER)).floor() as usize)
 }
 

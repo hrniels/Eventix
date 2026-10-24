@@ -25,12 +25,14 @@ impl TaskStatusInput {
             &["NEEDS-ACTION", "COMPLETED", "IN-PROCESS", "CANCELLED"],
         );
         widget.append(&status);
+
         let progress = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         let percent = spin(0.0, 100.0, 0.0);
         progress.append(&percent);
         progress.append(&gtk::Label::new(Some("%")));
         widget.append(&progress);
         progress.set_visible(false);
+
         let completion = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         let has_completed = gtk::CheckButton::with_label(locale.translate("Completed"));
         let completed = DateInput::new(locale, options.start.date());
@@ -41,11 +43,13 @@ impl TaskStatusInput {
         completion.append(&completed.widget);
         widget.append(&completion);
         completion.set_visible(false);
+
         status.connect_selected_notify(move |status| {
             progress.set_visible(status.selected() == 2);
             completion.set_visible(status.selected() == 1);
         });
         row(form, locale, "Status", &widget);
+
         Self {
             status,
             percent,
@@ -81,6 +85,7 @@ impl TaskStatusInput {
         self.percent
             .set_value(f64::from(status.percent.unwrap_or(0)));
         self.has_completed.set_active(status.completed.is_some());
+
         if let Some(date) = &status.completed {
             self.completed
                 .entry

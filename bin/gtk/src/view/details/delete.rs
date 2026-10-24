@@ -50,6 +50,7 @@ pub(crate) fn confirm(
         row.append(&icon);
         area.set_hexpand(true);
         row.append(&area);
+
         // Balance the icon so the text stays centered within the whole dialog.
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let balance = gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal);

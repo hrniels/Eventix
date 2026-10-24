@@ -43,6 +43,7 @@ impl Panel {
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         title.add_css_class("ev_panel_title");
         header.append(&title);
+
         let new_item = {
             let button = gtk::Button::from_icon_name("list-add-symbolic");
             button.set_action_name(Some(if is_events {
@@ -135,6 +136,7 @@ impl Panel {
                 rows.insert(key, button);
             }
         }
+
         rows
     }
 
@@ -142,6 +144,7 @@ impl Panel {
         if child.parent().is_none() {
             self.list.append(child);
         }
+
         self.list.reorder_child_after(child, previous);
     }
 
@@ -164,6 +167,7 @@ fn group_heading(group: &SidebarGroup, locale: &dyn Locale) -> gtk::Label {
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .build();
     label.add_css_class("ev_sidebar_day");
+
     label
 }
 
@@ -171,21 +175,27 @@ fn update_row(button: &gtk::Button, row: &SidebarRow, locale: &dyn Locale) {
     for class in button.css_classes() {
         button.remove_css_class(&class);
     }
+
     button.add_css_class("ev_sidebar_row");
     button.set_child(Some(&row_content(row, locale)));
+
     if row.full_day && !row.task {
         button.add_css_class("ev_sidebar_full_day");
         button.add_css_class(&style::calendar_class(&row.background, &row.foreground));
     }
+
     if row.overdue {
         button.add_css_class("ev_sidebar_overdue");
     }
+
     if row.due_today {
         button.add_css_class("ev_sidebar_due_today");
     }
+
     if row.cancelled {
         button.add_css_class("ev_cancelled");
     }
+
     button.set_tooltip_text(Some(&format!(
         "{}{}{}",
         row.time,
@@ -245,11 +255,13 @@ fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
         }
         content.append(&marker);
     }
+
     if !row.time.is_empty() {
         let time = gtk::Label::new(Some(&row.time));
         time.add_css_class("ev_sidebar_time");
         content.append(&time);
     }
+
     let summary = gtk::Label::builder()
         .label(&row.summary)
         .xalign(0.0)
@@ -257,11 +269,13 @@ fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
         .hexpand(true)
         .build();
     content.append(&summary);
+
     let indicators: EventIndicators = glib::Object::new();
     indicators.set_spacing(content.spacing());
     indicators.set_pixel_size(14);
     indicators.set_state(row.recurrent, row.exception, row.alarm, locale);
     content.append(&indicators);
+
     content
 }
 
@@ -270,6 +284,7 @@ fn icon(name: &str) -> gtk::Image {
         "/io/github/hrniels/Eventix/gtk/icons/{name}-symbolic.svg"
     ));
     image.set_pixel_size(14);
+
     image
 }
 
@@ -289,14 +304,17 @@ mod imp {
         type Type = super::Sidebar;
         type ParentType = gtk::Box;
     }
+
     impl ObjectImpl for Sidebar {
         fn constructed(&self) {
             self.parent_constructed();
+
             let obj = self.obj();
             obj.set_orientation(gtk::Orientation::Vertical);
             obj.set_homogeneous(true);
             obj.set_spacing(12);
             obj.add_css_class("ev_sidebar");
+
             let events = Panel::new(obj.upcast_ref(), true);
             let tasks = Panel::new(obj.upcast_ref(), false);
             let locale = eventix_locale::default();
@@ -304,12 +322,15 @@ mod imp {
             tasks.title.set_text(locale.translate("Next Tasks"));
             self.panels.replace(Some((events, tasks)));
         }
+
         fn dispose(&self) {
             self.details.borrow().close();
             self.panels.take();
         }
     }
+
     impl WidgetImpl for Sidebar {}
+
     impl BoxImpl for Sidebar {}
 }
 
@@ -365,6 +386,7 @@ impl Sidebar {
             .flat_map(|group| &group.rows)
             .map(|row| (row.background.as_str(), row.foreground.as_str()));
         imp.colors.replace(style::colors_css(colors));
+
         if let Some((events, tasks)) = imp.panels.borrow_mut().as_mut() {
             events
                 .title

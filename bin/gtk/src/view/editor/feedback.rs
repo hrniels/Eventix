@@ -112,6 +112,7 @@ impl ItemEditor {
             ),
             FieldFeedback::new(Field::NewAttendee, &self.new_attendee, Some(4)),
         ];
+
         if let Some(status) = &self.task_status {
             self.feedback.push(FieldFeedback::new(
                 Field::CompletedDate,
@@ -125,6 +126,7 @@ impl ItemEditor {
     pub fn show_validation_errors(&self, issues: &[Issue]) {
         self.error.set_visible(false);
         self.present_issues(issues);
+
         if let Some(first) = issues.first()
             && let Some(feedback) = self.feedback.iter().find(|item| item.field == first.field)
         {
@@ -137,6 +139,7 @@ impl ItemEditor {
                 feedback.input.grab_focus();
                 return;
             }
+
             // The revealer must finish opening before focus can scroll the entry into view.
             let input = feedback.input.downgrade();
             let target = if first.field == Field::StartDate && !self.has_start.is_active() {
@@ -161,6 +164,7 @@ impl ItemEditor {
         for feedback in &self.feedback {
             feedback.update(issues);
         }
+
         for (index, section) in self.sections.iter().enumerate() {
             let invalid = self.feedback.iter().any(|feedback| {
                 feedback.section == Some(index)

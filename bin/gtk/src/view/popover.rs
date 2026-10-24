@@ -70,15 +70,19 @@ impl DetailsController {
         if let Some(callback) = self.task.borrow().clone() {
             popover.connect_task(move |item, action| callback(item, action));
         }
+
         if let Some(callback) = self.occurrence.borrow().clone() {
             popover.connect_occurrence(move |item, action| callback(item, action));
         }
+
         if let Some(callback) = self.respond.borrow().clone() {
             popover.connect_respond(move |item, response| callback(item, response));
         }
+
         if let Some(callback) = self.edit.borrow().clone() {
             popover.connect_edit(move |item, scope| callback(item, scope));
         }
+
         if let Some(callback) = self.delete.borrow().clone() {
             popover
                 .connect_delete(move |item, recurrent, summary| callback(item, recurrent, summary));
@@ -103,9 +107,11 @@ impl DetailsController {
         let Some(popover) = self.popover.borrow().clone() else {
             return false;
         };
+
         let Some(stack) = popover.child().and_downcast::<gtk::Stack>() else {
             return false;
         };
+
         self.retained.set(true);
         self.original.replace(stack.visible_child());
         self.set_editor_scroll(panel);
@@ -115,6 +121,7 @@ impl DetailsController {
         self.force_centered.set(false);
         self.centered.set(false);
         self.remeasure(&popover);
+
         true
     }
 
@@ -131,11 +138,13 @@ impl DetailsController {
         let Some(popover) = self.popover.borrow().clone() else {
             return;
         };
+
         let original = self.original.take();
         self.editor_scroll.take();
         let Some(stack) = popover.child().and_downcast::<gtk::Stack>() else {
             return;
         };
+
         let child = if let Some(updated) = updated {
             popover.update_property(&[gtk::accessible::Property::Label(
                 &updated.imp().summary.text(),
@@ -147,6 +156,7 @@ impl DetailsController {
         } else {
             original
         };
+
         if let Some(child) = &child {
             if child.parent().is_none() {
                 stack.add_child(child);
@@ -154,6 +164,7 @@ impl DetailsController {
             stack.set_visible_child(child);
             Self::clean_stack(&stack);
         }
+
         self.force_centered.set(false);
         self.centered.set(false);
         self.remeasure(&popover);
@@ -165,6 +176,7 @@ impl DetailsController {
     fn content_stack(popover: &EventDetails) {
         let content = popover.child();
         popover.set_child(None::<&gtk::Widget>);
+
         let stack = gtk::Stack::builder()
             .hhomogeneous(false)
             .vhomogeneous(false)
@@ -175,6 +187,7 @@ impl DetailsController {
         if let Some(content) = content {
             stack.add_child(&content);
         }
+
         stack.connect_transition_running_notify(Self::clean_stack);
         popover.set_child(Some(&stack));
     }
@@ -184,12 +197,15 @@ impl DetailsController {
         if stack.is_transition_running() {
             return;
         }
+
         let Some(visible) = stack.visible_child() else {
             return;
         };
+
         if visible.has_css_class("ev_item_editor") {
             return;
         }
+
         let children: Vec<_> = stack
             .pages()
             .iter::<gtk::StackPage>()
@@ -208,6 +224,7 @@ impl DetailsController {
         // GTK's animated popdown can be mistaken for a rejected native allocation.
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+
         let weak = Rc::downgrade(self);
         keys.connect_key_pressed(move |keys, key, _, modifiers| {
             if let Some(propagation) = keys
@@ -218,6 +235,7 @@ impl DetailsController {
             {
                 return propagation;
             }
+
             if key == gtk::gdk::Key::Escape
                 && keys
                     .widget()
@@ -229,6 +247,7 @@ impl DetailsController {
                 controller.close();
                 return glib::Propagation::Stop;
             }
+
             glib::Propagation::Proceed
         });
         popover.add_controller(keys);
@@ -238,6 +257,7 @@ impl DetailsController {
         if self.owner_hidden.get() {
             return;
         }
+
         let (width, height) = popover.placement_size();
         self.width.set(width);
         self.minimum_height.set(height);
@@ -252,6 +272,7 @@ impl DetailsController {
         self.parent.take();
         self.source.take();
         self.retained.set(false);
+
         if let Some(popover) = self.popover.take() {
             popover.popdown();
             Self::defer_unparent(&popover);
@@ -270,9 +291,11 @@ impl DetailsController {
         if self.owner_hidden.replace(!visible) == !visible {
             return;
         }
+
         let Some(popover) = self.popover.borrow().clone() else {
             return;
         };
+
         if !visible {
             self.rejected.set(false);
             popover.set_visible(false);
@@ -312,6 +335,7 @@ impl DetailsController {
         if self.owner_hidden.get() {
             return;
         }
+
         if self.is_parent(parent) || self.is_source(parent) {
             let popover = self.popover.borrow().clone();
             if let Some(popover) = popover {
@@ -323,6 +347,7 @@ impl DetailsController {
 
     pub fn show(self: &Rc<Self>, parent: &gtk::Widget, button: &EventCard, locale: &dyn Locale) {
         let Some(event) = button.event() else { return };
+
         let popover = EventDetails::new(&event, locale);
         self.show_details(parent, button.upcast_ref(), popover);
     }
@@ -348,15 +373,18 @@ impl DetailsController {
             self.set_editor_scroll(panel);
             self.retained.set(true);
         }
+
         self.bind_actions(&popover);
         Self::content_stack(&popover);
         self.connect_keys(&popover);
         self.source.replace(Some(parent.downgrade()));
+
         // A page-owned popup keeps its native surface when editing or refreshing replaces
         // the event widget underneath it.
         let page = parent.ancestor(super::page::CalendarPage::static_type());
         let parent = page.as_ref().unwrap_or(parent);
         popover.set_parent(parent);
+
         // Measure once before changing arrow and width requests for centered placement.
         let (width, minimum_height) = popover.placement_size();
         self.width.set(width);
@@ -367,6 +395,7 @@ impl DetailsController {
         self.parent.replace(Some(parent.downgrade()));
         self.anchor.replace(anchor.map(gtk::Widget::downgrade));
         self.place(&popover);
+
         let weak = Rc::downgrade(self);
         popover.connect_closed(move |closed| {
             let weak = weak.clone();
@@ -378,9 +407,11 @@ impl DetailsController {
                     if controller.owner_hidden.get() {
                         return;
                     }
+
                     if controller.rejected.replace(false) && controller.retry_centered(&closed) {
                         return;
                     }
+
                     if closed.is_visible() {
                         // A rejected native allocation can unmap a popup without hiding it.
                         // Recover it once using centered placement rather than leaving it open
@@ -390,6 +421,7 @@ impl DetailsController {
                         }
                         return;
                     }
+
                     controller.popover.take();
                     controller.anchor.take();
                     controller.parent.take();
@@ -399,21 +431,26 @@ impl DetailsController {
                     controller.retained.set(false);
                     controller.notify_dismissed();
                 }
+
                 if closed.parent().is_some() {
                     closed.unparent();
                 }
             });
         });
+
         self.popover.replace(Some(popover.clone()));
+
         let weak = Rc::downgrade(self);
         let previous_layout = Cell::new(None);
         popover.add_tick_callback(move |popover, _| {
             let Some(controller) = weak.upgrade() else {
                 return glib::ControlFlow::Break;
             };
+
             if controller.popover.borrow().as_ref() != Some(popover) {
                 return glib::ControlFlow::Break;
             }
+
             let layout = controller
                 .editor_scroll
                 .borrow()
@@ -436,11 +473,14 @@ impl DetailsController {
             if transitioning || (previous_layout.replace(layout) != layout && layout.is_some()) {
                 controller.remeasure(popover);
             }
+
             glib::ControlFlow::Continue
         });
+
         if !self.owner_hidden.get() {
             popover.popup();
         }
+
         if let Some(surface) = popover.surface() {
             let weak = Rc::downgrade(self);
             let popup = popover.downgrade();
@@ -460,6 +500,7 @@ impl DetailsController {
                 }
             });
         }
+
         self.check_mapping(&popover);
     }
 
@@ -488,6 +529,7 @@ impl DetailsController {
         else {
             return;
         };
+
         let button = self
             .anchor
             .borrow()
@@ -496,9 +538,11 @@ impl DetailsController {
         let Some(root) = parent.root().and_downcast::<gtk::Window>() else {
             return;
         };
+
         let bounds = button
             .as_ref()
             .and_then(|button| button.compute_bounds(&root));
+
         // Only the intersection of all enclosing viewports is a usable popup anchor.
         let mut visible = Some(graphene::Rect::new(
             0.0,
@@ -515,8 +559,10 @@ impl DetailsController {
                         .and_then(|bounds| clip.intersection(&bounds))
                 });
             }
+
             ancestor = widget.parent();
         }
+
         let visible_anchor = bounds.and_then(|bounds| {
             visible
                 .and_then(|clip| clip.intersection(&bounds))
@@ -555,8 +601,10 @@ impl DetailsController {
             if scroll.max_content_height() != limit {
                 scroll.set_max_content_height(limit);
             }
+
             Some(position)
         });
+
         let centered = visible_anchor.is_none()
             || self.force_centered.get()
             || if scroll.is_some() {
@@ -576,6 +624,7 @@ impl DetailsController {
             else {
                 return;
             };
+
             let pointing_to = gtk::Allocation::new(
                 point.x().round() as i32,
                 point.y().round() as i32,
@@ -617,6 +666,7 @@ impl DetailsController {
             ) else {
                 return;
             };
+
             let pointing_to =
                 gtk::Allocation::new(point.x().round() as i32, point.y().round() as i32, 1, 1);
             if popover.pointing_to() != (true, pointing_to) {
@@ -636,12 +686,14 @@ impl DetailsController {
         if self.force_centered.get() || !mapped || self.popover.borrow().as_ref() != Some(popover) {
             return false;
         }
+
         // The compositor also constrains placement to the monitor. Once rejected, stay centered.
         self.force_centered.set(true);
         self.centered.set(true);
         self.place(popover);
         popover.popup();
         self.check_mapping(popover);
+
         true
     }
 
@@ -652,6 +704,7 @@ impl DetailsController {
             let Some(controller) = weak.upgrade() else {
                 return;
             };
+
             if controller.popover.borrow().as_ref() == Some(&popover)
                 && !controller.owner_hidden.get()
                 && !popover.is_mapped()

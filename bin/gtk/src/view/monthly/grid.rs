@@ -81,6 +81,7 @@ mod imp {
             while let Some(child) = self.obj().first_child() {
                 child.unparent();
             }
+
             self.weekdays.take();
             self.days.take();
             self.weeks.take();
@@ -112,6 +113,7 @@ mod imp {
             if self.month.borrow().is_none() {
                 return;
             }
+
             let allocate = |widget: &gtk::Widget, x: i32, y: i32, w: i32, h: i32| {
                 widget.measure(gtk::Orientation::Horizontal, -1);
                 widget.measure(gtk::Orientation::Vertical, w);
@@ -129,6 +131,7 @@ mod imp {
                     header - 1,
                 );
             }
+
             let mut y = header;
             let rows = self.rows.borrow();
             let labels = self.days.borrow();
@@ -170,6 +173,7 @@ mod imp {
             let Some(month) = self.month.borrow().clone() else {
                 return;
             };
+
             let today = Utc::now()
                 .with_timezone(month.locale.timezone())
                 .date_naive();
@@ -192,6 +196,7 @@ mod imp {
                         );
                     }
                 }
+
                 rect(
                     snapshot,
                     &line,
@@ -202,6 +207,7 @@ mod imp {
                 );
                 y += height;
             }
+
             rect(
                 snapshot,
                 &line,
@@ -210,6 +216,7 @@ mod imp {
                 obj.width() as f32,
                 1.0,
             );
+
             for day in 0..=7 {
                 rect(
                     snapshot,
@@ -220,6 +227,7 @@ mod imp {
                     (y - header) as f32,
                 );
             }
+
             for label in self
                 .weekdays
                 .borrow()
@@ -228,12 +236,15 @@ mod imp {
             {
                 obj.snapshot_child(label, snapshot);
             }
+
             for button in self.weeks.borrow().iter() {
                 obj.snapshot_child(button, snapshot);
             }
+
             for row in self.rows.borrow().iter() {
                 obj.snapshot_child(row, snapshot);
             }
+
             obj.snapshot_drop_preview(snapshot);
             if self.drop_preview.borrow().is_none() {
                 obj.snapshot_creation_hint(snapshot);
@@ -253,15 +264,18 @@ impl MonthGrid {
         let Some((x, y)) = self.imp().creation_hint.position() else {
             return;
         };
+
         let rows = self.allocated_rows(self.height());
         let header = self.weekday_header_height();
         let Some(index) = drop_day(self.width(), header, &rows, x, y) else {
             return;
         };
+
         let row = index / 7;
         let col = index % 7;
         let left = day_x(self.width(), col as f64) as f32;
         let right = day_x(self.width(), (col + 1) as f64) as f32;
+
         snapshot_hint(
             self,
             snapshot,
@@ -305,6 +319,7 @@ impl MonthGrid {
         else {
             return;
         };
+
         let text = if *all_day {
             month.locale.translate("All day").to_string()
         } else {
@@ -322,9 +337,11 @@ impl MonthGrid {
                 if !preview_contains(date, start.naive_local(), end.naive_local()) {
                     continue;
                 }
+
                 let x = day_x(self.width(), col as f64) as f32 + 2.0;
                 let w = (day_x(self.width(), (col + 1) as f64) as f32 - x - 2.0).max(1.0);
                 let h = height as f32 - 4.0;
+
                 rect(
                     snapshot,
                     &style::color(self, "ev_drop_background"),
@@ -337,6 +354,7 @@ impl MonthGrid {
                 rect(snapshot, &border, x, y + h, w, 2.0);
                 rect(snapshot, &border, x, y + 2.0, 2.0, h);
                 rect(snapshot, &border, x + w - 2.0, y + 2.0, 2.0, h);
+
                 // A solid label stays legible over existing events in busy day cells.
                 let label_y = y + height as f32 - 30.0;
                 rect(
@@ -350,6 +368,7 @@ impl MonthGrid {
                 let layout = self.create_pango_layout(Some(&text));
                 layout.set_width(((w - 12.0).max(0.0) * gtk::pango::SCALE as f32) as i32);
                 layout.set_ellipsize(gtk::pango::EllipsizeMode::End);
+
                 snapshot.save();
                 snapshot.translate(&graphene::Point::new(x + 6.0, label_y + 3.0));
                 snapshot.append_layout(&layout, &style::color(self, "ev_drop_text"));
@@ -361,6 +380,7 @@ impl MonthGrid {
 
     pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
         self.imp().details.replace(details.clone());
+
         for content in self.imp().contents.borrow().iter() {
             content.set_details(details.clone());
         }
@@ -381,7 +401,9 @@ impl MonthGrid {
         if count == 0 {
             return Vec::new();
         }
+
         let available = (height - self.weekday_header_height()).max(0);
+
         (0..count)
             .map(|row| {
                 (available / count + i32::from(row < available % count)).clamp(MIN_ROW, MAX_ROW)
@@ -404,6 +426,7 @@ impl MonthGrid {
     pub fn set_month(&self, month: Rc<MonthSnapshot>) {
         self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
+
         let imp = self.imp();
         let changed = imp
             .month
@@ -415,18 +438,23 @@ impl MonthGrid {
             for label in imp.weekdays.take().into_iter().chain(imp.days.take()) {
                 label.unparent();
             }
+
             for button in imp.weeks.take() {
                 button.unparent();
             }
+
             for row in imp.rows.take() {
                 row.unparent();
             }
+
             imp.scrollers.take();
             for (top, bottom) in imp.scroll_fades.take() {
                 top.unparent();
                 bottom.unparent();
             }
+
             imp.contents.take();
+
             for name in WEEKDAYS {
                 let builder = grid_children(&["weekday"]);
                 let label: gtk::Label = builder
@@ -436,6 +464,7 @@ impl MonthGrid {
                 label.set_parent(self);
                 imp.weekdays.borrow_mut().push(label);
             }
+
             for day in &month.days {
                 if day.date.weekday() == chrono::Weekday::Mon {
                     let builder = grid_children(&[
@@ -452,6 +481,7 @@ impl MonthGrid {
                     button.set_action_target_value(Some(&day.date.to_string().to_variant()));
                     button.set_parent(self);
                     imp.weeks.borrow_mut().push(button);
+
                     let content: WeekContent = builder
                         .object("content")
                         .expect("week content is defined in GTK resources");
@@ -468,6 +498,7 @@ impl MonthGrid {
                     let bottom_fade: gtk::Box = builder
                         .object("scroll_bottom_fade")
                         .expect("week bottom scroll fade is defined in GTK resources");
+
                     let update_fades = {
                         let top_fade = top_fade.downgrade();
                         let bottom_fade = bottom_fade.downgrade();
@@ -486,12 +517,14 @@ impl MonthGrid {
                     let adjustment = scroll.vadjustment();
                     adjustment.connect_changed(update_fades.clone());
                     adjustment.connect_value_changed(update_fades);
+
                     row_widget.set_parent(self);
                     imp.rows.borrow_mut().push(row_widget);
                     imp.scrollers.borrow_mut().push(scroll);
                     imp.scroll_fades.borrow_mut().push((top_fade, bottom_fade));
                     imp.contents.borrow_mut().push(content);
                 }
+
                 let builder = grid_children(&["day"]);
                 let label: gtk::Label = builder
                     .object("day")
@@ -505,9 +538,11 @@ impl MonthGrid {
                 imp.days.borrow_mut().push(label);
             }
         }
+
         for (label, name) in imp.weekdays.borrow().iter().zip(WEEKDAYS) {
             label.set_text(month.locale.translate(name));
         }
+
         for (button, week) in imp.weeks.borrow().iter().zip(month.days.chunks(7)) {
             button.set_tooltip_text(Some(&format!(
                 "{} · {}",
@@ -517,6 +552,7 @@ impl MonthGrid {
                     .fmt_weekdate(&week[0].date, eventix_locale::DateFlags::NoToday)
             )));
         }
+
         for (label, day) in imp.days.borrow().iter().zip(&month.days) {
             let text = if day.show_month {
                 format!(
@@ -529,6 +565,7 @@ impl MonthGrid {
             };
             label.set_text(&text);
         }
+
         for ((content, days), spans) in imp
             .contents
             .borrow()
@@ -538,6 +575,7 @@ impl MonthGrid {
         {
             content.set_week(days, spans, month.locale.clone());
         }
+
         imp.month.replace(Some(month));
         self.update_today();
         self.queue_resize();
@@ -557,6 +595,7 @@ impl MonthGrid {
                 }
             }
         }
+
         self.queue_draw();
     }
 }
@@ -570,6 +609,7 @@ impl MoveTarget for MonthGrid {
         let Some(start) = self.move_start(payload, x, y) else {
             return false;
         };
+
         let month = self.imp().month.borrow();
         let Some((start, end)) = month
             .as_ref()
@@ -577,6 +617,7 @@ impl MoveTarget for MonthGrid {
         else {
             return false;
         };
+
         let preview = DropPreview {
             start,
             end,
@@ -586,6 +627,7 @@ impl MoveTarget for MonthGrid {
             self.imp().drop_preview.replace(Some(preview));
             self.queue_draw();
         }
+
         true
     }
 
@@ -607,6 +649,7 @@ fn drop_day(width: i32, header: i32, rows: &[i32], x: f64, y: f64) -> Option<usi
     {
         return None;
     }
+
     let col = ((x - f64::from(GUTTER)) * 7.0 / f64::from(width - GUTTER)).floor() as usize;
     let mut bottom = header;
     for (row, height) in rows.iter().enumerate() {
@@ -615,6 +658,7 @@ fn drop_day(width: i32, header: i32, rows: &[i32], x: f64, y: f64) -> Option<usi
             return Some(row * 7 + col);
         }
     }
+
     None
 }
 

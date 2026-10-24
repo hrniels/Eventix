@@ -43,6 +43,7 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.surface.construct(self.obj().upcast_ref());
+
             DayList::ensure_type();
             let builder = gtk::Builder::from_resource(
                 "/io/github/hrniels/Eventix/gtk/view/monthly/week_content.ui",
@@ -68,6 +69,7 @@ mod imp {
             for list in self.lists.take() {
                 list.unparent();
             }
+
             self.surface.dispose(self.obj().upcast_ref());
         }
     }
@@ -110,6 +112,7 @@ mod imp {
                     .unwrap_or(0);
                 (self.obj().span_height() + timed + GAP).max(1)
             };
+
             (size, size, -1, -1)
         }
 
@@ -137,6 +140,7 @@ mod imp {
                     -1,
                 );
             }
+
             // Reserve the same span height in every column so timed lists stay aligned.
             let top = obj.span_height();
             for (day, list) in self.lists.borrow().iter().enumerate() {
@@ -150,6 +154,7 @@ mod imp {
                     -1,
                 );
             }
+
             self.surface.details.borrow().allocate(obj.upcast_ref());
         }
 
@@ -187,6 +192,7 @@ impl WeekContent {
 
     pub(crate) fn set_details(&self, details: Rc<DetailsController>) {
         self.imp().surface.details.replace(details.clone());
+
         for list in self.imp().lists.borrow().iter() {
             list.set_details(details.clone());
         }
@@ -207,13 +213,16 @@ impl WeekContent {
                 .map(|span| CardKey::Span(span.event.id.clone()))
                 .collect(),
         );
+
         for (card, span) in surface.cards.borrow().iter().zip(spans) {
             card.button.set_span(span, locale.as_ref());
             card.button.enable_date_drag();
         }
+
         for (list, day) in self.imp().lists.borrow().iter().zip(days) {
             list.set_day(day, locale.clone());
         }
+
         self.imp().spans.replace(spans.to_vec());
         self.queue_resize();
     }
@@ -227,6 +236,7 @@ impl WeekContent {
                 .iter()
                 .flat_map(DayList::event_cards),
         );
+
         cards
     }
 }

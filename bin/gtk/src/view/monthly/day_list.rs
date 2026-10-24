@@ -66,18 +66,21 @@ mod imp {
                 let count = self.surface.cards.borrow().len() as i32;
                 count * (self.obj().card_height(for_size.max(1)) + GAP)
             };
+
             (size, size, -1, -1)
         }
 
         fn size_allocate(&self, width: i32, _: i32, _: i32) {
             let obj = self.obj();
             let height = obj.card_height(width);
+
             for (index, card) in self.surface.cards.borrow().iter().enumerate() {
                 card.button.size_allocate(
                     &gtk::Allocation::new(0, index as i32 * (height + GAP), width, height),
                     -1,
                 );
             }
+
             self.surface.details.borrow().allocate(obj.upcast_ref());
         }
 
@@ -128,9 +131,11 @@ impl DayList {
             .map(|event| CardKey::Timed(event.id()))
             .collect();
         surface.reconcile(self.upcast_ref(), locale.clone(), keys);
+
         for (card, event) in surface.cards.borrow().iter().zip(&day.events) {
             card.button.set_monthly(event, locale.as_ref());
         }
+
         self.queue_resize();
     }
 }

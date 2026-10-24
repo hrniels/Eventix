@@ -110,9 +110,11 @@ impl CalendarSession {
     pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
         let (requests, rx) = async_channel::unbounded::<Message>();
         let (results, responses) = async_channel::unbounded();
+
         thread::spawn(move || {
             let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
             let mut worker = Worker::new(xdg);
+
             // Queries and commands are ordered. Never discard a queued mutation.
             while let Ok(message) = rx.recv_blocking() {
                 for event in worker.handle(message) {
@@ -122,6 +124,7 @@ impl CalendarSession {
                 }
             }
         });
+
         (Self { requests }, responses)
     }
 
@@ -171,17 +174,20 @@ impl ContentSubscription {
                 let end = start
                     .checked_add_signed(Duration::days(7))
                     .ok_or_else(|| anyhow::anyhow!("Week end out of range"))?;
+
                 (start, end)
             }
             View::Month => eventix_view::month_range(self.date)
                 .ok_or_else(|| anyhow::anyhow!("Month out of range"))?,
         };
+
         let at_midnight = |date: NaiveDate| {
             eventix_ical::util::resolve_local_time(
                 state.timezone(),
                 date.and_hms_opt(0, 0, 0).unwrap(),
             )
         };
+
         Ok(Query::Events {
             start: at_midnight(start),
             end: at_midnight(end),
@@ -241,6 +247,7 @@ impl Worker {
         }
 
         events.extend(self.handle_request(message));
+
         events
     }
 
@@ -268,6 +275,7 @@ impl Worker {
                 let result = self
                     .show_content(&request)
                     .map_err(|error| format!("{error:#}"));
+
                 Event::ContentLoaded(ContentResponse {
                     generation: request.generation,
                     result,
@@ -281,6 +289,7 @@ impl Worker {
                 Err(error) => Event::CommandFailed(format!("{error:#}")),
             },
         };
+
         vec![event]
     }
 
@@ -288,6 +297,7 @@ impl Worker {
         let state = load_local_state(self.xdg.clone())?;
         let event = Event::SourceLoaded(self.source_description(&state));
         self.state = Some(state);
+
         Ok(event)
     }
 
@@ -296,9 +306,11 @@ impl Worker {
             Ok(event) => event,
             Err(error) => return vec![Event::ReloadFailed(format!("{error:#}"))],
         };
+
         let mut events = vec![event];
         let ids = self.subscriptions.ids();
         events.extend(self.refresh_subscriptions(&ids));
+
         events
     }
 
@@ -315,6 +327,7 @@ impl Worker {
     ) -> anyhow::Result<(EditorOptions, Box<UpdateItem>)> {
         let state = self.state()?;
         let edit = UpdateItem::load(state, item, scope)?;
+
         Ok((
             EditorOptions::load_for(state, edit.fields.kind)?,
             Box::new(edit),
@@ -339,6 +352,7 @@ impl Worker {
                     .to_string()
             )
         })?;
+
         Ok((change, event))
     }
 
@@ -351,6 +365,7 @@ impl Worker {
                 .unwrap_or_else(|| Utc::now().with_timezone(state.timezone()).date_naive()),
             view: request.view,
         };
+
         self.load_content(content)
     }
 
@@ -359,9 +374,11 @@ impl Worker {
         let state = self.state()?;
         let query = content.query(state)?;
         let snapshot = content.snapshot(state)?;
+
         self.subscriptions
             .register(SubscriptionId::Calendar(content.generation), query);
         self.content = Some(content);
+
         Ok(snapshot)
     }
 
@@ -372,9 +389,11 @@ impl Worker {
             let snapshot = SidebarSnapshot::load(state, now);
             self.subscriptions
                 .register(SubscriptionId::Sidebar, Query::Sidebar { now });
+
             Ok(snapshot)
         })()
         .map_err(|error| format!("{error:#}"));
+
         Event::SidebarLoaded(result)
     }
 
@@ -414,6 +433,7 @@ impl Worker {
             .get_data_home()
             .map(|p| p.display().to_string())
             .unwrap_or_default();
+
         format!(
             "{}\n{}",
             formatx::formatx!(
@@ -466,6 +486,7 @@ fn load_local_state(xdg: Arc<xdg::BaseDirectories>) -> anyhow::Result<eventix_st
             .unwrap()
         );
     }
+
     Ok(state)
 }
 

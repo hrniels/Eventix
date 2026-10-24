@@ -32,6 +32,7 @@ mod imp {
     impl ObjectImpl for EventIndicators {
         fn constructed(&self) {
             self.parent_constructed();
+
             let obj = self.obj();
             obj.set_spacing(3);
             for (image, (name, _)) in self.icons.iter().zip(ICONS) {
@@ -42,10 +43,13 @@ mod imp {
                 image.set_visible(false);
                 obj.append(image);
             }
+
             obj.set_visible(false);
         }
     }
+
     impl WidgetImpl for EventIndicators {}
+
     impl BoxImpl for EventIndicators {}
 }
 
@@ -59,12 +63,14 @@ impl EventIndicators {
     pub fn set_state(&self, recurrent: bool, exception: bool, alarm: bool, locale: &dyn Locale) {
         let present = [recurrent, exception, alarm];
         self.imp().present.set(present);
+
         for ((image, (_, title)), present) in self.imp().icons.iter().zip(ICONS).zip(present) {
             let title = locale.translate(title);
             image.set_tooltip_text(Some(title));
             image.update_property(&[gtk::accessible::Property::Label(title)]);
             image.set_visible(present);
         }
+
         self.set_visible(present.into_iter().any(|present| present));
     }
 
@@ -83,6 +89,7 @@ impl EventIndicators {
             if !present {
                 continue;
             }
+
             let icon_width = image.measure(gtk::Orientation::Horizontal, -1).1;
             let icon_height = image.measure(gtk::Orientation::Vertical, -1).1;
             let needed = icon_width + if count > 0 { self.spacing() } else { 0 };
@@ -93,6 +100,7 @@ impl EventIndicators {
                 count += 1;
             }
         }
+
         self.set_visible(count > 0);
     }
 }

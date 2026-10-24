@@ -81,12 +81,15 @@ impl ItemEditor {
                 .set_text(&editor.options.start.date().to_string());
             editor.all_day.set_active(true);
         }
+
         editor.install_feedback();
+
         let editor = Rc::new(editor);
         editor.connect_timezone();
         editor.update_previews();
         editor.connect_previews();
         editor.connect_task_dates();
+
         editor
     }
 
@@ -94,10 +97,13 @@ impl ItemEditor {
         let locale = options.locale.as_ref();
         let form = gtk::Box::new(gtk::Orientation::Vertical, 0);
         form.add_css_class("ev_editor_form");
+
         let calendar = Self::create_calendar(&options);
         row(&form, locale, "Calendar", &calendar);
+
         let summary = gtk::Entry::new();
         row(&form, locale, "Summary", &summary);
+
         let location = gtk::Entry::new();
         row(&form, locale, "Location", &location);
         let location_completion = completion::Completion::new(&location, options.locations.clone());
@@ -108,6 +114,7 @@ impl ItemEditor {
         let dates = DateSection::new(&form, &options);
         let reminders = ReminderSection::new(&form, &options, &calendar);
         let (description, description_section) = Self::create_description(&form, locale);
+
         let recurrence = RecurrenceInput::new(locale, options.start.date());
         let repeat_section = FormSection::new(
             &form,
@@ -131,6 +138,7 @@ impl ItemEditor {
             .iter()
             .map(|section| section.preview.clone())
             .collect();
+
         Self {
             layer: shell.layer,
             save: shell.save,
@@ -178,18 +186,22 @@ impl ItemEditor {
             let Some(editor) = weak.upgrade() else {
                 return;
             };
+
             if editor.all_day.is_active() {
                 return;
             }
+
             let (Some(from), Some(to)) = (
                 chrono_tz::TZ_VARIANTS.get(old as usize),
                 chrono_tz::TZ_VARIANTS.get(timezone.selected() as usize),
             ) else {
                 return;
             };
+
             let Ok((start, end)) = editor.timed_dates(from) else {
                 return;
             };
+
             let context = DateContext::system();
             if let Some(start) = start {
                 let start = context.date(&start).start_in(to);
@@ -201,6 +213,7 @@ impl ItemEditor {
                     .start_time
                     .set_text(&start.format("%H:%M").to_string());
             }
+
             if let Some(end) = end {
                 let end = context.date(&end).start_in(to);
                 editor
@@ -214,6 +227,7 @@ impl ItemEditor {
 
     fn connect_previews(self: &Rc<Self>) {
         watch_fields(self.form.upcast_ref(), self);
+
         // Selection models for segmented controls and hidden stack pages are not widget children.
         for selection in [
             &self.recurrence.frequency,
@@ -229,8 +243,10 @@ impl ItemEditor {
                 }
             });
         }
+
         watch_fields(self.alarm.widget.upcast_ref(), self);
         watch_fields(self.personal_alarm.widget.upcast_ref(), self);
+
         let weak = Rc::downgrade(self);
         self.personal_override.connect_toggled(move |_| {
             if let Some(editor) = weak.upgrade() {
@@ -273,9 +289,11 @@ impl ItemEditor {
         {
             calendar.set_selected(index as u32);
         }
+
         let factory = calendar_factory(&options.calendars, &calendar.model().unwrap());
         calendar.set_factory(Some(&factory));
         calendar.set_list_factory(Some(&factory));
+
         calendar
     }
 
@@ -286,6 +304,7 @@ impl ItemEditor {
         description.set_bottom_margin(6);
         description.set_left_margin(6);
         description.set_right_margin(6);
+
         let scroll = gtk::ScrolledWindow::builder()
             .min_content_height(100)
             .max_content_height(180)
@@ -293,6 +312,7 @@ impl ItemEditor {
             .child(&description)
             .build();
         let section = FormSection::new(form, locale, "Description", &scroll, None);
+
         (description, section)
     }
 
@@ -308,6 +328,7 @@ impl ItemEditor {
         if self.kind() != CalCompType::Todo {
             return;
         }
+
         self.update_task_reminders();
         for toggle in [&self.has_start, &self.has_due] {
             let weak = Rc::downgrade(self);
@@ -335,6 +356,7 @@ impl ItemEditor {
         self.update_description_preview();
         self.update_recurrence_preview();
         self.update_attendees_preview();
+
         for preview in &self.previews {
             preview
                 .set_tooltip_text((!preview.text().is_empty()).then_some(preview.text().as_str()));
@@ -361,6 +383,7 @@ impl ItemEditor {
                     date(&self.start, &self.start_time)
                 ));
             }
+
             if self.has_due.is_active() {
                 dates.push(format!(
                     "{}: {}",
@@ -375,6 +398,7 @@ impl ItemEditor {
             });
             return;
         }
+
         self.previews[0].set_text(&if self.all_day.is_active() {
             format!("{start} – {end} · {}", locale.translate("All day"))
         } else {
@@ -406,6 +430,7 @@ impl ItemEditor {
         } else {
             ("Calendar", self.alarm.summary(timezone, locale))
         };
+
         self.previews[1].set_text(&format!("{}: {summary}", locale.translate(label)));
     }
 
@@ -449,6 +474,7 @@ impl ItemEditor {
         self.form.set_sensitive(!saving);
         self.save.set_sensitive(!saving);
         self.cancel.set_sensitive(!saving);
+
         for (index, section) in self.sections.iter().enumerate() {
             let occurrence_recurrence = index == 3
                 && self.existing.borrow().as_ref().is_some_and(|edit| {
@@ -499,6 +525,7 @@ impl ItemEditor {
         {
             bail!(locale.translate("error.end_before_start").to_string());
         }
+
         Ok((start, end))
     }
 }
@@ -520,25 +547,31 @@ impl EditorShell {
         layer.set_halign(gtk::Align::Fill);
         layer.set_valign(gtk::Align::Fill);
         layer.add_css_class("ev_editor_backdrop");
+
         let (panel, title) = Self::create_panel(locale);
         if options.kind == CalCompType::Todo {
             title.set_text(locale.translate("New Task"));
         }
+
         let scroll = gtk::ScrolledWindow::builder()
             .child(form)
             .hscrollbar_policy(gtk::PolicyType::Never)
             .propagate_natural_height(true)
             .build();
         panel.append(&scroll);
+
         let error = Self::create_error();
         panel.append(&error);
+
         let (save, cancel) = Self::append_actions(&panel, locale);
         layer.append(&panel);
+
         if options.calendars.is_empty() {
             error.set_text(locale.translate("error.create_calendar_first"));
             error.set_visible(true);
             save.set_sensitive(false);
         }
+
         Self {
             title,
             layer,
@@ -555,13 +588,16 @@ impl EditorShell {
         panel.set_valign(gtk::Align::Center);
         panel.set_vexpand(true);
         panel.set_size_request(super::ITEM_PANEL_WIDTH, -1);
+
         let title = gtk::Label::new(Some(locale.translate("New Event")));
         title.add_css_class("ev_editor_title");
+
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         header.add_css_class("ev_editor_header");
         title.set_hexpand(true);
         header.append(&title);
         panel.append(&header);
+
         (panel, title)
     }
 
@@ -571,19 +607,23 @@ impl EditorShell {
         error.set_xalign(0.0);
         error.set_visible(false);
         error.add_css_class("ev_editor_error");
+
         error
     }
 
     fn append_actions(panel: &gtk::Box, locale: &dyn Locale) -> (gtk::Button, gtk::Button) {
         let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         actions.add_css_class("ev_editor_actions");
+
         let save = action_button(locale, "Save", "floppy2-fill");
         save.set_hexpand(true);
         save.set_halign(gtk::Align::End);
+
         let cancel = action_button(locale, "Cancel", "x-circle");
         actions.append(&save);
         actions.append(&cancel);
         panel.append(&actions);
+
         (save, cancel)
     }
 }
@@ -607,11 +647,13 @@ impl DateSection {
         let end_value = options.start + Duration::hours(1);
         let end = DateInput::new(locale, end_value.date());
         Self::connect_dates(&start, &end);
+
         let start_time = time_entry(options.start.time());
         let end_time = time_entry(end_value.time());
         let all_day = gtk::CheckButton::new();
         all_day.set_halign(gtk::Align::Start);
         let timezone = Self::create_timezone(locale);
+
         let dates = gtk::Grid::builder()
             .column_spacing(6)
             .row_spacing(8)
@@ -621,13 +663,16 @@ impl DateSection {
         let end_fields = Self::date_fields(&end, &end_time);
         let has_start = gtk::CheckButton::with_label(locale.translate("Start"));
         let has_due = gtk::CheckButton::with_label(locale.translate("Due"));
+
         if options.kind == CalCompType::Todo {
             dates.attach(&has_start, 0, 0, 1, 1);
             dates.attach(&has_due, 2, 0, 1, 1);
             start_fields.set_sensitive(false);
             end_fields.set_sensitive(false);
+
             let fields = start_fields.clone();
             has_start.connect_toggled(move |button| fields.set_sensitive(button.is_active()));
+
             let fields = end_fields.clone();
             has_due.connect_toggled(move |button| fields.set_sensitive(button.is_active()));
         } else {
@@ -636,18 +681,22 @@ impl DateSection {
             Self::attach_label(&dates, locale, "Start", 0, 0, start.entry.upcast_ref());
             Self::attach_label(&dates, locale, "End", 2, 0, end.entry.upcast_ref());
         }
+
         Self::attach_label(&dates, locale, "All day", 0, 1, all_day.upcast_ref());
         Self::attach_label(&dates, locale, "Timezone", 2, 1, timezone.upcast_ref());
         dates.attach(&start_fields, 1, 0, 1, 1);
         dates.attach(&end_fields, 3, 0, 1, 1);
         dates.attach(&all_day, 1, 1, 1, 1);
+
         let timezone_field = gtk::Box::new(gtk::Orientation::Vertical, 0);
         timezone_field.set_hexpand(true);
         timezone_field.append(&timezone);
         dates.attach(&timezone_field, 3, 1, 1, 1);
         Self::connect_all_day(&all_day, &start_time, &end_time, &timezone);
         all_day.set_active(options.kind == CalCompType::Todo);
+
         let section = FormSection::new(form, locale, "Date", &dates, None);
+
         Self {
             section,
             start,
@@ -669,12 +718,14 @@ impl DateSection {
                 let (Some(source), Some(target)) = (input.upgrade(), target.upgrade()) else {
                     return;
                 };
+
                 let (Ok(date), Ok(other)) = (
                     NaiveDate::parse_from_str(source.text().as_str(), "%Y-%m-%d"),
                     NaiveDate::parse_from_str(target.text().as_str(), "%Y-%m-%d"),
                 ) else {
                     return;
                 };
+
                 if (is_start && date > other) || (!is_start && date < other) {
                     target.set_text(&date.to_string());
                 }
@@ -709,11 +760,13 @@ impl DateSection {
         date.widget.set_valign(gtk::Align::Center);
         date.entry.set_width_chars(10);
         date.entry.set_max_width_chars(10);
+
         time.set_hexpand(true);
         time.set_valign(gtk::Align::Center);
         time.set_max_width_chars(5);
         row.append(&date.widget);
         row.append(time);
+
         row
     }
 
@@ -728,6 +781,7 @@ impl DateSection {
             None::<gtk::Expression>,
             "string",
         )));
+
         // GTK 4.12 adds substring matching; retain native prefix search on GTK 4.10.
         if timezone.find_property("search-match-mode").is_some() {
             timezone.set_property("search-match-mode", gtk::StringFilterMatchMode::Substring);
@@ -739,6 +793,7 @@ impl DateSection {
         {
             timezone.set_selected(index as u32);
         }
+
         timezone
     }
 
@@ -748,6 +803,7 @@ impl DateSection {
             let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
                 return;
             };
+
             let label = gtk::Label::builder().xalign(0.0).build();
             if compact {
                 label.set_ellipsize(gtk::pango::EllipsizeMode::End);
@@ -756,10 +812,12 @@ impl DateSection {
             }
             item.set_child(Some(&label));
         });
+
         factory.connect_bind(|_, item| {
             let Some(item) = item.downcast_ref::<gtk::ListItem>() else {
                 return;
             };
+
             if let (Some(label), Some(zone)) = (
                 item.child().and_downcast::<gtk::Label>(),
                 item.item().and_downcast::<gtk::StringObject>(),
@@ -768,6 +826,7 @@ impl DateSection {
                 label.set_tooltip_text(Some(&zone.string()));
             }
         });
+
         factory
     }
 
@@ -783,6 +842,7 @@ impl DateSection {
             for time in &times {
                 time.set_sensitive(!button.is_active());
             }
+
             zone.set_sensitive(!button.is_active());
         });
     }
@@ -802,9 +862,11 @@ impl ReminderSection {
         let alarms = gtk::Stack::new();
         alarms.set_hhomogeneous(false);
         alarms.set_vhomogeneous(false);
+
         let alarm = AlarmInput::new(locale, options.start.date(), options.start.time());
         alarms.add_named(&alarm.widget, Some("calendar"));
         let (personal_alarm, personal_override) = Self::append_personal(&alarms, options);
+
         let mode = dropdown(locale, &["Calendar", "Personal"]);
         let modes = segments(locale, &mode, &["Calendar", "Personal"]);
         let panels = alarms.clone();
@@ -817,6 +879,7 @@ impl ReminderSection {
         });
         Self::connect_availability(calendar, &mode, &modes, options);
         let section = FormSection::new(form, locale, "Reminder", &alarms, Some(modes.upcast_ref()));
+
         Self {
             section,
             alarm,
@@ -834,12 +897,15 @@ impl ReminderSection {
         let personal_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let overwrite = gtk::CheckButton::with_label(locale.translate("Overwrite default"));
         personal_box.append(&overwrite);
+
         let alarm = AlarmInput::new(locale, options.start.date(), options.start.time());
         alarm.widget.set_sensitive(false);
         personal_box.append(&alarm.widget);
+
         let personal = alarm.widget.clone();
         overwrite.connect_toggled(move |button| personal.set_sensitive(button.is_active()));
         alarms.add_named(&personal_box, Some("personal"));
+
         (alarm, overwrite)
     }
 
@@ -857,6 +923,7 @@ impl ReminderSection {
                 .copied()
                 .unwrap_or(false),
         );
+
         let mode = mode.clone();
         calendar.connect_selected_notify(move |combo| {
             let personal = available
@@ -884,15 +951,18 @@ impl AttendeeSection {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let rows = gtk::Box::new(gtk::Orientation::Vertical, 4);
         widget.append(&rows);
+
         let new_entry = gtk::Entry::new();
         new_entry.set_placeholder_text(Some(locale.translate("New attendee")));
         new_entry.set_hexpand(true);
         let completion = completion::Completion::new(&new_entry, options.contacts.clone());
+
         let add = gtk::Button::with_label(locale.translate("Add"));
         let add_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         add_row.append(&new_entry);
         add_row.append(&add);
         widget.append(&add_row);
+
         let section = FormSection::new(form, locale, "Attendees", &widget, None);
         let section = Self {
             section,
@@ -901,6 +971,7 @@ impl AttendeeSection {
             completion,
         };
         section.connect_add(&add, rows, options);
+
         section
     }
 
@@ -914,6 +985,7 @@ impl AttendeeSection {
             if value.is_empty() {
                 return;
             }
+
             let input = AttendeeInput::new(&value, locale.as_ref());
             Self::connect_removal_preview(
                 &input,
@@ -925,6 +997,7 @@ impl AttendeeSection {
             entries.borrow_mut().push(input);
             entry.set_text("");
         });
+
         let weak_add = add.downgrade();
         self.new_entry.connect_activate(move |_| {
             if let Some(add) = weak_add.upgrade() {
@@ -970,6 +1043,7 @@ fn watch_fields(widget: &gtk::Widget, editor: &Rc<ItemEditor>) {
             });
         }
     }
+
     if let Some(text) = widget.downcast_ref::<gtk::TextView>() {
         let weak = Rc::downgrade(editor);
         text.buffer().connect_changed(move |_| {
@@ -978,6 +1052,7 @@ fn watch_fields(widget: &gtk::Widget, editor: &Rc<ItemEditor>) {
             }
         });
     }
+
     let mut child = widget.first_child();
     while let Some(widget) = child {
         watch_fields(&widget, editor);
@@ -994,6 +1069,7 @@ fn spin(min: f64, max: f64, value: f64) -> gtk::SpinButton {
     let widget = gtk::SpinButton::with_range(min, max, 1.0);
     widget.set_value(value);
     widget.set_numeric(true);
+
     widget
 }
 
@@ -1025,6 +1101,7 @@ impl DateInput {
             .width_chars(10)
             .build();
         entry.set_hexpand(true);
+
         let calendar = gtk::Calendar::new();
         let picker = Self::create_picker(locale, &calendar);
         let syncing = Rc::new(Cell::new(false));
@@ -1032,6 +1109,7 @@ impl DateInput {
         Self::connect_day_selected(&entry, &picker, &calendar, syncing.clone());
         widget.append(&entry);
         widget.append(&picker);
+
         Self {
             widget,
             entry,
@@ -1055,9 +1133,11 @@ impl DateInput {
             .valign(gtk::Align::Start)
             .build();
         picker.set_tooltip_text(Some(locale.translate("Choose date")));
+
         let popover = gtk::Popover::new();
         popover.set_child(Some(calendar));
         picker.set_popover(Some(&popover));
+
         picker
     }
 
@@ -1100,6 +1180,7 @@ impl DateInput {
             if syncing.get() {
                 return;
             }
+
             let date = calendar.date();
             input.set_text(&format!(
                 "{:04}-{:02}-{:02}",
@@ -1107,6 +1188,7 @@ impl DateInput {
                 date.month(),
                 date.day_of_month()
             ));
+
             if let Some(button) = button.upgrade() {
                 button.popdown();
             }
@@ -1137,15 +1219,18 @@ impl AlarmInput {
         let trigger = dropdown(locale, &["None", "Relative", "Absolute"]);
         let buttons = choices(locale, &trigger, &["None", "Relative", "Absolute"]);
         widget.append(&buttons[0]);
+
         let (relative, duration, unit, relation) = Self::create_relative(locale);
         Self::append_mode_row(&widget, &buttons[1], &relative);
         let relative_row = buttons[1].parent().unwrap();
+
         let (absolute, date, time) = Self::create_absolute(locale, date, time);
         Self::append_mode_row(&widget, &buttons[2], &absolute);
         trigger.connect_selected_notify(move |combo| {
             relative.set_sensitive(combo.selected() == 1);
             absolute.set_sensitive(combo.selected() == 2);
         });
+
         Self {
             widget,
             trigger,
@@ -1173,6 +1258,7 @@ impl AlarmInput {
         relative.append(&unit);
         relative.append(&relation);
         relative.set_sensitive(false);
+
         (relative, duration, unit, relation)
     }
 
@@ -1190,6 +1276,7 @@ impl AlarmInput {
         absolute.append(&date.widget);
         absolute.append(&time);
         absolute.set_sensitive(false);
+
         (absolute, date, time)
     }
 
@@ -1227,12 +1314,14 @@ impl AlarmInput {
             2 => self.absolute_trigger(timezone, locale)?,
             _ => return Ok(Vec::new()),
         };
+
         Ok(self.alarms(trigger, locale))
     }
 
     fn alarms(&self, trigger: CalTrigger, locale: &dyn Locale) -> Vec<CalAlarm> {
         let mut alarm = CalAlarm::new(CalAction::Display, trigger);
         alarm.set_description(Some(locale.translate("Reminder").to_string()));
+
         vec![alarm]
     }
 
@@ -1254,6 +1343,7 @@ impl AlarmInput {
             2 => Duration::days(amount),
             _ => Duration::minutes(amount),
         };
+
         CalTrigger::Relative {
             duration: duration.into(),
             related: if relation < 2 {
@@ -1281,6 +1371,7 @@ impl AlarmInput {
         let selected = current
             .and_then(|current| available.iter().position(|index| *index == current))
             .unwrap_or(0);
+
         *self.relations.borrow_mut() = available;
         self.relation.set_model(Some(&gtk::StringList::new(&names)));
         self.relation.set_selected(selected as u32);
@@ -1320,17 +1411,20 @@ impl AttendeeInput {
         label.set_hexpand(true);
         label.set_xalign(0.0);
         label.set_wrap(true);
+
         let role = Self::create_role(locale);
         let remove = gtk::Button::with_label(locale.translate("Remove"));
         widget.append(&label);
         widget.append(&role);
         widget.append(&remove);
+
         let weak = widget.downgrade();
         remove.connect_clicked(move |_| {
             if let Some(widget) = weak.upgrade() {
                 widget.set_visible(false);
             }
         });
+
         Self {
             original: None,
             widget,
@@ -1357,6 +1451,7 @@ impl AttendeeInput {
                 &required
             }));
         });
+
         role
     }
 
@@ -1384,6 +1479,7 @@ impl AttendeeInput {
         if let Some(name) = name {
             attendee.set_common_name(name.to_string());
         }
+
         if self.original.as_ref().is_none_or(|original| {
             (original.role() == Some(CalRole::Optional)) != self.role.is_active()
         }) {
@@ -1393,6 +1489,7 @@ impl AttendeeInput {
                 CalRole::Required
             });
         }
+
         attendee
     }
 }
@@ -1409,16 +1506,20 @@ pub(crate) fn has_nested_popup(window: &gtk::Window) -> bool {
             {
                 return true;
             }
+
             child = current.next_sibling();
         }
+
         if widget.is::<gtk::Popover>()
             && !widget.is::<super::details::EventDetails>()
             && widget.is_visible()
         {
             return true;
         }
+
         focused = widget.parent();
     }
+
     false
 }
 

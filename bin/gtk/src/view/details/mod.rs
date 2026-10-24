@@ -74,6 +74,7 @@ mod imp {
             EventIndicators::static_type();
             klass.bind_template();
         }
+
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
             obj.init_template();
         }
@@ -85,6 +86,7 @@ mod imp {
             self.dispose_template();
         }
     }
+
     impl WidgetImpl for EventDetails {
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             let obj = self.obj();
@@ -92,10 +94,12 @@ mod imp {
                 self.parent_snapshot(snapshot);
                 return;
             };
+
             super::arrow::snapshot(&obj, &contents, snapshot);
             obj.snapshot_child(&contents, snapshot);
         }
     }
+
     impl PopoverImpl for EventDetails {}
 }
 
@@ -121,6 +125,7 @@ impl EventDetails {
                 imp.parent_measure(gtk::Orientation::Vertical, natural_width)
                     .0,
             );
+
         (natural_width, minimum_height)
     }
 
@@ -140,6 +145,7 @@ impl EventDetails {
             locale,
         );
         obj.set_identity(&event.id);
+
         obj
     }
 
@@ -159,6 +165,7 @@ impl EventDetails {
             locale,
         );
         obj.set_identity(&row.id);
+
         obj
     }
 
@@ -241,6 +248,7 @@ impl EventDetails {
             if !occurrence && let Some(item) = &mut item {
                 item.recurrence = None;
             }
+
             let callback = callback.clone();
             let response = *response;
             button.connect_clicked(move |_| {
@@ -256,11 +264,13 @@ impl EventDetails {
         if let Some(child) = obj.child() {
             child.set_size_request(super::ITEM_PANEL_WIDTH, -1);
         }
+
         obj.setup_header(event, locale);
         obj.setup_tag(uid);
         obj.add_rows(event, locale);
         obj.add_actions(event, locale);
         obj.imp().recurrent.set(event.recurrent);
+
         obj
     }
 
@@ -275,6 +285,7 @@ impl EventDetails {
         imp.summary.set_tooltip_text(Some(summary));
         imp.indicators
             .set_state(event.recurrent, event.exception, event.alarm, locale);
+
         imp.calendar.set_tooltip_text(Some(event.calendar));
         imp.calendar
             .update_property(&[gtk::accessible::Property::Label(event.calendar)]);
@@ -289,6 +300,7 @@ impl EventDetails {
         imp.tag.set_cursor_from_name(Some("pointer"));
         imp.tag
             .update_property(&[gtk::accessible::Property::Label("UID")]);
+
         let uid = uid.to_owned();
         imp.tag.connect_clicked(move |button| {
             button.clipboard().set_text(&uid);
@@ -478,6 +490,7 @@ impl EventDetails {
                     .borrow_mut()
                     .push((button, TaskAction::Postpone { days }));
             }
+
             right.append(&postpone);
         }
 
@@ -504,6 +517,7 @@ impl EventDetails {
                 ]) {
                     self.imp().edits.borrow_mut().push((button, scope));
                 }
+
                 right.append(&edit_menu);
             } else {
                 let edit = button("pencil", locale.translate("Edit"), "");
@@ -578,6 +592,7 @@ impl EventDetails {
                         .borrow_mut()
                         .push((button, response, occurrence));
                 }
+
                 right.append(&response_menu);
             }
         }
@@ -601,8 +616,10 @@ fn detail_row(
         .hexpand(true)
         .build();
     row.add_css_class("ev_details_row");
+
     let image = icon(icon_name);
     image.set_valign(gtk::Align::Start);
+
     let title = gtk::Label::builder()
         .label(title)
         .xalign(0.0)
@@ -611,9 +628,11 @@ fn detail_row(
     title.add_css_class("ev_details_label");
     titles.add_widget(&title);
     value.update_relation(&[gtk::accessible::Relation::LabelledBy(&[title.upcast_ref()])]);
+
     row.attach(&image, 0, 0, 1, 1);
     row.attach(&title, 1, 0, 1, 1);
     row.attach(value, 2, 0, 1, 1);
+
     row
 }
 
@@ -631,6 +650,7 @@ fn reminder_content(reminders: &str, event: &DetailItem<'_>, locale: &dyn Locale
         }
         content.append(&buttons);
     }
+
     content
 }
 
@@ -645,6 +665,7 @@ fn organizer_label(organizer: &Contact, sent_by: Option<&str>, locale: &dyn Loca
         ));
     }
     text.set_markup(&markup);
+
     text
 }
 
@@ -666,6 +687,7 @@ fn attendees_content(attendees: &[Attendee]) -> gtk::Box {
         image.set_tooltip_text(Some(&attendee.tooltip));
         image.update_property(&[gtk::accessible::Property::Label(&attendee.tooltip)]);
         person.append(&image);
+
         let name = label("");
         name.set_markup(&contact_markup(&attendee.contact));
         name.set_tooltip_text(Some(&format!(
@@ -675,6 +697,7 @@ fn attendees_content(attendees: &[Attendee]) -> gtk::Box {
         person.append(&name);
         people.append(&person);
     }
+
     people
 }
 
@@ -706,7 +729,9 @@ fn button_content(icon_name: &str, text: &str) -> gtk::Box {
     if !icon_name.is_empty() {
         content.append(&icon(icon_name));
     }
+
     content.append(&gtk::Label::new(Some(text)));
+
     content
 }
 
@@ -720,6 +745,7 @@ fn button(icon_name: &str, text: &str, class: &str) -> gtk::Button {
         button.add_css_class(class);
     }
     button.update_property(&[gtk::accessible::Property::Label(text)]);
+
     button
 }
 
@@ -738,6 +764,7 @@ fn menu(
         .halign(gtk::Align::Start)
         .build();
     popover.add_css_class("ev_details_menu");
+
     let mut options = Vec::with_capacity(items.len());
     for (icon, title, class) in items {
         let item = button(icon, title, class);
@@ -754,6 +781,7 @@ fn menu(
         content.append(&item);
         options.push(item);
     }
+
     let menu = gtk::MenuButton::builder()
         .child(&button_content(icon_name, text))
         .popover(&popover)
@@ -764,12 +792,14 @@ fn menu(
         menu.add_css_class(class);
     }
     menu.update_property(&[gtk::accessible::Property::Label(text)]);
+
     let weak = menu.downgrade();
     popover.connect_show(move |popover| {
         if let Some(menu) = weak.upgrade() {
             popover.set_width_request(menu.width());
         }
     });
+
     (menu, options)
 }
 
@@ -788,6 +818,7 @@ fn link_markup(uri: &str, text: &str) -> String {
 fn linked_label(text: &str) -> gtk::Label {
     let label = label("");
     label.set_markup(&text_markup(text));
+
     label
 }
 
@@ -800,6 +831,7 @@ fn text_markup(text: &str) -> String {
         ))
         .expect("valid link regex")
     });
+
     let mut result = String::new();
     let mut end = 0;
     for found in LINKS.find_iter(text) {
@@ -818,7 +850,9 @@ fn text_markup(text: &str) -> String {
         result.push_str(&link_markup(&uri, text));
         end = found.start() + text.len();
     }
+
     result.push_str(&glib::markup_escape_text(&text[end..]));
+
     result
 }
 

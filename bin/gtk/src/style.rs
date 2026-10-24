@@ -33,6 +33,7 @@ pub fn color(widget: &impl IsA<gtk::Widget>, name: &str) -> gdk::RGBA {
 pub fn calendar_class(background: &str, foreground: &str) -> String {
     let mut hash = DefaultHasher::new();
     (background, foreground).hash(&mut hash);
+
     format!("ev_color_{}", hash.finish())
 }
 
@@ -68,5 +69,6 @@ pub fn colors_css<'a>(colors: impl IntoIterator<Item = (&'a str, &'a str)>) -> S
             class = calendar_class(background, foreground)
         ));
     }
+
     css
 }

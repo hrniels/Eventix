@@ -56,6 +56,7 @@ impl Completion {
             .child(list)
             .build();
         scroll.set_focusable(false);
+
         let popup = gtk::Popover::builder()
             .autohide(false)
             .has_arrow(false)
@@ -63,6 +64,7 @@ impl Completion {
             .child(&scroll)
             .build();
         popup.set_halign(gtk::Align::Start);
+
         (scroll, popup)
     }
 
@@ -76,8 +78,10 @@ impl Completion {
             schedule_refresh(self.refresh_callback(focus, candidates, dismissed.clone()));
         let update = schedule.clone();
         self.entry.connect_changed(move |_| update());
+
         let update = schedule.clone();
         self.entry.connect_map(move |_| update());
+
         focus.connect_enter(move |_| {
             dismissed.borrow_mut().take();
             schedule();
@@ -102,6 +106,7 @@ impl Completion {
         let weak_entry = self.entry.downgrade();
         let weak_focus = focus.downgrade();
         let weak_scroll = self.scroll.downgrade();
+
         Rc::new(move || {
             let (Some(popup), Some(list), Some(entry), Some(focus)) = (
                 weak_popup.upgrade(),
@@ -111,12 +116,14 @@ impl Completion {
             ) else {
                 return;
             };
+
             // Reopen from a clean state: an interrupted popdown animation can otherwise hide
             // fresh results, and an already mapped native popup can retain its previous size.
             popup.set_visible(false);
             while let Some(child) = list.first_child() {
                 list.remove(&child);
             }
+
             let text = entry.text();
             if entry.is_mapped()
                 && focus.contains_focus()
@@ -124,10 +131,12 @@ impl Completion {
             {
                 populate_list(&list, &candidates, &text);
             }
+
             if list.first_child().is_some() {
                 if let Some(scroll) = weak_scroll.upgrade() {
                     scroll.vadjustment().set_value(0.0);
                 }
+
                 popup.popup();
             }
         })
@@ -146,6 +155,7 @@ impl Completion {
     fn connect_keys(&self, dismissed: Rc<RefCell<Option<String>>>) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+
         let weak_entry = self.entry.downgrade();
         let weak_popup = self.popup.downgrade();
         let weak_list = self.list.downgrade();
@@ -158,12 +168,14 @@ impl Completion {
             ) else {
                 return glib::Propagation::Proceed;
             };
+
             if !popup.is_visible()
                 || modifiers
                     .intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK)
             {
                 return glib::Propagation::Proceed;
             }
+
             match key {
                 gdk::Key::Down | gdk::Key::Up => {
                     select_row(&list, weak_scroll.upgrade().as_ref(), key);
@@ -181,8 +193,10 @@ impl Completion {
                 }
                 _ => return glib::Propagation::Proceed,
             }
+
             glib::Propagation::Stop
         });
+
         self.entry.add_controller(keys);
     }
 
@@ -199,6 +213,7 @@ impl Completion {
 /// Coalesces edits into a single refresh after GTK has settled the entry and focus state.
 fn schedule_refresh(refresh: Rc<dyn Fn()>) -> Rc<dyn Fn()> {
     let pending = Rc::new(Cell::new(false));
+
     Rc::new(move || {
         if !pending.replace(true) {
             let pending = pending.clone();
@@ -261,6 +276,7 @@ fn accept(
         entry.set_position(-1);
         *dismissed.borrow_mut() = Some(entry.text().to_string());
     }
+
     popup.set_visible(false);
 }
 
@@ -270,6 +286,7 @@ fn matches<'a>(candidates: &'a [(String, String)], query: &str) -> Vec<&'a str> 
     if query.chars().count() < 2 {
         return Vec::new();
     }
+
     let mut ranked: Vec<_> = candidates
         .iter()
         .filter_map(|(value, normalized)| {
@@ -277,6 +294,7 @@ fn matches<'a>(candidates: &'a [(String, String)], query: &str) -> Vec<&'a str> 
         })
         .collect();
     ranked.sort_by_key(|(score, _)| *score);
+
     ranked
         .into_iter()
         .take(20)
@@ -288,6 +306,7 @@ fn match_score(normalized: &str, query: &str) -> Option<(u8, usize, usize)> {
     if normalized == query {
         return None;
     }
+
     let (category, position) = normalized
         .match_indices(query)
         .map(|(position, _)| {
@@ -305,6 +324,7 @@ fn match_score(normalized: &str, query: &str) -> Option<(u8, usize, usize)> {
             (category, position)
         })
         .min()?;
+
     Some((category, position, normalized.len()))
 }
 

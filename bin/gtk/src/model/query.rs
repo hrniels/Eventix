@@ -42,6 +42,7 @@ impl Query {
         else {
             return false;
         };
+
         let Some(occurrence) =
             file.occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())
         else {
@@ -55,6 +56,7 @@ impl Query {
         {
             return matches!(self, Self::Sidebar { .. });
         }
+
         if item.recurrence.is_none()
             && occurrence.is_recurrent()
             && occurrence.ctype() == CalCompType::Event

@@ -50,9 +50,11 @@ impl ItemEditor {
         if calendar.is_none() {
             check.report(Field::Calendar, "error.create_calendar_first");
         }
+
         if self.summary.text().trim().is_empty() {
             check.report(Field::Summary, "error.summary_empty");
         }
+
         if !self.new_attendee.text().trim().is_empty() {
             check.report(Field::NewAttendee, "error.new_attendee_not_empty");
         }
@@ -71,6 +73,7 @@ impl ItemEditor {
         if self.recurrence.frequency.selected() != 0 && !self.has_start.is_active() {
             check.report(Field::StartDate, "error.repeating_event_start");
         }
+
         let timezone = check.timezone(self.timezone.selected(), all_day);
         let dates = check.event_dates(self, start, end, timezone);
         let until = check.recurrence_until(&self.recurrence, start, all_day, timezone);
@@ -103,6 +106,7 @@ impl ItemEditor {
             check.issues.sort_by_key(|issue| issue.field);
             return Err(check.issues);
         }
+
         // Every missing required value has already produced a field issue above.
         let Some(calendar) = calendar else {
             return Err(check.issues);
@@ -132,6 +136,7 @@ impl ItemEditor {
                 .map(super::AttendeeInput::value)
                 .collect(),
         });
+
         // Preserve precision, custom recurrence clauses, and multiple/extended alarms when
         // their visible controls have not changed.
         if let (Some(existing), Some(initial)) = (
@@ -142,22 +147,28 @@ impl ItemEditor {
             if command.start == initial.start {
                 command.start = original.start.clone();
             }
+
             if command.end == initial.end {
                 command.end = original.end.clone();
             }
+
             if command.recurrence == initial.recurrence {
                 command.recurrence = original.recurrence.clone();
             }
+
             if command.alarms == initial.alarms {
                 command.alarms = original.alarms.clone();
             }
+
             if command.personal_alarms == initial.personal_alarms {
                 command.personal_alarms = original.personal_alarms.clone();
             }
+
             if command.task_status == initial.task_status {
                 command.task_status = original.task_status.clone();
             }
         }
+
         Ok(command)
     }
 }
@@ -323,11 +334,13 @@ impl<'a> Checks<'a> {
                 let (Some(date), Some(time)) = (date, time) else {
                     return Vec::new();
                 };
+
                 let date = CalDate::new_datetime(date, Some(time), timezone.name());
                 CalTrigger::Absolute(DateContext::system().date_to_utc(&date, timezone))
             }
             _ => return Vec::new(),
         };
+
         input.alarms(trigger, self.locale)
     }
 }

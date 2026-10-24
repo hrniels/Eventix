@@ -69,6 +69,7 @@ pub(crate) mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.gutter.set_size_request(GUTTER, -1);
+
             for label in [
                 &self.monday,
                 &self.tuesday,
@@ -96,6 +97,7 @@ pub(crate) mod imp {
                 self.headers.append(&header);
                 self.time_change_icons.borrow_mut().push(icon);
             }
+
             let top_fade = self.all_day_top_fade.downgrade();
             let bottom_fade = self.all_day_bottom_fade.downgrade();
             let update_fades = move |adjustment: &gtk::Adjustment| {
@@ -119,6 +121,7 @@ pub(crate) mod imp {
     }
 
     impl WidgetImpl for WeekContent {}
+
     impl BoxImpl for WeekContent {}
 }
 

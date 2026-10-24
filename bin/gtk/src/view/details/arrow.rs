@@ -19,6 +19,7 @@ pub(super) fn snapshot(popover: &EventDetails, contents: &gtk::Widget, snapshot:
         gdk::Gravity::South | gdk::Gravity::SouthEast | gdk::Gravity::SouthWest => false,
         _ => return,
     };
+
     let (has_anchor, anchor) = popover.pointing_to();
     let Some(target) = popover.parent().and_then(|parent| {
         parent.compute_point(
@@ -31,6 +32,7 @@ pub(super) fn snapshot(popover: &EventDetails, contents: &gtk::Widget, snapshot:
     }) else {
         return;
     };
+
     if !has_anchor {
         return;
     }
@@ -44,6 +46,7 @@ pub(super) fn snapshot(popover: &EventDetails, contents: &gtk::Widget, snapshot:
     } else {
         body.y() + body.height()
     };
+
     triangle(
         snapshot,
         x,

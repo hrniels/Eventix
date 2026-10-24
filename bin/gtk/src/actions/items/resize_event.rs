@@ -35,9 +35,11 @@ impl Resize {
         if !page.can_edit() {
             return None;
         }
+
         let grid = card.parent()?.downcast::<TimedGrid>().ok()?;
         let point = card.compute_point(&grid, &graphene::Point::new(x as f32, y as f32))?;
         page.dismiss_popovers();
+
         Some(Self {
             segment: card.resize_segment()?,
             edge,
@@ -51,6 +53,7 @@ impl Resize {
         if offset.abs() < 8.0 && self.value.is_none() {
             return;
         }
+
         let Some((value, range)) = resize_range(
             self.segment.date,
             (self.segment.event.start, self.segment.event.end),
@@ -61,6 +64,7 @@ impl Resize {
             self.grid.clear_drop_preview();
             return;
         };
+
         self.value = Some(value);
         self.grid.set_resize_preview(range);
     }
@@ -75,6 +79,7 @@ impl Resize {
         if value == original {
             return None;
         }
+
         Some(Box::new(ResizeEvent {
             item: ItemId {
                 calendar: event.id.calendar.clone(),
@@ -96,14 +101,17 @@ impl Resize {
 /// Installs edge gestures ahead of the button and move-drag controllers.
 pub(crate) fn install(card: &EventCard) {
     install_cursor(card);
+
     let active = Rc::new(RefCell::new(None::<Resize>));
     let drag = gtk::GestureDrag::new();
     drag.set_button(gdk::BUTTON_PRIMARY);
     drag.set_propagation_phase(gtk::PropagationPhase::Capture);
+
     let weak = card.downgrade();
     let state = active.clone();
     drag.connect_drag_begin(move |gesture, x, y| {
         let Some(card) = weak.upgrade() else { return };
+
         if let Some(resize) = Resize::begin(&card, x, y) {
             card.grab_focus();
             card.set_cursor_from_name(Some(match resize.edge {
@@ -116,18 +124,21 @@ pub(crate) fn install(card: &EventCard) {
             gesture.set_state(gtk::EventSequenceState::Denied);
         }
     });
+
     let state = active.clone();
     drag.connect_drag_update(move |_, _, offset| {
         if let Some(resize) = state.borrow_mut().as_mut() {
             resize.update(offset);
         }
     });
+
     let state = active.clone();
     let weak = card.downgrade();
     drag.connect_drag_end(move |_, _, offset| {
         if let Some(mut resize) = state.take() {
             resize.update(offset);
             resize.grid.clear_drop_preview();
+
             if let Some(command) = resize.command()
                 && let Some(page) = resize
                     .grid
@@ -137,20 +148,24 @@ pub(crate) fn install(card: &EventCard) {
                 page.execute_command(command);
             }
         }
+
         if let Some(card) = weak.upgrade() {
             card.set_cursor_from_name(Some("pointer"));
         }
     });
+
     let state = active.clone();
     let weak = card.downgrade();
     drag.connect_cancel(move |_, _| {
         if let Some(resize) = state.take() {
             resize.grid.clear_drop_preview();
         }
+
         if let Some(card) = weak.upgrade() {
             card.set_cursor_from_name(Some("pointer"));
         }
     });
+
     let keys = gtk::EventControllerKey::new();
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let weak = drag.downgrade();
@@ -162,6 +177,7 @@ pub(crate) fn install(card: &EventCard) {
             }
             return gtk::glib::Propagation::Stop;
         }
+
         gtk::glib::Propagation::Proceed
     });
     card.add_controller(keys);
@@ -171,6 +187,7 @@ pub(crate) fn install(card: &EventCard) {
         if let Some(resize) = active.take() {
             resize.grid.clear_drop_preview();
         }
+
         card.set_cursor_from_name(Some("pointer"));
     });
 }
@@ -193,6 +210,7 @@ fn install_cursor(card: &EventCard) {
             }));
         }
     });
+
     let weak = card.downgrade();
     motion.connect_leave(move |_| {
         if let Some(card) = weak.upgrade() {
@@ -212,6 +230,7 @@ fn resize_range(
     if !y.is_finite() {
         return None;
     }
+
     let tz = start.timezone();
     let midnight = day.and_hms_opt(0, 0, 0)?;
     let mut minute = (y.clamp(0.0, 1440.0) / 15.0).round() as i64 * 15;
@@ -219,6 +238,7 @@ fn resize_range(
         RangeEdge::Start => -15,
         RangeEdge::End => 15,
     };
+
     // Search towards the fixed edge's opposite direction when the pointer crosses it.
     while (0..=1440).contains(&minute) {
         let value = midnight.checked_add_signed(Duration::minutes(minute))?;

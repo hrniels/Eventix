@@ -36,11 +36,13 @@ impl CreationHint {
     ) {
         let motion = gtk::EventControllerMotion::new();
         motion.set_propagation_phase(gtk::PropagationPhase::Capture);
+
         let hint = self.clone();
         motion.connect_motion(move |controller, x, y| {
             let Some(widget) = controller.widget().and_downcast::<W>() else {
                 return;
             };
+
             let buttons = gdk::ModifierType::BUTTON1_MASK
                 | gdk::ModifierType::BUTTON2_MASK
                 | gdk::ModifierType::BUTTON3_MASK;
@@ -54,6 +56,7 @@ impl CreationHint {
                 widget.queue_draw();
             }
         });
+
         let hint = self.clone();
         motion.connect_leave(move |controller| {
             if let Some(widget) = controller.widget() {
@@ -74,6 +77,7 @@ impl CreationHint {
             {
                 hint.clear(&widget);
             }
+
             gtk::glib::Propagation::Proceed
         });
         widget.add_controller(events);
@@ -89,11 +93,14 @@ pub(crate) fn is_creation_target(widget: &gtk::Widget, x: f64, y: f64) -> bool {
         if (child.is::<gtk::Button>() && !child.is::<EventCard>()) || child.is::<gtk::Scrollbar>() {
             return false;
         }
+
         if child == *widget {
             break;
         }
+
         picked = child.parent();
     }
+
     true
 }
 

@@ -61,6 +61,7 @@ fn main() -> glib::ExitCode {
             style::install(&display);
         }
     });
+
     app.connect_activate(move |app| {
         if let Some(window) = app.active_window() {
             window.present();
@@ -68,5 +69,6 @@ fn main() -> glib::ExitCode {
             window::Window::new(app, args.data_prefix.clone(), args.date).present();
         }
     });
+
     app.run_with_args(&[] as &[&str])
 }
