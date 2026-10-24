@@ -8,7 +8,7 @@ use chrono::NaiveDate;
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::actions::{
-    Command,
+    Action,
     items::{ChangeOccurrence, ChangeTask, RespondItem},
 };
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
@@ -159,7 +159,7 @@ impl CalendarPage {
         let weak = self.downgrade();
         imp.details.connect_respond(move |item, response| {
             if let Some(page) = weak.upgrade()
-                && page.execute_command(Command::RespondItem(RespondItem { item, response }))
+                && page.execute_command(Box::new(RespondItem { item, response }))
             {
                 page.dismiss_popovers();
             }
@@ -168,8 +168,7 @@ impl CalendarPage {
         let weak = self.downgrade();
         imp.details.connect_occurrence(move |item, action| {
             if let Some(page) = weak.upgrade()
-                && page
-                    .execute_command(Command::ChangeOccurrence(ChangeOccurrence { item, action }))
+                && page.execute_command(Box::new(ChangeOccurrence { item, action }))
             {
                 page.dismiss_popovers();
             }
@@ -185,7 +184,7 @@ impl CalendarPage {
         let weak = self.downgrade();
         imp.details.connect_task(move |item, action| {
             if let Some(page) = weak.upgrade()
-                && page.execute_command(Command::ChangeTask(ChangeTask { item, action }))
+                && page.execute_command(Box::new(ChangeTask { item, action }))
             {
                 page.dismiss_popovers();
             }
@@ -304,7 +303,7 @@ impl CalendarPage {
         self.imp().session.can_edit(self)
     }
 
-    pub(crate) fn execute_command(&self, command: Command) -> bool {
+    pub(crate) fn execute_command(&self, command: Box<dyn Action>) -> bool {
         self.imp().session.execute_command(self, command)
     }
 

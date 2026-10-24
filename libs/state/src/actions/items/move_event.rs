@@ -12,7 +12,7 @@ use eventix_ical::{
 };
 
 use super::ItemId;
-use crate::State;
+use crate::{State, actions::Action};
 
 /// Moves one occurrence to a display-local time, preserving its span.
 ///
@@ -38,9 +38,12 @@ pub struct ResizeEvent {
     pub expected_end: DateTime<Utc>,
 }
 
-impl ResizeEvent {
-    /// Persists the resize and returns the identity to invalidate after a successful commit.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for ResizeEvent {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         MoveEvent {
             item: self.item,
             start: self.value,
@@ -51,12 +54,17 @@ impl ResizeEvent {
     }
 }
 
-impl MoveEvent {
-    /// Persists the move and returns the identity to invalidate after a successful commit.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
-        self.execute_change(state, None)
+impl Action for MoveEvent {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
     }
 
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+        self.execute_change(state, None)
+    }
+}
+
+impl MoveEvent {
     fn execute_change(self, state: &mut State, edge: Option<RangeEdge>) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let tz = *state.timezone();
@@ -160,7 +168,7 @@ mod tests {
     use eventix_ical::col::{CalDir, CalFile};
     use eventix_ical::objects::{EventLike, RangeEdge};
 
-    use super::{ItemId, MoveEvent, ResizeEvent};
+    use super::{Action, ItemId, MoveEvent, ResizeEvent};
     use crate::actions::items::CopyEvent;
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
@@ -244,7 +252,7 @@ mod tests {
             let original = fs::read(tmp.path().join("event.ics")).unwrap();
             let request = command(&state, None);
             let span = request.expected_end - request.expected_start;
-            let item = copy(request).execute(&mut state).unwrap();
+            let item = Box::new(copy(request)).execute(&mut state).unwrap();
             assert_ne!(item.uid, "move-me");
             assert!(item.recurrence.is_none());
             assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
@@ -284,7 +292,7 @@ mod tests {
             }
             let original = fs::read(tmp.path().join("event.ics")).unwrap();
             let files = fs::read_dir(tmp.path()).unwrap().count();
-            assert!(request.execute(&mut state).is_err());
+            assert!(Box::new(request).execute(&mut state).is_err());
             assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), files);
             assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
         }
@@ -300,11 +308,11 @@ mod tests {
             "DTSTART;VALUE=DATE:20261012\r\nDTEND;VALUE=DATE:20261014\r\n",
         );
         assert!(
-            resize(&state, None, RangeEdge::End, "2026-10-16T00:00:00")
+            Box::new(resize(&state, None, RangeEdge::End, "2026-10-16T00:00:00"))
                 .execute(&mut state)
                 .is_err()
         );
-        command(&state, None).execute(&mut state).unwrap();
+        Box::new(command(&state, None)).execute(&mut state).unwrap();
         let disk =
             CalFile::new_from_file(Arc::new("test".into()), tmp.path().join("event.ics")).unwrap();
         let occurrence = disk
@@ -350,7 +358,7 @@ mod tests {
                 let mut request = command(&state, Some(rid));
                 request.start = destination.parse().unwrap();
                 let start = request.start;
-                let item = request.execute(&mut state).unwrap();
+                let item = Box::new(request).execute(&mut state).unwrap();
                 let disk =
                     CalFile::new_from_file(Arc::new("test".into()), tmp.path().join("event.ics"))
                         .unwrap();
@@ -403,7 +411,7 @@ mod tests {
             ))
             .unwrap();
         state.store_mut().add(other);
-        let item = command(&state, None).execute(&mut state).unwrap();
+        let item = Box::new(command(&state, None)).execute(&mut state).unwrap();
         let target = state.store().directory(&Arc::new(item.calendar)).unwrap();
         let occurrence = target
             .occurrence_by_id("move-me", None, state.timezone())
@@ -435,7 +443,7 @@ mod tests {
             "2026-10-12"
         );
         let before = fs::read(tmp.path().join("event.ics")).unwrap();
-        assert!(stale.execute(&mut state).is_err());
+        assert!(Box::new(stale).execute(&mut state).is_err());
         assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), before);
     }
 
@@ -444,7 +452,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), "RRULE:FREQ=DAILY;COUNT=5\r\n", false);
         let rid = "TU2026-10-13T09:00:00".parse().unwrap();
-        let item = command(&state, Some(rid)).execute(&mut state).unwrap();
+        let item = Box::new(command(&state, Some(rid)))
+            .execute(&mut state)
+            .unwrap();
         assert_eq!(
             item.recurrence.as_ref().unwrap().to_string(),
             "TU2026-10-13T09:00:00"
@@ -469,7 +479,7 @@ mod tests {
             .unwrap();
         assert!(!next.is_overwritten());
         assert_eq!(next.occurrence_start().unwrap().hour(), 9);
-        command(&state, item.recurrence.clone())
+        Box::new(command(&state, item.recurrence.clone()))
             .execute(&mut state)
             .unwrap();
         assert_eq!(
@@ -498,7 +508,7 @@ mod tests {
         fs::remove_file(tmp.path().join("event.ics")).unwrap();
         fs::create_dir(tmp.path().join("event.ics")).unwrap();
         let entries = fs::read_dir(tmp.path()).unwrap().count();
-        assert!(request.execute(&mut state).is_err());
+        assert!(Box::new(request).execute(&mut state).is_err());
         assert_eq!(
             state.store().file_by_id("move-me").unwrap().calendar(),
             &before
@@ -516,16 +526,16 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), "", true);
         let before = fs::read(tmp.path().join("event.ics")).unwrap();
-        assert!(command(&state, None).execute(&mut state).is_err());
+        assert!(Box::new(command(&state, None)).execute(&mut state).is_err());
         assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), before);
         let mut state = fixture(tmp.path(), "", false);
         let protection = state
             .store_mut()
             .protect_directories([Arc::new("test".into())])
             .unwrap();
-        assert!(command(&state, None).execute(&mut state).is_err());
+        assert!(Box::new(command(&state, None)).execute(&mut state).is_err());
         drop(protection);
-        command(&state, None).execute(&mut state).unwrap();
+        Box::new(command(&state, None)).execute(&mut state).unwrap();
     }
 
     fn resize(
@@ -549,23 +559,28 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), "", false);
         let stale = resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00");
-        resize(&state, None, RangeEdge::Start, "2026-10-12T09:15:00")
-            .execute(&mut state)
-            .unwrap();
+        Box::new(resize(
+            &state,
+            None,
+            RangeEdge::Start,
+            "2026-10-12T09:15:00",
+        ))
+        .execute(&mut state)
+        .unwrap();
         let before = fs::read(tmp.path().join("event.ics")).unwrap();
-        assert!(stale.execute(&mut state).is_err());
+        assert!(Box::new(stale).execute(&mut state).is_err());
         for (edge, value) in [
             (RangeEdge::Start, "2026-10-12T10:00:00"),
             (RangeEdge::End, "2026-10-12T09:00:00"),
         ] {
             assert!(
-                resize(&state, None, edge, value)
+                Box::new(resize(&state, None, edge, value))
                     .execute(&mut state)
                     .is_err()
             );
         }
         assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), before);
-        resize(&state, None, RangeEdge::End, "2026-10-13T00:00:00")
+        Box::new(resize(&state, None, RangeEdge::End, "2026-10-13T00:00:00"))
             .execute(&mut state)
             .unwrap();
         let disk =
@@ -596,9 +611,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), "RRULE:FREQ=DAILY;COUNT=5\r\n", false);
         let rid = "TU2026-10-13T09:00:00".parse().unwrap();
-        let item = resize(&state, Some(rid), RangeEdge::End, "2026-10-13T10:15:00")
-            .execute(&mut state)
-            .unwrap();
+        let item = Box::new(resize(
+            &state,
+            Some(rid),
+            RangeEdge::End,
+            "2026-10-13T10:15:00",
+        ))
+        .execute(&mut state)
+        .unwrap();
         let disk =
             CalFile::new_from_file(Arc::new("test".into()), tmp.path().join("event.ics")).unwrap();
         let changed = disk
@@ -623,7 +643,7 @@ mod tests {
         let mut state = fixture(tmp.path(), "", true);
         let before = fs::read(tmp.path().join("event.ics")).unwrap();
         assert!(
-            resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00")
+            Box::new(resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00"))
                 .execute(&mut state)
                 .is_err()
         );
@@ -634,7 +654,7 @@ mod tests {
             .protect_directories([Arc::new("test".into())])
             .unwrap();
         assert!(
-            resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00")
+            Box::new(resize(&state, None, RangeEdge::End, "2026-10-12T10:15:00"))
                 .execute(&mut state)
                 .is_err()
         );

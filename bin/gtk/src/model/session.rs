@@ -9,7 +9,7 @@ use std::{sync::Arc, thread};
 use chrono::{Duration, NaiveDate, Utc};
 use eventix_ical::objects::CalCompType;
 use eventix_state::actions::{
-    Command,
+    Action,
     items::{CreateItem, EditScope, ItemId, UpdateItem},
 };
 use eventix_view::{MonthSnapshot, WeekSnapshot};
@@ -50,7 +50,7 @@ pub(crate) struct ContentResponse {
 
 /// Notifications carry identities and invalidations; snapshots are refetched separately.
 pub(crate) struct ChangeSet {
-    pub items: Vec<ItemId>,
+    pub item: ItemId,
     pub affected: Vec<SubscriptionId>,
 }
 
@@ -82,7 +82,7 @@ enum Message {
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,
-    Execute(Command),
+    Execute(Box<dyn Action>),
 }
 
 /// Owns the request channel, closing the worker when the page stops or is dropped.
@@ -137,7 +137,7 @@ impl CalendarSession {
         let _ = self.requests.try_send(Message::Reload);
     }
 
-    pub fn execute(&self, command: Command) {
+    pub fn execute(&self, command: Box<dyn Action>) {
         let _ = self.requests.try_send(Message::Execute(command));
     }
 
@@ -261,11 +261,9 @@ impl Worker {
                     .and_then(|state| EditorOptions::load_for(state, kind))
                     .map_err(|error| format!("{error:#}")),
             ),
-            Message::CreateItem(id, item) => Event::EditorSaved(
-                id,
-                self.execute(Command::CreateItem(item))
-                    .map_err(|error| format!("{error:#}")),
-            ),
+            Message::CreateItem(id, item) => {
+                Event::EditorSaved(id, self.execute(item).map_err(|error| format!("{error:#}")))
+            }
             Message::ShowContent(request) => {
                 let result = self
                     .show_content(&request)
@@ -325,12 +323,12 @@ impl Worker {
 
     fn save_edit(&mut self, edit: Box<UpdateItem>) -> anyhow::Result<(ChangeSet, SavedItem)> {
         let kind = edit.fields.kind;
-        let change = self.execute(Command::UpdateItem(edit))?;
+        let change = self.execute(edit)?;
         let state = self.state()?;
         let event = match kind {
-            CalCompType::Event => eventix_view::Event::load(state, &change.items[0])
+            CalCompType::Event => eventix_view::Event::load(state, &change.item)
                 .map(|event| SavedItem::Event(Box::new(event))),
-            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(state, &change.items[0])
+            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(state, &change.item)
                 .map(|task| SavedItem::Task(Box::new(task))),
         }
         .ok_or_else(|| {
@@ -427,7 +425,7 @@ impl Worker {
         )
     }
 
-    fn execute(&mut self, command: Command) -> anyhow::Result<ChangeSet> {
+    fn execute(&mut self, command: Box<dyn Action>) -> anyhow::Result<ChangeSet> {
         let state = self
             .state
             .as_mut()
@@ -442,16 +440,14 @@ impl Worker {
             }
         }
 
-        let items = command.execute(state)?;
-        for item in &items {
-            for id in self.subscriptions.matching(state, item) {
-                if !affected.contains(&id) {
-                    affected.push(id);
-                }
+        let item = command.execute(state)?;
+        for id in self.subscriptions.matching(state, &item) {
+            if !affected.contains(&id) {
+                affected.push(id);
             }
         }
 
-        Ok(ChangeSet { items, affected })
+        Ok(ChangeSet { item, affected })
     }
 }
 
@@ -483,8 +479,8 @@ mod tests {
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     use super::{
-        Command, ContentRequest, Event, ItemId, Message, Query, Snapshot, SubscriptionId, View,
-        Worker, load_local_state,
+        ContentRequest, Event, ItemId, Message, Query, Snapshot, SubscriptionId, View, Worker,
+        load_local_state,
     };
 
     fn worker(path: &Path) -> Worker {
@@ -590,7 +586,7 @@ mod tests {
             panic!("expected task creation");
         };
         assert_eq!(change.affected, vec![SubscriptionId::Sidebar]);
-        let item = change.items[0].clone();
+        let item = change.item;
         let Some(Event::EditLoaded(3, Ok((options, mut edit)))) = worker
             .handle(Message::LoadEdit(3, item, EditScope::Series))
             .pop()
@@ -674,7 +670,7 @@ mod tests {
         else {
             panic!("successful save must publish the request identity and committed changes");
         };
-        assert_eq!(change.items.len(), 1);
+        assert_eq!(change.item.calendar, "test");
         assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
         assert!(change.affected.contains(&SubscriptionId::Sidebar));
         assert!(
@@ -726,7 +722,7 @@ mod tests {
         else {
             panic!("expected saved details");
         };
-        assert_eq!(change.items, vec![item]);
+        assert_eq!(change.item, item);
         assert!(change.affected.contains(&SubscriptionId::Calendar(8)));
         assert_eq!(event.summary, "Edited occurrence");
         assert_eq!(event.start.date_naive().to_string(), "2026-11-10");
@@ -742,6 +738,43 @@ mod tests {
             panic!("expected week");
         };
         assert!(week.days[1].timed.is_empty());
+    }
+
+    #[test]
+    fn following_edits_invalidate_source_and_destination_queries_with_one_returned_identity() {
+        use eventix_state::actions::items::{EditScope, UpdateItem};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        subscribe(&mut worker, 10, "2026-11-09", View::Week);
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: Some("TU2026-10-13T09:00:00".parse().unwrap()),
+        };
+        let mut edit =
+            UpdateItem::load(worker.state().unwrap(), item.clone(), EditScope::Following).unwrap();
+        edit.fields.start = Some("TU2026-11-10T09:00:00".parse().unwrap());
+        edit.fields.end = Some("TU2026-11-10T10:00:00".parse().unwrap());
+
+        let change = worker.execute(Box::new(edit)).unwrap();
+        assert_ne!(change.item.uid, item.uid);
+        assert!(change.item.recurrence.is_none());
+        assert!(change.affected.contains(&SubscriptionId::Sidebar));
+        assert!(change.affected.contains(&SubscriptionId::Calendar(10)));
+
+        let state = worker.state().unwrap();
+        let old_file = state.store().file_by_id(&item.uid).unwrap();
+        let start = chrono_tz::UTC
+            .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
+            .unwrap();
+        assert_eq!(
+            old_file
+                .occurrences_between(start, start + Duration::days(7), |_| true)
+                .count(),
+            1
+        );
+        assert!(state.store().file_by_id(&change.item.uid).is_some());
     }
 
     #[test]
@@ -788,13 +821,11 @@ mod tests {
         let mut worker = worker(tmp.path());
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let request = command(&worker, "2026-11-10T14:30:00");
-        let Some(Event::Changed(change)) = worker
-            .handle(Message::Execute(Command::MoveEvent(request)))
-            .pop()
+        let Some(Event::Changed(change)) = worker.handle(Message::Execute(Box::new(request))).pop()
         else {
             panic!("expected committed identity notification")
         };
-        assert_eq!(change.items.len(), 1);
+        assert_eq!(change.item.uid, "move-me");
         assert!(
             change.affected.contains(&SubscriptionId::Calendar(1)),
             "old range is invalidated"
@@ -830,7 +861,7 @@ mod tests {
             },
         );
         let request = command(&worker, "2026-11-11T14:30:00");
-        let change = worker.execute(Command::MoveEvent(request)).unwrap();
+        let change = worker.execute(Box::new(request)).unwrap();
         assert_eq!(change.affected, vec![SubscriptionId::Sidebar]);
         assert!(matches!(
             worker
@@ -840,7 +871,7 @@ mod tests {
         ));
 
         let request = command(&worker, "2026-10-14T14:30:00");
-        let change = worker.execute(Command::MoveEvent(request)).unwrap();
+        let change = worker.execute(Box::new(request)).unwrap();
         assert!(
             change.affected.contains(&SubscriptionId::Calendar(1)),
             "entry into range is invalidated"
@@ -889,7 +920,7 @@ mod tests {
                 recurrence,
             };
             let Some(Event::Changed(change)) = worker
-                .handle(Message::Execute(Command::RespondItem(RespondItem {
+                .handle(Message::Execute(Box::new(RespondItem {
                     item: item.clone(),
                     response: CalPartStat::Accepted,
                 })))
@@ -897,7 +928,7 @@ mod tests {
             else {
                 panic!("expected response notification")
             };
-            assert_eq!(change.items, vec![item]);
+            assert_eq!(change.item, item);
             assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
             assert!(change.affected.contains(&SubscriptionId::Sidebar));
             let events = worker.handle(Message::RefreshSubscriptions(change.affected));
@@ -931,11 +962,11 @@ mod tests {
             recurrence: None,
         };
         let change = worker
-            .execute(Command::DeleteItem(
-                eventix_state::actions::items::DeleteItem { item: item.clone() },
-            ))
+            .execute(Box::new(eventix_state::actions::items::DeleteItem {
+                item: item.clone(),
+            }))
             .unwrap();
-        assert_eq!(change.items, vec![item]);
+        assert_eq!(change.item, item);
         assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
         assert!(change.affected.contains(&SubscriptionId::Sidebar));
         let events = worker.handle(Message::RefreshSubscriptions(change.affected));
@@ -959,7 +990,7 @@ mod tests {
         let mut worker = worker(tmp.path());
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let request = command(&worker, "2026-10-14T14:30:00");
-        let change = worker.execute(Command::MoveEvent(request)).unwrap();
+        let change = worker.execute(Box::new(request)).unwrap();
         subscribe(&mut worker, 2, "2026-11-01", View::Month);
         let old_calendar = change
             .affected
@@ -972,7 +1003,7 @@ mod tests {
                 .is_empty()
         );
         let request = command(&worker, "2026-11-10T14:30:00");
-        let change = worker.execute(Command::MoveEvent(request)).unwrap();
+        let change = worker.execute(Box::new(request)).unwrap();
         assert!(change.affected.contains(&SubscriptionId::Calendar(2)));
         assert!(!change.affected.contains(&SubscriptionId::Calendar(1)));
     }
@@ -986,14 +1017,14 @@ mod tests {
         request.expected_start += Duration::minutes(15);
         assert!(matches!(
             worker
-                .handle(Message::Execute(Command::MoveEvent(request)))
+                .handle(Message::Execute(Box::new(request)))
                 .as_slice(),
             [Event::CommandFailed(_)]
         ));
         let request = command(&worker, "2026-10-14T14:30:00");
         assert!(matches!(
             worker
-                .handle(Message::Execute(Command::MoveEvent(request)))
+                .handle(Message::Execute(Box::new(request)))
                 .as_slice(),
             [Event::Changed(_)]
         ));
@@ -1123,7 +1154,7 @@ mod tests {
             [Event::ContentLoaded(response), Event::SidebarLoaded(Ok(_))] if response.result.is_ok())
         );
         let command = command(&worker, "2026-10-14T14:30:00");
-        assert!(worker.execute(Command::MoveEvent(command)).is_ok());
+        assert!(worker.execute(Box::new(command)).is_ok());
     }
 
     #[test]

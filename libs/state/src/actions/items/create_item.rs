@@ -8,8 +8,11 @@ use eventix_ical::objects::{
     UpdatableEventLike,
 };
 
-use super::{ItemId, create_component};
-use crate::{CalendarAlarmType, State};
+use super::ItemId;
+use crate::{
+    CalendarAlarmType, State,
+    actions::{Action, create_component},
+};
 
 /// Creates an event or task from frontend-independent, already parsed field values.
 #[derive(Clone, Debug)]
@@ -54,13 +57,18 @@ impl TaskStatus {
     }
 }
 
-impl CreateItem {
-    /// Validates and persists an event or task, returning its new identity.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for CreateItem {
+    fn affected_items(&self) -> &[ItemId] {
+        &[]
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         self.validate(state)?;
         self.create(state)
     }
+}
 
+impl CreateItem {
     pub(super) fn validate(&self, state: &State) -> anyhow::Result<()> {
         let locale = state.locale();
 
@@ -183,7 +191,7 @@ mod tests {
         objects::{CalCompType, CalDateType, CalRole, EventLike},
     };
 
-    use super::{CalAlarm, CalAttendee, CalDate, CalRRule, CreateItem, State};
+    use super::{Action, CalAlarm, CalAttendee, CalDate, CalRRule, CreateItem, State};
     use crate::{CalendarSettings, CollectionSettings, SyncerType};
 
     fn state(path: &Path, read_only: bool) -> State {
@@ -211,8 +219,8 @@ mod tests {
         state
     }
 
-    fn command() -> CreateItem {
-        CreateItem {
+    fn command() -> Box<CreateItem> {
+        Box::new(CreateItem {
             kind: CalCompType::Event,
             task_status: None,
             calendar: "test".into(),
@@ -225,7 +233,7 @@ mod tests {
             alarms: Vec::new(),
             personal_alarms: None,
             attendees: Vec::new(),
-        }
+        })
     }
 
     #[test]

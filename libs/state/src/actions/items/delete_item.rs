@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 use super::ItemId;
-use crate::State;
+use crate::{State, actions::Action};
 
 /// Deletes an item, including all occurrences and overrides of a recurring series.
 #[derive(Debug)]
@@ -15,9 +15,12 @@ pub struct DeleteItem {
     pub item: ItemId,
 }
 
-impl DeleteItem {
-    /// Persists the deletion and returns the complete series identity to invalidate.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for DeleteItem {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         state
             .settings()
@@ -46,7 +49,7 @@ mod tests {
 
     use eventix_ical::col::CalDir;
 
-    use super::{DeleteItem, ItemId};
+    use super::{Action, DeleteItem, ItemId};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, read_only: bool) -> State {
@@ -92,14 +95,14 @@ mod tests {
         state
     }
 
-    fn command(uid: &str) -> DeleteItem {
-        DeleteItem {
+    fn command(uid: &str) -> Box<DeleteItem> {
+        Box::new(DeleteItem {
             item: ItemId {
                 calendar: "test".into(),
                 uid: uid.into(),
                 recurrence: None,
             },
-        }
+        })
     }
 
     #[test]

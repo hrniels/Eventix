@@ -226,7 +226,10 @@ mod tests {
     };
     use eventix_state::{
         CalendarSettings, CollectionSettings, State, SyncerType,
-        actions::items::{CreateItem, EditScope, UpdateItem},
+        actions::{
+            Action,
+            items::{CreateItem, EditScope, UpdateItem},
+        },
     };
     use eventix_view::{Event, editor::EditorOptions};
     use gtk::prelude::*;
@@ -312,7 +315,7 @@ mod tests {
             personal_alarms: None,
             attendees: vec![],
         };
-        let item = fields.execute(&mut state).unwrap();
+        let item = Box::new(fields).execute(&mut state).unwrap();
         for recurrent in [false, true] {
             let mut edit = UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap();
             if recurrent {
@@ -431,7 +434,7 @@ mod tests {
                 personal_alarms: None,
                 attendees: vec![],
             };
-            let item = fields.execute(&mut state).unwrap();
+            let item = Box::new(fields).execute(&mut state).unwrap();
             let event = Event::load(&state, &item).unwrap();
             let locale = eventix_locale::new_with_timezone(
                 &xdg,
@@ -771,7 +774,7 @@ mod tests {
             assert_eq!(fields.end, before.end);
             let mut edit = editor.existing.borrow().clone().unwrap();
             edit.fields = *fields;
-            edit.execute(&mut state).unwrap();
+            Box::new(edit).execute(&mut state).unwrap();
             parent.test_saved_editor(crate::model::session::SavedItem::Event(Box::new(
                 Event::load(&state, &item).unwrap(),
             )));

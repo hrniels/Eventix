@@ -8,7 +8,7 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalDate, CalDateTime, CalendarTimeZoneResolver};
 use eventix_state::actions::{
-    Command,
+    Action,
     items::{CopyEvent, ItemId, MoveEvent},
 };
 use eventix_view::{Event, TimedEvent};
@@ -96,16 +96,16 @@ impl DraggedEvent {
         Some((start, end))
     }
 
-    fn command(&self, start: NaiveDateTime, copy: bool) -> Command {
+    fn command(&self, start: NaiveDateTime, copy: bool) -> Box<dyn Action> {
         if copy {
-            return Command::CopyEvent(CopyEvent {
+            return Box::new(CopyEvent {
                 item: self.item.clone(),
                 start,
                 expected_start: self.expected_start,
                 expected_end: self.expected_end,
             });
         }
-        Command::MoveEvent(MoveEvent {
+        Box::new(MoveEvent {
             item: self.item.clone(),
             start,
             expected_start: self.expected_start,

@@ -8,7 +8,7 @@ use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime};
 use chrono_tz::Tz;
 use eventix_ical::objects::{CalDate, CalDateTime, CalendarTimeZoneResolver, RangeEdge};
 use eventix_state::actions::{
-    Command,
+    Action,
     items::{ItemId, ResizeEvent},
 };
 use eventix_view::TimedEvent;
@@ -65,7 +65,7 @@ impl Resize {
         self.grid.set_resize_preview(range);
     }
 
-    fn command(&self) -> Option<Command> {
+    fn command(&self) -> Option<Box<dyn Action>> {
         let event = &self.segment.event;
         let value = self.value?;
         let original = match self.edge {
@@ -75,7 +75,7 @@ impl Resize {
         if value == original {
             return None;
         }
-        Some(Command::ResizeEvent(ResizeEvent {
+        Some(Box::new(ResizeEvent {
             item: ItemId {
                 calendar: event.id.calendar.clone(),
                 uid: event.id.uid.clone(),

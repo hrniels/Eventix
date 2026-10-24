@@ -12,7 +12,7 @@ use eventix_ical::{
 use formatx::formatx;
 
 use super::ItemId;
-use crate::State;
+use crate::{State, actions::Action};
 
 /// Selects whether an occurrence is hidden or retained with canceled status.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,9 +28,12 @@ pub struct ChangeOccurrence {
     pub action: OccurrenceAction,
 }
 
-impl ChangeOccurrence {
-    /// Persists the change and returns the identity to invalidate after a successful commit.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for ChangeOccurrence {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let timezone = *state.timezone();
         let recurrence = self
@@ -145,7 +148,7 @@ mod tests {
         objects::{CalDate, CalEventStatus, EventLike},
     };
 
-    use super::{ChangeOccurrence, ItemId, OccurrenceAction};
+    use super::{Action, ChangeOccurrence, ItemId, OccurrenceAction};
     use crate::{CalendarSettings, CollectionSettings, EmailAccount, State, SyncerType};
 
     fn fixture(path: &Path, start: &str, organizer: &str, read_only: bool) -> State {
@@ -189,15 +192,15 @@ mod tests {
         state
     }
 
-    fn command(recurrence: &str, action: OccurrenceAction) -> ChangeOccurrence {
-        ChangeOccurrence {
+    fn command(recurrence: &str, action: OccurrenceAction) -> Box<ChangeOccurrence> {
+        Box::new(ChangeOccurrence {
             item: ItemId {
                 calendar: "test".into(),
                 uid: "meeting".into(),
                 recurrence: Some(recurrence.parse().unwrap()),
             },
             action,
-        }
+        })
     }
 
     fn reload(path: &Path) -> CalDir {

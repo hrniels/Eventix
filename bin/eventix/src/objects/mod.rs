@@ -9,4 +9,4 @@ mod dayocc;
 pub use calendars::{Calendar, Calendars};
 pub use compaction::CompAction;
 pub use dayocc::{DayOccurrence, OccurrenceOverlap};
-pub use eventix_state::actions::items::create_component;
+pub use eventix_state::actions::create_component;

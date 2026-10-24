@@ -13,7 +13,7 @@ use eventix_ical::{
 use uuid::Uuid;
 
 use super::ItemId;
-use crate::State;
+use crate::{State, actions::Action};
 
 /// Copies a non-recurring event to a display-local time, preserving its details and span.
 ///
@@ -26,9 +26,12 @@ pub struct CopyEvent {
     pub expected_end: DateTime<Utc>,
 }
 
-impl CopyEvent {
-    /// Persists the copy and returns its new identity to invalidate after a successful commit.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for CopyEvent {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let tz = *state.timezone();
         let (collection, settings) = state

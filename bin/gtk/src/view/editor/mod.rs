@@ -1431,6 +1431,7 @@ pub(crate) fn is_save_key(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
 mod tests {
     use chrono::NaiveDateTime;
     use eventix_ical::objects::{CalDateType, CalRRuleFreq};
+    use eventix_state::actions::Action;
     use eventix_view::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
@@ -1566,7 +1567,7 @@ mod tests {
         );
         let mut edit = editor.existing.borrow().clone().unwrap();
         edit.fields = *fields;
-        edit.execute(&mut state).unwrap();
+        Box::new(edit).execute(&mut state).unwrap();
 
         let editor = ItemEditor::edit(
             3,
@@ -1654,7 +1655,7 @@ mod tests {
         editor.summary.set_text("Edited task");
         let mut edit = editor.existing.borrow().clone().unwrap();
         edit.fields = *editor.command().unwrap();
-        edit.execute(&mut state).unwrap();
+        Box::new(edit).execute(&mut state).unwrap();
         let saved = eventix_view::sidebar::SidebarRow::load(&state, &item).unwrap();
         assert_eq!(saved.summary, "Edited task");
         parent.test_saved_editor(crate::model::session::SavedItem::Task(Box::new(saved)));

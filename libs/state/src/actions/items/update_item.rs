@@ -14,7 +14,7 @@ use eventix_ical::{
 use eventix_locale::Locale;
 
 use super::{CreateItem, ItemId, TaskStatus};
-use crate::State;
+use crate::{State, actions::Action};
 
 /// Selects which part of an event or task series is edited.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,9 +161,14 @@ impl UpdateItem {
         }
         Ok(())
     }
+}
 
-    /// Persists edited fields, rejecting stale revisions and retaining properties outside the form.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for UpdateItem {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let current = self.validate_revision(state)?;
         let locale = state.locale();
         let tz = *state.timezone();
@@ -263,7 +268,9 @@ impl UpdateItem {
         self.save_personal_alarms(state, &result);
         Ok(result)
     }
+}
 
+impl UpdateItem {
     fn validate_revision(&self, state: &State) -> anyhow::Result<Self> {
         self.fields.validate(state)?;
         let current = Self::load(state, self.item.clone(), self.scope)?;
@@ -503,7 +510,7 @@ mod tests {
         objects::{CalCompType, CalDate, CalPartStat, EventLike},
     };
 
-    use super::{EditScope, ItemId, UpdateItem};
+    use super::{Action, EditScope, ItemId, UpdateItem};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, recurrent: bool) -> State {
@@ -604,7 +611,7 @@ mod tests {
             percent: Some(35),
             completed: None,
         });
-        edit.execute(&mut state).unwrap();
+        Box::new(edit).execute(&mut state).unwrap();
         let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         assert!(edit.fields.start.is_none() && edit.fields.end.is_none());
         assert_eq!(edit.fields.task_status.as_ref().unwrap().percent, Some(35));
@@ -613,7 +620,7 @@ mod tests {
             percent: None,
             completed: Some("TU2026-10-15T00:00:00".parse().unwrap()),
         });
-        edit.execute(&mut state).unwrap();
+        Box::new(edit).execute(&mut state).unwrap();
         let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
         assert!(disk.contains("STATUS:COMPLETED"));
         assert!(disk.contains("PERCENT-COMPLETE:100"));
@@ -621,7 +628,7 @@ mod tests {
         assert!(disk.contains("X-CUSTOM:keep-me"));
         let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         edit.fields.task_status.as_mut().unwrap().status = CalTodoStatus::NeedsAction;
-        edit.execute(&mut state).unwrap();
+        Box::new(edit).execute(&mut state).unwrap();
         let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
         assert!(!disk.contains("PERCENT-COMPLETE"));
         assert!(!disk.contains("COMPLETED:"));
@@ -639,7 +646,7 @@ mod tests {
             let target = item(Some("TU2026-10-14T09:00:00"));
             let mut edit = UpdateItem::load(&state, target, scope).unwrap();
             edit.fields.summary = "Changed task".into();
-            edit.execute(&mut state).unwrap();
+            Box::new(edit).execute(&mut state).unwrap();
             let start = chrono_tz::UTC
                 .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
                 .unwrap();
@@ -675,12 +682,12 @@ mod tests {
                 let mut exception =
                     UpdateItem::load(&state, item(Some(rid)), EditScope::Occurrence).unwrap();
                 exception.fields.summary = "Exception".into();
-                exception.execute(&mut state).unwrap();
+                Box::new(exception).execute(&mut state).unwrap();
             }
             let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
             edit.fields.calendar = "target".into();
             edit.fields.summary = "Moved".into();
-            let result = edit.execute(&mut state).unwrap();
+            let result = Box::new(edit).execute(&mut state).unwrap();
             assert_eq!(result.calendar, "target");
             assert_eq!(result.uid, "edit-me");
             assert!(!source.path().join("event.ics").exists());
@@ -716,7 +723,7 @@ mod tests {
             .unwrap();
             edit.fields.calendar = "target".into();
             edit.fields.summary = "Moved following".into();
-            let result = edit.execute(&mut state).unwrap();
+            let result = Box::new(edit).execute(&mut state).unwrap();
             assert_eq!(result.calendar, "target");
             assert_ne!(result.uid, "edit-me");
             assert!(result.recurrence.is_none());
@@ -772,7 +779,7 @@ mod tests {
             .unwrap();
             edit.fields.calendar = "target".into();
             edit.fields.summary = "Must not be saved".into();
-            assert!(edit.execute(&mut state).is_err());
+            assert!(Box::new(edit).execute(&mut state).is_err());
             let file = state.store().file_by_id("edit-me").unwrap();
             assert_eq!(file.directory().as_str(), "test");
             assert_eq!(
@@ -824,7 +831,7 @@ mod tests {
             }
             .into();
             edit.fields.summary = "Must not be saved".into();
-            assert!(edit.execute(&mut state).is_err(), "{case}");
+            assert!(Box::new(edit).execute(&mut state).is_err(), "{case}");
             let file = state
                 .store()
                 .file_by_id("edit-me")
@@ -858,7 +865,7 @@ mod tests {
         let stale = edit.clone();
         edit.fields.summary = "Edited".into();
         edit.fields.location = "Office".into();
-        assert_eq!(edit.execute(&mut state).unwrap(), item(None));
+        assert_eq!(Box::new(edit).execute(&mut state).unwrap(), item(None));
         let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
         assert!(disk.contains("SUMMARY:Edited"));
         assert!(disk.contains("X-CUSTOM:keep-me"));
@@ -871,7 +878,7 @@ mod tests {
             occurrence.attendees().unwrap()[0].part_stat(),
             Some(CalPartStat::Accepted)
         );
-        assert!(stale.execute(&mut state).is_err());
+        assert!(Box::new(stale).execute(&mut state).is_err());
         assert_eq!(
             fs::read_to_string(tmp.path().join("event.ics")).unwrap(),
             disk
@@ -887,7 +894,7 @@ mod tests {
         edit.fields.summary = "Exception".into();
         edit.fields.start = Some("TU2026-10-13T12:00:00".parse().unwrap());
         edit.fields.end = Some("TU2026-10-13T13:00:00".parse().unwrap());
-        assert_eq!(edit.execute(&mut state).unwrap(), target);
+        assert_eq!(Box::new(edit).execute(&mut state).unwrap(), target);
         let occurrence = state
             .store()
             .occurrence_by_id("edit-me", target.recurrence.as_ref(), state.timezone())
@@ -909,7 +916,7 @@ mod tests {
         assert_eq!(other.rrule().unwrap().count(), Some(5));
         let mut series = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         series.fields.description = "Inherited description".into();
-        series.execute(&mut state).unwrap();
+        Box::new(series).execute(&mut state).unwrap();
         let occurrence = state
             .store()
             .occurrence_by_id("edit-me", target.recurrence.as_ref(), state.timezone())
@@ -930,7 +937,7 @@ mod tests {
                 Some(5 - (day - 12))
             );
             edit.fields.summary = "Following".into();
-            let result = edit.execute(&mut state).unwrap();
+            let result = Box::new(edit).execute(&mut state).unwrap();
             assert_ne!(result.uid, "edit-me");
             let start = chrono_tz::UTC
                 .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
@@ -972,11 +979,11 @@ mod tests {
         let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         let original = fs::read(tmp.path().join("event.ics")).unwrap();
         edit.fields.summary.clear();
-        assert!(edit.execute(&mut state).is_err());
+        assert!(Box::new(edit).execute(&mut state).is_err());
         assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
         let edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         fs::write(tmp.path().join("event.ics"), b"external change").unwrap();
-        assert!(edit.execute(&mut state).is_err());
+        assert!(Box::new(edit).execute(&mut state).is_err());
         assert_eq!(
             fs::read(tmp.path().join("event.ics")).unwrap(),
             b"external change"

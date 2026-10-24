@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell};
 
 use chrono::NaiveDate;
 use eventix_state::actions::{
-    Command,
+    Action,
     items::{DeleteItem, ItemId},
 };
 use gtk::{glib, prelude::*, subclass::prelude::*};
@@ -54,7 +54,7 @@ impl PageSession {
             && self.current.borrow().is_some()
     }
 
-    pub(super) fn execute_command(&self, page: &CalendarPage, command: Command) -> bool {
+    pub(super) fn execute_command(&self, page: &CalendarPage, command: Box<dyn Action>) -> bool {
         if !self.can_edit(page) {
             return false;
         }
@@ -90,7 +90,7 @@ impl PageSession {
         let weak = page.downgrade();
         delete::confirm(&window, locale.as_ref(), recurrent, summary, move || {
             if let Some(page) = weak.upgrade()
-                && page.execute_command(Command::DeleteItem(DeleteItem { item }))
+                && page.execute_command(Box::new(DeleteItem { item }))
             {
                 page.dismiss_popovers();
             }
@@ -175,9 +175,7 @@ impl PageSession {
             }
             Event::Changed(change) => {
                 self.pending_command.set(false);
-                if !change.items.is_empty() {
-                    self.refresh_subscriptions(change);
-                }
+                self.refresh_subscriptions(change);
             }
             Event::CommandFailed(error) => {
                 self.pending_command.set(false);

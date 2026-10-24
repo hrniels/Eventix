@@ -13,7 +13,7 @@ use eventix_ical::{
 };
 
 use super::ItemId;
-use crate::State;
+use crate::{State, actions::Action};
 
 /// Selects a quick action for a single task occurrence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,9 +29,12 @@ pub struct ChangeTask {
     pub action: TaskAction,
 }
 
-impl ChangeTask {
-    /// Persists the change and returns the identity to invalidate after a successful commit.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for ChangeTask {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let timezone = *state.timezone();
         let invalid = || locale.translate("Could not apply changes").to_string();
@@ -124,7 +127,7 @@ mod tests {
         objects::{CalDate, CalTodoStatus, DateContext, EventLike, PRIORITY_MEDIUM},
     };
 
-    use super::{ChangeTask, ItemId, TaskAction};
+    use super::{Action, ChangeTask, ItemId, TaskAction};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, body: &str) -> State {
@@ -158,15 +161,15 @@ mod tests {
         state
     }
 
-    fn command(recurrence: Option<&str>, action: TaskAction) -> ChangeTask {
-        ChangeTask {
+    fn command(recurrence: Option<&str>, action: TaskAction) -> Box<ChangeTask> {
+        Box::new(ChangeTask {
             item: ItemId {
                 calendar: "test".into(),
                 uid: "task".into(),
                 recurrence: recurrence.map(|r| r.parse().unwrap()),
             },
             action,
-        }
+        })
     }
 
     #[test]

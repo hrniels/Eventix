@@ -11,7 +11,7 @@ use eventix_ical::{
 };
 
 use super::ItemId;
-use crate::State;
+use crate::{State, actions::Action};
 
 /// Sets the current user's attendee response for a series or a single occurrence.
 #[derive(Debug)]
@@ -20,9 +20,12 @@ pub struct RespondItem {
     pub response: CalPartStat,
 }
 
-impl RespondItem {
-    /// Persists the response and returns the identity to invalidate after a successful commit.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<ItemId> {
+impl Action for RespondItem {
+    fn affected_items(&self) -> &[ItemId] {
+        std::slice::from_ref(&self.item)
+    }
+
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let timezone = *state.timezone();
         let (collection, _) = state.settings().calendar(&self.item.calendar).context(
@@ -111,7 +114,7 @@ mod tests {
         objects::{CalDate, CalPartStat, EventLike},
     };
 
-    use super::{ItemId, RespondItem};
+    use super::{Action, ItemId, RespondItem};
     use crate::{CalendarSettings, CollectionSettings, EmailAccount, State, SyncerType};
 
     fn fixture(path: &Path, recurrent: bool, read_only: bool) -> State {
@@ -163,15 +166,15 @@ mod tests {
         state
     }
 
-    fn command(recurrence: Option<CalDate>, response: CalPartStat) -> RespondItem {
-        RespondItem {
+    fn command(recurrence: Option<CalDate>, response: CalPartStat) -> Box<RespondItem> {
+        Box::new(RespondItem {
             item: ItemId {
                 calendar: "test".into(),
                 uid: "invitation".into(),
                 recurrence,
             },
             response,
-        }
+        })
     }
 
     #[test]

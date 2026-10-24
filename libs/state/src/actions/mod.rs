@@ -4,57 +4,28 @@
 
 //! Validated, persisted application operations.
 
+mod create_component;
 pub mod items;
+
+pub use create_component::create_component;
 
 use crate::State;
 
-use items::{
-    ChangeOccurrence, ChangeTask, CopyEvent, CreateItem, DeleteItem, ItemId, MoveEvent,
-    ResizeEvent, RespondItem, UpdateItem,
-};
+use items::ItemId;
 
-/// A validated application operation to execute against the authoritative state.
-#[derive(Debug)]
-pub enum Command {
-    MoveEvent(MoveEvent),
-    CopyEvent(CopyEvent),
-    ResizeEvent(ResizeEvent),
-    CreateItem(Box<CreateItem>),
-    UpdateItem(Box<UpdateItem>),
-    DeleteItem(DeleteItem),
-    RespondItem(RespondItem),
-    ChangeOccurrence(ChangeOccurrence),
-    ChangeTask(ChangeTask),
-}
-
-impl Command {
+/// A validated operation that persists a change to an item.
+pub trait Action: std::fmt::Debug + Send {
     /// Returns the identities whose query membership must be checked before execution.
-    pub fn affected_items(&self) -> &[ItemId] {
-        match self {
-            Self::MoveEvent(command) => std::slice::from_ref(&command.item),
-            Self::CopyEvent(command) => std::slice::from_ref(&command.item),
-            Self::ResizeEvent(command) => std::slice::from_ref(&command.item),
-            Self::CreateItem(_) => &[],
-            Self::UpdateItem(command) => std::slice::from_ref(&command.item),
-            Self::DeleteItem(command) => std::slice::from_ref(&command.item),
-            Self::RespondItem(command) => std::slice::from_ref(&command.item),
-            Self::ChangeOccurrence(command) => std::slice::from_ref(&command.item),
-            Self::ChangeTask(command) => std::slice::from_ref(&command.item),
-        }
-    }
+    ///
+    /// These identify existing items, including the source of a copy or a split series.
+    fn affected_items(&self) -> &[ItemId];
 
-    /// Persists the operation and returns the identities to invalidate after a successful commit.
-    pub fn execute(self, state: &mut State) -> anyhow::Result<Vec<ItemId>> {
-        match self {
-            Self::MoveEvent(command) => command.execute(state).map(|item| vec![item]),
-            Self::CopyEvent(command) => command.execute(state).map(|item| vec![item]),
-            Self::ResizeEvent(command) => command.execute(state).map(|item| vec![item]),
-            Self::CreateItem(command) => command.execute(state).map(|item| vec![item]),
-            Self::UpdateItem(command) => command.execute(state).map(|item| vec![item]),
-            Self::DeleteItem(command) => command.execute(state).map(|item| vec![item]),
-            Self::RespondItem(command) => command.execute(state).map(|item| vec![item]),
-            Self::ChangeOccurrence(command) => command.execute(state).map(|item| vec![item]),
-            Self::ChangeTask(command) => command.execute(state).map(|item| vec![item]),
-        }
-    }
+    /// Persists the operation and returns the identity to invalidate after a successful commit.
+    ///
+    /// Creation, copying, and splitting a series return the new item's identity. Callers should
+    /// check query membership before execution using [`Self::affected_items`] and afterward using
+    /// the returned identity.
+    ///
+    /// Returns an error if validation or persistence fails.
+    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId>;
 }

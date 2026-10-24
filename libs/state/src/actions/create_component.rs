@@ -12,7 +12,7 @@ use eventix_ical::{
 use eventix_locale::Locale;
 use uuid::Uuid;
 
-use super::ItemId;
+use super::items::ItemId;
 use crate::{CalendarAlarmType, PersonalAlarms, State};
 
 /// Creates and persists an item in a writable calendar supporting its type.
