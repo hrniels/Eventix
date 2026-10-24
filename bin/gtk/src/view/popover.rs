@@ -536,6 +536,10 @@ impl DetailsController {
         self.check_mapping(&popover);
     }
 
+    pub fn is_open(&self) -> bool {
+        self.popover.borrow().is_some()
+    }
+
     #[cfg(test)]
     pub fn current(&self) -> Option<EventDetails> {
         self.popover.borrow().clone()

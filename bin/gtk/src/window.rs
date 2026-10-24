@@ -149,18 +149,15 @@ impl Window {
             _ => return glib::Propagation::Proceed,
         };
 
-        let mut focused = gtk::prelude::GtkWindowExt::focus(self);
-        while let Some(widget) = focused {
-            if widget.has_css_class("ev_sidebar") {
-                return glib::Propagation::Proceed;
-            }
-
-            focused = widget.parent();
+        if self.imp().page.popup_open() {
+            return glib::Propagation::Proceed;
         }
 
-        self.imp()
-            .page
-            .focus_event(self.focused_event_card().as_ref(), forward);
+        let Some(card) = self.focused_event_card() else {
+            return glib::Propagation::Proceed;
+        };
+
+        self.imp().page.focus_event(Some(&card), forward);
 
         glib::Propagation::Stop
     }
@@ -221,6 +218,7 @@ impl Window {
             }
         });
         self.add_action(&action);
+        app.set_accels_for_action("win.new-event", &["<Alt>e"]);
 
         let action = gio::SimpleAction::new("new-task", None);
         let page = self.imp().page.downgrade();
@@ -230,6 +228,17 @@ impl Window {
             }
         });
         self.add_action(&action);
+        app.set_accels_for_action("win.new-task", &["<Alt>t"]);
+
+        let action = gio::SimpleAction::new("quick-add-task", None);
+        let page = self.imp().page.downgrade();
+        action.connect_activate(move |_, _| {
+            if let Some(page) = page.upgrade() {
+                page.focus_quick_task();
+            }
+        });
+        self.add_action(&action);
+        app.set_accels_for_action("win.quick-add-task", &["<Alt>a"]);
 
         for (name, keys, days) in [
             ("previous", vec!["<Alt>Left"], Some(-1)),

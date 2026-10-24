@@ -252,6 +252,10 @@ impl CalendarPage {
         self.imp().editor.editor_open()
     }
 
+    pub fn popup_open(&self) -> bool {
+        self.editor_open() || self.imp().details.is_open()
+    }
+
     /// Handles editor shortcuts before either the window or a native popup consumes them.
     pub fn handle_editor_key(
         &self,
@@ -267,6 +271,15 @@ impl CalendarPage {
 
     pub fn new_task(&self) {
         self.imp().editor.new_item(self, CalCompType::Todo);
+    }
+
+    pub fn focus_quick_task(&self) {
+        if self.editor_open() {
+            return;
+        }
+
+        self.dismiss_popovers();
+        self.imp().sidebar.quick_task().summary.grab_focus();
     }
 
     pub fn close_editor(&self) {
@@ -513,6 +526,7 @@ pub(crate) mod tests {
     /// Checks real widget allocation, focus retention and cross-surface popup coordination.
     /// Called by the display-backed details test so GTK stays on one test thread.
     pub(crate) fn assert_span_layout_and_refresh(mut week: WeekSnapshot) {
+        assert_arrow_key_routing(&week);
         let mut span = week.all_day[0].clone();
         span.end_day = 3;
         let mut adjacent = span.clone();
@@ -1198,8 +1212,166 @@ pub(crate) mod tests {
         drain();
     }
 
+    /// Exercises the window capture handler with real focus, cards, and editor popups.
+    fn assert_arrow_key_routing(week: &WeekSnapshot) {
+        use eventix_ical::objects::CalCompType;
+        use eventix_view::{editor::EditorCalendar, sidebar::SidebarSnapshot};
+
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.ArrowKeysTest")
+            .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        let locale = week.locale.clone();
+        let start = week.start.and_hms_opt(10, 0, 0).unwrap();
+        let mut all_day = week.all_day.clone();
+        let mut second = all_day[0].clone();
+        second.event.id.uid = "arrow-routing-second".into();
+        second.row += 1;
+        all_day.push(second);
+        page.show_week(WeekSnapshot {
+            start: week.start,
+            days: (0..7)
+                .map(|offset| Day {
+                    date: week.start + Duration::days(offset),
+                    timed: vec![],
+                    dst: vec![],
+                })
+                .collect(),
+            all_day,
+            locale: week.locale.clone(),
+        });
+        let calendars = || {
+            ["first", "second"]
+                .into_iter()
+                .map(|id| EditorCalendar {
+                    id: id.into(),
+                    name: id.into(),
+                    background: "#ffffff".into(),
+                    personal: false,
+                })
+                .collect()
+        };
+        page.imp().sidebar.set_snapshot(SidebarSnapshot {
+            events: vec![],
+            tasks: vec![],
+            task_calendars: calendars(),
+            last_task_calendar: None,
+            locale: locale.clone(),
+        });
+        window.set_default_size(1200, 800);
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let controllers = window.observe_controllers();
+        let keys = (0..controllers.n_items())
+            .filter_map(|index| {
+                controllers
+                    .item(index)
+                    .and_downcast::<gtk::EventControllerKey>()
+            })
+            .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+            .unwrap();
+        let press = |key: gtk::gdk::Key| {
+            keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[&key, &0u32, &gtk::gdk::ModifierType::empty()],
+            )
+        };
+        let quick = page.imp().sidebar.quick_task();
+        fn dropdown(widget: &gtk::Widget) -> Option<gtk::DropDown> {
+            if let Some(dropdown) = widget.downcast_ref::<gtk::DropDown>() {
+                return Some(dropdown.clone());
+            }
+            let mut child = widget.first_child();
+            while let Some(widget) = child {
+                if let Some(found) = dropdown(&widget) {
+                    return Some(found);
+                }
+                child = widget.next_sibling();
+            }
+            None
+        }
+        let calendar = dropdown(quick.widget.upcast_ref()).unwrap();
+        for control in [
+            quick.summary.upcast_ref::<gtk::Widget>(),
+            calendar.upcast_ref(),
+        ] {
+            assert!(control.grab_focus());
+            let focus = gtk::prelude::GtkWindowExt::focus(&window);
+            for key in [
+                gtk::gdk::Key::Left,
+                gtk::gdk::Key::Right,
+                gtk::gdk::Key::Up,
+                gtk::gdk::Key::Down,
+            ] {
+                assert!(!press(key));
+                assert_eq!(gtk::prelude::GtkWindowExt::focus(&window), focus);
+            }
+        }
+
+        page.focus_event(None, true);
+        let first = gtk::prelude::GtkWindowExt::focus(&window).unwrap();
+        assert!(first.is::<crate::view::card::EventCard>());
+        assert!(press(gtk::gdk::Key::Down));
+        assert_ne!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+        assert!(press(gtk::gdk::Key::Up));
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+        assert!(press(gtk::gdk::Key::Right));
+        assert_ne!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+        assert!(press(gtk::gdk::Key::Left));
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+
+        for kind in [CalCompType::Event, CalCompType::Todo] {
+            let editor = page.test_new_editor(EditorOptions {
+                kind,
+                calendars: calendars(),
+                last_calendar: None,
+                locations: vec![],
+                contacts: vec![],
+                start,
+                locale: locale.clone(),
+            });
+            drain();
+            let calendar = dropdown(&editor.popup_panel()).unwrap();
+            assert!(calendar.grab_focus());
+            let focus = gtk::prelude::GtkWindowExt::focus(&window);
+            for key in [
+                gtk::gdk::Key::Left,
+                gtk::gdk::Key::Right,
+                gtk::gdk::Key::Up,
+                gtk::gdk::Key::Down,
+            ] {
+                assert!(!press(key));
+                assert_eq!(gtk::prelude::GtkWindowExt::focus(&window), focus);
+            }
+            page.close_editor();
+            drain();
+        }
+        window.close();
+        drain();
+    }
+
     #[test]
-    fn arrows_enter_events_from_non_event_focus_and_stop_at_boundaries() {
+    fn event_focus_order_stops_at_boundaries() {
         assert_eq!(event_focus_index(3, None, true), Some(0));
         assert_eq!(event_focus_index(3, None, false), Some(2));
         assert_eq!(event_focus_index(3, Some(0), true), Some(1));
