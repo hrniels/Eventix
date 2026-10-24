@@ -25,7 +25,7 @@ mod layout;
 mod recurrence;
 mod task_status;
 mod validation;
-use layout::{FormSection, body_label, calendar_factory, choices, row, segments};
+use layout::{FormSection, bind_choice, body_label, calendar_factory, row, segments};
 use recurrence::RecurrenceInput;
 
 /// Owns the draft independently of calendar refreshes and the details popup.
@@ -1029,11 +1029,12 @@ fn spin(min: f64, max: f64, value: f64) -> gtk::SpinButton {
 }
 
 fn time_entry(time: NaiveTime) -> gtk::Entry {
-    gtk::Entry::builder()
-        .text(time.format("%H:%M").to_string())
-        .width_chars(5)
-        .max_width_chars(8)
-        .build()
+    let builder =
+        gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/time_entry.ui");
+    let entry: gtk::Entry = builder.object("time").expect("editor time entry");
+    entry.set_text(&time.format("%H:%M").to_string());
+
+    entry
 }
 
 fn parse_time(entry: &gtk::Entry, locale: &dyn Locale) -> anyhow::Result<NaiveTime> {
@@ -1050,20 +1051,17 @@ struct DateInput {
 
 impl DateInput {
     fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
-        let widget = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        let entry = gtk::Entry::builder()
-            .text(date.to_string())
-            .width_chars(10)
-            .build();
-        entry.set_hexpand(true);
-
-        let calendar = gtk::Calendar::new();
-        let picker = Self::create_picker(locale, &calendar);
+        let builder =
+            gtk::Builder::from_resource("/io/github/hrniels/Eventix/gtk/view/editor/date_input.ui");
+        let widget = builder.object("date_input").expect("editor date input");
+        let entry: gtk::Entry = builder.object("entry").expect("editor date entry");
+        entry.set_text(&date.to_string());
+        let calendar = builder.object("calendar").expect("editor date calendar");
+        let picker: gtk::MenuButton = builder.object("picker").expect("editor date picker");
+        picker.set_tooltip_text(Some(locale.translate("Choose date")));
         let syncing = Rc::new(Cell::new(false));
         Self::connect_picker_open(&entry, &picker, &calendar, syncing.clone());
         Self::connect_day_selected(&entry, &picker, &calendar, syncing.clone());
-        widget.append(&entry);
-        widget.append(&picker);
 
         Self {
             widget,
@@ -1080,20 +1078,6 @@ impl DateInput {
                 callback();
             }
         });
-    }
-
-    fn create_picker(locale: &dyn Locale, calendar: &gtk::Calendar) -> gtk::MenuButton {
-        let picker = gtk::MenuButton::builder()
-            .icon_name("x-office-calendar-symbolic")
-            .valign(gtk::Align::Start)
-            .build();
-        picker.set_tooltip_text(Some(locale.translate("Choose date")));
-
-        let popover = gtk::Popover::new();
-        popover.set_child(Some(calendar));
-        picker.set_popover(Some(&popover));
-
-        picker
     }
 
     fn connect_picker_open(
@@ -1170,17 +1154,45 @@ struct AlarmInput {
 
 impl AlarmInput {
     fn new(locale: &dyn Locale, date: NaiveDate, time: NaiveTime) -> Self {
-        let widget = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        let builder = gtk::Builder::from_resource(
+            "/io/github/hrniels/Eventix/gtk/view/editor/alarm_input.ui",
+        );
+        let widget = builder.object("alarm_input").expect("editor alarm input");
         let trigger = dropdown(locale, &["None", "Relative", "Absolute"]);
-        let buttons = choices(locale, &trigger, &["None", "Relative", "Absolute"]);
-        widget.append(&buttons[0]);
+        for (index, (id, label)) in [
+            ("none", "None"),
+            ("relative_choice", "Relative"),
+            ("absolute_choice", "Absolute"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let button: gtk::CheckButton = builder.object(id).expect("editor alarm choice");
+            button.set_label(Some(locale.translate(label)));
+            bind_choice(&button, &trigger, index as u32);
+        }
 
-        let (relative, duration, unit, relation) = Self::create_relative(locale);
-        Self::append_mode_row(&widget, &buttons[1], &relative);
-        let relative_row = buttons[1].parent().unwrap();
+        let duration = builder.object("duration").expect("editor alarm duration");
+        let unit: gtk::DropDown = builder.object("unit").expect("editor alarm unit");
+        let names: Vec<_> = ["Minutes", "Hours", "Days"]
+            .iter()
+            .map(|name| locale.translate(name))
+            .collect();
+        unit.set_model(Some(&gtk::StringList::new(&names)));
+        let relation: gtk::DropDown = builder.object("relation").expect("editor alarm relation");
+        let names: Vec<_> = ["BeforeStart", "AfterStart", "BeforeEnd", "AfterEnd"]
+            .iter()
+            .map(|name| locale.translate(name))
+            .collect();
+        relation.set_model(Some(&gtk::StringList::new(&names)));
 
-        let (absolute, date, time) = Self::create_absolute(locale, date, time);
-        Self::append_mode_row(&widget, &buttons[2], &absolute);
+        let relative: gtk::Box = builder.object("relative").expect("editor relative alarm");
+        let absolute: gtk::Box = builder.object("absolute").expect("editor absolute alarm");
+        let date = DateInput::new(locale, date);
+        date.widget.set_hexpand(false);
+        let time = time_entry(time);
+        absolute.append(&date.widget);
+        absolute.append(&time);
         trigger.connect_selected_notify(move |combo| {
             relative.set_sensitive(combo.selected() == 1);
             absolute.set_sensitive(combo.selected() == 2);
@@ -1193,54 +1205,10 @@ impl AlarmInput {
             unit,
             relation,
             relations: RefCell::new(vec![0, 1, 2, 3]),
-            relative_row,
+            relative_row: builder.object("relative_row").expect("relative alarm row"),
             date,
             time,
         }
-    }
-
-    fn create_relative(
-        locale: &dyn Locale,
-    ) -> (gtk::Box, gtk::SpinButton, gtk::DropDown, gtk::DropDown) {
-        let relative = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        let duration = spin(0.0, 100000.0, 15.0);
-        let unit = dropdown(locale, &["Minutes", "Hours", "Days"]);
-        let relation = dropdown(
-            locale,
-            &["BeforeStart", "AfterStart", "BeforeEnd", "AfterEnd"],
-        );
-        relative.append(&duration);
-        relative.append(&unit);
-        relative.append(&relation);
-        relative.set_sensitive(false);
-
-        (relative, duration, unit, relation)
-    }
-
-    fn create_absolute(
-        locale: &dyn Locale,
-        date: NaiveDate,
-        time: NaiveTime,
-    ) -> (gtk::Box, DateInput, gtk::Entry) {
-        let absolute = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        let date = DateInput::new(locale, date);
-        date.widget.set_hexpand(false);
-        absolute.set_hexpand(false);
-        absolute.set_halign(gtk::Align::Start);
-        let time = time_entry(time);
-        absolute.append(&date.widget);
-        absolute.append(&time);
-        absolute.set_sensitive(false);
-
-        (absolute, date, time)
-    }
-
-    fn append_mode_row(widget: &gtk::Box, button: &gtk::CheckButton, controls: &gtk::Box) {
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        button.set_size_request(100, -1);
-        row.append(button);
-        row.append(controls);
-        widget.append(&row);
     }
 
     fn summary(&self, timezone: &chrono_tz::Tz, locale: &dyn Locale) -> String {
@@ -1491,7 +1459,7 @@ mod tests {
     use eventix_view::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
-    use super::{CalDate, DateInput, DateSection, ItemEditor};
+    use super::{AlarmInput, CalDate, DateInput, DateSection, ItemEditor};
 
     fn assert_slot_creation_defaults() {
         for (start, all_day, expected_end) in [
@@ -1529,6 +1497,87 @@ mod tests {
                 );
                 assert_eq!(matches!(date, CalDate::Date(..)), all_day);
             }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn alarm_choices_synchronize_modes_and_preserve_trigger_values() {
+        use eventix_ical::objects::{CalRelated, CalTrigger};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        for language in [
+            eventix_locale::LocaleType::English,
+            eventix_locale::LocaleType::German,
+        ] {
+            let locale = eventix_locale::new_with_timezone(&xdg, language, chrono_tz::UTC).unwrap();
+            let alarm = AlarmInput::new(
+                locale.as_ref(),
+                "2026-10-15".parse().unwrap(),
+                "10:30:00".parse().unwrap(),
+            );
+            let none = alarm
+                .widget
+                .first_child()
+                .and_downcast::<gtk::CheckButton>()
+                .unwrap();
+            let relative = alarm
+                .relative_row
+                .first_child()
+                .and_downcast::<gtk::CheckButton>()
+                .unwrap();
+            let absolute = alarm
+                .widget
+                .last_child()
+                .unwrap()
+                .first_child()
+                .and_downcast::<gtk::CheckButton>()
+                .unwrap();
+            let relative_controls = alarm.relative_row.last_child().unwrap();
+            let absolute_controls = alarm.widget.last_child().unwrap().last_child().unwrap();
+            assert!(none.is_active());
+            assert!(
+                alarm
+                    .value(&chrono_tz::UTC, locale.as_ref())
+                    .unwrap()
+                    .is_empty()
+            );
+            assert!(!relative_controls.is_sensitive() && !absolute_controls.is_sensitive());
+
+            relative.set_active(true);
+            assert_eq!(alarm.trigger.selected(), 1);
+            assert!(!none.is_active() && relative_controls.is_sensitive());
+            assert!(!absolute_controls.is_sensitive());
+            assert!(matches!(
+                alarm.value(&chrono_tz::UTC, locale.as_ref()).unwrap()[0].trigger(),
+                CalTrigger::Relative { duration, related: CalRelated::Start }
+                    if *duration == chrono::Duration::minutes(-15).into()
+            ));
+
+            absolute.set_active(true);
+            assert_eq!(alarm.trigger.selected(), 2);
+            assert!(!relative.is_active() && !relative_controls.is_sensitive());
+            assert!(absolute_controls.is_sensitive());
+            assert!(matches!(
+                alarm.value(&chrono_tz::UTC, locale.as_ref()).unwrap()[0].trigger(),
+                CalTrigger::Absolute(date)
+                    if date.to_string() == "TU2026-10-15T10:30:00"
+            ));
+
+            alarm.trigger.set_selected(1);
+            assert!(relative.is_active() && !absolute.is_active());
+            alarm.set_dates(false, false, locale.as_ref());
+            assert!(none.is_active());
+            assert!(!alarm.relative_row.is_visible());
+            assert!(
+                alarm
+                    .value(&chrono_tz::UTC, locale.as_ref())
+                    .unwrap()
+                    .is_empty()
+            );
         }
     }
 
@@ -1850,6 +1899,7 @@ mod tests {
     #[ignore = "requires a GTK display"]
     fn date_inputs_synchronize_on_focus_loss_and_picker_selection() {
         gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
         let locale = eventix_locale::new_with_timezone(

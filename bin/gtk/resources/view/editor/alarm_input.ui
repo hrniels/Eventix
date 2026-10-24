@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkAdjustment" id="duration_adjustment">
+    <property name="lower">0</property>
+    <property name="upper">100000</property>
+    <property name="step-increment">1</property>
+    <property name="page-increment">10</property>
+    <property name="value">15</property>
+  </object>
+  <object class="GtkBox" id="alarm_input">
+    <property name="orientation">vertical</property>
+    <property name="spacing">6</property>
+    <child>
+      <object class="GtkCheckButton" id="none">
+        <property name="active">true</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="relative_row">
+        <property name="orientation">horizontal</property>
+        <property name="spacing">12</property>
+        <child>
+          <object class="GtkCheckButton" id="relative_choice">
+            <property name="group">none</property>
+            <property name="width-request">100</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="relative">
+            <property name="orientation">horizontal</property>
+            <property name="spacing">6</property>
+            <property name="sensitive">false</property>
+            <child>
+              <object class="GtkSpinButton" id="duration">
+                <property name="adjustment">duration_adjustment</property>
+                <property name="climb-rate">1</property>
+                <property name="numeric">true</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkDropDown" id="unit"/>
+            </child>
+            <child>
+              <object class="GtkDropDown" id="relation"/>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">horizontal</property>
+        <property name="spacing">12</property>
+        <child>
+          <object class="GtkCheckButton" id="absolute_choice">
+            <property name="group">none</property>
+            <property name="width-request">100</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="absolute">
+            <property name="orientation">horizontal</property>
+            <property name="spacing">6</property>
+            <property name="hexpand">false</property>
+            <property name="halign">start</property>
+            <property name="sensitive">false</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

@@ -199,7 +199,7 @@ pub(super) fn choices(
     buttons
 }
 
-fn bind_choice(button: &gtk::CheckButton, model: &gtk::DropDown, index: u32) {
+pub(super) fn bind_choice(button: &gtk::CheckButton, model: &gtk::DropDown, index: u32) {
     let selection = model.downgrade();
     button.connect_toggled(move |button| {
         if button.is_active()
