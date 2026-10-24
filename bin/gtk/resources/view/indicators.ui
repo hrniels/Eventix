@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <template class="EventixEventIndicators" parent="GtkBox">
+    <property name="spacing">3</property>
+    <property name="visible">false</property>
+    <child>
+      <object class="GtkImage" id="recurrent">
+        <property name="resource">/io/github/hrniels/Eventix/gtk/icons/arrow-clockwise-symbolic.svg</property>
+        <property name="pixel-size">16</property>
+        <property name="visible">false</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkImage" id="exception">
+        <property name="resource">/io/github/hrniels/Eventix/gtk/icons/pencil-symbolic.svg</property>
+        <property name="pixel-size">16</property>
+        <property name="visible">false</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkImage" id="alarm">
+        <property name="resource">/io/github/hrniels/Eventix/gtk/icons/alarm-symbolic.svg</property>
+        <property name="pixel-size">16</property>
+        <property name="visible">false</property>
+      </object>
+    </child>
+  </template>
+</interface>

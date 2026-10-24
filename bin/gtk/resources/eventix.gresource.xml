@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/io/github/hrniels/Eventix/gtk">
     <file>view/card.ui</file>
+    <file>view/indicators.ui</file>
     <file>view/details/details.ui</file>
     <file>view/details/scrollers.ui</file>
     <file>icons/LICENSE</file>

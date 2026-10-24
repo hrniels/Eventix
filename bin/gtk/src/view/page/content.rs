@@ -346,7 +346,7 @@ impl PageContent {
 
         for ((label, icon), day) in Self::day_labels(page)
             .into_iter()
-            .zip(imp.weekly.imp().time_change_icons.borrow().iter())
+            .zip(imp.weekly.imp().time_change_icons())
             .zip(&week.days)
         {
             let text = locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday);

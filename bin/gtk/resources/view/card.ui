@@ -23,7 +23,6 @@
         </child>
         <child>
           <object class="EventixEventIndicators" id="indicators">
-            <property name="spacing">3</property>
             <property name="valign">start</property>
             <property name="margin-top">2</property>
             <property name="margin-end">2</property>

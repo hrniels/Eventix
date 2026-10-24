@@ -7,18 +7,20 @@ use std::cell::Cell;
 use eventix_locale::Locale;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-const ICONS: [(&str, &str); 3] = [
-    ("arrow-clockwise", "Recurring event"),
-    ("pencil", "Recurrence exception"),
-    ("alarm", "Reminder"),
-];
+const TITLES: [&str; 3] = ["Recurring event", "Recurrence exception", "Reminder"];
 
 mod imp {
     use super::*;
 
-    #[derive(Default)]
+    #[derive(Default, gtk::CompositeTemplate)]
+    #[template(resource = "/io/github/hrniels/Eventix/gtk/view/indicators.ui")]
     pub struct EventIndicators {
-        pub icons: [gtk::Image; 3],
+        #[template_child]
+        pub recurrent: gtk::TemplateChild<gtk::Image>,
+        #[template_child]
+        pub exception: gtk::TemplateChild<gtk::Image>,
+        #[template_child]
+        pub alarm: gtk::TemplateChild<gtk::Image>,
         pub present: Cell<[bool; 3]>,
     }
 
@@ -27,24 +29,19 @@ mod imp {
         const NAME: &'static str = "EventixEventIndicators";
         type Type = super::EventIndicators;
         type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
     }
 
     impl ObjectImpl for EventIndicators {
-        fn constructed(&self) {
-            self.parent_constructed();
-
-            let obj = self.obj();
-            obj.set_spacing(3);
-            for (image, (name, _)) in self.icons.iter().zip(ICONS) {
-                image.set_resource(Some(&format!(
-                    "/io/github/hrniels/Eventix/gtk/icons/{name}-symbolic.svg"
-                )));
-                image.set_pixel_size(16);
-                image.set_visible(false);
-                obj.append(image);
-            }
-
-            obj.set_visible(false);
+        fn dispose(&self) {
+            self.dispose_template();
         }
     }
 
@@ -60,11 +57,16 @@ glib::wrapper! {
 }
 
 impl EventIndicators {
+    fn icons(&self) -> [&gtk::Image; 3] {
+        let imp = self.imp();
+        [&imp.recurrent, &imp.exception, &imp.alarm]
+    }
+
     pub fn set_state(&self, recurrent: bool, exception: bool, alarm: bool, locale: &dyn Locale) {
         let present = [recurrent, exception, alarm];
         self.imp().present.set(present);
 
-        for ((image, (_, title)), present) in self.imp().icons.iter().zip(ICONS).zip(present) {
+        for ((image, title), present) in self.icons().into_iter().zip(TITLES).zip(present) {
             let title = locale.translate(title);
             image.set_tooltip_text(Some(title));
             image.update_property(&[gtk::accessible::Property::Label(title)]);
@@ -75,7 +77,7 @@ impl EventIndicators {
     }
 
     pub fn set_pixel_size(&self, size: i32) {
-        for image in &self.imp().icons {
+        for image in self.icons() {
             image.set_pixel_size(size);
         }
     }
@@ -83,7 +85,7 @@ impl EventIndicators {
     /// Shows only present indicators that fit within the available content area.
     pub fn fit(&self, mut width: i32, height: i32) {
         let mut count = 0;
-        for (image, present) in self.imp().icons.iter().zip(self.imp().present.get()) {
+        for (image, present) in self.icons().into_iter().zip(self.imp().present.get()) {
             // Restore visibility before measuring so icons can reappear on resize.
             image.set_visible(present);
             if !present {

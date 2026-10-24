@@ -230,10 +230,7 @@ fn populate_list(list: &gtk::ListBox, candidates: &[(String, String)], query: &s
     for value in matches(candidates, query) {
         let label = gtk::Label::new(Some(value));
         label.set_xalign(0.0);
-        label.set_margin_start(8);
-        label.set_margin_end(8);
-        label.set_margin_top(5);
-        label.set_margin_bottom(5);
+        label.add_css_class("ev_completion_result");
         list.append(&label);
         if let Some(row) = label.parent() {
             row.set_focusable(false);

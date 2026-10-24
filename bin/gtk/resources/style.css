@@ -165,6 +165,10 @@ button.ev_editor_section_toggle:checked {
     border-color: @error_color;
 }
 
+.ev_completion_result {
+    margin: 5px 8px;
+}
+
 .ev_day_headers label,
 .ev_month_weekday {
     padding: 8px 0;

@@ -12,45 +12,150 @@
             <property name="hexpand">true</property>
             <style><class name="ev_day_headers"/></style>
             <child>
-              <object class="GtkLabel" id="monday">
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
                 <property name="hexpand">true</property>
-                <property name="ellipsize">end</property>
+                <child>
+                  <object class="GtkLabel" id="monday">
+                    <property name="hexpand">false</property>
+                    <property name="ellipsize">end</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkImage" id="monday_time_change">
+                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="pixel-size">18</property>
+                    <property name="valign">center</property>
+                    <property name="visible">false</property>
+                  </object>
+                </child>
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="tuesday">
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
                 <property name="hexpand">true</property>
-                <property name="ellipsize">end</property>
+                <child>
+                  <object class="GtkLabel" id="tuesday">
+                    <property name="hexpand">false</property>
+                    <property name="ellipsize">end</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkImage" id="tuesday_time_change">
+                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="pixel-size">18</property>
+                    <property name="valign">center</property>
+                    <property name="visible">false</property>
+                  </object>
+                </child>
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="wednesday">
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
                 <property name="hexpand">true</property>
-                <property name="ellipsize">end</property>
+                <child>
+                  <object class="GtkLabel" id="wednesday">
+                    <property name="hexpand">false</property>
+                    <property name="ellipsize">end</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkImage" id="wednesday_time_change">
+                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="pixel-size">18</property>
+                    <property name="valign">center</property>
+                    <property name="visible">false</property>
+                  </object>
+                </child>
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="thursday">
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
                 <property name="hexpand">true</property>
-                <property name="ellipsize">end</property>
+                <child>
+                  <object class="GtkLabel" id="thursday">
+                    <property name="hexpand">false</property>
+                    <property name="ellipsize">end</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkImage" id="thursday_time_change">
+                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="pixel-size">18</property>
+                    <property name="valign">center</property>
+                    <property name="visible">false</property>
+                  </object>
+                </child>
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="friday">
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
                 <property name="hexpand">true</property>
-                <property name="ellipsize">end</property>
+                <child>
+                  <object class="GtkLabel" id="friday">
+                    <property name="hexpand">false</property>
+                    <property name="ellipsize">end</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkImage" id="friday_time_change">
+                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="pixel-size">18</property>
+                    <property name="valign">center</property>
+                    <property name="visible">false</property>
+                  </object>
+                </child>
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="saturday">
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
                 <property name="hexpand">true</property>
-                <property name="ellipsize">end</property>
+                <child>
+                  <object class="GtkLabel" id="saturday">
+                    <property name="hexpand">false</property>
+                    <property name="ellipsize">end</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkImage" id="saturday_time_change">
+                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="pixel-size">18</property>
+                    <property name="valign">center</property>
+                    <property name="visible">false</property>
+                  </object>
+                </child>
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="sunday">
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <property name="halign">center</property>
                 <property name="hexpand">true</property>
-                <property name="ellipsize">end</property>
+                <child>
+                  <object class="GtkLabel" id="sunday">
+                    <property name="hexpand">false</property>
+                    <property name="ellipsize">end</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkImage" id="sunday_time_change">
+                    <property name="resource">/io/github/hrniels/Eventix/gtk/icons/clock-history-symbolic.svg</property>
+                    <property name="pixel-size">18</property>
+                    <property name="valign">center</property>
+                    <property name="visible">false</property>
+                  </object>
+                </child>
               </object>
             </child>
           </object>
