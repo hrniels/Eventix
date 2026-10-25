@@ -4,13 +4,12 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
-use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
 use eventix_view::list::{Row, Snapshot};
 use gtk::{glib, prelude::*};
 
-use crate::view::calendar_selector::set_dot_color;
 use crate::view::indicators::EventIndicators;
+use crate::view::response_marker;
 
 use super::{actions::Actions, item::ListItem, model::ListModel, row::FixedRow};
 
@@ -139,12 +138,13 @@ fn row_content(row: &Row, locale: &dyn Locale, handlers: &Rc<Actions>) -> gtk::B
         "Event"
     })));
     content.append(&kind);
-    let dot = gtk::DrawingArea::new();
-    dot.set_size_request(ICON_SIZE, ICON_SIZE);
-    dot.set_tooltip_text(Some(&row.calendar_name));
-    let color = gtk::gdk::RGBA::parse(&row.background).unwrap_or(gtk::gdk::RGBA::TRANSPARENT);
-    set_dot_color(&dot, color);
-    content.append(&dot);
+    content.append(&response_marker::new(
+        &row.background,
+        &row.calendar_name,
+        row.response.map(Into::into),
+        ICON_SIZE,
+        locale,
+    ));
     let summary = gtk::Label::new(Some(&row.summary));
     summary.set_xalign(0.0);
     summary.set_hexpand(true);
@@ -159,18 +159,6 @@ fn row_content(row: &Row, locale: &dyn Locale, handlers: &Rc<Actions>) -> gtk::B
         completed.set_pixel_size(ICON_SIZE);
         completed.set_tooltip_text(Some(locale.translate("Completed")));
         content.append(&completed);
-    }
-    if let Some(response) = row.response {
-        let (icon, title) = match response {
-            CalPartStat::Accepted => ("emblem-ok-symbolic", "Accepted"),
-            CalPartStat::Tentative => ("dialog-question-symbolic", "Tentative"),
-            CalPartStat::Declined => ("window-close-symbolic", "Declined"),
-            _ => ("dialog-question-symbolic", "NEEDS-ACTION"),
-        };
-        let response = gtk::Image::from_icon_name(icon);
-        response.set_pixel_size(ICON_SIZE);
-        response.set_tooltip_text(Some(locale.translate(title)));
-        content.append(&response);
     }
     let indicators: EventIndicators = gtk::glib::Object::new();
     indicators.set_valign(gtk::Align::Center);

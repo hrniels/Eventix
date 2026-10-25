@@ -8,13 +8,12 @@ use chrono::NaiveDate;
 use eventix_locale::{DateFlags, Locale};
 use eventix_view::{
     OccurrenceId,
-    details::Response,
     sidebar::{SidebarGroup, SidebarRow},
 };
 use gtk::{glib, prelude::*};
 
 use super::super::{
-    details::EventDetails, indicators::EventIndicators, popover::DetailsController,
+    details::EventDetails, indicators::EventIndicators, popover::DetailsController, response_marker,
 };
 use crate::style;
 
@@ -239,25 +238,13 @@ fn bind_details_action(
 fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
     if !row.full_day || row.task {
-        let marker = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        marker.set_valign(gtk::Align::Center);
-        marker.add_css_class("ev_sidebar_marker");
-        marker.add_css_class(&style::calendar_class(&row.background, &row.foreground));
-        if let Some(response) = row.response {
-            let (name, class) = match response {
-                Response::Accepted => ("check-lg", "ev_details_good"),
-                Response::Declined => ("x-lg", "ev_details_critical"),
-                Response::Tentative => ("question-lg", "ev_details_warn"),
-                Response::Pending => ("", ""),
-            };
-            if !name.is_empty() {
-                let image = icon(name);
-                image.add_css_class("ev_sidebar_response");
-                image.add_css_class(class);
-                marker.append(&image);
-            }
-        }
-        content.append(&marker);
+        content.append(&response_marker::new(
+            &row.background,
+            &row.calendar,
+            row.response,
+            18,
+            locale,
+        ));
     }
 
     if !row.time.is_empty() {
@@ -281,14 +268,4 @@ fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
     content.append(&indicators);
 
     content
-}
-
-fn icon(name: &str) -> gtk::Image {
-    let image = gtk::Image::from_resource(&format!(
-        "{}/icons/{name}-symbolic.svg",
-        crate::RESOURCE_PREFIX
-    ));
-    image.set_pixel_size(14);
-
-    image
 }

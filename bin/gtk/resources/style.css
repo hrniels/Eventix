@@ -565,16 +565,9 @@ button.ev_sidebar_full_day {
     padding-left: 12px;
 }
 
-.ev_sidebar_marker {
-    min-width: 18px;
-    min-height: 18px;
-    border-radius: 50%;
-}
-
-.ev_sidebar_response {
+.ev_response_marker_inner {
     background: white;
     border-radius: 50%;
-    margin: 2px;
 }
 
 .ev_sidebar_time,
