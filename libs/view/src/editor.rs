@@ -11,7 +11,7 @@ use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::State;
 
-/// A writable calendar available for creating items.
+/// A calendar available for creating or editing items.
 pub struct EditorCalendar {
     pub id: String,
     pub name: String,
@@ -22,13 +22,16 @@ pub struct EditorCalendar {
 impl EditorCalendar {
     /// Returns writable calendars supporting the requested component type, sorted by name and ID.
     pub fn load(state: &State, kind: CalCompType) -> Vec<Self> {
+        Self::load_with_current(state, kind, None)
+    }
+
+    fn load_with_current(state: &State, kind: CalCompType, current: Option<&str>) -> Vec<Self> {
         let mut calendars = Vec::new();
         for collection in state.settings().collections().values() {
-            if collection.is_read_only() {
-                continue;
-            }
             for (id, settings) in collection.calendars() {
-                if settings.types().contains(&kind) {
+                if current == Some(id.as_str())
+                    || (!collection.is_read_only() && settings.types().contains(&kind))
+                {
                     calendars.push(Self {
                         id: id.clone(),
                         name: settings.name().clone(),
@@ -69,7 +72,22 @@ impl EditorOptions {
 
     /// Loads writable calendars and defaults for the requested component type.
     pub fn load_for(state: &State, kind: CalCompType) -> anyhow::Result<Self> {
-        let calendars = EditorCalendar::load(state, kind);
+        Self::load_with_current(state, kind, None)
+    }
+
+    /// Loads defaults and calendar choices for editing an existing item.
+    ///
+    /// Includes the current calendar in addition to writable calendars supporting the item type.
+    pub fn load_for_edit(state: &State, kind: CalCompType, current: &str) -> anyhow::Result<Self> {
+        Self::load_with_current(state, kind, Some(current))
+    }
+
+    fn load_with_current(
+        state: &State,
+        kind: CalCompType,
+        current: Option<&str>,
+    ) -> anyhow::Result<Self> {
+        let calendars = EditorCalendar::load_with_current(state, kind, current);
         let now = Utc::now().with_timezone(state.timezone());
         let start = now
             .with_minute(0)

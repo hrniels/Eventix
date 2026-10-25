@@ -332,12 +332,25 @@ mod tests {
             attendees: vec![],
         };
         let item = Box::new(fields).execute(&mut state).unwrap();
+        state
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .all_calendars_mut()
+            .get_mut("current")
+            .unwrap()
+            .set_types(vec![CalCompType::Todo]);
+        let creation = EditorOptions::load(&state).unwrap();
+        assert_eq!(creation.calendars.len(), 1);
+        assert_eq!(creation.calendars[0].id, "other");
         for recurrent in [false, true] {
             let mut edit = UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap();
             if recurrent {
                 edit.fields.recurrence = Some("FREQ=DAILY;COUNT=5".parse().unwrap());
             }
-            let mut options = EditorOptions::load(&state).unwrap();
+            let mut options =
+                EditorOptions::load_for_edit(&state, CalCompType::Event, "current").unwrap();
             options.last_calendar = Some("other".into());
             let editor = super::ItemEditor::edit(1, options, edit.clone());
             let window = gtk::Window::builder().child(&editor.layer).build();
@@ -360,8 +373,11 @@ mod tests {
 
             for scope in [EditScope::Occurrence, EditScope::Following] {
                 edit.scope = scope;
-                let editor =
-                    super::ItemEditor::edit(2, EditorOptions::load(&state).unwrap(), edit.clone());
+                let editor = super::ItemEditor::edit(
+                    2,
+                    EditorOptions::load_for_edit(&state, CalCompType::Event, "current").unwrap(),
+                    edit.clone(),
+                );
                 assert_eq!(editor.command().unwrap().calendar, "current");
                 assert_eq!(
                     editor.calendar.widget.is_sensitive(),
@@ -373,6 +389,17 @@ mod tests {
                 }
             }
         }
+
+        let mut edit = UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap();
+        let editor = super::ItemEditor::edit(
+            3,
+            EditorOptions::load_for_edit(&state, CalCompType::Event, "current").unwrap(),
+            edit.clone(),
+        );
+        editor.summary.set_text("Updated event");
+        edit.fields = *editor.command().unwrap();
+        Box::new(edit).execute(&mut state).unwrap();
+        assert_eq!(Event::load(&state, &item).unwrap().summary, "Updated event");
     }
 
     #[test]

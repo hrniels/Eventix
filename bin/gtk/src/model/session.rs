@@ -438,7 +438,7 @@ impl Worker {
         let edit = UpdateItem::load(state, item, scope)?;
 
         Ok((
-            EditorOptions::load_for(state, edit.fields.kind)?,
+            EditorOptions::load_for_edit(state, edit.fields.kind, &edit.item.calendar)?,
             Box::new(edit),
         ))
     }
@@ -911,6 +911,64 @@ mod tests {
         worker
             .subscriptions
             .register(SubscriptionId::Sidebar, Query::Sidebar { now });
+    }
+
+    #[test]
+    fn edit_requests_include_current_calendar_without_creation_support() {
+        use eventix_ical::objects::CalCompType;
+        use eventix_state::actions::items::EditScope;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        let collection = worker
+            .state
+            .as_mut()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap();
+        collection
+            .all_calendars_mut()
+            .get_mut("test")
+            .unwrap()
+            .set_types(vec![CalCompType::Todo]);
+        for (id, kind) in [("events", CalCompType::Event), ("tasks", CalCompType::Todo)] {
+            let mut settings = CalendarSettings::default();
+            settings.set_enabled(true);
+            settings.set_types(vec![kind]);
+            settings.set_name(id.into());
+            collection.all_calendars_mut().insert(id.into(), settings);
+        }
+
+        let Some(Event::EditorLoaded(1, Ok(options))) = worker
+            .handle(Message::PrepareEditor(1, CalCompType::Event))
+            .pop()
+        else {
+            panic!("expected creation options");
+        };
+        assert_eq!(options.calendars.len(), 1);
+        assert_eq!(options.calendars[0].id, "events");
+
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: None,
+        };
+        let Some(Event::EditLoaded(2, Ok((options, _)))) = worker
+            .handle(Message::LoadEdit(2, item, EditScope::Series))
+            .pop()
+        else {
+            panic!("expected edit options");
+        };
+        let ids: Vec<_> = options
+            .calendars
+            .iter()
+            .map(|cal| cal.id.as_str())
+            .collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"test"));
+        assert!(ids.contains(&"events"));
     }
 
     #[test]
