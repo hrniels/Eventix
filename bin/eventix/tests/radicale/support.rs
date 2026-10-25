@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use axum::http::StatusCode;
-use eventix_ical::objects::EventLike;
+use eventix_ical::objects::{CalCompType, EventLike};
 use eventix_state::{
     CollectionSettings, EmailAccount, EventixState, SyncerType, encrypt_password,
     retrieve_portal_secret,
@@ -202,9 +202,28 @@ impl RadicalePeer {
         .await;
         assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
 
-        self.calendar_id_for_folder(expected_folder)
+        let cal_id = self
+            .calendar_id_for_folder(expected_folder)
             .await
-            .expect("created calendar does not exist?")
+            .expect("created calendar does not exist?");
+
+        // New calendars have no configured item types until the user selects them.
+        let mut state = self.state.lock().await;
+        state
+            .settings_mut()
+            .collections_mut()
+            .get_mut(COL_ID)
+            .expect("test collection exists")
+            .all_calendars_mut()
+            .get_mut(&cal_id)
+            .expect("created calendar exists")
+            .set_types(vec![CalCompType::Event, CalCompType::Todo]);
+        state
+            .settings()
+            .write_to_file()
+            .expect("save calendar types");
+
+        cal_id
     }
 
     pub async fn try_create_calendar(&self, name: &str) -> (StatusCode, String) {
