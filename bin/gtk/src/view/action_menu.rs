@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
 
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
@@ -513,7 +517,39 @@ fn popover(model: &gio::MenuModel, root: Option<&gtk::Popover>) -> gtk::Popover 
     let contents: gtk::Box = builder.object("contents").unwrap();
     let popover: gtk::Popover = builder.object("popover").unwrap();
     append_rows(&contents, model, &popover, root.unwrap_or(&popover));
+    track_pointer_motion(&popover, &contents);
     popover
+}
+
+/// Enables hover highlights only after the pointer moves inside an opened menu.
+fn track_pointer_motion(popover: &gtk::Popover, contents: &gtk::Box) {
+    // Mapping a native popup can temporarily hover a row before its final allocation.
+    // Pointer entry alone must not highlight that row, especially destructive actions.
+    // Readiness applies to direct rows of these contents, independently of nested menus.
+    let position = Rc::new(Cell::new(None));
+    let motion = gtk::EventControllerMotion::new();
+    let last = position.clone();
+    motion.connect_enter(move |_, x, y| last.set(Some((x, y))));
+    let last = position.clone();
+    motion.connect_leave(move |_| last.set(None));
+    let last = position.clone();
+    let weak = contents.downgrade();
+    motion.connect_motion(move |_, x, y| {
+        if let Some(previous) = last.replace(Some((x, y)))
+            && previous != (x, y)
+            && let Some(contents) = weak.upgrade()
+        {
+            contents.add_css_class("ev_action_menu_pointer_moved");
+        }
+    });
+    popover.add_controller(motion);
+    let weak = contents.downgrade();
+    popover.connect_map(move |_| {
+        position.set(None);
+        if let Some(contents) = weak.upgrade() {
+            contents.remove_css_class("ev_action_menu_pointer_moved");
+        }
+    });
 }
 
 fn append_rows(
@@ -613,6 +649,92 @@ mod tests {
     use gtk::{gio, prelude::*};
 
     use super::{Actions, MenuAction, OccurrenceTarget, bind, menu, occurrence_menu};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn opening_menus_and_submenus_ignore_stationary_hover_until_pointer_moves() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let (model, group) = menu(&[Action::Delete], &*eventix_locale::default());
+        let (variants, _) = menu(&[Action::Delete], &*eventix_locale::default());
+        model.prepend_submenu(Some("Variants"), &variants);
+        let anchor = gtk::Button::new();
+        let window = gtk::Window::builder().child(&anchor).build();
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let popup = super::popover(model.upcast_ref(), None);
+        popup.insert_action_group("item", Some(&group));
+        popup.set_parent(&anchor);
+        let submenu = popup
+            .child()
+            .unwrap()
+            .first_child()
+            .unwrap()
+            .downcast::<gtk::MenuButton>()
+            .unwrap();
+        let check_hover = |popup: &gtk::Popover| {
+            let delete = popup.child().unwrap().last_child().unwrap();
+            let motion = popup
+                .observe_controllers()
+                .snapshot()
+                .into_iter()
+                .find_map(|controller| controller.downcast::<gtk::EventControllerMotion>().ok())
+                .unwrap();
+            #[allow(deprecated)]
+            let background = || {
+                let snapshot = gtk::Snapshot::new();
+                snapshot.render_background(&delete.style_context(), 0.0, 0.0, 100.0, 30.0);
+                snapshot.to_node()
+            };
+            // Reproduce a transient native-popup hover without moving the pointer.
+            delete.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+            motion.emit_by_name::<()>("enter", &[&10.0_f64, &10.0_f64]);
+            motion.emit_by_name::<()>("motion", &[&10.0_f64, &10.0_f64]);
+            drain();
+            assert!(
+                background().is_none(),
+                "opening must not paint a hover background"
+            );
+
+            motion.emit_by_name::<()>("motion", &[&11.0_f64, &10.0_f64]);
+            drain();
+            assert!(
+                background().is_some(),
+                "pointer movement enables the Delete highlight"
+            );
+            delete.unset_state_flags(gtk::StateFlags::PRELIGHT);
+            drain();
+            assert!(
+                background().is_none(),
+                "leaving Delete clears its highlight"
+            );
+        };
+        for _ in 0..2 {
+            popup.popup();
+            drain();
+            check_hover(&popup);
+            // The parent is already hover-ready when each submenu opens and reopens.
+            for _ in 0..2 {
+                submenu.popup();
+                drain();
+                let variants = submenu.popover().unwrap();
+                check_hover(&variants);
+                variants.popdown();
+                drain();
+            }
+            popup.popdown();
+            drain();
+        }
+        popup.unparent();
+        window.close();
+    }
 
     #[test]
     fn german_occurrence_menu_uses_full_response_labels_and_groups_destructive_actions() {

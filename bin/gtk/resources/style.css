@@ -76,8 +76,8 @@
     background: transparent;
 }
 
-.ev_action_menu button.ev_action_menu_item:hover,
-.ev_action_menu .ev_action_menu_item > button:hover {
+.ev_action_menu_pointer_moved > button.ev_action_menu_item:hover,
+.ev_action_menu_pointer_moved > .ev_action_menu_item > button:hover {
     background: alpha(@theme_fg_color, 0.1);
 }
 
@@ -465,7 +465,7 @@ button.ev_details_uid:hover {
 .ev_details_good > button,
 .ev_details_menu button.ev_details_good:hover,
 .ev_action_menu .ev_action_menu_item.ev_details_good > button,
-.ev_action_menu button.ev_action_menu_item.ev_details_good:hover,
+.ev_action_menu_pointer_moved > button.ev_action_menu_item.ev_details_good:hover,
 .ev_action_menu button.ev_action_response_status.ev_details_good {
     background-image: linear-gradient(#198754, #13653f);
     color: white;
@@ -474,7 +474,7 @@ button.ev_details_uid:hover {
 .ev_details_warn > button,
 .ev_details_menu button.ev_details_warn:hover,
 .ev_action_menu .ev_action_menu_item.ev_details_warn > button,
-.ev_action_menu button.ev_action_menu_item.ev_details_warn:hover,
+.ev_action_menu_pointer_moved > button.ev_action_menu_item.ev_details_warn:hover,
 .ev_action_menu button.ev_action_response_status.ev_details_warn {
     background-image: linear-gradient(#f57c00, #c66400);
     color: white;
@@ -483,7 +483,7 @@ button.ev_details_uid:hover {
 .ev_details_critical > button,
 .ev_details_menu button.ev_details_critical:hover,
 .ev_action_menu .ev_action_menu_item.ev_details_critical > button,
-.ev_action_menu button.ev_action_menu_item.ev_details_critical:hover,
+.ev_action_menu_pointer_moved > button.ev_action_menu_item.ev_details_critical:hover,
 .ev_action_menu button.ev_action_response_status.ev_details_critical {
     background-image: linear-gradient(#ff0000, #e00000);
     color: white;
