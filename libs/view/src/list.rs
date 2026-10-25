@@ -12,23 +12,13 @@ use eventix_ical::{
 };
 use eventix_locale::Locale;
 use eventix_state::State;
+use eventix_state::actions::items::ItemId;
 
 /// Applied list selection. An empty calendar selection means all calendars.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
     pub keywords: String,
     pub calendars: Vec<String>,
-    pub page: usize,
-}
-
-impl Default for Filter {
-    fn default() -> Self {
-        Self {
-            keywords: String::new(),
-            calendars: vec![],
-            page: 1,
-        }
-    }
 }
 
 /// Case-insensitive AND groups separated by the standalone word `OR`.
@@ -91,20 +81,14 @@ pub struct Row {
     pub recurrence: String,
 }
 
-/// A bounded page of results, with the effective selection and total result count.
+/// A lightweight ordered index of matching base components.
+///
+/// Row presentation data is loaded separately, only when requested by the view.
 pub struct Snapshot {
     pub filter: Filter,
     pub calendars: Vec<Calendar>,
-    pub rows: Vec<Row>,
-    pub total: usize,
+    pub items: Vec<ItemId>,
     pub locale: Arc<dyn Locale + Send + Sync>,
-}
-
-const PER_PAGE: usize = 12;
-
-/// Returns the number of pages, including one empty page for no results.
-pub fn page_count(total: usize) -> usize {
-    total.div_ceil(PER_PAGE).max(1)
 }
 
 impl Snapshot {
@@ -161,19 +145,18 @@ impl Snapshot {
                 .cmp(modified(a))
                 .then_with(|| (af.directory(), a.uid()).cmp(&(bf.directory(), b.uid())))
         });
-        let total = components.len();
-        filter.page = filter.page.clamp(1, page_count(total));
-        let rows = components
+        let items = components
             .into_iter()
-            .skip((filter.page - 1) * PER_PAGE)
-            .take(PER_PAGE)
-            .filter_map(|(file, comp)| Row::load(state, file, comp, &*locale))
+            .map(|(file, comp)| ItemId {
+                calendar: file.directory().to_string(),
+                uid: comp.uid().clone(),
+                recurrence: None,
+            })
             .collect();
         Self {
             filter,
             calendars,
-            rows,
-            total,
+            items,
             locale,
         }
     }
@@ -186,7 +169,18 @@ fn modified(comp: &CalComponent) -> &CalDate {
 }
 
 impl Row {
-    fn load(
+    /// Loads presentation data for a single base component, or returns none if unavailable.
+    pub fn load(state: &State, item: &ItemId) -> Option<Self> {
+        if item.recurrence.is_some() {
+            return None;
+        }
+        let dir = state.store().directory(&Arc::new(item.calendar.clone()))?;
+        let file = dir.file_by_id(&item.uid)?;
+        let comp = file.component_with(|comp| comp.uid() == &item.uid && comp.rid().is_none())?;
+        Self::from_component(state, file, comp, &*state.locale())
+    }
+
+    fn from_component(
         state: &State,
         file: &CalFile,
         comp: &CalComponent,
@@ -249,7 +243,7 @@ mod tests {
     use eventix_ical::col::{CalDir, CalFile};
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
-    use super::{Filter, KeywordExpression, Snapshot, page_count};
+    use super::{Filter, KeywordExpression, Row, Snapshot};
 
     fn state(components: &[&str]) -> (tempfile::TempDir, State) {
         let tmp = tempfile::tempdir().unwrap();
@@ -302,19 +296,20 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert_eq!(snapshot.total, 3);
+        assert_eq!(snapshot.items.len(), 3);
         assert_eq!(snapshot.calendars.len(), 2);
-        let done = snapshot.rows.iter().find(|row| row.uid == "done").unwrap();
+        let rows: Vec<_> = snapshot
+            .items
+            .iter()
+            .filter_map(|item| Row::load(&state, item))
+            .collect();
+        let done = rows.iter().find(|row| row.uid == "done").unwrap();
         assert!(done.task && done.completed);
         assert_eq!(done.date_range, "-");
-        let past = snapshot.rows.iter().find(|row| row.uid == "past").unwrap();
+        let past = rows.iter().find(|row| row.uid == "past").unwrap();
         assert!(past.date_range.contains('‒'));
         assert!(!past.date_range.contains("&#"));
-        let series = snapshot
-            .rows
-            .iter()
-            .find(|row| row.uid == "series")
-            .unwrap();
+        let series = rows.iter().find(|row| row.uid == "series").unwrap();
         assert!(series.recurrent && series.alarm);
         assert!(!series.recurrence.is_empty());
         assert!(
@@ -335,10 +330,9 @@ mod tests {
                 &Filter {
                     keywords: keywords.into(),
                     calendars: vec!["home".into()],
-                    page: 1,
                 },
             );
-            assert_eq!(snapshot.total, 1, "{keywords}");
+            assert_eq!(snapshot.items.len(), 1, "{keywords}");
         }
         assert_eq!(
             Snapshot::load(
@@ -348,13 +342,14 @@ mod tests {
                     ..Default::default()
                 }
             )
-            .total,
+            .items
+            .len(),
             0
         );
     }
 
     #[test]
-    fn ordering_uses_modified_then_created_then_stamp_and_pages_are_clamped() {
+    fn index_includes_all_matches_in_modified_created_and_stamp_order() {
         let components: Vec<_> = (1..=14).map(|index| {
             format!("BEGIN:VTODO\nUID:item-{index:02}\nDTSTAMP:20260101T000000Z\nCREATED:202601{index:02}T000000Z\nEND:VTODO")
         }).collect();
@@ -362,24 +357,17 @@ mod tests {
         let (_tmp, state) = state(&refs);
         let mut filter = Filter {
             calendars: vec!["home".into()],
-            page: usize::MAX,
             ..Default::default()
         };
         let snapshot = Snapshot::load(&state, &filter);
-        assert_eq!(snapshot.filter.page, 2);
-        assert_eq!(snapshot.total, 14);
-        assert_eq!(
-            snapshot
-                .rows
-                .iter()
-                .map(|row| row.uid.as_str())
-                .collect::<Vec<_>>(),
-            ["item-02", "item-01"]
-        );
+        assert_eq!(snapshot.items.len(), 14);
+        assert_eq!(snapshot.items[0].uid, "item-14");
+        assert_eq!(snapshot.items[13].uid, "item-01");
+        let last = Row::load(&state, &snapshot.items[13]).unwrap();
+        assert_eq!(last.uid, "item-01");
         filter.keywords = "not-found".into();
         let empty = Snapshot::load(&state, &filter);
-        assert_eq!(empty.filter.page, 1);
-        assert!(empty.rows.is_empty());
+        assert!(empty.items.is_empty());
 
         let (_tmp, state) = self::state(&[
             "BEGIN:VTODO\nUID:modified\nDTSTAMP:20260101T000000Z\nCREATED:20260102T000000Z\nLAST-MODIFIED:20260104T000000Z\nEND:VTODO",
@@ -395,7 +383,7 @@ mod tests {
         );
         assert_eq!(
             snapshot
-                .rows
+                .items
                 .iter()
                 .map(|row| row.uid.as_str())
                 .collect::<Vec<_>>(),
@@ -413,9 +401,17 @@ mod tests {
     }
 
     #[test]
-    fn pages_include_an_empty_page_and_partial_last_page() {
-        assert_eq!(page_count(0), 1);
-        assert_eq!(page_count(12), 1);
-        assert_eq!(page_count(13), 2);
+    fn row_loading_rejects_missing_components_and_recurrence_exceptions() {
+        let (_tmp, state) = state(&["BEGIN:VTODO\nUID:task\nSUMMARY:Task\nEND:VTODO"]);
+        let snapshot = Snapshot::load(&state, &Filter::default());
+        let mut item = snapshot.items[0].clone();
+        item.calendar = "missing".into();
+        assert!(Row::load(&state, &item).is_none());
+        item = snapshot.items[0].clone();
+        item.uid = "missing".into();
+        assert!(Row::load(&state, &item).is_none());
+        item = snapshot.items[0].clone();
+        item.recurrence = Some("TU2026-10-25T09:00:00".parse().unwrap());
+        assert!(Row::load(&state, &item).is_none());
     }
 }

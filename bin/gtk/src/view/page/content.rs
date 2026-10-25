@@ -125,9 +125,6 @@ impl PageContent {
         let generation = self.generation.get() + 1;
         self.generation.set(generation);
         self.loading.set(true);
-        if let Some(list) = imp.list.get() {
-            list.set_loading(true);
-        }
         imp.status
             .set_text(page.locale().translate("Loading calendar…"));
 
@@ -485,15 +482,9 @@ impl PageContent {
 
                 self.loaded_generation.set(Some(response.generation));
                 self.loading.set(false);
-                if let Some(list) = page.imp().list.get() {
-                    list.set_loading(false);
-                }
             }
             Err(error) => {
                 self.loading.set(false);
-                if let Some(list) = page.imp().list.get() {
-                    list.set_loading(false);
-                }
                 page.show_error("Could not load local calendars", &error);
             }
         }

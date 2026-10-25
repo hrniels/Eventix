@@ -4,7 +4,7 @@
 
 //! Serialized queries and mutations; this module never accesses GTK objects.
 
-use std::{sync::Arc, thread};
+use std::{fmt, sync::Arc, thread};
 
 use chrono::{Duration, NaiveDate, Utc};
 use eventix_ical::objects::CalCompType;
@@ -51,6 +51,30 @@ pub(crate) struct ContentResponse {
     pub result: Result<Snapshot, String>,
 }
 
+pub(crate) struct ListRowsRequest {
+    /// Identifies the view's index revision so late row data cannot update a newer list.
+    pub revision: u64,
+    pub items: Vec<ItemId>,
+}
+
+impl fmt::Debug for ListRowsRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_struct("ListRowsRequest");
+        debug.field("revision", &self.revision);
+        if self.items.len() > 2 {
+            debug.field("item-count", &self.items.len());
+        } else {
+            debug.field("items", &self.items);
+        }
+        debug.finish()
+    }
+}
+
+pub(crate) struct ListRowsResponse {
+    pub revision: u64,
+    pub result: Result<Vec<(ItemId, Option<eventix_view::list::Row>)>, String>,
+}
+
 /// Notifications carry identities and invalidations; snapshots are refetched separately.
 pub(crate) struct ChangeSet {
     pub item: ItemId,
@@ -64,6 +88,7 @@ pub(crate) enum Event {
     EditSaved(u64, Result<(ChangeSet, SavedItem), String>),
     RemindersSaved(Result<(ChangeSet, SavedItem), String>),
     ContentLoaded(ContentResponse),
+    ListRowsLoaded(ListRowsResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
     SourceLoaded(String),
     ReloadFailed(String),
@@ -84,6 +109,7 @@ enum Message {
     SaveEdit(u64, Box<UpdateItem>),
     SaveReminders(ItemId, UpdatePersonalAlarms),
     ShowContent(ContentRequest),
+    LoadListRows(ListRowsRequest),
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,
@@ -141,6 +167,10 @@ impl CalendarSession {
 
     pub fn show_content(&self, request: ContentRequest) {
         let _ = self.requests.try_send(Message::ShowContent(request));
+    }
+
+    pub fn load_list_rows(&self, request: ListRowsRequest) {
+        let _ = self.requests.try_send(Message::LoadListRows(request));
     }
 
     pub fn refresh_sidebar(&self) {
@@ -302,6 +332,22 @@ impl Worker {
                     result,
                 })
             }
+            Message::LoadListRows(request) => Event::ListRowsLoaded(ListRowsResponse {
+                revision: request.revision,
+                result: self
+                    .state()
+                    .map(|state| {
+                        request
+                            .items
+                            .into_iter()
+                            .map(|item| {
+                                let row = eventix_view::list::Row::load(state, &item);
+                                (item, row)
+                            })
+                            .collect()
+                    })
+                    .map_err(|error| format!("{error:#}")),
+            }),
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
@@ -1159,11 +1205,10 @@ mod tests {
                 filter: Filter {
                     keywords: "needle".into(),
                     calendars: vec!["test".into()],
-                    page: 1,
                 },
             })
             .unwrap();
-        assert!(matches!(snapshot, Snapshot::List(list) if list.rows.is_empty()));
+        assert!(matches!(snapshot, Snapshot::List(list) if list.items.is_empty()));
         let item = ItemId {
             calendar: "test".into(),
             uid: "move-me".into(),
@@ -1177,12 +1222,12 @@ mod tests {
             assert!(change.affected.contains(&SubscriptionId::Calendar(42)));
             let events = worker.handle(Message::RefreshSubscriptions(change.affected));
             assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
-                if response.generation == 42 && matches!(&response.result, Ok(Snapshot::List(list)) if list.total == expected)));
+                if response.generation == 42 && matches!(&response.result, Ok(Snapshot::List(list)) if list.items.len() == expected)));
         }
         let change = worker.execute(Box::new(DeleteItem { item })).unwrap();
         let events = worker.handle(Message::RefreshSubscriptions(change.affected));
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
-            if matches!(&response.result, Ok(Snapshot::List(list)) if list.total == 0)));
+            if matches!(&response.result, Ok(Snapshot::List(list)) if list.items.is_empty())));
         subscribe(&mut worker, 43, "2026-10-12", View::Week);
         assert!(
             worker
@@ -1191,6 +1236,45 @@ mod tests {
                 ]))
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn list_rows_load_only_requested_identities_without_replacing_the_subscription() {
+        use super::ListRowsRequest;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        let Snapshot::List(index) = worker
+            .show_content(&ContentRequest {
+                generation: 42,
+                date: None,
+                view: View::List,
+                filter: Default::default(),
+            })
+            .unwrap()
+        else {
+            panic!("expected a list index")
+        };
+        assert_eq!(index.items.len(), 1);
+        let mut missing = index.items[0].clone();
+        missing.uid = "missing".into();
+        let events = worker.handle(Message::LoadListRows(ListRowsRequest {
+            revision: 7,
+            items: vec![index.items[0].clone(), missing.clone()],
+        }));
+        let [Event::ListRowsLoaded(response)] = events.as_slice() else {
+            panic!("expected row data")
+        };
+        assert_eq!(response.revision, 7);
+        let rows = response.result.as_ref().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].0, index.items[0]);
+        assert_eq!(rows[0].1.as_ref().unwrap().summary, "Move me");
+        assert!(rows[0].1.as_ref().unwrap().recurrent);
+        assert_eq!(rows[1].0, missing);
+        assert!(rows[1].1.is_none());
+        assert_eq!(worker.content.as_ref().unwrap().generation, 42);
+        assert!(worker.subscriptions.contains(SubscriptionId::Calendar(42)));
     }
 
     #[test]
@@ -1207,15 +1291,14 @@ mod tests {
             view: View::List,
             filter: eventix_view::list::Filter {
                 keywords: "needle".into(),
-                page: 9,
                 ..Default::default()
             },
         }));
         assert!(
             matches!(events.as_slice(), [Event::SourceLoaded(_), Event::ContentLoaded(response)]
-            if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.filter.page == 1))
+            if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.items.is_empty()))
         );
-        assert_eq!(worker.content.as_ref().unwrap().filter.page, 1);
+        assert_eq!(worker.content.as_ref().unwrap().filter.keywords, "needle");
         let events = worker.handle(Message::Reload);
         assert!(
             matches!(events.as_slice(), [Event::SourceLoaded(_), Event::ContentLoaded(response)]

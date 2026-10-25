@@ -2,42 +2,53 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, collections::BTreeMap};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
-use eventix_view::list::Row;
-use gtk::prelude::*;
+use eventix_view::list::{Row, Snapshot};
+use gtk::{glib, prelude::*};
 
 use crate::view::calendar_selector::set_dot_color;
 use crate::view::indicators::EventIndicators;
 
-type RowKey = (String, String);
+use super::{item::ListItem, model::ListModel, row::FixedRow};
 
-/// Renders the result list and retains live row identity on refresh.
+const ICON_SIZE: i32 = 20;
+
+/// Renders a virtualized list with presentation data loaded on demand.
 pub(super) struct Results {
     pub scroll: gtk::ScrolledWindow,
-    list: gtk::ListBox,
+    pub model: ListModel,
+    pub widget: gtk::Stack,
     empty: gtk::Label,
-    rows: RefCell<BTreeMap<RowKey, gtk::ListBoxRow>>,
+    locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
 }
 
 impl Results {
     pub fn new() -> Self {
-        let list = gtk::ListBox::new();
-        list.set_selection_mode(gtk::SelectionMode::None);
+        let model: ListModel = glib::Object::new();
+        let locale = Rc::new(RefCell::new(eventix_locale::default()));
+        let factory = factory(locale.clone());
+        let selection = gtk::NoSelection::new(Some(model.clone()));
+        let list = gtk::ListView::new(Some(selection), Some(factory));
+        list.set_enable_rubberband(false);
         let empty = gtk::Label::new(None);
-        list.set_placeholder(Some(&empty));
         let scroll = gtk::ScrolledWindow::builder()
             .vexpand(true)
             .hscrollbar_policy(gtk::PolicyType::Never)
             .child(&list)
             .build();
+        let widget = gtk::Stack::new();
+        widget.set_vexpand(true);
+        widget.add_child(&scroll);
+        widget.add_child(&empty);
         Self {
             scroll,
-            list,
+            model,
+            widget,
             empty,
-            rows: RefCell::default(),
+            locale,
         }
     }
 
@@ -45,36 +56,64 @@ impl Results {
         self.scroll.vadjustment().set_value(0.0);
     }
 
-    pub fn update(&self, rows: &[Row], locale: &dyn Locale) {
-        self.empty.set_text(locale.translate("No items found"));
-        let mut old = self.rows.take();
-        let mut live = BTreeMap::new();
-        for (index, row) in rows.iter().enumerate() {
-            let key = (row.calendar.clone(), row.uid.clone());
-            let widget = old.remove(&key).unwrap_or_else(|| {
-                gtk::ListBoxRow::builder()
-                    .activatable(false)
-                    .selectable(false)
-                    .focusable(true)
-                    .build()
-            });
-            widget.set_child(Some(&row_content(row, locale)));
-            if widget.parent().is_none() {
-                self.list.insert(&widget, index as i32);
-            } else if widget.index() != index as i32 {
-                let focused = widget.has_focus();
-                self.list.remove(&widget);
-                self.list.insert(&widget, index as i32);
-                if focused {
-                    widget.grab_focus();
-                }
+    pub fn update(&self, snapshot: Snapshot) {
+        self.empty
+            .set_text(snapshot.locale.translate("No items found"));
+        self.locale.replace(snapshot.locale);
+        let empty = snapshot.items.is_empty();
+        self.model.set_items(snapshot.items);
+        if empty {
+            self.widget.set_visible_child(&self.empty);
+        } else {
+            self.widget.set_visible_child(&self.scroll);
+        }
+    }
+}
+
+fn factory(locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>) -> gtk::SignalListItemFactory {
+    let factory = gtk::SignalListItemFactory::new();
+    let bindings = Rc::new(RefCell::new(HashMap::<
+        gtk::ListItem,
+        (ListItem, glib::SignalHandlerId),
+    >::new()));
+    factory.connect_setup(|_, item| {
+        let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+        item.set_activatable(false);
+        item.set_selectable(false);
+        item.set_child(Some(&FixedRow::new()));
+    });
+    let bound = bindings.clone();
+    factory.connect_bind(move |_, item| {
+        let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+        let data = item.item().and_downcast::<ListItem>().unwrap();
+        let row = item.child().and_downcast::<FixedRow>().unwrap();
+        update_row(&row, &data, &**locale.borrow());
+        let weak = row.downgrade();
+        let locale = locale.clone();
+        let handler = data.connect_notify_local(Some("loaded"), move |data, _| {
+            if let Some(row) = weak.upgrade() {
+                update_row(&row, data, &**locale.borrow());
             }
-            live.insert(key, widget);
+        });
+        bound.borrow_mut().insert(item.clone(), (data, handler));
+    });
+    factory.connect_unbind(move |_, item| {
+        let item = item.downcast_ref::<gtk::ListItem>().unwrap();
+        if let Some((data, handler)) = bindings.borrow_mut().remove(item) {
+            data.disconnect(handler);
         }
-        for widget in old.into_values() {
-            self.list.remove(&widget);
+        if let Some(row) = item.child().and_downcast::<FixedRow>() {
+            row.set_child(&gtk::Box::new(gtk::Orientation::Horizontal, 0));
         }
-        self.rows.replace(live);
+    });
+    factory
+}
+
+fn update_row(widget: &FixedRow, item: &ListItem, locale: &dyn Locale) {
+    if let Some(row) = item.row().as_ref() {
+        widget.set_child(&row_content(row, locale));
+    } else {
+        widget.set_child(&gtk::Box::new(gtk::Orientation::Horizontal, 0));
     }
 }
 
@@ -86,6 +125,7 @@ fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
     } else {
         "x-office-calendar-symbolic"
     });
+    kind.set_pixel_size(ICON_SIZE);
     kind.set_tooltip_text(Some(locale.translate(if row.task {
         "Task"
     } else {
@@ -93,7 +133,7 @@ fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
     })));
     content.append(&kind);
     let dot = gtk::DrawingArea::new();
-    dot.set_size_request(16, 16);
+    dot.set_size_request(ICON_SIZE, ICON_SIZE);
     dot.set_tooltip_text(Some(&row.calendar_name));
     let color = gtk::gdk::RGBA::parse(&row.background).unwrap_or(gtk::gdk::RGBA::TRANSPARENT);
     set_dot_color(&dot, color);
@@ -109,6 +149,7 @@ fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
     content.append(&summary);
     if row.completed {
         let completed = gtk::Image::from_icon_name("emblem-ok-symbolic");
+        completed.set_pixel_size(ICON_SIZE);
         completed.set_tooltip_text(Some(locale.translate("Completed")));
         content.append(&completed);
     }
@@ -120,13 +161,15 @@ fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
             _ => ("dialog-question-symbolic", "NEEDS-ACTION"),
         };
         let response = gtk::Image::from_icon_name(icon);
+        response.set_pixel_size(ICON_SIZE);
         response.set_tooltip_text(Some(locale.translate(title)));
         content.append(&response);
     }
     let indicators: EventIndicators = gtk::glib::Object::new();
+    indicators.set_pixel_size(ICON_SIZE);
     indicators.set_state(row.recurrent, false, row.alarm, locale);
     content.append(&indicators);
-    let dates = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    let dates = gtk::Box::new(gtk::Orientation::Vertical, 0);
     dates.set_valign(gtk::Align::Center);
     dates.set_size_request(260, -1);
     for text in [&row.date_range, &row.recurrence]
@@ -135,7 +178,9 @@ fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
     {
         let label = gtk::Label::new(Some(text));
         label.set_xalign(0.5);
-        label.set_wrap(true);
+        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        label.set_max_width_chars(1);
+        label.set_tooltip_text(Some(text));
         dates.append(&label);
     }
     content.append(&dates);

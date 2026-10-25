@@ -107,7 +107,6 @@ impl Filtering {
     pub fn filter(&self) -> Filter {
         Filter {
             keywords: self.search.text().to_string(),
-            page: 1,
             calendars: self
                 .choices
                 .borrow()

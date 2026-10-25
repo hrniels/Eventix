@@ -120,6 +120,14 @@ mod imp {
                     page.show_content(page.imp().content.date.get());
                 }
             });
+            let weak = obj.downgrade();
+            list.connect_load_rows(move |request| {
+                if let Some(page) = weak.upgrade()
+                    && let Some(session) = page.imp().session.current.borrow().as_ref()
+                {
+                    session.load_list_rows(request);
+                }
+            });
             self.content_stack.add_child(&list.widget);
             let _ = self.list.set(list);
             obj.align_headers();
@@ -456,8 +464,7 @@ pub(crate) mod tests {
                     ..Default::default()
                 },
                 calendars: vec![],
-                rows: vec![],
-                total: 0,
+                items: vec![],
                 locale: eventix_locale::default(),
             })
         };
