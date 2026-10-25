@@ -125,6 +125,27 @@ Cargo bundles these files into the executable using GResource. Building requires
 libraries. Editing a resource triggers recompilation; no loose `.ui` or CSS files are needed at
 runtime.
 
+### GTK UI tests
+
+Run the display-dependent GTK tests on an invisible Xvfb display with an Openbox window
+manager and a separate D-Bus session:
+
+```bash
+./b test-ui
+./b test-ui styled_hour_labels
+```
+
+These tests remain ignored by ordinary `./b test` runs. `test-ui` selects the ignored tests
+in `eventix-gtk` and runs each in its own process so GTK initialization stays on one thread.
+The GTK test binary is built once, and the command prints a combined pass/fail summary,
+elapsed time, and output from failing tests.
+Rendering uses the software Cairo backend.
+The virtual display and window manager are cleaned up when the command exits, including on
+test failure.
+
+Use `./b test-ui --visible` to debug tests on your current desktop, and `--nocapture` to
+show output from passing tests. Both options can be combined with a test name filter.
+
 ## Relevant Files
 
 Eventix can be configured completely via its web UI. However, in case manual inspection is desired,

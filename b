@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from contextlib import contextmanager
 import fnmatch
 import json
 import os
@@ -11,6 +12,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 
 # Define application identifiers for normal and debug mode
 APP_ID = "io.github.hrniels.Eventix"
@@ -144,6 +146,132 @@ def cmd_test(args):
     if args.nocapture:
         cmd.extend(["--", "--nocapture"])
     subprocess.run(cmd, env=dev_env(), check=True)
+
+
+@contextmanager
+def ui_window_manager(env):
+    """Runs Openbox until the UI tests finish, including on failure."""
+    with tempfile.TemporaryFile(mode="w+") as log:
+        manager = subprocess.Popen(
+            ["openbox", "--sm-disable"], env=env, stdout=log, stderr=log)
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if manager.poll() is not None:
+                    break
+                result = subprocess.run(
+                    ["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"], env=env,
+                    capture_output=True, text=True, check=True)
+                if "window id #" in result.stdout:
+                    yield
+                    return
+                time.sleep(0.05)
+            log.seek(0)
+            sys.exit("Openbox did not become ready:\n" + log.read())
+        finally:
+            if manager.poll() is None:
+                manager.terminate()
+                try:
+                    manager.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    manager.kill()
+                    manager.wait()
+
+
+def build_ui_test_binary(env):
+    """Builds the GTK test binary and returns its executable and working directory."""
+    result = subprocess.run(
+        ["cargo", "test", "-p", "eventix-gtk", "--bin", "eventix-gtk",
+         "--no-run", "--message-format=json"],
+        env=env, stdout=subprocess.PIPE, text=True)
+    artifact = None
+    for line in result.stdout.splitlines():
+        message = json.loads(line)
+        if message.get("reason") == "compiler-message":
+            rendered = message["message"].get("rendered")
+            if rendered:
+                print(rendered, file=sys.stderr, end="")
+        elif (message.get("reason") == "compiler-artifact"
+              and message.get("executable") and message["profile"]["test"]):
+            artifact = message
+    result.check_returncode()
+    if artifact is None:
+        sys.exit("Cargo did not produce a GTK test executable.")
+    return artifact["executable"], Path(artifact["manifest_path"]).parent
+
+
+def run_ui_tests(args, env):
+    """Runs isolated GTK tests and prints a combined summary with failure output."""
+    subprocess.run(["cargo", "build", "--bin", "eventix-getpw"], check=True)
+    executable, workdir = build_ui_test_binary(env)
+    result = subprocess.run(
+        [executable, args.filter, "--list", "--ignored"], env=env, cwd=workdir,
+        capture_output=True, text=True, check=True)
+    tests = [line.removesuffix(": test") for line in result.stdout.splitlines()
+             if line.endswith(": test")]
+    if not tests:
+        sys.exit("No GTK UI tests matched the filter.")
+
+    print(f"\nrunning {len(tests)} GTK UI tests", flush=True)
+    failures = []
+    started = time.monotonic()
+    for test in tests:
+        test_cmd = [executable, test, "--ignored", "--exact", "--test-threads=1"]
+        if args.nocapture:
+            test_cmd.append("--nocapture")
+        result = subprocess.run(
+            test_cmd, env=env, cwd=workdir, text=True,
+            stdout=None if args.nocapture else subprocess.PIPE,
+            stderr=None if args.nocapture else subprocess.STDOUT)
+        status = "ok" if result.returncode == 0 else "FAILED"
+        print(f"test {test} ... {status}", flush=True)
+        if result.returncode:
+            failures.append((test, result.stdout, result.returncode))
+
+    elapsed = time.monotonic() - started
+    if failures:
+        print("\nfailures:")
+        for test, output, returncode in failures:
+            print(f"\n---- {test} (exit status {returncode}) ----")
+            if output:
+                print(output, end="" if output.endswith("\n") else "\n")
+        print("\nfailed tests:")
+        for test, _, _ in failures:
+            print(f"    {test}")
+    status = "FAILED" if failures else "ok"
+    print(f"\ntest result: {status}. {len(tests) - len(failures)} passed; "
+          f"{len(failures)} failed; finished in {elapsed:.2f}s", flush=True)
+    if failures:
+        raise SystemExit(1)
+
+
+def cmd_test_ui(args):
+    """Runs GTK UI tests on an isolated display unless visible mode is selected."""
+    if not args.visible and not args.virtual_session:
+        tools = ["xvfb-run", "Xvfb", "xauth", "dbus-run-session", "openbox", "xprop"]
+        missing = [tool for tool in tools if not shutil.which(tool)]
+        if missing:
+            sys.exit("Missing UI test tools: " + ", ".join(missing) +
+                     "\nOn Arch Linux: sudo pacman -S xorg-server-xvfb xorg-xauth "
+                     "dbus openbox xorg-xprop")
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env["GSK_RENDERER"] = "cairo"
+        env.pop("WAYLAND_DISPLAY", None)
+        cmd = ["xvfb-run", "-a", "-s", "-screen 0 1920x1080x24 -nolisten tcp",
+               "dbus-run-session", "--", sys.executable, str(Path(__file__).resolve()),
+               "test-ui", "--virtual-session", args.filter]
+        if args.nocapture:
+            cmd.append("--nocapture")
+        subprocess.run(cmd, env=env, check=True)
+        return
+
+    env = dev_env()
+    if args.virtual_session:
+        with ui_window_manager(env):
+            run_ui_tests(args, env)
+    else:
+        run_ui_tests(args, env)
 
 
 def cmd_coverage(args):
@@ -572,6 +700,16 @@ def main():
         help="Show output from passing tests")
     test_parser.set_defaults(cargo_args=[])
     test_parser.set_defaults(func=cmd_test)
+
+    ui_parser = subparsers.add_parser(
+        "test-ui", help="Run GTK UI tests on an invisible virtual display")
+    ui_parser.add_argument("filter", nargs="?", default="", help="Test name substring")
+    ui_parser.add_argument(
+        "--visible", action="store_true", help="Show test windows on the current desktop")
+    ui_parser.add_argument(
+        "--nocapture", action="store_true", help="Show output from passing tests")
+    ui_parser.add_argument("--virtual-session", action="store_true", help=argparse.SUPPRESS)
+    ui_parser.set_defaults(func=cmd_test_ui)
 
     coverage_parser = subparsers.add_parser("coverage", help="Generate code coverage information")
     coverage_parser.add_argument("--file", help="Show line-by-line coverage for a single file")

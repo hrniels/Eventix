@@ -32,6 +32,13 @@ as for `cargo test`. So for example:
 Agents should prefer running tests at the smallest relevant scope first
 (single crate or single test) before running the full workspace suite.
 
+Run display-dependent GTK tests with `./b test-ui`, optionally followed by a
+test name substring. This runs each ignored `eventix-gtk` test in a separate
+process on an invisible Xvfb display with Openbox and an isolated D-Bus session.
+Use this command instead of running ignored GTK tests on the current desktop.
+Only use `./b test-ui --visible` when explicitly requested for interactive debugging.
+See README.md for the required system packages.
+
 ## LINTING AND FORMATTING
 
 Format code (required before commit):
