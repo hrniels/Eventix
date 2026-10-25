@@ -517,7 +517,8 @@ button.ev_details_uid:hover {
 }
 
 .ev_panel_header {
-    padding: 0.3em 0.5em;
+    /* Whole-pixel vertical padding keeps aligned headers on the same pixel boundaries. */
+    padding: 4px 0.5em;
 }
 
 .ev_panel_title {
@@ -531,12 +532,6 @@ button.ev_details_uid:hover {
     padding: 2px 6px;
 }
 
-.ev_sidebar_add_item {
-    min-height: 0;
-    min-width: 0;
-    padding: 0 3px;
-}
-
 .ev_calendar_selector popover contents {
     min-width: 240px;
 }
@@ -546,10 +541,18 @@ button.ev_details_uid:hover {
     border-top: 1px solid alpha(@theme_fg_color, 0.16);
 }
 
-.ev_quick_task button {
+.ev_quick_task entry {
+    font-size: 0.9em;
+}
+
+.ev_quick_task > entry,
+.ev_quick_task > button,
+.ev_quick_task > menubutton > button,
+.ev_quick_task > dropdown > button {
+    font-size: 0.9em;
+    min-height: 20px;
     min-width: 0;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding: 3px 4px;
 }
 
 .ev_sidebar_day {

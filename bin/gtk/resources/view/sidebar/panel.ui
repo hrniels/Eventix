@@ -23,6 +23,7 @@
             <child>
               <object class="GtkButton" id="new_item">
                 <property name="icon-name">list-add-symbolic</property>
+                <property name="valign">center</property>
                 <style><class name="ev_sidebar_add_item"/></style>
               </object>
             </child>

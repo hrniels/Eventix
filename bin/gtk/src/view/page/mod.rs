@@ -248,6 +248,17 @@ impl CalendarPage {
             group.add_widget(&title);
         }
 
+        let buttons = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
+        buttons.add_widget(&*imp.previous);
+        buttons.add_widget(&*imp.today);
+        buttons.add_widget(&*imp.next);
+        for kind in [
+            eventix_ical::objects::CalCompType::Event,
+            eventix_ical::objects::CalCompType::Todo,
+        ] {
+            buttons.add_widget(&imp.sidebar.new_item_button(kind));
+        }
+
         imp.header_group.replace(Some(group));
     }
 
@@ -456,6 +467,59 @@ pub(crate) mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn panel_headers_and_add_buttons_match_calendar_controls() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        let imp = page.imp();
+        for view in [View::Week, View::Month, View::List] {
+            imp.content.switch_view(&page, view);
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            let header: gtk::Widget = if view == View::List {
+                imp.list.get().unwrap().header().clone().upcast()
+            } else {
+                imp.header.get().upcast()
+            };
+            let bounds = header.compute_bounds(&page).unwrap();
+            assert_eq!(bounds.y().fract(), 0.0, "{view:?}: header pixel alignment");
+            assert_eq!(
+                bounds.height().fract(),
+                0.0,
+                "{view:?}: header pixel height"
+            );
+            for sidebar_header in imp.sidebar.panel_titles() {
+                let sidebar_bounds = sidebar_header.compute_bounds(&page).unwrap();
+                assert_eq!(bounds.height(), sidebar_bounds.height(), "{view:?}");
+                let button = sidebar_header.last_child().unwrap();
+                let button_bounds = button.compute_bounds(&page).unwrap();
+                let previous_bounds = imp.previous.compute_bounds(&page).unwrap();
+                assert_eq!(
+                    button_bounds.height(),
+                    previous_bounds.height(),
+                    "{view:?}: add and navigation button heights"
+                );
+                assert_eq!(
+                    button_bounds.width(),
+                    previous_bounds.width(),
+                    "{view:?}: add and navigation button widths"
+                );
+            }
+        }
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn list_switching_preserves_filters_dates_and_rejects_stale_responses() {
         use eventix_view::list::{Filter, Snapshot as ListSnapshot};
 
@@ -587,6 +651,13 @@ pub(crate) mod tests {
         let quick = page.imp().sidebar.quick_task();
         assert!(quick.widget.is_mapped());
         assert!(quick.summary.width() >= 40);
+        let input = quick.summary.compute_bounds(&page).unwrap();
+        let mut control = quick.widget.first_child();
+        while let Some(widget) = control {
+            let bounds = widget.compute_bounds(&page).unwrap();
+            assert_eq!(bounds.height(), input.height(), "{}", widget.type_());
+            control = widget.next_sibling();
+        }
         let sidebar = page.imp().sidebar.compute_bounds(&page).unwrap();
         let add = quick.add.compute_bounds(&page).unwrap();
         assert!(add.x() + add.width() <= sidebar.x() + sidebar.width());
