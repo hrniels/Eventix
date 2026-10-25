@@ -46,6 +46,10 @@
     border-bottom: 1px solid @ev_grid_line;
 }
 
+.ev_list_row:hover {
+    background: @ev_create_background;
+}
+
 .ev_list_completed {
     text-decoration: line-through;
     opacity: 0.65;
