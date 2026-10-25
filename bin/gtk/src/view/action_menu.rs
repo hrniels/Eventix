@@ -191,13 +191,9 @@ pub(super) fn button<T: Clone + 'static>(
 ) -> gtk::MenuButton {
     let (model, actions) = menu(available, locale);
     bind(&actions, row, handlers);
-    let button = gtk::MenuButton::builder()
-        .icon_name("view-more-symbolic")
-        .tooltip_text(locale.translate("Actions"))
-        .valign(gtk::Align::Center)
-        .hexpand(false)
-        .build();
-    button.add_css_class("ev_action_menu_button");
+    let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/button.ui"));
+    let button: gtk::MenuButton = builder.object("button").unwrap();
+    button.set_tooltip_text(Some(locale.translate("Actions")));
     button.update_property(&[gtk::accessible::Property::Label(
         locale.translate("Actions"),
     )]);
@@ -513,13 +509,9 @@ fn menu_item(label: &str, key: &str) -> gio::MenuItem {
 
 /// Builds menu rows with both icons and labels, including nested variant menus.
 fn popover(model: &gio::MenuModel, root: Option<&gtk::Popover>) -> gtk::Popover {
-    let contents = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    contents.set_size_request(180, -1);
-    let popover = gtk::Popover::builder()
-        .child(&contents)
-        .accessible_role(gtk::AccessibleRole::Menu)
-        .build();
-    popover.add_css_class("ev_action_menu");
+    let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/popover.ui"));
+    let contents: gtk::Box = builder.object("contents").unwrap();
+    let popover: gtk::Popover = builder.object("popover").unwrap();
     append_rows(&contents, model, &popover, root.unwrap_or(&popover));
     popover
 }
@@ -541,19 +533,16 @@ fn append_rows(
         let item = gio::MenuItem::from_model(model, index);
         let row = item_content(&item);
         let widget: gtk::Widget = if let Some(submenu) = model.item_link(index, "submenu") {
-            gtk::MenuButton::builder()
-                .child(&row)
-                .direction(gtk::ArrowType::Right)
-                .always_show_arrow(true)
-                .popover(&popover(&submenu, Some(root)))
-                .accessible_role(gtk::AccessibleRole::MenuItem)
-                .build()
-                .upcast()
+            let builder =
+                gtk::Builder::from_resource(resource_path!("view/action_menu/submenu.ui"));
+            let button: gtk::MenuButton = builder.object("button").unwrap();
+            button.set_child(Some(&row));
+            button.set_popover(Some(&popover(&submenu, Some(root))));
+            button.upcast()
         } else {
-            let button = gtk::Button::builder()
-                .child(&row)
-                .accessible_role(gtk::AccessibleRole::MenuItem)
-                .build();
+            let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/item.ui"));
+            let button: gtk::Button = builder.object("button").unwrap();
+            button.set_child(Some(&row));
             if let Some(action) = string_attribute(&item, "action") {
                 button.set_action_name(Some(&action));
                 if action == "item.response" || action == "item.response-series" {
@@ -578,7 +567,6 @@ fn append_rows(
             );
             button.upcast()
         };
-        widget.add_css_class("ev_action_menu_item");
         if let Some(color) = string_attribute(&item, "ev-color") {
             widget.add_css_class(match color.as_str() {
                 "error_color" => "ev_details_critical",
@@ -591,19 +579,22 @@ fn append_rows(
 }
 
 fn item_content(item: &gio::MenuItem) -> gtk::Box {
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    if let Some(icon) = item
+    let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/content.ui"));
+    let row = builder.object("content").unwrap();
+    let image: gtk::Image = builder.object("icon").unwrap();
+    let icon = item
         .attribute_value("icon", None)
-        .and_then(|value| gio::Icon::deserialize(&value))
-    {
-        let image = gtk::Image::from_gicon(&icon);
-        image.set_pixel_size(16);
-        row.append(&image);
+        .and_then(|value| gio::Icon::deserialize(&value));
+    if let Some(icon) = &icon {
+        image.set_from_gicon(icon);
     }
-    let label = gtk::Label::new(string_attribute(item, "label").as_deref());
-    label.set_xalign(0.0);
-    label.set_hexpand(true);
-    row.append(&label);
+    image.set_visible(icon.is_some());
+    let label: gtk::Label = builder.object("label").unwrap();
+    label.set_text(
+        string_attribute(item, "label")
+            .as_deref()
+            .unwrap_or_default(),
+    );
     row
 }
 

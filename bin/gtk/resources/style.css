@@ -64,6 +64,10 @@
     opacity: 0.65;
 }
 
+.ev_action_menu_contents {
+    min-width: 180px;
+}
+
 .ev_action_menu button.ev_action_menu_item,
 .ev_action_menu .ev_action_menu_item > button {
     padding: 6px 8px;
