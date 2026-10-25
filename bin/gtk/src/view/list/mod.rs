@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-mod actions;
 mod filtering;
 mod item;
 mod model;
@@ -18,7 +17,7 @@ use crate::model::session::{ListRowsRequest, ListRowsResponse};
 
 use self::{filtering::Filtering, results::Results};
 
-pub(crate) use actions::MenuAction;
+use super::action_menu::MenuAction;
 
 /// Coordinates independent filtering and virtualized results.
 pub(crate) struct ListView {

@@ -28,7 +28,7 @@ use crate::view::list::ListView;
 mod content;
 mod create;
 mod editor;
-mod list;
+mod item_actions;
 mod session;
 
 mod imp {
@@ -743,6 +743,9 @@ pub(crate) mod tests {
         );
 
         let find_popup = |_: &gtk::Widget| page.imp().details.current();
+        assert_context_menu(card, &card.event().unwrap().id.uid);
+        let timed = &imp.timed.event_cards()[0].1;
+        assert_context_menu(timed, &timed.event().unwrap().id.uid);
         card.emit_clicked();
         drain();
         let strip_popup = find_popup(imp.all_day.upcast_ref()).unwrap();
@@ -768,6 +771,50 @@ pub(crate) mod tests {
         assert!(find_popup(imp.all_day.upcast_ref()).is_none());
         window.close();
         drain();
+    }
+
+    fn assert_context_menu(anchor: &impl IsA<gtk::Widget>, expected_uid: &str) {
+        let click = anchor
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
+            .expect("event widgets have a secondary-click menu");
+        click.emit_by_name::<()>("pressed", &[&1i32, &5.0f64, &5.0f64]);
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let popup = anchor.last_child().and_downcast::<gtk::Popover>().unwrap();
+        assert!(popup.is_mapped());
+        assert!(popup.has_css_class("ev_action_menu"));
+        assert!(!popup.has_arrow());
+        anchor.clipboard().set_text("before context action");
+        popup
+            .child()
+            .unwrap()
+            .last_child()
+            .unwrap()
+            .downcast::<gtk::Button>()
+            .unwrap()
+            .emit_clicked();
+        let copied = gtk::glib::MainContext::default()
+            .block_on(anchor.clipboard().read_text_future())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            copied, expected_uid,
+            "context-menu buttons dispatch their actions"
+        );
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            popup.parent().is_none(),
+            "closed context menus are released"
+        );
     }
 
     /// Checks sidebar geometry, independent scrolling, retained rows and task popups.
@@ -937,6 +984,7 @@ pub(crate) mod tests {
         drain();
         assert!(button.has_focus(), "refresh retains the live focused row");
         assert_eq!(event_scroll.vadjustment().value(), 60.0);
+        assert_context_menu(&button, "sidebar-task-0");
         button.emit_clicked();
         drain();
         let popup = page.imp().details.current().unwrap();
@@ -1139,6 +1187,7 @@ pub(crate) mod tests {
         );
         let cards = imp.monthly.event_cards();
         assert_eq!(cards.len(), 19);
+        assert_context_menu(&cards[0].1, &cards[0].1.event().unwrap().id.uid);
         assert_ne!(cards[0].1, cards[18].1);
         assert_eq!(
             cards[0].1.tooltip_text().as_deref(),

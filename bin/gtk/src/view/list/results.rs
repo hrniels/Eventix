@@ -11,7 +11,8 @@ use gtk::{glib, prelude::*};
 use crate::view::indicators::EventIndicators;
 use crate::view::response_marker;
 
-use super::{actions::Actions, item::ListItem, model::ListModel, row::FixedRow};
+use super::{item::ListItem, model::ListModel, row::FixedRow};
+use crate::view::action_menu::{self as actions, Actions};
 
 const ICON_SIZE: i32 = 20;
 
@@ -20,7 +21,7 @@ pub(super) struct Results {
     pub scroll: gtk::ScrolledWindow,
     pub model: ListModel,
     pub widget: gtk::Stack,
-    pub actions: Rc<Actions>,
+    pub actions: Rc<Actions<Row>>,
     empty: gtk::Label,
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
 }
@@ -74,7 +75,7 @@ impl Results {
 
 fn factory(
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
-    actions: Rc<Actions>,
+    actions: Rc<Actions<Row>>,
 ) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let bindings = Rc::new(RefCell::new(HashMap::<
@@ -115,7 +116,7 @@ fn factory(
     factory
 }
 
-fn update_row(widget: &FixedRow, item: &ListItem, locale: &dyn Locale, actions: &Rc<Actions>) {
+fn update_row(widget: &FixedRow, item: &ListItem, locale: &dyn Locale, actions: &Rc<Actions<Row>>) {
     if let Some(row) = item.row().as_ref() {
         widget.set_child(&row_content(row, locale, actions));
     } else {
@@ -123,7 +124,7 @@ fn update_row(widget: &FixedRow, item: &ListItem, locale: &dyn Locale, actions: 
     }
 }
 
-fn row_content(row: &Row, locale: &dyn Locale, handlers: &Rc<Actions>) -> gtk::Box {
+fn row_content(row: &Row, locale: &dyn Locale, handlers: &Rc<Actions<Row>>) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     content.add_css_class("ev_list_row");
     let kind = gtk::Image::from_icon_name(if row.task {
@@ -180,7 +181,7 @@ fn row_content(row: &Row, locale: &dyn Locale, handlers: &Rc<Actions>) -> gtk::B
         dates.append(&label);
     }
     content.append(&dates);
-    let actions = super::actions::button(row, locale, &content, handlers);
+    let actions = actions::button(row, &row.actions, locale, &content, handlers);
     content.append(&actions);
     content
 }

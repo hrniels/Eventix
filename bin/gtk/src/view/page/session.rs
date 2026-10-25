@@ -235,7 +235,7 @@ impl PageSession {
                                 EventDetails::new_sidebar(&task, locale.as_ref())
                             }
                         };
-                        details.edit_series_reminders();
+                        details.edit_selected_reminders();
                         imp.details
                             .show_details(page.upcast_ref(), page.upcast_ref(), details);
                     }

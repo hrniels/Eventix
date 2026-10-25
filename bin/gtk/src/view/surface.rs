@@ -74,6 +74,20 @@ impl Surface {
                 old_cards.remove(index).button
             } else {
                 let button = EventCard::new();
+                let weak_button = button.downgrade();
+                let weak_surface = Rc::downgrade(self);
+                super::action_menu::install_context(&button, move || {
+                    let event = weak_button.upgrade()?.event()?;
+                    let surface = weak_surface.upgrade()?;
+                    let locale = surface.locale.borrow().clone()?;
+                    let target = super::action_menu::OccurrenceTarget::new(
+                        &event.id,
+                        &event.summary,
+                        event.recurrent,
+                        false,
+                    )?;
+                    Some((target, event.details, locale))
+                });
                 let parent = widget.downgrade();
                 let weak = Rc::downgrade(self);
                 button.connect_clicked(move |button| {

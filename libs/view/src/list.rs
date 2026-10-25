@@ -14,6 +14,8 @@ use eventix_locale::Locale;
 use eventix_state::actions::items::ItemId;
 use eventix_state::{CalendarAlarmType, State};
 
+pub use crate::item_actions::Action;
+
 /// Applied list selection. An empty calendar selection means all calendars.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
@@ -80,21 +82,6 @@ pub struct Row {
     pub date_range: String,
     pub recurrence: String,
     pub actions: Vec<Action>,
-}
-
-/// An available action or invitation status in a base component's list row.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Action {
-    Complete,
-    Postpone,
-    Delete,
-    Edit,
-    Respond {
-        status: CalPartStat,
-        read_only: bool,
-    },
-    Alarms,
-    CopyUid,
 }
 
 /// A lightweight ordered index of matching base components.

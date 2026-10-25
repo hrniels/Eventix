@@ -6,6 +6,7 @@
 
 pub mod details;
 pub mod editor;
+pub mod item_actions;
 pub mod layout;
 pub mod list;
 pub mod monthly;

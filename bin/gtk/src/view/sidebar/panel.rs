@@ -215,6 +215,17 @@ fn bind_details_action(
     details: &Rc<DetailsController>,
 ) {
     button.set_action_name(None);
+    let snapshot = row.clone();
+    let context_locale = locale.clone();
+    super::super::action_menu::install_context(button, move || {
+        let target = super::super::action_menu::OccurrenceTarget::new(
+            &snapshot.id,
+            &snapshot.summary,
+            snapshot.recurrent,
+            snapshot.task,
+        )?;
+        Some((target, snapshot.details.clone(), context_locale.clone()))
+    });
     let actions = gtk::gio::SimpleActionGroup::new();
     let action = gtk::gio::SimpleAction::new("details", None);
     let controller = details.clone();

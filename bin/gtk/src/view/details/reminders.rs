@@ -32,8 +32,8 @@ pub(super) struct ReminderEditor {
 }
 
 impl ReminderEditor {
-    pub(super) fn edit_series(&self) {
-        if !self.occurrence {
+    pub(super) fn edit_scope(&self, occurrence: bool) {
+        if self.occurrence == occurrence {
             self.edit.emit_clicked();
         }
     }
@@ -348,8 +348,11 @@ mod tests {
         };
         animate(&display);
         let collapsed = area.height();
-        edit.emit_clicked();
+        for editor in &editors {
+            editor.edit_scope(true);
+        }
         let panel = stack.visible_child().unwrap();
+        assert!(editors[1].input.widget.is_ancestor(&panel));
         assert_ne!(panel, display);
         assert_eq!(area.height(), collapsed, "content switches before resizing");
         assert!(

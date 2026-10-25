@@ -140,7 +140,7 @@
 "IN-PROCESS" = "In Bearbeitung"
 "CONFIRMED" = "Bestätigt"
 
-"Tentative" = "Unverbindl."
+"Tentative" = "Unverbindlich"
 
 "BeforeStart" = "Vor Beginn"
 "AfterStart" = "Nach Beginn"
@@ -364,6 +364,8 @@
 "Repetitions" = "Wiederholungen"
 "Reset" = "Zurücksetzen"
 "Respond" = "Antworten"
+"Respond (Occurrence)" = "Antworten (Termin)"
+"Respond (Series)" = "Antworten (Serie)"
 "Retry" = "Erneut versuchen"
 "Request failed with status {}" = "Anfrage mit Status {} fehlgeschlagen"
 "Same day" = "Gleichen Tag"
