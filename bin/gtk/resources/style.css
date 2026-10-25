@@ -32,6 +32,10 @@
     background: alpha(@theme_selected_bg_color, 0.2);
 }
 
+.ev_panel_header button.ev_list_calendar:hover {
+    border-color: black;
+}
+
 .ev_list_view row {
     padding: 0;
     min-height: 0;
