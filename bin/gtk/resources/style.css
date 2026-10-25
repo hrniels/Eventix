@@ -268,6 +268,10 @@ button.ev_editor_section_toggle:checked {
     border-bottom-right-radius: 0;
 }
 
+.ev_view_switch > button:not(:first-child):not(:last-child) {
+    border-radius: 0;
+}
+
 .ev_view_switch > button:last-child {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
