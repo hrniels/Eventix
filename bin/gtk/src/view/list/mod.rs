@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod actions;
 mod filtering;
 mod item;
 mod model;
@@ -16,6 +17,8 @@ use gtk::prelude::*;
 use crate::model::session::{ListRowsRequest, ListRowsResponse};
 
 use self::{filtering::Filtering, results::Results};
+
+pub(crate) use actions::MenuAction;
 
 /// Coordinates independent filtering and virtualized results.
 pub(crate) struct ListView {
@@ -66,6 +69,10 @@ impl ListView {
         self.results.model.connect_load_rows(load);
     }
 
+    pub fn connect_action(&self, handler: impl Fn(&eventix_view::list::Row, MenuAction) + 'static) {
+        self.results.actions.connect(handler);
+    }
+
     pub fn set_snapshot(&self, snapshot: Snapshot) {
         self.filtering
             .update(&snapshot.calendars, &snapshot.filter, &*snapshot.locale);
@@ -83,10 +90,10 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use eventix_state::actions::items::ItemId;
-    use eventix_view::list::{Calendar, Filter, Row, Snapshot};
+    use eventix_view::list::{Action, Calendar, Filter, Row, Snapshot};
     use gtk::prelude::*;
 
-    use super::{ListView, item::ListItem, row::FixedRow};
+    use super::{ListView, MenuAction, item::ListItem, row::FixedRow};
     use crate::model::session::ListRowsResponse;
 
     fn descendants<T: IsA<gtk::Widget> + StaticType>(widget: &gtk::Widget) -> Vec<T> {
@@ -124,6 +131,19 @@ mod tests {
     }
 
     fn row(item: &ItemId) -> Row {
+        let recurrent = item
+            .uid
+            .strip_prefix("item-")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap()
+            % 2
+            == 0;
+        let mut actions = Vec::new();
+        if !recurrent {
+            actions.extend([Action::Complete, Action::Postpone]);
+        }
+        actions.extend([Action::Delete, Action::Edit, Action::CopyUid]);
         Row {
             calendar: item.calendar.clone(),
             calendar_name: "Work".into(),
@@ -132,11 +152,12 @@ mod tests {
             background: "#803366".into(),
             task: true,
             completed: false,
-            recurrent: true,
+            recurrent,
             alarm: true,
             response: None,
             date_range: "2026-10-25".into(),
             recurrence: "Every day, until the end of the year. ".repeat(8),
+            actions,
         }
     }
 
@@ -148,6 +169,13 @@ mod tests {
         crate::style::install(&gtk::gdk::Display::default().unwrap());
         let weak_model = {
             let view = ListView::new();
+            let actions = Rc::new(RefCell::new(Vec::new()));
+            let recorded = actions.clone();
+            view.connect_action(move |row, action| {
+                recorded
+                    .borrow_mut()
+                    .push((row.calendar.clone(), row.uid.clone(), action));
+            });
             let changes = Rc::new(RefCell::new(Vec::new()));
             let weak = Rc::downgrade(&view);
             let recorded = changes.clone();
@@ -209,6 +237,110 @@ mod tests {
                     .filter(|row| row.is_mapped())
                     .all(|row| row.height() == 45)
             );
+            let mut action_width = None;
+            for row in rows.iter().filter(|row| row.is_mapped()) {
+                let actions = row
+                    .first_child()
+                    .unwrap()
+                    .last_child()
+                    .unwrap()
+                    .downcast::<gtk::MenuButton>()
+                    .unwrap();
+                assert_eq!(
+                    *action_width.get_or_insert(actions.width()),
+                    actions.width()
+                );
+                assert!(actions.height() <= row.height());
+                assert!(actions.width() < 50, "only a compact menu button remains");
+                let bounds = actions.compute_bounds(row).unwrap();
+                assert!(bounds.x() >= 0.0);
+                assert!(bounds.x() + bounds.width() <= row.width() as f32);
+                assert_eq!(actions.tooltip_text().as_deref(), Some("Actions"));
+                assert!(actions.popover().is_none(), "menus are created lazily");
+            }
+            let menu = rows
+                .iter()
+                .find(|row| {
+                    row.is_mapped()
+                        && descendants::<gtk::Label>(row.upcast_ref())
+                            .iter()
+                            .any(|label| label.text() == "Item 1")
+                })
+                .unwrap()
+                .first_child()
+                .unwrap()
+                .last_child()
+                .unwrap()
+                .downcast::<gtk::MenuButton>()
+                .unwrap();
+            menu.popup();
+            drain();
+            let popover = menu.popover().unwrap();
+            assert!(popover.is_mapped());
+            let delete = descendants::<gtk::Label>(popover.upcast_ref())
+                .into_iter()
+                .find(|label| label.text() == "Delete")
+                .unwrap();
+            let delete_button = delete.ancestor(gtk::Button::static_type()).unwrap();
+            assert!(delete_button.has_css_class("ev_details_critical"));
+            for icon in ["trash", "pencil", "tag"] {
+                assert!(
+                    descendants::<gtk::Image>(popover.upcast_ref())
+                        .iter()
+                        .any(|image| {
+                            image.is_mapped()
+                                && image
+                                    .gicon()
+                                    .and_downcast::<gtk::gio::FileIcon>()
+                                    .is_some_and(|file| {
+                                        file.file()
+                                            .uri()
+                                            .ends_with(&format!("/{icon}-symbolic.svg"))
+                                    })
+                        }),
+                    "{icon} is displayed alongside its menu label"
+                );
+            }
+            let postpone = descendants::<gtk::MenuButton>(popover.upcast_ref())
+                .into_iter()
+                .find(|button| {
+                    descendants::<gtk::Label>(button.upcast_ref())
+                        .iter()
+                        .any(|label| label.text() == "Postpone")
+                })
+                .unwrap();
+            postpone.popup();
+            drain();
+            let variants = postpone.popover().unwrap();
+            assert!(variants.is_mapped());
+            let one_day = descendants::<gtk::Button>(variants.upcast_ref())
+                .into_iter()
+                .find(|button| {
+                    descendants::<gtk::Label>(button.upcast_ref())
+                        .iter()
+                        .any(|label| label.text() == "1day")
+                })
+                .unwrap();
+            assert!(one_day.is_sensitive());
+            assert!(
+                descendants::<gtk::Image>(one_day.upcast_ref())
+                    .iter()
+                    .any(|image| image.is_mapped())
+            );
+            one_day.emit_clicked();
+            drain();
+            assert_eq!(
+                actions.borrow().as_slice(),
+                &[(
+                    "Work".into(),
+                    "item-1".into(),
+                    MenuAction::Task(eventix_state::actions::items::TaskAction::Postpone {
+                        days: 1
+                    }),
+                )]
+            );
+            assert!(!variants.is_visible());
+            assert!(!popover.is_visible());
             let search = descendants::<gtk::Entry>(view.widget.upcast_ref()).remove(0);
             assert!(search.allocated_width() <= 200);
             search.set_text("alpha beta OR gamma");
@@ -219,7 +351,10 @@ mod tests {
             );
             search.emit_activate();
             assert_eq!(view.filter().keywords, "alpha beta OR gamma");
-            let toggles = descendants::<gtk::ToggleButton>(view.widget.upcast_ref());
+            let toggles: Vec<_> = descendants::<gtk::ToggleButton>(view.widget.upcast_ref())
+                .into_iter()
+                .filter(|button| button.has_css_class("ev_list_calendar"))
+                .collect();
             for button in &toggles {
                 assert_eq!(button.allocated_height(), search.allocated_height());
                 assert_eq!(button.allocated_width(), button.allocated_height());

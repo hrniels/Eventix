@@ -1067,6 +1067,22 @@ mod tests {
                     assert!(parent.is_sensitive());
                 }
             }
+            parent.dismiss_popovers();
+            let standalone = parent.test_existing_editor(
+                EditorOptions::load(&state).unwrap(),
+                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
+            );
+            drain();
+            assert!(
+                parent.editor_open(),
+                "list edits open without an existing details popup"
+            );
+            assert!(standalone.summary.is_mapped());
+            standalone.cancel.emit_clicked();
+            drain();
+            assert!(!parent.editor_open());
+            assert!(controller.current().is_none());
+
             gtk::Settings::default()
                 .unwrap()
                 .set_gtk_enable_animations(true);

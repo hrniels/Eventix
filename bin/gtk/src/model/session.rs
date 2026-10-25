@@ -87,6 +87,7 @@ pub(crate) enum Event {
     EditLoaded(u64, Result<(EditorOptions, Box<UpdateItem>), String>),
     EditSaved(u64, Result<(ChangeSet, SavedItem), String>),
     RemindersSaved(Result<(ChangeSet, SavedItem), String>),
+    RemindersLoaded(u64, Result<SavedItem, String>),
     ContentLoaded(ContentResponse),
     ListRowsLoaded(ListRowsResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
@@ -108,6 +109,7 @@ enum Message {
     LoadEdit(u64, ItemId, EditScope),
     SaveEdit(u64, Box<UpdateItem>),
     SaveReminders(ItemId, UpdatePersonalAlarms),
+    LoadReminders(u64, ItemId, CalCompType),
     ShowContent(ContentRequest),
     LoadListRows(ListRowsRequest),
     RefreshSidebar,
@@ -122,6 +124,12 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn load_reminders(&self, id: u64, item: ItemId, kind: CalCompType) {
+        let _ = self
+            .requests
+            .try_send(Message::LoadReminders(id, item, kind));
+    }
+
     pub fn save_reminders(&self, selected: ItemId, command: UpdatePersonalAlarms) {
         let _ = self
             .requests
@@ -300,6 +308,11 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
+            Message::LoadReminders(id, item, kind) => Event::RemindersLoaded(
+                id,
+                self.saved_item(&item, kind)
+                    .map_err(|error| format!("{error:#}")),
+            ),
             Message::SaveReminders(selected, command) => Event::RemindersSaved(
                 self.save_reminders(selected, command)
                     .map_err(|error| format!("{error:#}")),
@@ -417,7 +430,10 @@ impl Worker {
         let state = self.state()?;
         let kind = state
             .store()
-            .file_by_id(&selected.uid)
+            .directories()
+            .iter()
+            .find(|dir| dir.id().as_str() == selected.calendar)
+            .and_then(|dir| dir.file_by_id(&selected.uid))
             .and_then(|file| {
                 file.occurrence_by_id(
                     &selected.uid,
@@ -1081,6 +1097,7 @@ mod tests {
     #[test]
     fn reminder_saves_return_the_selected_occurrence_and_refresh_series_membership() {
         use super::SavedItem;
+        use eventix_ical::objects::CalCompType;
         use eventix_state::{CalendarAlarmType, actions::items::UpdatePersonalAlarms};
 
         let tmp = tempfile::tempdir().unwrap();
@@ -1103,6 +1120,19 @@ mod tests {
             uid: "move-me".into(),
             recurrence: Some("TU2026-10-13T09:00:00".parse().unwrap()),
         };
+        let base = ItemId {
+            recurrence: None,
+            ..selected.clone()
+        };
+        let Some(Event::RemindersLoaded(17, Ok(SavedItem::Event(base)))) = worker
+            .handle(Message::LoadReminders(17, base, CalCompType::Event))
+            .pop()
+        else {
+            panic!("expected series reminder details")
+        };
+        assert!(base.id.recurrence.is_empty());
+        assert!(base.recurrent);
+        assert!(base.details.actions.personal_reminders);
         let command = UpdatePersonalAlarms {
             item: ItemId {
                 recurrence: None,

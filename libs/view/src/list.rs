@@ -11,8 +11,8 @@ use eventix_ical::{
     objects::{CalCompType, CalComponent, CalDate, CalPartStat, CalTodoStatus, EventLike},
 };
 use eventix_locale::Locale;
-use eventix_state::State;
 use eventix_state::actions::items::ItemId;
+use eventix_state::{CalendarAlarmType, State};
 
 /// Applied list selection. An empty calendar selection means all calendars.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -79,6 +79,22 @@ pub struct Row {
     pub response: Option<CalPartStat>,
     pub date_range: String,
     pub recurrence: String,
+    pub actions: Vec<Action>,
+}
+
+/// An available action or invitation status in a base component's list row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    Complete,
+    Postpone,
+    Delete,
+    Edit,
+    Respond {
+        status: CalPartStat,
+        read_only: bool,
+    },
+    Alarms,
+    CopyUid,
 }
 
 /// A lightweight ordered index of matching base components.
@@ -198,6 +214,11 @@ impl Row {
             false,
         );
         let email = collection.email().map(|email| email.address());
+        let owner = comp.is_owned_by(email.as_ref());
+        let part_stat = email
+            .as_ref()
+            .filter(|_| !owner)
+            .and_then(|email| comp.attendee_status(email));
         let response = email
             .as_ref()
             .filter(|email| !comp.is_owned_by(Some(email)))
@@ -219,6 +240,13 @@ impl Row {
             recurrent: comp.is_recurrent(),
             alarm: state.personal_alarms().has_alarms(&occ, settings.alarms()),
             response,
+            actions: actions(
+                comp,
+                owner,
+                collection.is_read_only(),
+                matches!(settings.alarms(), CalendarAlarmType::Personal { .. }),
+                part_stat,
+            ),
             // Locale's web-oriented range formatter encodes its separator as an HTML entity.
             date_range: locale
                 .date_range(
@@ -236,14 +264,166 @@ impl Row {
     }
 }
 
+fn actions(
+    comp: &CalComponent,
+    owner: bool,
+    read_only: bool,
+    personal_alarms: bool,
+    part_stat: Option<CalPartStat>,
+) -> Vec<Action> {
+    let mut actions = Vec::new();
+    if let Some(todo) = comp.as_todo()
+        && !read_only
+        && !comp.is_recurrent()
+        && todo.status() != Some(CalTodoStatus::Completed)
+    {
+        actions.push(Action::Complete);
+        if owner && comp.end_or_due().is_some() {
+            actions.push(Action::Postpone);
+        }
+    }
+    if !read_only {
+        actions.push(Action::Delete);
+    }
+    if owner {
+        if !read_only {
+            actions.push(Action::Edit);
+        }
+    } else {
+        if let Some(status) = part_stat
+            && (!read_only
+                || matches!(
+                    status,
+                    CalPartStat::Accepted | CalPartStat::Tentative | CalPartStat::Declined
+                ))
+        {
+            actions.push(Action::Respond { status, read_only });
+        }
+        if personal_alarms {
+            actions.push(Action::Alarms);
+        }
+    }
+    actions.push(Action::CopyUid);
+    actions
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use eventix_ical::col::{CalDir, CalFile};
+    use eventix_ical::{
+        col::{CalDir, CalFile},
+        objects::{CalPartStat, UpdatableEventLike},
+    };
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
-    use super::{Filter, KeywordExpression, Row, Snapshot};
+    use super::{Action, Filter, KeywordExpression, Row, Snapshot, actions};
+
+    fn available_actions(
+        component: &str,
+        owner: bool,
+        read_only: bool,
+        personal_alarms: bool,
+        response: Option<CalPartStat>,
+    ) -> Vec<Action> {
+        let calendar: eventix_ical::objects::Calendar =
+            format!("BEGIN:VCALENDAR\nVERSION:2.0\n{component}\nEND:VCALENDAR\n")
+                .parse()
+                .unwrap();
+        actions(
+            &calendar.components()[0],
+            owner,
+            read_only,
+            personal_alarms,
+            response,
+        )
+    }
+
+    #[test]
+    fn task_actions_require_writable_incomplete_nonrecurrent_tasks() {
+        for (fields, expected) in [
+            ("", vec![Action::Complete]),
+            (
+                "DUE;VALUE=DATE:20261025\n",
+                vec![Action::Complete, Action::Postpone],
+            ),
+            ("STATUS:COMPLETED\n", vec![]),
+            (
+                "DTSTART;VALUE=DATE:20261025\nDUE;VALUE=DATE:20261026\nRRULE:FREQ=DAILY\n",
+                vec![],
+            ),
+        ] {
+            let component = format!("BEGIN:VTODO\nUID:task\n{fields}END:VTODO");
+            let mut expected = expected;
+            expected.extend([Action::Delete, Action::Edit, Action::CopyUid]);
+            assert_eq!(
+                available_actions(&component, true, false, false, None),
+                expected,
+                "{fields}"
+            );
+            assert_eq!(
+                available_actions(&component, true, true, false, None),
+                [Action::CopyUid]
+            );
+        }
+        let assigned = "BEGIN:VTODO\nUID:task\nDUE;VALUE=DATE:20261025\nEND:VTODO";
+        assert_eq!(
+            available_actions(
+                assigned,
+                false,
+                false,
+                false,
+                Some(CalPartStat::NeedsAction)
+            ),
+            [
+                Action::Complete,
+                Action::Delete,
+                Action::Respond {
+                    status: CalPartStat::NeedsAction,
+                    read_only: false,
+                },
+                Action::CopyUid,
+            ]
+        );
+    }
+
+    #[test]
+    fn invitation_actions_preserve_response_status_and_personal_alarm_permissions() {
+        let event = "BEGIN:VEVENT\nUID:event\nDTSTART;VALUE=DATE:20261025\nEND:VEVENT";
+        assert_eq!(
+            available_actions(event, true, false, true, None),
+            [Action::Delete, Action::Edit, Action::CopyUid]
+        );
+        for read_only in [false, true] {
+            for status in [
+                CalPartStat::NeedsAction,
+                CalPartStat::Accepted,
+                CalPartStat::Tentative,
+                CalPartStat::Declined,
+            ] {
+                let mut expected = Vec::new();
+                if !read_only {
+                    expected.push(Action::Delete);
+                }
+                if !read_only || status != CalPartStat::NeedsAction {
+                    expected.push(Action::Respond { status, read_only });
+                }
+                expected.extend([Action::Alarms, Action::CopyUid]);
+                assert_eq!(
+                    available_actions(event, false, read_only, true, Some(status)),
+                    expected
+                );
+            }
+            assert_eq!(
+                available_actions(event, false, read_only, false, None),
+                if read_only {
+                    vec![Action::CopyUid]
+                } else {
+                    vec![Action::Delete, Action::CopyUid]
+                }
+            );
+        }
+    }
 
     fn state(components: &[&str]) -> (tempfile::TempDir, State) {
         let tmp = tempfile::tempdir().unwrap();
@@ -279,6 +459,42 @@ mod tests {
             .collections_mut()
             .insert("local".into(), collection);
         (tmp, state)
+    }
+
+    #[test]
+    fn detail_loading_keeps_calendar_identity_when_uids_are_shared() {
+        let (_tmp, mut state) = state(&[
+            "BEGIN:VEVENT\nUID:event\nDTSTART;VALUE=DATE:20261025\nEND:VEVENT",
+            "BEGIN:VTODO\nUID:task\nEND:VTODO",
+        ]);
+        for calendar in ["work", "home"] {
+            for uid in ["event", "task"] {
+                state
+                    .store_mut()
+                    .directory_mut(&Arc::new(calendar.into()))
+                    .unwrap()
+                    .file_by_id_mut(uid)
+                    .unwrap()
+                    .calendar_mut()
+                    .components_mut()[0]
+                    .set_summary(Some(calendar.into()));
+            }
+        }
+        for calendar in ["work", "home"] {
+            let mut item = eventix_state::actions::items::ItemId {
+                calendar: calendar.into(),
+                uid: "event".into(),
+                recurrence: None,
+            };
+            assert_eq!(crate::Event::load(&state, &item).unwrap().summary, calendar);
+            item.uid = "task".into();
+            assert_eq!(
+                crate::sidebar::SidebarRow::load(&state, &item)
+                    .unwrap()
+                    .summary,
+                calendar
+            );
+        }
     }
 
     #[test]

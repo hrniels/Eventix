@@ -209,6 +209,12 @@ impl EventDetails {
         }
     }
 
+    pub(crate) fn edit_series_reminders(&self) {
+        for editor in self.imp().reminders.borrow().iter() {
+            editor.edit_series();
+        }
+    }
+
     pub(crate) fn selected_item(&self) -> Option<ItemId> {
         self.imp().item.borrow().clone()
     }

@@ -48,7 +48,12 @@ pub struct SidebarRow {
 impl SidebarRow {
     /// Loads an occurrence for details even when it is outside the upcoming task list.
     pub fn load(state: &State, item: &eventix_state::actions::items::ItemId) -> Option<Self> {
-        let file = state.store().file_by_id(&item.uid)?;
+        let file = state
+            .store()
+            .directories()
+            .iter()
+            .find(|dir| dir.id().as_str() == item.calendar)?
+            .file_by_id(&item.uid)?;
         let occ = file.occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())?;
         let now = chrono::Utc::now().with_timezone(state.timezone());
         row(state, &occ, now.date_naive(), now)

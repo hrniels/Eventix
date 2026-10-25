@@ -25,6 +25,7 @@ pub(super) struct PageEditor {
     request: Cell<u64>,
     loading: Cell<bool>,
     slot: Cell<Option<EventSlot>>,
+    standalone: Cell<bool>,
 }
 
 impl PageEditor {
@@ -74,7 +75,8 @@ impl PageEditor {
 
         // Opening a new popup closes the previous one and invalidates pending editor loads.
         // Install the new editor only after that cleanup has completed.
-        let shown = if editor.existing.borrow().is_some() {
+        let standalone = editor.existing.borrow().is_none() || !page.imp().details.is_open();
+        let shown = if !standalone {
             page.imp().details.show_editor(&editor.popup_panel())
         } else {
             page.imp()
@@ -85,6 +87,7 @@ impl PageEditor {
         };
 
         if shown {
+            self.standalone.set(standalone);
             self.current.replace(Some(editor.clone()));
             editor.focus();
         }
@@ -158,7 +161,7 @@ impl PageEditor {
         }
 
         if let Some(editor) = self.current.take() {
-            if editor.existing.borrow().is_some() {
+            if !self.standalone.get() {
                 let locale = page.locale();
                 let updated = item.map(|item| match item {
                     SavedItem::Event(event) => EventDetails::new(event, locale.as_ref()),
@@ -167,10 +170,12 @@ impl PageEditor {
                 page.imp().details.restore_details(updated);
             } else {
                 page.imp().details.close();
-                page.imp()
-                    .sidebar
-                    .new_item_button(editor.kind())
-                    .grab_focus();
+                if editor.existing.borrow().is_none() {
+                    page.imp()
+                        .sidebar
+                        .new_item_button(editor.kind())
+                        .grab_focus();
+                }
             }
         }
 

@@ -12,7 +12,7 @@ use gtk::{glib, prelude::*};
 use crate::view::calendar_selector::set_dot_color;
 use crate::view::indicators::EventIndicators;
 
-use super::{item::ListItem, model::ListModel, row::FixedRow};
+use super::{actions::Actions, item::ListItem, model::ListModel, row::FixedRow};
 
 const ICON_SIZE: i32 = 20;
 
@@ -21,6 +21,7 @@ pub(super) struct Results {
     pub scroll: gtk::ScrolledWindow,
     pub model: ListModel,
     pub widget: gtk::Stack,
+    pub actions: Rc<Actions>,
     empty: gtk::Label,
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
 }
@@ -29,7 +30,8 @@ impl Results {
     pub fn new() -> Self {
         let model: ListModel = glib::Object::new();
         let locale = Rc::new(RefCell::new(eventix_locale::default()));
-        let factory = factory(locale.clone());
+        let actions = Rc::new(Actions::default());
+        let factory = factory(locale.clone(), actions.clone());
         let selection = gtk::NoSelection::new(Some(model.clone()));
         let list = gtk::ListView::new(Some(selection), Some(factory));
         list.set_enable_rubberband(false);
@@ -47,6 +49,7 @@ impl Results {
             scroll,
             model,
             widget,
+            actions,
             empty,
             locale,
         }
@@ -70,7 +73,10 @@ impl Results {
     }
 }
 
-fn factory(locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>) -> gtk::SignalListItemFactory {
+fn factory(
+    locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
+    actions: Rc<Actions>,
+) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let bindings = Rc::new(RefCell::new(HashMap::<
         gtk::ListItem,
@@ -87,12 +93,13 @@ fn factory(locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>) -> gtk::SignalLis
         let item = item.downcast_ref::<gtk::ListItem>().unwrap();
         let data = item.item().and_downcast::<ListItem>().unwrap();
         let row = item.child().and_downcast::<FixedRow>().unwrap();
-        update_row(&row, &data, &**locale.borrow());
+        update_row(&row, &data, &**locale.borrow(), &actions);
         let weak = row.downgrade();
         let locale = locale.clone();
+        let actions = actions.clone();
         let handler = data.connect_notify_local(Some("loaded"), move |data, _| {
             if let Some(row) = weak.upgrade() {
-                update_row(&row, data, &**locale.borrow());
+                update_row(&row, data, &**locale.borrow(), &actions);
             }
         });
         bound.borrow_mut().insert(item.clone(), (data, handler));
@@ -109,15 +116,15 @@ fn factory(locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>) -> gtk::SignalLis
     factory
 }
 
-fn update_row(widget: &FixedRow, item: &ListItem, locale: &dyn Locale) {
+fn update_row(widget: &FixedRow, item: &ListItem, locale: &dyn Locale, actions: &Rc<Actions>) {
     if let Some(row) = item.row().as_ref() {
-        widget.set_child(&row_content(row, locale));
+        widget.set_child(&row_content(row, locale, actions));
     } else {
         widget.set_child(&gtk::Box::new(gtk::Orientation::Horizontal, 0));
     }
 }
 
-fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
+fn row_content(row: &Row, locale: &dyn Locale, handlers: &Rc<Actions>) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     content.add_css_class("ev_list_row");
     let kind = gtk::Image::from_icon_name(if row.task {
@@ -185,5 +192,7 @@ fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
         dates.append(&label);
     }
     content.append(&dates);
+    let actions = super::actions::button(row, locale, &content, handlers);
+    content.append(&actions);
     content
 }

@@ -54,7 +54,12 @@ impl Event {
         item: &eventix_state::actions::items::ItemId,
     ) -> Option<Self> {
         use eventix_ical::objects::EventLike;
-        let file = state.store().file_by_id(&item.uid)?;
+        let file = state
+            .store()
+            .directories()
+            .iter()
+            .find(|dir| dir.id().as_str() == item.calendar)?
+            .file_by_id(&item.uid)?;
         let occ = file.occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())?;
         let (_, settings) = state.settings().calendar(&item.calendar)?;
         let start = occ.occurrence_start()?.with_timezone(state.timezone());
