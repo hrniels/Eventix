@@ -166,6 +166,7 @@ fn row_content(row: &Row, locale: &dyn Locale) -> gtk::Box {
         content.append(&response);
     }
     let indicators: EventIndicators = gtk::glib::Object::new();
+    indicators.set_valign(gtk::Align::Center);
     indicators.set_pixel_size(ICON_SIZE);
     indicators.set_state(row.recurrent, false, row.alarm, locale);
     content.append(&indicators);
