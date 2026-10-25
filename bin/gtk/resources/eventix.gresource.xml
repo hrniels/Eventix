@@ -13,6 +13,11 @@
     <file>view/editor/section.ui</file>
     <file>view/editor/shell.ui</file>
     <file>view/editor/time_entry.ui</file>
+    <file>view/list/calendar.ui</file>
+    <file>view/list/content.ui</file>
+    <file>view/list/filtering.ui</file>
+    <file>view/list/results.ui</file>
+    <file>view/list/row.ui</file>
     <file>icons/LICENSE</file>
     <file>icons/alarm-symbolic.svg</file>
     <file>icons/arrow-clockwise-symbolic.svg</file>

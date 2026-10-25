@@ -33,24 +33,16 @@ impl Results {
         let actions = Rc::new(Actions::default());
         let factory = factory(locale.clone(), actions.clone());
         let selection = gtk::NoSelection::new(Some(model.clone()));
-        let list = gtk::ListView::new(Some(selection), Some(factory));
-        list.set_enable_rubberband(false);
-        let empty = gtk::Label::new(None);
-        let scroll = gtk::ScrolledWindow::builder()
-            .vexpand(true)
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .child(&list)
-            .build();
-        let widget = gtk::Stack::new();
-        widget.set_vexpand(true);
-        widget.add_child(&scroll);
-        widget.add_child(&empty);
+        let builder = gtk::Builder::from_resource(resource_path!("view/list/results.ui"));
+        let list: gtk::ListView = builder.object("list").unwrap();
+        list.set_model(Some(&selection));
+        list.set_factory(Some(&factory));
         Self {
-            scroll,
+            scroll: builder.object("scroll").unwrap(),
             model,
-            widget,
+            widget: builder.object("results").unwrap(),
             actions,
-            empty,
+            empty: builder.object("empty").unwrap(),
             locale,
         }
     }
@@ -125,62 +117,51 @@ fn update_row(widget: &FixedRow, item: &ListItem, locale: &dyn Locale, actions: 
 }
 
 fn row_content(row: &Row, locale: &dyn Locale, handlers: &Rc<Actions<Row>>) -> gtk::Box {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    content.add_css_class("ev_list_row");
-    let kind = gtk::Image::from_icon_name(if row.task {
+    EventIndicators::ensure_type();
+    let builder = gtk::Builder::from_resource(resource_path!("view/list/row.ui"));
+    let content: gtk::Box = builder.object("content").unwrap();
+    let kind: gtk::Image = builder.object("kind").unwrap();
+    kind.set_icon_name(Some(if row.task {
         "view-task-symbolic"
     } else {
         "x-office-calendar-symbolic"
-    });
-    kind.set_pixel_size(ICON_SIZE);
+    }));
     kind.set_tooltip_text(Some(locale.translate(if row.task {
         "Task"
     } else {
         "Event"
     })));
-    content.append(&kind);
-    content.append(&response_marker::new(
-        &row.background,
-        &row.calendar_name,
-        row.response.map(Into::into),
-        ICON_SIZE,
-        locale,
-    ));
-    let summary = gtk::Label::new(Some(&row.summary));
-    summary.set_xalign(0.0);
-    summary.set_hexpand(true);
-    summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    content.insert_child_after(
+        &response_marker::new(
+            &row.background,
+            &row.calendar_name,
+            row.response.map(Into::into),
+            ICON_SIZE,
+            locale,
+        ),
+        Some(&kind),
+    );
+    let summary: gtk::Label = builder.object("summary").unwrap();
+    summary.set_text(&row.summary);
     summary.set_tooltip_text(Some(&row.summary));
     if row.completed {
         summary.add_css_class("ev_list_completed");
     }
-    content.append(&summary);
-    if row.completed {
-        let completed = gtk::Image::from_icon_name("emblem-ok-symbolic");
-        completed.set_pixel_size(ICON_SIZE);
-        completed.set_tooltip_text(Some(locale.translate("Completed")));
-        content.append(&completed);
-    }
-    let indicators: EventIndicators = gtk::glib::Object::new();
-    indicators.set_valign(gtk::Align::Center);
+    let completed: gtk::Image = builder.object("completed").unwrap();
+    completed.set_visible(row.completed);
+    completed.set_tooltip_text(Some(locale.translate("Completed")));
+    let indicators: EventIndicators = builder.object("indicators").unwrap();
     indicators.set_pixel_size(ICON_SIZE);
     indicators.set_state(row.recurrent, false, row.alarm, locale);
-    content.append(&indicators);
-    let dates = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    dates.set_valign(gtk::Align::Center);
-    dates.set_size_request(260, -1);
-    for text in [&row.date_range, &row.recurrence]
-        .into_iter()
-        .filter(|text| !text.is_empty())
-    {
-        let label = gtk::Label::new(Some(text));
-        label.set_xalign(0.5);
-        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        label.set_max_width_chars(1);
+    for (id, text) in [
+        ("date_range", &row.date_range),
+        ("recurrence", &row.recurrence),
+    ] {
+        let label: gtk::Label = builder.object(id).unwrap();
+        label.set_text(text);
         label.set_tooltip_text(Some(text));
-        dates.append(&label);
+        label.set_visible(!text.is_empty());
     }
-    content.append(&dates);
     let actions = actions::button(row, &row.actions, locale, &content, handlers);
     content.append(&actions);
     content

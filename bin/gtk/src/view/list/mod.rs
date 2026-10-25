@@ -29,13 +29,12 @@ pub(crate) struct ListView {
 
 impl ListView {
     pub fn new() -> Rc<Self> {
-        let widget = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        widget.add_css_class("ev_list_view");
+        let builder = gtk::Builder::from_resource(resource_path!("view/list/content.ui"));
+        let widget: gtk::Box = builder.object("content").unwrap();
         let filtering = Filtering::new();
         let results = Results::new();
         filtering.update(&[], &Filter::default(), &*eventix_locale::default());
-        widget.append(&filtering.widget);
-        widget.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+        widget.prepend(&filtering.widget);
         widget.append(&results.widget);
         Rc::new(Self {
             widget,

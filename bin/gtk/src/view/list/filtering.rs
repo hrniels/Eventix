@@ -30,37 +30,14 @@ pub(super) struct Filtering {
 
 impl Filtering {
     pub fn new() -> Rc<Self> {
-        let widget = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        widget.add_css_class("ev_panel_header");
-        let search = gtk::Entry::new();
-        // Keep the natural entry width below the pixel request, regardless of font size.
-        search.set_width_chars(1);
-        search.set_max_width_chars(1);
-        search.set_size_request(200, -1);
-        let calendars = gtk::Box::new(gtk::Orientation::Horizontal, 2);
-        let calendar_scroll = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Automatic)
-            .vscrollbar_policy(gtk::PolicyType::Never)
-            .hexpand(true)
-            .child(&calendars)
-            .build();
-        let apply = gtk::Button::new();
-        let reset = gtk::Button::from_icon_name("edit-clear-symbolic");
-        let title = gtk::Label::new(None);
-        title.set_halign(gtk::Align::End);
-        title.add_css_class("ev_panel_title");
-        widget.append(&search);
-        widget.append(&apply);
-        widget.append(&reset);
-        widget.append(&calendar_scroll);
-        widget.append(&title);
+        let builder = gtk::Builder::from_resource(resource_path!("view/list/filtering.ui"));
         let filtering = Rc::new(Self {
-            widget,
-            search,
-            calendars,
-            apply,
-            reset,
-            title,
+            widget: builder.object("filtering").unwrap(),
+            search: builder.object("search").unwrap(),
+            calendars: builder.object("calendars").unwrap(),
+            apply: builder.object("apply").unwrap(),
+            reset: builder.object("reset").unwrap(),
+            title: builder.object("title").unwrap(),
             choices: RefCell::default(),
             updating: Cell::new(false),
             changed: RefCell::default(),
@@ -157,20 +134,16 @@ impl Filtering {
     }
 
     fn calendar_button(self: &Rc<Self>, calendar: &Calendar) -> gtk::ToggleButton {
-        let button = gtk::ToggleButton::new();
-        button.add_css_class("ev_list_calendar");
+        let builder = gtk::Builder::from_resource(resource_path!("view/list/calendar.ui"));
+        let button: gtk::ToggleButton = builder.object("calendar").unwrap();
         button.set_size_request(self.search.measure(gtk::Orientation::Vertical, -1).1, -1);
         button.set_tooltip_text(Some(&calendar.name));
         button.update_property(&[gtk::accessible::Property::Label(&calendar.name)]);
-        let dot = gtk::DrawingArea::new();
-        dot.set_size_request(24, 24);
-        dot.set_halign(gtk::Align::Center);
-        dot.set_valign(gtk::Align::Center);
+        let dot: gtk::DrawingArea = builder.object("dot").unwrap();
         set_dot_color(
             &dot,
             gdk::RGBA::parse(&calendar.background).unwrap_or(gdk::RGBA::TRANSPARENT),
         );
-        button.set_child(Some(&dot));
 
         let weak = Rc::downgrade(self);
         button.connect_toggled(move |button| {

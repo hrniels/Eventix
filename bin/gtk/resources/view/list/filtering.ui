@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkBox" id="filtering">
+    <property name="spacing">8</property>
+    <style><class name="ev_panel_header"/></style>
+    <child>
+      <object class="GtkEntry" id="search">
+        <!-- Keep the natural entry width below the pixel request, regardless of font size. -->
+        <property name="width-chars">1</property>
+        <property name="max-width-chars">1</property>
+        <property name="width-request">200</property>
+      </object>
+    </child>
+    <child><object class="GtkButton" id="apply"/></child>
+    <child>
+      <object class="GtkButton" id="reset">
+        <property name="icon-name">edit-clear-symbolic</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkScrolledWindow">
+        <property name="hscrollbar-policy">automatic</property>
+        <property name="vscrollbar-policy">never</property>
+        <property name="hexpand">true</property>
+        <property name="child">
+          <object class="GtkBox" id="calendars">
+            <property name="spacing">2</property>
+          </object>
+        </property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="title">
+        <property name="halign">end</property>
+        <style><class name="ev_panel_title"/></style>
+      </object>
+    </child>
+  </object>
+</interface>

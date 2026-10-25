@@ -23,6 +23,15 @@
     opacity: 0.45;
 }
 
+.ev_list_calendar_dot {
+    min-width: 24px;
+    min-height: 24px;
+}
+
+.ev_list_dates {
+    min-width: 260px;
+}
+
 .ev_panel_header button.ev_list_calendar {
     padding: 2px;
 }
