@@ -163,7 +163,9 @@ impl Filtering {
         button.set_tooltip_text(Some(&calendar.name));
         button.update_property(&[gtk::accessible::Property::Label(&calendar.name)]);
         let dot = gtk::DrawingArea::new();
-        dot.set_size_request(16, 16);
+        dot.set_size_request(24, 24);
+        dot.set_halign(gtk::Align::Center);
+        dot.set_valign(gtk::Align::Center);
         set_dot_color(
             &dot,
             gdk::RGBA::parse(&calendar.background).unwrap_or(gdk::RGBA::TRANSPARENT),
