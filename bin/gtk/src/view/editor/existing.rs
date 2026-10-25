@@ -1005,10 +1005,14 @@ mod tests {
                         editor.summary.grab_focus();
                         editor.location.grab_focus();
                         drain();
+                        assert!(!editor.summary.has_css_class("ev_editor_invalid"));
+                        editor.save.emit_clicked();
                         assert!(editor.summary.has_css_class("ev_editor_invalid"));
                         editor.summary.set_text("Unsaved new event");
                         editor.summary.grab_focus();
                         drain();
+                        assert!(editor.summary.has_css_class("ev_editor_invalid"));
+                        editor.save.emit_clicked();
                         assert!(!editor.summary.has_css_class("ev_editor_invalid"));
 
                         editor.sections[0].toggle.set_active(true);

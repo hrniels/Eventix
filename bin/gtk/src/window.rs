@@ -365,13 +365,14 @@ pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
 }
 
 fn sync_popup_visibility(window: &gtk::Window, page: &CalendarPage) {
-    // Nested popup grabs can temporarily deactivate GTK's window while its native
-    // toplevel remains focused. Switching applications must hide, not dismiss, its popup.
+    // Only nested popup grabs may override GTK's inactive state. On X11 the native
+    // FOCUSED flag describes focused decorations, which can outlive keyboard focus.
     let focused = window.is_active()
-        || window
-            .surface()
-            .and_downcast::<gtk::gdk::Toplevel>()
-            .is_some_and(|surface| surface.state().contains(gtk::gdk::ToplevelState::FOCUSED));
+        || (crate::view::editor::has_nested_popup(window)
+            && window
+                .surface()
+                .and_downcast::<gtk::gdk::Toplevel>()
+                .is_some_and(|surface| surface.state().contains(gtk::gdk::ToplevelState::FOCUSED)));
 
     page.set_popup_owner_visible(window.is_visible() && focused);
 }
