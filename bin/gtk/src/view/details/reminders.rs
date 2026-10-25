@@ -16,7 +16,6 @@ use super::{DetailItem, ReminderHandler, button, label};
 use crate::view::editor::AlarmInput;
 
 pub(super) struct ReminderEditor {
-    edit: gtk::Button,
     save: gtk::Button,
     overwrite: gtk::CheckButton,
     input: Rc<AlarmInput>,
@@ -32,12 +31,6 @@ pub(super) struct ReminderEditor {
 }
 
 impl ReminderEditor {
-    pub(super) fn edit_scope(&self, occurrence: bool) {
-        if self.occurrence == occurrence {
-            self.edit.emit_clicked();
-        }
-    }
-
     pub(super) fn saved(&self, details: &Details) {
         let initial = if self.occurrence {
             &details.personal_reminders.occurrence
@@ -173,7 +166,6 @@ pub(super) fn content(
             }
         });
         editors.push(ReminderEditor {
-            edit,
             save,
             overwrite,
             input,
@@ -348,9 +340,7 @@ mod tests {
         };
         animate(&display);
         let collapsed = area.height();
-        for editor in &editors {
-            editor.edit_scope(true);
-        }
+        edit.emit_clicked();
         let panel = stack.visible_child().unwrap();
         assert!(editors[1].input.widget.is_ancestor(&panel));
         assert_ne!(panel, display);

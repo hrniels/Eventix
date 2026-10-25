@@ -209,19 +209,6 @@ impl EventDetails {
         }
     }
 
-    pub(crate) fn edit_selected_reminders(&self) {
-        let occurrence = self.imp().recurrent.get()
-            && self
-                .imp()
-                .item
-                .borrow()
-                .as_ref()
-                .is_some_and(|item| item.recurrence.is_some());
-        for editor in self.imp().reminders.borrow().iter() {
-            editor.edit_scope(occurrence);
-        }
-    }
-
     pub(crate) fn selected_item(&self) -> Option<ItemId> {
         self.imp().item.borrow().clone()
     }

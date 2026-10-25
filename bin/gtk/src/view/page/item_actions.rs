@@ -16,6 +16,17 @@ impl CalendarPage {
             self.clipboard().set_text(&row.uid);
             return;
         }
+        if action == MenuAction::Details {
+            self.open_item_details(
+                ItemId {
+                    calendar: row.calendar.clone(),
+                    uid: row.uid.clone(),
+                    recurrence: None,
+                },
+                row.task,
+            );
+            return;
+        }
         if !self.can_edit() || self.editor_open() {
             return;
         }
@@ -45,16 +56,8 @@ impl CalendarPage {
                 self.dismiss_popovers();
                 self.imp().editor.edit_item(self, item, EditScope::Series);
             }
-            MenuAction::Alarms => {
-                self.dismiss_popovers();
-                let kind = if row.task {
-                    CalCompType::Todo
-                } else {
-                    CalCompType::Event
-                };
-                self.imp().session.load_reminders(item, kind);
-            }
-            MenuAction::CopyUid
+            MenuAction::Details
+            | MenuAction::CopyUid
             | MenuAction::EditOccurrence
             | MenuAction::EditFollowing
             | MenuAction::RespondSeries(_)
@@ -65,6 +68,10 @@ impl CalendarPage {
     pub(crate) fn occurrence_menu_action(&self, target: &OccurrenceTarget, action: MenuAction) {
         if action == MenuAction::CopyUid {
             self.clipboard().set_text(&target.item.uid);
+            return;
+        }
+        if action == MenuAction::Details {
+            self.open_item_details(target.item.clone(), target.task);
             return;
         }
         if !self.can_edit() || self.editor_open() {
@@ -108,18 +115,22 @@ impl CalendarPage {
                 self.dismiss_popovers();
                 self.imp().editor.edit_item(self, item, scope);
             }
-            MenuAction::Alarms => {
-                self.dismiss_popovers();
-                self.imp().session.load_reminders(
-                    item,
-                    if target.task {
-                        CalCompType::Todo
-                    } else {
-                        CalCompType::Event
-                    },
-                );
-            }
-            MenuAction::CopyUid => {}
+            MenuAction::Details | MenuAction::CopyUid => {}
         }
+    }
+
+    fn open_item_details(&self, item: ItemId, task: bool) {
+        if self.editor_open() {
+            return;
+        }
+        self.dismiss_popovers();
+        self.imp().session.load_details(
+            item,
+            if task {
+                CalCompType::Todo
+            } else {
+                CalCompType::Event
+            },
+        );
     }
 }

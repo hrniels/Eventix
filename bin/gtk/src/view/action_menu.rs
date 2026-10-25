@@ -20,7 +20,7 @@ pub(crate) enum MenuAction {
     Respond(CalPartStat),
     Delete,
     Edit,
-    Alarms,
+    Details,
     CopyUid,
     EditOccurrence,
     EditFollowing,
@@ -147,9 +147,6 @@ fn occurrence_menu(
     if available.edit {
         items.push(Action::Edit);
     }
-    if available.personal_reminders {
-        items.push(Action::Alarms);
-    }
     if let Some(response) = available.occurrence_response.or(available.series_response)
         && (!available.read_only || response != Response::Pending)
     {
@@ -253,7 +250,7 @@ fn bind<T: Clone + 'static>(actions: &gio::SimpleActionGroup, row: &T, handlers:
         ("decline", MenuAction::Respond(CalPartStat::Declined)),
         ("delete", MenuAction::Delete),
         ("edit", MenuAction::Edit),
-        ("alarms", MenuAction::Alarms),
+        ("details", MenuAction::Details),
         ("copy-uid", MenuAction::CopyUid),
         ("edit-occurrence", MenuAction::EditOccurrence),
         ("edit-following", MenuAction::EditFollowing),
@@ -300,11 +297,12 @@ fn scoped_menu(
 ) -> (gio::Menu, gio::SimpleActionGroup) {
     let model = gio::Menu::new();
     let actions = gio::SimpleActionGroup::new();
+    let details = gio::Menu::new();
     let task = gio::Menu::new();
     let deletion = gio::Menu::new();
     let editing = gio::Menu::new();
     let invitation = gio::Menu::new();
-    let utility = gio::Menu::new();
+    append(&details, &actions, locale, "Details", "details", true);
     for action in available {
         match action {
             Action::Complete => append(&task, &actions, locale, "Complete", "complete", true),
@@ -328,14 +326,7 @@ fn scoped_menu(
                 }
                 append_submenu(&task, locale, "Postpone", &variants);
             }
-            Action::Delete => append(
-                &deletion,
-                &actions,
-                locale,
-                if recurrent { "Delete series" } else { "Delete" },
-                "delete",
-                true,
-            ),
+            Action::Delete => {}
             Action::Edit if recurrent => {
                 let variants = gio::Menu::new();
                 for (key, name) in [
@@ -348,7 +339,7 @@ fn scoped_menu(
                 append_submenu(&editing, locale, "Edit", &variants);
             }
             Action::Edit => append(&editing, &actions, locale, "Edit", "edit", true),
-            Action::Alarms => append(&invitation, &actions, locale, "Alarms", "alarms", true),
+            Action::Alarms => {}
             Action::Respond { status, read_only } => append_response(
                 &invitation,
                 &actions,
@@ -357,7 +348,7 @@ fn scoped_menu(
                 *read_only,
                 recurrent.then_some("Occurrence"),
             ),
-            Action::CopyUid => append(&utility, &actions, locale, "Copy UID", "copy-uid", true),
+            Action::CopyUid => append(&details, &actions, locale, "Copy UID", "copy-uid", true),
         }
     }
     if let Some(occurrence) = occurrence {
@@ -387,7 +378,20 @@ fn scoped_menu(
             );
         }
     }
-    for section in [task, deletion, editing, invitation, utility] {
+    if available.contains(&Action::Delete) {
+        append(
+            &deletion,
+            &actions,
+            locale,
+            if recurrent { "Delete series" } else { "Delete" },
+            "delete",
+            true,
+        );
+    }
+    for index in 0..editing.n_items() {
+        task.append_item(&gio::MenuItem::from_model(&editing, index));
+    }
+    for section in [details, invitation, task, deletion] {
         if section.n_items() > 0 {
             model.append_section(None, &section);
         }
@@ -475,10 +479,11 @@ fn menu_item(label: &str, key: &str) -> gio::MenuItem {
         "Decline" | "Declined" => ("x-lg", Some("error_color")),
         "Tentative" => ("question-lg", Some("warning_color")),
         "Postpone" | "1day" | "2days" | "3days" | "5days" | "1week" => ("skip-forward-fill", None),
-        "Edit" | "Alarms" | "This occurrence" | "This and following occ." | "Complete series" => {
+        "Edit" | "This occurrence" | "This and following occ." | "Complete series" => {
             ("pencil", None)
         }
         "Copy UID" => ("tag", None),
+        "Details" => ("card-heading", None),
         _ => ("reply", None),
     };
     let item = gio::MenuItem::new(Some(label), None);
@@ -630,15 +635,15 @@ mod tests {
             &*locale,
         );
         assert_eq!(model.n_items(), 4);
-        let deletion = model.item_link(0, "section").unwrap();
+        let deletion = model.item_link(3, "section").unwrap();
         assert_eq!(deletion.n_items(), 2);
-        assert_eq!(label(&deletion, 0), locale.translate("Delete series"));
-        assert_eq!(label(&deletion, 1), locale.translate("Cancel occ."));
-        let editing = model.item_link(1, "section").unwrap();
-        assert_eq!(editing.n_items(), 1);
-        assert!(editing.item_link(0, "submenu").is_some());
-        let responses = model.item_link(2, "section").unwrap();
+        assert_eq!(label(&deletion, 0), locale.translate("Cancel occ."));
+        assert_eq!(label(&deletion, 1), locale.translate("Delete series"));
+        let responses = model.item_link(1, "section").unwrap();
         assert_eq!(responses.n_items(), 2);
+        let editing = model.item_link(2, "section").unwrap();
+        assert_eq!(label(&editing, 0), locale.translate("Edit"));
+        assert!(editing.item_link(0, "submenu").is_some());
         assert_eq!(label(&responses, 0), "Unverbindlich (Termin)");
         assert_eq!(label(&responses, 1), "Angenommen (Serie)");
         for index in 0..2 {
@@ -654,7 +659,7 @@ mod tests {
             true,
             &*locale,
         );
-        let responses = pending.item_link(0, "section").unwrap();
+        let responses = pending.item_link(1, "section").unwrap();
         assert_eq!(label(&responses, 0), "Antworten (Termin)");
         assert_eq!(label(&responses, 1), "Antworten (Serie)");
     }
@@ -699,6 +704,10 @@ mod tests {
             .child()
             .unwrap()
             .first_child()
+            .unwrap()
+            .next_sibling()
+            .unwrap()
+            .next_sibling()
             .unwrap()
             .downcast::<gtk::MenuButton>()
             .unwrap();
@@ -748,18 +757,21 @@ mod tests {
             true,
             &*eventix_locale::default(),
         );
-        assert_eq!(model.n_items(), 5);
-        let deletion = model.item_link(1, "section").unwrap();
+        assert_eq!(model.n_items(), 4);
+        let deletion = model.item_link(3, "section").unwrap();
         assert_eq!(deletion.n_items(), 2);
-        assert_eq!(label(&deletion, 0), "Delete series");
-        assert_eq!(label(&deletion, 1), "Exclude occ.");
+        assert_eq!(label(&deletion, 0), "Exclude occ.");
+        assert_eq!(label(&deletion, 1), "Delete series");
         let editing = model.item_link(2, "section").unwrap();
-        assert_eq!(editing.n_items(), 1);
-        let scopes = editing.item_link(0, "submenu").unwrap();
+        assert_eq!(editing.n_items(), 3);
+        let scopes = editing.item_link(2, "submenu").unwrap();
+        assert_eq!(label(&editing, 0), "Complete");
+        assert_eq!(label(&editing, 1), "Postpone");
+        assert_eq!(label(&editing, 2), "Edit");
         assert_eq!(label(&scopes, 0), "This occurrence");
         assert_eq!(label(&scopes, 1), "This and following occ.");
         assert_eq!(label(&scopes, 2), "Complete series");
-        let invitation = model.item_link(3, "section").unwrap();
+        let invitation = model.item_link(1, "section").unwrap();
         assert_eq!(invitation.n_items(), 2);
         assert_eq!(label(&invitation, 0), "Tentative (Occurrence)");
         assert_eq!(label(&invitation, 1), "Accepted (Series)");
@@ -817,7 +829,8 @@ mod tests {
         ] {
             assert!(read_only.lookup_action(name).is_none(), "{name}");
         }
-        assert!(read_only.is_action_enabled("alarms"));
+        assert!(read_only.lookup_action("alarms").is_none());
+        assert!(read_only.is_action_enabled("details"));
         assert!(read_only.is_action_enabled("copy-uid"));
         let mut invalid = id;
         invalid.recurrence = "invalid".into();
@@ -889,7 +902,7 @@ mod tests {
             ("decline", MenuAction::Respond(CalPartStat::Declined)),
             ("edit", MenuAction::Edit),
             ("delete", MenuAction::Delete),
-            ("alarms", MenuAction::Alarms),
+            ("details", MenuAction::Details),
             ("copy-uid", MenuAction::CopyUid),
         ];
         for (name, _) in expected {
@@ -921,10 +934,16 @@ mod tests {
             ],
             &*eventix_locale::default(),
         );
-        assert_eq!(model.n_items(), 4);
-        let task = model.item_link(0, "section").unwrap();
+        assert_eq!(model.n_items(), 3);
+        let details = model.item_link(0, "section").unwrap();
+        assert_eq!(details.n_items(), 2);
+        assert_eq!(label(&details, 0), "Details");
+        assert_eq!(label(&details, 1), "Copy UID");
+        let task = model.item_link(1, "section").unwrap();
+        assert_eq!(task.n_items(), 3);
         assert_eq!(label(&task, 0), "Complete");
         assert_eq!(label(&task, 1), "Postpone");
+        assert_eq!(label(&task, 2), "Edit");
         let postpone = task.item_link(1, "submenu").unwrap();
         assert_eq!(postpone.n_items(), 5);
         for (index, (title, days)) in [
@@ -940,14 +959,9 @@ mod tests {
             assert_eq!(label(&postpone, index as i32), title);
             assert!(actions.is_action_enabled(&format!("postpone-{days}")));
         }
-        let deletion = model.item_link(1, "section").unwrap();
+        let deletion = model.item_link(2, "section").unwrap();
         assert_eq!(deletion.n_items(), 1);
         assert_eq!(label(&deletion, 0), "Delete");
-        let editing = model.item_link(2, "section").unwrap();
-        assert_eq!(editing.n_items(), 1);
-        assert_eq!(label(&editing, 0), "Edit");
-        let utility = model.item_link(3, "section").unwrap();
-        assert_eq!(label(&utility, 0), "Copy UID");
     }
 
     #[test]
@@ -965,9 +979,10 @@ mod tests {
                 &*eventix_locale::default(),
             );
             assert_eq!(model.n_items(), 2);
-            let invitation = model.item_link(0, "section").unwrap();
+            let invitation = model.item_link(1, "section").unwrap();
             assert_eq!(label(&invitation, 0), "Accepted");
-            assert_eq!(label(&invitation, 1), "Alarms");
+            assert_eq!(invitation.n_items(), 1);
+            assert!(actions.lookup_action("alarms").is_none());
             if read_only {
                 assert!(invitation.item_link(0, "submenu").is_none());
                 assert!(!actions.is_action_enabled("response"));

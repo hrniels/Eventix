@@ -364,7 +364,7 @@ impl CalendarPage {
     }
 
     pub fn dismiss_popovers(&self) {
-        self.imp().session.cancel_reminder_load();
+        self.imp().session.cancel_details_load();
         self.imp().details.close();
         if self.editor_open() {
             self.imp().editor.discard_editor();

@@ -87,7 +87,7 @@ pub(crate) enum Event {
     EditLoaded(u64, Result<(EditorOptions, Box<UpdateItem>), String>),
     EditSaved(u64, Result<(ChangeSet, SavedItem), String>),
     RemindersSaved(Result<(ChangeSet, SavedItem), String>),
-    RemindersLoaded(u64, Result<SavedItem, String>),
+    DetailsLoaded(u64, Result<SavedItem, String>),
     ContentLoaded(ContentResponse),
     ListRowsLoaded(ListRowsResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
@@ -109,7 +109,7 @@ enum Message {
     LoadEdit(u64, ItemId, EditScope),
     SaveEdit(u64, Box<UpdateItem>),
     SaveReminders(ItemId, UpdatePersonalAlarms),
-    LoadReminders(u64, ItemId, CalCompType),
+    LoadDetails(u64, ItemId, CalCompType),
     ShowContent(ContentRequest),
     LoadListRows(ListRowsRequest),
     RefreshSidebar,
@@ -124,10 +124,8 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
-    pub fn load_reminders(&self, id: u64, item: ItemId, kind: CalCompType) {
-        let _ = self
-            .requests
-            .try_send(Message::LoadReminders(id, item, kind));
+    pub fn load_details(&self, id: u64, item: ItemId, kind: CalCompType) {
+        let _ = self.requests.try_send(Message::LoadDetails(id, item, kind));
     }
 
     pub fn save_reminders(&self, selected: ItemId, command: UpdatePersonalAlarms) {
@@ -308,7 +306,7 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
-            Message::LoadReminders(id, item, kind) => Event::RemindersLoaded(
+            Message::LoadDetails(id, item, kind) => Event::DetailsLoaded(
                 id,
                 self.saved_item(&item, kind)
                     .map_err(|error| format!("{error:#}")),
@@ -1124,8 +1122,8 @@ mod tests {
             recurrence: None,
             ..selected.clone()
         };
-        let Some(Event::RemindersLoaded(17, Ok(SavedItem::Event(base)))) = worker
-            .handle(Message::LoadReminders(17, base, CalCompType::Event))
+        let Some(Event::DetailsLoaded(17, Ok(SavedItem::Event(base)))) = worker
+            .handle(Message::LoadDetails(17, base, CalCompType::Event))
             .pop()
         else {
             panic!("expected series reminder details")

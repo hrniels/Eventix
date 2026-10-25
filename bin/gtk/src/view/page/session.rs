@@ -23,22 +23,22 @@ pub(super) struct PageSession {
     pending_command: Cell<bool>,
     pending_quick_task: Cell<bool>,
     pending_reminders: RefCell<Option<glib::WeakRef<EventDetails>>>,
-    reminder_request: Cell<u64>,
-    pending_reminder_load: Cell<Option<u64>>,
+    details_request: Cell<u64>,
+    pending_details_load: Cell<Option<u64>>,
     timer: RefCell<Option<glib::SourceId>>,
 }
 
 impl PageSession {
-    pub(super) fn cancel_reminder_load(&self) {
-        self.pending_reminder_load.set(None);
+    pub(super) fn cancel_details_load(&self) {
+        self.pending_details_load.set(None);
     }
 
-    pub(super) fn load_reminders(&self, item: ItemId, kind: CalCompType) {
+    pub(super) fn load_details(&self, item: ItemId, kind: CalCompType) {
         if let Some(session) = self.current.borrow().as_ref() {
-            let id = self.reminder_request.get().wrapping_add(1);
-            self.reminder_request.set(id);
-            self.pending_reminder_load.set(Some(id));
-            session.load_reminders(id, item, kind);
+            let id = self.details_request.get().wrapping_add(1);
+            self.details_request.set(id);
+            self.pending_details_load.set(Some(id));
+            session.load_details(id, item, kind);
         }
     }
 
@@ -221,11 +221,11 @@ impl PageSession {
     fn handle_event(&self, page: &CalendarPage, event: Event) {
         let imp = page.imp();
         match event {
-            Event::RemindersLoaded(id, result) => {
-                if self.pending_reminder_load.get() != Some(id) {
+            Event::DetailsLoaded(id, result) => {
+                if self.pending_details_load.get() != Some(id) {
                     return;
                 }
-                self.pending_reminder_load.set(None);
+                self.pending_details_load.set(None);
                 match result {
                     Ok(item) => {
                         let locale = page.locale();
@@ -235,7 +235,6 @@ impl PageSession {
                                 EventDetails::new_sidebar(&task, locale.as_ref())
                             }
                         };
-                        details.edit_selected_reminders();
                         imp.details
                             .show_details(page.upcast_ref(), page.upcast_ref(), details);
                     }
