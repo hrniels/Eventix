@@ -221,6 +221,10 @@ impl PageSession {
     fn handle_event(&self, page: &CalendarPage, event: Event) {
         let imp = page.imp();
         match event {
+            Event::FilepathLoaded(result) => match result {
+                Ok(path) => page.clipboard().set_text(&path),
+                Err(error) => page.show_error("Could not copy filepath", &error),
+            },
             Event::DetailsLoaded(id, result) => {
                 if self.pending_details_load.get() != Some(id) {
                     return;

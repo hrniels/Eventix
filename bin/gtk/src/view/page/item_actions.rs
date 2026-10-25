@@ -16,26 +16,23 @@ impl CalendarPage {
             self.clipboard().set_text(&row.uid);
             return;
         }
+        let item = ItemId {
+            calendar: row.calendar.clone(),
+            uid: row.uid.clone(),
+            recurrence: None,
+        };
+        if action == MenuAction::CopyFilepath {
+            self.copy_item_filepath(item);
+            return;
+        }
         if action == MenuAction::Details {
-            self.open_item_details(
-                ItemId {
-                    calendar: row.calendar.clone(),
-                    uid: row.uid.clone(),
-                    recurrence: None,
-                },
-                row.task,
-            );
+            self.open_item_details(item, row.task);
             return;
         }
         if !self.can_edit() || self.editor_open() {
             return;
         }
 
-        let item = ItemId {
-            calendar: row.calendar.clone(),
-            uid: row.uid.clone(),
-            recurrence: None,
-        };
         match action {
             MenuAction::Task(action) => {
                 if self.execute_command(Box::new(ChangeTask { item, action })) {
@@ -58,6 +55,7 @@ impl CalendarPage {
             }
             MenuAction::Details
             | MenuAction::CopyUid
+            | MenuAction::CopyFilepath
             | MenuAction::EditOccurrence
             | MenuAction::EditFollowing
             | MenuAction::RespondSeries(_)
@@ -72,6 +70,10 @@ impl CalendarPage {
         }
         if action == MenuAction::Details {
             self.open_item_details(target.item.clone(), target.task);
+            return;
+        }
+        if action == MenuAction::CopyFilepath {
+            self.copy_item_filepath(target.item.clone());
             return;
         }
         if !self.can_edit() || self.editor_open() {
@@ -115,7 +117,13 @@ impl CalendarPage {
                 self.dismiss_popovers();
                 self.imp().editor.edit_item(self, item, scope);
             }
-            MenuAction::Details | MenuAction::CopyUid => {}
+            MenuAction::Details | MenuAction::CopyUid | MenuAction::CopyFilepath => {}
+        }
+    }
+
+    fn copy_item_filepath(&self, item: ItemId) {
+        if let Some(session) = self.imp().session.current.borrow().as_ref() {
+            session.load_filepath(item);
         }
     }
 

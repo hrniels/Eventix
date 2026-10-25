@@ -88,6 +88,7 @@ pub(crate) enum Event {
     EditSaved(u64, Result<(ChangeSet, SavedItem), String>),
     RemindersSaved(Result<(ChangeSet, SavedItem), String>),
     DetailsLoaded(u64, Result<SavedItem, String>),
+    FilepathLoaded(Result<String, String>),
     ContentLoaded(ContentResponse),
     ListRowsLoaded(ListRowsResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
@@ -110,6 +111,7 @@ enum Message {
     SaveEdit(u64, Box<UpdateItem>),
     SaveReminders(ItemId, UpdatePersonalAlarms),
     LoadDetails(u64, ItemId, CalCompType),
+    LoadFilepath(ItemId),
     ShowContent(ContentRequest),
     LoadListRows(ListRowsRequest),
     RefreshSidebar,
@@ -124,6 +126,10 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn load_filepath(&self, item: ItemId) {
+        let _ = self.requests.try_send(Message::LoadFilepath(item));
+    }
+
     pub fn load_details(&self, id: u64, item: ItemId, kind: CalCompType) {
         let _ = self.requests.try_send(Message::LoadDetails(id, item, kind));
     }
@@ -306,6 +312,9 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
+            Message::LoadFilepath(item) => {
+                Event::FilepathLoaded(self.filepath(&item).map_err(|error| format!("{error:#}")))
+            }
             Message::LoadDetails(id, item, kind) => Event::DetailsLoaded(
                 id,
                 self.saved_item(&item, kind)
@@ -396,6 +405,28 @@ impl Worker {
         self.state
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No loaded state"))
+    }
+
+    fn filepath(&self, item: &ItemId) -> anyhow::Result<String> {
+        let state = self.state()?;
+        let file = state
+            .store()
+            .directories()
+            .iter()
+            .find(|dir| dir.id().as_str() == item.calendar)
+            .and_then(|dir| dir.file_by_id(&item.uid))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    state
+                        .locale()
+                        .translate("Occurrence is no longer available")
+                        .to_string()
+                )
+            })?;
+
+        Ok(std::path::absolute(file.path())?
+            .to_string_lossy()
+            .into_owned())
     }
 
     fn load_edit(
@@ -652,6 +683,53 @@ mod tests {
         let mut worker = Worker::new(xdg);
         worker.state = Some(state);
         worker
+    }
+
+    #[test]
+    fn filepath_requests_preserve_calendar_identity_and_resolve_occurrences() {
+        let tmp = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        let other_path = other.path().join("different filename.ics");
+        fs::copy(tmp.path().join("event.ics"), &other_path).unwrap();
+        worker.state.as_mut().unwrap().store_mut().add(
+            CalDir::new_from_dir(
+                Arc::new("other".into()),
+                other.path().into(),
+                "Other".into(),
+                true,
+            )
+            .unwrap(),
+        );
+
+        for (calendar, path) in [
+            ("test", tmp.path().join("event.ics")),
+            ("other", other_path),
+        ] {
+            for recurrence in [None, Some("TU2026-10-13T09:00:00".parse().unwrap())] {
+                let events = worker.handle(Message::LoadFilepath(ItemId {
+                    calendar: calendar.into(),
+                    uid: "move-me".into(),
+                    recurrence,
+                }));
+                let [Event::FilepathLoaded(Ok(actual))] = events.as_slice() else {
+                    panic!("expected the requested filepath");
+                };
+                assert_eq!(actual, &path.to_string_lossy());
+            }
+        }
+        for (calendar, uid) in [("missing", "move-me"), ("test", "missing")] {
+            assert!(matches!(
+                worker
+                    .handle(Message::LoadFilepath(ItemId {
+                        calendar: calendar.into(),
+                        uid: uid.into(),
+                        recurrence: None,
+                    }))
+                    .as_slice(),
+                [Event::FilepathLoaded(Err(_))]
+            ));
+        }
     }
 
     fn command(worker: &Worker, start: &str) -> MoveEvent {

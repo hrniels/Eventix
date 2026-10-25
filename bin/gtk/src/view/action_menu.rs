@@ -22,6 +22,7 @@ pub(crate) enum MenuAction {
     Edit,
     Details,
     CopyUid,
+    CopyFilepath,
     EditOccurrence,
     EditFollowing,
     RespondSeries(CalPartStat),
@@ -252,6 +253,7 @@ fn bind<T: Clone + 'static>(actions: &gio::SimpleActionGroup, row: &T, handlers:
         ("edit", MenuAction::Edit),
         ("details", MenuAction::Details),
         ("copy-uid", MenuAction::CopyUid),
+        ("copy-filepath", MenuAction::CopyFilepath),
         ("edit-occurrence", MenuAction::EditOccurrence),
         ("edit-following", MenuAction::EditFollowing),
         (
@@ -348,7 +350,17 @@ fn scoped_menu(
                 *read_only,
                 recurrent.then_some("Occurrence"),
             ),
-            Action::CopyUid => append(&details, &actions, locale, "Copy UID", "copy-uid", true),
+            Action::CopyUid => {
+                append(&details, &actions, locale, "Copy UID", "copy-uid", true);
+                append(
+                    &details,
+                    &actions,
+                    locale,
+                    "Copy Filepath",
+                    "copy-filepath",
+                    true,
+                );
+            }
         }
     }
     if let Some(occurrence) = occurrence {
@@ -483,6 +495,7 @@ fn menu_item(label: &str, key: &str) -> gio::MenuItem {
             ("pencil", None)
         }
         "Copy UID" => ("tag", None),
+        "Copy Filepath" => ("journal-text", None),
         "Details" => ("card-heading", None),
         _ => ("reply", None),
     };
@@ -832,6 +845,7 @@ mod tests {
         assert!(read_only.lookup_action("alarms").is_none());
         assert!(read_only.is_action_enabled("details"));
         assert!(read_only.is_action_enabled("copy-uid"));
+        assert!(read_only.is_action_enabled("copy-filepath"));
         let mut invalid = id;
         invalid.recurrence = "invalid".into();
         assert!(OccurrenceTarget::new(&invalid, "", true, false).is_none());
@@ -904,6 +918,7 @@ mod tests {
             ("delete", MenuAction::Delete),
             ("details", MenuAction::Details),
             ("copy-uid", MenuAction::CopyUid),
+            ("copy-filepath", MenuAction::CopyFilepath),
         ];
         for (name, _) in expected {
             group.activate_action(name, None);
@@ -936,9 +951,10 @@ mod tests {
         );
         assert_eq!(model.n_items(), 3);
         let details = model.item_link(0, "section").unwrap();
-        assert_eq!(details.n_items(), 2);
+        assert_eq!(details.n_items(), 3);
         assert_eq!(label(&details, 0), "Details");
         assert_eq!(label(&details, 1), "Copy UID");
+        assert_eq!(label(&details, 2), "Copy Filepath");
         let task = model.item_link(1, "section").unwrap();
         assert_eq!(task.n_items(), 3);
         assert_eq!(label(&task, 0), "Complete");
