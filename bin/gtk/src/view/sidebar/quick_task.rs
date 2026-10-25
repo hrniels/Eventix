@@ -23,19 +23,14 @@ pub(crate) struct QuickTask {
 
 impl QuickTask {
     pub fn new(locale: &dyn Locale) -> Rc<Self> {
-        let widget = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        widget.add_css_class("ev_quick_task");
-        widget.set_visible(false);
+        let builder = gtk::Builder::from_resource(resource_path!("view/sidebar/quick_task.ui"));
+        let widget: gtk::Box = builder.object("quick_task").unwrap();
 
         let calendar = CalendarSelector::new(&[], None, true);
-        widget.append(&calendar.widget);
+        widget.prepend(&calendar.widget);
 
-        let summary = gtk::Entry::builder()
-            .hexpand(true)
-            .width_chars(1)
-            .tooltip_text(locale.translate("Summary"))
-            .build();
-        widget.append(&summary);
+        let summary: gtk::Entry = builder.object("summary").unwrap();
+        summary.set_tooltip_text(Some(locale.translate("Summary")));
 
         let due = DateInput::new_popup(locale, chrono::Local::now().date_naive());
         due.entry.set_text("");
@@ -62,11 +57,10 @@ impl QuickTask {
                 }
             }
         });
-        widget.append(&due_picker);
+        widget.insert_child_after(&due_picker, Some(&summary));
 
-        let add = gtk::Button::from_icon_name("list-add-symbolic");
+        let add: gtk::Button = builder.object("add").unwrap();
         add.set_tooltip_text(Some(locale.translate("New Task")));
-        widget.append(&add);
 
         Rc::new(Self {
             widget,

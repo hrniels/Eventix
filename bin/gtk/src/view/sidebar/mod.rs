@@ -19,12 +19,13 @@ use quick_task::QuickTask;
 mod imp {
     use super::*;
 
-    #[derive(Default)]
+    resource_template! { "view/sidebar/sidebar.ui",
     pub struct Sidebar {
         pub(super) quick_task: RefCell<Option<Rc<QuickTask>>>,
         pub(super) panels: RefCell<Option<(Panel, Panel)>>,
         pub(super) details: RefCell<Rc<DetailsController>>,
         pub colors: RefCell<String>,
+    }
     }
 
     #[glib::object_subclass]
@@ -32,6 +33,14 @@ mod imp {
         const NAME: &'static str = "EventixSidebar";
         type Type = super::Sidebar;
         type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
     }
 
     impl ObjectImpl for Sidebar {
@@ -39,11 +48,6 @@ mod imp {
             self.parent_constructed();
 
             let obj = self.obj();
-            obj.set_orientation(gtk::Orientation::Vertical);
-            obj.set_homogeneous(true);
-            obj.set_spacing(12);
-            obj.add_css_class("ev_sidebar");
-
             let events = Panel::new(obj.upcast_ref(), true);
             let tasks = Panel::new(obj.upcast_ref(), false);
             let locale = eventix_locale::default();
@@ -59,6 +63,7 @@ mod imp {
             self.details.borrow().close();
             self.panels.take();
             self.quick_task.take();
+            self.dispose_template();
         }
     }
 

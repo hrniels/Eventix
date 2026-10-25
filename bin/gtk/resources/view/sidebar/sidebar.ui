@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <template class="EventixSidebar" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="homogeneous">true</property>
+    <property name="spacing">12</property>
+    <style><class name="ev_sidebar"/></style>
+  </template>
+</interface>

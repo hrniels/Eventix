@@ -794,9 +794,11 @@ pub(crate) mod tests {
         popup
             .child()
             .unwrap()
-            .last_child()
-            .unwrap()
-            .downcast::<gtk::Button>()
+            .observe_children()
+            .snapshot()
+            .into_iter()
+            .filter_map(|child| child.downcast::<gtk::Button>().ok())
+            .find(|button| button.action_name().as_deref() == Some("item.copy-uid"))
             .unwrap()
             .emit_clicked();
         let copied = gtk::glib::MainContext::default()

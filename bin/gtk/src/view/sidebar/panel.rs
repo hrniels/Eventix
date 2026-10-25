@@ -10,7 +10,7 @@ use eventix_view::{
     OccurrenceId,
     sidebar::{SidebarGroup, SidebarRow},
 };
-use gtk::{glib, prelude::*};
+use gtk::prelude::*;
 
 use super::super::{
     details::EventDetails, indicators::EventIndicators, popover::DetailsController, response_marker,
@@ -31,53 +31,22 @@ pub(super) struct Panel {
 
 impl Panel {
     pub(super) fn new(parent: &gtk::Box, is_events: bool) -> Self {
-        let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        panel.set_vexpand(true);
-
-        let frame = gtk::Frame::builder().child(&panel).vexpand(true).build();
-        frame.add_css_class("ev_panel_frame");
-
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        header.add_css_class("ev_panel_header");
-        let title = gtk::Label::new(None);
-        title.set_hexpand(true);
-        title.set_xalign(0.0);
-        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        title.add_css_class("ev_panel_title");
-        header.append(&title);
-
-        let new_item = {
-            let button = gtk::Button::from_icon_name("list-add-symbolic");
-            button.set_action_name(Some(if is_events {
-                "win.new-event"
-            } else {
-                "win.new-task"
-            }));
-            button.add_css_class("ev_sidebar_add_item");
-            header.append(&button);
-            button
-        };
-        panel.append(&header);
-        panel.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-
-        let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let scroll = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .vscrollbar_policy(gtk::PolicyType::Always)
-            .vexpand(true)
-            .child(&list)
-            .build();
-
-        panel.append(&scroll);
-        parent.append(&frame);
+        let builder = gtk::Builder::from_resource(resource_path!("view/sidebar/panel.ui"));
+        let new_item: gtk::Button = builder.object("new_item").unwrap();
+        new_item.set_action_name(Some(if is_events {
+            "win.new-event"
+        } else {
+            "win.new-task"
+        }));
+        parent.append(&builder.object::<gtk::Frame>("frame").unwrap());
 
         Self {
-            content: panel,
-            header,
-            title,
+            content: builder.object("content").unwrap(),
+            header: builder.object("header").unwrap(),
+            title: builder.object("title").unwrap(),
             new_item,
-            list,
-            scroll,
+            list: builder.object("list").unwrap(),
+            scroll: builder.object("scroll").unwrap(),
             rows: BTreeMap::new(),
         }
     }
@@ -131,7 +100,11 @@ impl Panel {
             previous = Some(label.upcast());
             for row in &group.rows {
                 let key = (group.date, row.id.clone());
-                let button = self.rows.remove(&key).unwrap_or_default();
+                let button = self.rows.remove(&key).unwrap_or_else(|| {
+                    gtk::Builder::from_resource(resource_path!("view/sidebar/row.ui"))
+                        .object("row")
+                        .unwrap()
+                });
                 update_row(&button, row, &**locale);
                 bind_details_action(&button, row, locale, details);
                 self.place_child(button.upcast_ref(), previous.as_ref());
@@ -164,22 +137,20 @@ fn group_heading(group: &SidebarGroup, locale: &dyn Locale) -> gtk::Label {
         .date
         .map(|date| locale.fmt_weekdate(&date, DateFlags::empty()))
         .unwrap_or_else(|| locale.translate("Unplanned").to_owned());
-    let label = gtk::Label::builder()
-        .label(&heading)
-        .xalign(0.0)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .build();
-    label.add_css_class("ev_sidebar_day");
+    let builder = gtk::Builder::from_resource(resource_path!("view/sidebar/heading.ui"));
+    let label: gtk::Label = builder.object("heading").unwrap();
+    label.set_text(&heading);
 
     label
 }
 
 fn update_row(button: &gtk::Button, row: &SidebarRow, locale: &dyn Locale) {
     for class in button.css_classes() {
-        button.remove_css_class(&class);
+        if class != "ev_sidebar_row" {
+            button.remove_css_class(&class);
+        }
     }
 
-    button.add_css_class("ev_sidebar_row");
     button.set_child(Some(&row_content(row, locale)));
 
     if row.full_day && !row.task {
@@ -247,9 +218,11 @@ fn bind_details_action(
 }
 
 fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+    EventIndicators::ensure_type();
+    let builder = gtk::Builder::from_resource(resource_path!("view/sidebar/row_content.ui"));
+    let content: gtk::Box = builder.object("content").unwrap();
     if !row.full_day || row.task {
-        content.append(&response_marker::new(
+        content.prepend(&response_marker::new(
             &row.background,
             &row.calendar,
             row.response,
@@ -258,25 +231,16 @@ fn row_content(row: &SidebarRow, locale: &dyn Locale) -> gtk::Box {
         ));
     }
 
-    if !row.time.is_empty() {
-        let time = gtk::Label::new(Some(&row.time));
-        time.add_css_class("ev_sidebar_time");
-        content.append(&time);
-    }
+    let time: gtk::Label = builder.object("time").unwrap();
+    time.set_text(&row.time);
+    time.set_visible(!row.time.is_empty());
 
-    let summary = gtk::Label::builder()
-        .label(&row.summary)
-        .xalign(0.0)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .hexpand(true)
-        .build();
-    content.append(&summary);
+    let summary: gtk::Label = builder.object("summary").unwrap();
+    summary.set_text(&row.summary);
 
-    let indicators: EventIndicators = glib::Object::new();
-    indicators.set_spacing(content.spacing());
+    let indicators: EventIndicators = builder.object("indicators").unwrap();
     indicators.set_pixel_size(14);
     indicators.set_state(row.recurrent, row.exception, row.alarm, locale);
-    content.append(&indicators);
 
     content
 }

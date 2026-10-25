@@ -23,6 +23,12 @@
     <file>view/list/filtering.ui</file>
     <file>view/list/results.ui</file>
     <file>view/list/row.ui</file>
+    <file>view/sidebar/heading.ui</file>
+    <file>view/sidebar/panel.ui</file>
+    <file>view/sidebar/quick_task.ui</file>
+    <file>view/sidebar/row.ui</file>
+    <file>view/sidebar/row_content.ui</file>
+    <file>view/sidebar/sidebar.ui</file>
     <file>icons/LICENSE</file>
     <file>icons/alarm-symbolic.svg</file>
     <file>icons/arrow-clockwise-symbolic.svg</file>
