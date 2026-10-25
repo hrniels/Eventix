@@ -17,6 +17,7 @@ pub(crate) enum SubscriptionId {
 }
 
 pub(crate) enum Query {
+    List,
     Events {
         start: DateTime<Tz>,
         end: DateTime<Tz>,
@@ -29,6 +30,11 @@ pub(crate) enum Query {
 impl Query {
     /// Tests membership by identity against authoritative state, without copying objects.
     fn contains(&self, state: &State, item: &ItemId) -> bool {
+        // Any edit can change membership, ordering or pagination, including series edits.
+        // List visibility is independent of the week/month calendar toggles.
+        if matches!(self, Self::List) {
+            return true;
+        }
         if state.misc().calendar_disabled(&item.calendar) {
             return false;
         }
@@ -64,6 +70,7 @@ impl Query {
             let (start, end) = match self {
                 Self::Events { start, end } => (*start, *end),
                 Self::Sidebar { now } => (*now, *now + Duration::days(7)),
+                Self::List => unreachable!(),
             };
             return file
                 .occurrences_between(start, end, |component| component.uid() == &item.uid)
@@ -75,6 +82,7 @@ impl Query {
         }
 
         match self {
+            Self::List => true,
             Self::Events { start, end } => {
                 occurrence.ctype() == CalCompType::Event && occurrence.overlaps(*start, *end)
             }

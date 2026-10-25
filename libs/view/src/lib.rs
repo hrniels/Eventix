@@ -7,6 +7,7 @@
 pub mod details;
 pub mod editor;
 pub mod layout;
+pub mod list;
 pub mod monthly;
 mod projection;
 pub mod sidebar;

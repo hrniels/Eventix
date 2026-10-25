@@ -9,6 +9,7 @@ pub mod details;
 pub(crate) mod editor;
 mod geometry;
 mod indicators;
+mod list;
 pub(crate) mod monthly;
 pub(crate) mod page;
 pub(crate) mod popover;

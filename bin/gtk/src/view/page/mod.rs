@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{
+    cell::{OnceCell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
 
 use chrono::NaiveDate;
 use eventix_ical::objects::CalCompType;
@@ -19,6 +23,7 @@ use super::{
     weekly::content::WeekContent,
 };
 use crate::model::session::View;
+use crate::view::list::ListView;
 
 mod content;
 mod create;
@@ -32,6 +37,12 @@ mod imp {
     pub struct CalendarPage {
         #[template_child]
         pub stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub content_stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub calendar_content: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub list_view: gtk::TemplateChild<gtk::ToggleButton>,
         #[template_child]
         pub header: gtk::TemplateChild<gtk::CenterBox>,
         #[template_child]
@@ -67,6 +78,7 @@ mod imp {
 
         pub(super) editor: PageEditor,
         pub(super) content: PageContent,
+        pub(super) list: OnceCell<Rc<ListView>>,
         pub(super) session: PageSession,
         pub calendar_css: RefCell<String>,
         pub header_group: RefCell<Option<gtk::SizeGroup>>,
@@ -101,6 +113,15 @@ mod imp {
 
             let obj = self.obj();
             obj.setup_details();
+            let list = ListView::new();
+            let weak = obj.downgrade();
+            list.connect_changed(move || {
+                if let Some(page) = weak.upgrade() {
+                    page.show_content(page.imp().content.date.get());
+                }
+            });
+            self.content_stack.add_child(&list.widget);
+            let _ = self.list.set(list);
             obj.align_headers();
             self.content.connect_controls(&obj);
             obj.connect_event_creation();
@@ -205,6 +226,9 @@ impl CalendarPage {
         let imp = self.imp();
         let group = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
         group.add_widget(&*imp.header);
+        if let Some(list) = imp.list.get() {
+            group.add_widget(list.header());
+        }
         for title in imp.sidebar.panel_titles() {
             group.add_widget(&title);
         }
@@ -294,6 +318,12 @@ impl CalendarPage {
         self.imp().content.show_content(self, date);
     }
 
+    pub fn show_today(&self) {
+        if self.imp().content.view.get() != View::List {
+            self.show_content(None);
+        }
+    }
+
     pub fn navigate(&self, direction: i32) {
         self.imp().content.navigate(self, direction);
     }
@@ -308,6 +338,10 @@ impl CalendarPage {
 
     pub fn switch_to_month(&self) {
         self.imp().content.switch_view(self, View::Month);
+    }
+
+    pub fn switch_to_list(&self) {
+        self.imp().content.switch_view(self, View::List);
     }
 
     pub fn show_week_at(&self, date: NaiveDate) {
@@ -399,6 +433,92 @@ pub(crate) mod tests {
         pub(in crate::view) fn test_saved_editor(&self, item: SavedItem) {
             self.imp().editor.finish_editor(self, Some(&item));
         }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn list_switching_preserves_filters_dates_and_rejects_stale_responses() {
+        use eventix_view::list::{Filter, Snapshot as ListSnapshot};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let page: CalendarPage = gtk::glib::Object::new();
+        let date = "2026-10-25".parse().unwrap();
+        page.show_content(Some(date));
+        page.switch_to_list();
+        let imp = page.imp();
+        let generation = imp.content.generation.get();
+        let snapshot = |keywords: &str| {
+            Snapshot::List(ListSnapshot {
+                filter: Filter {
+                    keywords: keywords.into(),
+                    ..Default::default()
+                },
+                calendars: vec![],
+                rows: vec![],
+                total: 0,
+                locale: eventix_locale::default(),
+            })
+        };
+        page.receive_content(ContentResponse {
+            generation,
+            result: Ok(snapshot("current")),
+        });
+        page.receive_content(ContentResponse {
+            generation: generation - 1,
+            result: Ok(snapshot("stale")),
+        });
+        let list = imp.list.get().unwrap();
+        assert_eq!(list.filter().keywords, "current");
+        assert_eq!(
+            imp.content_stack.visible_child(),
+            Some(list.widget.clone().upcast())
+        );
+        assert!(!imp.calendar_content.is_child_visible());
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            imp.sidebar.is_mapped(),
+            "the sidebar remains visible in list view"
+        );
+        let panel = imp
+            .content_stack
+            .parent()
+            .unwrap()
+            .downcast::<gtk::Frame>()
+            .unwrap();
+        assert!(panel.has_css_class("ev_panel_frame"));
+        assert!(panel.has_css_class("ev_calendar_panel"));
+        let bounds = panel.compute_bounds(&page).unwrap();
+        let sidebar = imp.sidebar.compute_bounds(&page).unwrap();
+        assert!(sidebar.x() >= bounds.x() + bounds.width());
+        assert!((bounds.width() / sidebar.width() - 4.0).abs() < 0.5);
+        assert_eq!(
+            list.header().height(),
+            imp.sidebar.panel_titles()[0].height()
+        );
+        page.navigate(1);
+        page.show_today();
+        assert_eq!(imp.content.date.get(), Some(date));
+        assert_eq!(imp.content.generation.get(), generation);
+        page.switch_to_month();
+        assert_eq!(
+            imp.content_stack.visible_child(),
+            Some(imp.calendar_content.clone().upcast())
+        );
+        page.switch_to_list();
+        assert_eq!(list.filter().keywords, "current");
+        assert_eq!(imp.content.date.get(), Some(date));
+        window.close();
     }
 
     #[test]
@@ -1298,6 +1418,21 @@ pub(crate) mod tests {
             }
             None
         }
+        fn section_toggle(widget: &gtk::Widget) -> Option<gtk::ToggleButton> {
+            if let Some(toggle) = widget.downcast_ref::<gtk::ToggleButton>()
+                && widget.has_css_class("ev_editor_section_toggle")
+            {
+                return Some(toggle.clone());
+            }
+            let mut child = widget.first_child();
+            while let Some(widget) = child {
+                if let Some(found) = section_toggle(&widget) {
+                    return Some(found);
+                }
+                child = widget.next_sibling();
+            }
+            None
+        }
         let calendar = dropdown(quick.widget.upcast_ref()).unwrap();
         for control in [
             quick.summary.upcast_ref::<gtk::Widget>(),
@@ -1351,17 +1486,23 @@ pub(crate) mod tests {
                 locale: locale.clone(),
             });
             drain();
-            let calendar = dropdown(&editor.popup_panel()).unwrap();
-            assert!(calendar.grab_focus());
-            let focus = gtk::prelude::GtkWindowExt::focus(&window);
-            for key in [
-                gtk::gdk::Key::Left,
-                gtk::gdk::Key::Right,
-                gtk::gdk::Key::Up,
-                gtk::gdk::Key::Down,
-            ] {
-                assert!(!press(key));
-                assert_eq!(gtk::prelude::GtkWindowExt::focus(&window), focus);
+            let panel = editor.popup_panel();
+            let calendar = dropdown(&panel).unwrap();
+            let section = section_toggle(&panel).unwrap();
+            for control in [calendar.upcast_ref::<gtk::Widget>(), section.upcast_ref()] {
+                assert!(control.grab_focus());
+                let focus = gtk::prelude::GtkWindowExt::focus(&window);
+                for (key, direction) in [
+                    (gtk::gdk::Key::Left, gtk::DirectionType::Left),
+                    (gtk::gdk::Key::Right, gtk::DirectionType::Right),
+                    (gtk::gdk::Key::Up, gtk::DirectionType::Up),
+                    (gtk::gdk::Key::Down, gtk::DirectionType::Down),
+                ] {
+                    assert!(!press(key));
+                    // Exercise GTK's default arrow binding as well as our capture handler.
+                    window.emit_by_name::<()>("move-focus", &[&direction]);
+                    assert_eq!(gtk::prelude::GtkWindowExt::focus(&window), focus);
+                }
             }
             page.close_editor();
             drain();

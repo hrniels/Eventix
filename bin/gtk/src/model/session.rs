@@ -22,11 +22,13 @@ pub(crate) enum View {
     #[default]
     Week,
     Month,
+    List,
 }
 
 pub(crate) enum Snapshot {
     Week(WeekSnapshot),
     Month(MonthSnapshot),
+    List(eventix_view::list::Snapshot),
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +40,7 @@ pub(crate) struct ContentRequest {
     pub generation: u64,
     pub date: Option<NaiveDate>,
     pub view: View,
+    pub filter: eventix_view::list::Filter,
 }
 
 pub(crate) struct ContentResponse {
@@ -165,17 +168,19 @@ impl Drop for CalendarSession {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct ContentSubscription {
     /// Retains the selection's generation when rebuilding its snapshot or query.
     generation: u64,
     date: NaiveDate,
     view: View,
+    filter: eventix_view::list::Filter,
 }
 
 impl ContentSubscription {
     fn query(&self, state: &eventix_state::State) -> anyhow::Result<Query> {
         let (start, end) = match self.view {
+            View::List => return Ok(Query::List),
             View::Week => {
                 let start = eventix_view::week_start(self.date)
                     .ok_or_else(|| anyhow::anyhow!("Week start out of range"))?;
@@ -206,6 +211,10 @@ impl ContentSubscription {
         match self.view {
             View::Week => WeekSnapshot::load(state, self.date).map(Snapshot::Week),
             View::Month => MonthSnapshot::load(state, self.date).map(Snapshot::Month),
+            View::List => Ok(Snapshot::List(eventix_view::list::Snapshot::load(
+                state,
+                &self.filter,
+            ))),
         }
     }
 }
@@ -412,16 +421,20 @@ impl Worker {
                 .date
                 .unwrap_or_else(|| Utc::now().with_timezone(state.timezone()).date_naive()),
             view: request.view,
+            filter: request.filter.clone(),
         };
 
         self.load_content(content)
     }
 
     /// Installs a subscription only after its query and initial snapshot are available.
-    fn load_content(&mut self, content: ContentSubscription) -> anyhow::Result<Snapshot> {
+    fn load_content(&mut self, mut content: ContentSubscription) -> anyhow::Result<Snapshot> {
         let state = self.state()?;
         let query = content.query(state)?;
         let snapshot = content.snapshot(state)?;
+        if let Snapshot::List(list) = &snapshot {
+            content.filter = list.filter.clone();
+        }
 
         self.subscriptions
             .register(SubscriptionId::Calendar(content.generation), query);
@@ -448,16 +461,14 @@ impl Worker {
     fn refresh_subscriptions(&mut self, ids: &[SubscriptionId]) -> Vec<Event> {
         let mut events = Vec::new();
 
-        if let Some(content) = self.content
+        if let Some(content) = self.content.clone()
             && ids.contains(&SubscriptionId::Calendar(content.generation))
         {
+            let generation = content.generation;
             let result = self
                 .load_content(content)
                 .map_err(|error| format!("{error:#}"));
-            events.push(Event::ContentLoaded(ContentResponse {
-                generation: content.generation,
-                result,
-            }));
+            events.push(Event::ContentLoaded(ContentResponse { generation, result }));
         }
 
         if ids.contains(&SubscriptionId::Sidebar)
@@ -753,6 +764,7 @@ mod tests {
             generation,
             date: Some(date.parse().unwrap()),
             view,
+            filter: Default::default(),
         });
         assert!(response.is_ok());
         let now = chrono_tz::UTC
@@ -1127,6 +1139,91 @@ mod tests {
     }
 
     #[test]
+    fn filtered_list_refreshes_for_changes_into_and_out_of_membership_and_deletion() {
+        use eventix_state::actions::items::{DeleteItem, EditScope, UpdateItem};
+        use eventix_view::list::Filter;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state
+            .as_mut()
+            .unwrap()
+            .misc_mut()
+            .toggle_calendar(&"test".into());
+        let snapshot = worker
+            .show_content(&ContentRequest {
+                generation: 42,
+                date: None,
+                view: View::List,
+                filter: Filter {
+                    keywords: "needle".into(),
+                    calendars: vec!["test".into()],
+                    page: 1,
+                },
+            })
+            .unwrap();
+        assert!(matches!(snapshot, Snapshot::List(list) if list.rows.is_empty()));
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: None,
+        };
+        for (summary, expected) in [("Needle", 1), ("Other", 0), ("Needle again", 1)] {
+            let mut edit =
+                UpdateItem::load(worker.state().unwrap(), item.clone(), EditScope::Series).unwrap();
+            edit.fields.summary = summary.into();
+            let change = worker.execute(Box::new(edit)).unwrap();
+            assert!(change.affected.contains(&SubscriptionId::Calendar(42)));
+            let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+            assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
+                if response.generation == 42 && matches!(&response.result, Ok(Snapshot::List(list)) if list.total == expected)));
+        }
+        let change = worker.execute(Box::new(DeleteItem { item })).unwrap();
+        let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+        assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
+            if matches!(&response.result, Ok(Snapshot::List(list)) if list.total == 0)));
+        subscribe(&mut worker, 43, "2026-10-12", View::Week);
+        assert!(
+            worker
+                .handle(Message::RefreshSubscriptions(vec![
+                    SubscriptionId::Calendar(42)
+                ]))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn list_can_initialize_first_and_reload_retains_selection_generation() {
+        let tmp = tempfile::tempdir().unwrap();
+        eventix_state::Settings::new(tmp.path().join("settings.toml"))
+            .write_to_file()
+            .unwrap();
+        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
+        let mut worker = Worker::new(xdg);
+        let events = worker.handle(Message::ShowContent(ContentRequest {
+            generation: 17,
+            date: None,
+            view: View::List,
+            filter: eventix_view::list::Filter {
+                keywords: "needle".into(),
+                page: 9,
+                ..Default::default()
+            },
+        }));
+        assert!(
+            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::ContentLoaded(response)]
+            if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.filter.page == 1))
+        );
+        assert_eq!(worker.content.as_ref().unwrap().filter.page, 1);
+        let events = worker.handle(Message::Reload);
+        assert!(
+            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::ContentLoaded(response)]
+            if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.filter.keywords == "needle"))
+        );
+    }
+
+    #[test]
     fn failed_commands_publish_no_changes_and_allow_subsequent_commands() {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -1167,16 +1264,20 @@ mod tests {
             generation: 1,
             date: None,
             view: View::Week,
+            filter: Default::default(),
         }));
         assert!(matches!(events.as_slice(),
             [Event::ContentLoaded(response)] if response.result.is_ok()));
-        let content = worker.content.unwrap();
+        let content = worker.content.clone().unwrap();
         assert!(matches!(
             worker.handle(Message::RefreshSidebar).as_slice(),
             [Event::SidebarLoaded(Ok(_))]
         ));
-        assert_eq!(worker.content.unwrap().date, content.date);
-        assert_eq!(worker.content.unwrap().generation, content.generation);
+        assert_eq!(worker.content.as_ref().unwrap().date, content.date);
+        assert_eq!(
+            worker.content.as_ref().unwrap().generation,
+            content.generation
+        );
 
         let events = worker.handle(Message::RefreshSubscriptions(vec![
             SubscriptionId::Calendar(1),
@@ -1184,7 +1285,7 @@ mod tests {
         assert!(
             matches!(events.as_slice(), [Event::ContentLoaded(response)] if response.result.is_ok())
         );
-        assert_eq!(worker.content.unwrap().date, content.date);
+        assert_eq!(worker.content.as_ref().unwrap().date, content.date);
     }
 
     #[test]
@@ -1193,15 +1294,16 @@ mod tests {
         let mut worker = worker(tmp.path());
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let ids = worker.subscriptions.ids();
-        let date = worker.content.unwrap().date;
+        let date = worker.content.as_ref().unwrap().date;
         let events = worker.handle(Message::ShowContent(ContentRequest {
             generation: 2,
             date: Some(NaiveDate::MAX),
             view: View::Week,
+            filter: Default::default(),
         }));
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
             if response.generation == 2 && response.result.is_err()));
-        assert_eq!(worker.content.unwrap().date, date);
+        assert_eq!(worker.content.as_ref().unwrap().date, date);
         assert_eq!(worker.subscriptions.ids(), ids);
         assert!(matches!(
             worker.handle(Message::RefreshSidebar).as_slice(),
@@ -1298,6 +1400,7 @@ mod tests {
             generation: 1,
             date: Some("2026-10-12".parse().unwrap()),
             view: View::Week,
+            filter: Default::default(),
         }));
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
             if response.generation == 1 && response.result.is_err()));
@@ -1312,6 +1415,7 @@ mod tests {
             generation: 1,
             date: Some("2026-10-12".parse().unwrap()),
             view: View::Week,
+            filter: Default::default(),
         }));
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
             if response.generation == 1 && response.result.is_ok()));

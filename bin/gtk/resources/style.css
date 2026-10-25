@@ -19,6 +19,34 @@
     padding: 8px 6px 8px 12px;
 }
 
+.ev_list_view {
+    margin-bottom: 8px;
+}
+
+.ev_list_calendar:not(:checked) {
+    opacity: 0.45;
+}
+
+.ev_panel_header button.ev_list_calendar {
+    padding: 2px;
+}
+
+.ev_list_calendar:checked {
+    border-color: @theme_selected_bg_color;
+    background: alpha(@theme_selected_bg_color, 0.2);
+}
+
+.ev_list_row {
+    padding: 10px 12px;
+    min-height: 36px;
+    border-bottom: 1px solid @ev_grid_line;
+}
+
+.ev_list_completed {
+    text-decoration: line-through;
+    opacity: 0.65;
+}
+
 .ev_editor_backdrop {
     background: alpha(black, 0.12);
     padding: 16px;
@@ -425,6 +453,7 @@ button.ev_details_uid:hover {
  * matching the outer spacing on the other sides. */
 .ev_calendar_panel {
     margin-left: 6px;
+    border-radius: 6px;
 }
 
 /* Shared colors for panel, editor, and details headers. */

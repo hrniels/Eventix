@@ -12,6 +12,7 @@ use eventix_ical::objects::{
 };
 use eventix_locale::{DateFlags, Locale};
 use eventix_state::{CalendarAlarmType, EventixState, PersonalAlarms, Settings};
+use eventix_view::list::KeywordExpression;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -76,47 +77,6 @@ struct CalendarFilter<'a> {
     id: &'a str,
     name: &'a str,
     selected: bool,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct KeywordExpression {
-    groups: Vec<Vec<String>>,
-}
-
-impl KeywordExpression {
-    fn parse(input: &str) -> Self {
-        let mut groups = Vec::new();
-        let mut current = Vec::new();
-
-        for token in input.split_whitespace() {
-            if token.eq_ignore_ascii_case("OR") {
-                if !current.is_empty() {
-                    groups.push(std::mem::take(&mut current));
-                }
-                continue;
-            }
-
-            current.push(token.to_lowercase());
-        }
-
-        if !current.is_empty() {
-            groups.push(current);
-        }
-
-        Self { groups }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.groups.is_empty()
-    }
-
-    fn matches(&self, text: &str) -> bool {
-        self.is_empty()
-            || self
-                .groups
-                .iter()
-                .any(|group| group.iter().all(|term| text.contains(term)))
-    }
 }
 
 struct ListComponent<'a> {
@@ -415,24 +375,14 @@ mod tests {
     fn keyword_expression_parses_or_case_insensitively() {
         let expr = KeywordExpression::parse("alpha or beta");
 
-        assert_eq!(
-            expr,
-            KeywordExpression {
-                groups: vec![vec![String::from("alpha")], vec![String::from("beta")]],
-            }
-        );
+        assert_eq!(expr, KeywordExpression::parse("alpha OR beta"));
     }
 
     #[test]
     fn keyword_expression_ignores_empty_or_groups() {
         let expr = KeywordExpression::parse("OR alpha OR OR beta OR");
 
-        assert_eq!(
-            expr,
-            KeywordExpression {
-                groups: vec![vec![String::from("alpha")], vec![String::from("beta")]],
-            }
-        );
+        assert_eq!(expr, KeywordExpression::parse("alpha OR beta"));
     }
 
     #[test]

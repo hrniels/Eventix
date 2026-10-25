@@ -50,6 +50,15 @@ impl PageContent {
             }
         });
 
+        let weak = page.downgrade();
+        imp.list_view.connect_toggled(move |button| {
+            if button.is_active()
+                && let Some(page) = weak.upgrade()
+            {
+                page.switch_to_list();
+            }
+        });
+
         self.translate_labels(page);
 
         let weak = page.downgrade();
@@ -97,6 +106,10 @@ impl PageContent {
         imp.month_view
             .set_tooltip_text(Some(locale.translate("Monthly View")));
 
+        imp.list_view.set_label(locale.translate("List"));
+        imp.list_view
+            .set_tooltip_text(Some(locale.translate("List View")));
+
         imp.today.set_label(locale.translate("Today"));
         imp.reload
             .set_tooltip_text(Some(locale.translate("Reload local calendars")));
@@ -112,6 +125,9 @@ impl PageContent {
         let generation = self.generation.get() + 1;
         self.generation.set(generation);
         self.loading.set(true);
+        if let Some(list) = imp.list.get() {
+            list.set_loading(true);
+        }
         imp.status
             .set_text(page.locale().translate("Loading calendar…"));
 
@@ -120,12 +136,13 @@ impl PageContent {
                 generation,
                 date,
                 view: self.view.get(),
+                filter: imp.list.get().map(|list| list.filter()).unwrap_or_default(),
             });
         }
     }
 
     pub(super) fn navigate(&self, page: &CalendarPage, direction: i32) {
-        if page.editor_open() {
+        if page.editor_open() || self.view.get() == View::List {
             return;
         }
 
@@ -137,6 +154,7 @@ impl PageContent {
         let next = match self.view.get() {
             View::Week => date.checked_add_signed(chrono::Duration::days(i64::from(direction) * 7)),
             View::Month => shift_month(date, direction),
+            View::List => None,
         };
         if let Some(date) = next {
             self.show_content(page, Some(date));
@@ -149,6 +167,9 @@ impl PageContent {
         current: Option<&EventCard>,
         forward: bool,
     ) {
+        if self.view.get() == View::List {
+            return;
+        }
         let imp = page.imp();
         let cards = if self.view.get() == View::Month {
             imp.monthly.event_cards()
@@ -211,6 +232,14 @@ impl PageContent {
         imp.picker.popdown();
         imp.week_view.set_active(view == View::Week);
         imp.month_view.set_active(view == View::Month);
+        imp.list_view.set_active(view == View::List);
+        if view == View::List {
+            if let Some(list) = imp.list.get() {
+                imp.content_stack.set_visible_child(&list.widget);
+            }
+        } else {
+            imp.content_stack.set_visible_child(&*imp.calendar_content);
+        }
 
         if view == View::Month {
             imp.stack.set_visible_child(&*imp.monthly_content);
@@ -398,6 +427,9 @@ impl PageContent {
     }
 
     pub(super) fn update_today(&self, page: &CalendarPage) {
+        if self.view.get() == View::List {
+            return;
+        }
         let imp = page.imp();
         if self.view.get() == View::Month {
             imp.monthly.update_today();
@@ -433,13 +465,35 @@ impl PageContent {
                 match snapshot {
                     Snapshot::Week(week) => self.show_week(page, week),
                     Snapshot::Month(month) => self.show_month(page, month),
+                    Snapshot::List(list) => {
+                        let imp = page.imp();
+                        imp.locale.replace(Some(list.locale.clone()));
+                        self.translate_labels(page);
+                        imp.status
+                            .set_text(list.locale.translate("Events and Tasks"));
+                        if let Some(window) = page.root().and_downcast::<gtk::Window>() {
+                            window.set_title(Some(&format!(
+                                "Eventix — {}",
+                                list.locale.translate("List View")
+                            )));
+                        }
+                        if let Some(view) = imp.list.get() {
+                            view.set_snapshot(list);
+                        }
+                    }
                 }
 
                 self.loaded_generation.set(Some(response.generation));
                 self.loading.set(false);
+                if let Some(list) = page.imp().list.get() {
+                    list.set_loading(false);
+                }
             }
             Err(error) => {
                 self.loading.set(false);
+                if let Some(list) = page.imp().list.get() {
+                    list.set_loading(false);
+                }
                 page.show_error("Could not load local calendars", &error);
             }
         }

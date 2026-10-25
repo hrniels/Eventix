@@ -39,7 +39,25 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for Window {}
+    impl WidgetImpl for Window {
+        fn move_focus(&self, direction: gtk::DirectionType) {
+            // Unhandled arrows reach GTK's window bindings after the focused control.
+            // Do not let that fallback move focus out of the active popup.
+            if self.page.popup_open()
+                && matches!(
+                    direction,
+                    gtk::DirectionType::Left
+                        | gtk::DirectionType::Right
+                        | gtk::DirectionType::Up
+                        | gtk::DirectionType::Down
+                )
+            {
+                return;
+            }
+
+            self.parent_move_focus(direction);
+        }
+    }
 
     impl WindowImpl for Window {
         fn close_request(&self) -> glib::Propagation {
@@ -247,6 +265,7 @@ impl Window {
             ("reload", vec!["<Primary>r", "F5"], None),
             ("week-view", vec!["<Alt>w"], None),
             ("month-view", vec!["<Alt>m"], None),
+            ("list-view", vec!["<Alt>l"], None),
         ] {
             let action = gio::SimpleAction::new(name, None);
             let page = self.imp().page.downgrade();
@@ -264,8 +283,10 @@ impl Window {
                         page.switch_to_week();
                     } else if name == "month-view" {
                         page.switch_to_month();
+                    } else if name == "list-view" {
+                        page.switch_to_list();
                     } else {
-                        page.show_content(None);
+                        page.show_today();
                     }
                 }
             });

@@ -84,6 +84,9 @@ impl PageSession {
         let imp = page.imp();
         let content = &imp.content;
         content.loading.set(true);
+        if let Some(list) = imp.list.get() {
+            list.set_loading(true);
+        }
         imp.status
             .set_text(page.locale().translate("Loading calendar…"));
 
@@ -96,6 +99,7 @@ impl PageSession {
                     generation: content.generation.get(),
                     date: content.date.get(),
                     view: content.view.get(),
+                    filter: imp.list.get().map(|list| list.filter()).unwrap_or_default(),
                 });
                 session.refresh_sidebar();
             }
@@ -246,6 +250,9 @@ impl PageSession {
             Event::SourceLoaded(source) => imp.status.set_tooltip_text(Some(&source)),
             Event::ReloadFailed(error) => {
                 imp.content.loading.set(false);
+                if let Some(list) = imp.list.get() {
+                    list.set_loading(false);
+                }
                 page.show_error("Could not load local calendars", &error);
             }
             Event::Changed(change) => {

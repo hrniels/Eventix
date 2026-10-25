@@ -191,7 +191,7 @@ fn calendar_factory(
     factory
 }
 
-fn set_dot_color(dot: &gtk::DrawingArea, color: gdk::RGBA) {
+pub(super) fn set_dot_color(dot: &gtk::DrawingArea, color: gdk::RGBA) {
     dot.set_draw_func(move |_, cr, width, height| {
         cr.set_source_rgba(
             color.red().into(),
