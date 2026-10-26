@@ -736,6 +736,16 @@ mod tests {
             .into_iter()
             .find(|button| button.label().as_deref() == Some("Load earlier"))
             .unwrap();
+        let list = descendants::<gtk::ListView>(view.widget.upcast_ref()).remove(0);
+        let selection = list.model().and_downcast::<gtk::SingleSelection>().unwrap();
+        selection.set_selected(1);
+        drain();
+        let label = earlier.child().and_downcast::<gtk::Label>().unwrap();
+        assert_eq!(
+            label.color(),
+            list.color(),
+            "selected pagination labels retain the list's readable foreground"
+        );
         earlier.grab_focus();
         drain();
         let position = adjustment.value();

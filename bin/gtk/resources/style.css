@@ -62,6 +62,11 @@
     background: @ev_create_background;
 }
 
+.ev_list_view button.ev_list_pagination,
+.ev_list_view button.ev_list_pagination > label {
+    color: inherit;
+}
+
 .ev_list_completed {
     text-decoration: line-through;
     opacity: 0.65;

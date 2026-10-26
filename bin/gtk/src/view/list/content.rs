@@ -305,6 +305,7 @@ impl Content {
     fn pagination_button(&self) -> gtk::Button {
         let button = gtk::Button::new();
         button.add_css_class("flat");
+        button.add_css_class("ev_list_pagination");
         let target = self.pagination.clone();
         let model = self.model.clone();
         button.connect_clicked(move |_| {
