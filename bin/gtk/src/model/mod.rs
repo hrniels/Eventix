@@ -4,5 +4,6 @@
 
 //! Session-owned state and query subscriptions, independent of GTK objects.
 
+pub(crate) mod calendars;
 pub(crate) mod query;
 pub(crate) mod session;

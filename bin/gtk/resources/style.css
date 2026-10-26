@@ -19,6 +19,40 @@
     padding: 8px 6px 8px 12px;
 }
 
+.ev_calendars_box {
+    border: 1px solid alpha(@theme_fg_color, 0.25);
+    border-radius: 5px;
+    background: linear-gradient(shade(@theme_bg_color, 1.05), shade(@theme_bg_color, 0.95));
+}
+
+.ev_calendars_label {
+    border: none;
+    padding: 4px 8px;
+}
+
+.ev_calendars_label,
+.ev_calendars_label:hover,
+.ev_calendars_label:active {
+    background: transparent;
+    box-shadow: none;
+}
+
+.ev_calendar_toggle {
+    padding: 0;
+    min-width: 0;
+    min-height: 0;
+    border: none;
+    border-radius: 50%;
+}
+
+.ev_calendar_toggle,
+.ev_calendar_toggle:hover,
+.ev_calendar_toggle:active,
+.ev_calendar_toggle:checked {
+    background: transparent;
+    box-shadow: none;
+}
+
 .ev_list_calendar:not(:checked) {
     opacity: 0.45;
 }

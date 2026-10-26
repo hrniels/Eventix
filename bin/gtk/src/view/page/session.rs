@@ -221,6 +221,10 @@ impl PageSession {
     fn handle_event(&self, page: &CalendarPage, event: Event) {
         let imp = page.imp();
         match event {
+            Event::CalendarsLoaded(calendars) => imp.calendar_toggles.update(page, calendars),
+            Event::CalendarToggleFailed(error) => {
+                page.show_error("Could not apply changes", &error);
+            }
             Event::FilepathLoaded(result) => match result {
                 Ok(path) => page.clipboard().set_text(&path),
                 Err(error) => page.show_error("Could not copy filepath", &error),

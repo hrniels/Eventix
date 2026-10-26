@@ -25,6 +25,7 @@ use super::{
 use crate::model::session::View;
 use crate::view::list::ListView;
 
+mod calendars;
 mod content;
 mod create;
 mod editor;
@@ -73,6 +74,10 @@ mod imp {
         #[template_child]
         pub reload: gtk::TemplateChild<gtk::Button>,
         #[template_child]
+        pub calendars_button: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub calendars: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub calendar: gtk::TemplateChild<gtk::Calendar>,
@@ -81,6 +86,7 @@ mod imp {
         pub(super) content: PageContent,
         pub(super) list: OnceCell<Rc<ListView>>,
         pub(super) session: PageSession,
+        pub(super) calendar_toggles: calendars::PageCalendars,
         pub calendar_css: RefCell<String>,
         pub header_group: RefCell<Option<gtk::SizeGroup>>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,

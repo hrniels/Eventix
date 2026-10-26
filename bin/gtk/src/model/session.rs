@@ -15,6 +15,7 @@ use eventix_state::actions::{
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
+use super::calendars::{self, CalendarVisibility};
 use super::query::{Query, SubscriptionId, Subscriptions};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -97,6 +98,8 @@ pub(crate) struct ChangeSet {
 }
 
 pub(crate) enum Event {
+    CalendarsLoaded(Vec<CalendarVisibility>),
+    CalendarToggleFailed(String),
     EditorLoaded(u64, Result<EditorOptions, String>),
     EditorSaved(u64, Result<ChangeSet, String>),
     EditLoaded(u64, Result<(EditorOptions, Box<UpdateItem>), String>),
@@ -121,6 +124,7 @@ pub(crate) enum SavedItem {
 
 #[derive(Debug)]
 enum Message {
+    ToggleCalendar(String),
     PrepareEditor(u64, CalCompType),
     CreateItem(u64, Box<CreateItem>),
     LoadEdit(u64, ItemId, EditScope),
@@ -143,6 +147,10 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn toggle_calendar(&self, id: String) {
+        let _ = self.requests.try_send(Message::ToggleCalendar(id));
+    }
+
     pub fn load_filepath(&self, item: ItemId) {
         let _ = self.requests.try_send(Message::LoadFilepath(item));
     }
@@ -311,7 +319,10 @@ impl Worker {
             )
         {
             match self.load_state() {
-                Ok(event) => events.push(event),
+                Ok(event) => {
+                    events.push(event);
+                    events.push(Event::CalendarsLoaded(self.calendars()));
+                }
                 Err(error) => {
                     let error = format!("{error:#}");
                     return vec![match message {
@@ -333,6 +344,7 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
+            Message::ToggleCalendar(id) => return self.toggle_calendar(id),
             Message::LoadFilepath(item) => {
                 Event::FilepathLoaded(self.filepath(&item).map_err(|error| format!("{error:#}")))
             }
@@ -430,7 +442,7 @@ impl Worker {
             Err(error) => return vec![Event::ReloadFailed(format!("{error:#}"))],
         };
 
-        let mut events = vec![event];
+        let mut events = vec![event, Event::CalendarsLoaded(self.calendars())];
         let ids = self.subscriptions.ids();
         events.extend(self.refresh_subscriptions(&ids));
 
@@ -441,6 +453,42 @@ impl Worker {
         self.state
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No loaded state"))
+    }
+
+    fn calendars(&self) -> Vec<CalendarVisibility> {
+        self.state.as_ref().map(calendars::load).unwrap_or_default()
+    }
+
+    fn toggle_calendar(&mut self, id: String) -> Vec<Event> {
+        let result = (|| -> anyhow::Result<()> {
+            let state = self
+                .state
+                .as_mut()
+                .ok_or_else(|| anyhow::anyhow!("No loaded state"))?;
+            calendars::toggle(state, &id)
+        })();
+
+        let mut events = vec![Event::CalendarsLoaded(self.calendars())];
+        match result {
+            Ok(()) => {
+                // The list owns its calendar filter and must not inherit header visibility.
+                let ids = self
+                    .subscriptions
+                    .ids()
+                    .into_iter()
+                    .filter(|id| {
+                        *id == SubscriptionId::Sidebar
+                            || self.content.as_ref().is_some_and(|content| {
+                                content.view != View::List
+                                    && *id == SubscriptionId::Calendar(content.generation)
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                events.extend(self.refresh_subscriptions(&ids));
+            }
+            Err(error) => events.push(Event::CalendarToggleFailed(format!("{error:#}"))),
+        }
+        events
     }
 
     fn filepath(&self, item: &ItemId) -> anyhow::Result<String> {
@@ -1478,6 +1526,91 @@ mod tests {
     }
 
     #[test]
+    fn calendar_toggles_persist_refresh_calendar_views_and_preserve_list_filters() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::write(
+            tmp.path().join("task.ics"),
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\n\
+             UID:unplanned\r\nSUMMARY:Task\r\nEND:VTODO\r\nEND:VCALENDAR\r\n",
+        )
+        .unwrap();
+        let mut worker = worker(tmp.path());
+        assert!(worker.calendars()[0].enabled);
+        for view in [View::Week, View::Month] {
+            subscribe(&mut worker, 7, "2026-10-12", view);
+            for enabled in [false, true] {
+                let events = worker.handle(Message::ToggleCalendar("test".into()));
+                let [
+                    Event::CalendarsLoaded(calendars),
+                    Event::ContentLoaded(response),
+                    Event::SidebarLoaded(Ok(sidebar)),
+                ] = events.as_slice()
+                else {
+                    panic!("toggle must refresh the header, calendar, and sidebar")
+                };
+                assert_eq!(calendars[0].enabled, enabled);
+                assert_eq!(response.generation, 7);
+                let count = match response.result.as_ref().unwrap() {
+                    Snapshot::Week(week) => {
+                        week.days.iter().map(|day| day.timed.len()).sum::<usize>()
+                    }
+                    Snapshot::Month(month) => month.days.iter().map(|day| day.events.len()).sum(),
+                    Snapshot::List(_) => panic!("expected calendar view"),
+                };
+                assert_eq!(count > 0, enabled);
+                assert_eq!(!sidebar.tasks.is_empty(), enabled);
+                let saved = eventix_state::Misc::load_from_file(&worker.xdg).unwrap();
+                assert_eq!(saved.calendar_disabled(&"test".into()), !enabled);
+            }
+        }
+
+        let request = ContentRequest {
+            generation: 8,
+            date: None,
+            view: View::List,
+            filter: eventix_view::list::Filter {
+                keywords: "Move".into(),
+                calendars: vec!["test".into()],
+            },
+        };
+        worker.show_content(&request).unwrap();
+        let events = worker.handle(Message::ToggleCalendar("test".into()));
+        assert!(matches!(events.as_slice(),
+            [Event::CalendarsLoaded(calendars), Event::SidebarLoaded(Ok(_))]
+            if !calendars[0].enabled));
+        let Snapshot::List(list) = worker.show_content(&request).unwrap() else {
+            panic!("expected list")
+        };
+        assert_eq!(list.filter.keywords, "Move");
+        assert_eq!(list.filter.calendars, vec!["test".to_string()]);
+        assert_eq!(list.items.len(), 1);
+
+        let events = worker.handle(Message::ToggleCalendar("missing".into()));
+        assert!(matches!(events.as_slice(),
+            [Event::CalendarsLoaded(calendars), Event::CalendarToggleFailed(_)]
+            if !calendars[0].enabled));
+    }
+
+    #[test]
+    fn failed_calendar_visibility_write_restores_state_without_refreshing_views() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        subscribe(&mut worker, 1, "2026-10-12", View::Week);
+        fs::create_dir(tmp.path().join("misc.toml")).unwrap();
+        let events = worker.handle(Message::ToggleCalendar("test".into()));
+        assert!(matches!(events.as_slice(),
+            [Event::CalendarsLoaded(calendars), Event::CalendarToggleFailed(_)]
+            if calendars[0].enabled));
+        assert!(
+            !worker
+                .state()
+                .unwrap()
+                .misc()
+                .calendar_disabled(&"test".into())
+        );
+    }
+
+    #[test]
     fn list_can_initialize_first_and_reload_retains_selection_generation() {
         let tmp = tempfile::tempdir().unwrap();
         eventix_state::Settings::new(tmp.path().join("settings.toml"))
@@ -1495,13 +1628,13 @@ mod tests {
             },
         }));
         assert!(
-            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::ContentLoaded(response)]
+            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.items.is_empty()))
         );
         assert_eq!(worker.content.as_ref().unwrap().filter.keywords, "needle");
         let events = worker.handle(Message::Reload);
         assert!(
-            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::ContentLoaded(response)]
+            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.filter.keywords == "needle"))
         );
     }
@@ -1538,7 +1671,11 @@ mod tests {
         let mut worker = Worker::new(xdg);
         assert!(matches!(
             worker.handle(Message::RefreshSidebar).as_slice(),
-            [Event::SourceLoaded(_), Event::SidebarLoaded(Ok(_))]
+            [
+                Event::SourceLoaded(_),
+                Event::CalendarsLoaded(_),
+                Event::SidebarLoaded(Ok(_))
+            ]
         ));
         assert!(worker.content.is_none());
         assert_eq!(worker.subscriptions.ids(), vec![SubscriptionId::Sidebar]);
@@ -1619,6 +1756,7 @@ mod tests {
         let events = worker.handle(Message::Reload);
         let [
             Event::SourceLoaded(_),
+            Event::CalendarsLoaded(_),
             Event::ContentLoaded(response),
             Event::SidebarLoaded(Ok(_)),
         ] = events.as_slice()
@@ -1692,7 +1830,7 @@ mod tests {
         fs::write(&settings_path, &before).unwrap();
         assert!(matches!(
             worker.handle(Message::Reload).as_slice(),
-            [Event::SourceLoaded(_)]
+            [Event::SourceLoaded(_), Event::CalendarsLoaded(_)]
         ));
         let events = worker.handle(Message::ShowContent(ContentRequest {
             generation: 1,
