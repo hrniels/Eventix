@@ -77,6 +77,10 @@ impl Filtering {
         self.search.grab_focus();
     }
 
+    pub fn set_keywords(&self, keywords: &str) {
+        self.search.set_text(keywords);
+    }
+
     pub fn connect_focus_results(&self, focus: impl Fn() -> bool + 'static) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);

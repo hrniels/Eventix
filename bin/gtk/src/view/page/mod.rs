@@ -46,6 +46,8 @@ mod imp {
         #[template_child]
         pub list_view: gtk::TemplateChild<gtk::ToggleButton>,
         #[template_child]
+        pub search: gtk::TemplateChild<gtk::Entry>,
+        #[template_child]
         pub header: gtk::TemplateChild<gtk::CenterBox>,
         #[template_child]
         pub sidebar: gtk::TemplateChild<Sidebar>,
@@ -352,6 +354,22 @@ impl CalendarPage {
         self.imp().sidebar.quick_task().summary.grab_focus();
     }
 
+    pub fn focus_search(&self) {
+        if self.editor_open() {
+            return;
+        }
+
+        self.dismiss_popovers();
+        let imp = self.imp();
+        if imp.content.view.get() == View::List {
+            if let Some(list) = imp.list.get() {
+                list.focus_search();
+            }
+        } else {
+            imp.search.grab_focus();
+        }
+    }
+
     pub fn close_editor(&self) {
         self.imp().editor.finish_editor(self, None);
     }
@@ -534,6 +552,65 @@ pub(crate) mod tests {
                     "{view:?}: add and navigation button widths"
                 );
             }
+        }
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn quick_search_switches_to_filtered_list_and_shortcut_follows_the_view() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("org.eventix.SearchTest")
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        window.present();
+        let drain = || {
+            for _ in 0..10 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let imp = page.imp();
+        let list = imp.list.get().unwrap();
+        assert_eq!(app.accels_for_action("win.search"), ["<Control>f"]);
+
+        for view in [View::Week, View::Month] {
+            imp.content.switch_view(&page, view);
+            drain();
+            assert!(imp.search.is_mapped());
+            gtk::prelude::ActionGroupExt::activate_action(&window, "search", None);
+            assert!(
+                gtk::prelude::RootExt::focus(&window)
+                    .is_some_and(|focus| focus.is_ancestor(&*imp.search))
+            );
+
+            imp.search.set_text("meeting OR appointment");
+            let generation = imp.content.generation.get();
+            imp.search.emit_activate();
+            drain();
+            assert_eq!(imp.content.view.get(), View::List);
+            assert_eq!(imp.content.generation.get(), generation + 1);
+            assert_eq!(list.filter().keywords, "meeting OR appointment");
+            assert!(!gtk::prelude::WidgetExt::is_visible(&*imp.search));
+            assert!(imp.search.text().is_empty());
+            let focus = gtk::prelude::RootExt::focus(&window).unwrap();
+            let search = focus.ancestor(gtk::Entry::static_type()).unwrap();
+            let search = search.downcast::<gtk::Entry>().unwrap();
+            assert_eq!(search.text(), "meeting OR appointment");
+            assert!(search.is_ancestor(&list.widget));
+
+            imp.list_view.grab_focus();
+            gtk::prelude::ActionGroupExt::activate_action(&window, "search", None);
+            assert!(
+                gtk::prelude::RootExt::focus(&window)
+                    .is_some_and(|focus| focus.is_ancestor(&search))
+            );
+            search.emit_activate();
+            assert_eq!(list.filter().keywords, "meeting OR appointment");
         }
         window.close();
     }

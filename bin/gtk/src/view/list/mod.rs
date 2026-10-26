@@ -40,23 +40,6 @@ impl ListView {
         filtering.update(&[], &Filter::default(), &*eventix_locale::default());
         widget.prepend(&filtering.widget);
         widget.append(&results.widget);
-        let shortcuts = gtk::ShortcutController::new();
-        shortcuts.set_scope(gtk::ShortcutScope::Global);
-        let weak = Rc::downgrade(&filtering);
-        shortcuts.add_shortcut(gtk::Shortcut::new(
-            Some(gtk::KeyvalTrigger::new(
-                gtk::gdk::Key::f,
-                gtk::gdk::ModifierType::CONTROL_MASK,
-            )),
-            Some(gtk::CallbackAction::new(move |_, _| {
-                if let Some(filtering) = weak.upgrade() {
-                    filtering.focus_search();
-                    return gtk::glib::Propagation::Stop;
-                }
-                gtk::glib::Propagation::Proceed
-            })),
-        ));
-        widget.add_controller(shortcuts);
         let view = Rc::new(Self {
             widget,
             filtering,
@@ -73,6 +56,16 @@ impl ListView {
 
     pub fn filter(&self) -> Filter {
         self.applied.borrow().clone()
+    }
+
+    pub fn focus_search(&self) {
+        self.filtering.focus_search();
+    }
+
+    pub fn set_keywords(&self, keywords: &str) {
+        self.filtering.set_keywords(keywords);
+        self.applied.borrow_mut().keywords = keywords.into();
+        self.results.reset_scroll();
     }
 
     pub fn header(&self) -> &gtk::Box {
@@ -532,11 +525,7 @@ mod tests {
         navigate(gdk::Key::Left);
         assert_eq!(view.results.model.n_items(), 5000);
         navigate(gdk::Key::End);
-        press(
-            view.widget.upcast_ref(),
-            gdk::Key::f,
-            gdk::ModifierType::CONTROL_MASK,
-        );
+        view.focus_search();
         assert!(RootExt::focus(&window).is_some_and(|focus| {
             focus.is_ancestor(&descendants::<gtk::Entry>(view.widget.upcast_ref())[0])
         }));

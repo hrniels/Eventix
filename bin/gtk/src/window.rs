@@ -228,6 +228,16 @@ impl Window {
     }
 
     fn setup_actions(&self, app: &gtk::Application) {
+        let action = gio::SimpleAction::new("search", None);
+        let page = self.imp().page.downgrade();
+        action.connect_activate(move |_, _| {
+            if let Some(page) = page.upgrade() {
+                page.focus_search();
+            }
+        });
+        self.add_action(&action);
+        app.set_accels_for_action("win.search", &["<Primary>f"]);
+
         let action = gio::SimpleAction::new("new-event", None);
         let page = self.imp().page.downgrade();
         action.connect_activate(move |_, _| {

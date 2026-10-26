@@ -33,6 +33,21 @@ impl PageContent {
         let imp = page.imp();
 
         let weak = page.downgrade();
+        imp.search.connect_activate(move |entry| {
+            let Some(page) = weak.upgrade() else { return };
+            if page.editor_open() {
+                return;
+            }
+
+            if let Some(list) = page.imp().list.get() {
+                list.set_keywords(entry.text().as_str());
+            }
+            entry.set_text("");
+            page.switch_to_list();
+            page.focus_search();
+        });
+
+        let weak = page.downgrade();
         imp.week_view.connect_toggled(move |button| {
             if button.is_active()
                 && let Some(page) = weak.upgrade()
@@ -85,6 +100,14 @@ impl PageContent {
         let imp = page.imp();
         let locale = page.locale();
         let monthly = self.view.get() == View::Month;
+
+        imp.search
+            .set_placeholder_text(Some(locale.translate("Search")));
+        imp.search
+            .update_property(&[gtk::accessible::Property::Label(locale.translate("Search"))]);
+        imp.search.set_tooltip_text(Some(locale.translate(
+            "Search summary, description, location or UID. Use OR for alternatives.",
+        )));
 
         imp.previous
             .set_tooltip_text(Some(locale.translate(if monthly {
@@ -234,6 +257,7 @@ impl PageContent {
         imp.week_view.set_active(view == View::Week);
         imp.month_view.set_active(view == View::Month);
         imp.list_view.set_active(view == View::List);
+        imp.search.set_visible(view != View::List);
         if view == View::List {
             if let Some(list) = imp.list.get() {
                 imp.content_stack.set_visible_child(&list.widget);

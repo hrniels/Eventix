@@ -9,6 +9,13 @@
         <property name="spacing">8</property>
         <style><class name="ev_calendar_toolbar"/></style>
         <child>
+          <object class="GtkEntry" id="search">
+            <property name="primary-icon-name">system-search-symbolic</property>
+            <property name="width-chars">24</property>
+            <property name="valign">center</property>
+          </object>
+        </child>
+        <child>
           <object class="GtkBox">
             <property name="hexpand">true</property>
           </object>
