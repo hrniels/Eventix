@@ -1330,6 +1330,77 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn clearing_filters_loads_visible_rows_without_scrolling() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let view = ListView::new();
+        let weak = Rc::downgrade(&view);
+        view.connect_load_rows(move |request| {
+            weak.upgrade()
+                .unwrap()
+                .set_rows(ListRowsResponse {
+                    revision: request.revision,
+                    result: Ok(request
+                        .items
+                        .into_iter()
+                        .map(|id| {
+                            let row = row(&id);
+                            (id, Some(row))
+                        })
+                        .collect()),
+                })
+                .unwrap();
+        });
+        view.set_snapshot(snapshot(Filter::default()));
+        let window = gtk::Window::builder()
+            .default_width(1000)
+            .default_height(500)
+            .child(&view.widget)
+            .build();
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        for count in [1, 0, 3] {
+            let mut filtered = snapshot(Filter::default());
+            filtered.filter.keywords = "filtered".into();
+            filtered.items = filtered.items.into_iter().skip(100).take(count).collect();
+            view.results.reset_scroll();
+            view.set_snapshot(filtered);
+            drain();
+            view.results.reset_scroll();
+            view.set_snapshot(snapshot(Filter::default()));
+            drain();
+            view.set_snapshot(snapshot(Filter::default()));
+            drain();
+            let adjustment = view.results.scroll.vadjustment();
+            assert_eq!(adjustment.value(), 0.0);
+            let end = (adjustment.page_size() / f64::from(super::row::ROW_HEIGHT)).ceil() as u32;
+            for index in 0..end {
+                let item = view
+                    .results
+                    .model
+                    .item(index)
+                    .unwrap()
+                    .downcast::<ListItem>()
+                    .unwrap();
+                assert!(
+                    item.row().is_some(),
+                    "visible row {index} is empty after clearing {count} matches"
+                );
+            }
+        }
+        window.close();
+        window.set_child(None::<&gtk::Widget>);
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn viewport_loading_merges_pages_skips_cached_rows_and_deduplicates_requests() {
         use super::model::ListModel;
 

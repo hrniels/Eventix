@@ -37,6 +37,7 @@ pub(super) struct Results {
     empty: gtk::Label,
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
     scroll_position: Rc<ScrollPosition>,
+    reset_pending: Cell<bool>,
 }
 
 impl Results {
@@ -78,10 +79,12 @@ impl Results {
             empty: builder.object("empty").unwrap(),
             locale,
             scroll_position,
+            reset_pending: Cell::new(false),
         }
     }
 
     pub fn reset_scroll(&self) {
+        self.reset_pending.set(true);
         self.scroll_position.reset();
     }
 
@@ -92,7 +95,7 @@ impl Results {
         if let Some(selection) = self.list.model().and_downcast::<gtk::SingleSelection>() {
             selection.set_selected(0);
         }
-        self.reset_scroll();
+        self.scroll_position.reset();
         // A jump from the filter can target a row outside GTK's current widget pool.
         // Wait for that row's allocation before moving keyboard focus to it.
         let slots = Rc::downgrade(&self.slots);
@@ -120,7 +123,19 @@ impl Results {
             .set_text(snapshot.locale.translate("No items found"));
         self.locale.replace(snapshot.locale);
         let empty = snapshot.items.is_empty();
+        let reset = self.reset_pending.replace(false);
+        if reset {
+            // A filter reset starts a new viewport. GTK otherwise follows a
+            // surviving item's identity to its new index while our scroll guard
+            // retains the old offset, leaving visible rows outside the load range.
+            self.list.set_model(None::<&gtk::SelectionModel>);
+        }
         self.model.set_items(snapshot.items);
+        if reset {
+            let selection = gtk::SingleSelection::new(Some(self.model.clone()));
+            selection.set_can_unselect(false);
+            self.list.set_model(Some(&selection));
+        }
         if empty {
             self.widget.set_visible_child(&self.empty);
         } else {
