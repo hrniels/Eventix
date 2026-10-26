@@ -2,10 +2,35 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::cell::{Cell, RefCell};
+use std::{
+    cell::{Cell, RefCell},
+    sync::Arc,
+};
 
+use eventix_state::actions::items::ItemId;
 use eventix_view::list::Row;
+use eventix_view::list::occurrences::{Direction, Row as OccurrenceRow};
 use gtk::{glib, prelude::*, subclass::prelude::*};
+
+#[derive(Clone, Debug)]
+pub(super) enum Entry {
+    Base(ItemId),
+    More(ItemId, Direction, bool),
+    Occurrence(Arc<OccurrenceRow>),
+    Empty(ItemId),
+}
+
+impl PartialEq for Entry {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Base(a), Self::Base(b)) | (Self::Empty(a), Self::Empty(b)) => a == b,
+            // Loading changes must retain the focused control's model identity.
+            (Self::More(a, ad, _), Self::More(b, bd, _)) => a == b && ad == bd,
+            (Self::Occurrence(a), Self::Occurrence(b)) => a.item == b.item,
+            _ => false,
+        }
+    }
+}
 
 mod imp {
     use super::*;
@@ -14,6 +39,7 @@ mod imp {
     #[properties(wrapper_type = super::ListItem)]
     pub struct ListItem {
         pub row: RefCell<Option<Row>>,
+        pub(super) entry: RefCell<Option<Entry>>,
         #[property(get)]
         pub loaded: Cell<bool>,
     }
@@ -33,6 +59,14 @@ glib::wrapper! {
 }
 
 impl ListItem {
+    pub(super) fn entry(&self) -> std::cell::Ref<'_, Option<Entry>> {
+        self.imp().entry.borrow()
+    }
+
+    pub(super) fn set_entry(&self, entry: Entry) {
+        self.imp().entry.replace(Some(entry));
+    }
+
     pub fn row(&self) -> std::cell::Ref<'_, Option<Row>> {
         self.imp().row.borrow()
     }

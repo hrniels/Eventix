@@ -136,6 +136,20 @@ mod imp {
                 }
             });
             self.content_stack.add_child(&list.widget);
+            let weak = obj.downgrade();
+            list.connect_load_occurrences(move |request| {
+                if let Some(page) = weak.upgrade()
+                    && let Some(session) = page.imp().session.current.borrow().as_ref()
+                {
+                    session.load_occurrences(request);
+                }
+            });
+            let weak = obj.downgrade();
+            list.connect_occurrence_action(move |target, action| {
+                if let Some(page) = weak.upgrade() {
+                    page.occurrence_menu_action(target, action);
+                }
+            });
             let _ = self.list.set(list);
             obj.align_headers();
             self.content.connect_controls(&obj);

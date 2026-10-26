@@ -284,6 +284,13 @@ impl PageSession {
                     page.show_error("Could not load local calendars", &error);
                 }
             }
+            Event::OccurrencesLoaded(response) => {
+                if let Some(list) = imp.list.get()
+                    && let Err(error) = list.set_occurrences(response)
+                {
+                    page.show_error("Could not load local calendars", &error);
+                }
+            }
             Event::SidebarLoaded(result) => match result {
                 Ok(sidebar) => {
                     imp.sidebar.set_snapshot(sidebar);

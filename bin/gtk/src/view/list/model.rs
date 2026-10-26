@@ -8,15 +8,34 @@ use std::{
     rc::Rc,
 };
 
+use chrono::Utc;
+use eventix_ical::objects::{CalDate, CalDateType, DateContext};
 use eventix_state::actions::items::ItemId;
+use eventix_view::list::occurrences::{Cursor, Direction};
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
-use crate::model::session::{ListRowsRequest, ListRowsResponse};
+use crate::model::session::{
+    ListRowsRequest, ListRowsResponse, OccurrencesRequest, OccurrencesResponse,
+};
 
-use super::item::ListItem;
+use super::item::{Entry, ListItem};
 
 type Key = (String, String);
 type LoadRows = Rc<dyn Fn(ListRowsRequest)>;
+type LoadOccurrences = Rc<dyn Fn(OccurrencesRequest)>;
+type Changing = Rc<dyn Fn(u32, u32)>;
+
+struct Expansion {
+    token: u64,
+    anchor: Cursor,
+    rows: Vec<std::sync::Arc<eventix_view::list::occurrences::Row>>,
+    earlier: Option<Cursor>,
+    later: Option<Cursor>,
+    loading_earlier: bool,
+    loading_later: bool,
+    earlier_count: usize,
+    later_count: usize,
+}
 
 fn key(item: &ItemId) -> Key {
     (item.calendar.clone(), item.uid.clone())
@@ -28,11 +47,17 @@ mod imp {
     #[derive(Default)]
     pub struct ListModel {
         pub items: RefCell<Vec<ItemId>>,
+        pub(super) entries: RefCell<Vec<Entry>>,
+        pub(super) expanded: RefCell<BTreeMap<Key, Expansion>>,
+        pub token: Cell<u64>,
         pub live: RefCell<BTreeMap<Key, glib::WeakRef<ListItem>>>,
+        pub(super) live_children: RefCell<Vec<(Entry, glib::WeakRef<ListItem>)>>,
         pub pending: RefCell<BTreeSet<Key>>,
         pub scheduled: Cell<bool>,
         pub revision: Cell<u64>,
         pub(super) load: RefCell<Option<LoadRows>>,
+        pub(super) load_occurrences: RefCell<Option<LoadOccurrences>>,
+        pub(super) changing: RefCell<Option<Changing>>,
     }
 
     #[glib::object_subclass]
@@ -50,11 +75,25 @@ mod imp {
         }
 
         fn n_items(&self) -> u32 {
-            self.items.borrow().len() as u32
+            self.entries.borrow().len() as u32
         }
 
         fn item(&self, position: u32) -> Option<glib::Object> {
-            let key = key(self.items.borrow().get(position as usize)?);
+            let entry = self.entries.borrow().get(position as usize)?.clone();
+            let Entry::Base(id) = &entry else {
+                let mut live = self.live_children.borrow_mut();
+                live.retain(|(_, item)| item.upgrade().is_some());
+                if let Some(item) = live.iter().find_map(|(existing, item)| {
+                    (existing == &entry).then(|| item.upgrade()).flatten()
+                }) {
+                    return Some(item.upcast());
+                }
+                let item: ListItem = glib::Object::new();
+                item.set_entry(entry.clone());
+                live.push((entry, item.downgrade()));
+                return Some(item.upcast());
+            };
+            let key = key(id);
             if let Some(item) = self
                 .live
                 .borrow()
@@ -64,6 +103,7 @@ mod imp {
                 return Some(item.upcast());
             }
             let item: ListItem = glib::Object::new();
+            item.set_entry(entry);
             self.live.borrow_mut().insert(key.clone(), item.downgrade());
             self.obj().queue(key);
             Some(item.upcast())
@@ -77,6 +117,9 @@ glib::wrapper! {
 }
 
 impl ListModel {
+    pub(super) fn connect_changing(&self, changing: impl Fn(u32, u32) + 'static) {
+        self.imp().changing.replace(Some(Rc::new(changing)));
+    }
     pub(super) fn connect_load_rows(&self, load: impl Fn(ListRowsRequest) + 'static) {
         self.imp().load.replace(Some(Rc::new(load)));
     }
@@ -85,38 +128,309 @@ impl ListModel {
         let imp = self.imp();
         imp.revision.set(imp.revision.get() + 1);
         imp.pending.borrow_mut().clear();
-        let old = imp.items.replace(items);
-        let (prefix, removed, added, keys) = {
-            let items = imp.items.borrow();
-            let prefix = old
-                .iter()
-                .zip(items.iter())
-                .take_while(|(a, b)| a == b)
-                .count();
-            let suffix = old[prefix..]
-                .iter()
-                .rev()
-                .zip(items[prefix..].iter().rev())
-                .take_while(|(a, b)| a == b)
-                .count();
-            (
-                prefix,
-                old.len() - prefix - suffix,
-                items.len() - prefix - suffix,
-                items.iter().map(key).collect::<BTreeSet<_>>(),
-            )
-        };
+        let keys = items.iter().map(key).collect::<BTreeSet<_>>();
+        imp.items.replace(items);
+        imp.expanded
+            .borrow_mut()
+            .retain(|key, _| keys.contains(key));
         imp.live
             .borrow_mut()
             .retain(|key, item| keys.contains(key) && item.upgrade().is_some());
-        if removed != 0 || added != 0 {
-            self.items_changed(prefix as u32, removed as u32, added as u32);
-        }
+        self.rebuild();
         // Refresh only objects retained by GTK's current viewport/cache. Weak
         // references let rows and their presentation data disappear after unbind.
         let live: Vec<_> = imp.live.borrow().keys().cloned().collect();
         for key in live {
             self.queue(key);
+        }
+        let children: Vec<_> = imp
+            .live_children
+            .borrow()
+            .iter()
+            .filter_map(|(_, item)| item.upgrade())
+            .collect();
+        for child in children {
+            child.notify("loaded");
+        }
+        let expanded: Vec<_> = imp.expanded.borrow().keys().cloned().collect();
+        for (calendar, uid) in expanded {
+            self.refresh_expansion(&ItemId {
+                calendar,
+                uid,
+                recurrence: None,
+            });
+        }
+    }
+
+    pub(super) fn connect_load_occurrences(&self, load: impl Fn(OccurrencesRequest) + 'static) {
+        self.imp().load_occurrences.replace(Some(Rc::new(load)));
+    }
+
+    pub(super) fn is_expanded(&self, item: &ItemId) -> bool {
+        self.imp().expanded.borrow().contains_key(&key(item))
+    }
+
+    pub(super) fn toggle(&self, item: &ItemId, timezone: &chrono_tz::Tz) {
+        let imp = self.imp();
+        if imp.expanded.borrow_mut().remove(&key(item)).is_some() {
+            self.rebuild();
+            self.notify_base(item);
+            return;
+        }
+        let today = Utc::now().with_timezone(timezone).date_naive();
+        let anchor = Cursor {
+            start: DateContext::system()
+                .date(&CalDate::Date(today, CalDateType::Inclusive))
+                .start_in(timezone),
+            recurrence: String::new(),
+        };
+        imp.expanded.borrow_mut().insert(
+            key(item),
+            Expansion {
+                token: 0,
+                anchor: anchor.clone(),
+                rows: Vec::new(),
+                earlier: Some(anchor.clone()),
+                later: Some(anchor),
+                loading_earlier: false,
+                loading_later: false,
+                earlier_count: 5,
+                later_count: 5,
+            },
+        );
+        self.refresh_expansion(item);
+        self.notify_base(item);
+    }
+
+    fn refresh_expansion(&self, item: &ItemId) {
+        let imp = self.imp();
+        imp.token.set(imp.token.get() + 1);
+        let requests = {
+            let mut expanded = imp.expanded.borrow_mut();
+            let Some(expansion) = expanded.get_mut(&key(item)) else {
+                return;
+            };
+            expansion.token = imp.token.get();
+            expansion.loading_earlier = true;
+            expansion.loading_later = true;
+            expansion.earlier = Some(expansion.anchor.clone());
+            expansion.later = Some(expansion.anchor.clone());
+            // Keep displayed rows until both sides are replaced, so refresh preserves geometry.
+            [Direction::Earlier, Direction::From].map(|direction| OccurrencesRequest {
+                revision: imp.revision.get(),
+                token: expansion.token,
+                item: item.clone(),
+                cursor: expansion.anchor.clone(),
+                direction,
+                count: if direction == Direction::Earlier {
+                    expansion.earlier_count
+                } else {
+                    expansion.later_count
+                },
+            })
+        };
+        self.rebuild();
+        for request in requests {
+            self.request_occurrences(request);
+        }
+    }
+
+    pub(super) fn load_more(&self, item: &ItemId, direction: Direction) {
+        let request = {
+            let mut expanded = self.imp().expanded.borrow_mut();
+            let Some(expansion) = expanded.get_mut(&key(item)) else {
+                return;
+            };
+            let (cursor, loading) = if direction == Direction::Earlier {
+                (&expansion.earlier, &mut expansion.loading_earlier)
+            } else {
+                (&expansion.later, &mut expansion.loading_later)
+            };
+            if *loading {
+                return;
+            }
+            let Some(cursor) = cursor.clone() else { return };
+            *loading = true;
+            let direction = if direction == Direction::Later && cursor == expansion.anchor {
+                Direction::From
+            } else {
+                direction
+            };
+            OccurrencesRequest {
+                revision: self.imp().revision.get(),
+                token: expansion.token,
+                item: item.clone(),
+                cursor,
+                direction,
+                count: 5,
+            }
+        };
+        self.rebuild();
+        self.request_occurrences(request);
+    }
+
+    fn request_occurrences(&self, request: OccurrencesRequest) {
+        let load = self.imp().load_occurrences.borrow().clone();
+        if let Some(load) = load {
+            load(request);
+        }
+    }
+
+    pub(super) fn set_occurrences(&self, response: OccurrencesResponse) -> Result<(), String> {
+        let request = response.request;
+        if request.revision != self.imp().revision.get() {
+            return Ok(());
+        }
+        let result = {
+            let mut expanded = self.imp().expanded.borrow_mut();
+            let Some(expansion) = expanded.get_mut(&key(&request.item)) else {
+                return Ok(());
+            };
+            if expansion.token != request.token {
+                return Ok(());
+            }
+            let earlier = request.direction == Direction::Earlier;
+            if earlier {
+                expansion.loading_earlier = false;
+            } else {
+                expansion.loading_later = false;
+            }
+            response.result.map(|page| {
+                // Initial/refresh pages replace their side of the anchor; pagination appends.
+                if request.cursor == expansion.anchor {
+                    expansion
+                        .rows
+                        .retain(|row| (row.cursor < expansion.anchor) != earlier);
+                }
+                let boundary = if earlier {
+                    page.rows.first()
+                } else {
+                    page.rows.last()
+                }
+                .map(|row| row.cursor.clone())
+                .filter(|_| page.more);
+                if earlier {
+                    expansion.earlier = boundary;
+                } else {
+                    expansion.later = boundary;
+                }
+                expansion.rows.extend(page.rows);
+                expansion.rows.sort_by(|a, b| a.cursor.cmp(&b.cursor));
+                expansion.rows.dedup_by(|a, b| a.item == b.item);
+                expansion.earlier_count = expansion
+                    .rows
+                    .iter()
+                    .filter(|row| row.cursor < expansion.anchor)
+                    .count()
+                    .max(5);
+                expansion.later_count = expansion
+                    .rows
+                    .iter()
+                    .filter(|row| row.cursor >= expansion.anchor)
+                    .count()
+                    .max(5);
+            })
+        };
+        self.rebuild();
+        result
+    }
+
+    fn notify_base(&self, item: &ItemId) {
+        let live = self
+            .imp()
+            .live
+            .borrow()
+            .get(&key(item))
+            .and_then(glib::WeakRef::upgrade);
+        if let Some(live) = live {
+            live.notify("loaded");
+        }
+    }
+
+    fn rebuild(&self) {
+        let imp = self.imp();
+        let mut entries = Vec::new();
+        for item in imp.items.borrow().iter() {
+            entries.push(Entry::Base(item.clone()));
+            if let Some(expansion) = imp.expanded.borrow().get(&key(item)) {
+                if expansion.earlier.is_some() {
+                    entries.push(Entry::More(
+                        item.clone(),
+                        Direction::Earlier,
+                        expansion.loading_earlier,
+                    ));
+                }
+                entries.extend(expansion.rows.iter().cloned().map(Entry::Occurrence));
+                if expansion.rows.is_empty()
+                    && !expansion.loading_earlier
+                    && !expansion.loading_later
+                {
+                    entries.push(Entry::Empty(item.clone()));
+                }
+                if expansion.later.is_some() {
+                    entries.push(Entry::More(
+                        item.clone(),
+                        Direction::Later,
+                        expansion.loading_later,
+                    ));
+                }
+            }
+        }
+        let (prefix, removed, added) = {
+            let old = imp.entries.borrow();
+            let prefix = old
+                .iter()
+                .zip(entries.iter())
+                .take_while(|(a, b)| a == b)
+                .count();
+            let suffix = old[prefix..]
+                .iter()
+                .rev()
+                .zip(entries[prefix..].iter().rev())
+                .take_while(|(a, b)| a == b)
+                .count();
+            (
+                prefix,
+                old.len() - prefix - suffix,
+                entries.len() - prefix - suffix,
+            )
+        };
+        if removed != 0 || added != 0 {
+            // Moving focus can reenter GTK's factory, which must still see the old index.
+            let changing = imp.changing.borrow().clone();
+            if let Some(changing) = changing {
+                changing(prefix as u32, removed as u32);
+            }
+        }
+        imp.entries.replace(entries);
+        let mut updates = Vec::new();
+        imp.live_children.borrow_mut().retain_mut(|(entry, item)| {
+            let Some(item) = item.upgrade() else {
+                return false;
+            };
+            let entries = imp.entries.borrow();
+            let Some(current) = entries.iter().find(|current| *current == entry) else {
+                return false;
+            };
+            let changed = match (&*entry, current) {
+                (Entry::More(_, _, old), Entry::More(_, _, new)) => old != new,
+                (Entry::Occurrence(old), Entry::Occurrence(new)) => {
+                    !std::sync::Arc::ptr_eq(old, new)
+                }
+                _ => false,
+            };
+            if changed {
+                *entry = current.clone();
+                updates.push((item, current.clone()));
+            }
+            true
+        });
+        if removed != 0 || added != 0 {
+            self.items_changed(prefix as u32, removed as u32, added as u32);
+        }
+        for (item, entry) in updates {
+            item.set_entry(entry);
+            item.notify("loaded");
         }
     }
 
@@ -167,6 +481,11 @@ impl ListModel {
             return Ok(());
         }
         for (id, row) in response.result? {
+            if row.as_ref().is_none_or(|row| !row.recurrent)
+                && self.imp().expanded.borrow_mut().remove(&key(&id)).is_some()
+            {
+                self.rebuild();
+            }
             let item = imp
                 .live
                 .borrow()

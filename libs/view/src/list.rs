@@ -2,7 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Base-component browsing, independent of occurrence expansion and calendar visibility.
+//! Base-component browsing and occurrence expansion, independent of calendar visibility.
+
+pub mod occurrences;
 
 use std::sync::Arc;
 
@@ -302,6 +304,7 @@ mod tests {
         col::{CalDir, CalFile},
         objects::{CalPartStat, UpdatableEventLike},
     };
+    use eventix_state::actions::items::ItemId;
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     use super::{Action, Filter, KeywordExpression, Row, Snapshot, actions};
@@ -446,6 +449,185 @@ mod tests {
             .collections_mut()
             .insert("local".into(), collection);
         (tmp, state)
+    }
+
+    #[test]
+    fn occurrence_pages_include_boundaries_exclusions_and_equal_start_overrides_once() {
+        use crate::list::occurrences::{Cursor, Direction, Page};
+        use chrono::TimeZone;
+        let (_tmp, state) = state(&["BEGIN:VEVENT\nUID:series\nDTSTART;VALUE=DATE:20261015\n\
+             RRULE:FREQ=DAILY;COUNT=20\nEXDATE;VALUE=DATE:20261024\nSUMMARY:Base\nEND:VEVENT\n\
+             BEGIN:VEVENT\nUID:series\nRECURRENCE-ID;VALUE=DATE:20261026\n\
+             DTSTART;VALUE=DATE:20261025\nSUMMARY:Moved\nEND:VEVENT"]);
+        let item = ItemId {
+            calendar: "work".into(),
+            uid: "series".into(),
+            recurrence: None,
+        };
+        let cursor = Cursor {
+            start: chrono_tz::Europe::Berlin
+                .with_ymd_and_hms(2026, 10, 25, 0, 0, 0)
+                .unwrap(),
+            recurrence: String::new(),
+        };
+        let earlier = Page::load(&state, &item, &cursor, Direction::Earlier, 5);
+        assert_eq!(earlier.rows.len(), 5);
+        assert!(earlier.more);
+        assert!(earlier.rows.last().unwrap().excluded);
+        assert_eq!(earlier.rows.last().unwrap().item.calendar, "work");
+        let oldest = Page::load(
+            &state,
+            &item,
+            &earlier.rows[0].cursor,
+            Direction::Earlier,
+            5,
+        );
+        assert_eq!(oldest.rows.len(), 5);
+        assert!(!oldest.more);
+        let first = Page::load(&state, &item, &cursor, Direction::From, 1);
+        assert_eq!(first.rows.len(), 1);
+        assert_eq!(first.rows[0].cursor.start, cursor.start);
+        assert!(first.more);
+        let second = Page::load(&state, &item, &first.rows[0].cursor, Direction::Later, 1);
+        assert_eq!(second.rows[0].cursor.start, cursor.start);
+        assert_ne!(first.rows[0].item, second.rows[0].item);
+        assert!(second.rows[0].overwritten);
+        assert_eq!(second.rows[0].summary, "Moved");
+        let mut all = oldest.rows;
+        all.extend(earlier.rows);
+        let mut boundary = cursor;
+        let mut dir = Direction::From;
+        loop {
+            let page = Page::load(&state, &item, &boundary, dir, 3);
+            if let Some(last) = page.rows.last() {
+                boundary = last.cursor.clone();
+            }
+            all.extend(page.rows);
+            if !page.more {
+                break;
+            }
+            dir = Direction::Later;
+        }
+        assert_eq!(all.len(), 20);
+        assert!(all.windows(2).all(|pair| pair[0].cursor < pair[1].cursor));
+        let ids = all
+            .iter()
+            .map(|row| row.item.recurrence.as_ref().unwrap().to_string())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(ids.len(), 20);
+    }
+
+    #[test]
+    fn occurrence_pages_support_tasks_without_due_dates_and_respect_calendar_identity() {
+        use crate::list::occurrences::{Cursor, Direction, Page};
+        use chrono::TimeZone;
+        let (_tmp, state) = state(&["BEGIN:VTODO\nUID:task\nDTSTART;VALUE=DATE:20261025\n\
+             RRULE:FREQ=DAILY;COUNT=2\nSTATUS:COMPLETED\nEND:VTODO"]);
+        let mut item = ItemId {
+            calendar: "home".into(),
+            uid: "task".into(),
+            recurrence: None,
+        };
+        let cursor = Cursor {
+            start: chrono_tz::Europe::Berlin
+                .with_ymd_and_hms(2026, 10, 25, 0, 0, 0)
+                .unwrap(),
+            recurrence: String::new(),
+        };
+        let page = Page::load(&state, &item, &cursor, Direction::From, 5);
+        assert_eq!(page.rows.len(), 2);
+        assert!(!page.more);
+        for row in &page.rows {
+            assert_eq!(row.item.calendar, "home");
+            assert!(row.task && row.completed);
+            assert!(!row.details.actions.complete);
+            assert!(!row.details.actions.postpone);
+            assert!(!row.details.date.is_empty());
+        }
+        item.calendar = "missing".into();
+        assert!(
+            Page::load(&state, &item, &cursor, Direction::From, 5)
+                .rows
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn occurrence_markers_inherit_calendar_colors_and_use_overridden_attendee_responses() {
+        use crate::{
+            details::Response,
+            list::occurrences::{Cursor, Direction, Page},
+        };
+        use chrono::TimeZone;
+        let (_tmp, mut state) = state(&[
+            "BEGIN:VEVENT\nUID:invitation\nDTSTART;VALUE=DATE:20261025\n\
+             RRULE:FREQ=DAILY;COUNT=4\nORGANIZER:mailto:owner@example.org\n\
+             ATTENDEE;PARTSTAT=ACCEPTED:mailto:guest@example.org\nEND:VEVENT\n\
+             BEGIN:VEVENT\nUID:invitation\nRECURRENCE-ID;VALUE=DATE:20261026\n\
+             DTSTART;VALUE=DATE:20261026\nATTENDEE;PARTSTAT=TENTATIVE:mailto:guest@example.org\nEND:VEVENT\n\
+             BEGIN:VEVENT\nUID:invitation\nRECURRENCE-ID;VALUE=DATE:20261027\n\
+             DTSTART;VALUE=DATE:20261027\nATTENDEE;PARTSTAT=DECLINED:mailto:guest@example.org\nEND:VEVENT\n\
+             BEGIN:VEVENT\nUID:invitation\nRECURRENCE-ID;VALUE=DATE:20261028\n\
+             DTSTART;VALUE=DATE:20261028\nATTENDEE:mailto:guest@example.org\nEND:VEVENT",
+        ]);
+        let collection = state
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap();
+        collection
+            .all_calendars_mut()
+            .get_mut("work")
+            .unwrap()
+            .set_bgcolor("#803366".into());
+        let syncer = |mail: &str| SyncerType::VDirSyncer {
+            email: eventix_state::EmailAccount::new("User".into(), mail.into()),
+            url: "https://example.org".into(),
+            read_only: false,
+            username: None,
+            password: None,
+            time_span: Default::default(),
+        };
+        collection.set_syncer(syncer("guest@example.org"));
+        let item = ItemId {
+            calendar: "work".into(),
+            uid: "invitation".into(),
+            recurrence: None,
+        };
+        let cursor = Cursor {
+            start: chrono_tz::Europe::Berlin
+                .with_ymd_and_hms(2026, 10, 25, 0, 0, 0)
+                .unwrap(),
+            recurrence: String::new(),
+        };
+        let page = Page::load(&state, &item, &cursor, Direction::From, 5);
+        assert_eq!(
+            page.rows.iter().map(|row| row.response).collect::<Vec<_>>(),
+            [
+                Response::Accepted,
+                Response::Tentative,
+                Response::Declined,
+                Response::Pending
+            ]
+            .map(Some)
+        );
+        let base = Row::load(&state, &item).unwrap();
+        for row in page.rows {
+            assert_eq!(row.background, base.background);
+            assert_eq!(row.calendar_name, base.calendar_name);
+        }
+        state
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .set_syncer(syncer("owner@example.org"));
+        assert!(
+            Page::load(&state, &item, &cursor, Direction::From, 5)
+                .rows
+                .iter()
+                .all(|row| row.response.is_none())
+        );
     }
 
     #[test]

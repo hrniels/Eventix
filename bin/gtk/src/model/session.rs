@@ -75,6 +75,21 @@ pub(crate) struct ListRowsResponse {
     pub result: Result<Vec<(ItemId, Option<eventix_view::list::Row>)>, String>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct OccurrencesRequest {
+    pub revision: u64,
+    pub token: u64,
+    pub item: ItemId,
+    pub cursor: eventix_view::list::occurrences::Cursor,
+    pub direction: eventix_view::list::occurrences::Direction,
+    pub count: usize,
+}
+
+pub(crate) struct OccurrencesResponse {
+    pub request: OccurrencesRequest,
+    pub result: Result<eventix_view::list::occurrences::Page, String>,
+}
+
 /// Notifications carry identities and invalidations; snapshots are refetched separately.
 pub(crate) struct ChangeSet {
     pub item: ItemId,
@@ -91,6 +106,7 @@ pub(crate) enum Event {
     FilepathLoaded(Result<String, String>),
     ContentLoaded(ContentResponse),
     ListRowsLoaded(ListRowsResponse),
+    OccurrencesLoaded(OccurrencesResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
     SourceLoaded(String),
     ReloadFailed(String),
@@ -114,6 +130,7 @@ enum Message {
     LoadFilepath(ItemId),
     ShowContent(ContentRequest),
     LoadListRows(ListRowsRequest),
+    LoadOccurrences(OccurrencesRequest),
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,
@@ -183,6 +200,10 @@ impl CalendarSession {
 
     pub fn load_list_rows(&self, request: ListRowsRequest) {
         let _ = self.requests.try_send(Message::LoadListRows(request));
+    }
+
+    pub fn load_occurrences(&self, request: OccurrencesRequest) {
+        let _ = self.requests.try_send(Message::LoadOccurrences(request));
     }
 
     pub fn refresh_sidebar(&self) {
@@ -368,6 +389,21 @@ impl Worker {
                     })
                     .map_err(|error| format!("{error:#}")),
             }),
+            Message::LoadOccurrences(request) => {
+                let result = self
+                    .state()
+                    .map(|state| {
+                        eventix_view::list::occurrences::Page::load(
+                            state,
+                            &request.item,
+                            &request.cursor,
+                            request.direction,
+                            request.count,
+                        )
+                    })
+                    .map_err(|error| format!("{error:#}"));
+                Event::OccurrencesLoaded(OccurrencesResponse { request, result })
+            }
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
