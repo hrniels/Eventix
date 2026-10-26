@@ -48,6 +48,8 @@
 .ev_list_view row {
     padding: 0;
     min-height: 0;
+    background: transparent;
+    color: inherit;
 }
 
 .ev_list_row {
@@ -55,7 +57,8 @@
     border-bottom: 1px solid @ev_grid_line;
 }
 
-.ev_list_row:hover {
+.ev_list_row:hover,
+.ev_list_view row:selected .ev_list_row {
     background: @ev_create_background;
 }
 

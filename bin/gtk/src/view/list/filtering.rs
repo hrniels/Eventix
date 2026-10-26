@@ -73,6 +73,23 @@ impl Filtering {
         self.changed.replace(Some(Rc::new(changed)));
     }
 
+    pub fn focus_search(&self) {
+        self.search.grab_focus();
+    }
+
+    pub fn connect_focus_results(&self, focus: impl Fn() -> bool + 'static) {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            if key == gdk::Key::Down && modifiers.is_empty() && focus() {
+                gtk::glib::Propagation::Stop
+            } else {
+                gtk::glib::Propagation::Proceed
+            }
+        });
+        self.search.add_controller(keys);
+    }
+
     fn emit_changed(&self) {
         if !self.updating.get()
             && let Some(changed) = self.changed.borrow().as_ref()

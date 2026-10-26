@@ -23,6 +23,7 @@ use super::{
 use crate::view::action_menu::{Actions, OccurrenceTarget};
 
 type Bindings = RefCell<HashMap<gtk::ListItem, (ListItem, glib::SignalHandlerId)>>;
+type Slots = Rc<RefCell<HashMap<gtk::ListItem, Rc<Content>>>>;
 
 /// Renders a virtualized list with presentation data loaded on demand.
 pub(super) struct Results {
@@ -31,6 +32,8 @@ pub(super) struct Results {
     pub widget: gtk::Stack,
     pub actions: Rc<Actions<Row>>,
     pub occurrence_actions: Rc<Actions<OccurrenceTarget>>,
+    list: gtk::ListView,
+    slots: Slots,
     empty: gtk::Label,
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
     scroll_position: Rc<ScrollPosition>,
@@ -46,16 +49,23 @@ impl Results {
         let list: gtk::ListView = builder.object("list").unwrap();
         let scroll: gtk::ScrolledWindow = builder.object("scroll").unwrap();
         let scroll_position = ScrollPosition::new(&scroll, &list);
+        let slots = Slots::default();
         let factory = factory(
+            &list,
+            &slots,
             model.clone(),
             locale.clone(),
             actions.clone(),
             occurrence_actions.clone(),
             scroll_position.clone(),
         );
-        let selection = gtk::NoSelection::new(Some(model.clone()));
+        let selection = gtk::SingleSelection::new(Some(model.clone()));
+        selection.set_can_unselect(false);
         list.set_model(Some(&selection));
         list.set_factory(Some(&factory));
+        list.connect_map(|list| {
+            list.grab_focus();
+        });
         track_viewport(&model, &scroll);
         Self {
             scroll,
@@ -63,6 +73,8 @@ impl Results {
             widget: builder.object("results").unwrap(),
             actions,
             occurrence_actions,
+            list,
+            slots,
             empty: builder.object("empty").unwrap(),
             locale,
             scroll_position,
@@ -71,6 +83,36 @@ impl Results {
 
     pub fn reset_scroll(&self) {
         self.scroll_position.reset();
+    }
+
+    pub fn focus_first(&self) -> bool {
+        if self.model.n_items() == 0 {
+            return false;
+        }
+        if let Some(selection) = self.list.model().and_downcast::<gtk::SingleSelection>() {
+            selection.set_selected(0);
+        }
+        self.reset_scroll();
+        // A jump from the filter can target a row outside GTK's current widget pool.
+        // Wait for that row's allocation before moving keyboard focus to it.
+        let slots = Rc::downgrade(&self.slots);
+        self.list.add_tick_callback(move |list, _| {
+            let Some(slots) = slots.upgrade().filter(|_| list.is_mapped()) else {
+                return glib::ControlFlow::Break;
+            };
+            let row = slots
+                .borrow()
+                .iter()
+                .find(|(item, _)| item.position() == 0)
+                .and_then(|(_, content)| content.widget.parent());
+            if let Some(row) = row {
+                row.grab_focus();
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
+        });
+        true
     }
 
     pub fn update(&self, snapshot: Snapshot) {
@@ -87,7 +129,68 @@ impl Results {
     }
 }
 
+fn install_keyboard(list: &gtk::ListView, slots: &Slots) {
+    let activated = slots.clone();
+    list.connect_activate(move |_, position| {
+        let content = activated
+            .borrow()
+            .iter()
+            .find(|(item, _)| item.position() == position)
+            .map(|(_, content)| content.clone());
+        if let Some(content) = content {
+            content.open_menu();
+        }
+    });
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak_list = list.downgrade();
+    let targets = slots.clone();
+    keys.connect_key_pressed(move |_, key, _, modifiers| {
+        let Some(list) = weak_list.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+        // Menus retain their own keyboard navigation and activation.
+        if !modifiers.is_empty()
+            || !matches!(
+                key,
+                gtk::gdk::Key::space
+                    | gtk::gdk::Key::Left
+                    | gtk::gdk::Key::Right
+                    | gtk::gdk::Key::Return
+                    | gtk::gdk::Key::KP_Enter
+            )
+            || list
+                .root()
+                .and_then(|root| root.focus())
+                .is_some_and(|focus| focus.ancestor(gtk::Popover::static_type()).is_some())
+        {
+            return glib::Propagation::Proceed;
+        }
+        let Some(selection) = list.model().and_downcast::<gtk::SingleSelection>() else {
+            return glib::Propagation::Proceed;
+        };
+        let content = targets
+            .borrow()
+            .iter()
+            .find(|(item, _)| item.position() == selection.selected())
+            .map(|(_, content)| content.clone());
+        if let Some(content) = content {
+            match key {
+                gtk::gdk::Key::space => content.toggle_occurrences(None),
+                gtk::gdk::Key::Left => content.toggle_occurrences(Some(false)),
+                gtk::gdk::Key::Right => content.toggle_occurrences(Some(true)),
+                _ => content.open_menu(),
+            }
+            return glib::Propagation::Stop;
+        }
+        glib::Propagation::Proceed
+    });
+    list.add_controller(keys);
+}
+
 fn factory(
+    list: &gtk::ListView,
+    slots: &Slots,
     model: ListModel,
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
     actions: Rc<Actions<Row>>,
@@ -96,7 +199,7 @@ fn factory(
 ) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let bindings = Rc::new(Bindings::default());
-    let slots = Rc::new(RefCell::new(HashMap::<gtk::ListItem, Rc<Content>>::new()));
+    install_keyboard(list, slots);
     let weak = Rc::downgrade(&bindings);
     let position = scroll_position.clone();
     model.connect_changing(move |start, removed| {
@@ -109,8 +212,8 @@ fn factory(
     let setup_model = model.clone();
     factory.connect_setup(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-        item.set_activatable(false);
-        item.set_selectable(false);
+        item.set_activatable(true);
+        item.set_selectable(true);
         let content = Rc::new(Content::new(&setup_model));
         item.set_child(Some(&content.widget));
         setup_slots.borrow_mut().insert(item.clone(), content);
@@ -150,6 +253,7 @@ fn factory(
             content.clear();
         }
     });
+    let slots = slots.clone();
     factory.connect_teardown(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().unwrap();
         slots.borrow_mut().remove(item);

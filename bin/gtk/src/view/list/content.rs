@@ -217,6 +217,24 @@ impl Content {
         }
     }
 
+    pub fn open_menu(&self) {
+        if self.menu.is_mapped() {
+            self.menu.popup();
+        } else if let Some(button) = self.more.get().filter(|button| button.is_mapped()) {
+            button.emit_clicked();
+        }
+    }
+
+    pub fn toggle_occurrences(&self, expanded: Option<bool>) {
+        let target = self.expansion.borrow().clone();
+        if let Some((id, timezone)) = target
+            && let Some(model) = self.model.upgrade()
+            && expanded.is_none_or(|expanded| model.is_expanded(&id) != expanded)
+        {
+            model.toggle(&id, &timezone);
+        }
+    }
+
     fn show(&self, child: &impl IsA<gtk::Widget>) {
         self.widget.set_child(child);
         child.set_visible(true);
@@ -268,7 +286,7 @@ impl Content {
             } else {
                 "pan-end-symbolic"
             }));
-        self.content.set_focusable(id.is_some());
+        self.content.set_focusable(false);
         self.content
             .set_cursor_from_name(id.as_ref().map(|_| "pointer"));
         self.content.set_tooltip_text(id.as_ref().map(|_| {
@@ -334,26 +352,4 @@ fn install_expansion(content: &gtk::Box, target: &ExpansionTarget, model: &ListM
         }
     });
     content.add_controller(click);
-    let keys = gtk::EventControllerKey::new();
-    let weak_content = content.downgrade();
-    let weak_model = model.downgrade();
-    let target = target.clone();
-    keys.connect_key_pressed(move |_, key, _, modifiers| {
-        if weak_content
-            .upgrade()
-            .is_some_and(|content| content.has_focus())
-            && modifiers.is_empty()
-            && matches!(key, gtk::gdk::Key::Return | gtk::gdk::Key::space)
-        {
-            let target = target.borrow().clone();
-            if let Some((id, timezone)) = target
-                && let Some(model) = weak_model.upgrade()
-            {
-                model.toggle(&id, &timezone);
-                return glib::Propagation::Stop;
-            }
-        }
-        glib::Propagation::Proceed
-    });
-    content.add_controller(keys);
 }

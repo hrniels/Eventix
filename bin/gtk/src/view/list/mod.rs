@@ -40,12 +40,35 @@ impl ListView {
         filtering.update(&[], &Filter::default(), &*eventix_locale::default());
         widget.prepend(&filtering.widget);
         widget.append(&results.widget);
-        Rc::new(Self {
+        let shortcuts = gtk::ShortcutController::new();
+        shortcuts.set_scope(gtk::ShortcutScope::Global);
+        let weak = Rc::downgrade(&filtering);
+        shortcuts.add_shortcut(gtk::Shortcut::new(
+            Some(gtk::KeyvalTrigger::new(
+                gtk::gdk::Key::f,
+                gtk::gdk::ModifierType::CONTROL_MASK,
+            )),
+            Some(gtk::CallbackAction::new(move |_, _| {
+                if let Some(filtering) = weak.upgrade() {
+                    filtering.focus_search();
+                    return gtk::glib::Propagation::Stop;
+                }
+                gtk::glib::Propagation::Proceed
+            })),
+        ));
+        widget.add_controller(shortcuts);
+        let view = Rc::new(Self {
             widget,
             filtering,
             results,
             applied: RefCell::default(),
-        })
+        });
+        let weak = Rc::downgrade(&view);
+        view.filtering.connect_focus_results(move || {
+            weak.upgrade()
+                .is_some_and(|view| view.results.focus_first())
+        });
+        view
     }
 
     pub fn filter(&self) -> Filter {
@@ -380,6 +403,164 @@ mod tests {
         model.set_items(vec![b]);
         assert!(!model.is_expanded(&a));
         assert_eq!(model.n_items(), 1);
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn keyboard_navigation_selects_scrolls_opens_menus_and_toggles_occurrences() {
+        use gtk::{gdk, glib};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gdk::Display::default().unwrap());
+        let view = ListView::new();
+        let weak = Rc::downgrade(&view);
+        view.connect_load_rows(move |request| {
+            weak.upgrade()
+                .unwrap()
+                .set_rows(ListRowsResponse {
+                    revision: request.revision,
+                    result: Ok(request
+                        .items
+                        .into_iter()
+                        .map(|id| {
+                            let row = row(&id);
+                            (id, Some(row))
+                        })
+                        .collect()),
+                })
+                .unwrap();
+        });
+        view.set_snapshot(snapshot(Filter::default()));
+        let window = gtk::Window::builder()
+            .default_width(1000)
+            .default_height(500)
+            .child(&view.widget)
+            .build();
+        window.present();
+        let list = descendants::<gtk::ListView>(view.widget.upcast_ref()).remove(0);
+        let selection = list.model().and_downcast::<gtk::SingleSelection>().unwrap();
+        let drain = || {
+            for _ in 0..15 {
+                while glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        // Activate GTK's actual key bindings as well as the list's capture controller.
+        let press = |widget: &gtk::Widget, key: gdk::Key, modifiers: gdk::ModifierType| {
+            let controllers = widget.observe_controllers().snapshot();
+            for controller in &controllers {
+                if let Some(keys) = controller.downcast_ref::<gtk::EventControllerKey>()
+                    && keys.emit_by_name::<bool>("key-pressed", &[&key, &0u32, &modifiers])
+                {
+                    return;
+                }
+            }
+            for controller in controllers {
+                if let Ok(shortcuts) = controller.downcast::<gtk::ShortcutController>() {
+                    for shortcut in shortcuts.snapshot() {
+                        let shortcut = shortcut.downcast::<gtk::Shortcut>().unwrap();
+                        if let Some(trigger) =
+                            shortcut.trigger().and_downcast::<gtk::KeyvalTrigger>()
+                            && trigger.keyval() == key
+                            && trigger.modifiers() == modifiers
+                        {
+                            assert!(shortcut.action().unwrap().activate(
+                                gtk::ShortcutActionFlags::EXCLUSIVE,
+                                widget,
+                                shortcut.arguments().as_ref(),
+                            ));
+                            return;
+                        }
+                    }
+                }
+            }
+            panic!("no binding for {key:?}");
+        };
+        drain();
+        assert_eq!(selection.selected(), 0);
+        assert!(RootExt::focus(&window).is_some_and(|focus| focus.is_ancestor(&list)));
+        let navigate = |key| {
+            press(list.upcast_ref(), key, gdk::ModifierType::empty());
+            drain();
+        };
+        navigate(gdk::Key::Down);
+        assert_eq!(selection.selected(), 1);
+        navigate(gdk::Key::Up);
+        assert_eq!(selection.selected(), 0);
+        navigate(gdk::Key::Page_Down);
+        assert!(selection.selected() > 1);
+        navigate(gdk::Key::Page_Up);
+        assert_eq!(selection.selected(), 0);
+        navigate(gdk::Key::End);
+        assert_eq!(selection.selected(), 4999);
+        assert!(view.results.scroll.vadjustment().value() > 0.0);
+        assert!(
+            descendants::<gtk::Label>(list.upcast_ref())
+                .iter()
+                .any(|label| label.is_mapped() && label.text() == "Item 4999")
+        );
+        navigate(gdk::Key::Return);
+        let menu = descendants::<gtk::MenuButton>(list.upcast_ref())
+            .into_iter()
+            .find(|button| button.popover().is_some_and(|popover| popover.is_visible()))
+            .unwrap();
+        menu.popdown();
+        drain();
+        navigate(gdk::Key::Home);
+        assert_eq!(selection.selected(), 0);
+        navigate(gdk::Key::space);
+        assert!(
+            view.results
+                .model
+                .is_expanded(&snapshot(Filter::default()).items[0])
+        );
+        navigate(gdk::Key::space);
+        assert_eq!(view.results.model.n_items(), 5000);
+        navigate(gdk::Key::Right);
+        let expanded_count = view.results.model.n_items();
+        assert!(expanded_count > 5000);
+        navigate(gdk::Key::Right);
+        assert_eq!(view.results.model.n_items(), expanded_count);
+        navigate(gdk::Key::Left);
+        assert_eq!(view.results.model.n_items(), 5000);
+        navigate(gdk::Key::Left);
+        assert_eq!(view.results.model.n_items(), 5000);
+        navigate(gdk::Key::Down);
+        navigate(gdk::Key::space);
+        navigate(gdk::Key::Right);
+        navigate(gdk::Key::Left);
+        assert_eq!(view.results.model.n_items(), 5000);
+        navigate(gdk::Key::End);
+        press(
+            view.widget.upcast_ref(),
+            gdk::Key::f,
+            gdk::ModifierType::CONTROL_MASK,
+        );
+        assert!(RootExt::focus(&window).is_some_and(|focus| {
+            focus.is_ancestor(&descendants::<gtk::Entry>(view.widget.upcast_ref())[0])
+        }));
+        let search = descendants::<gtk::Entry>(view.widget.upcast_ref()).remove(0);
+        press(
+            search.upcast_ref(),
+            gdk::Key::Down,
+            gdk::ModifierType::empty(),
+        );
+        drain();
+        assert_eq!(selection.selected(), 0);
+        assert_eq!(view.results.scroll.vadjustment().value(), 0.0);
+        assert!(RootExt::focus(&window).is_some_and(|focus| focus.is_ancestor(&list)));
+        navigate(gdk::Key::Down);
+        assert_eq!(selection.selected(), 1);
+        let mut empty = snapshot(Filter::default());
+        empty.items.clear();
+        view.set_snapshot(empty);
+        drain();
+        view.filtering.focus_search();
+        assert!(!view.results.focus_first());
+        assert!(RootExt::focus(&window).is_some_and(|focus| focus.is_ancestor(&search)));
+        window.close();
+        window.set_child(None::<&gtk::Widget>);
     }
 
     #[test]
