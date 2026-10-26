@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::Cell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use gtk::{gdk, graphene, prelude::*};
 
@@ -11,10 +15,13 @@ use crate::style;
 use super::card::EventCard;
 use super::geometry::rect;
 
+const SCROLL_QUIET_PERIOD: Duration = Duration::from_millis(200);
+
 /// Tracks a creation target without intercepting card clicks or drag gestures.
 #[derive(Default)]
 pub(crate) struct CreationHint {
     position: Cell<Option<(f64, f64)>>,
+    scroll_until: Cell<Option<Instant>>,
 }
 
 impl CreationHint {
@@ -27,6 +34,12 @@ impl CreationHint {
             widget.set_cursor_from_name(None);
             widget.queue_draw();
         }
+    }
+
+    fn pause_for_scroll(&self, widget: &impl IsA<gtk::Widget>) {
+        self.scroll_until
+            .set(Some(Instant::now() + SCROLL_QUIET_PERIOD));
+        self.clear(widget);
     }
 
     pub(crate) fn install<W: IsA<gtk::Widget>>(
@@ -42,6 +55,16 @@ impl CreationHint {
             let Some(widget) = controller.widget().and_downcast::<W>() else {
                 return;
             };
+
+            // Touchpads can interleave pointer motion with scrolling. Wait for scrolling
+            // to settle before allowing motion to restore the highlight and copy cursor.
+            if hint
+                .scroll_until
+                .get()
+                .is_some_and(|until| Instant::now() < until)
+            {
+                return;
+            }
 
             let buttons = gdk::ModifierType::BUTTON1_MASK
                 | gdk::ModifierType::BUTTON2_MASK
@@ -70,12 +93,12 @@ impl CreationHint {
         events.set_propagation_phase(gtk::PropagationPhase::Capture);
         let hint = self.clone();
         events.connect_event(move |controller, event| {
-            if matches!(
-                event.event_type(),
-                gdk::EventType::TouchBegin | gdk::EventType::Scroll
-            ) && let Some(widget) = controller.widget()
-            {
-                hint.clear(&widget);
+            if let Some(widget) = controller.widget() {
+                match event.event_type() {
+                    gdk::EventType::Scroll => hint.pause_for_scroll(&widget),
+                    gdk::EventType::TouchBegin => hint.clear(&widget),
+                    _ => {}
+                }
             }
 
             gtk::glib::Propagation::Proceed
@@ -118,4 +141,56 @@ pub(crate) fn snapshot_hint(
         (bounds.width() - 2.0).max(0.0),
         (bounds.height() - 2.0).max(0.0),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{rc::Rc, time::Instant};
+
+    use gtk::prelude::*;
+
+    use super::CreationHint;
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn scrolling_suppresses_creation_feedback_until_motion_after_a_quiet_period() {
+        gtk::init().unwrap();
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let hint = Rc::new(CreationHint::default());
+        hint.install(&widget, |_, _, _| true);
+        let motion = widget
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .find_map(|controller| controller.downcast::<gtk::EventControllerMotion>().ok())
+            .unwrap();
+        let move_pointer = |x: f64| motion.emit_by_name::<()>("motion", &[&x, &10.0_f64]);
+
+        move_pointer(10.0);
+        assert_eq!(hint.position(), Some((10.0, 10.0)));
+        assert_eq!(widget.cursor().unwrap().name().as_deref(), Some("copy"));
+
+        hint.pause_for_scroll(&widget);
+        assert_eq!(hint.position(), None);
+        assert!(widget.cursor().is_none());
+        move_pointer(11.0);
+        assert_eq!(hint.position(), None);
+        assert!(widget.cursor().is_none());
+
+        // A later scroll restarts suppression, including after pointer leave/re-entry.
+        hint.scroll_until.set(Some(Instant::now()));
+        hint.pause_for_scroll(&widget);
+        motion.emit_by_name::<()>("leave", &[]);
+        move_pointer(12.0);
+        assert_eq!(hint.position(), None);
+        assert!(widget.cursor().is_none());
+
+        // Expiring the quiet period alone must not restore stale feedback.
+        hint.scroll_until.set(Some(Instant::now()));
+        assert_eq!(hint.position(), None);
+        assert!(widget.cursor().is_none());
+        move_pointer(13.0);
+        assert_eq!(hint.position(), Some((13.0, 10.0)));
+        assert_eq!(widget.cursor().unwrap().name().as_deref(), Some("copy"));
+    }
 }
