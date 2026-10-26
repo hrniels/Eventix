@@ -60,6 +60,9 @@ impl FixedRow {
     }
 
     pub fn set_child(&self, child: &impl IsA<gtk::Widget>) {
+        if self.first_child().as_ref() == Some(child.as_ref()) {
+            return;
+        }
         if let Some(old) = self.first_child() {
             // Re-rendering a focused menu/row must not send GTK's list focus back
             // to the first item. The row outlives its presentation widgets.

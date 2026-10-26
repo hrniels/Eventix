@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod content;
 mod filtering;
 mod item;
 mod model;
@@ -1033,6 +1034,14 @@ mod tests {
                 .downcast::<ListItem>()
                 .unwrap();
             let position = adjustment.value();
+            let retained_contents: Vec<_> = descendants::<FixedRow>(view.widget.upcast_ref())
+                .into_iter()
+                .filter(|row| row.is_mapped())
+                .map(|row| {
+                    let content = row.first_child().unwrap();
+                    (row, content)
+                })
+                .collect();
             view.set_snapshot(snapshot(view.filter()));
             drain();
             assert_eq!(
@@ -1040,6 +1049,9 @@ mod tests {
                 position,
                 "refresh preserves the scroll position"
             );
+            for (row, content) in retained_contents {
+                assert_eq!(row.first_child().as_ref(), Some(&content));
+            }
             assert_eq!(
                 view.results.model.item(4999).unwrap(),
                 last.clone().upcast::<gtk::glib::Object>()
@@ -1092,5 +1104,257 @@ mod tests {
             weak_model.upgrade().is_none(),
             "the list model is released with the view"
         );
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn recycled_content_resets_presentation_and_dispatches_only_current_item_actions() {
+        use std::sync::Arc;
+
+        use eventix_view::details::Response;
+
+        use super::{content::Content, item::Entry, model::ListModel};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let model: ListModel = gtk::glib::Object::new();
+        let content = Content::new(&model);
+        let actions = Rc::new(crate::view::action_menu::Actions::default());
+        let occurrence_actions = Rc::new(crate::view::action_menu::Actions::default());
+        let commands = Rc::new(RefCell::new(Vec::new()));
+        let recorded = commands.clone();
+        actions.connect(move |row: &Row, action| {
+            recorded.borrow_mut().push((row.uid.clone(), action));
+        });
+        let occurrences = Rc::new(RefCell::new(Vec::new()));
+        let recorded = occurrences.clone();
+        occurrence_actions.connect(
+            move |target: &crate::view::action_menu::OccurrenceTarget, action| {
+                recorded.borrow_mut().push((target.item.clone(), action));
+            },
+        );
+        let locale = eventix_locale::default();
+        let present = |entry, row| {
+            let item: ListItem = gtk::glib::Object::new();
+            item.set_entry(entry);
+            item.set_row(row);
+            content.update(&item, &*locale, &actions, &occurrence_actions);
+        };
+        let id = ItemId {
+            calendar: "Work".into(),
+            uid: "item-0".into(),
+            recurrence: None,
+        };
+        let mut task = row(&id);
+        task.completed = true;
+        task.response = Some(eventix_ical::objects::CalPartStat::Declined);
+        present(Entry::Base(id.clone()), Some(task));
+        let root = content.widget.first_child().unwrap();
+        let widgets = descendants::<gtk::Widget>(&root);
+        let summary = descendants::<gtk::Label>(&root)
+            .into_iter()
+            .find(|label| label.text() == "Item 0")
+            .unwrap();
+        let marker = descendants::<gtk::Overlay>(&root).remove(0);
+        let menu = descendants::<gtk::MenuButton>(&root).remove(0);
+        assert!(summary.has_css_class("ev_list_completed"));
+        assert_eq!(root.tooltip_text().as_deref(), Some("Expand occurrences"));
+        let controllers = root.observe_controllers().n_items();
+        let click = root
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|click| click.button() == gtk::gdk::BUTTON_PRIMARY)
+            .unwrap();
+        content.clear();
+        assert!(menu.activate_action("item.edit", None).is_err());
+        click.emit_by_name::<()>("released", &[&1i32, &0.0f64, &0.0f64]);
+        assert!(
+            !model.is_expanded(&id),
+            "unbound expansion handlers do nothing"
+        );
+
+        let event_id = ItemId {
+            calendar: "Home".into(),
+            uid: "item-1".into(),
+            recurrence: None,
+        };
+        let mut event = row(&event_id);
+        event.task = false;
+        event.alarm = false;
+        event.calendar_name = "Home".into();
+        event.background = "#00aa00".into();
+        event.date_range.clear();
+        event.recurrence.clear();
+        event.actions = vec![Action::CopyUid];
+        for _ in 0..3 {
+            present(Entry::Base(event_id.clone()), Some(event.clone()));
+        }
+        assert_eq!(
+            descendants::<gtk::Widget>(&root),
+            widgets,
+            "base rows reuse their widget trees"
+        );
+        assert_eq!(content.widget.first_child().as_ref(), Some(&root));
+        assert_eq!(summary.text(), "Item 1");
+        assert!(!summary.has_css_class("ev_list_completed"));
+        assert_eq!(marker.tooltip_text().as_deref(), Some("Home"));
+        assert!(!root.is_focusable());
+        assert!(root.tooltip_text().is_none());
+        assert!(root.cursor().is_none());
+        assert_eq!(root.observe_controllers().n_items(), controllers);
+        assert!(menu.activate_action("item.edit", None).is_err());
+        menu.activate_action("item.copy-uid", None).unwrap();
+        assert_eq!(
+            commands.borrow().as_slice(),
+            &[("item-1".into(), MenuAction::CopyUid)]
+        );
+        click.emit_by_name::<()>("released", &[&1i32, &0.0f64, &0.0f64]);
+        assert!(!model.is_expanded(&id));
+        assert!(!model.is_expanded(&event_id));
+
+        let request = crate::model::session::OccurrencesRequest {
+            revision: 0,
+            token: 0,
+            item: id.clone(),
+            cursor: eventix_view::list::occurrences::Cursor {
+                start: chrono::Utc::now().with_timezone(locale.timezone()),
+                recurrence: String::new(),
+            },
+            direction: eventix_view::list::occurrences::Direction::From,
+            count: 1,
+        };
+        let mut occurrence = occurrence_page(&request).rows.remove(0);
+        Arc::make_mut(&mut occurrence).response = Some(Response::Accepted);
+        Arc::make_mut(&mut occurrence).excluded = true;
+        let occurrence_id = occurrence.item.clone();
+        present(Entry::Occurrence(occurrence), None);
+        assert_eq!(content.widget.first_child().as_ref(), Some(&root));
+        assert_eq!(root.first_child().as_ref(), Some(marker.upcast_ref()));
+        assert!(root.has_css_class("ev_list_occurrence"));
+        assert_eq!(root.margin_start(), 32);
+        assert!(summary.has_css_class("ev_list_completed"));
+        assert_eq!(summary.tooltip_text().as_deref(), Some("Excluded"));
+        assert_eq!(descendants::<gtk::MenuButton>(&root)[0], menu);
+        menu.activate_action("item.edit-occurrence", None).unwrap();
+        assert_eq!(
+            occurrences.borrow().as_slice(),
+            &[(occurrence_id, MenuAction::EditOccurrence)]
+        );
+        assert!(
+            commands.borrow().len() == 1,
+            "occurrence actions do not dispatch base targets"
+        );
+
+        present(Entry::Base(event_id.clone()), Some(event.clone()));
+        assert_eq!(descendants::<gtk::Widget>(&root), widgets);
+        assert!(!root.has_css_class("ev_list_occurrence"));
+        assert_eq!(root.margin_start(), 0);
+        assert!(!summary.has_css_class("ev_list_completed"));
+        assert_eq!(summary.tooltip_text().as_deref(), Some("Item 1"));
+        assert!(menu.activate_action("item.edit-occurrence", None).is_err());
+        assert!(menu.popover().is_none(), "recycled menus remain lazy");
+
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let recorded = requests.clone();
+        model.connect_load_occurrences(move |request| recorded.borrow_mut().push(request));
+        model.set_items(vec![id, event_id.clone()]);
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        let german = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::German,
+            chrono_tz::Europe::Berlin,
+        )
+        .unwrap();
+        event.recurrent = true;
+        let item: ListItem = gtk::glib::Object::new();
+        item.set_entry(Entry::Base(event_id.clone()));
+        item.set_row(Some(event));
+        content.update(&item, &*german, &actions, &occurrence_actions);
+        assert_eq!(menu.tooltip_text().as_deref(), Some("Aktionen"));
+        click.emit_by_name::<()>("released", &[&1i32, &0.0f64, &0.0f64]);
+        assert_eq!(requests.borrow().len(), 2);
+        for request in requests.borrow().iter() {
+            assert_eq!(request.item, event_id);
+            assert_eq!(request.cursor.start.timezone(), chrono_tz::Europe::Berlin);
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn recycled_pagination_buttons_use_the_current_series_and_direction() {
+        use super::{content::Content, item::Entry, model::ListModel};
+        use crate::model::session::OccurrencesResponse;
+        use eventix_view::list::occurrences::Direction;
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let model: ListModel = gtk::glib::Object::new();
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let recorded = requests.clone();
+        model.connect_load_occurrences(move |request| recorded.borrow_mut().push(request));
+        let a = ItemId {
+            calendar: "Work".into(),
+            uid: "item-0".into(),
+            recurrence: None,
+        };
+        let b = ItemId {
+            calendar: "Home".into(),
+            uid: "item-2".into(),
+            recurrence: None,
+        };
+        model.set_items(vec![a.clone(), b.clone()]);
+        for id in [&a, &b] {
+            model.toggle(id, &chrono_tz::Europe::Berlin);
+        }
+        for request in requests.take() {
+            model
+                .set_occurrences(OccurrencesResponse {
+                    result: Ok(occurrence_page(&request)),
+                    request,
+                })
+                .unwrap();
+        }
+        let content = Content::new(&model);
+        let locale = eventix_locale::default();
+        let actions = Rc::new(crate::view::action_menu::Actions::default());
+        let occurrence_actions = Rc::new(crate::view::action_menu::Actions::default());
+        let present = |id: &ItemId, direction, loading| {
+            let item: ListItem = gtk::glib::Object::new();
+            item.set_entry(Entry::More(id.clone(), direction, loading));
+            content.update(&item, &*locale, &actions, &occurrence_actions);
+        };
+        present(&a, Direction::Earlier, false);
+        let button = content
+            .widget
+            .first_child()
+            .and_downcast::<gtk::Button>()
+            .unwrap();
+        content.clear();
+        button.emit_clicked();
+        assert!(requests.borrow().is_empty());
+        present(&b, Direction::Later, false);
+        assert_eq!(
+            content.widget.first_child().as_ref(),
+            Some(button.upcast_ref())
+        );
+        button.emit_clicked();
+        let request = requests.take().pop().unwrap();
+        assert_eq!(request.item, b);
+        assert_eq!(request.direction, Direction::Later);
+        present(&b, Direction::Later, true);
+        assert_eq!(button.label().as_deref(), Some("Loading occurrences…"));
+        button.emit_clicked();
+        assert!(
+            requests.borrow().is_empty(),
+            "loading does not request duplicate pages"
+        );
+        present(&a, Direction::Earlier, false);
+        button.emit_clicked();
+        let request = requests.take().pop().unwrap();
+        assert_eq!(request.item, a);
+        assert_eq!(request.direction, Direction::Earlier);
     }
 }

@@ -205,23 +205,23 @@ impl<T> Actions<T> {
     }
 }
 
-pub(super) fn button<T: Clone + 'static>(
+pub(super) fn update_button<T: Clone + 'static>(
+    button: &gtk::MenuButton,
     row: &T,
     available: &[Action],
     locale: &dyn Locale,
-    anchor: &impl IsA<gtk::Widget>,
     handlers: &Rc<Actions<T>>,
-) -> gtk::MenuButton {
+) {
     let (model, actions) = menu(available, locale);
-    menu_button(row, model, actions, locale, anchor, handlers)
+    update_menu_button(button, row, model, actions, locale, handlers);
 }
 
-pub(super) fn occurrence_button(
+pub(super) fn update_occurrence_button(
+    button: &gtk::MenuButton,
     row: &eventix_view::list::occurrences::Row,
     locale: &dyn Locale,
-    anchor: &impl IsA<gtk::Widget>,
     handlers: &Rc<Actions<OccurrenceTarget>>,
-) -> gtk::MenuButton {
+) {
     let target = OccurrenceTarget {
         item: row.item.clone(),
         summary: row.summary.clone(),
@@ -230,32 +230,13 @@ pub(super) fn occurrence_button(
     };
     let (model, actions) =
         occurrence_menu_for(&row.details.actions, true, locale, row.excluded, true);
-    menu_button(&target, model, actions, locale, anchor, handlers)
+    update_menu_button(button, &target, model, actions, locale, handlers);
 }
 
-fn menu_button<T: Clone + 'static>(
-    row: &T,
-    model: gio::Menu,
-    actions: gio::SimpleActionGroup,
-    locale: &dyn Locale,
-    anchor: &impl IsA<gtk::Widget>,
-    handlers: &Rc<Actions<T>>,
-) -> gtk::MenuButton {
-    bind(&actions, row, handlers);
+/// Creates the persistent button and context-click controller without binding an item.
+pub(super) fn empty_button(anchor: &impl IsA<gtk::Widget>) -> gtk::MenuButton {
     let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/button.ui"));
     let button: gtk::MenuButton = builder.object("button").unwrap();
-    button.set_tooltip_text(Some(locale.translate("Actions")));
-    button.update_property(&[gtk::accessible::Property::Label(
-        locale.translate("Actions"),
-    )]);
-    button.insert_action_group("item", Some(&actions));
-    // Virtualized rows only need the popover's widgets once their menu is opened.
-    button.set_create_popup_func(move |button| {
-        let popover = popover(model.upcast_ref(), None);
-        popover.set_halign(gtk::Align::End);
-        button.set_popover(Some(&popover));
-    });
-
     let click = gtk::GestureClick::new();
     click.set_button(gtk::gdk::BUTTON_SECONDARY);
     let weak = button.downgrade();
@@ -267,6 +248,47 @@ fn menu_button<T: Clone + 'static>(
     });
     anchor.add_controller(click);
     button
+}
+
+/// Releases the previous item's targets and lazy popup before a button is rebound.
+pub(super) fn clear_button(button: &gtk::MenuButton) {
+    close_popup(button);
+    button.unset_create_popup_func();
+    button.insert_action_group("item", None::<&gio::SimpleActionGroup>);
+}
+
+fn close_popup(button: &gtk::MenuButton) {
+    if let Some(popover) = button.popover()
+        && let Some(focus) = button.root().and_then(|root| root.focus())
+        && (focus == popover || focus.is_ancestor(&popover))
+    {
+        button.grab_focus();
+    }
+    button.popdown();
+    button.set_popover(None::<&gtk::Popover>);
+}
+
+fn update_menu_button<T: Clone + 'static>(
+    button: &gtk::MenuButton,
+    row: &T,
+    model: gio::Menu,
+    actions: gio::SimpleActionGroup,
+    locale: &dyn Locale,
+    handlers: &Rc<Actions<T>>,
+) {
+    close_popup(button);
+    bind(&actions, row, handlers);
+    button.set_tooltip_text(Some(locale.translate("Actions")));
+    button.update_property(&[gtk::accessible::Property::Label(
+        locale.translate("Actions"),
+    )]);
+    button.insert_action_group("item", Some(&actions));
+    // Virtualized rows only need the popover's widgets once their menu is opened.
+    button.set_create_popup_func(move |button| {
+        let popover = popover(model.upcast_ref(), None);
+        popover.set_halign(gtk::Align::End);
+        button.set_popover(Some(&popover));
+    });
 }
 
 fn bind<T: Clone + 'static>(actions: &gio::SimpleActionGroup, row: &T, handlers: &Rc<Actions<T>>) {
