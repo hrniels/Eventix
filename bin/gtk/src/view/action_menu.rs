@@ -447,9 +447,6 @@ fn scoped_menu_for(
         }
     }
     if let Some(occurrence) = occurrence {
-        if occurrence.personal_reminders {
-            details.append(Some(locale.translate("Reminder")), Some("item.details"));
-        }
         if occurrence.cancel {
             append(&deletion, &actions, locale, "Cancel occ.", "cancel", true);
         }
@@ -1220,7 +1217,7 @@ mod tests {
     }
 
     #[test]
-    fn excluded_occurrence_menu_offers_include_and_personal_reminders() {
+    fn excluded_occurrence_menu_offers_include_without_reminder_entry() {
         let (menu, actions) = super::occurrence_menu_for(
             &eventix_view::details::DetailActions {
                 exclude: true,
@@ -1233,7 +1230,8 @@ mod tests {
             true,
         );
         let details = menu.item_link(0, "section").unwrap();
-        assert_eq!(label(&details, details.n_items() - 1), "Reminder");
+        assert_eq!(details.n_items(), 1);
+        assert_eq!(label(&details, 0), "Details");
         let deletion = menu.item_link(1, "section").unwrap();
         assert_eq!(deletion.n_items(), 1);
         assert_eq!(label(&deletion, 0), "Include");
