@@ -135,9 +135,9 @@ impl Window {
             return glib::Propagation::Proceed;
         }
 
-        if modifiers.contains(gtk::gdk::ModifierType::ALT_MASK)
+        if modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK)
             && !modifiers.intersects(
-                gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SUPER_MASK,
+                gtk::gdk::ModifierType::ALT_MASK | gtk::gdk::ModifierType::SUPER_MASK,
             )
         {
             match key {
@@ -246,7 +246,7 @@ impl Window {
             }
         });
         self.add_action(&action);
-        app.set_accels_for_action("win.new-event", &["<Alt>e"]);
+        app.set_accels_for_action("win.new-event", &["<Control>e"]);
 
         let action = gio::SimpleAction::new("new-task", None);
         let page = self.imp().page.downgrade();
@@ -256,7 +256,7 @@ impl Window {
             }
         });
         self.add_action(&action);
-        app.set_accels_for_action("win.new-task", &["<Alt>t"]);
+        app.set_accels_for_action("win.new-task", &["<Control>t"]);
 
         let action = gio::SimpleAction::new("quick-add-task", None);
         let page = self.imp().page.downgrade();
@@ -266,16 +266,16 @@ impl Window {
             }
         });
         self.add_action(&action);
-        app.set_accels_for_action("win.quick-add-task", &["<Alt>a"]);
+        app.set_accels_for_action("win.quick-add-task", &["<Control>a"]);
 
         for (name, keys, days) in [
-            ("previous", vec!["<Alt>Left"], Some(-1)),
-            ("next", vec!["<Alt>Right"], Some(1)),
-            ("today", vec!["<Alt>Home", "period"], None),
+            ("previous", vec!["<Control>Left"], Some(-1)),
+            ("next", vec!["<Control>Right"], Some(1)),
+            ("today", vec!["<Control>Home", "period"], None),
             ("reload", vec!["<Primary>r", "F5"], None),
-            ("week-view", vec!["<Alt>w"], None),
-            ("month-view", vec!["<Alt>m"], None),
-            ("list-view", vec!["<Alt>l"], None),
+            ("week-view", vec!["<Control>w"], None),
+            ("month-view", vec!["<Control>m"], None),
+            ("list-view", vec!["<Control>l"], None),
         ] {
             let action = gio::SimpleAction::new(name, None);
             let page = self.imp().page.downgrade();

@@ -109,8 +109,8 @@ relaunching with a different profile or XDG environment: the application is sing
 
 Keyboard shortcuts:
 
-- **Alt+Left / Alt+Right:** previous / next week
-- **Alt+Home:** current week
+- **Ctrl+Left / Ctrl+Right:** previous / next week
+- **Ctrl+Home:** current week
 - **Ctrl+R / F5:** reload local calendars
 - **Escape:** dismiss event details or the date picker
 
