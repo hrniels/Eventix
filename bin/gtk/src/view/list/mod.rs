@@ -113,6 +113,18 @@ mod tests {
     use super::{ListView, MenuAction, item::ListItem, row::FixedRow};
     use crate::model::session::ListRowsResponse;
 
+    fn wait_until(ready: impl Fn() -> bool) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while !ready() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "list work did not finish"
+            );
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+
     fn descendants<T: IsA<gtk::Widget> + StaticType>(widget: &gtk::Widget) -> Vec<T> {
         let mut found = Vec::new();
         if let Ok(item) = widget.clone().downcast::<T>() {
@@ -583,6 +595,11 @@ mod tests {
         assert_eq!(view.results.model.n_items(), 5022);
         adjustment.set_value(adjustment.upper() - adjustment.page_size());
         drain();
+        wait_until(|| {
+            descendants::<gtk::Label>(view.widget.upcast_ref())
+                .iter()
+                .any(|label| label.text() == "Item 4999")
+        });
         assert!(
             descendants::<gtk::Label>(view.widget.upcast_ref())
                 .iter()
@@ -816,6 +833,7 @@ mod tests {
             let loaded = loads.clone();
             let weak = Rc::downgrade(&view);
             view.connect_load_rows(move |request| {
+                let view = weak.upgrade().unwrap();
                 loaded
                     .borrow_mut()
                     .push((request.revision, request.items.len()));
@@ -827,13 +845,11 @@ mod tests {
                         (item, Some(row))
                     })
                     .collect();
-                weak.upgrade()
-                    .unwrap()
-                    .set_rows(ListRowsResponse {
-                        revision: request.revision,
-                        result: Ok(result),
-                    })
-                    .unwrap();
+                view.set_rows(ListRowsResponse {
+                    revision: request.revision,
+                    result: Ok(result),
+                })
+                .unwrap();
             });
             view.set_snapshot(snapshot(Filter::default()));
             let window = gtk::Window::builder()
@@ -851,9 +867,13 @@ mod tests {
             drain();
             assert_eq!(view.results.model.n_items(), 5000);
             let count: usize = loads.borrow().iter().map(|(_, count)| count).sum();
+            let page_capacity = (view.results.scroll.vadjustment().page_size()
+                / f64::from(super::row::ROW_HEIGHT))
+            .ceil() as usize
+                + 1;
             assert!(
-                (1..512).contains(&count),
-                "initial row data is bounded, got {count}"
+                (1..=page_capacity).contains(&count),
+                "initial loading is limited to the viewport, got {count} for {page_capacity} rows"
             );
             let rows = descendants::<FixedRow>(view.widget.upcast_ref());
             assert!(
@@ -866,7 +886,13 @@ mod tests {
                     .all(|row| row.height() == 45)
             );
             let mut action_width = None;
-            for row in rows.iter().filter(|row| row.is_mapped()) {
+            for row in rows.iter().filter(|row| {
+                row.compute_bounds(&view.results.scroll)
+                    .is_some_and(|bounds| {
+                        bounds.y() + bounds.height() > 0.0
+                            && bounds.y() < view.results.scroll.height() as f32
+                    })
+            }) {
                 let actions = row
                     .first_child()
                     .unwrap()
@@ -1008,12 +1034,27 @@ mod tests {
             let offscreen = view.results.model.item(5).unwrap().downgrade();
             let old_revision = loads.borrow().last().unwrap().0;
             let adjustment = view.results.scroll.vadjustment();
+            let before_jump = loads.borrow().len();
             adjustment.set_value(adjustment.upper() - adjustment.page_size());
             drain();
+            wait_until(|| {
+                descendants::<gtk::Label>(view.widget.upcast_ref())
+                    .iter()
+                    .any(|label| label.text() == "Item 4999")
+            });
             let labels = descendants::<gtk::Label>(view.widget.upcast_ref());
             assert!(
                 labels.iter().any(|label| label.text() == "Item 4999"),
                 "the last item is accessible by scrolling"
+            );
+            assert_eq!(
+                loads.borrow().len(),
+                before_jump + 1,
+                "a scrollbar-sized jump loads the visible page in one request"
+            );
+            assert!(
+                loads.borrow().last().unwrap().1 <= page_capacity,
+                "jumping must not load GTK's offscreen cache"
             );
             assert!(
                 offscreen.upgrade().is_none(),
@@ -1104,6 +1145,243 @@ mod tests {
             weak_model.upgrade().is_none(),
             "the list model is released with the view"
         );
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn viewport_loading_merges_pages_skips_cached_rows_and_deduplicates_requests() {
+        use super::model::ListModel;
+
+        gtk::init().unwrap();
+        let model: ListModel = gtk::glib::Object::new();
+        let ids = snapshot(Filter::default()).items;
+        model.set_items(ids.clone());
+        let retained: Vec<_> = (0..200)
+            .map(|index| model.item(index).unwrap().downcast::<ListItem>().unwrap())
+            .collect();
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let recorded = requests.clone();
+        model.connect_load_rows(move |request| recorded.borrow_mut().push(request));
+        model.set_viewport(10, 30, false);
+        wait_until(|| requests.borrow().len() == 1);
+        assert_eq!(requests.borrow()[0].items, ids[10..30]);
+
+        model.set_viewport(11, 31, false);
+        wait_until(|| requests.borrow().len() == 2);
+        assert_eq!(
+            requests.borrow()[1].items,
+            ids[30..31],
+            "overlapping requests must not duplicate in-flight rows"
+        );
+
+        model.set_viewport(100, 120, false);
+        while gtk::glib::MainContext::default().iteration(false) {}
+        assert_eq!(
+            requests.borrow().len(),
+            3,
+            "page jumps load on the next idle turn"
+        );
+        assert_eq!(requests.borrow()[2].items, ids[100..120]);
+        for range in [10..30, 100..120] {
+            model
+                .set_rows(ListRowsResponse {
+                    revision: 1,
+                    result: Ok(ids[range]
+                        .iter()
+                        .map(|id| (id.clone(), Some(row(id))))
+                        .collect()),
+                })
+                .unwrap();
+        }
+        assert!(retained[100..120].iter().all(ListItem::loaded));
+        assert!(
+            retained[..100].iter().all(|item| !item.loaded()),
+            "late offscreen results must not update cached widgets"
+        );
+
+        model.set_viewport(101, 121, false);
+        wait_until(|| requests.borrow().len() == 4);
+        assert_eq!(
+            requests.borrow()[3].items,
+            ids[120..121],
+            "already loaded rows must not be requested again"
+        );
+        model.set_items(ids.clone());
+        while gtk::glib::MainContext::default().iteration(false) {}
+        assert_eq!(requests.borrow().len(), 5);
+        assert_eq!(requests.borrow()[4].revision, 2);
+        assert_eq!(
+            requests.borrow()[4].items,
+            ids[101..121],
+            "refresh must reload just the visible page in one request"
+        );
+        model.toggle(&ids[102], &chrono_tz::Europe::Berlin);
+        model
+            .set_rows(ListRowsResponse {
+                revision: 2,
+                result: Ok(ids[101..121]
+                    .iter()
+                    .map(|id| (id.clone(), Some(row(id))))
+                    .collect()),
+            })
+            .unwrap();
+        model.toggle(&ids[102], &chrono_tz::Europe::Berlin);
+        while gtk::glib::MainContext::default().iteration(false) {}
+        assert_eq!(requests.borrow().len(), 6);
+        assert_eq!(
+            requests.borrow()[5].items,
+            ids[119..121],
+            "collapsing a series must load newly exposed cached rows without scrolling"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn viewport_loading_progresses_during_continuous_small_scroll_movements() {
+        use std::{cell::Cell, time::Duration};
+
+        use super::model::ListModel;
+
+        gtk::init().unwrap();
+        let model: ListModel = gtk::glib::Object::new();
+        model.set_items(snapshot(Filter::default()).items);
+        let _retained: Vec<_> = (0..300).map(|index| model.item(index).unwrap()).collect();
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let recorded = requests.clone();
+        model.connect_load_rows(move |request| recorded.borrow_mut().push(request));
+        model.set_viewport(0, 20, false);
+        wait_until(|| requests.borrow().len() == 1);
+
+        let movements = Rc::new(Cell::new(0));
+        let moved = movements.clone();
+        let scrolling = model.clone();
+        let source = gtk::glib::timeout_add_local(Duration::from_millis(5), move || {
+            let first = moved.get() + 1;
+            moved.set(first);
+            // A partially visible row must not be mistaken for a viewport resize.
+            scrolling.set_viewport(first, first + 20 + first % 2, false);
+            gtk::glib::ControlFlow::Continue
+        });
+        wait_until(|| requests.borrow().len() > 1);
+        source.remove();
+        assert!(
+            (2..100).contains(&movements.get()),
+            "small movements should coalesce without starving continuous scrolling"
+        );
+        let requests = requests.borrow();
+        let identities: std::collections::BTreeSet<_> = requests
+            .iter()
+            .flat_map(|request| request.items.iter().map(|id| (&id.calendar, &id.uid)))
+            .collect();
+        assert_eq!(
+            identities.len(),
+            requests.iter().map(|request| request.items.len()).sum(),
+            "continuous scrolling must not duplicate in-flight identities"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn viewport_results_present_the_page_together_and_reject_superseded_work() {
+        use super::model::ListModel;
+
+        gtk::init().unwrap();
+        let model: ListModel = gtk::glib::Object::new();
+        let ids: Vec<_> = snapshot(Filter::default())
+            .items
+            .into_iter()
+            .take(64)
+            .collect();
+        model.set_items(ids.clone());
+        let mut items: Vec<_> = (0..64)
+            .map(|index| model.item(index).unwrap().downcast::<ListItem>().unwrap())
+            .collect();
+        model.set_viewport(0, 20, false);
+        let notifications = Rc::new(RefCell::new(Vec::new()));
+        for (index, item) in items.iter().enumerate() {
+            let recorded = notifications.clone();
+            item.connect_notify_local(Some("loaded"), move |_, _| {
+                recorded.borrow_mut().push(index);
+            });
+        }
+        let expired = items.remove(0).downgrade();
+        assert!(expired.upgrade().is_none());
+        let replacement = model.item(0).unwrap().downcast::<ListItem>().unwrap();
+        model
+            .set_rows(ListRowsResponse {
+                revision: 1,
+                result: Ok(ids.iter().map(|id| (id.clone(), Some(row(id)))).collect()),
+            })
+            .unwrap();
+        assert_eq!(
+            *notifications.borrow(),
+            (1..20).collect::<Vec<_>>(),
+            "the visible page is presented together without delayed batches"
+        );
+        assert!(
+            replacement.loaded(),
+            "responses can populate a recreated visible object"
+        );
+        assert!(items[19..].iter().all(|item| !item.loaded()));
+
+        let old_summary = items[0].row().as_ref().unwrap().summary.clone();
+        model.set_items(ids.clone());
+        assert_eq!(
+            items[0].row().as_ref().unwrap().summary,
+            old_summary,
+            "refresh retains existing content"
+        );
+        model
+            .set_rows(ListRowsResponse {
+                revision: 1,
+                result: Ok(vec![(ids[1].clone(), None)]),
+            })
+            .unwrap();
+        model
+            .set_rows(ListRowsResponse {
+                revision: 2,
+                result: Ok(vec![(ids[2].clone(), None)]),
+            })
+            .unwrap();
+        assert!(items[1].row().is_none());
+        assert_eq!(
+            items[0].row().as_ref().unwrap().summary,
+            old_summary,
+            "changing the list rejects late responses"
+        );
+        let weak = model.downgrade();
+        let refreshed_ids = ids.clone();
+        let handler = items[2].connect_notify_local(Some("loaded"), move |_, _| {
+            weak.upgrade().unwrap().set_items(refreshed_ids.clone());
+        });
+        let mut obsolete = row(&ids[4]);
+        obsolete.summary = "OBSOLETE".into();
+        model
+            .set_rows(ListRowsResponse {
+                revision: 2,
+                result: Ok(vec![
+                    (ids[3].clone(), Some(row(&ids[3]))),
+                    (ids[4].clone(), Some(obsolete)),
+                ]),
+            })
+            .unwrap();
+        items[2].disconnect(handler);
+        assert_ne!(
+            items[3].row().as_ref().unwrap().summary,
+            "OBSOLETE",
+            "a synchronous list replacement must stop the old response halfway through"
+        );
+        assert!(
+            model
+                .set_rows(ListRowsResponse {
+                    revision: 3,
+                    result: Err("failed load".into()),
+                })
+                .is_err()
+        );
+        let weak = model.downgrade();
+        drop(model);
+        assert!(weak.upgrade().is_none(), "timers must not retain the model");
     }
 
     #[test]

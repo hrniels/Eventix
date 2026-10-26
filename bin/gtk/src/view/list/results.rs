@@ -2,13 +2,24 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    rc::Rc,
+    sync::Arc,
+};
 
 use eventix_locale::Locale;
 use eventix_view::list::{Row, Snapshot};
 use gtk::{glib, prelude::*};
 
-use super::{content::Content, item::ListItem, model::ListModel, scroll::ScrollPosition};
+use super::{
+    content::Content,
+    item::{Entry, ListItem},
+    model::ListModel,
+    row::ROW_HEIGHT,
+    scroll::ScrollPosition,
+};
 use crate::view::action_menu::{Actions, OccurrenceTarget};
 
 type Bindings = RefCell<HashMap<gtk::ListItem, (ListItem, glib::SignalHandlerId)>>;
@@ -45,6 +56,7 @@ impl Results {
         let selection = gtk::NoSelection::new(Some(model.clone()));
         list.set_model(Some(&selection));
         list.set_factory(Some(&factory));
+        track_viewport(&model, &scroll);
         Self {
             scroll,
             model,
@@ -88,7 +100,7 @@ fn factory(
     let weak = Rc::downgrade(&bindings);
     let position = scroll_position.clone();
     model.connect_changing(move |start, removed| {
-        position.hold();
+        position.hold_for_change();
         if let Some(bindings) = weak.upgrade() {
             move_focus_before_change(&bindings, start, removed);
         }
@@ -117,7 +129,11 @@ fn factory(
         let scroll_position = scroll_position.clone();
         let handler = data.connect_notify_local(Some("loaded"), move |data, _| {
             if let Some(content) = weak.upgrade() {
-                scroll_position.hold();
+                if matches!(&*data.entry(), Some(Entry::Base(_))) {
+                    scroll_position.hold_for_content();
+                } else {
+                    scroll_position.hold();
+                }
                 content.update(data, &**locale.borrow(), &actions, &occurrence_actions);
             }
         });
@@ -140,6 +156,38 @@ fn factory(
         item.set_child(None::<&gtk::Widget>);
     });
     factory
+}
+
+/// Tracks visible rows independently of GTK's larger pool of bound/cache items.
+fn track_viewport(model: &ListModel, scroll: &gtk::ScrolledWindow) {
+    let weak = model.downgrade();
+    let viewport = scroll.downgrade();
+    let page_size = Cell::new(0.0);
+    let update = Rc::new(move || {
+        let (Some(model), Some(scroll)) = (weak.upgrade(), viewport.upgrade()) else {
+            return;
+        };
+        if !scroll.is_mapped() {
+            page_size.set(0.0);
+            model.set_viewport(0, 0, false);
+            return;
+        }
+        let adjustment = scroll.vadjustment();
+        let height = f64::from(ROW_HEIGHT);
+        let first = (adjustment.value() / height).floor() as u32;
+        let end = ((adjustment.value() + adjustment.page_size()) / height).ceil() as u32;
+        let resized = page_size.replace(adjustment.page_size()) != adjustment.page_size();
+        model.set_viewport(first, end, resized);
+    });
+    let changed = update.clone();
+    scroll
+        .vadjustment()
+        .connect_value_changed(move |_| changed());
+    let changed = update.clone();
+    scroll.vadjustment().connect_changed(move |_| changed());
+    let changed = update.clone();
+    scroll.connect_map(move |_| changed());
+    scroll.connect_unmap(move |_| update());
 }
 
 fn move_focus_before_change(bindings: &Bindings, start: u32, removed: u32) {

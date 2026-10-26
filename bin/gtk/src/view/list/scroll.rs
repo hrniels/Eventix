@@ -14,11 +14,13 @@ pub(super) struct ScrollPosition {
     adjustment: gtk::Adjustment,
     list: glib::WeakRef<gtk::ListView>,
     pending: Cell<Option<f64>>,
+    protect_updates: Cell<bool>,
 }
 
 impl ScrollPosition {
     pub fn reset(&self) {
         self.pending.set(None);
+        self.protect_updates.set(false);
         self.adjustment.set_value(0.0);
     }
 
@@ -27,22 +29,29 @@ impl ScrollPosition {
             adjustment: scroll.vadjustment(),
             list: list.downgrade(),
             pending: Cell::new(None),
+            protect_updates: Cell::new(false),
         });
         let weak = Rc::downgrade(&position);
         position
             .adjustment
             .connect_value_changed(move |adjustment| {
-                if let Some(position) = weak.upgrade()
-                    && let Some(value) = position.pending.get()
-                    && adjustment.value() != value
-                {
-                    adjustment.set_value(value);
+                if let Some(position) = weak.upgrade() {
+                    if let Some(value) = position.pending.get() {
+                        if adjustment.value() != value {
+                            adjustment.set_value(value);
+                        }
+                    } else {
+                        // A new scroll position supersedes the anchor preserved for
+                        // a structural change, including its delayed content fills.
+                        position.protect_updates.set(false);
+                    }
                 }
             });
         let weak = Rc::downgrade(&position);
         list.connect_unmap(move |_| {
             if let Some(position) = weak.upgrade() {
                 position.pending.set(None);
+                position.protect_updates.set(false);
             }
         });
         position
@@ -71,5 +80,18 @@ impl ScrollPosition {
             }
         }));
         clock.request_phase(gtk::gdk::FrameClockPhase::AFTER_PAINT);
+    }
+
+    /// Preserves the offset across a structural change and its delayed row updates.
+    pub fn hold_for_change(self: &Rc<Self>) {
+        self.protect_updates.set(true);
+        self.hold();
+    }
+
+    /// Preserves a structural-change anchor until a subsequent scroll supersedes it.
+    pub fn hold_for_content(self: &Rc<Self>) {
+        if self.protect_updates.get() {
+            self.hold();
+        }
     }
 }
