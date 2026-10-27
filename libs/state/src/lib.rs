@@ -12,6 +12,9 @@ mod sync;
 /// Toolkit-independent calendar mutations.
 pub mod actions;
 
+/// Microsoft device authentication and background monitoring.
+pub mod auth;
+
 /// Utility helpers exposed to other crates and tests.
 pub mod util;
 

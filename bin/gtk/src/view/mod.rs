@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 mod action_menu;
+pub(crate) mod auth;
 mod calendar_selector;
 pub(crate) mod card;
 mod creation_hint;

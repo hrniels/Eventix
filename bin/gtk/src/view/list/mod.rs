@@ -1532,7 +1532,10 @@ mod tests {
             .collect();
         assert_eq!(
             identities.len(),
-            requests.iter().map(|request| request.items.len()).sum(),
+            requests
+                .iter()
+                .map(|request| request.items.len())
+                .sum::<usize>(),
             "continuous scrolling must not duplicate in-flight identities"
         );
     }

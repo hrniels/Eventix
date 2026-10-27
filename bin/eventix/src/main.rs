@@ -8,7 +8,6 @@ mod debug;
 mod extract;
 mod generated;
 mod html;
-mod http;
 mod notify;
 mod objects;
 mod pages;

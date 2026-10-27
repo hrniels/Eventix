@@ -10,7 +10,6 @@ pub mod api;
 pub mod comps;
 pub mod extract;
 pub mod html;
-mod http;
 pub mod objects;
 pub mod pages;
 pub mod util;

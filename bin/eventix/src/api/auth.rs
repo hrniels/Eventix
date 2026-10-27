@@ -2,14 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::{sync::Arc, time::SystemTime};
 
 use crate::api::{HTMLResponse, JsonError};
 use crate::html::filters;
-use crate::http::HttpClient;
 use anyhow::{Context, anyhow};
 use askama::Template;
 use async_trait::async_trait;
@@ -20,51 +16,13 @@ use axum::{
     routing::{get, post},
 };
 use eventix_locale::Locale;
+use eventix_state::auth::{DeviceCodeResponse, MicrosoftDeviceCodeClient, TokenPoll};
 use eventix_state::{
     EncryptedPassword, EventixState, State as AppState, SyncerType, decrypt_password,
     encrypt_password, retrieve_portal_secret,
 };
 use formatx::formatx;
 use serde::{Deserialize, Serialize};
-
-const CLIENT_ID: &str = "d3590ed6-52b3-4102-aeff-aad2292ab01c";
-const OAUTH_SCOPE: &str = "openid profile offline_access https://graph.microsoft.com/.default";
-const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/devicecode";
-const TOKEN_URL: &str = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
-
-#[derive(Debug, Deserialize)]
-struct DeviceCodeResponse {
-    device_code: String,
-    user_code: String,
-    verification_uri: String,
-    expires_in: u64,
-    #[serde(default = "default_poll_interval")]
-    interval: u64,
-}
-
-fn default_poll_interval() -> u64 {
-    5
-}
-
-#[derive(Debug, Deserialize)]
-struct TokenResponse {
-    refresh_token: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct OAuthError {
-    error: String,
-    error_description: Option<String>,
-}
-
-enum TokenPoll {
-    Pending,
-    Retry,
-    SlowDown,
-    Complete(String),
-    Declined,
-    Expired,
-}
 
 #[async_trait]
 trait DeviceCodeClient: Send + Sync {
@@ -75,88 +33,15 @@ trait DeviceCodeClient: Send + Sync {
     async fn poll(&self, device_code: &str) -> anyhow::Result<TokenPoll>;
 }
 
-struct MicrosoftDeviceCodeClient {
-    client: HttpClient,
-}
-
-impl MicrosoftDeviceCodeClient {
-    fn new() -> Self {
-        // Reuse the HTTPS connection across the initial request and subsequent token polls.
-        Self {
-            client: HttpClient::new(),
-        }
-    }
-}
-
 #[async_trait]
 impl DeviceCodeClient for MicrosoftDeviceCodeClient {
     async fn start(&self) -> anyhow::Result<DeviceCodeResponse> {
-        let response = self
-            .client
-            .post_form(
-                DEVICE_CODE_URL,
-                &[("client_id", CLIENT_ID), ("scope", OAUTH_SCOPE)],
-                Duration::from_secs(30),
-            )
-            .await
-            .context("requesting Microsoft device code")?;
-        if response.status.is_success() {
-            serde_json::from_slice(&response.body).context("parsing device code response")
-        } else {
-            // OAuth error responses are structured JSON and contain the useful failure reason.
-            let error: OAuthError =
-                serde_json::from_slice(&response.body).context("parsing device code error")?;
-            Err(oauth_error(error))
-        }
+        MicrosoftDeviceCodeClient::start(self).await
     }
 
     async fn poll(&self, device_code: &str) -> anyhow::Result<TokenPoll> {
-        let response = match self
-            .client
-            .post_form(
-                TOKEN_URL,
-                &[
-                    ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-                    ("client_id", CLIENT_ID),
-                    ("device_code", device_code),
-                ],
-                Duration::from_secs(30),
-            )
-            .await
-        {
-            Ok(response) => response,
-            Err(error) => {
-                tracing::debug!(?error, "polling Microsoft device authorization failed");
-                return Ok(TokenPoll::Retry);
-            }
-        };
-        parse_token_response(response.status.is_success(), &response.body)
+        MicrosoftDeviceCodeClient::poll(self, device_code).await
     }
-}
-
-fn parse_token_response(success: bool, body: &[u8]) -> anyhow::Result<TokenPoll> {
-    if success {
-        let token: TokenResponse =
-            serde_json::from_slice(body).context("parsing token response")?;
-        return Ok(TokenPoll::Complete(token.refresh_token));
-    }
-
-    let error: OAuthError = serde_json::from_slice(body).context("parsing token error")?;
-    match error.error.as_str() {
-        "authorization_pending" => Ok(TokenPoll::Pending),
-        "slow_down" => Ok(TokenPoll::SlowDown),
-        "authorization_declined" => Ok(TokenPoll::Declined),
-        "expired_token" | "bad_verification_code" => Ok(TokenPoll::Expired),
-        _ => Err(oauth_error(error)),
-    }
-}
-
-fn oauth_error(error: OAuthError) -> anyhow::Error {
-    anyhow!(
-        "Microsoft OAuth error '{}': {}",
-        error.error,
-        error.error_description.unwrap_or_default()
-    )
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -383,10 +268,7 @@ async fn poll_handler(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        EncryptedPassword, PendingAuthState, TokenPoll, open_auth_state, parse_token_response,
-        seal_auth_state,
-    };
+    use super::{EncryptedPassword, PendingAuthState, open_auth_state, seal_auth_state};
 
     #[test]
     fn sealed_auth_state_round_trips_without_exposing_device_code() {
@@ -426,49 +308,5 @@ mod tests {
             ),
             None
         );
-    }
-
-    #[test]
-    fn parses_successful_token_response() {
-        let response = parse_token_response(true, br#"{"refresh_token":"secret"}"#).unwrap();
-        let TokenPoll::Complete(token) = response else {
-            panic!("expected completed token response");
-        };
-        assert_eq!(token, "secret");
-    }
-
-    #[test]
-    fn parses_expected_polling_errors() {
-        for (error, expected) in [
-            ("authorization_pending", "pending"),
-            ("slow_down", "slow_down"),
-            ("authorization_declined", "declined"),
-            ("expired_token", "expired"),
-            ("bad_verification_code", "expired"),
-        ] {
-            let body = format!(r#"{{"error":"{error}"}}"#);
-            let response = parse_token_response(false, body.as_bytes()).unwrap();
-            let actual = match response {
-                TokenPoll::Pending => "pending",
-                TokenPoll::Retry => "retry",
-                TokenPoll::SlowDown => "slow_down",
-                TokenPoll::Declined => "declined",
-                TokenPoll::Expired => "expired",
-                TokenPoll::Complete(_) => "complete",
-            };
-            assert_eq!(actual, expected);
-        }
-    }
-
-    #[test]
-    fn rejects_unexpected_oauth_error() {
-        let error = parse_token_response(
-            false,
-            br#"{"error":"invalid_client","error_description":"bad client"}"#,
-        )
-        .err()
-        .unwrap();
-        assert!(error.to_string().contains("invalid_client"));
-        assert!(error.to_string().contains("bad client"));
     }
 }

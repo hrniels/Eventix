@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 use chrono::NaiveDate;
 use eventix_ical::objects::CalCompType;
@@ -15,6 +16,7 @@ use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::session::{CalendarSession, ChangeSet, ContentRequest, Event, SavedItem};
+use crate::view::auth::SyncPopup;
 use crate::view::details::{EventDetails, delete};
 
 /// Owns the model connection, command state, and periodic refresh lifecycle.
@@ -29,6 +31,8 @@ pub(super) struct PageSession {
     timer: RefCell<Option<glib::SourceId>>,
     pending_sync: Cell<bool>,
     progress_timer: RefCell<Option<glib::SourceId>>,
+    auth_popup: RefCell<Option<Rc<SyncPopup>>>,
+    auth_generation: Cell<u64>,
 }
 
 impl PageSession {
@@ -128,14 +132,14 @@ impl PageSession {
         }
         self.pending_sync.set(false);
         imp.reload.set_sensitive(true);
-        let errors = match result {
+        let errors = match &result {
             Ok(result) => {
                 imp.sync_progress.set_fraction(1.0);
-                sync_errors(&result, page.locale().as_ref())
+                sync_errors(result, page.locale().as_ref())
             }
             Err(error) => {
                 imp.sync_progress.set_visible(false);
-                vec![error]
+                vec![error.clone()]
             }
         };
         if errors.is_empty() {
@@ -170,6 +174,69 @@ impl PageSession {
                     }
                 },
             )));
+
+        if let Ok(result) = &result {
+            let mut collections: Vec<_> = result
+                .collections
+                .iter()
+                .filter_map(|(collection, outcome)| {
+                    matches!(outcome, SyncColResult::AuthFailed(_)).then_some(collection.clone())
+                })
+                .collect();
+            collections.sort();
+            if let Some(collection) = collections.into_iter().next() {
+                self.authenticate(page, collection);
+            }
+        }
+    }
+
+    fn authenticate(&self, page: &CalendarPage, collection: String) {
+        let Some(window) = page.root().and_downcast::<gtk::Window>() else {
+            return;
+        };
+        if self.current.borrow().is_none() {
+            return;
+        }
+        let id = self.auth_generation.get().wrapping_add(1);
+        self.auth_generation.set(id);
+        self.pending_sync.set(true);
+        page.imp().reload.set_sensitive(false);
+        page.imp()
+            .status
+            .set_text(page.locale().translate("Waiting for authentication..."));
+        let weak = page.downgrade();
+        let popup = SyncPopup::new(
+            &window,
+            page.locale(),
+            collection.clone(),
+            move |authenticated| {
+                if let Some(page) = weak.upgrade() {
+                    page.imp()
+                        .session
+                        .authentication_finished(&page, authenticated);
+                }
+            },
+        );
+        self.auth_popup.replace(Some(Rc::new(popup)));
+        if let Some(session) = self.current.borrow().as_ref() {
+            session.authenticate(id, collection);
+        }
+    }
+
+    fn authentication_finished(&self, page: &CalendarPage, authenticated: bool) {
+        self.auth_popup.take();
+        if let Some(session) = self.current.borrow().as_ref() {
+            session.cancel_authentication(self.auth_generation.get());
+        }
+        self.pending_sync.set(false);
+        page.imp().reload.set_sensitive(true);
+        if authenticated {
+            self.reload(page);
+        } else {
+            page.imp()
+                .status
+                .set_text(page.locale().translate("Synchronization cancelled"));
+        }
     }
 
     pub(super) fn can_edit(&self, page: &CalendarPage) -> bool {
@@ -368,6 +435,21 @@ impl PageSession {
                 });
             }
             Event::SyncFinished(result) => self.sync_finished(page, result),
+            Event::AuthPrompt(id, prompt) => {
+                if id == self.auth_generation.get()
+                    && let Some(popup) = self.auth_popup.borrow().as_ref()
+                {
+                    popup.set_prompt(prompt);
+                }
+            }
+            Event::AuthFinished(id, result) => {
+                let popup = self.auth_popup.borrow().clone();
+                if id == self.auth_generation.get()
+                    && let Some(popup) = popup
+                {
+                    popup.finished(result);
+                }
+            }
             Event::Changed(change) => {
                 self.pending_command.set(false);
                 if self.pending_quick_task.replace(false) {
@@ -393,6 +475,7 @@ impl PageSession {
 
     pub(super) fn stop(&self, page: &CalendarPage) {
         page.imp().editor.stop(page);
+        self.auth_popup.take();
         self.current.take();
         self.pending_sync.set(false);
         page.imp().sync_progress.set_visible(false);
@@ -418,10 +501,7 @@ fn sync_errors(result: &SyncResult, locale: &dyn eventix_locale::Locale) -> Vec<
         match outcome {
             SyncColResult::Success(_) => {}
             SyncColResult::Error(error) => errors.push(format!("{collection}: {error}")),
-            SyncColResult::AuthFailed(url) => errors.push(format!(
-                "{}\n{url}",
-                formatx::formatx!(locale.translate("error.reauth_required"), collection).unwrap()
-            )),
+            SyncColResult::AuthFailed(_) => {}
         }
     }
     for (calendar, failed) in &result.calendars {
@@ -446,6 +526,84 @@ mod tests {
     use gtk::{glib, prelude::*, subclass::prelude::*};
 
     use super::{CalendarSession, Event};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn auth_failure_pauses_sync_until_authentication_and_cancel_suppresses_retry() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.AuthTest")
+            .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
+        let state = eventix_state::State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+        let (session, responses) = CalendarSession::test_start(state);
+        let imp = page.imp();
+        imp.session.current.replace(Some(session));
+        window.present();
+        let failure = || {
+            Ok(eventix_state::SyncResult {
+                collections: [(
+                    "office".to_string(),
+                    eventix_state::SyncColResult::AuthFailed(
+                        "https://example.invalid/auth".to_string(),
+                    ),
+                )]
+                .into(),
+                ..Default::default()
+            })
+        };
+        imp.session.sync_finished(&page, failure());
+        assert!(imp.session.pending_sync.get());
+        assert!(imp.session.auth_popup.borrow().is_some());
+        assert!(!imp.reload.is_sensitive());
+        assert!(!imp.status.text().contains("example.invalid"));
+        imp.session.authentication_finished(&page, false);
+        assert!(imp.session.auth_popup.borrow().is_none());
+        assert!(!imp.session.pending_sync.get());
+        assert!(imp.reload.is_sensitive());
+
+        imp.session.sync_finished(&page, failure());
+        let id = imp.session.auth_generation.get();
+        imp.session.handle_event(
+            &page,
+            Event::AuthFinished(id - 1, Ok(eventix_state::auth::AuthOutcome::Complete)),
+        );
+        assert!(
+            imp.session.auth_popup.borrow().is_some(),
+            "stale authentication is ignored"
+        );
+        imp.session.handle_event(
+            &page,
+            Event::AuthFinished(id, Ok(eventix_state::auth::AuthOutcome::Complete)),
+        );
+        assert!(imp.session.auth_popup.borrow().is_none());
+        assert!(
+            imp.session.pending_sync.get(),
+            "successful authentication retries sync"
+        );
+        let context = glib::MainContext::default();
+        context.block_on(async {
+            while let Ok(event) = responses.recv().await {
+                let finished = matches!(event, Event::SyncFinished(_));
+                imp.session.handle_event(&page, event);
+                if finished {
+                    break;
+                }
+            }
+        });
+        assert!(!imp.session.pending_sync.get());
+        assert!(imp.reload.is_sensitive());
+
+        imp.session.sync_finished(&page, failure());
+        window.close();
+        assert!(imp.session.auth_popup.borrow().is_none());
+        assert!(!imp.session.pending_sync.get());
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]

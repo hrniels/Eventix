@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <!-- User-facing text is populated through the application's TOML locale in Rust. -->
+  <object class="GtkWindow" id="window">
+    <property name="modal">true</property>
+    <property name="destroy-with-parent">true</property>
+    <property name="resizable">false</property>
+    <property name="default-width">460</property>
+    <child>
+      <object class="GtkEventControllerKey" id="keys"/>
+    </child>
+    <property name="child">
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="spacing">16</property>
+        <style><class name="ev_auth_content"/></style>
+        <child>
+          <object class="GtkLabel" id="explanation">
+            <property name="wrap">true</property>
+            <property name="max-width-chars">60</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="code">
+            <property name="selectable">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="status">
+            <property name="wrap">true</property>
+            <property name="max-width-chars">60</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">12</property>
+            <property name="halign">center</property>
+            <child>
+              <object class="GtkButton" id="open">
+                <property name="sensitive">false</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">8</property>
+                    <property name="halign">center</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="resource">@RESOURCE_PREFIX@/icons/box-arrow-up-right-symbolic.svg</property>
+                        <property name="pixel-size">19</property>
+                      </object>
+                    </child>
+                    <child><object class="GtkLabel" id="open_label"/></child>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="cancel">
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">8</property>
+                    <property name="halign">center</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="resource">@RESOURCE_PREFIX@/icons/x-circle-symbolic.svg</property>
+                        <property name="pixel-size">19</property>
+                      </object>
+                    </child>
+                    <child><object class="GtkLabel" id="cancel_label"/></child>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </property>
+  </object>
+</interface>

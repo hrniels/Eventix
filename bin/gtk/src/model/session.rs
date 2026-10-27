@@ -12,6 +12,7 @@ use eventix_state::actions::{
     Action,
     items::{CreateItem, EditScope, ItemId, UpdateItem, UpdatePersonalAlarms},
 };
+use eventix_state::auth::{AuthOutcome, AuthPrompt, monitor_o365_auth};
 use eventix_state::{EventixState, State, SyncProgress, SyncResult};
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
@@ -116,6 +117,8 @@ pub(crate) enum Event {
     ReloadFailed(String),
     SyncProgress { completed: usize, total: usize },
     SyncFinished(Result<SyncResult, String>),
+    AuthPrompt(u64, AuthPrompt),
+    AuthFinished(u64, Result<AuthOutcome, String>),
     Changed(ChangeSet),
     CommandFailed(String),
 }
@@ -142,6 +145,8 @@ enum Message {
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,
     SyncAll,
+    Authenticate(u64, String),
+    CancelAuthentication(u64),
     SyncFinished(Result<SyncResult, String>),
     Execute(Box<dyn Action>),
 }
@@ -149,6 +154,14 @@ enum Message {
 /// Owns the request channel, closing the worker when the page stops or is dropped.
 pub(crate) struct CalendarSession {
     requests: async_channel::Sender<Message>,
+}
+
+struct AuthenticationTask(tokio::task::JoinHandle<()>);
+
+impl Drop for AuthenticationTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 impl CalendarSession {
@@ -178,9 +191,26 @@ impl CalendarSession {
                 }
             };
             let mut sync_task = None;
+            let mut auth_task: Option<(u64, AuthenticationTask)> = None;
 
             // Queries and commands are ordered. Never discard a queued mutation.
             while let Ok(message) = rx.recv_blocking() {
+                match &message {
+                    Message::Authenticate(id, collection) => {
+                        auth_task.take();
+                        auth_task = worker
+                            .start_auth(&runtime, &results, *id, collection.clone())
+                            .map(|task| (*id, task));
+                        continue;
+                    }
+                    Message::CancelAuthentication(id) => {
+                        if auth_task.as_ref().is_some_and(|(current, _)| current == id) {
+                            auth_task.take();
+                        }
+                        continue;
+                    }
+                    _ => {}
+                }
                 if matches!(message, Message::SyncAll) {
                     if sync_task.is_none() {
                         sync_task = worker.start_sync(&runtime, &results, &sync_requests);
@@ -253,6 +283,16 @@ impl CalendarSession {
 
     pub fn sync_all(&self) -> bool {
         self.requests.try_send(Message::SyncAll).is_ok()
+    }
+
+    pub fn authenticate(&self, id: u64, collection: String) {
+        let _ = self
+            .requests
+            .try_send(Message::Authenticate(id, collection));
+    }
+
+    pub fn cancel_authentication(&self, id: u64) {
+        let _ = self.requests.try_send(Message::CancelAuthentication(id));
     }
 
     pub fn execute(&self, command: Box<dyn Action>) {
@@ -453,6 +493,9 @@ impl Worker {
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
             Message::SyncAll => unreachable!("sync is dispatched independently of queries"),
+            Message::Authenticate(..) | Message::CancelAuthentication(_) => {
+                unreachable!("authentication is dispatched independently of queries")
+            }
             Message::SyncFinished(result) => {
                 let mut events = vec![Event::CalendarsLoaded(self.calendars())];
                 if result.as_ref().map_or(true, |result| result.changed) {
@@ -507,6 +550,29 @@ impl Worker {
                     .map_err(|error| format!("{error:#}"));
             let _ = requests.send(Message::SyncFinished(result)).await;
         }))
+    }
+
+    fn start_auth(
+        &self,
+        runtime: &tokio::runtime::Runtime,
+        results: &async_channel::Sender<Event>,
+        id: u64,
+        collection: String,
+    ) -> Option<AuthenticationTask> {
+        let Some(state) = self.state.clone() else {
+            let _ =
+                results.send_blocking(Event::AuthFinished(id, Err("No loaded state".to_string())));
+            return None;
+        };
+        let results = results.clone();
+        Some(AuthenticationTask(runtime.spawn(async move {
+            let result = monitor_o365_auth(&state, &collection, |prompt| {
+                let _ = results.try_send(Event::AuthPrompt(id, prompt));
+            })
+            .await
+            .map_err(|error| format!("{error:#}"));
+            let _ = results.send(Event::AuthFinished(id, result)).await;
+        })))
     }
 
     fn reload(&mut self) -> Vec<Event> {

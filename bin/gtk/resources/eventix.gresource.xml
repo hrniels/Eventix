@@ -6,6 +6,7 @@
     <file>view/action_menu/item.ui</file>
     <file>view/action_menu/popover.ui</file>
     <file>view/action_menu/submenu.ui</file>
+    <file>view/auth.ui</file>
     <file>view/card.ui</file>
     <file>view/indicators.ui</file>
     <file>view/details/details.ui</file>
@@ -32,6 +33,7 @@
     <file>icons/LICENSE</file>
     <file>icons/alarm-symbolic.svg</file>
     <file>icons/arrow-clockwise-symbolic.svg</file>
+    <file>icons/box-arrow-up-right-symbolic.svg</file>
     <file>icons/calendar-date-symbolic.svg</file>
     <file>icons/calendar-event-symbolic.svg</file>
     <file>icons/calendar-range-symbolic.svg</file>

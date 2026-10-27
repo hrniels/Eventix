@@ -106,6 +106,10 @@
     margin: 4px 0;
 }
 
+.ev_auth_content {
+    padding: 12px;
+}
+
 .ev_editor_backdrop {
     background: alpha(black, 0.12);
     padding: 16px;
