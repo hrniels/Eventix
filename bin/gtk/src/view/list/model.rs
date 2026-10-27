@@ -27,6 +27,7 @@ type LoadOccurrences = Rc<dyn Fn(OccurrencesRequest)>;
 type Changing = Rc<dyn Fn(u32, u32)>;
 const SCROLL_DELAY: Duration = Duration::from_millis(35);
 const MAX_SCROLL_DELAY: Duration = Duration::from_millis(75);
+const OCCURRENCES_PER_PAGE: usize = 3;
 
 struct Expansion {
     token: u64,
@@ -199,8 +200,8 @@ impl ListModel {
                 later: Some(anchor),
                 loading_earlier: false,
                 loading_later: false,
-                earlier_count: 5,
-                later_count: 5,
+                earlier_count: OCCURRENCES_PER_PAGE,
+                later_count: OCCURRENCES_PER_PAGE,
             },
         );
         self.refresh_expansion(item);
@@ -267,7 +268,7 @@ impl ListModel {
                 item: item.clone(),
                 cursor,
                 direction,
-                count: 5,
+                count: OCCURRENCES_PER_PAGE,
             }
         };
         self.rebuild();
@@ -327,13 +328,13 @@ impl ListModel {
                     .iter()
                     .filter(|row| row.cursor < expansion.anchor)
                     .count()
-                    .max(5);
+                    .max(OCCURRENCES_PER_PAGE);
                 expansion.later_count = expansion
                     .rows
                     .iter()
                     .filter(|row| row.cursor >= expansion.anchor)
                     .count()
-                    .max(5);
+                    .max(OCCURRENCES_PER_PAGE);
             })
         };
         self.rebuild();

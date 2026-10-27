@@ -316,7 +316,7 @@ mod tests {
                 })
                 .unwrap();
         }
-        assert_eq!(model.n_items(), 14);
+        assert_eq!(model.n_items(), 10);
         assert_eq!(
             model.item(3),
             model.item(3),
@@ -330,12 +330,12 @@ mod tests {
                 request: more,
             })
             .unwrap();
-        assert_eq!(model.n_items(), 19);
+        assert_eq!(model.n_items(), 13);
         let retained = model.item(3).unwrap().downcast::<ListItem>().unwrap();
         model.set_items(vec![a.clone(), b.clone()]);
         let refresh = requests.take();
-        assert_eq!(refresh[0].count, 10);
-        assert_eq!(refresh[1].count, 5);
+        assert_eq!(refresh[0].count, 6);
+        assert_eq!(refresh[1].count, 3);
         let mut refreshed = occurrence_page(&refresh[0]);
         for row in &mut refreshed.rows {
             std::sync::Arc::make_mut(row).summary.push_str(" refreshed");
@@ -388,7 +388,7 @@ mod tests {
                 }
             })
             .collect();
-        assert_eq!(rows.len(), 10);
+        assert_eq!(rows.len(), 6);
         assert!(
             rows.iter()
                 .all(|item| item.calendar == "Work" && item.recurrence.is_some())
