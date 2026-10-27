@@ -155,10 +155,15 @@ mod tests {
         assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars:"));
         let label_bounds = imp.calendars_button.compute_bounds(&page).unwrap();
         let circle_bounds = first.compute_bounds(&page).unwrap();
-        let view_bounds = imp.week_view.compute_bounds(&page).unwrap();
+        let view_bounds = imp.list_view.compute_bounds(&page).unwrap();
+        let search_bounds = imp.search.compute_bounds(&page).unwrap();
+        let last_circle_bounds = second.compute_bounds(&page).unwrap();
+        let reload_bounds = imp.reload.compute_bounds(&page).unwrap();
+        assert!(view_bounds.x() + view_bounds.width() < search_bounds.x());
+        assert!(search_bounds.x() + search_bounds.width() < label_bounds.x());
         assert!(label_bounds.x() + label_bounds.width() <= circle_bounds.x());
         assert!(circle_bounds.width() >= 22.0);
-        assert!(circle_bounds.x() + circle_bounds.width() < view_bounds.x());
+        assert!(last_circle_bounds.x() + last_circle_bounds.width() < reload_bounds.x());
 
         calendars[0].enabled = true;
         calendars[1].enabled = false;
