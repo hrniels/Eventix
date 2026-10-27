@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn refresh_action_syncs_in_background_and_displays_left_status_progress() {
+    fn refresh_action_syncs_in_background_and_displays_right_status_progress() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let app = gtk::Application::builder()
@@ -635,7 +635,7 @@ mod tests {
         while context.iteration(false) {}
         let progress_bounds = imp.sync_progress.compute_bounds(&page).unwrap();
         let status_bounds = imp.status.compute_bounds(&page).unwrap();
-        assert!(progress_bounds.x() + progress_bounds.width() <= status_bounds.x());
+        assert!(status_bounds.x() + status_bounds.width() <= progress_bounds.x());
 
         let mut completed = false;
         context.block_on(async {
