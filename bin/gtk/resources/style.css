@@ -546,9 +546,10 @@ button.ev_details_uid:hover {
     font-weight: bold;
 }
 
-/* Navigation controls sit inside the calendar header line and must stay compact. */
-.ev_panel_header button {
-    min-height: 0;
+/* Keep navigation, sidebar actions, and list filters at the same compact height. */
+.ev_panel_header button,
+.ev_panel_header entry {
+    min-height: 22px;
     min-width: 0;
     padding: 2px 6px;
 }

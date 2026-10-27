@@ -517,6 +517,7 @@ pub(crate) mod tests {
             .build();
         window.present();
         let imp = page.imp();
+        let mut header_height = None;
         for view in [View::Week, View::Month, View::List] {
             imp.content.switch_view(&page, view);
             for _ in 0..20 {
@@ -529,12 +530,30 @@ pub(crate) mod tests {
                 imp.header.get().upcast()
             };
             let bounds = header.compute_bounds(&page).unwrap();
+            assert_eq!(
+                *header_height.get_or_insert(bounds.height()),
+                bounds.height(),
+                "{view:?}: header height stays consistent across views"
+            );
             assert_eq!(bounds.y().fract(), 0.0, "{view:?}: header pixel alignment");
             assert_eq!(
                 bounds.height().fract(),
                 0.0,
                 "{view:?}: header pixel height"
             );
+            if view == View::List {
+                let mut child = header.first_child();
+                while let Some(control) = child {
+                    if control.is::<gtk::Entry>() || control.is::<gtk::Button>() {
+                        assert_eq!(
+                            control.height(),
+                            imp.previous.height(),
+                            "list filters and navigation controls have the same height"
+                        );
+                    }
+                    child = control.next_sibling();
+                }
+            }
             for sidebar_header in imp.sidebar.panel_titles() {
                 let sidebar_bounds = sidebar_header.compute_bounds(&page).unwrap();
                 assert_eq!(bounds.height(), sidebar_bounds.height(), "{view:?}");
