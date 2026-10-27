@@ -4,10 +4,11 @@
 
 use std::cell::RefCell;
 
-use gtk::{gdk, prelude::*, subclass::prelude::*};
+use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::calendars::CalendarVisibility;
+use crate::view::calendar_selector::draw_toggle_circle;
 
 /// Keeps header visibility controls synchronized without replacing focused buttons on a toggle.
 #[derive(Default)]
@@ -43,7 +44,7 @@ impl PageCalendars {
                 .active(calendar.enabled)
                 .tooltip_text(&calendar.name)
                 .build();
-            draw_circle(&dot, &button, &calendar.background);
+            draw_toggle_circle(&dot, &button, &calendar.background);
             button.add_css_class("ev_calendar_toggle");
             button.update_property(&[gtk::accessible::Property::Label(&calendar.name)]);
             let weak = page.downgrade();
@@ -60,43 +61,6 @@ impl PageCalendars {
             choices.push((calendar, button));
         }
     }
-}
-
-fn draw_circle(dot: &gtk::DrawingArea, button: &gtk::ToggleButton, background: &str) {
-    let color = gdk::RGBA::parse(background).unwrap_or(gdk::RGBA::TRANSPARENT);
-    let weak = button.downgrade();
-    dot.set_draw_func(move |_, cr, width, height| {
-        let Some(button) = weak.upgrade() else { return };
-        if button.is_active() {
-            cr.set_source_rgba(
-                color.red().into(),
-                color.green().into(),
-                color.blue().into(),
-                color.alpha().into(),
-            );
-        } else {
-            cr.set_source_rgb(0.65, 0.65, 0.65);
-        }
-        cr.arc(
-            f64::from(width) / 2.0,
-            f64::from(height) / 2.0,
-            f64::from(width.min(height)) / 2.0 - 1.0,
-            0.0,
-            std::f64::consts::TAU,
-        );
-        let _ = cr.fill_preserve();
-        if button.state_flags().contains(gtk::StateFlags::PRELIGHT) {
-            cr.set_source_rgb(0.0, 0.0, 0.0);
-            cr.set_line_width(1.0);
-            let _ = cr.stroke();
-        }
-    });
-    let weak = dot.downgrade();
-    button.connect_state_flags_changed(move |_, _| {
-        if let Some(dot) = weak.upgrade() {
-            dot.queue_draw();
-        }
-    });
 }
 
 #[cfg(test)]

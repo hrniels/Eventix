@@ -6,6 +6,7 @@
     <style><class name="ev_panel_header"/></style>
     <child>
       <object class="GtkEntry" id="search">
+        <property name="primary-icon-name">system-search-symbolic</property>
         <!-- Keep the natural entry width below the pixel request, regardless of font size. -->
         <property name="width-chars">1</property>
         <property name="max-width-chars">1</property>
@@ -25,7 +26,8 @@
         <property name="hexpand">true</property>
         <property name="child">
           <object class="GtkBox" id="calendars">
-            <property name="spacing">2</property>
+            <property name="spacing">4</property>
+            <property name="valign">center</property>
           </object>
         </property>
       </object>

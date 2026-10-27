@@ -136,9 +136,8 @@ impl Window {
         }
 
         if modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK)
-            && !modifiers.intersects(
-                gtk::gdk::ModifierType::ALT_MASK | gtk::gdk::ModifierType::SUPER_MASK,
-            )
+            && !modifiers
+                .intersects(gtk::gdk::ModifierType::ALT_MASK | gtk::gdk::ModifierType::SUPER_MASK)
         {
             match key {
                 gtk::gdk::Key::Left => {

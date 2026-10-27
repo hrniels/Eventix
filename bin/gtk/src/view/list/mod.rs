@@ -1177,6 +1177,10 @@ mod tests {
             assert!(!popover.is_visible());
             let search = descendants::<gtk::Entry>(view.widget.upcast_ref()).remove(0);
             assert!(search.allocated_width() <= 200);
+            assert_eq!(
+                search.primary_icon_name().as_deref(),
+                Some("system-search-symbolic")
+            );
             search.set_text("alpha beta OR gamma");
             drain();
             assert!(
@@ -1187,11 +1191,13 @@ mod tests {
             assert_eq!(view.filter().keywords, "alpha beta OR gamma");
             let toggles: Vec<_> = descendants::<gtk::ToggleButton>(view.widget.upcast_ref())
                 .into_iter()
-                .filter(|button| button.has_css_class("ev_list_calendar"))
+                .filter(|button| button.has_css_class("ev_calendar_toggle"))
                 .collect();
             for button in &toggles {
-                assert_eq!(button.allocated_height(), search.allocated_height());
-                assert_eq!(button.allocated_width(), button.allocated_height());
+                assert!(button.allocated_height() <= search.allocated_height());
+                let dot = button.child().and_downcast::<gtk::DrawingArea>().unwrap();
+                assert_eq!(dot.allocated_width(), 22);
+                assert_eq!(dot.allocated_height(), 22);
             }
             toggles[0].set_active(false);
             assert_eq!(view.filter().calendars, ["Home"]);

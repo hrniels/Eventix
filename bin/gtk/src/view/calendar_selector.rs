@@ -191,6 +191,48 @@ fn calendar_factory(
     factory
 }
 
+/// Draws a visibility toggle with a gray inactive circle and a black outline on hover.
+pub(super) fn draw_toggle_circle(
+    dot: &gtk::DrawingArea,
+    button: &gtk::ToggleButton,
+    background: &str,
+) {
+    let color = gdk::RGBA::parse(background).unwrap_or(gdk::RGBA::TRANSPARENT);
+    let weak = button.downgrade();
+    dot.set_draw_func(move |_, cr, width, height| {
+        let Some(button) = weak.upgrade() else { return };
+        if button.is_active() {
+            cr.set_source_rgba(
+                color.red().into(),
+                color.green().into(),
+                color.blue().into(),
+                color.alpha().into(),
+            );
+        } else {
+            cr.set_source_rgb(0.65, 0.65, 0.65);
+        }
+        cr.arc(
+            f64::from(width) / 2.0,
+            f64::from(height) / 2.0,
+            f64::from(width.min(height)) / 2.0 - 1.0,
+            0.0,
+            std::f64::consts::TAU,
+        );
+        let _ = cr.fill_preserve();
+        if button.state_flags().contains(gtk::StateFlags::PRELIGHT) {
+            cr.set_source_rgb(0.0, 0.0, 0.0);
+            cr.set_line_width(1.0);
+            let _ = cr.stroke();
+        }
+    });
+    let weak = dot.downgrade();
+    button.connect_state_flags_changed(move |_, _| {
+        if let Some(dot) = weak.upgrade() {
+            dot.queue_draw();
+        }
+    });
+}
+
 pub(super) fn set_dot_color(dot: &gtk::DrawingArea, color: gdk::RGBA) {
     dot.set_draw_func(move |_, cr, width, height| {
         cr.set_source_rgba(

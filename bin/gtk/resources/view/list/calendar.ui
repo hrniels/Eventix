@@ -2,12 +2,13 @@
 <interface>
   <requires lib="gtk" version="4.10"/>
   <object class="GtkToggleButton" id="calendar">
-    <style><class name="ev_list_calendar"/></style>
+    <style><class name="ev_calendar_toggle"/></style>
     <property name="child">
       <object class="GtkDrawingArea" id="dot">
         <property name="halign">center</property>
         <property name="valign">center</property>
-        <style><class name="ev_list_calendar_dot"/></style>
+        <property name="width-request">22</property>
+        <property name="height-request">22</property>
       </object>
     </property>
   </object>

@@ -11,7 +11,7 @@ use eventix_locale::Locale;
 use eventix_view::list::{Calendar, Filter};
 use gtk::{gdk, prelude::*};
 
-use crate::view::calendar_selector::set_dot_color;
+use crate::view::calendar_selector::draw_toggle_circle;
 
 type Changed = Rc<dyn Fn()>;
 
@@ -157,14 +157,10 @@ impl Filtering {
     fn calendar_button(self: &Rc<Self>, calendar: &Calendar) -> gtk::ToggleButton {
         let builder = gtk::Builder::from_resource(resource_path!("view/list/calendar.ui"));
         let button: gtk::ToggleButton = builder.object("calendar").unwrap();
-        button.set_size_request(self.search.measure(gtk::Orientation::Vertical, -1).1, -1);
         button.set_tooltip_text(Some(&calendar.name));
         button.update_property(&[gtk::accessible::Property::Label(&calendar.name)]);
         let dot: gtk::DrawingArea = builder.object("dot").unwrap();
-        set_dot_color(
-            &dot,
-            gdk::RGBA::parse(&calendar.background).unwrap_or(gdk::RGBA::TRANSPARENT),
-        );
+        draw_toggle_circle(&dot, &button, &calendar.background);
 
         let weak = Rc::downgrade(self);
         button.connect_toggled(move |button| {
