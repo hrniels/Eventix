@@ -147,6 +147,27 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
+        let (requests, rx) = async_channel::unbounded::<Message>();
+        let (results, responses) = async_channel::unbounded();
+
+        thread::spawn(move || {
+            let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
+            let mut worker = Worker::new(xdg);
+
+            // Queries and commands are ordered. Never discard a queued mutation.
+            while let Ok(message) = rx.recv_blocking() {
+                for event in worker.handle(message) {
+                    if results.send_blocking(event).is_err() {
+                        return;
+                    }
+                }
+            }
+        });
+
+        (Self { requests }, responses)
+    }
+
     pub fn toggle_calendar(&self, id: String) {
         let _ = self.requests.try_send(Message::ToggleCalendar(id));
     }
@@ -179,27 +200,6 @@ impl CalendarSession {
 
     pub fn create_item(&self, id: u64, item: Box<CreateItem>) {
         let _ = self.requests.try_send(Message::CreateItem(id, item));
-    }
-
-    pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
-        let (requests, rx) = async_channel::unbounded::<Message>();
-        let (results, responses) = async_channel::unbounded();
-
-        thread::spawn(move || {
-            let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
-            let mut worker = Worker::new(xdg);
-
-            // Queries and commands are ordered. Never discard a queued mutation.
-            while let Ok(message) = rx.recv_blocking() {
-                for event in worker.handle(message) {
-                    if results.send_blocking(event).is_err() {
-                        return;
-                    }
-                }
-            }
-        });
-
-        (Self { requests }, responses)
     }
 
     pub fn show_content(&self, request: ContentRequest) {
