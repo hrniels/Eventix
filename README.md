@@ -81,7 +81,7 @@ WantedBy=default.target
 
 ### Native GTK week-view prototype
 
-`eventix-gtk` is an experimental, read-only GTK4 application. It loads configured local calendars
+`eventix-gtk` is an experimental GTK4 application. It loads configured local calendars
 directly, without starting the web server or embedding WebKit. It displays all-day and timed events,
 overlaps, recurring occurrences, calendar colors, and daylight-saving transitions. Click an event
 for details, or focus it with Tab and press Enter.
@@ -89,7 +89,7 @@ for details, or focus it with Tab and press Enter.
 To use the existing development data in `run/` (including the locale links prepared by `./b`):
 
 ```bash
-XDG_DATA_HOME="$PWD/run" XDG_CONFIG_HOME="$PWD/run" cargo run -p eventix-gtk
+./b gtk
 ```
 
 Use `--date YYYY-MM-DD` to open a specific week. Debug builds default to the
@@ -97,12 +97,15 @@ Use `--date YYYY-MM-DD` to open a specific week. Debug builds default to the
 The `--data-prefix` option selects a different prefix, for example:
 
 ```bash
-cargo run -p eventix-gtk -- --data-prefix io.github.hrniels.Eventix
+./b gtk --data-prefix io.github.hrniels.Eventix
 ```
 
 English and German translations are bundled; installed XDG `locale/` files override them.
-This prototype reads already-downloaded calendar data; it does not synchronize or send alarms.
-The reload button rereads local data and settings. Existing calendar visibility settings apply.
+The refresh button synchronizes all collections in the background and shows per-collection progress
+on the left of the status bar. Existing calendar visibility settings apply. The development launcher
+adds `run/venv/bin`, `contrib/davmail/dist`, and `target/debug` to `PATH` and builds `eventix-getpw`.
+Run `./b vdirsyncer` and `./b davmail` first if these development helpers are not installed.
+When launching directly with Cargo, these helper executables must be available on `PATH`.
 Hover over the status line to see the configuration file and calendar data directory being used.
 Missing settings are reported with their expected path. Close an existing GTK window before
 relaunching with a different profile or XDG environment: the application is single-instance.
@@ -111,7 +114,7 @@ Keyboard shortcuts:
 
 - **Ctrl+Left / Ctrl+Right:** previous / next week
 - **Ctrl+Home:** current week
-- **Ctrl+R / F5:** reload local calendars
+- **Ctrl+R / F5:** synchronize all calendars
 - **Escape:** dismiss event details or the date picker
 
 The native UI is defined by GTK composite templates in `bin/gtk/resources/`: `window.ui`,

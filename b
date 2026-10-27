@@ -122,6 +122,14 @@ def cmd_import(args):
     run_cmd(cmd_args)
 
 
+def cmd_gtk(args):
+    """Runs the GTK application with the development synchronization helpers."""
+    subprocess.run(["cargo", "build", "--bin", "eventix-getpw"], check=True)
+    subprocess.run(
+        ["cargo", "run", "--bin", "eventix-gtk", "--", *args.gtk_args],
+        env=dev_env(), check=True)
+
+
 def cmd_davmail(args):
     """Builds Davmail using Maven and Ant."""
     subprocess.run(["mvn", "install"], cwd='contrib/davmail', check=True)
@@ -684,6 +692,10 @@ def main():
         help="Run the eventix app with tray icon")
     app_parser.set_defaults(func=cmd_app)
 
+    gtk_parser = subparsers.add_parser(
+        "gtk", help="Run the GTK app with bundled development sync tools")
+    gtk_parser.set_defaults(gtk_args=[], func=cmd_gtk)
+
     import_parser = subparsers.add_parser("import", help="Import an ICS file")
     import_parser.add_argument("file", help="Path to the ICS file to import")
     import_parser.set_defaults(func=cmd_import)
@@ -747,7 +759,9 @@ def main():
     dist_parser.set_defaults(func=cmd_dist)
 
     args, unknown = parser.parse_known_args()
-    if args.command == "test" or args.command == "coverage":
+    if args.command == "gtk":
+        args.gtk_args = unknown[1:] if unknown[:1] == ["--"] else unknown
+    elif args.command == "test" or args.command == "coverage":
         args.cargo_args = unknown
     elif unknown:
         parser.error("unrecognized arguments: {}".format(" ".join(unknown)))
