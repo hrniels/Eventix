@@ -78,7 +78,7 @@ impl DavmailRunner for RealDavmailRunner {
             cmd.args([props_path.to_str().unwrap()]);
             cmd.kill_on_drop(true);
 
-            let mut child = cmd.spawn()?;
+            let mut child = cmd.spawn().context("Starting davmail")?;
             let stdin = child.stdin.take().unwrap();
             let stdout = child.stdout.take().unwrap();
             let mut reader = BufReader::new(stdout).lines();

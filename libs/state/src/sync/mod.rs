@@ -229,7 +229,7 @@ pub(crate) async fn handle_sync_result(
 ) {
     let mut res = match res {
         Ok(res) => res,
-        Err(e) => SyncColResult::Error(e.to_string()),
+        Err(e) => SyncColResult::Error(format!("{e:#}")),
     };
 
     if let Err(e) = syncer.finish(state, &mut res) {

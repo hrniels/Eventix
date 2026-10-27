@@ -87,7 +87,7 @@ impl CommandRunner for RealCommandRunner {
         }
 
         cmd.args(args);
-        let mut child = cmd.spawn()?;
+        let mut child = cmd.spawn().with_context(|| format!("Starting {program}"))?;
 
         if let Some(data) = stdin_data
             && let Some(mut stdin) = child.stdin.take()
@@ -112,7 +112,7 @@ impl CommandRunner for RealCommandRunner {
         cmd.stderr(Stdio::piped());
         cmd.args(args);
 
-        let mut child = cmd.spawn()?;
+        let mut child = cmd.spawn().with_context(|| format!("Starting {program}"))?;
         let mut stdin = child.stdin.take().unwrap();
         let stderr = child.stderr.take().unwrap();
         let mut stderr_reader = BufReader::new(stderr).lines();
