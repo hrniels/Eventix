@@ -274,7 +274,7 @@ async fn state_sync_all_updates_last_reload() {
     // Sleep briefly so the timestamp has a chance to advance.
     sleep(Duration::from_millis(5)).await;
 
-    State::sync_all(&state, None)
+    State::sync_all(&state, None, None)
         .await
         .expect("sync_all must succeed");
 

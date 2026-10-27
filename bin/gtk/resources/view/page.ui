@@ -200,11 +200,25 @@
       </object>
     </child>
     <child>
-      <object class="GtkLabel" id="status">
-        <property name="xalign">0</property>
-        <property name="selectable">true</property>
-        <property name="wrap">true</property>
+      <object class="GtkBox">
+        <property name="spacing">12</property>
         <style><class name="ev_calendar_status"/></style>
+        <child>
+          <object class="GtkProgressBar" id="sync_progress">
+            <property name="visible">false</property>
+            <property name="width-request">160</property>
+            <property name="valign">center</property>
+            <property name="show-text">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="status">
+            <property name="xalign">0</property>
+            <property name="selectable">true</property>
+            <property name="wrap">true</property>
+            <property name="hexpand">true</property>
+          </object>
+        </child>
       </object>
     </child>
   </template>

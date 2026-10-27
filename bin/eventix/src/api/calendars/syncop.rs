@@ -72,7 +72,7 @@ async fn handler(
 
 async fn run_syncop(state: EventixState, req: Request) -> anyhow::Result<SyncResult> {
     let sync_res = match req.op {
-        Operation::SyncAll => EventixAppState::sync_all(&state, req.auth_url.as_ref())
+        Operation::SyncAll => EventixAppState::sync_all(&state, req.auth_url.as_ref(), None)
             .await
             .context("Unable to reload state"),
         Operation::ReloadCollection { col_id } => {

@@ -885,6 +885,7 @@ dependencies = [
  "gtk4",
  "regex",
  "tempfile",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "xdg",

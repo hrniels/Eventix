@@ -81,6 +81,18 @@ pub enum SyncColResult {
     AuthFailed(String),
 }
 
+/// Receives collection-level progress during synchronization.
+///
+/// Callbacks run outside the state lock and should return promptly. Completed collections
+/// include those with reported sync or authentication errors; progress measures work finished.
+pub trait SyncProgress: Send + Sync {
+    /// Reports the number of collections selected for synchronization, including zero.
+    fn started(&self, total: usize);
+
+    /// Reports a collection whose result has been applied to state.
+    fn collection_ready(&self, collection: &str, completed: usize, total: usize);
+}
+
 /// The aggregated result of a sync operation across one or more collections.
 #[derive(Debug, Default)]
 pub struct SyncResult {

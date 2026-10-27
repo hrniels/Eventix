@@ -66,6 +66,8 @@ mod imp {
         #[template_child]
         pub status: gtk::TemplateChild<gtk::Label>,
         #[template_child]
+        pub sync_progress: gtk::TemplateChild<gtk::ProgressBar>,
+        #[template_child]
         pub weekly: gtk::TemplateChild<WeekContent>,
         #[template_child]
         pub previous: gtk::TemplateChild<gtk::Button>,

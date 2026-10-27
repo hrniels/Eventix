@@ -10,6 +10,7 @@ use eventix_state::actions::{
     Action,
     items::{DeleteItem, ItemId, UpdatePersonalAlarms},
 };
+use eventix_state::{SyncColResult, SyncResult};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
@@ -26,6 +27,8 @@ pub(super) struct PageSession {
     details_request: Cell<u64>,
     pending_details_load: Cell<Option<u64>>,
     timer: RefCell<Option<glib::SourceId>>,
+    pending_sync: Cell<bool>,
+    progress_timer: RefCell<Option<glib::SourceId>>,
 }
 
 impl PageSession {
@@ -95,28 +98,78 @@ impl PageSession {
     }
 
     pub(super) fn reload(&self, page: &CalendarPage) {
-        page.dismiss_popovers();
-
-        let imp = page.imp();
-        let content = &imp.content;
-        content.loading.set(true);
-        imp.status
-            .set_text(page.locale().translate("Loading calendar…"));
-
-        if let Some(session) = self.current.borrow().as_ref() {
-            session.reload();
-
-            // A failed initial load or navigation has no subscription for the selected content.
-            if content.loaded_generation.get() != Some(content.generation.get()) {
-                session.show_content(ContentRequest {
-                    generation: content.generation.get(),
-                    date: content.date.get(),
-                    view: content.view.get(),
-                    filter: imp.list.get().map(|list| list.filter()).unwrap_or_default(),
-                });
-                session.refresh_sidebar();
-            }
+        if self.pending_sync.get() {
+            return;
         }
+        if let Some(session) = self.current.borrow().as_ref() {
+            if !session.sync_all() {
+                return;
+            }
+        } else {
+            return;
+        }
+        page.dismiss_popovers();
+        let imp = page.imp();
+        self.pending_sync.set(true);
+        if let Some(timer) = self.progress_timer.take() {
+            timer.remove();
+        }
+        imp.reload.set_sensitive(false);
+        imp.sync_progress.set_fraction(0.0);
+        imp.sync_progress.set_visible(true);
+        imp.sync_progress
+            .set_tooltip_text(Some(page.locale().translate("Synchronizing calendars…")));
+    }
+
+    fn sync_finished(&self, page: &CalendarPage, result: Result<SyncResult, String>) {
+        let imp = page.imp();
+        if let Some(timer) = self.progress_timer.take() {
+            timer.remove();
+        }
+        self.pending_sync.set(false);
+        imp.reload.set_sensitive(true);
+        let errors = match result {
+            Ok(result) => {
+                imp.sync_progress.set_fraction(1.0);
+                sync_errors(&result, page.locale().as_ref())
+            }
+            Err(error) => {
+                imp.sync_progress.set_visible(false);
+                vec![error]
+            }
+        };
+        if errors.is_empty() {
+            imp.status
+                .set_text(page.locale().translate("Synchronization completed"));
+        } else {
+            page.show_error("Could not synchronize calendars", &errors.join("\n"));
+        }
+
+        // A failed initial load or navigation has no subscription for the selected content.
+        let content = &imp.content;
+        if content.loaded_generation.get() != Some(content.generation.get())
+            && let Some(session) = self.current.borrow().as_ref()
+        {
+            session.show_content(ContentRequest {
+                generation: content.generation.get(),
+                date: content.date.get(),
+                view: content.view.get(),
+                filter: imp.list.get().map(|list| list.filter()).unwrap_or_default(),
+            });
+            session.refresh_sidebar();
+        }
+
+        let weak = page.downgrade();
+        self.progress_timer
+            .replace(Some(glib::timeout_add_local_once(
+                std::time::Duration::from_secs(1),
+                move || {
+                    if let Some(page) = weak.upgrade() {
+                        page.imp().session.progress_timer.take();
+                        page.imp().sync_progress.set_visible(false);
+                    }
+                },
+            )));
     }
 
     pub(super) fn can_edit(&self, page: &CalendarPage) -> bool {
@@ -307,6 +360,14 @@ impl PageSession {
                 imp.content.loading.set(false);
                 page.show_error("Could not load local calendars", &error);
             }
+            Event::SyncProgress { completed, total } => {
+                imp.sync_progress.set_fraction(if total == 0 {
+                    1.0
+                } else {
+                    completed as f64 / total as f64
+                });
+            }
+            Event::SyncFinished(result) => self.sync_finished(page, result),
             Event::Changed(change) => {
                 self.pending_command.set(false);
                 if self.pending_quick_task.replace(false) {
@@ -333,6 +394,12 @@ impl PageSession {
     pub(super) fn stop(&self, page: &CalendarPage) {
         page.imp().editor.stop(page);
         self.current.take();
+        self.pending_sync.set(false);
+        page.imp().sync_progress.set_visible(false);
+        page.imp().reload.set_sensitive(true);
+        if let Some(timer) = self.progress_timer.take() {
+            timer.remove();
+        }
         if self.pending_quick_task.replace(false) {
             page.imp().sidebar.quick_task().finish(false);
         }
@@ -342,5 +409,101 @@ impl PageSession {
         if let Some(timer) = self.timer.take() {
             timer.remove();
         }
+    }
+}
+
+fn sync_errors(result: &SyncResult, locale: &dyn eventix_locale::Locale) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (collection, outcome) in &result.collections {
+        match outcome {
+            SyncColResult::Success(_) => {}
+            SyncColResult::Error(error) => errors.push(format!("{collection}: {error}")),
+            SyncColResult::AuthFailed(url) => errors.push(format!(
+                "{}\n{url}",
+                formatx::formatx!(locale.translate("error.reauth_required"), collection).unwrap()
+            )),
+        }
+    }
+    for (calendar, failed) in &result.calendars {
+        if *failed {
+            errors.push(
+                formatx::formatx!(
+                    locale.translate("Could not synchronize calendar '{}'"),
+                    calendar
+                )
+                .unwrap(),
+            );
+        }
+    }
+    errors.sort();
+    errors
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use gtk::{glib, prelude::*, subclass::prelude::*};
+
+    use super::{CalendarSession, Event};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn refresh_action_syncs_in_background_and_displays_left_status_progress() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.SyncTest")
+            .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
+        let state = eventix_state::State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+        let (session, responses) = CalendarSession::test_start(state);
+        let imp = page.imp();
+        imp.session.current.replace(Some(session));
+        window.present();
+        assert!(!imp.sync_progress.is_visible());
+        gtk::prelude::ActionGroupExt::activate_action(&window, "reload", None);
+        assert!(imp.session.pending_sync.get());
+        assert!(imp.sync_progress.is_visible());
+        assert_eq!(imp.sync_progress.fraction(), 0.0);
+        assert!(!imp.reload.is_sensitive());
+        gtk::prelude::ActionGroupExt::activate_action(&window, "reload", None);
+
+        let context = glib::MainContext::default();
+        while context.iteration(false) {}
+        let progress_bounds = imp.sync_progress.compute_bounds(&page).unwrap();
+        let status_bounds = imp.status.compute_bounds(&page).unwrap();
+        assert!(progress_bounds.x() + progress_bounds.width() <= status_bounds.x());
+
+        let mut completed = false;
+        context.block_on(async {
+            while let Ok(event) = responses.recv().await {
+                let finished = matches!(event, Event::SyncFinished(_));
+                imp.session.handle_event(&page, event);
+                if finished {
+                    completed = true;
+                    break;
+                }
+            }
+        });
+        assert!(completed);
+        assert!(!imp.session.pending_sync.get());
+        assert!(imp.reload.is_sensitive());
+        assert_eq!(imp.sync_progress.fraction(), 1.0);
+        assert!(imp.sync_progress.is_visible());
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(1100)));
+        assert!(!imp.sync_progress.is_visible());
+        assert!(imp.session.progress_timer.borrow().is_none());
+
+        imp.session.sync_finished(&page, Err("test failure".into()));
+        assert!(!imp.sync_progress.is_visible());
+        assert!(imp.status.text().contains("test failure"));
+        window.close();
+        assert!(imp.session.progress_timer.borrow().is_none());
+        assert!(!imp.sync_progress.is_visible());
     }
 }

@@ -47,7 +47,9 @@ pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, EncryptedPassword,
     Settings, SyncTimeBound, SyncTimeSpan, SyncerType,
 };
-pub use sync::{SyncColResult, SyncResult, Syncer, create_calendar_by_folder, log_file};
+pub use sync::{
+    SyncColResult, SyncProgress, SyncResult, Syncer, create_calendar_by_folder, log_file,
+};
 
 /// Shared, async-safe handle to the global application state.
 ///
@@ -514,9 +516,15 @@ impl State {
     }
 
     /// Synchronizes all collections.
+    ///
+    /// The optional observer receives the initial collection count and an update after each
+    /// collection's result has been applied. Collection-level errors count as completed work
+    /// and are included in the returned result. An operation-level error stops synchronization
+    /// immediately without reporting the failed collection as ready.
     pub async fn sync_all(
         state: &EventixState,
         auth_url: Option<&String>,
+        progress: Option<&dyn SyncProgress>,
     ) -> anyhow::Result<sync::SyncResult> {
         let col_ids = {
             let state = state.lock().await;
@@ -528,12 +536,19 @@ impl State {
                 .collect::<Vec<_>>()
         };
 
+        let total = col_ids.len();
+        if let Some(progress) = progress {
+            progress.started(total);
+        }
         let mut sync_res = sync::SyncResult::default();
-        for col_id in col_ids {
+        for (index, col_id) in col_ids.into_iter().enumerate() {
             let mut col_res = Self::sync_collection(state, &col_id, auth_url).await?;
             sync_res.changed |= col_res.changed;
             sync_res.collections.extend(col_res.collections.drain());
             sync_res.calendars.extend(col_res.calendars.drain());
+            if let Some(progress) = progress {
+                progress.collection_ready(&col_id, index + 1, total);
+            }
         }
 
         let mut state = state.lock().await;

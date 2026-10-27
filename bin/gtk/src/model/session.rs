@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Serialized queries and mutations; this module never accesses GTK objects.
+//! Serialized queries and mutations with independent background sync; never accesses GTK objects.
 
 use std::{fmt, sync::Arc, thread};
 
@@ -12,6 +12,7 @@ use eventix_state::actions::{
     Action,
     items::{CreateItem, EditScope, ItemId, UpdateItem, UpdatePersonalAlarms},
 };
+use eventix_state::{EventixState, State, SyncProgress, SyncResult};
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
@@ -113,6 +114,8 @@ pub(crate) enum Event {
     SidebarLoaded(Result<SidebarSnapshot, String>),
     SourceLoaded(String),
     ReloadFailed(String),
+    SyncProgress { completed: usize, total: usize },
+    SyncFinished(Result<SyncResult, String>),
     Changed(ChangeSet),
     CommandFailed(String),
 }
@@ -138,6 +141,8 @@ enum Message {
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,
+    SyncAll,
+    SyncFinished(Result<SyncResult, String>),
     Execute(Box<dyn Action>),
 }
 
@@ -148,15 +153,43 @@ pub(crate) struct CalendarSession {
 
 impl CalendarSession {
     pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
+        let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
+        Self::start_worker(Worker::new(xdg))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_start(state: State) -> (Self, async_channel::Receiver<Event>) {
+        let mut worker = Worker::new(Arc::new(state.xdg().clone()));
+        worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
+        Self::start_worker(worker)
+    }
+
+    fn start_worker(mut worker: Worker) -> (Self, async_channel::Receiver<Event>) {
         let (requests, rx) = async_channel::unbounded::<Message>();
         let (results, responses) = async_channel::unbounded();
+        let sync_requests = requests.clone();
 
         thread::spawn(move || {
-            let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
-            let mut worker = Worker::new(xdg);
+            let runtime = match tokio::runtime::Runtime::new() {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    let _ = results.send_blocking(Event::SyncFinished(Err(error.to_string())));
+                    return;
+                }
+            };
+            let mut sync_task = None;
 
             // Queries and commands are ordered. Never discard a queued mutation.
             while let Ok(message) = rx.recv_blocking() {
+                if matches!(message, Message::SyncAll) {
+                    if sync_task.is_none() {
+                        sync_task = worker.start_sync(&runtime, &results, &sync_requests);
+                    }
+                    continue;
+                }
+                if matches!(message, Message::SyncFinished(_)) {
+                    sync_task = None;
+                }
                 for event in worker.handle(message) {
                     if results.send_blocking(event).is_err() {
                         return;
@@ -218,8 +251,8 @@ impl CalendarSession {
         let _ = self.requests.try_send(Message::RefreshSidebar);
     }
 
-    pub fn reload(&self) {
-        let _ = self.requests.try_send(Message::Reload);
+    pub fn sync_all(&self) -> bool {
+        self.requests.try_send(Message::SyncAll).is_ok()
     }
 
     pub fn execute(&self, command: Box<dyn Action>) {
@@ -292,7 +325,7 @@ impl ContentSubscription {
 
 struct Worker {
     xdg: Arc<xdg::BaseDirectories>,
-    state: Option<eventix_state::State>,
+    state: Option<EventixState>,
     content: Option<ContentSubscription>,
     subscriptions: Subscriptions,
 }
@@ -369,7 +402,7 @@ impl Worker {
             Message::PrepareEditor(id, kind) => Event::EditorLoaded(
                 id,
                 self.state()
-                    .and_then(|state| EditorOptions::load_for(state, kind))
+                    .and_then(|state| EditorOptions::load_for(&state, kind))
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::CreateItem(id, item) => {
@@ -394,7 +427,7 @@ impl Worker {
                             .items
                             .into_iter()
                             .map(|item| {
-                                let row = eventix_view::list::Row::load(state, &item);
+                                let row = eventix_view::list::Row::load(&state, &item);
                                 (item, row)
                             })
                             .collect()
@@ -406,7 +439,7 @@ impl Worker {
                     .state()
                     .map(|state| {
                         eventix_view::list::occurrences::Page::load(
-                            state,
+                            &state,
                             &request.item,
                             &request.cursor,
                             request.direction,
@@ -419,6 +452,15 @@ impl Worker {
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
+            Message::SyncAll => unreachable!("sync is dispatched independently of queries"),
+            Message::SyncFinished(result) => {
+                let mut events = vec![Event::CalendarsLoaded(self.calendars())];
+                if result.as_ref().map_or(true, |result| result.changed) {
+                    events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
+                }
+                events.push(Event::SyncFinished(result));
+                return events;
+            }
             Message::Execute(command) => match self.execute(command) {
                 Ok(change) => Event::Changed(change),
                 Err(error) => Event::CommandFailed(format!("{error:#}")),
@@ -431,9 +473,40 @@ impl Worker {
     fn load_state(&mut self) -> anyhow::Result<Event> {
         let state = load_local_state(self.xdg.clone())?;
         let event = Event::SourceLoaded(self.source_description(&state));
-        self.state = Some(state);
+        self.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
 
         Ok(event)
+    }
+
+    /// Starts network work separately so the serialized request loop remains available.
+    fn start_sync(
+        &mut self,
+        runtime: &tokio::runtime::Runtime,
+        results: &async_channel::Sender<Event>,
+        requests: &async_channel::Sender<Message>,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        if self.state.is_none() {
+            for event in self.handle(Message::Reload) {
+                if let Event::ReloadFailed(error) = event {
+                    let _ = results.send_blocking(Event::SyncFinished(Err(error)));
+                    return None;
+                }
+                let _ = results.send_blocking(event);
+            }
+        }
+        let state = self.state.clone()?;
+        let progress = SessionProgress(results.clone());
+        let requests = requests.clone();
+        Some(runtime.spawn(async move {
+            // Await a child task so panics also produce a terminal UI event.
+            let result =
+                tokio::spawn(async move { State::sync_all(&state, None, Some(&progress)).await })
+                    .await
+                    .map_err(anyhow::Error::from)
+                    .and_then(|result| result)
+                    .map_err(|error| format!("{error:#}"));
+            let _ = requests.send(Message::SyncFinished(result)).await;
+        }))
     }
 
     fn reload(&mut self) -> Vec<Event> {
@@ -449,23 +522,23 @@ impl Worker {
         events
     }
 
-    fn state(&self) -> anyhow::Result<&eventix_state::State> {
+    fn state(&self) -> anyhow::Result<tokio::sync::OwnedMutexGuard<State>> {
         self.state
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No loaded state"))
+            .map(|state| state.clone().blocking_lock_owned())
     }
 
     fn calendars(&self) -> Vec<CalendarVisibility> {
-        self.state.as_ref().map(calendars::load).unwrap_or_default()
+        self.state()
+            .map(|state| calendars::load(&state))
+            .unwrap_or_default()
     }
 
     fn toggle_calendar(&mut self, id: String) -> Vec<Event> {
         let result = (|| -> anyhow::Result<()> {
-            let state = self
-                .state
-                .as_mut()
-                .ok_or_else(|| anyhow::anyhow!("No loaded state"))?;
-            calendars::toggle(state, &id)
+            let mut state = self.state()?;
+            calendars::toggle(&mut state, &id)
         })();
 
         let mut events = vec![Event::CalendarsLoaded(self.calendars())];
@@ -519,10 +592,10 @@ impl Worker {
         scope: EditScope,
     ) -> anyhow::Result<(EditorOptions, Box<UpdateItem>)> {
         let state = self.state()?;
-        let edit = UpdateItem::load(state, item, scope)?;
+        let edit = UpdateItem::load(&state, item, scope)?;
 
         Ok((
-            EditorOptions::load_for_edit(state, edit.fields.kind, &edit.item.calendar)?,
+            EditorOptions::load_for_edit(&state, edit.fields.kind, &edit.item.calendar)?,
             Box::new(edit),
         ))
     }
@@ -563,6 +636,7 @@ impl Worker {
                         .to_string()
                 )
             })?;
+        drop(state);
         let change = self.execute(Box::new(command))?;
         let item = self.saved_item(&selected, kind)?;
         Ok((change, item))
@@ -571,9 +645,9 @@ impl Worker {
     fn saved_item(&self, item: &ItemId, kind: CalCompType) -> anyhow::Result<SavedItem> {
         let state = self.state()?;
         let event = match kind {
-            CalCompType::Event => eventix_view::Event::load(state, item)
+            CalCompType::Event => eventix_view::Event::load(&state, item)
                 .map(|event| SavedItem::Event(Box::new(event))),
-            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(state, item)
+            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(&state, item)
                 .map(|task| SavedItem::Task(Box::new(task))),
         }
         .ok_or_else(|| {
@@ -599,14 +673,15 @@ impl Worker {
             filter: request.filter.clone(),
         };
 
+        drop(state);
         self.load_content(content)
     }
 
     /// Installs a subscription only after its query and initial snapshot are available.
     fn load_content(&mut self, mut content: ContentSubscription) -> anyhow::Result<Snapshot> {
         let state = self.state()?;
-        let query = content.query(state)?;
-        let snapshot = content.snapshot(state)?;
+        let query = content.query(&state)?;
+        let snapshot = content.snapshot(&state)?;
         if let Snapshot::List(list) = &snapshot {
             content.filter = list.filter.clone();
         }
@@ -622,7 +697,7 @@ impl Worker {
         let result = (|| -> anyhow::Result<SidebarSnapshot> {
             let state = self.state()?;
             let now = Utc::now().with_timezone(state.timezone());
-            let snapshot = SidebarSnapshot::load(state, now);
+            let snapshot = SidebarSnapshot::load(&state, now);
             self.subscriptions
                 .register(SubscriptionId::Sidebar, Query::Sidebar { now });
 
@@ -680,28 +755,40 @@ impl Worker {
     }
 
     fn execute(&mut self, command: Box<dyn Action>) -> anyhow::Result<ChangeSet> {
-        let state = self
-            .state
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("No loaded state"))?;
+        let mut state = self.state()?;
 
         let mut affected = Vec::new();
         for item in command.affected_items() {
-            for id in self.subscriptions.matching(state, item) {
+            for id in self.subscriptions.matching(&state, item) {
                 if !affected.contains(&id) {
                     affected.push(id);
                 }
             }
         }
 
-        let item = command.execute(state)?;
-        for id in self.subscriptions.matching(state, &item) {
+        let item = command.execute(&mut state)?;
+        for id in self.subscriptions.matching(&state, &item) {
             if !affected.contains(&id) {
                 affected.push(id);
             }
         }
 
         Ok(ChangeSet { item, affected })
+    }
+}
+
+struct SessionProgress(async_channel::Sender<Event>);
+
+impl SyncProgress for SessionProgress {
+    fn started(&self, total: usize) {
+        let _ = self.0.try_send(Event::SyncProgress {
+            completed: 0,
+            total,
+        });
+    }
+
+    fn collection_ready(&self, _collection: &str, completed: usize, total: usize) {
+        let _ = self.0.try_send(Event::SyncProgress { completed, total });
     }
 }
 
@@ -765,8 +852,81 @@ mod tests {
             .collections_mut()
             .insert("local".into(), collection);
         let mut worker = Worker::new(xdg);
-        worker.state = Some(state);
+        worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
         worker
+    }
+
+    #[test]
+    fn background_sync_streams_progress_refreshes_subscriptions_and_suppresses_duplicates() {
+        use super::CalendarSession;
+
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("vdirsyncer")).unwrap();
+        let mut worker = worker(tmp.path());
+        subscribe(&mut worker, 17, "2026-10-12", View::Week);
+        fs::write(
+            tmp.path().join("new.ics"),
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n\
+             UID:synced\r\nDTSTART:20261012T110000Z\r\nDTEND:20261012T120000Z\r\n\
+             SUMMARY:Synced event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+        )
+        .unwrap();
+        let shared = worker.state.clone().unwrap();
+        let guard = shared.blocking_lock();
+        let (session, responses) = CalendarSession::start_worker(worker);
+        session.sync_all();
+        session.sync_all();
+        session.refresh_sidebar();
+        drop(guard);
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let mut progress = Vec::new();
+                let mut refreshed = false;
+                loop {
+                    match responses.recv().await.unwrap() {
+                        Event::SyncProgress { completed, total } => {
+                            progress.push((completed, total))
+                        }
+                        Event::ContentLoaded(response) => {
+                            assert_eq!(response.generation, 17);
+                            let Snapshot::Week(week) = response.result.unwrap() else {
+                                panic!("expected the selected week");
+                            };
+                            assert_eq!(week.start.to_string(), "2026-10-12");
+                            assert!(
+                                week.days[0]
+                                    .timed
+                                    .iter()
+                                    .any(|event| event.event.id.uid == "synced")
+                            );
+                            refreshed = true;
+                        }
+                        Event::SyncFinished(result) => {
+                            assert!(result.unwrap().changed);
+                            assert!(refreshed);
+                            assert_eq!(progress, [(0, 1), (1, 1)]);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                // A request queued after completion is a fence for any duplicate work.
+                session.refresh_sidebar();
+                while let Ok(event) = responses.recv().await {
+                    match event {
+                        Event::SidebarLoaded(_) => break,
+                        Event::SyncProgress { .. } | Event::SyncFinished(_) => {
+                            panic!("duplicate sync")
+                        }
+                        _ => {}
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        });
     }
 
     #[test]
@@ -776,7 +936,7 @@ mod tests {
         let mut worker = worker(tmp.path());
         let other_path = other.path().join("different filename.ics");
         fs::copy(tmp.path().join("event.ics"), &other_path).unwrap();
-        worker.state.as_mut().unwrap().store_mut().add(
+        worker.state().unwrap().store_mut().add(
             CalDir::new_from_dir(
                 Arc::new("other".into()),
                 other.path().into(),
@@ -822,7 +982,7 @@ mod tests {
             uid: "move-me".into(),
             recurrence: Some("TU2026-10-13T09:00:00".parse().unwrap()),
         };
-        let state = worker.state.as_ref().unwrap();
+        let state = worker.state().unwrap();
         let occurrence = state
             .store()
             .occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())
@@ -843,8 +1003,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
         worker
-            .state
-            .as_mut()
+            .state()
             .unwrap()
             .settings_mut()
             .collections_mut()
@@ -868,7 +1027,7 @@ mod tests {
             uid: "move-me".into(),
             recurrence: None,
         };
-        let mut fields = UpdateItem::load(worker.state().unwrap(), source, EditScope::Series)
+        let mut fields = UpdateItem::load(&worker.state().unwrap(), source, EditScope::Series)
             .unwrap()
             .fields;
         fields.kind = CalCompType::Todo;
@@ -919,8 +1078,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
         worker
-            .state
-            .as_mut()
+            .state()
             .unwrap()
             .settings_mut()
             .collections_mut()
@@ -1004,10 +1162,8 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
-        let collection = worker
-            .state
-            .as_mut()
-            .unwrap()
+        let mut state = worker.state().unwrap();
+        let collection = state
             .settings_mut()
             .collections_mut()
             .get_mut("local")
@@ -1025,6 +1181,7 @@ mod tests {
             collection.all_calendars_mut().insert(id.into(), settings);
         }
 
+        drop(state);
         let Some(Event::EditorLoaded(1, Ok(options))) = worker
             .handle(Message::PrepareEditor(1, CalCompType::Event))
             .pop()
@@ -1114,7 +1271,7 @@ mod tests {
             recurrence: Some("TU2026-10-13T09:00:00".parse().unwrap()),
         };
         let mut edit =
-            UpdateItem::load(worker.state().unwrap(), item.clone(), EditScope::Following).unwrap();
+            UpdateItem::load(&worker.state().unwrap(), item.clone(), EditScope::Following).unwrap();
         edit.fields.start = Some("TU2026-11-10T09:00:00".parse().unwrap());
         edit.fields.end = Some("TU2026-11-10T10:00:00".parse().unwrap());
 
@@ -1146,8 +1303,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
         worker
-            .state
-            .as_mut()
+            .state()
             .unwrap()
             .store_mut()
             .file_by_id_mut("move-me")
@@ -1248,8 +1404,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
         worker
-            .state
-            .as_mut()
+            .state()
             .unwrap()
             .settings_mut()
             .collections_mut()
@@ -1264,8 +1419,7 @@ mod tests {
                 time_span: Default::default(),
             });
         worker
-            .state
-            .as_mut()
+            .state()
             .unwrap()
             .store_mut()
             .file_by_id_mut("move-me")
@@ -1321,8 +1475,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
         worker
-            .state
-            .as_mut()
+            .state()
             .unwrap()
             .settings_mut()
             .collections_mut()
@@ -1440,8 +1593,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
         worker
-            .state
-            .as_mut()
+            .state()
             .unwrap()
             .misc_mut()
             .toggle_calendar(&"test".into());
@@ -1464,7 +1616,8 @@ mod tests {
         };
         for (summary, expected) in [("Needle", 1), ("Other", 0), ("Needle again", 1)] {
             let mut edit =
-                UpdateItem::load(worker.state().unwrap(), item.clone(), EditScope::Series).unwrap();
+                UpdateItem::load(&worker.state().unwrap(), item.clone(), EditScope::Series)
+                    .unwrap();
             edit.fields.summary = summary.into();
             let change = worker.execute(Box::new(edit)).unwrap();
             assert!(change.affected.contains(&SubscriptionId::Calendar(42)));
