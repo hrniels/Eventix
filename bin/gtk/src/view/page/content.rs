@@ -140,12 +140,7 @@ impl PageContent {
             .set_tooltip_text(Some(locale.translate("Calendars")));
         imp.reload
             .set_tooltip_text(Some(locale.translate("Synchronize all calendars")));
-        imp.cancel_sync
-            .set_tooltip_text(Some(locale.translate("Cancel synchronization")));
-        imp.cancel_sync
-            .update_property(&[gtk::accessible::Property::Label(
-                locale.translate("Cancel synchronization"),
-            )]);
+        imp.status.set_locale(locale.as_ref());
         imp.picker
             .set_tooltip_text(Some(locale.translate("Choose date")));
     }

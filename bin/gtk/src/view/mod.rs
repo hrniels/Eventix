@@ -17,6 +17,7 @@ pub(crate) mod page;
 pub(crate) mod popover;
 mod response_marker;
 mod sidebar;
+mod status_bar;
 mod surface;
 pub mod weekly;
 

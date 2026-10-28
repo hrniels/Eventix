@@ -24,6 +24,7 @@ use super::{
 };
 use crate::model::session::View;
 use crate::view::list::ListView;
+use crate::view::status_bar::StatusBar;
 
 mod calendars;
 mod content;
@@ -64,11 +65,7 @@ mod imp {
         #[template_child]
         pub title: gtk::TemplateChild<gtk::Label>,
         #[template_child]
-        pub status: gtk::TemplateChild<gtk::Label>,
-        #[template_child]
-        pub sync_progress: gtk::TemplateChild<gtk::ProgressBar>,
-        #[template_child]
-        pub cancel_sync: gtk::TemplateChild<gtk::Button>,
+        pub status: gtk::TemplateChild<StatusBar>,
         #[template_child]
         pub weekly: gtk::TemplateChild<WeekContent>,
         #[template_child]
@@ -111,6 +108,7 @@ mod imp {
             WeekContent::ensure_type();
             MonthGrid::ensure_type();
             Sidebar::ensure_type();
+            StatusBar::ensure_type();
 
             klass.bind_template();
         }
@@ -168,7 +166,7 @@ mod imp {
             obj.connect_event_creation();
             self.session.connect_quick_task(&obj);
             let weak = obj.downgrade();
-            self.cancel_sync.connect_clicked(move |_| {
+            self.status.connect_cancel(move || {
                 if let Some(page) = weak.upgrade() {
                     page.imp().session.cancel_sync(&page);
                 }
