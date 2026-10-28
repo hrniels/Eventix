@@ -13,7 +13,7 @@ use eventix_state::actions::{
     items::{CreateItem, EditScope, ItemId, UpdateItem, UpdatePersonalAlarms},
 };
 use eventix_state::auth::{AuthOutcome, AuthPrompt, monitor_o365_auth};
-use eventix_state::{EventixState, State, SyncProgress, SyncResult};
+use eventix_state::{EventixState, State, SyncCancellation, SyncProgress, SyncResult};
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
@@ -145,6 +145,7 @@ enum Message {
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,
     SyncAll,
+    CancelSync,
     Authenticate(u64, String),
     CancelAuthentication(u64),
     SyncFinished(Result<SyncResult, String>),
@@ -190,7 +191,7 @@ impl CalendarSession {
                     return;
                 }
             };
-            let mut sync_task = None;
+            let mut sync_task: Option<(tokio::task::JoinHandle<()>, SyncCancellation)> = None;
             let mut auth_task: Option<(u64, AuthenticationTask)> = None;
 
             // Queries and commands are ordered. Never discard a queued mutation.
@@ -213,7 +214,16 @@ impl CalendarSession {
                 }
                 if matches!(message, Message::SyncAll) {
                     if sync_task.is_none() {
-                        sync_task = worker.start_sync(&runtime, &results, &sync_requests);
+                        let cancellation = SyncCancellation::default();
+                        sync_task = worker
+                            .start_sync(&runtime, &results, &sync_requests, cancellation.clone())
+                            .map(|task| (task, cancellation));
+                    }
+                    continue;
+                }
+                if matches!(message, Message::CancelSync) {
+                    if let Some((_, cancellation)) = &sync_task {
+                        cancellation.cancel();
                     }
                     continue;
                 }
@@ -283,6 +293,10 @@ impl CalendarSession {
 
     pub fn sync_all(&self) -> bool {
         self.requests.try_send(Message::SyncAll).is_ok()
+    }
+
+    pub fn cancel_sync(&self) {
+        let _ = self.requests.try_send(Message::CancelSync);
     }
 
     pub fn authenticate(&self, id: u64, collection: String) {
@@ -492,7 +506,9 @@ impl Worker {
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
-            Message::SyncAll => unreachable!("sync is dispatched independently of queries"),
+            Message::SyncAll | Message::CancelSync => {
+                unreachable!("sync is dispatched independently of queries")
+            }
             Message::Authenticate(..) | Message::CancelAuthentication(_) => {
                 unreachable!("authentication is dispatched independently of queries")
             }
@@ -527,6 +543,7 @@ impl Worker {
         runtime: &tokio::runtime::Runtime,
         results: &async_channel::Sender<Event>,
         requests: &async_channel::Sender<Message>,
+        cancellation: SyncCancellation,
     ) -> Option<tokio::task::JoinHandle<()>> {
         if self.state.is_none() {
             for event in self.handle(Message::Reload) {
@@ -542,12 +559,13 @@ impl Worker {
         let requests = requests.clone();
         Some(runtime.spawn(async move {
             // Await a child task so panics also produce a terminal UI event.
-            let result =
-                tokio::spawn(async move { State::sync_all(&state, None, Some(&progress)).await })
-                    .await
-                    .map_err(anyhow::Error::from)
-                    .and_then(|result| result)
-                    .map_err(|error| format!("{error:#}"));
+            let result = tokio::spawn(async move {
+                State::sync_all_cancellable(&state, None, Some(&progress), &cancellation).await
+            })
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
+            .map_err(|error| format!("{error:#}"));
             let _ = requests.send(Message::SyncFinished(result)).await;
         }))
     }
@@ -920,6 +938,97 @@ mod tests {
         let mut worker = Worker::new(xdg);
         worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
         worker
+    }
+
+    #[test]
+    fn background_sync_cancellation_finishes_once_refreshes_content_and_allows_another_sync() {
+        use super::CalendarSession;
+
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("vdirsyncer")).unwrap();
+        let mut worker = worker(tmp.path());
+        subscribe(&mut worker, 17, "2026-10-12", View::Week);
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let listener = runtime
+            .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let shared = worker.state.clone().unwrap();
+        {
+            let mut state = shared.blocking_lock();
+            state
+                .settings_mut()
+                .collections_mut()
+                .get_mut("local")
+                .unwrap()
+                .set_syncer(SyncerType::VDirSyncer {
+                    email: eventix_state::EmailAccount::new(
+                        "Test".into(),
+                        "test@example.com".into(),
+                    ),
+                    url: format!("http://{address}/"),
+                    read_only: false,
+                    username: None,
+                    password: None,
+                    time_span: Default::default(),
+                });
+        }
+        let (session, responses) = CalendarSession::start_worker(worker);
+        session.sync_all();
+        runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let (_connection, _) = listener.accept().await.unwrap();
+                session.sync_all();
+                session.cancel_sync();
+                session.cancel_sync();
+                let mut refreshed = false;
+                loop {
+                    match responses.recv().await.unwrap() {
+                        Event::ContentLoaded(response) => {
+                            assert_eq!(response.generation, 17);
+                            assert!(response.result.is_ok());
+                            refreshed = true;
+                        }
+                        Event::SyncFinished(result) => {
+                            assert!(result.unwrap().cancelled);
+                            assert!(refreshed);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                session.cancel_sync();
+                session.refresh_sidebar();
+                loop {
+                    match responses.recv().await.unwrap() {
+                        Event::SidebarLoaded(_) => break,
+                        Event::SyncFinished(_) | Event::SyncProgress { .. } => {
+                            panic!("duplicate sync")
+                        }
+                        _ => {}
+                    }
+                }
+                shared
+                    .lock()
+                    .await
+                    .settings_mut()
+                    .collections_mut()
+                    .get_mut("local")
+                    .unwrap()
+                    .set_syncer(SyncerType::FileSystem {
+                        path: tmp.path().display().to_string(),
+                    });
+                session.sync_all();
+                loop {
+                    if let Event::SyncFinished(result) = responses.recv().await.unwrap() {
+                        assert!(!result.unwrap().cancelled);
+                        break;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        });
     }
 
     #[test]

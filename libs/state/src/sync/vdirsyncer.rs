@@ -9,13 +9,13 @@ use std::path::PathBuf;
 use std::process::{ExitStatus, Output, Stdio};
 use std::sync::Arc;
 use tokio::fs::{self, File};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use xdg::BaseDirectories;
 
 use crate::settings::SyncTimeSpan;
-use crate::sync::{SyncColResult, Syncer, log_line};
+use crate::sync::{SyncCancellation, SyncCancelled, SyncColResult, Syncer, log_line};
 
 // --- CommandRunner trait and implementations ---
 
@@ -46,10 +46,11 @@ pub(crate) trait CommandRunner: Send + Sync {
 pub(crate) struct RealCommandRunner {
     data_home: PathBuf,
     config_home: PathBuf,
+    cancellation: SyncCancellation,
 }
 
 impl RealCommandRunner {
-    fn new(xdg: &BaseDirectories) -> Self {
+    fn new(xdg: &BaseDirectories, cancellation: SyncCancellation) -> Self {
         let data_home = xdg.get_data_home().unwrap();
         let config_home = xdg.get_config_home().unwrap();
         Self {
@@ -57,6 +58,7 @@ impl RealCommandRunner {
             // raw XDG roots rather than the already-prefixed directories used by the parent app.
             data_home: data_home.parent().unwrap_or(&data_home).to_path_buf(),
             config_home: config_home.parent().unwrap_or(&config_home).to_path_buf(),
+            cancellation,
         }
     }
 
@@ -89,13 +91,41 @@ impl CommandRunner for RealCommandRunner {
         cmd.args(args);
         let mut child = cmd.spawn().with_context(|| format!("Starting {program}"))?;
 
-        if let Some(data) = stdin_data
-            && let Some(mut stdin) = child.stdin.take()
-        {
-            stdin.write_all(data).await?;
+        let result = {
+            let work = async {
+                if let Some(data) = stdin_data
+                    && let Some(mut stdin) = child.stdin.take()
+                {
+                    stdin.write_all(data).await?;
+                }
+                // call child.wait() and construct Output manually as wait_for_output() consumes
+                // child, which we still need for cleanup in case of result.is_err() below.
+                let mut stdout = child.stdout.take().unwrap();
+                let mut stderr = child.stderr.take().unwrap();
+                let mut out = Vec::new();
+                let mut err = Vec::new();
+                let (status, _, _) = tokio::try_join!(
+                    child.wait(),
+                    stdout.read_to_end(&mut out),
+                    stderr.read_to_end(&mut err),
+                )?;
+                Ok(Output {
+                    status,
+                    stdout: out,
+                    stderr: err,
+                })
+            };
+            tokio::select! {
+                biased;
+                _ = self.cancellation.cancelled() => Err(SyncCancelled.into()),
+                result = work => result,
+            }
+        };
+        if result.is_err() {
+            child.kill().await.ok();
+            child.wait().await.ok();
         }
-
-        Ok(child.wait_with_output().await?)
+        result
     }
 
     async fn run_interactive(
@@ -118,13 +148,25 @@ impl CommandRunner for RealCommandRunner {
         let mut stderr_reader = BufReader::new(stderr).lines();
         let mut lines = Vec::new();
 
-        while let Some(line) = stderr_reader.next_line().await? {
-            lines.push(line);
-            stdin.write_all(yes_response).await.unwrap();
+        let result = {
+            let work = async {
+                while let Some(line) = stderr_reader.next_line().await? {
+                    lines.push(line);
+                    stdin.write_all(yes_response).await?;
+                }
+                Ok((child.wait().await?, lines))
+            };
+            tokio::select! {
+                biased;
+                _ = self.cancellation.cancelled() => Err(SyncCancelled.into()),
+                result = work => result,
+            }
+        };
+        if result.is_err() {
+            child.kill().await.ok();
+            child.wait().await.ok();
         }
-
-        let output = child.wait_with_output().await?;
-        Ok((output.status, lines))
+        result
     }
 }
 
@@ -255,7 +297,7 @@ impl VDirSyncer {
     /// `folder_id` maps vdirsyncer folder names to calendar IDs. Returns an error if the
     /// configuration file cannot be written.
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(
+    pub(crate) async fn new_cancellable(
         xdg: &BaseDirectories,
         col_id: String,
         folder_id: HashMap<String, String>,
@@ -264,6 +306,7 @@ impl VDirSyncer {
         username: Option<String>,
         time_span: &SyncTimeSpan,
         log: Arc<Mutex<File>>,
+        cancellation: SyncCancellation,
     ) -> anyhow::Result<Self> {
         Self::new_with_runner(
             xdg,
@@ -274,7 +317,7 @@ impl VDirSyncer {
             username,
             time_span,
             log,
-            Arc::new(RealCommandRunner::new(xdg)),
+            Arc::new(RealCommandRunner::new(xdg, cancellation)),
         )
         .await
     }
@@ -655,6 +698,58 @@ mod tests {
     use std::sync::Mutex as StdMutex;
 
     // --- FakeCommandRunner ---
+
+    #[tokio::test]
+    async fn cancellation_reaps_subprocesses_before_returning() {
+        for interactive in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let xdg = crate::with_test_xdg(tmp.path(), tmp.path());
+            let cancellation = SyncCancellation::default();
+
+            // build some long-running command
+            let runner = RealCommandRunner::new(&xdg, cancellation.clone());
+            let marker = tmp.path().join("pid");
+            let marker_arg = marker.to_str().unwrap();
+            let args = ["-c", "echo $$ > \"$1\"; exec sleep 30", "test", marker_arg];
+
+            // construct async block to run it
+            let work = async {
+                if interactive {
+                    runner
+                        .run_interactive("sh", &args, b"y\n")
+                        .await
+                        .map(|_| ())
+                } else {
+                    runner.run("sh", &args, None).await.map(|_| ())
+                }
+            };
+
+            // construct async block to cancel it after a short time
+            let cancel = async {
+                let pid = loop {
+                    if let Ok(pid) = tokio::fs::read_to_string(&marker).await
+                        && let Ok(pid) = pid.trim().parse::<u32>()
+                    {
+                        break pid;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                };
+                cancellation.cancel();
+                pid
+            };
+
+            // run both and wait for them
+            let (result, pid) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                tokio::join!(work, cancel)
+            })
+            .await
+            .unwrap();
+
+            // ensure the child process does no longer exist
+            assert!(result.unwrap_err().is::<SyncCancelled>());
+            assert!(!std::path::Path::new(&format!("/proc/{pid}")).exists());
+        }
+    }
 
     /// A recorded call made to the fake runner.
     #[derive(Debug, Clone)]

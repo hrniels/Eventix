@@ -68,6 +68,8 @@ mod imp {
         #[template_child]
         pub sync_progress: gtk::TemplateChild<gtk::ProgressBar>,
         #[template_child]
+        pub cancel_sync: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
         pub weekly: gtk::TemplateChild<WeekContent>,
         #[template_child]
         pub previous: gtk::TemplateChild<gtk::Button>,
@@ -165,6 +167,12 @@ mod imp {
             self.content.connect_controls(&obj);
             obj.connect_event_creation();
             self.session.connect_quick_task(&obj);
+            let weak = obj.downgrade();
+            self.cancel_sync.connect_clicked(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    page.imp().session.cancel_sync(&page);
+                }
+            });
         }
 
         fn dispose(&self) {

@@ -121,8 +121,23 @@ impl PageSession {
         imp.reload.set_sensitive(false);
         imp.sync_progress.set_fraction(0.0);
         imp.sync_progress.set_visible(true);
+        imp.cancel_sync.set_sensitive(true);
+        imp.cancel_sync.set_visible(true);
         imp.sync_progress
             .set_tooltip_text(Some(page.locale().translate("Synchronizing calendars…")));
+    }
+
+    pub(super) fn cancel_sync(&self, page: &CalendarPage) {
+        if self.pending_sync.get()
+            && page.imp().cancel_sync.is_sensitive()
+            && let Some(session) = self.current.borrow().as_ref()
+        {
+            session.cancel_sync();
+            page.imp().cancel_sync.set_sensitive(false);
+            page.imp()
+                .status
+                .set_text(page.locale().translate("Cancelling synchronization…"));
+        }
     }
 
     fn sync_finished(&self, page: &CalendarPage, result: Result<SyncResult, String>) {
@@ -131,10 +146,16 @@ impl PageSession {
             timer.remove();
         }
         self.pending_sync.set(false);
+        imp.cancel_sync.set_visible(false);
         imp.reload.set_sensitive(true);
+        let cancelled = result.as_ref().is_ok_and(|result| result.cancelled);
         let errors = match &result {
             Ok(result) => {
-                imp.sync_progress.set_fraction(1.0);
+                if cancelled {
+                    imp.sync_progress.set_visible(false);
+                } else {
+                    imp.sync_progress.set_fraction(1.0);
+                }
                 sync_errors(result, page.locale().as_ref())
             }
             Err(error) => {
@@ -142,7 +163,10 @@ impl PageSession {
                 vec![error.clone()]
             }
         };
-        if errors.is_empty() {
+        if cancelled {
+            imp.status
+                .set_text(page.locale().translate("Synchronization cancelled"));
+        } else if errors.is_empty() {
             imp.status
                 .set_text(page.locale().translate("Synchronization completed"));
         } else {
@@ -163,6 +187,9 @@ impl PageSession {
             session.refresh_sidebar();
         }
 
+        if cancelled {
+            return;
+        }
         let weak = page.downgrade();
         self.progress_timer
             .replace(Some(glib::timeout_add_local_once(
@@ -476,9 +503,12 @@ impl PageSession {
     pub(super) fn stop(&self, page: &CalendarPage) {
         page.imp().editor.stop(page);
         self.auth_popup.take();
-        self.current.take();
+        if let Some(session) = self.current.take() {
+            session.cancel_sync();
+        }
         self.pending_sync.set(false);
         page.imp().sync_progress.set_visible(false);
+        page.imp().cancel_sync.set_visible(false);
         page.imp().reload.set_sensitive(true);
         if let Some(timer) = self.progress_timer.take() {
             timer.remove();
@@ -624,9 +654,12 @@ mod tests {
         imp.session.current.replace(Some(session));
         window.present();
         assert!(!imp.sync_progress.is_visible());
+        assert!(!imp.cancel_sync.is_visible());
         gtk::prelude::ActionGroupExt::activate_action(&window, "reload", None);
         assert!(imp.session.pending_sync.get());
         assert!(imp.sync_progress.is_visible());
+        assert!(imp.cancel_sync.is_visible());
+        assert!(imp.cancel_sync.is_sensitive());
         assert_eq!(imp.sync_progress.fraction(), 0.0);
         assert!(!imp.reload.is_sensitive());
         gtk::prelude::ActionGroupExt::activate_action(&window, "reload", None);
@@ -636,6 +669,12 @@ mod tests {
         let progress_bounds = imp.sync_progress.compute_bounds(&page).unwrap();
         let status_bounds = imp.status.compute_bounds(&page).unwrap();
         assert!(status_bounds.x() + status_bounds.width() <= progress_bounds.x());
+        let cancel_bounds = imp.cancel_sync.compute_bounds(&page).unwrap();
+        assert!(progress_bounds.x() + progress_bounds.width() <= cancel_bounds.x());
+        assert_eq!(
+            imp.cancel_sync.icon_name().as_deref(),
+            Some("window-close-symbolic")
+        );
 
         let mut completed = false;
         context.block_on(async {
@@ -653,6 +692,7 @@ mod tests {
         assert!(imp.reload.is_sensitive());
         assert_eq!(imp.sync_progress.fraction(), 1.0);
         assert!(imp.sync_progress.is_visible());
+        assert!(!imp.cancel_sync.is_visible());
         context.block_on(glib::timeout_future(std::time::Duration::from_millis(1100)));
         assert!(!imp.sync_progress.is_visible());
         assert!(imp.session.progress_timer.borrow().is_none());
@@ -660,6 +700,37 @@ mod tests {
         imp.session.sync_finished(&page, Err("test failure".into()));
         assert!(!imp.sync_progress.is_visible());
         assert!(imp.status.text().contains("test failure"));
+        imp.session.pending_sync.set(true);
+        imp.reload.set_sensitive(false);
+        imp.sync_progress.set_fraction(0.5);
+        imp.sync_progress.set_visible(true);
+        imp.cancel_sync.set_visible(true);
+        imp.cancel_sync.emit_clicked();
+        assert!(!imp.cancel_sync.is_sensitive());
+        assert!(!imp.reload.is_sensitive());
+        assert!(imp.session.pending_sync.get());
+        assert_eq!(imp.status.text(), "Cancelling synchronization…");
+        imp.cancel_sync.emit_clicked();
+        imp.session.sync_finished(
+            &page,
+            Ok(eventix_state::SyncResult {
+                cancelled: true,
+                collections: [(
+                    "office".into(),
+                    eventix_state::SyncColResult::AuthFailed("https://example.invalid/auth".into()),
+                )]
+                .into(),
+                ..Default::default()
+            }),
+        );
+        assert!(!imp.session.pending_sync.get());
+        assert!(imp.reload.is_sensitive());
+        assert!(!imp.sync_progress.is_visible());
+        assert_eq!(imp.sync_progress.fraction(), 0.5);
+        assert!(!imp.cancel_sync.is_visible());
+        assert!(imp.session.auth_popup.borrow().is_none());
+        assert!(imp.session.progress_timer.borrow().is_none());
+        assert_eq!(imp.status.text(), "Synchronization cancelled");
         window.close();
         assert!(imp.session.progress_timer.borrow().is_none());
         assert!(!imp.sync_progress.is_visible());

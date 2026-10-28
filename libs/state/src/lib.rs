@@ -51,7 +51,8 @@ pub use settings::{
     Settings, SyncTimeBound, SyncTimeSpan, SyncerType,
 };
 pub use sync::{
-    SyncColResult, SyncProgress, SyncResult, Syncer, create_calendar_by_folder, log_file,
+    SyncCancellation, SyncColResult, SyncProgress, SyncResult, Syncer, create_calendar_by_folder,
+    log_file,
 };
 
 /// Shared, async-safe handle to the global application state.
@@ -89,6 +90,7 @@ impl State {
         state: &EventixState,
         col_id: &String,
         auth_url: Option<&String>,
+        cancellation: &SyncCancellation,
         run: F,
     ) -> anyhow::Result<sync::SyncResult>
     where
@@ -99,30 +101,57 @@ impl State {
             CollectionSettings,
             Option<String>,
             Option<String>,
+            SyncCancellation,
         ) -> Fut,
         Fut: std::future::Future<Output = anyhow::Result<sync::SyncExecution>>,
     {
-        let (mut plan, xdg) = {
+        let preparation = async {
             let mut state = state.lock().await;
             // in case the o365 is empty (e.g., due to an earlier migration where it didn't matter
             // that it was empty), repair it here by generating a new one and storing it.
             Self::repair_o365_password(&mut state, col_id).await?;
             let plan = Self::prepare_collection_sync(&mut state, col_id)?;
-            (plan, state.xdg.clone())
+            Ok::<_, anyhow::Error>((plan, state.xdg.clone()))
+        };
+        let (mut plan, xdg) = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Ok(SyncResult {
+                cancelled: true,
+                ..Default::default()
+            }),
+            result = preparation => result?,
         };
 
-        let (snapshot, mut syncer, res) = run(
+        // Backends observe cancellation themselves so subprocess cleanup completes before
+        // write protection is released and partially updated files are read back into state.
+        let execution = run(
             xdg,
             plan.index,
             plan.col_id.clone(),
             plan.snapshot.clone(),
             plan.token.clone(),
             auth_url.cloned(),
+            cancellation.clone(),
         )
-        .await?;
+        .await;
+        let interrupted = match &execution {
+            Err(error) => error.is::<sync::SyncCancelled>(),
+            Ok((_, _, Err(error))) => error.is::<sync::SyncCancelled>(),
+            _ => false,
+        };
 
         let mut state = state.lock().await;
         drop(plan.protection.take());
+        if interrupted {
+            sync::reload_collection_from_disk(&mut state, col_id, Some(&plan.snapshot))?;
+            return Ok(SyncResult {
+                cancelled: true,
+                // A stopped subprocess may already have changed files, even without a result.
+                changed: true,
+                ..Default::default()
+            });
+        }
+        let (snapshot, mut syncer, res) = execution?;
         let mut sync_res = sync::SyncResult::default();
         sync::handle_sync_result(
             &mut state,
@@ -471,50 +500,95 @@ impl State {
         sync::delete_calendar_by_folder(state, col_id, folder).await
     }
 
-    /// Synchronizes a single collection.
+    /// Synchronizes one collection, retaining local changes if cancellation interrupts it.
+    ///
+    /// Returns only after backend processes have stopped and the local store has been reconciled.
+    /// Cancellation preserves calendar error flags and is reported in the returned result.
     pub async fn sync_collection(
         state: &EventixState,
         col_id: &String,
         auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        Self::run_collection_sync_op(state, col_id, auth_url, sync::run_sync_from_snapshot).await
-    }
-
-    /// Discovers a remote collection and returns information about it.
-    pub async fn discover_collection(
-        state: &EventixState,
-        col_id: &String,
-        auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        Self::run_collection_sync_op(state, col_id, auth_url, sync::run_discover_from_snapshot)
-            .await
-    }
-
-    /// Reloads a collection from its remote source and refreshes local files.
-    pub async fn reload_collection(
-        state: &EventixState,
-        col_id: &String,
-        auth_url: Option<&String>,
+        cancellation: &SyncCancellation,
     ) -> anyhow::Result<sync::SyncResult> {
         Self::run_collection_sync_op(
             state,
             col_id,
             auth_url,
+            cancellation,
+            sync::run_sync_from_snapshot,
+        )
+        .await
+    }
+
+    /// Discovers a remote collection and returns information about it.
+    ///
+    /// Cancellation stops backend work and reconciles local files before returning a cancelled
+    /// result, preserving existing calendar error flags.
+    pub async fn discover_collection(
+        state: &EventixState,
+        col_id: &String,
+        auth_url: Option<&String>,
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<sync::SyncResult> {
+        Self::run_collection_sync_op(
+            state,
+            col_id,
+            auth_url,
+            cancellation,
+            sync::run_discover_from_snapshot,
+        )
+        .await
+    }
+
+    /// Reloads a collection from its remote source and refreshes local files.
+    ///
+    /// Cancellation stops remaining reload stages and reconciles local files before returning a
+    /// cancelled result. Files already deleted or downloaded are not restored to their old state.
+    pub async fn reload_collection(
+        state: &EventixState,
+        col_id: &String,
+        auth_url: Option<&String>,
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<sync::SyncResult> {
+        Self::run_collection_sync_op(
+            state,
+            col_id,
+            auth_url,
+            cancellation,
             sync::run_reload_collection_from_snapshot,
         )
         .await
     }
 
     /// Reloads a single calendar from its remote source and refreshes the local file.
+    ///
+    /// Cancellation stops remaining reload stages and reconciles local files before returning a
+    /// cancelled result. Files already deleted or downloaded are not restored to their old state.
     pub async fn reload_calendar(
         state: &EventixState,
         col_id: &String,
         cal_id: &String,
         auth_url: Option<&String>,
+        cancellation: &SyncCancellation,
     ) -> anyhow::Result<sync::SyncResult> {
-        Self::run_collection_sync_op(state, col_id, auth_url, |xdg, idx, id, col, token, auth| {
-            sync::run_reload_calendar_from_snapshot(xdg, idx, id, col, token, auth, cal_id)
-        })
+        Self::run_collection_sync_op(
+            state,
+            col_id,
+            auth_url,
+            cancellation,
+            |xdg, idx, id, col, token, auth, cancellation| {
+                sync::run_reload_calendar_from_snapshot(
+                    xdg,
+                    idx,
+                    id,
+                    col,
+                    token,
+                    auth,
+                    cancellation,
+                    cal_id,
+                )
+            },
+        )
         .await
     }
 
@@ -529,7 +603,21 @@ impl State {
         auth_url: Option<&String>,
         progress: Option<&dyn SyncProgress>,
     ) -> anyhow::Result<sync::SyncResult> {
-        let col_ids = {
+        Self::sync_all_cancellable(state, auth_url, progress, &SyncCancellation::default()).await
+    }
+
+    /// Synchronizes all collections until completion or cancellation.
+    ///
+    /// Keeps completed results and skips remaining collections after cancellation. Interrupted
+    /// collections are reconciled before returning, without counting them as completed progress.
+    /// Only a fully completed operation advances the last-reload timestamp.
+    pub async fn sync_all_cancellable(
+        state: &EventixState,
+        auth_url: Option<&String>,
+        progress: Option<&dyn SyncProgress>,
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<sync::SyncResult> {
+        let snapshot = async {
             let state = state.lock().await;
             state
                 .settings()
@@ -538,6 +626,14 @@ impl State {
                 .cloned()
                 .collect::<Vec<_>>()
         };
+        let col_ids = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Ok(SyncResult {
+                cancelled: true,
+                ..Default::default()
+            }),
+            ids = snapshot => ids,
+        };
 
         let total = col_ids.len();
         if let Some(progress) = progress {
@@ -545,16 +641,24 @@ impl State {
         }
         let mut sync_res = sync::SyncResult::default();
         for (index, col_id) in col_ids.into_iter().enumerate() {
-            let mut col_res = Self::sync_collection(state, &col_id, auth_url).await?;
+            let mut col_res = Self::sync_collection(state, &col_id, auth_url, cancellation).await?;
             sync_res.changed |= col_res.changed;
+            sync_res.cancelled |= col_res.cancelled;
             sync_res.collections.extend(col_res.collections.drain());
             sync_res.calendars.extend(col_res.calendars.drain());
+            if sync_res.cancelled {
+                return Ok(sync_res);
+            }
             if let Some(progress) = progress {
                 progress.collection_ready(&col_id, index + 1, total);
             }
         }
 
         let mut state = state.lock().await;
+        if cancellation.is_cancelled() {
+            sync_res.cancelled = true;
+            return Ok(sync_res);
+        }
         state.last_reload = chrono::Utc::now().naive_utc();
         Ok(sync_res)
     }

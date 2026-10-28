@@ -15,7 +15,7 @@ use std::time::Duration;
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, Lines};
 use tokio::net::TcpStream;
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tokio::time::{sleep, timeout};
 use xdg::BaseDirectories;
@@ -23,7 +23,7 @@ use xdg::BaseDirectories;
 use crate::State;
 use crate::settings::SyncTimeSpan;
 use crate::sync::vdirsyncer::VDirSyncer;
-use crate::sync::{SyncColResult, Syncer, log_line};
+use crate::sync::{SyncCancellation, SyncCancelled, SyncColResult, Syncer, log_line};
 
 const PORT_BASE: u16 = 25000;
 const DAVMAIL_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
@@ -55,7 +55,7 @@ pub(crate) trait DavmailRunner: Send + Sync {
 }
 
 /// Production [`DavmailRunner`] that spawns a real DavMail subprocess.
-pub(crate) struct RealDavmailRunner;
+pub(crate) struct RealDavmailRunner(SyncCancellation);
 
 impl DavmailRunner for RealDavmailRunner {
     fn run_with_davmail<'a>(
@@ -78,26 +78,41 @@ impl DavmailRunner for RealDavmailRunner {
             cmd.args([props_path.to_str().unwrap()]);
             cmd.kill_on_drop(true);
 
-            let mut child = cmd.spawn().context("Starting davmail")?;
-            let stdin = child.stdin.take().unwrap();
-            let stdout = child.stdout.take().unwrap();
-            let mut reader = BufReader::new(stdout).lines();
-
-            run_with_davmail_impl(
-                stdin,
-                &mut reader,
-                wait_for_port(port, DAVMAIL_STARTUP_TIMEOUT),
-                || async move {
-                    child.kill().await.ok();
-                },
-                &id,
-                auth_url.as_ref(),
-                log,
-                func,
-            )
-            .await
+            let child = cmd.spawn().context("Starting davmail")?;
+            run_with_davmail_process(child, port, &id, auth_url.as_ref(), log, func, &self.0).await
         })
     }
+}
+
+/// Runs the DavMail lifecycle for a spawned process and waits for its shutdown before returning.
+async fn run_with_davmail_process(
+    mut child: Child,
+    port: u16,
+    id: &str,
+    auth_url: Option<&String>,
+    log: Arc<Mutex<File>>,
+    func: SyncFuture<'_>,
+    cancellation: &SyncCancellation,
+) -> anyhow::Result<SyncColResult> {
+    let stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut reader = BufReader::new(stdout).lines();
+
+    run_with_davmail_cancellable(
+        stdin,
+        &mut reader,
+        wait_for_port(port, DAVMAIL_STARTUP_TIMEOUT),
+        || async move {
+            child.kill().await.ok();
+            child.wait().await.ok();
+        },
+        id,
+        auth_url,
+        log,
+        func,
+        cancellation,
+    )
+    .await
 }
 
 /// Waits until the local DavMail CalDAV port accepts TCP connections.
@@ -120,7 +135,7 @@ async fn wait_for_port(port: u16, startup_timeout: Duration) -> anyhow::Result<(
 /// Accepts pre-constructed I/O handles so that tests can inject in-memory pipes without spawning
 /// a real DavMail process. `kill` is called unconditionally when the function returns.
 #[allow(clippy::too_many_arguments)]
-async fn run_with_davmail_impl<W, R, Ready, K, Fut>(
+async fn run_with_davmail_cancellable<W, R, Ready, K, Fut>(
     mut stdin: W,
     reader: &mut Lines<BufReader<R>>,
     ready: Ready,
@@ -129,6 +144,7 @@ async fn run_with_davmail_impl<W, R, Ready, K, Fut>(
     auth_url: Option<&String>,
     log: Arc<Mutex<File>>,
     func: SyncFuture<'_>,
+    cancellation: &SyncCancellation,
 ) -> anyhow::Result<SyncColResult>
 where
     W: AsyncWrite + Unpin,
@@ -168,14 +184,25 @@ where
     tokio::pin!(read_output);
 
     let startup = tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => Err(SyncCancelled.into()),
         res = ready => res.map(|()| None),
         res = &mut read_output => res.map(Some),
     };
     let res = match startup {
-        Ok(None) => tokio::select! {
-            res = func => res,
-            res = &mut read_output => res,
-        },
+        Ok(None) => {
+            tokio::pin!(func);
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => {
+                    // The inner runner observes the same request and reaps vdirsyncer.
+                    let _ = func.await;
+                    Err(SyncCancelled.into())
+                },
+                res = &mut func => res,
+                res = &mut read_output => res,
+            }
+        }
         Ok(Some(res)) => Ok(res),
         Err(err) => Err(err),
     };
@@ -210,7 +237,7 @@ impl O365 {
     /// the Microsoft login redirect URL provided by the user during an interactive auth flow;
     /// `token` is a previously persisted OAuth refresh token that can skip re-authentication.
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(
+    pub(crate) async fn new_cancellable(
         xdg: &BaseDirectories,
         idx: usize,
         col_id: String,
@@ -221,6 +248,7 @@ impl O365 {
         token: Option<String>,
         time_span: &SyncTimeSpan,
         log: Arc<Mutex<File>>,
+        cancellation: SyncCancellation,
     ) -> anyhow::Result<Self> {
         let port = PORT_BASE + idx as u16;
 
@@ -233,7 +261,7 @@ impl O365 {
         let url = format!("http://localhost:{}/users/{}/{}/", port, user_enc, col_enc);
 
         // create vdirsyncer instance
-        let vdirsyncer = VDirSyncer::new(
+        let vdirsyncer = VDirSyncer::new_cancellable(
             xdg,
             col_id.clone(),
             folder_id,
@@ -242,6 +270,7 @@ impl O365 {
             Some(username),
             time_span,
             log.clone(),
+            cancellation.clone(),
         )
         .await?;
 
@@ -252,7 +281,7 @@ impl O365 {
             props_path,
             port,
             log,
-            Arc::new(RealDavmailRunner),
+            Arc::new(RealDavmailRunner(cancellation)),
         ))
     }
 
@@ -495,6 +524,67 @@ mod tests {
     use std::task::{Context as TaskContext, Poll};
     use tokio::io::AsyncReadExt;
     use tokio::sync::Notify;
+
+    #[tokio::test]
+    async fn cancellation_stops_and_reaps_davmail_process() {
+        for during_sync in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let log = make_log(tmp.path()).await;
+            let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+                .await
+                .unwrap();
+            let port = listener.local_addr().unwrap().port();
+
+            // A quiet, long-lived subprocess stands in for DavMail. Use the production process
+            // lifecycle so this test exercises the real kill-and-wait callback, not a fake one.
+            let child = Command::new("sleep")
+                .arg("30")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()
+                .unwrap();
+            let pid = child.id().unwrap();
+            let process_path = PathBuf::from(format!("/proc/{pid}"));
+            assert!(process_path.exists());
+
+            let cancellation = SyncCancellation::default();
+            let started = Notify::new();
+            let work = run_with_davmail_process(
+                child,
+                port,
+                "office",
+                None,
+                log,
+                Box::pin(async {
+                    started.notify_one();
+                    cancellation.cancelled().await;
+                    Err(SyncCancelled.into())
+                }),
+                &cancellation,
+            );
+
+            let cancel = async {
+                if during_sync {
+                    // The listening port lets readiness succeed; wait until sync is active.
+                    started.notified().await;
+                }
+                cancellation.cancel();
+            };
+
+            // In the startup case, request cancellation before polling the lifecycle at all.
+            let ((), result) = timeout(Duration::from_secs(5), async {
+                tokio::join!(biased; cancel, work)
+            })
+            .await
+            .unwrap();
+
+            assert!(result.unwrap_err().is::<SyncCancelled>());
+            // An unreaped zombie would still have a /proc entry, so absence checks both steps.
+            assert!(!process_path.exists());
+        }
+    }
 
     // --- FakeCommandRunner (for injecting into inner VDirSyncer) ---
 
@@ -1023,7 +1113,7 @@ mod tests {
         assert_eq!(o365.take_token(), Some("{AES}encrypted-token".to_string()),);
     }
 
-    // --- run_with_davmail_impl unit tests ---
+    // --- run_with_davmail_cancellable unit tests ---
     //
     // These tests exercise the core DavMail lifecycle logic (readiness detection, auth URL
     // injection, select! racing) without spawning a real DavMail process.  In-memory duplex
@@ -1132,7 +1222,8 @@ mod tests {
         let ready = Arc::new(Notify::new());
         let ready_clone = ready.clone();
 
-        let run = run_with_davmail_impl(
+        let cancellation = SyncCancellation::default();
+        let run = run_with_davmail_cancellable(
             stdin,
             &mut reader_lines,
             async move {
@@ -1146,6 +1237,7 @@ mod tests {
             None,
             log,
             Box::pin(async { Ok(SyncColResult::Success(true)) }),
+            &cancellation,
         );
         tokio::pin!(run);
         tokio::select! {
@@ -1182,7 +1274,7 @@ mod tests {
         let log = make_log(tmp.path()).await;
         let stdin = tokio::io::sink();
 
-        let res = run_with_davmail_impl(
+        let res = run_with_davmail_cancellable(
             stdin,
             &mut reader_lines,
             async { Ok(()) },
@@ -1191,6 +1283,7 @@ mod tests {
             None,
             log,
             Box::pin(std::future::pending()),
+            &SyncCancellation::default(),
         )
         .await
         .unwrap();
@@ -1215,7 +1308,7 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let log = make_log(tmp.path()).await;
-        let res = run_with_davmail_impl(
+        let res = run_with_davmail_cancellable(
             tokio::io::sink(),
             &mut reader_lines,
             async { Ok(()) },
@@ -1224,6 +1317,7 @@ mod tests {
             None,
             log,
             Box::pin(std::future::pending()),
+            &SyncCancellation::default(),
         )
         .await
         .unwrap();
@@ -1258,7 +1352,7 @@ mod tests {
 
         let auth_url = "https://login.microsoftonline.com/redirect?code=xyz".to_string();
 
-        let res = run_with_davmail_impl(
+        let res = run_with_davmail_cancellable(
             stdin_notifying,
             &mut reader_lines,
             async { Ok(()) },
@@ -1271,6 +1365,7 @@ mod tests {
                 written_notify.notified().await;
                 Ok(SyncColResult::Success(true))
             }),
+            &SyncCancellation::default(),
         )
         .await
         .unwrap();
@@ -1299,7 +1394,7 @@ mod tests {
         let log = make_log(tmp.path()).await;
         let stdin = tokio::io::sink();
 
-        let res = run_with_davmail_impl(
+        let res = run_with_davmail_cancellable(
             stdin,
             &mut reader_lines,
             std::future::pending(),
@@ -1308,6 +1403,7 @@ mod tests {
             None,
             log,
             Box::pin(std::future::pending()),
+            &SyncCancellation::default(),
         )
         .await;
 

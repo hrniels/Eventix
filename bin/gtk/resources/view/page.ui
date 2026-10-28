@@ -219,6 +219,14 @@
             <property name="show-text">true</property>
           </object>
         </child>
+        <child>
+          <object class="GtkButton" id="cancel_sync">
+            <property name="visible">false</property>
+            <property name="icon-name">window-close-symbolic</property>
+            <property name="valign">center</property>
+            <style><class name="ev_cancel_sync"/></style>
+          </object>
+        </child>
       </object>
     </child>
   </template>
