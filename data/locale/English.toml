@@ -400,6 +400,7 @@
 "Synchronization cancelled" = "Synchronization cancelled"
 "Synchronization completed" = "Synchronization completed"
 "Synchronize all calendars" = "Synchronize all calendars"
+"Synchronize all calendars (last sync at: {})" = "Synchronize all calendars (last sync at: {})"
 "Synchronizing calendars…" = "Synchronizing calendars…"
 "Tasks" = "Tasks"
 "The authentication code expired. Please try again." = "The authentication code expired. Please try again."

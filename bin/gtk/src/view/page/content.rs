@@ -140,6 +140,7 @@ impl PageContent {
             .set_tooltip_text(Some(locale.translate("Calendars")));
         imp.reload
             .set_tooltip_text(Some(locale.translate("Synchronize all calendars")));
+        imp.session.update_sync_time(page);
         imp.status.set_locale(locale.as_ref());
         imp.picker
             .set_tooltip_text(Some(locale.translate("Choose date")));

@@ -77,6 +77,8 @@ mod imp {
         #[template_child]
         pub reload: gtk::TemplateChild<gtk::Button>,
         #[template_child]
+        pub last_sync: gtk::TemplateChild<gtk::Label>,
+        #[template_child]
         pub calendars_button: gtk::TemplateChild<gtk::Button>,
         #[template_child]
         pub calendars: gtk::TemplateChild<gtk::Box>,

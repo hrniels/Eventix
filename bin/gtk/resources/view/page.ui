@@ -69,8 +69,22 @@
         </child>
         <child>
           <object class="GtkButton" id="reload">
-            <property name="icon-name">view-refresh-symbolic</property>
             <property name="action-name">win.reload</property>
+            <property name="child">
+              <object class="GtkBox">
+                <property name="spacing">4</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="icon-name">view-refresh-symbolic</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="last_sync">
+                    <property name="valign">center</property>
+                  </object>
+                </child>
+              </object>
+            </property>
           </object>
         </child>
       </object>

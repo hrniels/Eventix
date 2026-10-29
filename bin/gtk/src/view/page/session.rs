@@ -5,8 +5,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use eventix_ical::objects::CalCompType;
+use eventix_locale::{DateFlags, TimeFlags};
 use eventix_state::actions::{
     Action,
     items::{DeleteItem, ItemId, UpdatePersonalAlarms},
@@ -30,11 +31,33 @@ pub(super) struct PageSession {
     pending_details_load: Cell<Option<u64>>,
     timer: RefCell<Option<glib::SourceId>>,
     pending_sync: Cell<bool>,
+    last_sync: Cell<Option<DateTime<Utc>>>,
     auth_popup: RefCell<Option<Rc<SyncPopup>>>,
     auth_generation: Cell<u64>,
 }
 
 impl PageSession {
+    pub(super) fn update_sync_time(&self, page: &CalendarPage) {
+        if let Some(time) = self.last_sync.get() {
+            let locale = page.locale();
+            let time = time.with_timezone(locale.timezone());
+            page.imp()
+                .last_sync
+                .set_text(&locale.fmt_time(&time, TimeFlags::None));
+            let tooltip = formatx::formatx!(
+                locale.translate("Synchronize all calendars (last sync at: {})"),
+                locale.fmt_datetime(&time, DateFlags::NoToday)
+            )
+            .unwrap();
+            page.imp().reload.set_tooltip_text(Some(&tooltip));
+        }
+    }
+
+    fn record_sync_time(&self, page: &CalendarPage) {
+        self.last_sync.set(Some(Utc::now()));
+        self.update_sync_time(page);
+    }
+
     pub(super) fn cancel_details_load(&self) {
         self.pending_details_load.set(None);
     }
@@ -137,6 +160,9 @@ impl PageSession {
         imp.reload.set_sensitive(true);
         let cancelled = result.as_ref().is_ok_and(|result| result.cancelled);
         imp.status.finish_sync(result.is_ok(), cancelled);
+        if result.is_ok() {
+            self.record_sync_time(page);
+        }
         let errors = match &result {
             Ok(result) => sync_errors(result, page.locale().as_ref()),
             Err(error) => vec![error.clone()],
@@ -415,7 +441,10 @@ impl PageSession {
                 }
                 Err(error) => page.show_error("Could not load sidebar", &error),
             },
-            Event::SourceLoaded(source) => imp.status.set_source(&source),
+            Event::SourceLoaded(source) => {
+                imp.status.set_source(&source);
+                self.record_sync_time(page);
+            }
             Event::ReloadFailed(error) => {
                 imp.content.loading.set(false);
                 page.show_error("Could not load local calendars", &error);
@@ -612,6 +641,10 @@ mod tests {
         imp.session.current.replace(Some(session));
         window.present();
         let status = imp.status.imp();
+        let previous_sync = chrono::DateTime::from_timestamp(0, 0).unwrap();
+        imp.session.last_sync.set(Some(previous_sync));
+        imp.session.update_sync_time(&page);
+        let previous_label = imp.last_sync.text();
         assert!(!status.sync_progress.is_visible());
         assert!(!status.cancel_sync.is_visible());
         gtk::prelude::ActionGroupExt::activate_action(&window, "reload", None);
@@ -647,6 +680,39 @@ mod tests {
             }
         });
         assert!(completed);
+        assert!(imp.session.last_sync.get().unwrap() > previous_sync);
+        assert_ne!(imp.last_sync.text(), previous_label);
+        let locale = page.locale();
+        assert_eq!(
+            imp.last_sync.text(),
+            locale.fmt_time(
+                &imp.session
+                    .last_sync
+                    .get()
+                    .unwrap()
+                    .with_timezone(locale.timezone()),
+                eventix_locale::TimeFlags::None,
+            )
+        );
+        while context.iteration(false) {}
+        let reload_bounds = imp.reload.compute_bounds(&page).unwrap();
+        let time_bounds = imp.last_sync.compute_bounds(&page).unwrap();
+        assert!(time_bounds.x() >= reload_bounds.x());
+        assert!(time_bounds.x() + time_bounds.width() <= reload_bounds.x() + reload_bounds.width());
+        assert_eq!(
+            imp.reload.tooltip_text().unwrap(),
+            format!(
+                "Synchronize all calendars (last sync at: {})",
+                locale.fmt_datetime(
+                    &imp.session
+                        .last_sync
+                        .get()
+                        .unwrap()
+                        .with_timezone(locale.timezone()),
+                    eventix_locale::DateFlags::NoToday,
+                )
+            )
+        );
         assert!(!imp.session.pending_sync.get());
         assert!(imp.reload.is_sensitive());
         assert_eq!(status.sync_progress.fraction(), 1.0);
@@ -656,7 +722,9 @@ mod tests {
         assert!(!status.sync_progress.is_visible());
         assert!(status.progress_timer.borrow().is_none());
 
+        let last_sync = imp.session.last_sync.get();
         imp.session.sync_finished(&page, Err("test failure".into()));
+        assert_eq!(imp.session.last_sync.get(), last_sync);
         assert!(!status.sync_progress.is_visible());
         assert!(imp.status.text().contains("test failure"));
         imp.session.pending_sync.set(true);

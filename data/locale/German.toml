@@ -399,6 +399,7 @@
 "Synchronization cancelled" = "Synchronisierung abgebrochen"
 "Synchronization completed" = "Synchronisierung abgeschlossen"
 "Synchronize all calendars" = "Alle Kalender synchronisieren"
+"Synchronize all calendars (last sync at: {})" = "Alle Kalender synchronisieren (letzte Synchronisierung: {})"
 "Synchronizing calendars…" = "Kalender werden synchronisiert…"
 "Tasks" = "Aufgaben"
 "The authentication code expired. Please try again." = "Der Authentifizierungscode ist abgelaufen. Bitte versuche es erneut."
