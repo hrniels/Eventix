@@ -30,6 +30,7 @@ pub(super) struct PageSession {
     details_request: Cell<u64>,
     pending_details_load: Cell<Option<u64>>,
     timer: RefCell<Option<glib::SourceId>>,
+    sync_timer: RefCell<Option<glib::SourceId>>,
     pending_sync: Cell<bool>,
     last_sync: Cell<Option<DateTime<Utc>>>,
     auth_popup: RefCell<Option<Rc<SyncPopup>>>,
@@ -124,6 +125,10 @@ impl PageSession {
     }
 
     pub(super) fn reload(&self, page: &CalendarPage) {
+        self.synchronize(page, true);
+    }
+
+    fn synchronize(&self, page: &CalendarPage, dismiss_popovers: bool) {
         if self.pending_sync.get() {
             return;
         }
@@ -134,7 +139,9 @@ impl PageSession {
         } else {
             return;
         }
-        page.dismiss_popovers();
+        if dismiss_popovers {
+            page.dismiss_popovers();
+        }
         let imp = page.imp();
         self.pending_sync.set(true);
         imp.reload.set_sensitive(false);
@@ -325,6 +332,18 @@ impl PageSession {
         });
         self.timer.replace(Some(timer));
 
+        let weak = page.downgrade();
+        let timer = glib::timeout_add_seconds_local(5 * 60, move || {
+            let Some(page) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+
+            page.imp().session.synchronize(&page, false);
+
+            glib::ControlFlow::Continue
+        });
+        self.sync_timer.replace(Some(timer));
+
         page.show_content(date);
         if let Some(session) = self.current.borrow().as_ref() {
             session.refresh_sidebar();
@@ -507,6 +526,9 @@ impl PageSession {
         page.dismiss_popovers();
 
         if let Some(timer) = self.timer.take() {
+            timer.remove();
+        }
+        if let Some(timer) = self.sync_timer.take() {
             timer.remove();
         }
     }
