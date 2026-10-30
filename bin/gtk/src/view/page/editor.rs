@@ -222,9 +222,8 @@ impl PageEditor {
         }
 
         self.loading.set(false);
-        match result {
-            Ok((options, edit)) => self.present_existing_editor(page, id, options, *edit),
-            Err(error) => page.show_error("Could not apply changes", &error),
+        if let Ok((options, edit)) = result {
+            self.present_existing_editor(page, id, options, *edit);
         }
     }
 
@@ -239,21 +238,18 @@ impl PageEditor {
         }
 
         self.loading.set(false);
-        match result {
-            Ok(mut options) => {
-                let slot = self.slot.take();
-                if let Some(slot) = slot {
-                    options.start = slot.start;
-                }
-
-                let editor = if slot.is_some_and(|slot| slot.all_day) {
-                    ItemEditor::new_at(id, options, true)
-                } else {
-                    ItemEditor::new(id, options)
-                };
-                self.present_editor(page, editor);
+        if let Ok(mut options) = result {
+            let slot = self.slot.take();
+            if let Some(slot) = slot {
+                options.start = slot.start;
             }
-            Err(error) => page.show_error("Could not load local calendars", &error),
+
+            let editor = if slot.is_some_and(|slot| slot.all_day) {
+                ItemEditor::new_at(id, options, true)
+            } else {
+                ItemEditor::new(id, options)
+            };
+            self.present_editor(page, editor);
         }
     }
 

@@ -4,10 +4,41 @@
     <property name="spacing">12</property>
     <style><class name="ev_calendar_status"/></style>
     <child>
+      <object class="GtkMenuButton" id="history_button">
+        <property name="icon-name">document-open-recent-symbolic</property>
+        <property name="valign">center</property>
+        <property name="sensitive">false</property>
+        <property name="direction">up</property>
+        <property name="popover">
+          <object class="GtkPopover" id="history_popup">
+            <property name="position">top</property>
+            <property name="halign">start</property>
+            <property name="has-arrow">false</property>
+            <style><class name="ev_activity_history"/></style>
+            <child>
+              <object class="GtkScrolledWindow" id="history_scroll">
+                <property name="hscrollbar-policy">never</property>
+                <property name="width-request">600</property>
+                <property name="min-content-width">600</property>
+                <property name="max-content-height">320</property>
+                <property name="propagate-natural-height">true</property>
+                <child>
+                  <object class="GtkListView" id="history">
+                    <property name="focusable">false</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </child>
+    <child>
       <object class="GtkLabel" id="status">
         <property name="xalign">0</property>
         <property name="selectable">true</property>
-        <property name="wrap">true</property>
+        <property name="single-line-mode">true</property>
+        <property name="ellipsize">end</property>
         <property name="hexpand">true</property>
       </object>
     </child>

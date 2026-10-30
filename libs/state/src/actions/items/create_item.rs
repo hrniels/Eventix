@@ -58,6 +58,13 @@ impl TaskStatus {
 }
 
 impl Action for CreateItem {
+    fn description(&self) -> &'static str {
+        match self.kind {
+            CalCompType::Event => "New event created",
+            CalCompType::Todo => "New task created",
+        }
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         &[]
     }

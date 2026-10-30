@@ -39,6 +39,10 @@ pub struct ResizeEvent {
 }
 
 impl Action for ResizeEvent {
+    fn description(&self) -> &'static str {
+        "Event resized"
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }
@@ -55,6 +59,10 @@ impl Action for ResizeEvent {
 }
 
 impl Action for MoveEvent {
+    fn description(&self) -> &'static str {
+        "Event moved"
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }

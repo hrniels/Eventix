@@ -21,6 +21,15 @@ pub struct RespondItem {
 }
 
 impl Action for RespondItem {
+    fn description(&self) -> &'static str {
+        match self.response {
+            CalPartStat::Accepted => "Invitation accepted",
+            CalPartStat::Declined => "Invitation declined",
+            CalPartStat::Tentative => "Invitation tentatively accepted",
+            _ => "Invitation response saved",
+        }
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }

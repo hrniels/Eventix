@@ -16,6 +16,10 @@ pub struct DeleteItem {
 }
 
 impl Action for DeleteItem {
+    fn description(&self) -> &'static str {
+        "Item deleted"
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }

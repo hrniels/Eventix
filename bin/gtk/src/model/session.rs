@@ -17,6 +17,7 @@ use eventix_state::{EventixState, State, SyncCancellation, SyncProgress, SyncRes
 use eventix_view::{MonthSnapshot, WeekSnapshot};
 use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
+use super::activity::{Activity, Phase};
 use super::calendars::{self, CalendarVisibility};
 use super::query::{Query, SubscriptionId, Subscriptions};
 
@@ -100,6 +101,7 @@ pub(crate) struct ChangeSet {
 }
 
 pub(crate) enum Event {
+    Activity(Activity),
     CalendarsLoaded(Vec<CalendarVisibility>),
     CalendarToggleFailed(String),
     EditorLoaded(u64, Result<EditorOptions, String>),
@@ -113,7 +115,7 @@ pub(crate) enum Event {
     ListRowsLoaded(ListRowsResponse),
     OccurrencesLoaded(OccurrencesResponse),
     SidebarLoaded(Result<SidebarSnapshot, String>),
-    SourceLoaded(String),
+    StateLoaded,
     ReloadFailed(String),
     SyncProgress { completed: usize, total: usize },
     SyncFinished(Result<SyncResult, String>),
@@ -121,6 +123,34 @@ pub(crate) enum Event {
     AuthFinished(u64, Result<AuthOutcome, String>),
     Changed(ChangeSet),
     CommandFailed(String),
+}
+
+impl Event {
+    fn failure(&self) -> Option<(&'static str, &str)> {
+        let (operation, error) = match self {
+            Self::CalendarToggleFailed(error) | Self::CommandFailed(error) => {
+                ("Applying changes", Some(error))
+            }
+            Self::EditorLoaded(_, result) => ("Preparing editor", result.as_ref().err()),
+            Self::EditorSaved(_, result) => ("New item created", result.as_ref().err()),
+            Self::EditLoaded(_, result) => ("Loading item", result.as_ref().err()),
+            Self::EditSaved(_, result) => ("Item updated", result.as_ref().err()),
+            Self::RemindersSaved(result) => ("Reminders updated", result.as_ref().err()),
+            Self::DetailsLoaded(_, result) => ("Loading item", result.as_ref().err()),
+            Self::FilepathLoaded(result) => ("Loading filepath", result.as_ref().err()),
+            Self::ContentLoaded(response) => ("Loading calendar", response.result.as_ref().err()),
+            Self::ListRowsLoaded(response) => ("Loading calendar", response.result.as_ref().err()),
+            Self::OccurrencesLoaded(response) => {
+                ("Loading calendar", response.result.as_ref().err())
+            }
+            Self::SidebarLoaded(result) => ("Loading sidebar", result.as_ref().err()),
+            Self::ReloadFailed(error) => ("Loading calendar", Some(error)),
+            Self::SyncFinished(result) => ("Synchronizing calendars", result.as_ref().err()),
+            Self::AuthFinished(_, result) => ("Authenticating", result.as_ref().err()),
+            _ => return None,
+        };
+        error.map(|error| (operation, error.as_str()))
+    }
 }
 
 pub(crate) enum SavedItem {
@@ -148,8 +178,157 @@ enum Message {
     CancelSync,
     Authenticate(u64, String),
     CancelAuthentication(u64),
+    AuthenticationFinished(u64, Result<AuthOutcome, String>),
     SyncFinished(Result<SyncResult, String>),
     Execute(Box<dyn Action>),
+}
+
+impl Message {
+    fn activity(&self, request: u64) -> Option<Activity> {
+        let (operation, items, calendar) = match self {
+            Self::ToggleCalendar(calendar) => (
+                "Calendar visibility changed",
+                vec![],
+                Some(calendar.clone()),
+            ),
+            Self::CreateItem(_, item) => (item.description(), vec![], Some(item.calendar.clone())),
+            Self::SaveEdit(_, item) => (item.description(), vec![item.item.clone()], None),
+            Self::SaveReminders(item, _) => ("Reminders updated", vec![item.clone()], None),
+            Self::Execute(action) => (action.description(), action.affected_items().to_vec(), None),
+            Self::SyncAll => ("Synchronizing calendars", vec![], None),
+            Self::Authenticate(_, collection) => {
+                ("Authenticating", vec![], Some(collection.clone()))
+            }
+            _ => return None,
+        };
+        let mut activity = Activity::new(request, operation);
+        activity.set_items(items);
+        if matches!(self, Self::Authenticate(..)) {
+            activity.set_collection(calendar);
+        } else {
+            activity.set_calendar(calendar);
+        }
+        Some(activity)
+    }
+}
+
+/// Publishes activity before results, so ignored stale results still leave an audit trail.
+fn publish_events(
+    results: &async_channel::Sender<Event>,
+    events: Vec<Event>,
+    activity: Option<Activity>,
+    request: u64,
+) {
+    // Calendar names from this response must be available when its activity is displayed.
+    let events: Vec<_> = events
+        .into_iter()
+        .filter_map(|event| {
+            if matches!(event, Event::CalendarsLoaded(_)) {
+                let _ = results.send_blocking(event);
+                None
+            } else {
+                Some(event)
+            }
+        })
+        .collect();
+
+    let mut failed = false;
+    let mut cancelled = false;
+    let mut activity = activity;
+    for event in &events {
+        if let Some((operation, error)) = event.failure() {
+            let mutation_failed = matches!(
+                event,
+                Event::CalendarToggleFailed(_)
+                    | Event::CommandFailed(_)
+                    | Event::EditorSaved(..)
+                    | Event::EditSaved(..)
+                    | Event::RemindersSaved(_)
+                    | Event::SyncFinished(_)
+                    | Event::AuthFinished(..)
+            );
+            failed |= mutation_failed;
+            let entry = if mutation_failed {
+                activity.clone()
+            } else {
+                None
+            }
+            .unwrap_or_else(|| Activity::new(request, operation));
+            let _ = results.send_blocking(Event::Activity(
+                entry.finish(Phase::Failed, Some(error.into())),
+            ));
+        }
+
+        let item = match event {
+            Event::EditorSaved(_, Ok(change)) | Event::Changed(change) => Some(&change.item),
+            Event::EditSaved(_, Ok((change, _))) | Event::RemindersSaved(Ok((change, _))) => {
+                Some(&change.item)
+            }
+            _ => None,
+        };
+
+        if let (Some(activity), Some(item)) = (&mut activity, item) {
+            activity.add_item(item.clone());
+        }
+
+        if let Event::SyncFinished(Ok(result)) = event {
+            cancelled = result.cancelled;
+            let mut errors = Vec::new();
+            for (collection, outcome) in &result.collections {
+                let error = match outcome {
+                    eventix_state::SyncColResult::Error(error) => Some(error.clone()),
+                    eventix_state::SyncColResult::AuthFailed(_) => {
+                        Some("Authentication required".to_string())
+                    }
+                    _ => None,
+                };
+                if let Some(error) = error {
+                    errors.push((collection.clone(), error, true));
+                }
+            }
+
+            for (calendar, failed) in &result.calendars {
+                if *failed {
+                    errors.push((
+                        calendar.clone(),
+                        "Calendar synchronization failed".into(),
+                        false,
+                    ));
+                }
+            }
+            errors.sort();
+
+            for (scope, error, collection) in errors {
+                failed = true;
+                let mut entry = activity
+                    .clone()
+                    .unwrap_or_else(|| Activity::new(request, "Synchronizing calendars"));
+                if collection {
+                    entry.set_collection(Some(scope));
+                } else {
+                    entry.set_calendar(Some(scope));
+                }
+                let _ = results
+                    .send_blocking(Event::Activity(entry.finish(Phase::Failed, Some(error))));
+            }
+        }
+    }
+
+    if let Some(activity) = activity {
+        // Cancellation is terminal even if some collections also reported errors.
+        if cancelled || !failed {
+            let phase = if cancelled {
+                Phase::Cancelled
+            } else {
+                Phase::Completed
+            };
+            let _ = results.send_blocking(Event::Activity(activity.finish(phase, None)));
+        }
+    }
+
+    for event in events {
+        let _ = results.send_blocking(event);
+    }
 }
 
 /// Owns the request channel, closing the worker when the page stops or is dropped.
@@ -178,65 +357,12 @@ impl CalendarSession {
         Self::start_worker(worker)
     }
 
-    fn start_worker(mut worker: Worker) -> (Self, async_channel::Receiver<Event>) {
+    fn start_worker(worker: Worker) -> (Self, async_channel::Receiver<Event>) {
         let (requests, rx) = async_channel::unbounded::<Message>();
         let (results, responses) = async_channel::unbounded();
-        let sync_requests = requests.clone();
+        let worker_requests = requests.clone();
 
-        thread::spawn(move || {
-            let runtime = match tokio::runtime::Runtime::new() {
-                Ok(runtime) => runtime,
-                Err(error) => {
-                    let _ = results.send_blocking(Event::SyncFinished(Err(error.to_string())));
-                    return;
-                }
-            };
-            let mut sync_task: Option<(tokio::task::JoinHandle<()>, SyncCancellation)> = None;
-            let mut auth_task: Option<(u64, AuthenticationTask)> = None;
-
-            // Queries and commands are ordered. Never discard a queued mutation.
-            while let Ok(message) = rx.recv_blocking() {
-                match &message {
-                    Message::Authenticate(id, collection) => {
-                        auth_task.take();
-                        auth_task = worker
-                            .start_auth(&runtime, &results, *id, collection.clone())
-                            .map(|task| (*id, task));
-                        continue;
-                    }
-                    Message::CancelAuthentication(id) => {
-                        if auth_task.as_ref().is_some_and(|(current, _)| current == id) {
-                            auth_task.take();
-                        }
-                        continue;
-                    }
-                    _ => {}
-                }
-                if matches!(message, Message::SyncAll) {
-                    if sync_task.is_none() {
-                        let cancellation = SyncCancellation::default();
-                        sync_task = worker
-                            .start_sync(&runtime, &results, &sync_requests, cancellation.clone())
-                            .map(|task| (task, cancellation));
-                    }
-                    continue;
-                }
-                if matches!(message, Message::CancelSync) {
-                    if let Some((_, cancellation)) = &sync_task {
-                        cancellation.cancel();
-                    }
-                    continue;
-                }
-                if matches!(message, Message::SyncFinished(_)) {
-                    sync_task = None;
-                }
-                for event in worker.handle(message) {
-                    if results.send_blocking(event).is_err() {
-                        return;
-                    }
-                }
-            }
-        });
+        thread::spawn(move || worker.run(rx, worker_requests, results));
 
         (Self { requests }, responses)
     }
@@ -384,6 +510,95 @@ struct Worker {
     subscriptions: Subscriptions,
 }
 
+struct RunningSync {
+    _task: tokio::task::JoinHandle<()>,
+    cancellation: SyncCancellation,
+    activity: Activity,
+}
+
+struct RunningAuthentication {
+    id: u64,
+    task: AuthenticationTask,
+    activity: Activity,
+}
+
+/// Owns the runtime, notification channels, and independently running requests.
+struct WorkerRuntime {
+    runtime: tokio::runtime::Runtime,
+    requests: async_channel::Sender<Message>,
+    results: async_channel::Sender<Event>,
+    sync: Option<RunningSync>,
+    authentication: Option<RunningAuthentication>,
+}
+
+impl WorkerRuntime {
+    fn new(
+        requests: async_channel::Sender<Message>,
+        results: async_channel::Sender<Event>,
+    ) -> Option<Self> {
+        match tokio::runtime::Runtime::new() {
+            Ok(runtime) => Some(Self {
+                runtime,
+                requests,
+                results,
+                sync: None,
+                authentication: None,
+            }),
+            Err(error) => {
+                let _ = results.send_blocking(Event::Activity(
+                    Activity::new(0, "Starting session")
+                        .finish(Phase::Failed, Some(error.to_string())),
+                ));
+                let _ = results.send_blocking(Event::SyncFinished(Err(error.to_string())));
+                None
+            }
+        }
+    }
+
+    fn cancel_authentication(&mut self, id: u64) {
+        if !self
+            .authentication
+            .as_ref()
+            .is_some_and(|task| task.id == id)
+        {
+            return;
+        }
+        if let Some(authentication) = self.authentication.take() {
+            drop(authentication.task);
+            let _ = self.results.send_blocking(Event::Activity(
+                authentication.activity.finish(Phase::Cancelled, None),
+            ));
+        }
+    }
+
+    fn finish_authentication(&mut self, id: u64, result: Result<AuthOutcome, String>) {
+        if !self
+            .authentication
+            .as_ref()
+            .is_some_and(|task| task.id == id)
+        {
+            return;
+        }
+        let Some(authentication) = self.authentication.take() else {
+            return;
+        };
+        let phase = match &result {
+            Ok(AuthOutcome::Complete) => Phase::Completed,
+            _ => Phase::Failed,
+        };
+        let error = match &result {
+            Ok(AuthOutcome::Complete) => None,
+            Ok(AuthOutcome::Declined) => Some("Authentication declined".into()),
+            Ok(AuthOutcome::Expired) => Some("Authentication expired".into()),
+            Err(error) => Some(error.clone()),
+        };
+        let _ = self.results.send_blocking(Event::Activity(
+            authentication.activity.finish(phase, error),
+        ));
+        let _ = self.results.send_blocking(Event::AuthFinished(id, result));
+    }
+}
+
 impl Worker {
     fn new(xdg: Arc<xdg::BaseDirectories>) -> Self {
         Self {
@@ -392,6 +607,106 @@ impl Worker {
             content: None,
             subscriptions: Subscriptions::default(),
         }
+    }
+
+    /// Processes queued requests in order while synchronization and authentication run separately.
+    fn run(
+        mut self,
+        receiver: async_channel::Receiver<Message>,
+        requests: async_channel::Sender<Message>,
+        results: async_channel::Sender<Event>,
+    ) {
+        let Some(mut runtime) = WorkerRuntime::new(requests, results) else {
+            return;
+        };
+        let mut request = 0;
+
+        // Queries and commands are ordered. Never discard a queued mutation.
+        while let Ok(message) = receiver.recv_blocking() {
+            request += 1;
+            self.dispatch(&mut runtime, message, request);
+            if runtime.results.is_closed() {
+                return;
+            }
+        }
+    }
+
+    fn dispatch(&mut self, runtime: &mut WorkerRuntime, message: Message, request: u64) {
+        match message {
+            Message::Authenticate(id, collection) => {
+                self.begin_authentication(runtime, id, collection, request);
+            }
+            Message::CancelAuthentication(id) => runtime.cancel_authentication(id),
+            Message::AuthenticationFinished(id, result) => {
+                runtime.finish_authentication(id, result);
+            }
+            Message::SyncAll => self.begin_sync(runtime, request),
+            Message::CancelSync => {
+                if let Some(sync) = &runtime.sync {
+                    sync.cancellation.cancel();
+                }
+            }
+            message => {
+                let activity = if matches!(message, Message::SyncFinished(_)) {
+                    runtime.sync.take().map(|sync| sync.activity)
+                } else {
+                    message.activity(request)
+                };
+                publish_events(&runtime.results, self.handle(message), activity, request);
+            }
+        }
+    }
+
+    fn begin_sync(&mut self, runtime: &mut WorkerRuntime, request: u64) {
+        if runtime.sync.is_some() {
+            return;
+        }
+        let cancellation = SyncCancellation::default();
+        let activity = Message::SyncAll.activity(request).unwrap();
+        let _ = runtime
+            .results
+            .send_blocking(Event::Activity(activity.clone()));
+        runtime.sync = self
+            .start_sync(
+                &runtime.runtime,
+                &runtime.results,
+                &runtime.requests,
+                cancellation.clone(),
+                &activity,
+            )
+            .map(|task| RunningSync {
+                _task: task,
+                cancellation,
+                activity,
+            });
+    }
+
+    fn begin_authentication(
+        &self,
+        runtime: &mut WorkerRuntime,
+        id: u64,
+        collection: String,
+        request: u64,
+    ) {
+        if let Some(authentication) = &runtime.authentication {
+            runtime.cancel_authentication(authentication.id);
+        }
+        let activity = Message::Authenticate(id, collection.clone())
+            .activity(request)
+            .unwrap();
+        let _ = runtime
+            .results
+            .send_blocking(Event::Activity(activity.clone()));
+        runtime.authentication = self
+            .start_auth(
+                &runtime.runtime,
+                &runtime.results,
+                &runtime.requests,
+                id,
+                collection,
+                activity.clone(),
+            )
+            .map(|task| RunningAuthentication { id, task, activity });
     }
 
     fn handle(&mut self, message: Message) -> Vec<Event> {
@@ -509,7 +824,9 @@ impl Worker {
             Message::SyncAll | Message::CancelSync => {
                 unreachable!("sync is dispatched independently of queries")
             }
-            Message::Authenticate(..) | Message::CancelAuthentication(_) => {
+            Message::Authenticate(..)
+            | Message::CancelAuthentication(_)
+            | Message::AuthenticationFinished(..) => {
                 unreachable!("authentication is dispatched independently of queries")
             }
             Message::SyncFinished(result) => {
@@ -531,10 +848,9 @@ impl Worker {
 
     fn load_state(&mut self) -> anyhow::Result<Event> {
         let state = load_local_state(self.xdg.clone())?;
-        let event = Event::SourceLoaded(self.source_description(&state));
         self.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
 
-        Ok(event)
+        Ok(Event::StateLoaded)
     }
 
     /// Starts network work separately so the serialized request loop remains available.
@@ -544,11 +860,17 @@ impl Worker {
         results: &async_channel::Sender<Event>,
         requests: &async_channel::Sender<Message>,
         cancellation: SyncCancellation,
+        activity: &Activity,
     ) -> Option<tokio::task::JoinHandle<()>> {
         if self.state.is_none() {
             for event in self.handle(Message::Reload) {
                 if let Event::ReloadFailed(error) = event {
-                    let _ = results.send_blocking(Event::SyncFinished(Err(error)));
+                    publish_events(
+                        results,
+                        vec![Event::SyncFinished(Err(error))],
+                        Some(activity.clone()),
+                        activity.request(),
+                    );
                     return None;
                 }
                 let _ = results.send_blocking(event);
@@ -574,22 +896,31 @@ impl Worker {
         &self,
         runtime: &tokio::runtime::Runtime,
         results: &async_channel::Sender<Event>,
+        requests: &async_channel::Sender<Message>,
         id: u64,
         collection: String,
+        activity: Activity,
     ) -> Option<AuthenticationTask> {
         let Some(state) = self.state.clone() else {
-            let _ =
-                results.send_blocking(Event::AuthFinished(id, Err("No loaded state".to_string())));
+            publish_events(
+                results,
+                vec![Event::AuthFinished(id, Err("No loaded state".to_string()))],
+                Some(activity.clone()),
+                activity.request(),
+            );
             return None;
         };
         let results = results.clone();
+        let requests = requests.clone();
         Some(AuthenticationTask(runtime.spawn(async move {
             let result = monitor_o365_auth(&state, &collection, |prompt| {
                 let _ = results.try_send(Event::AuthPrompt(id, prompt));
             })
             .await
             .map_err(|error| format!("{error:#}"));
-            let _ = results.send(Event::AuthFinished(id, result)).await;
+            let _ = requests
+                .send(Message::AuthenticationFinished(id, result))
+                .await;
         })))
     }
 
@@ -814,30 +1145,6 @@ impl Worker {
         events
     }
 
-    fn source_description(&self, state: &eventix_state::State) -> String {
-        let config = self
-            .xdg
-            .find_config_file("settings.toml")
-            .or_else(|| self.xdg.get_config_file("settings.toml"))
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
-        let data = self
-            .xdg
-            .get_data_home()
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
-
-        format!(
-            "{}\n{}",
-            formatx::formatx!(
-                state.locale().translate("Calendar configuration: {}"),
-                config
-            )
-            .unwrap(),
-            formatx::formatx!(state.locale().translate("Calendar data: {}"), data).unwrap()
-        )
-    }
-
     fn execute(&mut self, command: Box<dyn Action>) -> anyhow::Result<ChangeSet> {
         let mut state = self.state()?;
 
@@ -938,6 +1245,163 @@ mod tests {
         let mut worker = Worker::new(xdg);
         worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
         worker
+    }
+
+    #[test]
+    fn activity_records_mutations_new_uids_and_read_errors_but_not_successful_reads() {
+        use super::CalendarSession;
+        use crate::model::activity::Phase;
+        use eventix_state::actions::items::{DeleteItem, EditScope, UpdateItem};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let worker = worker(tmp.path());
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: None,
+        };
+        let fields = {
+            let mut state = worker.state().unwrap();
+            state
+                .settings_mut()
+                .collections_mut()
+                .get_mut("local")
+                .unwrap()
+                .all_calendars_mut()
+                .get_mut("test")
+                .unwrap()
+                .set_types(vec![eventix_ical::objects::CalCompType::Event]);
+            UpdateItem::load(&state, item.clone(), EditScope::Series)
+                .unwrap()
+                .fields
+        };
+        let mut missing = item.clone();
+        missing.uid = "missing".into();
+        let (session, responses) = CalendarSession::start_worker(worker);
+        session.load_details(91, item, eventix_ical::objects::CalCompType::Event);
+        session.create_item(92, Box::new(fields));
+        session.execute(Box::new(DeleteItem {
+            item: missing.clone(),
+        }));
+        // Even a failed read superseded in the UI must remain in the history.
+        session.load_details(90, missing, eventix_ical::objects::CalCompType::Event);
+        session.refresh_sidebar();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let (entries, created) = runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let mut entries = Vec::new();
+                let mut created = None;
+                loop {
+                    match responses.recv().await.unwrap() {
+                        Event::Activity(entry) => entries.push(entry),
+                        Event::EditorSaved(92, Ok(change)) => created = Some(change.item),
+                        Event::SidebarLoaded(Ok(_)) => break,
+                        _ => {}
+                    }
+                }
+                (entries, created.unwrap())
+            })
+            .await
+            .unwrap()
+        });
+        assert_eq!(entries.len(), 3);
+        let locale = eventix_locale::default();
+        assert_eq!(entries[0].summary(locale.as_ref()), "New event created");
+        assert_eq!(entries[0].phase(), Phase::Completed);
+        assert_eq!(entries[0].items(), std::slice::from_ref(&created));
+        assert_ne!(created.uid, "move-me");
+        assert_eq!(entries[1].summary(locale.as_ref()), "Failed: Item deleted");
+        assert_eq!(entries[1].phase(), Phase::Failed);
+        assert_eq!(entries[1].items()[0].uid, "missing");
+        assert_eq!(entries[2].summary(locale.as_ref()), "Failed: Loading item");
+        assert_eq!(entries[2].phase(), Phase::Failed);
+    }
+
+    #[test]
+    fn sync_activity_keeps_partial_failures_and_cancellation_without_claiming_success() {
+        use super::publish_events;
+        use crate::model::activity::{Activity, Phase};
+
+        let (sender, receiver) = async_channel::unbounded();
+        let activity = Activity::new(7, "Synchronizing calendars");
+        let result = || eventix_state::SyncResult {
+            collections: [
+                (
+                    "Work".into(),
+                    eventix_state::SyncColResult::Error("Connection\nrefused".into()),
+                ),
+                (
+                    "Office".into(),
+                    eventix_state::SyncColResult::AuthFailed("https://secret.invalid".into()),
+                ),
+            ]
+            .into(),
+            calendars: [("Personal".into(), true)].into(),
+            ..Default::default()
+        };
+        publish_events(
+            &sender,
+            vec![
+                Event::SyncFinished(Ok(result())),
+                Event::CalendarsLoaded(vec![super::CalendarVisibility {
+                    id: "Personal".into(),
+                    name: "My calendar".into(),
+                    background: "#ffffff".into(),
+                    enabled: true,
+                }]),
+            ],
+            Some(activity.clone()),
+            8,
+        );
+        let Event::CalendarsLoaded(calendars) = receiver.try_recv().unwrap() else {
+            panic!("calendar names must be published before the sync activity");
+        };
+        assert_eq!(calendars[0].name, "My calendar");
+        let mut entries = Vec::new();
+        while let Ok(event) = receiver.try_recv() {
+            if let Event::Activity(entry) = event {
+                entries.push(entry);
+            }
+        }
+        assert_eq!(entries.len(), 3);
+        assert!(
+            entries
+                .iter()
+                .all(|entry| entry.phase() == Phase::Failed && entry.request() == 7)
+        );
+        assert!(entries.iter().all(|entry| {
+            !entry
+                .text(eventix_locale::default().as_ref(), str::to_owned)
+                .contains("secret.invalid")
+        }));
+        assert!(entries.iter().any(|entry| {
+            entry
+                .text(eventix_locale::default().as_ref(), str::to_owned)
+                .contains("Collection: Work")
+        }));
+
+        publish_events(
+            &sender,
+            vec![Event::SyncFinished(Ok(eventix_state::SyncResult {
+                cancelled: true,
+                ..result()
+            }))],
+            Some(activity),
+            9,
+        );
+        let mut entries = Vec::new();
+        while let Ok(event) = receiver.try_recv() {
+            if let Event::Activity(entry) = event {
+                entries.push(entry);
+            }
+        }
+        assert_eq!(entries.len(), 4);
+        assert_eq!(entries.last().unwrap().phase(), Phase::Cancelled);
+        assert!(
+            entries
+                .iter()
+                .all(|entry| entry.phase() != Phase::Completed)
+        );
     }
 
     #[test]
@@ -1058,9 +1522,11 @@ mod tests {
         runtime.block_on(async {
             tokio::time::timeout(std::time::Duration::from_secs(5), async {
                 let mut progress = Vec::new();
+                let mut activities = Vec::new();
                 let mut refreshed = false;
                 loop {
                     match responses.recv().await.unwrap() {
+                        Event::Activity(entry) => activities.push(entry),
                         Event::SyncProgress { completed, total } => {
                             progress.push((completed, total))
                         }
@@ -1082,6 +1548,10 @@ mod tests {
                             assert!(result.unwrap().changed);
                             assert!(refreshed);
                             assert_eq!(progress, [(0, 1), (1, 1)]);
+                            assert_eq!(activities.len(), 2);
+                            assert_eq!(activities[0].phase(), super::Phase::Started);
+                            assert_eq!(activities[1].phase(), super::Phase::Completed);
+                            assert_eq!(activities[0].request(), activities[1].request());
                             break;
                         }
                         _ => {}
@@ -1956,13 +2426,13 @@ mod tests {
             },
         }));
         assert!(
-            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
+            matches!(events.as_slice(), [Event::StateLoaded, Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.items.is_empty()))
         );
         assert_eq!(worker.content.as_ref().unwrap().filter.keywords, "needle");
         let events = worker.handle(Message::Reload);
         assert!(
-            matches!(events.as_slice(), [Event::SourceLoaded(_), Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
+            matches!(events.as_slice(), [Event::StateLoaded, Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.filter.keywords == "needle"))
         );
     }
@@ -2000,7 +2470,7 @@ mod tests {
         assert!(matches!(
             worker.handle(Message::RefreshSidebar).as_slice(),
             [
-                Event::SourceLoaded(_),
+                Event::StateLoaded,
                 Event::CalendarsLoaded(_),
                 Event::SidebarLoaded(Ok(_))
             ]
@@ -2083,7 +2553,7 @@ mod tests {
             .unwrap();
         let events = worker.handle(Message::Reload);
         let [
-            Event::SourceLoaded(_),
+            Event::StateLoaded,
             Event::CalendarsLoaded(_),
             Event::ContentLoaded(response),
             Event::SidebarLoaded(Ok(_)),
@@ -2158,7 +2628,7 @@ mod tests {
         fs::write(&settings_path, &before).unwrap();
         assert!(matches!(
             worker.handle(Message::Reload).as_slice(),
-            [Event::SourceLoaded(_), Event::CalendarsLoaded(_)]
+            [Event::StateLoaded, Event::CalendarsLoaded(_)]
         ));
         let events = worker.handle(Message::ShowContent(ContentRequest {
             generation: 1,

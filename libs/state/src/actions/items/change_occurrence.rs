@@ -29,6 +29,13 @@ pub struct ChangeOccurrence {
 }
 
 impl Action for ChangeOccurrence {
+    fn description(&self) -> &'static str {
+        match self.action {
+            OccurrenceAction::Exclude => "Occurrence exclusion toggled",
+            OccurrenceAction::Cancel => "Occurrence cancelled",
+        }
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }

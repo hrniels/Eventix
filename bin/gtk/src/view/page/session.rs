@@ -117,9 +117,6 @@ impl PageSession {
         if let Some(session) = self.current.borrow().as_ref() {
             self.pending_command.set(true);
             self.pending_reminders.replace(Some(popover.downgrade()));
-            page.imp()
-                .status
-                .set_text(page.locale().translate("Applying changes…"));
             session.save_reminders(selected, command);
         }
     }
@@ -155,9 +152,6 @@ impl PageSession {
         {
             session.cancel_sync();
             page.imp().status.cancelling();
-            page.imp()
-                .status
-                .set_text(page.locale().translate("Cancelling synchronization…"));
         }
     }
 
@@ -170,20 +164,6 @@ impl PageSession {
         if result.is_ok() {
             self.record_sync_time(page);
         }
-        let errors = match &result {
-            Ok(result) => sync_errors(result, page.locale().as_ref()),
-            Err(error) => vec![error.clone()],
-        };
-        if cancelled {
-            imp.status
-                .set_text(page.locale().translate("Synchronization cancelled"));
-        } else if errors.is_empty() {
-            imp.status
-                .set_text(page.locale().translate("Synchronization completed"));
-        } else {
-            page.show_error("Could not synchronize calendars", &errors.join("\n"));
-        }
-
         // A failed initial load or navigation has no subscription for the selected content.
         let content = &imp.content;
         if content.loaded_generation.get() != Some(content.generation.get())
@@ -227,9 +207,6 @@ impl PageSession {
         self.auth_generation.set(id);
         self.pending_sync.set(true);
         page.imp().reload.set_sensitive(false);
-        page.imp()
-            .status
-            .set_text(page.locale().translate("Waiting for authentication..."));
         let weak = page.downgrade();
         let popup = SyncPopup::new(
             &window,
@@ -258,10 +235,6 @@ impl PageSession {
         page.imp().reload.set_sensitive(true);
         if authenticated {
             self.reload(page);
-        } else {
-            page.imp()
-                .status
-                .set_text(page.locale().translate("Synchronization cancelled"));
         }
     }
 
@@ -276,11 +249,8 @@ impl PageSession {
             return false;
         }
 
-        let imp = page.imp();
         if let Some(session) = self.current.borrow().as_ref() {
             self.pending_command.set(true);
-            imp.status
-                .set_text(page.locale().translate("Applying changes…"));
             session.execute(command);
 
             true
@@ -316,6 +286,7 @@ impl PageSession {
     }
 
     pub(super) fn start(&self, page: &CalendarPage, prefix: String, date: Option<NaiveDate>) {
+        page.imp().status.clear();
         let (session, responses) = CalendarSession::start(prefix);
         self.current.replace(Some(session));
         page.install_styles();
@@ -377,34 +348,34 @@ impl PageSession {
     }
 
     fn handle_event(&self, page: &CalendarPage, event: Event) {
+        // The worker publishes errors as activity before these results, including stale ones.
+        // Result handlers only update their own controls and must not record the error again.
         let imp = page.imp();
         match event {
-            Event::CalendarsLoaded(calendars) => imp.calendar_toggles.update(page, calendars),
-            Event::CalendarToggleFailed(error) => {
-                page.show_error("Could not apply changes", &error);
+            Event::Activity(activity) => imp.status.record(&activity, page.locale().as_ref()),
+            Event::CalendarsLoaded(calendars) => {
+                imp.status.set_calendars(&calendars);
+                imp.calendar_toggles.update(page, calendars);
             }
-            Event::FilepathLoaded(result) => match result {
-                Ok(path) => page.clipboard().set_text(&path),
-                Err(error) => page.show_error("Could not copy filepath", &error),
-            },
+            Event::CalendarToggleFailed(_) => {}
+            Event::FilepathLoaded(result) => {
+                if let Ok(path) = result {
+                    page.clipboard().set_text(&path);
+                }
+            }
             Event::DetailsLoaded(id, result) => {
                 if self.pending_details_load.get() != Some(id) {
                     return;
                 }
                 self.pending_details_load.set(None);
-                match result {
-                    Ok(item) => {
-                        let locale = page.locale();
-                        let details = match item {
-                            SavedItem::Event(event) => EventDetails::new(&event, locale.as_ref()),
-                            SavedItem::Task(task) => {
-                                EventDetails::new_sidebar(&task, locale.as_ref())
-                            }
-                        };
-                        imp.details
-                            .show_details(page.upcast_ref(), page.upcast_ref(), details);
-                    }
-                    Err(error) => page.show_error("Could not apply changes", &error),
+                if let Ok(item) = result {
+                    let locale = page.locale();
+                    let details = match item {
+                        SavedItem::Event(event) => EventDetails::new(&event, locale.as_ref()),
+                        SavedItem::Task(task) => EventDetails::new_sidebar(&task, locale.as_ref()),
+                    };
+                    imp.details
+                        .show_details(page.upcast_ref(), page.upcast_ref(), details);
                 }
             }
             Event::RemindersSaved(result) => {
@@ -414,14 +385,11 @@ impl PageSession {
                     .take()
                     .and_then(|weak| weak.upgrade())
                     .filter(|popover| imp.details.is_current(popover));
-                match result {
-                    Ok((change, item)) => {
-                        if let Some(popover) = popover {
-                            popover.reminders_saved(&item, page.locale().as_ref());
-                        }
-                        self.refresh_subscriptions(change);
+                if let Ok((change, item)) = result {
+                    if let Some(popover) = popover {
+                        popover.reminders_saved(&item, page.locale().as_ref());
                     }
-                    Err(error) => page.show_error("Could not apply changes", &error),
+                    self.refresh_subscriptions(change);
                 }
             }
             Event::EditLoaded(id, result) => imp.editor.edit_loaded(page, id, result),
@@ -440,33 +408,26 @@ impl PageSession {
             }
             Event::ContentLoaded(response) => imp.content.receive_content(page, response),
             Event::ListRowsLoaded(response) => {
-                if let Some(list) = imp.list.get()
-                    && let Err(error) = list.set_rows(response)
-                {
-                    page.show_error("Could not load local calendars", &error);
+                if let Some(list) = imp.list.get() {
+                    let _ = list.set_rows(response);
                 }
             }
             Event::OccurrencesLoaded(response) => {
-                if let Some(list) = imp.list.get()
-                    && let Err(error) = list.set_occurrences(response)
-                {
-                    page.show_error("Could not load local calendars", &error);
+                if let Some(list) = imp.list.get() {
+                    let _ = list.set_occurrences(response);
                 }
             }
-            Event::SidebarLoaded(result) => match result {
-                Ok(sidebar) => {
+            Event::SidebarLoaded(result) => {
+                if let Ok(sidebar) = result {
                     imp.sidebar.set_snapshot(sidebar);
                     page.update_styles();
                 }
-                Err(error) => page.show_error("Could not load sidebar", &error),
-            },
-            Event::SourceLoaded(source) => {
-                imp.status.set_source(&source);
+            }
+            Event::StateLoaded => {
                 self.record_sync_time(page);
             }
-            Event::ReloadFailed(error) => {
+            Event::ReloadFailed(_) => {
                 imp.content.loading.set(false);
-                page.show_error("Could not load local calendars", &error);
             }
             Event::SyncProgress { completed, total } => {
                 imp.status.set_progress(completed, total);
@@ -494,12 +455,11 @@ impl PageSession {
                 }
                 self.refresh_subscriptions(change);
             }
-            Event::CommandFailed(error) => {
+            Event::CommandFailed(_) => {
                 self.pending_command.set(false);
                 if self.pending_quick_task.replace(false) {
                     imp.sidebar.quick_task().finish(false);
                 }
-                page.show_error("Could not apply changes", &error);
             }
         }
     }
@@ -532,30 +492,6 @@ impl PageSession {
             timer.remove();
         }
     }
-}
-
-fn sync_errors(result: &SyncResult, locale: &dyn eventix_locale::Locale) -> Vec<String> {
-    let mut errors = Vec::new();
-    for (collection, outcome) in &result.collections {
-        match outcome {
-            SyncColResult::Success(_) => {}
-            SyncColResult::Error(error) => errors.push(format!("{collection}: {error}")),
-            SyncColResult::AuthFailed(_) => {}
-        }
-    }
-    for (calendar, failed) in &result.calendars {
-        if *failed {
-            errors.push(
-                formatx::formatx!(
-                    locale.translate("Could not synchronize calendar '{}'"),
-                    calendar
-                )
-                .unwrap(),
-            );
-        }
-    }
-    errors.sort();
-    errors
 }
 
 #[cfg(test)]
@@ -702,6 +638,7 @@ mod tests {
             }
         });
         assert!(completed);
+        assert_eq!(imp.status.text(), "Synchronizing calendars completed");
         assert!(imp.session.last_sync.get().unwrap() > previous_sync);
         assert_ne!(imp.last_sync.text(), previous_label);
         let locale = page.locale();
@@ -748,7 +685,7 @@ mod tests {
         imp.session.sync_finished(&page, Err("test failure".into()));
         assert_eq!(imp.session.last_sync.get(), last_sync);
         assert!(!status.sync_progress.is_visible());
-        assert!(imp.status.text().contains("test failure"));
+        let latest = imp.status.text();
         imp.session.pending_sync.set(true);
         imp.reload.set_sensitive(false);
         status.sync_progress.set_fraction(0.5);
@@ -758,7 +695,11 @@ mod tests {
         assert!(!status.cancel_sync.is_sensitive());
         assert!(!imp.reload.is_sensitive());
         assert!(imp.session.pending_sync.get());
-        assert_eq!(imp.status.text(), "Cancelling synchronization…");
+        assert_eq!(
+            imp.status.text(),
+            latest,
+            "only activity events replace the latest entry"
+        );
         status.cancel_sync.emit_clicked();
         imp.session.sync_finished(
             &page,
@@ -779,7 +720,7 @@ mod tests {
         assert!(!status.cancel_sync.is_visible());
         assert!(imp.session.auth_popup.borrow().is_none());
         assert!(status.progress_timer.borrow().is_none());
-        assert_eq!(imp.status.text(), "Synchronization cancelled");
+        assert_eq!(imp.status.text(), latest);
         window.close();
         assert!(status.progress_timer.borrow().is_none());
         assert!(!status.sync_progress.is_visible());

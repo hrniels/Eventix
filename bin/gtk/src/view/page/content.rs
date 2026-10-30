@@ -154,8 +154,6 @@ impl PageContent {
         let generation = self.generation.get() + 1;
         self.generation.set(generation);
         self.loading.set(true);
-        imp.status
-            .set_text(page.locale().translate("Loading calendar…"));
 
         if let Some(session) = imp.session.current.borrow().as_ref() {
             session.show_content(ContentRequest {
@@ -347,24 +345,6 @@ impl PageContent {
         imp.title.set_text(&title);
         imp.title.set_tooltip_text(Some(&title));
 
-        let empty = month
-            .days
-            .iter()
-            .filter(|d| d.current_month)
-            .all(|d| d.events.is_empty())
-            && !month.spans.iter().enumerate().any(|(week, spans)| {
-                spans.iter().any(|span| {
-                    month.days[week * 7 + span.start_day..week * 7 + span.end_day]
-                        .iter()
-                        .any(|day| day.current_month)
-                })
-            });
-        imp.status.set_text(month.locale.translate(if empty {
-            "No events this month"
-        } else {
-            "Local calendars"
-        }));
-
         self.update_picker(page);
         if self.displayed.replace(Some(month.month)) != Some(month.month) {
             imp.monthly_content.vadjustment().set_value(0.0);
@@ -412,13 +392,6 @@ impl PageContent {
             icon.set_tooltip_text(time_change.then(|| locale.translate("Time change")));
             label.set_tooltip_text(time_change.then(|| locale.translate("Time change")));
         }
-
-        let empty = week.all_day.is_empty() && week.days.iter().all(|d| d.timed.is_empty());
-        imp.status.set_text(locale.translate(if empty {
-            "No events this week"
-        } else {
-            "Local calendars"
-        }));
 
         self.update_picker(page);
 
@@ -496,8 +469,6 @@ impl PageContent {
                         let imp = page.imp();
                         imp.locale.replace(Some(list.locale.clone()));
                         self.translate_labels(page);
-                        imp.status
-                            .set_text(list.locale.translate("Events and Tasks"));
                         if let Some(window) = page.root().and_downcast::<gtk::Window>() {
                             window.set_title(Some(&format!(
                                 "Eventix — {}",
@@ -513,9 +484,8 @@ impl PageContent {
                 self.loaded_generation.set(Some(response.generation));
                 self.loading.set(false);
             }
-            Err(error) => {
+            Err(_) => {
                 self.loading.set(false);
-                page.show_error("Could not load local calendars", &error);
             }
         }
     }

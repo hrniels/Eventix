@@ -30,6 +30,13 @@ pub struct ChangeTask {
 }
 
 impl Action for ChangeTask {
+    fn description(&self) -> &'static str {
+        match self.action {
+            TaskAction::Complete => "Task completed",
+            TaskAction::Postpone { .. } => "Task postponed",
+        }
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }

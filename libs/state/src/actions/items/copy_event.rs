@@ -27,6 +27,10 @@ pub struct CopyEvent {
 }
 
 impl Action for CopyEvent {
+    fn description(&self) -> &'static str {
+        "Event copied"
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }

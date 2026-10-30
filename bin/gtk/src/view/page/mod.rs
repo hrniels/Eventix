@@ -303,9 +303,11 @@ impl CalendarPage {
     }
 
     fn show_error(&self, message: &str, error: &str) {
-        self.imp()
-            .status
-            .set_text(&format!("{}\n{error}", self.locale().translate(message)));
+        let activity = crate::model::activity::Activity::new(0, "Applying changes").finish(
+            crate::model::activity::Phase::Failed,
+            Some(format!("{}: {error}", self.locale().translate(message))),
+        );
+        self.imp().status.record(&activity, self.locale().as_ref());
     }
 
     fn update_styles(&self) {
@@ -1580,12 +1582,13 @@ pub(crate) mod tests {
         let styles = gtk::CssProvider::new();
         imp.styles
             .replace(Some((WidgetExt::display(&window), styles.clone())));
+        let latest_activity = imp.status.text();
         page.show_month(all_day_only);
         drain();
         assert_eq!(
             imp.status.text(),
-            week.locale.translate("Local calendars"),
-            "a month containing only spans is not empty"
+            latest_activity,
+            "rendering content preserves the latest activity"
         );
         assert!(
             styles.to_string().contains(&crate::style::calendar_class(

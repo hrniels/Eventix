@@ -18,6 +18,10 @@ pub struct UpdatePersonalAlarms {
 }
 
 impl Action for UpdatePersonalAlarms {
+    fn description(&self) -> &'static str {
+        "Reminders updated"
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }

@@ -15,6 +15,9 @@ use items::ItemId;
 
 /// A validated operation that persists a change to an item.
 pub trait Action: std::fmt::Debug + Send {
+    /// Returns the translation key describing the successful outcome for activity messages.
+    fn description(&self) -> &'static str;
+
     /// Returns the identities whose query membership must be checked before execution.
     ///
     /// These identify existing items, including the source of a copy or a split series.

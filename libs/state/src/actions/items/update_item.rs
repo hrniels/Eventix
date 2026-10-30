@@ -164,6 +164,10 @@ impl UpdateItem {
 }
 
 impl Action for UpdateItem {
+    fn description(&self) -> &'static str {
+        "Item updated"
+    }
+
     fn affected_items(&self) -> &[ItemId] {
         std::slice::from_ref(&self.item)
     }
