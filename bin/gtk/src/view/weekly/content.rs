@@ -95,6 +95,14 @@ pub(crate) mod imp {
             self.parent_constructed();
             self.gutter.set_size_request(GUTTER, -1);
 
+            // Week changes reset the timeline to a fixed time. Focus changes while repacking
+            // cards must not scroll the viewport back to a previously selected card.
+            for scroll in [&self.all_day_scroll, &self.scroll] {
+                if let Some(viewport) = scroll.child().and_downcast::<gtk::Viewport>() {
+                    viewport.set_scroll_to_focus(false);
+                }
+            }
+
             let top_fade = self.all_day_top_fade.downgrade();
             let bottom_fade = self.all_day_bottom_fade.downgrade();
             let update_fades = move |adjustment: &gtk::Adjustment| {

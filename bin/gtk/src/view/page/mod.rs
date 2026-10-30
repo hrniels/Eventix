@@ -1601,6 +1601,116 @@ pub(crate) mod tests {
         drain();
     }
 
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn week_switch_resets_scroll_despite_focused_card() {
+        use std::sync::Arc;
+
+        use eventix_view::{Event, OccurrenceId, details::Details};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let locale = eventix_locale::default();
+        let start = "2026-10-19".parse().unwrap();
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        let drain = || {
+            for _ in 0..30 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        let make_week = |start: chrono::NaiveDate| {
+            let event_start = locale
+                .timezone()
+                .with_ymd_and_hms(start.year(), start.month(), start.day(), 22, 0, 0)
+                .unwrap();
+            let event = Event {
+                id: OccurrenceId {
+                    calendar: "cal".into(),
+                    uid: "event".into(),
+                    recurrence: String::new(),
+                },
+                summary: "Event".into(),
+                calendar: "Cal".into(),
+                foreground: "#ffffff".into(),
+                background: "#000000".into(),
+                start: event_start,
+                end: event_start + Duration::hours(1),
+                all_day: false,
+                cancelled: false,
+                recurrent: false,
+                exception: false,
+                alarm: false,
+                details: Arc::new(Details {
+                    date_label: "Date",
+                    date: String::new(),
+                    source_date: None,
+                    location: String::new(),
+                    description: String::new(),
+                    status: None,
+                    recurrence: None,
+                    reminders: None,
+                    personal_reminders: Default::default(),
+                    organizer: None,
+                    sent_by: None,
+                    attendees: vec![],
+                    actions: Default::default(),
+                }),
+            };
+            WeekSnapshot {
+                start,
+                days: (0..7)
+                    .map(|offset| Day {
+                        date: start + Duration::days(offset),
+                        timed: if offset == 0 {
+                            vec![TimedEvent {
+                                event: event.clone(),
+                                date: start,
+                                minute_start: 1320,
+                                minute_end: 1380,
+                                columns: Columns {
+                                    count: 1,
+                                    offset: 0,
+                                    span: 1,
+                                },
+                            }]
+                        } else {
+                            vec![]
+                        },
+                        dst: vec![],
+                    })
+                    .collect(),
+                all_day: vec![],
+                locale: locale.clone(),
+            }
+        };
+        page.show_week(make_week(start));
+        drain();
+        let card = page.imp().weekly.imp().timed.event_cards()[0].1.clone();
+        assert!(card.grab_focus());
+
+        // Simulate a previous week scrolled down to the selected card.
+        let scroll = &page.imp().weekly.imp().scroll;
+        scroll.vadjustment().set_value(900.0);
+        drain();
+
+        page.show_week(make_week(start + Duration::days(7)));
+        drain();
+        assert_eq!(
+            scroll.vadjustment().value(),
+            480.0,
+            "a week change always shows 08:00 at the top"
+        );
+        window.close();
+    }
+
     /// Exercises the window capture handler with real focus, cards, and editor popups.
     fn assert_arrow_key_routing(week: &WeekSnapshot) {
         use eventix_ical::objects::CalCompType;
