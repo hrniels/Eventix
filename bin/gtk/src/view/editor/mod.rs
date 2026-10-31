@@ -1116,6 +1116,7 @@ impl DateInput {
         let syncing = Rc::new(Cell::new(false));
         Self::connect_picker_open(&entry, &picker, &calendar, syncing.clone());
         Self::connect_day_selected(&entry, &picker, &calendar, syncing.clone());
+        Self::connect_selected_day_click(&calendar);
 
         Self {
             widget,
@@ -1187,6 +1188,30 @@ impl DateInput {
                 button.popdown();
             }
         });
+    }
+
+    /// Closes the picker when the user clicks the day that is already selected.
+    fn connect_selected_day_click(calendar: &gtk::Calendar) {
+        let click = gtk::GestureClick::new();
+        click.set_propagation_phase(gtk::PropagationPhase::Capture);
+
+        let cal = calendar.downgrade();
+        click.connect_pressed(move |_, _, x, y| {
+            let Some(calendar) = cal.upgrade() else {
+                return;
+            };
+            // Clicking the selected day changes nothing and emits no day-selected signal.
+            // GTK marks only that day's label as selected, so detect the click here.
+            let Some(day) = calendar.pick(x, y, gtk::PickFlags::DEFAULT) else {
+                return;
+            };
+            if !day.is::<gtk::Label>() || !day.state_flags().contains(gtk::StateFlags::SELECTED) {
+                return;
+            }
+
+            calendar.emit_by_name::<()>("day-selected", &[]);
+        });
+        calendar.add_controller(click);
     }
 
     pub(super) fn date(&self, locale: &dyn Locale) -> anyhow::Result<NaiveDate> {
@@ -2030,6 +2055,81 @@ mod tests {
         end.calendar.select_day(&selected);
         assert_eq!(start.entry.text(), "2026-10-10");
         assert_eq!(end.entry.text(), "2026-10-10");
+        window.close();
+    }
+
+    fn selected_day_label(widget: &gtk::Widget) -> Option<gtk::Label> {
+        if let Some(label) = widget.downcast_ref::<gtk::Label>()
+            && label.state_flags().contains(gtk::StateFlags::SELECTED)
+        {
+            return Some(label.clone());
+        }
+
+        let mut child = widget.first_child();
+        while let Some(widget) = child {
+            if let Some(label) = selected_day_label(&widget) {
+                return Some(label);
+            }
+            child = widget.next_sibling();
+        }
+        None
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn clicking_the_selected_day_closes_the_date_picker() {
+        use std::{cell::Cell, rc::Rc};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        let locale = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::English,
+            chrono_tz::Europe::Berlin,
+        )
+        .unwrap();
+        let date = "2026-10-15".parse().unwrap();
+        let input = DateInput::new(locale.as_ref(), date);
+        let selections = Rc::new(Cell::new(0));
+        let selected = selections.clone();
+        input.connect_date_selected(move || selected.set(selected.get() + 1));
+        let window = gtk::Window::builder().child(&input.widget).build();
+        window.present();
+
+        let iterate = || {
+            while gtk::glib::MainContext::default().iteration(false) {}
+        };
+        iterate();
+        input.picker.set_active(true);
+        iterate();
+        assert!(input.picker.is_active());
+        assert_eq!(selections.get(), 0);
+        gtk::test_widget_wait_for_draw(&input.calendar);
+
+        let day = selected_day_label(input.calendar.upcast_ref()).expect("selected day");
+        let bounds = day
+            .compute_bounds(&input.calendar)
+            .expect("selected day bounds");
+        let (x, y) = (
+            f64::from(bounds.x() + bounds.width() / 2.0),
+            f64::from(bounds.y() + bounds.height() / 2.0),
+        );
+        let click = input
+            .calendar
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|click| click.propagation_phase() == gtk::PropagationPhase::Capture)
+            .expect("date picker click gesture");
+        click.emit_by_name::<()>("pressed", &[&1i32, &x, &y]);
+        iterate();
+
+        assert!(!input.picker.is_active());
+        assert_eq!(input.entry.text(), "2026-10-15");
+        assert_eq!(selections.get(), 1);
         window.close();
     }
 
