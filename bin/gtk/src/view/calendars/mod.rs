@@ -8,6 +8,8 @@ use eventix_locale::Locale;
 use eventix_view::calendars::{Backend, Calendar, Collection, Snapshot};
 use gtk::{gdk, prelude::*};
 
+use super::calendar_selector::set_dot_color;
+
 pub(crate) struct CalendarsView {
     pub widget: gtk::Frame,
     pub header: gtk::Box,
@@ -295,26 +297,12 @@ fn calendar_card(
     let dot = gtk::DrawingArea::new();
     dot.set_size_request(22, 22);
     dot.set_valign(gtk::Align::Center);
-    let color = calendar
+    let mut color = calendar
         .background
         .parse::<gdk::RGBA>()
         .unwrap_or(gdk::RGBA::BLACK);
-    dot.set_draw_func(move |_, context, width, height| {
-        context.set_source_rgba(
-            color.red().into(),
-            color.green().into(),
-            color.blue().into(),
-            1.0,
-        );
-        context.arc(
-            f64::from(width) / 2.0,
-            f64::from(height) / 2.0,
-            f64::from(width.min(height)) / 2.0 - 1.0,
-            0.0,
-            std::f64::consts::TAU,
-        );
-        let _ = context.fill();
-    });
+    color.set_alpha(1.0);
+    set_dot_color(&dot, color);
     heading.append(&dot);
 
     let name = text(&calendar.name);

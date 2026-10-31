@@ -191,7 +191,7 @@ fn calendar_factory(
     factory
 }
 
-/// Draws a visibility toggle with a gray inactive circle and a black outline on hover.
+/// Draws a bordered visibility toggle with a gray inactive circle and a black outline on hover.
 pub(super) fn draw_toggle_circle(
     dot: &gtk::DrawingArea,
     button: &gtk::ToggleButton,
@@ -221,9 +221,11 @@ pub(super) fn draw_toggle_circle(
         let _ = cr.fill_preserve();
         if button.state_flags().contains(gtk::StateFlags::PRELIGHT) {
             cr.set_source_rgb(0.0, 0.0, 0.0);
-            cr.set_line_width(1.0);
-            let _ = cr.stroke();
+        } else {
+            cr.set_source_rgb(187.0 / 255.0, 187.0 / 255.0, 187.0 / 255.0);
         }
+        cr.set_line_width(1.0);
+        let _ = cr.stroke();
     });
     let weak = dot.downgrade();
     button.connect_state_flags_changed(move |_, _| {
@@ -248,7 +250,10 @@ pub(super) fn set_dot_color(dot: &gtk::DrawingArea, color: gdk::RGBA) {
             0.0,
             std::f64::consts::TAU,
         );
-        let _ = cr.fill();
+        let _ = cr.fill_preserve();
+        cr.set_source_rgb(187.0 / 255.0, 187.0 / 255.0, 187.0 / 255.0);
+        cr.set_line_width(1.0);
+        let _ = cr.stroke();
     });
 }
 
