@@ -131,10 +131,11 @@ pub(crate) enum Event {
 impl Event {
     fn failure(&self) -> Option<(&'static str, &str)> {
         let (operation, error) = match self {
-            Self::ManagementFinished(_, result) => ("Applying changes", result.as_ref().err()),
-            Self::CalendarToggleFailed(error) | Self::CommandFailed(error) => {
-                ("Applying changes", Some(error))
+            Self::ManagementFinished(request, result) => {
+                (request.description(), result.as_ref().err())
             }
+            Self::CalendarToggleFailed(error) => ("Calendar visibility changed", Some(error)),
+            Self::CommandFailed(error) => ("Applying changes", Some(error)),
             Self::EditorLoaded(_, result) => ("Preparing editor", result.as_ref().err()),
             Self::EditorSaved(_, result) => ("New item created", result.as_ref().err()),
             Self::EditLoaded(_, result) => ("Loading item", result.as_ref().err()),
@@ -193,9 +194,11 @@ enum Message {
 impl Message {
     fn activity(&self, request: u64) -> Option<Activity> {
         let (operation, items, calendar) = match self {
-            Self::ManageCalendar(request) => {
-                ("Applying changes", vec![], Some(request.calendar.clone()))
-            }
+            Self::ManageCalendar(request) => (
+                request.description(),
+                vec![],
+                Some(request.calendar.clone()),
+            ),
             Self::ToggleCalendar(calendar) => (
                 "Calendar visibility changed",
                 vec![],

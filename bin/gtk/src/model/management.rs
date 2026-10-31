@@ -22,6 +22,21 @@ pub(crate) struct Request {
     pub operation: Operation,
 }
 
+impl Request {
+    /// Returns the translation key for this calendar action's outcome.
+    pub(crate) fn description(&self) -> &'static str {
+        match self.operation {
+            Operation::Enable(true) => "Calendar enabled",
+            Operation::Enable(false) => "Calendar disabled",
+            Operation::Save(_) if self.configured => "Calendar settings updated",
+            Operation::Save(_) => "Calendar added",
+            Operation::Reload => "Calendar reloaded",
+            Operation::Delete if self.configured => "Calendar removed",
+            Operation::Delete => "Remote calendar deleted",
+        }
+    }
+}
+
 /// Applies calendar management changes using the same state operations as the HTML UI.
 pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Result<()> {
     if matches!(request.operation, Operation::Reload) {

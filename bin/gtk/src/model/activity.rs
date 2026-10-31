@@ -84,6 +84,21 @@ impl Activity {
     }
 
     pub fn summary(&self, locale: &dyn Locale) -> String {
+        if self.phase == Phase::Started {
+            let progress = match self.operation {
+                "Calendar enabled" => Some("Enabling calendar…"),
+                "Calendar disabled" => Some("Disabling calendar…"),
+                "Calendar settings updated" => Some("Saving calendar settings…"),
+                "Calendar added" => Some("Adding calendar…"),
+                "Calendar reloaded" => Some("Reloading calendar…"),
+                "Calendar removed" => Some("Removing calendar…"),
+                "Remote calendar deleted" => Some("Deleting remote calendar…"),
+                _ => None,
+            };
+            if let Some(progress) = progress {
+                return single_line(locale.translate(progress));
+            }
+        }
         if self.phase == Phase::Completed
             && !matches!(self.operation, "Synchronizing calendars" | "Authenticating")
         {
