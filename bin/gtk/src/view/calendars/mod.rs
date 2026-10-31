@@ -3,12 +3,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use eventix_locale::Locale;
 use eventix_view::calendars::{Backend, Calendar, Collection, Snapshot};
-use gtk::{gdk, prelude::*};
+use gtk::prelude::*;
 
-use super::calendar_selector::set_dot_color;
+mod card;
+
+use card::CalendarCard;
 
 pub(crate) struct CalendarsView {
     pub widget: gtk::Frame,
@@ -29,7 +33,7 @@ struct CollectionRow {
     separator: gtk::Separator,
     description: gtk::Box,
     calendars: gtk::Box,
-    cards: Vec<(Calendar, gtk::Frame)>,
+    cards: Vec<(Calendar, Rc<CalendarCard>)>,
     toggle_group: gtk::SizeGroup,
 }
 
@@ -80,7 +84,7 @@ impl CalendarsView {
                     row
                 };
 
-            row.update(collection, locale, translated);
+            row.update(collection, &snapshot.locale, translated);
             row.separator.set_visible(index > 0);
             self.collections
                 .reorder_child_after(&row.widget, previous.as_ref());
@@ -173,7 +177,12 @@ impl CollectionRow {
         }
     }
 
-    fn update(&mut self, model: &Collection, locale: &dyn Locale, translated: bool) {
+    fn update(
+        &mut self,
+        model: &Collection,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        translated: bool,
+    ) {
         if !translated && self.model == *model && self.description.first_child().is_some() {
             return;
         }
@@ -185,36 +194,32 @@ impl CollectionRow {
             || self.model.reload != model.reload
             || self.model.discover != model.discover
         {
-            self.update_description(model, locale);
+            self.update_description(model, locale.as_ref());
         }
 
-        let rebuild = translated
-            || self.model.backend != model.backend
-            || self.model.create_calendar != model.create_calendar;
         let mut old = std::mem::take(&mut self.cards);
         let mut previous: Option<gtk::Frame> = None;
         for calendar in &model.calendars {
             let reused = old.iter().position(|(old, _)| {
-                old.id == calendar.id
-                    && old.configured == calendar.configured
-                    && *old == *calendar
-                    && !rebuild
+                old.id == calendar.id && old.configured == calendar.configured
             });
             let card = if let Some(index) = reused {
                 old.remove(index).1
             } else {
-                let card = calendar_card(calendar, model, locale, &self.toggle_group);
-                self.calendars.append(&card);
+                let card = CalendarCard::new(calendar, model, locale.clone(), &self.toggle_group);
+                self.calendars.append(&card.widget);
                 card
             };
 
-            self.calendars.reorder_child_after(&card, previous.as_ref());
-            previous = Some(card.clone());
+            card.update(calendar, model, locale.clone());
+            self.calendars
+                .reorder_child_after(&card.widget, previous.as_ref());
+            previous = Some(card.widget.clone());
             self.cards.push((calendar.clone(), card));
         }
 
         for (_, card) in old {
-            self.calendars.remove(&card);
+            self.calendars.remove(&card.widget);
         }
 
         self.model = model.clone();
@@ -267,80 +272,6 @@ impl CollectionRow {
 
         self.description.append(&actions);
     }
-}
-
-fn calendar_card(
-    calendar: &Calendar,
-    collection: &Collection,
-    locale: &dyn Locale,
-    toggle_group: &gtk::SizeGroup,
-) -> gtk::Frame {
-    let builder = gtk::Builder::from_resource(resource_path!("view/calendars/calendar.ui"));
-    let widget: gtk::Frame = builder.object("calendar").unwrap();
-    let heading: gtk::Box = builder.object("heading").unwrap();
-
-    // Keep the color and name columns aligned even for calendars without an enablement control.
-    let toggle_slot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    toggle_slot.set_valign(gtk::Align::Center);
-    toggle_group.add_widget(&toggle_slot);
-    heading.append(&toggle_slot);
-    if calendar.configured {
-        let enabled = gtk::Switch::builder().active(calendar.enabled).build();
-        enabled.set_valign(gtk::Align::Center);
-        enabled.set_tooltip_text(Some(locale.translate("Enabled")));
-        enabled.update_property(&[gtk::accessible::Property::Label(
-            locale.translate("Enabled"),
-        )]);
-        toggle_slot.append(&enabled);
-    }
-
-    let dot = gtk::DrawingArea::new();
-    dot.set_size_request(22, 22);
-    dot.set_valign(gtk::Align::Center);
-    let mut color = calendar
-        .background
-        .parse::<gdk::RGBA>()
-        .unwrap_or(gdk::RGBA::BLACK);
-    color.set_alpha(1.0);
-    set_dot_color(&dot, color);
-    heading.append(&dot);
-
-    let name = text(&calendar.name);
-    name.set_wrap(false);
-    name.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    name.set_width_chars(1);
-    name.set_tooltip_text(Some(&calendar.name));
-    name.set_hexpand(true);
-    heading.append(&name);
-
-    let actions: gtk::Box = builder.object("actions").unwrap();
-    if calendar.configured {
-        let reload = action("view-refresh-symbolic", "Reload", locale);
-        let delete = icon_action("user-trash-symbolic", "Delete", locale);
-        if collection.backend != Backend::FileSystem {
-            reload.add_css_class("ev_button_warn");
-            delete.add_css_class("ev_button_warn");
-        }
-        actions.append(&reload);
-        actions.append(&delete);
-    } else if collection.create_calendar && collection.backend != Backend::FileSystem {
-        let delete = icon_action("user-trash-symbolic", "Delete", locale);
-        delete.add_css_class("ev_button_critical");
-        actions.append(&delete);
-    }
-
-    let (icon, label) = if calendar.configured {
-        ("pencil-symbolic", "Edit")
-    } else {
-        ("list-add-symbolic", "Add")
-    };
-    actions.append(&icon_action(icon, label, locale));
-
-    let folder = icon_action("folder-symbolic", "Folder", locale);
-    folder.set_tooltip_text(Some(&calendar.path));
-    actions.append(&folder);
-
-    widget
 }
 
 fn clear(container: &gtk::Box) {
@@ -426,6 +357,11 @@ mod tests {
                             "#123456"
                         }
                         .into(),
+                        foreground: "#ffffff".into(),
+                        events: true,
+                        tasks: false,
+                        personal_alarms: false,
+                        default_alarm: None,
                         enabled: index > 1,
                         folder: index.to_string(),
                         path: format!("/long/path/to/a/calendar/collection/{index}"),
@@ -537,7 +473,7 @@ mod tests {
         assert!(backend_icon.icon_name().is_none());
         assert!(backend_icon.paintable().is_some());
 
-        let card = view.rows.borrow()[0].cards[1].1.clone();
+        let card = view.rows.borrow()[0].cards[1].1.widget.clone();
         let description = view.rows.borrow()[0]
             .description
             .compute_bounds(&view.widget)
@@ -552,7 +488,13 @@ mod tests {
         assert!(!view.rows.borrow()[0].separator.is_visible());
         assert!(view.rows.borrow()[1].separator.is_visible());
 
-        let content = card.child().unwrap().downcast::<gtk::Box>().unwrap();
+        let content = card
+            .child()
+            .unwrap()
+            .first_child()
+            .unwrap()
+            .downcast::<gtk::Box>()
+            .unwrap();
         assert_eq!(content.orientation(), gtk::Orientation::Horizontal);
         let heading = content.first_child().unwrap();
         let actions = content.last_child().unwrap();
@@ -562,7 +504,7 @@ mod tests {
         assert!((heading_bounds.center().y() - action_bounds.center().y()).abs() <= 1.0);
         assert!(card.height() <= 44, "calendars stay compact single rows");
 
-        let unknown = view.rows.borrow()[0].cards[0].1.clone();
+        let unknown = view.rows.borrow()[0].cards[0].1.widget.clone();
         let color_x = |card: &gtk::Frame| {
             descendants(card.upcast_ref())
                 .into_iter()
@@ -665,7 +607,7 @@ mod tests {
         view.set_snapshot(snapshot());
         drain();
         assert_eq!(view.rows.borrow()[0].widget, row);
-        assert_eq!(view.rows.borrow()[0].cards[1].1, card);
+        assert_eq!(view.rows.borrow()[0].cards[1].1.widget, card);
         assert_eq!(scroll.vadjustment().value(), 100.0);
         assert_eq!(
             view.actions.compute_bounds(&view.widget).unwrap(),
@@ -676,7 +618,7 @@ mod tests {
         updated.collections[0].calendars[0].name = "Renamed".into();
         view.set_snapshot(updated);
         drain();
-        assert_eq!(view.rows.borrow()[0].cards[1].1, card);
+        assert_eq!(view.rows.borrow()[0].cards[1].1.widget, card);
         assert_eq!(scroll.vadjustment().value(), 100.0);
 
         let mut empty = snapshot();
@@ -714,8 +656,8 @@ mod tests {
         assert!(!view.rows.borrow()[0].separator.is_visible());
         assert!(view.rows.borrow()[1].separator.is_visible());
         assert_eq!(
-            color_x(&view.rows.borrow()[0].cards[0].1),
-            color_x(&view.rows.borrow()[1].cards[1].1)
+            color_x(&view.rows.borrow()[0].cards[0].1.widget),
+            color_x(&view.rows.borrow()[1].cards[1].1.widget)
         );
 
         window.set_default_size(400, 600);
@@ -752,5 +694,312 @@ mod tests {
             previous_right = bounds.x() + bounds.width();
             child = widget.next_sibling();
         }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn calendars_management_edits_and_adds_animate_and_preserve_drafts_on_refresh() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gdk::Display::default().unwrap());
+        gtk::Settings::default()
+            .unwrap()
+            .set_gtk_enable_animations(true);
+
+        let mut initial = snapshot();
+        initial.collections[0].calendars.truncate(2);
+        let configured = &mut initial.collections[0].calendars[1];
+        configured.personal_alarms = true;
+        configured.default_alarm = Some(eventix_ical::objects::CalAlarm::new(
+            eventix_ical::objects::CalAction::Display,
+            eventix_ical::objects::CalTrigger::Relative {
+                duration: chrono::Duration::minutes(-30).into(),
+                related: eventix_ical::objects::CalRelated::End,
+            },
+        ));
+        let view = CalendarsView::new(initial.locale.as_ref());
+        view.set_snapshot(initial);
+        let window = gtk::Window::builder()
+            .default_width(1400)
+            .default_height(900)
+            .child(&view.widget)
+            .build();
+        window.present();
+        let drain = |milliseconds| {
+            for _ in 0..milliseconds / 10 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        let button = |card: &gtk::Frame, tooltip: &str| {
+            descendants(card.upcast_ref())
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+                .find(|button| button.tooltip_text().as_deref() == Some(tooltip))
+                .unwrap()
+        };
+        let revealer = |card: &gtk::Frame| {
+            descendants(card.upcast_ref())
+                .into_iter()
+                .find_map(|widget| widget.downcast::<gtk::Revealer>().ok())
+                .unwrap()
+        };
+        let entry = |card: &gtk::Frame, tooltip: &str| {
+            descendants(card.upcast_ref())
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Entry>().ok())
+                .find(|entry| entry.tooltip_text().as_deref() == Some(tooltip))
+                .unwrap()
+        };
+        drain(100);
+        let card = view.rows.borrow()[0].cards[1].1.widget.clone();
+        let unknown = view.rows.borrow()[0].cards[0].1.widget.clone();
+        let edit = button(&card, "Edit");
+        let reveal = revealer(&card);
+        let collapsed_height = card.height();
+        let header = card.child().unwrap().first_child().unwrap();
+        let header_height = header.height();
+        let unknown_header = unknown.child().unwrap().first_child().unwrap();
+        let unknown_header_height = unknown_header.height();
+        let title = entry(&card, "Calendar Name").parent().unwrap();
+        let title_x = title.compute_bounds(&card).unwrap().x();
+        let unknown_title = entry(&unknown, "Calendar Name").parent().unwrap();
+        let unknown_title_x = unknown_title.compute_bounds(&unknown).unwrap().x();
+        let header_controls = descendants(&header);
+        let toggle = header_controls
+            .iter()
+            .find_map(|widget| widget.downcast_ref::<gtk::Switch>())
+            .unwrap();
+        let dot = header_controls
+            .iter()
+            .find_map(|widget| widget.downcast_ref::<gtk::DrawingArea>())
+            .unwrap();
+        let toggle_bounds = toggle.compute_bounds(&card).unwrap();
+        let dot_bounds = dot.compute_bounds(&card).unwrap();
+        assert!(dot_bounds.x() - toggle_bounds.x() - toggle_bounds.width() >= 16.0);
+        assert!(!reveal.reveals_child());
+        edit.emit_clicked();
+        assert!(reveal.reveals_child());
+        assert_eq!(
+            reveal.transition_type(),
+            gtk::RevealerTransitionType::SlideDown
+        );
+        assert_eq!(reveal.transition_duration(), 300);
+        assert!(!reveal.is_child_revealed(), "opening is animated");
+        let heights = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let frames = heights.clone();
+        let callback = card.add_tick_callback(move |card, _| {
+            frames.borrow_mut().push(card.height());
+            gtk::glib::ControlFlow::Continue
+        });
+        drain(450);
+        callback.remove();
+        assert!(reveal.is_child_revealed());
+        assert_eq!(
+            title.compute_bounds(&card).unwrap().x(),
+            title_x,
+            "first expansion keeps the title column in place"
+        );
+        assert_eq!(
+            header.height(),
+            header_height,
+            "editing keeps the title row height"
+        );
+        assert!(
+            heights
+                .borrow()
+                .iter()
+                .any(|height| *height > collapsed_height && *height < card.height()),
+            "opening has intermediate sizes"
+        );
+        let name = entry(&card, "Calendar Name");
+        let folder = entry(&card, "Folder");
+        assert_eq!(folder.text(), "1");
+        assert!(!folder.is_editable());
+        let controls = descendants(reveal.child().unwrap().upcast_ref());
+        let separators: Vec<_> = controls
+            .iter()
+            .filter(|widget| widget.has_css_class("ev_management_form_separator"))
+            .collect();
+        assert_eq!(separators.len(), 3);
+        assert!(separators.iter().all(|separator| separator.height() == 1));
+        let labels: Vec<_> = controls
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::Label>())
+            .filter(|label| label.has_css_class("ev_management_form_label"))
+            .collect();
+        assert_eq!(labels.len(), 4);
+        for label in labels {
+            assert_eq!(label.valign(), gtk::Align::Center);
+            assert_eq!(
+                label.pango_context().font_description().unwrap().weight(),
+                gtk::pango::Weight::Bold
+            );
+            let row = label.parent().unwrap();
+            let bounds = label.compute_bounds(&row).unwrap();
+            assert!((bounds.center().y() - row.height() as f32 / 2.0).abs() <= 0.5);
+            let field = label.next_sibling().unwrap();
+            assert_eq!(
+                field.compute_bounds(&card).unwrap().x(),
+                name.compute_bounds(&card).unwrap().x(),
+                "{} field aligns with the calendar name",
+                label.text(),
+            );
+        }
+        let duration = controls
+            .iter()
+            .find_map(|widget| widget.downcast_ref::<gtk::SpinButton>())
+            .unwrap();
+        assert_eq!(duration.value_as_int(), 30);
+        let colors: Vec<_> = controls
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::ColorDialogButton>())
+            .collect();
+        assert_eq!(colors.len(), 2);
+        assert_eq!(colors[0].rgba(), "#123456".parse::<gdk::RGBA>().unwrap());
+        assert_eq!(colors[1].rgba(), gdk::RGBA::WHITE);
+        let color_grid = colors[0]
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .downcast::<gtk::Grid>()
+            .unwrap();
+        for (row, title) in ["Preview (timed):", "Preview (all-day):"]
+            .into_iter()
+            .enumerate()
+        {
+            let row = row as i32;
+            assert_eq!(color_grid.child_at(0, row), colors[row as usize].parent());
+            let label = color_grid
+                .child_at(1, row)
+                .unwrap()
+                .downcast::<gtk::Label>()
+                .unwrap();
+            assert_eq!(label.text(), title);
+            assert_eq!(label.xalign(), 0.0);
+            let picker_bounds = colors[row as usize].compute_bounds(&color_grid).unwrap();
+            let label_bounds = label.compute_bounds(&color_grid).unwrap();
+            assert!(label_bounds.x() - picker_bounds.x() - picker_bounds.width() >= 32.0);
+            assert_eq!(
+                label.pango_context().font_description().unwrap().weight(),
+                gtk::pango::Weight::Bold
+            );
+            let preview = color_grid.child_at(2, row).unwrap();
+            assert!(preview.is::<gtk::DrawingArea>());
+            assert!(color_grid.child_at(3, row).is_none());
+            if row == 1 {
+                assert!(preview.width() < 90);
+                assert_eq!(preview.height(), 20);
+            }
+        }
+        for (label, active) in [("Events", true), ("Tasks", false)] {
+            let check = controls
+                .iter()
+                .filter_map(|widget| widget.downcast_ref::<gtk::CheckButton>())
+                .find(|check| check.label().as_deref() == Some(label))
+                .unwrap();
+            assert_eq!(check.is_active(), active);
+        }
+        let personal = controls
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::ToggleButton>())
+            .find(|button| button.label().as_deref() == Some("Personal"))
+            .unwrap();
+        assert!(personal.is_active());
+        assert!(duration.is_mapped());
+        name.set_text("Unsaved draft");
+        colors[0].set_rgba(&gdk::RGBA::RED);
+        let mut refreshed = snapshot();
+        refreshed.collections[0].calendars.truncate(2);
+        refreshed.collections[0].calendars[1].name = "Changed externally".into();
+        view.set_snapshot(refreshed);
+        drain(50);
+        assert_eq!(view.rows.borrow()[0].cards[1].1.widget, card);
+        assert_eq!(entry(&card, "Calendar Name"), name);
+        assert_eq!(name.text(), "Unsaved draft");
+        assert!(reveal.is_child_revealed());
+
+        button(&unknown, "Add").emit_clicked();
+        drain(350);
+        assert!(revealer(&unknown).is_child_revealed());
+        assert_eq!(
+            unknown_title.compute_bounds(&unknown).unwrap().x(),
+            unknown_title_x,
+            "first expansion keeps the unconfigured title column in place"
+        );
+        let unknown_name = entry(&unknown, "Calendar Name");
+        let unknown_folder = entry(&unknown, "Folder");
+        assert_eq!(
+            unknown_folder.compute_bounds(&unknown).unwrap().x(),
+            unknown_name.compute_bounds(&unknown).unwrap().x(),
+        );
+        assert_eq!(
+            unknown_header.height(),
+            unknown_header_height,
+            "adding keeps the title row height"
+        );
+        assert!(reveal.is_child_revealed(), "cards expand independently");
+        button(&card, "Save").emit_clicked();
+        assert!(reveal.reveals_child(), "Save remains unwired");
+        let expanded_height = card.height();
+        heights.borrow_mut().clear();
+        let frames = heights.clone();
+        let callback = card.add_tick_callback(move |card, _| {
+            frames.borrow_mut().push(card.height());
+            gtk::glib::ControlFlow::Continue
+        });
+        button(&card, "Cancel").emit_clicked();
+        drain(100);
+        assert!(
+            reveal.child().is_some(),
+            "form stays alive while collapsing"
+        );
+        drain(350);
+        callback.remove();
+        assert!(!reveal.is_child_revealed());
+        assert_eq!(card.height(), collapsed_height);
+        assert_eq!(header.height(), header_height);
+        assert!(
+            heights
+                .borrow()
+                .iter()
+                .any(|height| *height > collapsed_height && *height < expanded_height),
+            "closing has intermediate sizes"
+        );
+        assert!(edit.has_focus());
+        edit.emit_clicked();
+        assert_eq!(name.text(), "Changed externally");
+        // Reversing a partly completed opening must not destroy the closing animation.
+        drain(100);
+        button(&card, "Cancel").emit_clicked();
+        assert!(reveal.child().is_some());
+        drain(350);
+        assert!(!reveal.is_child_revealed());
+
+        let mut local = snapshot();
+        local.collections[0].backend = Backend::FileSystem;
+        local.collections[0].calendars.truncate(2);
+        view.set_snapshot(local);
+        edit.emit_clicked();
+        assert!(entry(&card, "Folder").is_editable());
+        button(&card, "Cancel").emit_clicked();
+        drain(350);
+        gtk::Settings::default()
+            .unwrap()
+            .set_gtk_enable_animations(false);
+        edit.emit_clicked();
+        drain(50);
+        assert!(
+            reveal.is_child_revealed(),
+            "reveal={} mapped={} animations={}",
+            reveal.reveals_child(),
+            reveal.is_mapped(),
+            gtk::Settings::default().unwrap().is_gtk_enable_animations()
+        );
+        button(&card, "Cancel").emit_clicked();
+        drain(50);
+        assert!(!reveal.is_child_revealed());
+        window.close();
     }
 }

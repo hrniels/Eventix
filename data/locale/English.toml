@@ -403,6 +403,8 @@
 "Personal" = "Personal"
 "Please enter a valid date (YYYY-MM-DD)." = "Please enter a valid date (YYYY-MM-DD)."
 "Please enter a valid time (HH:MM)." = "Please enter a valid time (HH:MM)."
+"Preview (all-day)" = "Preview (all-day)"
+"Preview (timed)" = "Preview (timed)"
 "Previous month" = "Previous month"
 "Previous week" = "Previous week"
 "Range of recurrence" = "Range of recurrence"

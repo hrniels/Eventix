@@ -402,6 +402,8 @@
 "Personal" = "Persönlich"
 "Please enter a valid date (YYYY-MM-DD)." = "Bitte gib ein gültiges Datum ein (JJJJ-MM-TT)."
 "Please enter a valid time (HH:MM)." = "Bitte gib eine gültige Uhrzeit ein (HH:MM)."
+"Preview (all-day)" = "Vorschau (ganztags)"
+"Preview (timed)" = "Vorschau (mit Uhrzeit)"
 "Previous month" = "Vorheriger Monat"
 "Previous week" = "Vorherige Woche"
 "Range of recurrence" = "Zeitraum der Wiederholung"

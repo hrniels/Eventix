@@ -6,8 +6,9 @@
 
 use std::{fs, path::Path, sync::Arc};
 
+use eventix_ical::objects::{CalAlarm, CalCompType};
 use eventix_locale::Locale;
-use eventix_state::{CollectionSettings, State, SyncerType};
+use eventix_state::{CalendarAlarmType, CollectionSettings, State, SyncerType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backend {
@@ -23,6 +24,11 @@ pub struct Calendar {
     pub configured: bool,
     pub name: String,
     pub background: String,
+    pub foreground: String,
+    pub events: bool,
+    pub tasks: bool,
+    pub personal_alarms: bool,
+    pub default_alarm: Option<CalAlarm>,
     pub enabled: bool,
     pub folder: String,
     pub path: String,
@@ -92,6 +98,14 @@ fn load_collection(
             configured: true,
             name: cal.name().clone(),
             background: cal.bgcolor().clone(),
+            foreground: cal.fgcolor().clone(),
+            events: cal.types().contains(&CalCompType::Event),
+            tasks: cal.types().contains(&CalCompType::Todo),
+            personal_alarms: matches!(cal.alarms(), CalendarAlarmType::Personal { .. }),
+            default_alarm: match cal.alarms() {
+                CalendarAlarmType::Personal { default } => default.clone(),
+                CalendarAlarmType::Calendar => None,
+            },
             enabled: cal.enabled(),
             folder: cal.folder().clone(),
             path: path.join(cal.folder()).to_string_lossy().into_owned(),
@@ -148,6 +162,11 @@ fn discover(path: &Path, calendars: &mut Vec<Calendar>) -> std::io::Result<()> {
             configured: false,
             name: metadata("displayname", &folder),
             background: metadata("color", "gray"),
+            foreground: "#000000".into(),
+            events: false,
+            tasks: false,
+            personal_alarms: false,
+            default_alarm: None,
             enabled: false,
             path: entry.path().to_string_lossy().into_owned(),
             folder,
@@ -159,7 +178,10 @@ fn discover(path: &Path, calendars: &mut Vec<Calendar>) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{Backend, Calendar, Snapshot, discover, load_collection};
-    use eventix_state::{CalendarSettings, CollectionSettings, EmailAccount, SyncerType};
+    use eventix_ical::objects::{CalAction, CalAlarm, CalCompType, CalRelated, CalTrigger};
+    use eventix_state::{
+        CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, SyncerType,
+    };
     use std::{fs, path::Path};
 
     #[test]
@@ -173,6 +195,17 @@ mod tests {
             calendar.set_name(name.into());
             calendar.set_folder(id.into());
             calendar.set_enabled(enabled);
+            calendar.set_fgcolor("#ffffff".into());
+            calendar.set_types(vec![CalCompType::Event]);
+            calendar.set_alarms(CalendarAlarmType::Personal {
+                default: Some(CalAlarm::new(
+                    CalAction::Display,
+                    CalTrigger::Relative {
+                        duration: chrono::Duration::minutes(-15).into(),
+                        related: CalRelated::Start,
+                    },
+                )),
+            });
             settings.all_calendars_mut().insert(id.into(), calendar);
         }
         fs::create_dir(dir.path().join("unconfigured")).unwrap();
@@ -183,6 +216,18 @@ mod tests {
         assert!(!collection.calendars[0].enabled);
         assert!(collection.calendars[1].enabled);
         assert!(collection.calendars.iter().all(|cal| cal.configured));
+        let calendar = &collection.calendars[0];
+        assert_eq!(calendar.foreground, "#ffffff");
+        assert!(calendar.events);
+        assert!(!calendar.tasks);
+        assert!(calendar.personal_alarms);
+        assert_eq!(
+            calendar.default_alarm.as_ref(),
+            match settings.all_calendars()["b"].alarms() {
+                CalendarAlarmType::Personal { default } => default.as_ref(),
+                CalendarAlarmType::Calendar => None,
+            }
+        );
     }
 
     #[test]
@@ -199,6 +244,11 @@ mod tests {
             configured: true,
             name: "Shared".into(),
             background: "red".into(),
+            foreground: "#000000".into(),
+            events: false,
+            tasks: false,
+            personal_alarms: false,
+            default_alarm: None,
             enabled: false,
             folder: "known".into(),
             path: String::new(),
@@ -210,6 +260,9 @@ mod tests {
         assert_eq!(new.name, "Shared");
         assert_eq!(new.background, "#123456");
         assert!(!new.configured);
+        assert_eq!(new.foreground, "#000000");
+        assert!(!new.events && !new.tasks && !new.personal_alarms);
+        assert!(new.default_alarm.is_none());
         let fallback = calendars
             .iter()
             .find(|cal| cal.folder == "fallback")

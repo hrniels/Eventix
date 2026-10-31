@@ -4,20 +4,33 @@
     <style><class name="ev_management_calendar"/></style>
     <child>
       <object class="GtkBox">
-        <property name="spacing">8</property>
-        <style><class name="ev_management_card"/></style>
+        <property name="orientation">vertical</property>
         <child>
-          <object class="GtkBox" id="heading">
+          <object class="GtkBox">
             <property name="spacing">8</property>
-            <property name="hexpand">true</property>
-            <property name="valign">center</property>
+            <style><class name="ev_management_card"/></style>
+            <child>
+              <object class="GtkBox" id="heading">
+                <property name="spacing">8</property>
+                <property name="hexpand">true</property>
+                <property name="valign">center</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="actions">
+                <property name="spacing">4</property>
+                <property name="halign">end</property>
+                <property name="valign">center</property>
+              </object>
+            </child>
           </object>
         </child>
-        <child><object class="GtkBox" id="actions">
-          <property name="spacing">4</property>
-          <property name="halign">end</property>
-          <property name="valign">center</property>
-        </object></child>
+        <child>
+          <object class="GtkRevealer" id="revealer">
+            <property name="transition-type">slide-down</property>
+            <property name="transition-duration">300</property>
+          </object>
+        </child>
       </object>
     </child>
   </object>

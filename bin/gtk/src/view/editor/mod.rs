@@ -1233,6 +1233,20 @@ pub(super) struct AlarmInput {
 }
 
 impl AlarmInput {
+    /// Creates a calendar default alarm input, with absolute dates hidden unless already configured.
+    pub(super) fn for_calendar(locale: &dyn Locale, alarm: Option<&CalAlarm>) -> Self {
+        let now = chrono::Utc::now().with_timezone(locale.timezone());
+        let input = Self::new(locale, now.date_naive(), now.time());
+        input.load(alarm, locale.timezone());
+        if !matches!(alarm.map(CalAlarm::trigger), Some(CalTrigger::Absolute(_))) {
+            // Calendar defaults normally apply relative to each item's dates, not a fixed date.
+            if let Some(absolute) = input.widget.last_child() {
+                absolute.set_visible(false);
+            }
+        }
+        input
+    }
+
     pub(super) fn new(locale: &dyn Locale, date: NaiveDate, time: NaiveTime) -> Self {
         let builder = gtk::Builder::from_resource(resource_path!("view/editor/alarm_input.ui"));
         let widget = builder.object("alarm_input").expect("editor alarm input");
