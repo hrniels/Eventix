@@ -90,7 +90,12 @@
       </object>
     </child>
     <child>
-      <object class="GtkGrid">
+      <object class="GtkStack" id="page_stack">
+        <property name="vexpand">true</property>
+        <property name="hhomogeneous">false</property>
+        <property name="vhomogeneous">false</property>
+        <child>
+      <object class="GtkGrid" id="views">
         <property name="column-homogeneous">true</property>
         <property name="column-spacing">8</property>
         <property name="vexpand">true</property>
@@ -210,6 +215,8 @@
             <layout><property name="column">4</property></layout>
             <property name="vexpand">true</property>
           </object>
+        </child>
+      </object>
         </child>
       </object>
     </child>

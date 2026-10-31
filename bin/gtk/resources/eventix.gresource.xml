@@ -8,6 +8,9 @@
     <file>view/action_menu/submenu.ui</file>
     <file>view/auth.ui</file>
     <file>view/card.ui</file>
+    <file>view/calendars/content.ui</file>
+    <file>view/calendars/collection.ui</file>
+    <file>view/calendars/calendar.ui</file>
     <file>view/indicators.ui</file>
     <file>view/details/details.ui</file>
     <file>view/details/scrollers.ui</file>
@@ -31,6 +34,9 @@
     <file>view/sidebar/row_content.ui</file>
     <file>view/sidebar/sidebar.ui</file>
     <file>icons/LICENSE</file>
+    <file>icons/fs.png</file>
+    <file>icons/caldav.png</file>
+    <file>icons/o365.png</file>
     <file>icons/alarm-symbolic.svg</file>
     <file>icons/arrow-clockwise-symbolic.svg</file>
     <file>icons/box-arrow-up-right-symbolic.svg</file>

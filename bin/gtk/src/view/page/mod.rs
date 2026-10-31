@@ -31,6 +31,7 @@ mod content;
 mod create;
 mod editor;
 mod item_actions;
+mod management;
 mod session;
 
 mod imp {
@@ -38,6 +39,10 @@ mod imp {
 
     resource_template! { "view/page.ui",
     pub struct CalendarPage {
+        #[template_child]
+        pub page_stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub views: gtk::TemplateChild<gtk::Grid>,
         #[template_child]
         pub stack: gtk::TemplateChild<gtk::Stack>,
         #[template_child]
@@ -92,6 +97,7 @@ mod imp {
         pub(super) list: OnceCell<Rc<ListView>>,
         pub(super) session: PageSession,
         pub(super) calendar_toggles: calendars::PageCalendars,
+        pub(super) management: management::PageManagement,
         pub calendar_css: RefCell<String>,
         pub header_group: RefCell<Option<gtk::SizeGroup>>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
@@ -126,6 +132,7 @@ mod imp {
 
             let obj = self.obj();
             obj.setup_details();
+            self.management.connect(&obj);
             let list = ListView::new();
             let weak = obj.downgrade();
             list.connect_changed(move || {
@@ -350,15 +357,21 @@ impl CalendarPage {
     }
 
     pub fn new_event(&self) {
+        if self.management_open() {
+            return;
+        }
         self.imp().editor.new_item(self, CalCompType::Event);
     }
 
     pub fn new_task(&self) {
+        if self.management_open() {
+            return;
+        }
         self.imp().editor.new_item(self, CalCompType::Todo);
     }
 
     pub fn focus_quick_task(&self) {
-        if self.editor_open() {
+        if self.editor_open() || self.management_open() {
             return;
         }
 
@@ -367,7 +380,7 @@ impl CalendarPage {
     }
 
     pub fn focus_search(&self) {
-        if self.editor_open() {
+        if self.editor_open() || self.management_open() {
             return;
         }
 
@@ -395,12 +408,15 @@ impl CalendarPage {
     }
 
     pub fn show_today(&self) {
-        if self.imp().content.view.get() != View::List {
+        if !self.management_open() && self.imp().content.view.get() != View::List {
             self.show_content(None);
         }
     }
 
     pub fn navigate(&self, direction: i32) {
+        if self.management_open() {
+            return;
+        }
         self.imp().content.navigate(self, direction);
     }
 
@@ -418,6 +434,10 @@ impl CalendarPage {
 
     pub fn switch_to_list(&self) {
         self.imp().content.switch_view(self, View::List);
+    }
+
+    pub fn management_open(&self) -> bool {
+        self.imp().management.visible.get()
     }
 
     pub fn show_week_at(&self, date: NaiveDate) {

@@ -103,6 +103,7 @@ pub(crate) struct ChangeSet {
 pub(crate) enum Event {
     Activity(Activity),
     CalendarsLoaded(Vec<CalendarVisibility>),
+    ManagementLoaded(u64, Result<eventix_view::calendars::Snapshot, String>),
     CalendarToggleFailed(String),
     EditorLoaded(u64, Result<EditorOptions, String>),
     EditorSaved(u64, Result<ChangeSet, String>),
@@ -144,6 +145,7 @@ impl Event {
                 ("Loading calendar", response.result.as_ref().err())
             }
             Self::SidebarLoaded(result) => ("Loading sidebar", result.as_ref().err()),
+            Self::ManagementLoaded(_, result) => ("Loading calendar", result.as_ref().err()),
             Self::ReloadFailed(error) => ("Loading calendar", Some(error)),
             Self::SyncFinished(result) => ("Synchronizing calendars", result.as_ref().err()),
             Self::AuthFinished(_, result) => ("Authenticating", result.as_ref().err()),
@@ -169,6 +171,7 @@ enum Message {
     LoadDetails(u64, ItemId, CalCompType),
     LoadFilepath(ItemId),
     ShowContent(ContentRequest),
+    LoadManagement(u64),
     LoadListRows(ListRowsRequest),
     LoadOccurrences(OccurrencesRequest),
     RefreshSidebar,
@@ -403,6 +406,10 @@ impl CalendarSession {
 
     pub fn show_content(&self, request: ContentRequest) {
         let _ = self.requests.try_send(Message::ShowContent(request));
+    }
+
+    pub fn load_management(&self, generation: u64) {
+        let _ = self.requests.try_send(Message::LoadManagement(generation));
     }
 
     pub fn load_list_rows(&self, request: ListRowsRequest) {
@@ -717,7 +724,10 @@ impl Worker {
         if self.state.is_none()
             && matches!(
                 message,
-                Message::ShowContent(_) | Message::RefreshSidebar | Message::PrepareEditor(_, _)
+                Message::ShowContent(_)
+                    | Message::LoadManagement(_)
+                    | Message::RefreshSidebar
+                    | Message::PrepareEditor(_, _)
             )
         {
             match self.load_state() {
@@ -733,6 +743,7 @@ impl Worker {
                             result: Err(error),
                         }),
                         Message::PrepareEditor(id, _) => Event::EditorLoaded(id, Err(error)),
+                        Message::LoadManagement(id) => Event::ManagementLoaded(id, Err(error)),
                         _ => Event::SidebarLoaded(Err(error)),
                     }];
                 }
@@ -746,6 +757,12 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
+            Message::LoadManagement(id) => Event::ManagementLoaded(
+                id,
+                self.state()
+                    .map(|state| eventix_view::calendars::Snapshot::load(&state))
+                    .map_err(|error| format!("{error:#}")),
+            ),
             Message::ToggleCalendar(id) => return self.toggle_calendar(id),
             Message::LoadFilepath(item) => {
                 Event::FilepathLoaded(self.filepath(&item).map_err(|error| format!("{error:#}")))
@@ -1245,6 +1262,39 @@ mod tests {
         let mut worker = Worker::new(xdg);
         worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
         worker
+    }
+
+    #[test]
+    fn management_requests_return_current_owned_data_without_replacing_content_queries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker.handle(Message::ShowContent(ContentRequest {
+            generation: 42,
+            date: Some("2026-10-12".parse().unwrap()),
+            view: View::Week,
+            filter: Default::default(),
+        }));
+        let subscriptions = worker.subscriptions.ids();
+        let events = worker.handle(Message::LoadManagement(7));
+        let [Event::ManagementLoaded(7, Ok(snapshot))] = events.as_slice() else {
+            panic!("expected a management snapshot");
+        };
+        assert_eq!(snapshot.collections[0].id, "local");
+        assert_eq!(snapshot.collections[0].calendars[0].id, "test");
+        assert!(snapshot.collections[0].calendars[0].enabled);
+        assert_eq!(worker.subscriptions.ids(), subscriptions);
+        assert_eq!(worker.content.as_ref().unwrap().generation, 42);
+        worker
+            .state()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .clear();
+        let events = worker.handle(Message::LoadManagement(8));
+        let [Event::ManagementLoaded(8, Ok(snapshot))] = events.as_slice() else {
+            panic!("expected refreshed management data");
+        };
+        assert!(snapshot.collections.is_empty());
     }
 
     #[test]

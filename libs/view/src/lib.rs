@@ -4,6 +4,7 @@
 
 //! Owned, toolkit-independent data for calendar views.
 
+pub mod calendars;
 pub mod details;
 pub mod editor;
 pub mod item_actions;

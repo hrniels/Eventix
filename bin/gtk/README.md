@@ -8,6 +8,14 @@ calendar gap/fold handling.
 
 ## Responsibilities
 
+The toolbar's **Calendars:** button opens collection management in place of the
+calendar/list and sidebar. Week/Month/List return to the existing date and filters.
+Management shows all configured calendars (including disabled ones) and locally
+discovered remote folders. Its action buttons and enablement switches are currently
+enabled placeholders; interactions do not persist collection or calendar settings yet.
+Metadata is read on the session worker, and management refreshes on entry, state
+reload and sync completion without replacing the active calendar subscription.
+
 - `src/actions/items/` contains GTK interaction adapters for item operations.
   Drag/drop and future menu/editor entry points submit the same typed commands.
 - `eventix_state::actions::items` implements validated, persisted mutations without

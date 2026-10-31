@@ -157,6 +157,7 @@ impl PageSession {
 
     fn sync_finished(&self, page: &CalendarPage, result: Result<SyncResult, String>) {
         let imp = page.imp();
+        imp.management.refresh(page);
         self.pending_sync.set(false);
         imp.reload.set_sensitive(true);
         let cancelled = result.as_ref().is_ok_and(|result| result.cancelled);
@@ -239,7 +240,8 @@ impl PageSession {
     }
 
     pub(super) fn can_edit(&self, page: &CalendarPage) -> bool {
-        !page.imp().content.loading.get()
+        !page.management_open()
+            && !page.imp().content.loading.get()
             && !self.pending_command.get()
             && self.current.borrow().is_some()
     }
@@ -358,6 +360,9 @@ impl PageSession {
                 imp.calendar_toggles.update(page, calendars);
             }
             Event::CalendarToggleFailed(_) => {}
+            Event::ManagementLoaded(generation, result) => {
+                imp.management.receive(page, generation, result);
+            }
             Event::FilepathLoaded(result) => {
                 if let Ok(path) = result {
                     page.clipboard().set_text(&path);
@@ -425,6 +430,7 @@ impl PageSession {
             }
             Event::StateLoaded => {
                 self.record_sync_time(page);
+                imp.management.refresh(page);
             }
             Event::ReloadFailed(_) => {
                 imp.content.loading.set(false);

@@ -19,6 +19,62 @@
     padding: 8px 6px;
 }
 
+.ev_management {
+    padding: 12px 0;
+}
+
+.ev_management_panel {
+    margin: 0 6px;
+}
+
+.ev_management_collection {
+    padding: 8px 0;
+}
+
+.ev_management_collection_name {
+    font-size: 1.25em;
+    font-weight: bold;
+}
+
+.ev_management_calendar {
+    background-color: alpha(@theme_fg_color, 0.05);
+    border: 1px solid alpha(@theme_fg_color, 0.2);
+    border-radius: 5px;
+}
+
+.ev_management_card {
+    padding: 5px 8px;
+}
+
+.ev_management_button {
+    min-width: 20px;
+    min-height: 20px;
+    padding: 2px 5px;
+    font-size: 0.9em;
+}
+
+.ev_management_icon_button {
+    min-width: 14px;
+}
+
+.ev_management_button.ev_button_critical {
+    color: #ff0000;
+}
+
+.ev_management_button.ev_button_critical:hover {
+    background-image: linear-gradient(#ff0000, #e00000);
+    color: white;
+}
+
+.ev_management_button.ev_button_warn {
+    color: #f57c00;
+}
+
+.ev_management_button.ev_button_warn:hover {
+    background-image: linear-gradient(#f57c00, #c66400);
+    color: white;
+}
+
 .ev_cancel_sync {
     color: @ev_now;
     min-width: 16px;
@@ -38,14 +94,21 @@
 
 .ev_calendars_label {
     border: none;
+    border-radius: 4px 0 0 4px;
     padding: 4px 8px;
 }
 
-.ev_calendars_label,
-.ev_calendars_label:hover,
-.ev_calendars_label:active {
+.ev_calendars_label {
     background: transparent;
     box-shadow: none;
+}
+
+.ev_calendars_label:hover {
+    background: alpha(@theme_fg_color, 0.08);
+}
+
+.ev_calendars_label:active {
+    background: alpha(@theme_fg_color, 0.16);
 }
 
 .ev_calendar_toggle,

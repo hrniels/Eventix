@@ -248,7 +248,8 @@ impl PageContent {
         }
 
         let imp = page.imp();
-        if self.view.replace(view) == view {
+        let was_management = imp.management.leave(page);
+        if self.view.replace(view) == view && !was_management {
             return;
         }
 
@@ -328,7 +329,9 @@ impl PageContent {
         imp.locale.replace(Some(month.locale.clone()));
         self.translate_labels(page);
 
-        if let Some(window) = page.root().and_downcast::<gtk::Window>() {
+        if let Some(window) = page.root().and_downcast::<gtk::Window>()
+            && !page.management_open()
+        {
             window.set_title(Some(&format!(
                 "Eventix — {}",
                 month.locale.translate("Monthly View")
@@ -363,7 +366,9 @@ impl PageContent {
         self.translate_labels(page);
 
         let locale = &week.locale;
-        if let Some(window) = page.root().and_downcast::<gtk::Window>() {
+        if let Some(window) = page.root().and_downcast::<gtk::Window>()
+            && !page.management_open()
+        {
             window.set_title(Some(&format!(
                 "Eventix — {}",
                 locale.translate("Weekly View")
@@ -469,7 +474,9 @@ impl PageContent {
                         let imp = page.imp();
                         imp.locale.replace(Some(list.locale.clone()));
                         self.translate_labels(page);
-                        if let Some(window) = page.root().and_downcast::<gtk::Window>() {
+                        if let Some(window) = page.root().and_downcast::<gtk::Window>()
+                            && !page.management_open()
+                        {
                             window.set_title(Some(&format!(
                                 "Eventix — {}",
                                 list.locale.translate("List View")
