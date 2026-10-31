@@ -9,6 +9,7 @@ use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::activity::{Activity, Phase};
+use crate::model::management::Request;
 use crate::view::calendars::CalendarsView;
 
 #[derive(Default)]
@@ -37,6 +38,14 @@ impl PageManagement {
         imp.picker.popdown();
         let view = self.view.get_or_init(|| {
             let view = CalendarsView::new(page.locale().as_ref());
+            let weak = page.downgrade();
+            view.connect_action(move |request| {
+                if let Some(page) = weak.upgrade()
+                    && let Some(session) = page.imp().session.current.borrow().as_ref()
+                {
+                    session.manage_calendar(request);
+                }
+            });
             if let Some(group) = imp.header_group.borrow().as_ref() {
                 group.add_widget(&view.header);
             }
@@ -74,6 +83,13 @@ impl PageManagement {
             self.generation.set(generation);
             session.load_management(generation);
         }
+    }
+
+    pub(super) fn finished(&self, page: &CalendarPage, request: &Request, success: bool) {
+        if let Some(view) = self.view.get() {
+            view.finish(request, success);
+        }
+        self.refresh(page);
     }
 
     pub(super) fn receive(

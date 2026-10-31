@@ -883,6 +883,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "xdg",
 ]
 

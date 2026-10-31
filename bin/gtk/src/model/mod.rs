@@ -6,5 +6,6 @@
 
 pub(crate) mod activity;
 pub(crate) mod calendars;
+pub(crate) mod management;
 pub(crate) mod query;
 pub(crate) mod session;

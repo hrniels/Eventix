@@ -8,11 +8,14 @@ use std::{
     sync::Arc,
 };
 
+use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
+use eventix_state::{CalendarAlarmType, CalendarSettings};
 use eventix_view::calendars::{Backend, Calendar, Collection};
 use gtk::{gdk, prelude::*};
 
-use super::{action, clear, icon_action, text};
+use super::{ActionHandler, action, clear, icon_action, text};
+use crate::model::management::{Operation, Request};
 use crate::view::{calendar_selector::set_dot_color, editor::AlarmInput};
 
 const ROW_TITLES: [&str; 4] = ["Folder", "Color", "Creation", "Alarms"];
@@ -27,6 +30,10 @@ pub(super) struct CalendarCard {
     header: CardHeader,
     actions: CardActions,
     revealer: gtk::Revealer,
+    collection: String,
+    on_action: ActionHandler,
+    draft: RefCell<Option<CalendarForm>>,
+    pending: Cell<bool>,
 }
 
 impl CalendarCard {
@@ -35,6 +42,7 @@ impl CalendarCard {
         collection: &Collection,
         locale: Arc<dyn Locale + Send + Sync>,
         toggle_group: &gtk::SizeGroup,
+        on_action: &ActionHandler,
     ) -> Rc<Self> {
         let builder = gtk::Builder::from_resource(resource_path!("view/calendars/calendar.ui"));
         let heading: gtk::Box = builder.object("heading").unwrap();
@@ -48,6 +56,10 @@ impl CalendarCard {
             create_calendar: Cell::new(collection.create_calendar),
             header: CardHeader::new(&heading, calendar, locale.as_ref(), toggle_group),
             actions: CardActions::new(&actions, calendar.configured, locale.as_ref()),
+            collection: collection.id.clone(),
+            on_action: on_action.clone(),
+            draft: RefCell::default(),
+            pending: Cell::new(false),
         });
         card.update(calendar, collection, locale);
         card.connect();
@@ -55,6 +67,46 @@ impl CalendarCard {
     }
 
     fn connect(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        self.header.enabled.connect_state_set(move |_, enabled| {
+            if let Some(card) = weak.upgrade() {
+                if card.model.borrow().enabled == enabled {
+                    return gtk::glib::Propagation::Proceed;
+                }
+                card.submit(Operation::Enable(enabled));
+            }
+            gtk::glib::Propagation::Stop
+        });
+        let weak = Rc::downgrade(self);
+        self.actions.save.connect_clicked(move |_| {
+            if let Some(card) = weak.upgrade() {
+                let result = card.draft.borrow().as_ref().map(|draft| {
+                    draft.settings(&card.header.entry.text(), card.locale.borrow().as_ref())
+                });
+                match result {
+                    Some(Ok(settings)) => card.submit(Operation::Save(Box::new(settings))),
+                    Some(Err(error)) => card.show_error(&error.to_string()),
+                    None => {}
+                }
+            }
+        });
+        let weak = Rc::downgrade(self);
+        self.actions.folder.connect_clicked(move |_| {
+            if let Some(card) = weak.upgrade() {
+                card.widget.clipboard().set_text(&card.model.borrow().path);
+            }
+        });
+        for (button, operation) in [
+            (&self.actions.reload, Operation::Reload),
+            (&self.actions.delete, Operation::Delete),
+        ] {
+            let weak = Rc::downgrade(self);
+            button.connect_clicked(move |_| {
+                if let Some(card) = weak.upgrade() {
+                    card.confirm(operation.clone());
+                }
+            });
+        }
         let weak = Rc::downgrade(self);
         self.actions.edit.connect_clicked(move |_| {
             if let Some(card) = weak.upgrade() {
@@ -67,6 +119,99 @@ impl CalendarCard {
                 card.close();
             }
         });
+    }
+
+    fn submit(&self, operation: Operation) {
+        let callback = self.on_action.borrow();
+        let Some(callback) = callback.as_ref() else {
+            return;
+        };
+        if self.pending.replace(true) {
+            return;
+        }
+        self.widget.set_sensitive(false);
+        let calendar = self.model.borrow();
+        callback(Request {
+            collection: self.collection.clone(),
+            calendar: calendar.id.clone(),
+            folder: calendar.folder.clone(),
+            configured: calendar.configured,
+            operation,
+        });
+    }
+
+    pub(super) fn finish(&self, request: &Request, success: bool) {
+        if !self.pending.replace(false) {
+            return;
+        }
+        self.widget.set_sensitive(true);
+        if success && let Operation::Enable(enabled) = request.operation {
+            self.model.borrow_mut().enabled = enabled;
+        }
+        if success
+            && matches!(request.operation, Operation::Save(_))
+            && self.revealer.reveals_child()
+        {
+            self.close();
+        }
+        self.header.enabled.set_state(self.model.borrow().enabled);
+        self.header.enabled.set_active(self.model.borrow().enabled);
+    }
+
+    fn show_error(&self, message: &str) {
+        let locale = self.locale.borrow();
+        let dialog = gtk::AlertDialog::builder()
+            .message(locale.translate("Could not apply changes"))
+            .detail(message)
+            .build();
+        dialog.show(self.widget.root().and_downcast::<gtk::Window>().as_ref());
+    }
+
+    fn confirm(self: &Rc<Self>, operation: Operation) {
+        let calendar = self.model.borrow();
+        let warning = match operation {
+            Operation::Delete if !calendar.configured => {
+                Some("warning.delete_calendar_remote_folder")
+            }
+            Operation::Delete if self.backend.get() != Backend::FileSystem => {
+                Some("warning.delete_calendar")
+            }
+            Operation::Reload if self.backend.get() != Backend::FileSystem => {
+                Some("warning.reload_calendar")
+            }
+            _ => None,
+        };
+        let Some(warning) = warning else {
+            drop(calendar);
+            self.submit(operation);
+            return;
+        };
+        let locale = self.locale.borrow();
+        let dialog = gtk::AlertDialog::builder()
+            .message(locale.translate("Are you sure?"))
+            .detail(locale.translate(warning))
+            .buttons(vec![
+                locale.translate("Cancel"),
+                locale.translate(match operation {
+                    Operation::Delete => "Delete",
+                    _ => "Reload",
+                }),
+            ])
+            .cancel_button(0)
+            .default_button(0)
+            .build();
+        let weak = Rc::downgrade(self);
+        dialog.choose(
+            self.widget.root().and_downcast::<gtk::Window>().as_ref(),
+            None::<&gtk::gio::Cancellable>,
+            move |result| {
+                if result == Ok(1)
+                    && let Some(card) = weak.upgrade()
+                {
+                    card.submit(operation);
+                }
+            },
+        );
     }
 
     pub(super) fn update(
@@ -109,7 +254,8 @@ impl CalendarCard {
             &self.header.field_labels,
         );
         // Replace discarded drafts only when reopening, never during a closing animation.
-        self.revealer.set_child(Some(&form));
+        self.revealer.set_child(Some(&form.widget));
+        self.draft.replace(Some(form));
         self.set_editing(true);
         self.header.entry.grab_focus();
     }
@@ -225,6 +371,8 @@ struct CardActions {
     cancel: gtk::Button,
     save: gtk::Button,
     folder: gtk::Button,
+    reload: gtk::Button,
+    delete: gtk::Button,
 }
 
 impl CardActions {
@@ -244,6 +392,8 @@ impl CardActions {
         let cancel = action("window-close-symbolic", "Cancel", locale);
         let save = icon_action("document-save-symbolic", "Save", locale);
         let folder = icon_action("folder-symbolic", "Folder", locale);
+        let reload = action("view-refresh-symbolic", "Reload", locale);
+        let delete = icon_action("user-trash-symbolic", "Delete", locale);
         edit_actions.append(&cancel);
         edit_actions.append(&save);
         container.append(&view_actions);
@@ -258,6 +408,8 @@ impl CardActions {
             cancel,
             save,
             folder,
+            reload,
+            delete,
         }
     }
 
@@ -265,23 +417,27 @@ impl CardActions {
         self.translate(configured, locale);
         clear(&self.view_actions);
         if configured {
-            let reload = action("view-refresh-symbolic", "Reload", locale);
-            let delete = icon_action("user-trash-symbolic", "Delete", locale);
+            let reload = &self.reload;
+            let delete = &self.delete;
+            reload.remove_css_class("ev_button_warn");
+            delete.remove_css_class("ev_button_warn");
+            label_control(reload, "Reload", locale);
+            label_control(delete, "Delete", locale);
             if collection.backend != Backend::FileSystem {
                 reload.add_css_class("ev_button_warn");
                 delete.add_css_class("ev_button_warn");
                 reload.set_tooltip_text(Some(locale.translate("warning.reload_calendar")));
                 delete.set_tooltip_text(Some(locale.translate("warning.delete_calendar")));
             }
-            self.view_actions.append(&reload);
-            self.view_actions.append(&delete);
+            self.view_actions.append(reload);
+            self.view_actions.append(delete);
         } else if collection.create_calendar && collection.backend != Backend::FileSystem {
-            let delete = icon_action("user-trash-symbolic", "Delete", locale);
+            let delete = &self.delete;
             delete.add_css_class("ev_button_critical");
             delete.set_tooltip_text(Some(
                 locale.translate("warning.delete_calendar_remote_folder"),
             ));
-            self.view_actions.append(&delete);
+            self.view_actions.append(delete);
         }
     }
 
@@ -318,13 +474,68 @@ fn form_label(title: &str, locale: &dyn Locale) -> gtk::Label {
     label
 }
 
+struct CalendarForm {
+    widget: gtk::Box,
+    folder: gtk::Entry,
+    background: gtk::ColorDialogButton,
+    foreground: gtk::ColorDialogButton,
+    events: gtk::CheckButton,
+    tasks: gtk::CheckButton,
+    personal: gtk::ToggleButton,
+    alarm: Rc<AlarmInput>,
+}
+
+impl CalendarForm {
+    fn settings(&self, name: &str, locale: &dyn Locale) -> anyhow::Result<CalendarSettings> {
+        let mut settings = CalendarSettings::default();
+        settings.set_name(name.to_owned());
+        settings.set_folder(self.folder.text().to_string());
+        settings.set_bgcolor(hex_color(self.background.rgba()));
+        settings.set_fgcolor(hex_color(self.foreground.rgba()));
+        settings.set_types(
+            [
+                (self.events.is_active(), CalCompType::Event),
+                (self.tasks.is_active(), CalCompType::Todo),
+            ]
+            .into_iter()
+            .filter_map(|(active, kind)| active.then_some(kind))
+            .collect(),
+        );
+        settings.set_alarms(if self.personal.is_active() {
+            CalendarAlarmType::Personal {
+                default: self
+                    .alarm
+                    .value_with_text(
+                        locale.timezone(),
+                        locale.translate("error.valid_date_time"),
+                        locale.translate("Reminder"),
+                    )?
+                    .into_iter()
+                    .next(),
+            }
+        } else {
+            CalendarAlarmType::Calendar
+        });
+        Ok(settings)
+    }
+}
+
+fn hex_color(color: gdk::RGBA) -> String {
+    format!(
+        "#{:02x}{:02x}{:02x}",
+        (color.red() * 255.0).round() as u8,
+        (color.green() * 255.0).round() as u8,
+        (color.blue() * 255.0).round() as u8,
+    )
+}
+
 fn calendar_form(
     calendar: &Calendar,
     backend: Backend,
     locale: &dyn Locale,
     dot: &gtk::DrawingArea,
     labels: &[gtk::Label; 4],
-) -> gtk::Box {
+) -> CalendarForm {
     let form = gtk::Box::new(gtk::Orientation::Vertical, 6);
     form.add_css_class("ev_management_form");
     let folder = gtk::Entry::builder()
@@ -335,23 +546,38 @@ fn calendar_form(
         .build();
     append_row(&form, &labels[0], "Folder", &folder, locale);
 
-    let colors = color_controls(calendar, locale, dot);
+    let (colors, background, foreground) = color_controls(calendar, locale, dot);
     append_row(&form, &labels[1], "Color", &colors, locale);
 
     let creation = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    for (label, active) in [("Events", calendar.events), ("Tasks", calendar.tasks)] {
+    let checks = [("Events", calendar.events), ("Tasks", calendar.tasks)].map(|(label, active)| {
         let check = gtk::CheckButton::with_label(locale.translate(label));
         check.set_active(active);
         creation.append(&check);
-    }
+        check
+    });
     append_row(&form, &labels[2], "Creation", &creation, locale);
 
-    let alarms = alarm_controls(calendar, locale);
+    let (alarms, personal, alarm) = alarm_controls(calendar, locale);
     append_row(&form, &labels[3], "Alarms", &alarms, locale);
-    form
+    let [events, tasks] = checks;
+    CalendarForm {
+        widget: form,
+        folder,
+        background,
+        foreground,
+        events,
+        tasks,
+        personal,
+        alarm,
+    }
 }
 
-fn color_controls(calendar: &Calendar, locale: &dyn Locale, dot: &gtk::DrawingArea) -> gtk::Grid {
+fn color_controls(
+    calendar: &Calendar,
+    locale: &dyn Locale,
+    dot: &gtk::DrawingArea,
+) -> (gtk::Grid, gtk::ColorDialogButton, gtk::ColorDialogButton) {
     let colors = gtk::Grid::builder()
         .column_spacing(8)
         .row_spacing(6)
@@ -388,7 +614,7 @@ fn color_controls(calendar: &Calendar, locale: &dyn Locale, dot: &gtk::DrawingAr
     }
     previews.update(background.rgba(), foreground.rgba());
     previews.connect(&background, &foreground);
-    colors
+    (colors, background, foreground)
 }
 
 fn append_color_row(
@@ -489,7 +715,10 @@ impl ColorPreviews {
     }
 }
 
-fn alarm_controls(calendar: &Calendar, locale: &dyn Locale) -> gtk::Box {
+fn alarm_controls(
+    calendar: &Calendar,
+    locale: &dyn Locale,
+) -> (gtk::Box, gtk::ToggleButton, Rc<AlarmInput>) {
     let alarms = gtk::Box::new(gtk::Orientation::Vertical, 8);
     let modes = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     modes.add_css_class("linked");
@@ -499,13 +728,17 @@ fn alarm_controls(calendar: &Calendar, locale: &dyn Locale) -> gtk::Box {
     modes.append(&calendar_mode);
     modes.append(&personal_mode);
     alarms.append(&modes);
-    let input = AlarmInput::for_calendar(locale, calendar.default_alarm.as_ref());
+    let input = Rc::new(AlarmInput::for_calendar(
+        locale,
+        calendar.default_alarm.as_ref(),
+    ));
     input.widget.set_visible(calendar.personal_alarms);
     alarms.append(&input.widget);
     personal_mode.set_active(calendar.personal_alarms);
     calendar_mode.set_active(!calendar.personal_alarms);
-    personal_mode.connect_toggled(move |button| input.widget.set_visible(button.is_active()));
-    alarms
+    let widget = input.widget.clone();
+    personal_mode.connect_toggled(move |button| widget.set_visible(button.is_active()));
+    (alarms, personal_mode, input)
 }
 
 fn append_row(

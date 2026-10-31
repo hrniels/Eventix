@@ -12,7 +12,10 @@ use gtk::prelude::*;
 
 mod card;
 
+use crate::model::management::Request;
 use card::CalendarCard;
+
+type ActionHandler = Rc<RefCell<Option<Box<dyn Fn(Request)>>>>;
 
 pub(crate) struct CalendarsView {
     pub widget: gtk::Frame,
@@ -25,6 +28,7 @@ pub(crate) struct CalendarsView {
     rows: RefCell<Vec<CollectionRow>>,
     language: RefCell<String>,
     toggle_group: gtk::SizeGroup,
+    on_action: ActionHandler,
 }
 
 struct CollectionRow {
@@ -35,6 +39,7 @@ struct CollectionRow {
     calendars: gtk::Box,
     cards: Vec<(Calendar, Rc<CalendarCard>)>,
     toggle_group: gtk::SizeGroup,
+    on_action: ActionHandler,
 }
 
 impl CalendarsView {
@@ -51,6 +56,7 @@ impl CalendarsView {
             rows: RefCell::default(),
             language: RefCell::default(),
             toggle_group: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
+            on_action: Rc::default(),
         };
         view.title.set_text(locale.translate("Calendars"));
         view.empty.set_text(locale.translate("Loading calendar"));
@@ -79,7 +85,7 @@ impl CalendarsView {
                 if let Some(index) = old.iter().position(|row| row.model.id == collection.id) {
                     old.remove(index)
                 } else {
-                    let row = CollectionRow::new(collection, &self.toggle_group);
+                    let row = CollectionRow::new(collection, &self.toggle_group, &self.on_action);
                     self.collections.append(&row.widget);
                     row
                 };
@@ -111,6 +117,25 @@ impl CalendarsView {
             self.empty
                 .set_text(locale.translate("Could not load local calendars"));
             self.empty.set_visible(true);
+        }
+    }
+
+    pub fn connect_action(&self, callback: impl Fn(Request) + 'static) {
+        self.on_action.replace(Some(Box::new(callback)));
+    }
+
+    pub fn finish(&self, request: &Request, success: bool) {
+        for row in self
+            .rows
+            .borrow()
+            .iter()
+            .filter(|row| row.model.id == request.collection)
+        {
+            for (calendar, card) in &row.cards {
+                if calendar.id == request.calendar && calendar.configured == request.configured {
+                    card.finish(request, success);
+                }
+            }
         }
     }
 
@@ -164,7 +189,7 @@ impl CalendarsView {
 }
 
 impl CollectionRow {
-    fn new(model: &Collection, toggle_group: &gtk::SizeGroup) -> Self {
+    fn new(model: &Collection, toggle_group: &gtk::SizeGroup, on_action: &ActionHandler) -> Self {
         let builder = gtk::Builder::from_resource(resource_path!("view/calendars/collection.ui"));
         Self {
             model: model.clone(),
@@ -174,6 +199,7 @@ impl CollectionRow {
             calendars: builder.object("calendars").unwrap(),
             cards: vec![],
             toggle_group: toggle_group.clone(),
+            on_action: on_action.clone(),
         }
     }
 
@@ -206,7 +232,13 @@ impl CollectionRow {
             let card = if let Some(index) = reused {
                 old.remove(index).1
             } else {
-                let card = CalendarCard::new(calendar, model, locale.clone(), &self.toggle_group);
+                let card = CalendarCard::new(
+                    calendar,
+                    model,
+                    locale.clone(),
+                    &self.toggle_group,
+                    &self.on_action,
+                );
                 self.calendars.append(&card.widget);
                 card
             };
@@ -290,7 +322,6 @@ fn text(value: &str) -> gtk::Label {
         .build()
 }
 
-/// Placeholder controls intentionally have neither actions nor signal handlers.
 fn action(icon: &str, label: &str, locale: &dyn Locale) -> gtk::Button {
     action_button(icon, label, true, locale)
 }
@@ -396,7 +427,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn calendars_management_renders_unwired_actions_and_preserves_cards_and_scroll() {
+    fn calendars_management_renders_actions_and_preserves_cards_and_scroll() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         crate::style::install(&gdk::Display::default().unwrap());
@@ -698,6 +729,136 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn calendars_management_actions_submit_drafts_and_recover_from_failures() {
+        use std::{cell::RefCell, rc::Rc};
+
+        use crate::model::management::{Operation, Request};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let view = CalendarsView::new(eventix_locale::default().as_ref());
+        let requests = Rc::new(RefCell::new(Vec::<Request>::new()));
+        let received = requests.clone();
+        view.connect_action(move |request| received.borrow_mut().push(request));
+        let mut initial = snapshot();
+        initial.collections[0].calendars.truncate(2);
+        view.set_snapshot(initial);
+        let card = view.rows.borrow()[0].cards[1].1.widget.clone();
+        let button = |tooltip: &str| {
+            descendants(card.upcast_ref())
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+                .find(|button| button.tooltip_text().as_deref() == Some(tooltip))
+                .unwrap()
+        };
+        let switch = descendants(card.upcast_ref())
+            .into_iter()
+            .find_map(|widget| widget.downcast::<gtk::Switch>().ok())
+            .unwrap();
+        switch.set_active(true);
+        let request = requests.borrow_mut().pop().unwrap();
+        assert!(matches!(request.operation, Operation::Enable(true)));
+        assert_eq!(request.calendar, "1");
+        assert!(!card.is_sensitive());
+        view.finish(&request, false);
+        assert!(card.is_sensitive());
+        assert!(!switch.is_active());
+        assert!(
+            requests.borrow().is_empty(),
+            "rollback does not submit another mutation"
+        );
+
+        button("Edit").emit_clicked();
+        let widgets = descendants(card.upcast_ref());
+        let name = widgets
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::Entry>())
+            .find(|entry| entry.tooltip_text().as_deref() == Some("Calendar Name"))
+            .unwrap();
+        name.set_text("Saved name");
+        let colors: Vec<_> = widgets
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::ColorDialogButton>())
+            .collect();
+        colors[0].set_rgba(&gdk::RGBA::RED);
+        button("Save").emit_clicked();
+        let request = requests.borrow_mut().pop().unwrap();
+        let Operation::Save(settings) = &request.operation else {
+            panic!("expected save");
+        };
+        assert_eq!(settings.name(), "Saved name");
+        assert_eq!(settings.bgcolor(), "#ff0000");
+        assert_eq!(settings.folder(), "1");
+        assert_eq!(
+            settings.types(),
+            &vec![eventix_ical::objects::CalCompType::Event]
+        );
+        let reveal = widgets
+            .iter()
+            .find_map(|widget| widget.downcast_ref::<gtk::Revealer>())
+            .unwrap();
+        view.finish(&request, false);
+        assert!(reveal.reveals_child());
+        assert_eq!(name.text(), "Saved name");
+        button("Save").emit_clicked();
+        let request = requests.borrow_mut().pop().unwrap();
+        view.finish(&request, true);
+        assert!(!reveal.reveals_child());
+
+        let mut refreshed = snapshot();
+        refreshed.collections[0].calendars[1].enabled = true;
+        view.set_snapshot(refreshed);
+        assert!(switch.is_active());
+        assert!(
+            requests.borrow().is_empty(),
+            "snapshot updates never submit mutations"
+        );
+
+        let mut local = snapshot();
+        local.collections[0].backend = Backend::FileSystem;
+        view.set_snapshot(local);
+        for (tooltip, reload) in [("Reload", true), ("Delete", false)] {
+            button(tooltip).emit_clicked();
+            let request = requests.borrow_mut().pop().unwrap();
+            assert_eq!(matches!(request.operation, Operation::Reload), reload);
+            assert_eq!(matches!(request.operation, Operation::Delete), !reload);
+            view.finish(&request, true);
+        }
+        let folder = descendants(card.upcast_ref())
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+            .find(|button| {
+                button.tooltip_text().as_deref() == Some("/long/path/to/a/calendar/collection/1")
+            })
+            .unwrap();
+        folder.emit_clicked();
+        let copied = gtk::glib::MainContext::default()
+            .block_on(card.clipboard().read_text_future())
+            .unwrap();
+        assert_eq!(
+            copied.as_deref(),
+            Some("/long/path/to/a/calendar/collection/1")
+        );
+
+        let unknown = view.rows.borrow()[0].cards[0].1.widget.clone();
+        let click = |tooltip: &str| {
+            descendants(unknown.upcast_ref())
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+                .find(|button| button.tooltip_text().as_deref() == Some(tooltip))
+                .unwrap()
+                .emit_clicked();
+        };
+        click("Add");
+        click("Save");
+        let request = requests.borrow_mut().pop().unwrap();
+        assert!(!request.configured);
+        assert_eq!(request.calendar, "0");
+        assert!(matches!(request.operation, Operation::Save(_)));
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn calendars_management_edits_and_adds_animate_and_preserve_drafts_on_refresh() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -941,7 +1102,7 @@ mod tests {
         );
         assert!(reveal.is_child_revealed(), "cards expand independently");
         button(&card, "Save").emit_clicked();
-        assert!(reveal.reveals_child(), "Save remains unwired");
+        assert!(reveal.reveals_child(), "Save needs a connected session");
         let expanded_height = card.height();
         heights.borrow_mut().clear();
         let frames = heights.clone();

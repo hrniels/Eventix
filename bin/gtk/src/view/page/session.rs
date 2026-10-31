@@ -363,6 +363,9 @@ impl PageSession {
             Event::ManagementLoaded(generation, result) => {
                 imp.management.receive(page, generation, result);
             }
+            Event::ManagementFinished(request, result) => {
+                imp.management.finished(page, &request, result.is_ok());
+            }
             Event::FilepathLoaded(result) => {
                 if let Ok(path) = result {
                     page.clipboard().set_text(&path);

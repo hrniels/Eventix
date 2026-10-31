@@ -19,6 +19,7 @@ use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
 use super::activity::{Activity, Phase};
 use super::calendars::{self, CalendarVisibility};
+use super::management::{self, Request as ManagementRequest};
 use super::query::{Query, SubscriptionId, Subscriptions};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -104,6 +105,7 @@ pub(crate) enum Event {
     Activity(Activity),
     CalendarsLoaded(Vec<CalendarVisibility>),
     ManagementLoaded(u64, Result<eventix_view::calendars::Snapshot, String>),
+    ManagementFinished(ManagementRequest, Result<(), String>),
     CalendarToggleFailed(String),
     EditorLoaded(u64, Result<EditorOptions, String>),
     EditorSaved(u64, Result<ChangeSet, String>),
@@ -129,6 +131,7 @@ pub(crate) enum Event {
 impl Event {
     fn failure(&self) -> Option<(&'static str, &str)> {
         let (operation, error) = match self {
+            Self::ManagementFinished(_, result) => ("Applying changes", result.as_ref().err()),
             Self::CalendarToggleFailed(error) | Self::CommandFailed(error) => {
                 ("Applying changes", Some(error))
             }
@@ -162,6 +165,7 @@ pub(crate) enum SavedItem {
 
 #[derive(Debug)]
 enum Message {
+    ManageCalendar(ManagementRequest),
     ToggleCalendar(String),
     PrepareEditor(u64, CalCompType),
     CreateItem(u64, Box<CreateItem>),
@@ -189,6 +193,9 @@ enum Message {
 impl Message {
     fn activity(&self, request: u64) -> Option<Activity> {
         let (operation, items, calendar) = match self {
+            Self::ManageCalendar(request) => {
+                ("Applying changes", vec![], Some(request.calendar.clone()))
+            }
             Self::ToggleCalendar(calendar) => (
                 "Calendar visibility changed",
                 vec![],
@@ -243,6 +250,7 @@ fn publish_events(
             let mutation_failed = matches!(
                 event,
                 Event::CalendarToggleFailed(_)
+                    | Event::ManagementFinished(_, Err(_))
                     | Event::CommandFailed(_)
                     | Event::EditorSaved(..)
                     | Event::EditSaved(..)
@@ -372,6 +380,10 @@ impl CalendarSession {
 
     pub fn toggle_calendar(&self, id: String) {
         let _ = self.requests.try_send(Message::ToggleCalendar(id));
+    }
+
+    pub fn manage_calendar(&self, request: ManagementRequest) {
+        let _ = self.requests.try_send(Message::ManageCalendar(request));
     }
 
     pub fn load_filepath(&self, item: ItemId) {
@@ -640,6 +652,24 @@ impl Worker {
 
     fn dispatch(&mut self, runtime: &mut WorkerRuntime, message: Message, request: u64) {
         match message {
+            Message::ManageCalendar(command) => {
+                let activity = Message::ManageCalendar(command.clone()).activity(request);
+                if let Some(activity) = &activity {
+                    let _ = runtime
+                        .results
+                        .send_blocking(Event::Activity(activity.clone()));
+                }
+                let result = self
+                    .state
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No loaded state"))
+                    .and_then(|state| runtime.runtime.block_on(management::apply(state, &command)))
+                    .map_err(|error| format!("{error:#}"));
+                let mut events = vec![Event::CalendarsLoaded(self.calendars())];
+                events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
+                events.push(Event::ManagementFinished(command, result));
+                publish_events(&runtime.results, events, activity, request);
+            }
             Message::Authenticate(id, collection) => {
                 self.begin_authentication(runtime, id, collection, request);
             }
@@ -757,6 +787,7 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
+            Message::ManageCalendar(_) => unreachable!("management is dispatched with the runtime"),
             Message::LoadManagement(id) => Event::ManagementLoaded(
                 id,
                 self.state()
@@ -1295,6 +1326,43 @@ mod tests {
             panic!("expected refreshed management data");
         };
         assert!(snapshot.collections.is_empty());
+    }
+
+    #[test]
+    fn management_mutations_refresh_subscriptions_and_publish_scoped_results() {
+        use crate::model::management::{Operation, Request};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker.handle(Message::ShowContent(ContentRequest {
+            generation: 42,
+            date: Some("2026-10-12".parse().unwrap()),
+            view: View::List,
+            filter: Default::default(),
+        }));
+        let (requests, _) = async_channel::unbounded();
+        let (results, responses) = async_channel::unbounded();
+        let mut runtime = super::WorkerRuntime::new(requests, results).unwrap();
+        worker.dispatch(
+            &mut runtime,
+            Message::ManageCalendar(Request {
+                collection: "local".into(),
+                calendar: "test".into(),
+                folder: String::new(),
+                configured: true,
+                operation: Operation::Enable(false),
+            }),
+            1,
+        );
+        let mut events = Vec::new();
+        while let Ok(event) = responses.try_recv() {
+            events.push(event);
+        }
+        assert!(events.iter().any(|event| matches!(event, Event::ManagementFinished(request, Ok(())) if request.calendar == "test")));
+        assert!(events.iter().any(
+            |event| matches!(event, Event::CalendarsLoaded(calendars) if calendars.is_empty())
+        ));
+        assert!(events.iter().any(|event| matches!(event, Event::ContentLoaded(response) if response.generation == 42 && response.result.is_ok())));
     }
 
     #[test]
