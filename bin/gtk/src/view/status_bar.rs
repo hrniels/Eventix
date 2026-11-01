@@ -7,7 +7,7 @@ use std::{
     collections::HashMap,
 };
 
-use eventix_locale::Locale;
+use eventix_locale::{Locale, LocaleType};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use crate::model::activity::{Activity, Phase};
@@ -26,6 +26,16 @@ mod imp {
 
     resource_template! { "view/status_bar.ui",
     pub struct StatusBar {
+        #[template_child]
+        pub language_button: gtk::TemplateChild<gtk::MenuButton>,
+        #[template_child]
+        pub language_icon: gtk::TemplateChild<gtk::Image>,
+        #[template_child]
+        pub language_popup: gtk::TemplateChild<gtk::Popover>,
+        #[template_child]
+        pub english: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub german: gtk::TemplateChild<gtk::Button>,
         #[template_child]
         pub status: gtk::TemplateChild<gtk::Label>,
         #[template_child]
@@ -184,6 +194,28 @@ impl StatusBar {
     }
 
     pub fn set_locale(&self, locale: &dyn Locale) {
+        let imp = self.imp();
+        imp.language_icon
+            .set_resource(Some(language_icon(locale.ty())));
+        imp.language_icon.set_pixel_size(16);
+        imp.language_button
+            .set_tooltip_text(Some(locale.translate("Language")));
+        imp.language_button
+            .update_property(&[gtk::accessible::Property::Label(
+                locale.translate("Language"),
+            )]);
+        for (button, language, name) in [
+            (&imp.english, LocaleType::English, "English"),
+            (&imp.german, LocaleType::German, "German"),
+        ] {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            let icon = gtk::Image::from_resource(language_icon(language));
+            icon.set_pixel_size(24);
+            row.append(&icon);
+            row.append(&gtk::Label::new(Some(locale.translate(name))));
+            button.set_child(Some(&row));
+            button.set_sensitive(locale.ty() != language);
+        }
         self.imp()
             .history_button
             .set_tooltip_text(Some(locale.translate("Activity history")));
@@ -201,6 +233,23 @@ impl StatusBar {
 
     pub fn connect_cancel(&self, callback: impl Fn() + 'static) {
         self.imp().cancel_sync.connect_clicked(move |_| callback());
+    }
+
+    pub fn connect_language(&self, callback: impl Fn(LocaleType) + 'static) {
+        let callback = std::rc::Rc::new(callback);
+        for (button, language) in [
+            (&self.imp().english, LocaleType::English),
+            (&self.imp().german, LocaleType::German),
+        ] {
+            let callback = callback.clone();
+            let weak = self.downgrade();
+            button.connect_clicked(move |_| {
+                if let Some(status) = weak.upgrade() {
+                    status.imp().language_popup.popdown();
+                    callback(language);
+                }
+            });
+        }
     }
 
     pub fn can_cancel(&self) -> bool {
@@ -281,6 +330,13 @@ impl StatusBar {
     }
 }
 
+fn language_icon(language: LocaleType) -> &'static str {
+    match language {
+        LocaleType::English => resource_path!("icons/language-en.svg"),
+        LocaleType::German => resource_path!("icons/language-de.svg"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gtk::{glib, prelude::*, subclass::prelude::*};
@@ -321,6 +377,80 @@ mod tests {
             child = widget.next_sibling();
         }
         None
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn language_selector_opens_above_status_and_switches_language() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let status: StatusBar = glib::Object::new();
+        crate::style::install(&status.display());
+        status.set_locale(eventix_locale::default().as_ref());
+        let imp = status.imp();
+        assert_eq!(
+            status.first_child().as_ref(),
+            Some(imp.language_button.upcast_ref())
+        );
+        assert_eq!(
+            imp.language_button.next_sibling().as_ref(),
+            Some(imp.history_button.upcast_ref())
+        );
+        assert!(!imp.english.is_sensitive());
+        assert!(imp.german.is_sensitive());
+        assert_eq!(
+            imp.language_button.tooltip_text().as_deref(),
+            Some("Language")
+        );
+        let selected = std::rc::Rc::new(std::cell::Cell::new(None));
+        let changed = selected.clone();
+        status.connect_language(move |language| changed.set(Some(language)));
+        let window = gtk::Window::new();
+        window.set_child(Some(&status));
+        window.present();
+        imp.language_button.popup();
+        let context = glib::MainContext::default();
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        assert!(imp.language_popup.is_mapped());
+        let language_bounds = imp.language_button.compute_bounds(&window).unwrap();
+        let history_bounds = imp.history_button.compute_bounds(&window).unwrap();
+        assert_eq!(language_bounds.x(), 6.0);
+        assert_eq!(
+            history_bounds.x() - language_bounds.x() - language_bounds.width(),
+            4.0
+        );
+        assert!(language_bounds.height() <= 32.0);
+        assert!(history_bounds.height() <= 32.0);
+        assert_eq!(imp.language_popup.position(), gtk::PositionType::Top);
+        imp.german.emit_clicked();
+        assert_eq!(selected.get(), Some(eventix_locale::LocaleType::German));
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = xdg::BaseDirectories::with_prefix(tmp.path().file_name().unwrap());
+        let german = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::German,
+            chrono_tz::UTC,
+        )
+        .unwrap();
+        status.set_locale(german.as_ref());
+        assert!(imp.english.is_sensitive());
+        assert!(!imp.german.is_sensitive());
+        assert_eq!(
+            imp.language_button.tooltip_text().as_deref(),
+            Some("Sprache")
+        );
+        let row = imp.german.child().and_downcast::<gtk::Box>().unwrap();
+        assert_eq!(
+            row.last_child()
+                .and_downcast::<gtk::Label>()
+                .unwrap()
+                .text(),
+            "Deutsch"
+        );
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        assert!(!imp.language_popup.is_mapped());
+        window.close();
+        while context.iteration(false) {}
     }
 
     #[test]

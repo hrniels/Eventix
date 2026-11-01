@@ -409,7 +409,13 @@ button.ev_editor_section_toggle:checked {
 }
 
 .ev_calendar_status {
-    padding: 4px 12px;
+    padding: 4px 6px;
+}
+
+.ev_status_button > button {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px;
 }
 
 .ev_cur_month {

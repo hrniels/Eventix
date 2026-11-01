@@ -181,6 +181,15 @@ mod imp {
                     page.imp().session.cancel_sync(&page);
                 }
             });
+            let weak = obj.downgrade();
+            self.status.connect_language(move |language| {
+                if let Some(page) = weak.upgrade() {
+                    page.dismiss_popovers();
+                    if let Some(session) = page.imp().session.current.borrow().as_ref() {
+                        session.set_language(language);
+                    }
+                }
+            });
         }
 
         fn dispose(&self) {

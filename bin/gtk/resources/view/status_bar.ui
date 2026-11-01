@@ -1,10 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <template class="EventixStatusBar" parent="GtkBox">
-    <property name="spacing">12</property>
+    <property name="spacing">4</property>
     <style><class name="ev_calendar_status"/></style>
     <child>
+      <object class="GtkMenuButton" id="language_button">
+        <style><class name="ev_status_button"/></style>
+        <property name="valign">center</property>
+        <property name="direction">up</property>
+        <property name="child"><object class="GtkImage" id="language_icon"/></property>
+        <property name="popover">
+          <object class="GtkPopover" id="language_popup">
+            <property name="position">top</property>
+            <property name="halign">start</property>
+            <property name="has-arrow">false</property>
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">4</property>
+                <child><object class="GtkButton" id="english"/></child>
+                <child><object class="GtkButton" id="german"/></child>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </child>
+    <child>
       <object class="GtkMenuButton" id="history_button">
+        <style><class name="ev_status_button"/></style>
         <property name="icon-name">document-open-recent-symbolic</property>
         <property name="valign">center</property>
         <property name="sensitive">false</property>
@@ -35,6 +59,7 @@
     </child>
     <child>
       <object class="GtkLabel" id="status">
+        <property name="margin-start">8</property>
         <property name="xalign">0</property>
         <property name="selectable">true</property>
         <property name="single-line-mode">true</property>

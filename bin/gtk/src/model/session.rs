@@ -177,6 +177,7 @@ pub(crate) enum SavedItem {
 
 #[derive(Debug)]
 enum Message {
+    SetLanguage(eventix_locale::LocaleType),
     ManageCalendar(ManagementRequest),
     ToggleCalendar(String),
     PrepareEditor(u64, CalCompType),
@@ -413,6 +414,10 @@ impl CalendarSession {
 
     pub fn toggle_calendar(&self, id: String) {
         let _ = self.requests.try_send(Message::ToggleCalendar(id));
+    }
+
+    pub fn set_language(&self, language: eventix_locale::LocaleType) {
+        let _ = self.requests.try_send(Message::SetLanguage(language));
     }
 
     pub fn manage_calendar(&self, request: ManagementRequest) {
@@ -926,6 +931,12 @@ impl Worker {
 
     fn handle_request(&mut self, message: Message) -> Vec<Event> {
         let event = match message {
+            Message::SetLanguage(language) => {
+                if let Err(error) = self.set_language(language) {
+                    return vec![Event::CommandFailed(format!("{error:#}"))];
+                }
+                return self.refresh_subscriptions(&self.subscriptions.ids());
+            }
             Message::ManageCalendar(_) => unreachable!("management is dispatched with the runtime"),
             Message::LoadManagement(id) => Event::ManagementLoaded(
                 id,
@@ -1038,6 +1049,20 @@ impl Worker {
         self.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
 
         Ok(Event::StateLoaded)
+    }
+
+    fn set_language(&self, language: eventix_locale::LocaleType) -> anyhow::Result<()> {
+        let mut state = self.state()?;
+        let previous = state.locale();
+        state.misc_mut().set_locale_type(language);
+        let result = state
+            .reload_locale_with_timezone(Some(*previous.timezone()))
+            .and_then(|()| state.misc_mut().write_to_file());
+        if result.is_err() {
+            state.misc_mut().set_locale_type(previous.ty());
+            state.reload_locale_with_timezone(Some(*previous.timezone()))?;
+        }
+        result
     }
 
     /// Starts network work separately so the serialized request loop remains available.
@@ -1432,6 +1457,37 @@ mod tests {
         let mut worker = Worker::new(xdg);
         worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
         worker
+    }
+
+    #[test]
+    fn language_change_refreshes_content_and_sidebar_and_persists_without_changing_timezone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker.handle(Message::ShowContent(ContentRequest {
+            generation: 42,
+            date: Some("2026-10-12".parse().unwrap()),
+            view: View::Week,
+            filter: Default::default(),
+        }));
+        worker.handle(Message::RefreshSidebar);
+        for language in [
+            eventix_locale::LocaleType::German,
+            eventix_locale::LocaleType::English,
+        ] {
+            let events = worker.handle(Message::SetLanguage(language));
+            assert!(events.iter().any(|event| matches!(event,
+                Event::ContentLoaded(response) if response.generation == 42
+                    && matches!(&response.result, Ok(Snapshot::Week(week))
+                        if week.locale.ty() == language))));
+            assert!(events.iter().any(|event| matches!(event,
+                Event::SidebarLoaded(Ok(sidebar)) if sidebar.locale.ty() == language)));
+            let state = worker.state().unwrap();
+            assert_eq!(state.locale().ty(), language);
+            assert_eq!(*state.locale().timezone(), chrono_tz::UTC);
+            let reloaded =
+                State::new_with_timezone(worker.xdg.clone(), Some(chrono_tz::UTC)).unwrap();
+            assert_eq!(reloaded.locale().ty(), language);
+        }
     }
 
     #[test]
