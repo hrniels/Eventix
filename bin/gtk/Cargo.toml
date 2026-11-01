@@ -8,6 +8,7 @@ anyhow.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 clap.workspace = true
+email_address = "0.2.9"
 eventix-locale.workspace = true
 eventix-ical.workspace = true
 eventix-state.workspace = true

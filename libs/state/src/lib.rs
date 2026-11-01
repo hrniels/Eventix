@@ -466,6 +466,86 @@ impl State {
         Ok(())
     }
 
+    /// Saves a collection's synchronizer settings and refreshes the local store.
+    ///
+    /// A missing password preserves current credentials; a supplied CalDAV password is encrypted.
+    /// Returns an error if the collection is missing, its backend changes, encryption fails,
+    /// persistence fails, or the store cannot be refreshed. Failed persistence restores the previous
+    /// in-memory settings.
+    pub async fn save_collection(
+        state: &EventixState,
+        col_id: &String,
+        mut syncer: SyncerType,
+        password: Option<&str>,
+    ) -> anyhow::Result<()> {
+        if let (
+            Some(value),
+            SyncerType::VDirSyncer {
+                username: Some(_),
+                password,
+                ..
+            },
+        ) = (password, &mut syncer)
+        {
+            let secret = retrieve_portal_secret().await?;
+            *password = Some(encrypt_password(&secret, value)?);
+        }
+
+        let mut state = state.lock().await;
+        let locale = state.locale();
+        let collection = state
+            .settings_mut()
+            .collections_mut()
+            .get_mut(col_id)
+            .ok_or_else(|| {
+                anyhow!(
+                    locale
+                        .translate("Collection is no longer available")
+                        .to_owned()
+                )
+            })?;
+
+        if std::mem::discriminant(collection.syncer()) != std::mem::discriminant(&syncer) {
+            anyhow::bail!(locale.translate("error.syncer_change").to_owned());
+        }
+
+        // Empty password fields retain the current credentials, not a stale draft's copy.
+        match &mut syncer {
+            SyncerType::VDirSyncer {
+                username,
+                password: saved,
+                ..
+            } => {
+                if username.is_none() {
+                    *saved = None;
+                } else if password.is_none() {
+                    *saved = collection.syncer().password().cloned();
+                }
+            }
+            SyncerType::O365 { password, .. } => {
+                if let Some(current) = collection.syncer().password() {
+                    *password = current.clone();
+                }
+            }
+            _ => {}
+        }
+
+        let previous = collection.syncer().clone();
+        collection.set_syncer(syncer);
+
+        if let Err(error) = state.settings().write_to_file() {
+            state
+                .settings_mut()
+                .collections_mut()
+                .get_mut(col_id)
+                .expect("collection remains present while state is locked")
+                .set_syncer(previous);
+            return Err(error);
+        }
+
+        Self::refresh_store(&mut state).await
+    }
+
     /// Deletes a collection remotely and remove it from local settings.
     pub async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
         sync::delete_collection(state, col_id).await?;

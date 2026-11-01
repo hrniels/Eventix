@@ -92,6 +92,11 @@ impl Activity {
                 "Calendar added" => Some("Adding calendar…"),
                 "Calendar reloaded" => Some("Reloading calendar…"),
                 "Calendar removed" => Some("Removing calendar…"),
+                "Collection settings updated" => Some("Saving collection settings…"),
+                "Collection removed" => Some("Removing collection…"),
+                "Collection reloaded" => Some("Reloading collection…"),
+                "Collection discovered" => Some("Discovering collection…"),
+                "Collection synchronized" => Some("Synchronizing collection…"),
                 "Remote calendar deleted" => Some("Deleting remote calendar…"),
                 _ => None,
             };

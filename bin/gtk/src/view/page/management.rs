@@ -85,9 +85,17 @@ impl PageManagement {
         }
     }
 
-    pub(super) fn finished(&self, page: &CalendarPage, request: &Request, success: bool) {
+    pub(super) fn finished(
+        &self,
+        page: &CalendarPage,
+        request: &Request,
+        result: &Result<(), String>,
+    ) {
         if let Some(view) = self.view.get() {
-            view.finish(request, success);
+            view.finish(request, result.is_ok());
+            if let Err(error) = result {
+                view.show_error(request, error);
+            }
         }
         self.refresh(page);
     }

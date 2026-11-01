@@ -872,6 +872,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
+ "email_address",
  "eventix-ical",
  "eventix-locale",
  "eventix-state",

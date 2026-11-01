@@ -11,9 +11,11 @@ use eventix_view::calendars::{Backend, Calendar, Collection, Snapshot};
 use gtk::prelude::*;
 
 mod card;
+mod collection;
 
 use crate::model::management::Request;
 use card::CalendarCard;
+use collection::CollectionActions;
 
 type ActionHandler = Rc<RefCell<Option<Box<dyn Fn(Request)>>>>;
 
@@ -40,6 +42,7 @@ struct CollectionRow {
     cards: Vec<(Calendar, Rc<CalendarCard>)>,
     toggle_group: gtk::SizeGroup,
     on_action: ActionHandler,
+    controls: Option<Rc<CollectionActions>>,
 }
 
 impl CalendarsView {
@@ -131,11 +134,37 @@ impl CalendarsView {
             .iter()
             .filter(|row| row.model.id == request.collection)
         {
+            if matches!(
+                request.operation,
+                crate::model::management::Operation::Collection(_)
+            ) {
+                if let Some(controls) = &row.controls {
+                    controls.finish(request, success);
+                }
+                continue;
+            }
             for (calendar, card) in &row.cards {
                 if calendar.id == request.calendar && calendar.configured == request.configured {
                     card.finish(request, success);
                 }
             }
+        }
+    }
+
+    pub fn show_error(&self, request: &Request, message: &str) {
+        if matches!(
+            request.operation,
+            crate::model::management::Operation::Collection(
+                crate::model::management::CollectionOperation::Save { .. }
+            )
+        ) && let Some(controls) = self
+            .rows
+            .borrow()
+            .iter()
+            .find(|row| row.model.id == request.collection)
+            .and_then(|row| row.controls.as_ref())
+        {
+            controls.error(message);
         }
     }
 
@@ -200,6 +229,7 @@ impl CollectionRow {
             cards: vec![],
             toggle_group: toggle_group.clone(),
             on_action: on_action.clone(),
+            controls: None,
         }
     }
 
@@ -220,7 +250,10 @@ impl CollectionRow {
             || self.model.reload != model.reload
             || self.model.discover != model.discover
         {
-            self.update_description(model, locale.as_ref());
+            self.update_description(model, locale);
+        }
+        if let Some(controls) = &self.controls {
+            controls.update(model, locale.clone());
         }
 
         let mut old = std::mem::take(&mut self.cards);
@@ -257,8 +290,9 @@ impl CollectionRow {
         self.model = model.clone();
     }
 
-    fn update_description(&self, model: &Collection, locale: &dyn Locale) {
+    fn update_description(&mut self, model: &Collection, locale: &Arc<dyn Locale + Send + Sync>) {
         clear(&self.description);
+        let locale_ref = locale.as_ref();
 
         let title = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let (icon, backend) = match model.backend {
@@ -268,7 +302,7 @@ impl CollectionRow {
         };
         let image = gtk::Image::from_resource(icon);
         image.set_pixel_size(32);
-        image.set_tooltip_text(Some(locale.translate(backend)));
+        image.set_tooltip_text(Some(locale_ref.translate(backend)));
         title.append(&image);
 
         let name = text(&model.id);
@@ -280,29 +314,11 @@ impl CollectionRow {
             self.description.append(&text(account));
         }
 
-        let actions = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-        actions.set_halign(gtk::Align::Start);
-
-        let delete = icon_action("user-trash-symbolic", "Delete", locale);
-        delete.add_css_class("ev_button_critical");
-        actions.append(&delete);
-        actions.append(&icon_action("pencil-symbolic", "Edit", locale));
-
-        if model.reload {
-            let reload = action("view-refresh-symbolic", "Reload", locale);
-            reload.add_css_class("ev_button_warn");
-            actions.append(&reload);
-        }
-        if model.discover {
-            actions.append(&action("find-location-symbolic", "Discover", locale));
-        }
-
-        actions.append(&action("view-refresh-symbolic", "Sync", locale));
-        if model.backend != Backend::FileSystem {
-            actions.append(&action("view-list-symbolic", "Log", locale));
-        }
-
-        self.description.append(&actions);
+        let controls = self
+            .controls
+            .get_or_insert_with(|| CollectionActions::new(model, locale.clone(), &self.on_action));
+        // Reparent stable controls without discarding an open form or a pending action.
+        self.description.append(&controls.widget);
     }
 }
 
@@ -372,6 +388,18 @@ mod tests {
         let mut snapshot = Snapshot {
             collections: vec![Collection {
                 id: "CalDAV collection with a long descriptive name".into(),
+                syncer: eventix_state::SyncerType::VDirSyncer {
+                    email: eventix_state::EmailAccount::new(
+                        "User".into(),
+                        "user@example.com".into(),
+                    ),
+                    url: "https://example.com".into(),
+                    read_only: false,
+                    username: None,
+                    password: None,
+                    time_span: Default::default(),
+                },
+                log_path: String::new(),
                 backend: Backend::CalDav,
                 account: Some("Calendar User <calendar@example.com>".into()),
                 reload: true,
@@ -404,6 +432,10 @@ mod tests {
         };
         snapshot.collections.push(Collection {
             id: "Empty collection".into(),
+            syncer: eventix_state::SyncerType::FileSystem {
+                path: "/unused".into(),
+            },
+            log_path: String::new(),
             backend: Backend::FileSystem,
             account: None,
             reload: false,
@@ -855,6 +887,358 @@ mod tests {
         assert!(!request.configured);
         assert_eq!(request.calendar, "0");
         assert!(matches!(request.operation, Operation::Save(_)));
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn collection_actions_submit_recover_and_preserve_edit_drafts() {
+        use crate::model::management::{CollectionOperation, Operation, Request};
+        use std::{cell::RefCell, rc::Rc};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gdk::Display::default().unwrap());
+        let view = CalendarsView::new(eventix_locale::default().as_ref());
+        let requests = Rc::new(RefCell::new(Vec::<Request>::new()));
+        let received = requests.clone();
+        view.connect_action(move |request| received.borrow_mut().push(request));
+        view.set_snapshot(snapshot());
+        let window = gtk::Window::builder().child(&view.widget).build();
+        window.present();
+        let controls = view.rows.borrow()[0].controls.as_ref().unwrap().clone();
+        let button = |root: &gtk::Widget, tooltip: &str| {
+            descendants(root)
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+                .find(|button| button.tooltip_text().as_deref() == Some(tooltip))
+                .unwrap()
+        };
+        for action in ["Sync", "Discover"] {
+            button(controls.widget.upcast_ref(), action).emit_clicked();
+            let request = requests.borrow_mut().pop().unwrap();
+            assert_eq!(request.collection, snapshot().collections[0].id);
+            assert!(request.calendar.is_empty());
+            assert!(matches!(
+                (&request.operation, action),
+                (Operation::Collection(CollectionOperation::Sync), "Sync")
+                    | (
+                        Operation::Collection(CollectionOperation::Discover),
+                        "Discover"
+                    )
+            ));
+            assert!(!controls.widget.is_sensitive());
+            view.finish(&request, false);
+            assert!(controls.widget.is_sensitive());
+        }
+        button(controls.widget.upcast_ref(), "Edit").emit_clicked();
+        let editor = controls.editor.borrow().as_ref().unwrap().clone();
+        assert!(editor.is_visible());
+        assert!(editor.is_modal());
+        assert_eq!(editor.transient_for(), Some(window.clone()));
+        assert_eq!(editor.title().as_deref(), Some("Edit Collection"));
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            descendants(view.rows.borrow()[0].description.upcast_ref())
+                .iter()
+                .all(|widget| !widget.is::<gtk::Entry>())
+        );
+        let fields = descendants(editor.upcast_ref());
+        let collection_name = fields
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::Label>())
+            .find(|label| label.text() == snapshot().collections[0].id)
+            .unwrap();
+        assert!(collection_name.selection_bounds().is_none());
+        let main_rows: Vec<_> = fields
+            .iter()
+            .filter(|widget| widget.has_css_class("ev_management_main_row"))
+            .collect();
+        assert_eq!(main_rows.len(), 2);
+        let main_label = main_rows[0].first_child().unwrap().last_child().unwrap();
+        let label_x = main_label.compute_bounds(&editor).unwrap().x();
+        for main in &main_rows {
+            let heading = main.first_child().unwrap();
+            assert!(heading.first_child().unwrap().is::<gtk::Image>());
+            assert_eq!(
+                heading
+                    .last_child()
+                    .unwrap()
+                    .compute_bounds(&editor)
+                    .unwrap()
+                    .x(),
+                label_x
+            );
+        }
+        let selector = main_rows[1].last_child().unwrap();
+        assert!(selector.height() <= 28, "sync-type selector stays compact");
+        let bounds = selector.compute_bounds(&editor).unwrap();
+        let row_bounds = main_rows[1].compute_bounds(&editor).unwrap();
+        assert_eq!(
+            bounds.x() + bounds.width(),
+            row_bounds.x() + row_bounds.width()
+        );
+        let identity = main_rows[0].parent().unwrap();
+        assert!(
+            descendants(&identity)
+                .iter()
+                .all(|widget| !widget.is::<gtk::Separator>())
+        );
+        let content = identity.parent().unwrap();
+        let syncer_section = main_rows[1].parent().unwrap();
+        assert!(main_rows[0].has_css_class("ev_management_hover_area"));
+        assert!(syncer_section.has_css_class("ev_management_hover_area"));
+        assert_eq!(syncer_section.parent(), Some(content.clone()));
+        assert_eq!(content.margin_start(), 8);
+        assert_eq!(content.margin_end(), 8);
+        assert_eq!(content.margin_top(), 8);
+        assert_eq!(content.margin_bottom(), 8);
+        assert!(!content.has_css_class("ev_management_form"));
+        for row in fields
+            .iter()
+            .filter(|widget| widget.has_css_class("ev_management_sync_row"))
+        {
+            assert_eq!(row.parent(), Some(syncer_section.clone()));
+            let heading = row.first_child().unwrap();
+            let label = heading.first_child().unwrap();
+            assert!(label.is::<gtk::Label>());
+            assert_eq!(label.compute_bounds(&editor).unwrap().x(), label_x);
+            assert_eq!(
+                row.last_child()
+                    .unwrap()
+                    .compute_bounds(&editor)
+                    .unwrap()
+                    .x(),
+                main_rows[0]
+                    .last_child()
+                    .unwrap()
+                    .compute_bounds(&editor)
+                    .unwrap()
+                    .x(),
+                "collection name aligns with synchronizer fields"
+            );
+        }
+        let checks: Vec<_> = fields
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::CheckButton>())
+            .collect();
+        assert_eq!(checks.len(), 3);
+        let indicator_x = checks[0]
+            .first_child()
+            .unwrap()
+            .compute_bounds(&editor)
+            .unwrap()
+            .x();
+        assert_eq!(
+            checks[1]
+                .first_child()
+                .unwrap()
+                .compute_bounds(&editor)
+                .unwrap()
+                .x(),
+            indicator_x
+        );
+        let spinner = fields
+            .iter()
+            .find_map(|widget| widget.downcast_ref::<gtk::SpinButton>())
+            .unwrap();
+        for radio in &checks[1..] {
+            assert_eq!(
+                radio.compute_bounds(&editor).unwrap().center().y(),
+                spinner.compute_bounds(&editor).unwrap().center().y()
+            );
+        }
+        let name = fields
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<gtk::Entry>())
+            .find(|entry| entry.tooltip_text().as_deref() == Some("Your Name"))
+            .unwrap();
+        name.set_text("");
+        button(editor.upcast_ref(), "Save").emit_clicked();
+        assert!(requests.borrow().is_empty());
+        let error = descendants(editor.upcast_ref())
+            .into_iter()
+            .find_map(|widget| {
+                widget
+                    .downcast::<gtk::Label>()
+                    .ok()
+                    .filter(|label| label.has_css_class("ev_management_error"))
+            })
+            .unwrap();
+        assert!(error.is_visible());
+        assert!(
+            error
+                .text()
+                .contains(snapshot().locale.translate("error.collection_your_name"))
+        );
+        name.set_text("Unsaved collection draft");
+        let mut updated = snapshot();
+        updated.collections[0].account = Some("Changed externally".into());
+        view.set_snapshot(updated);
+        assert_eq!(
+            view.rows.borrow()[0].controls.as_ref().unwrap().widget,
+            controls.widget
+        );
+        assert_eq!(name.text(), "Unsaved collection draft");
+        assert_eq!(controls.editor.borrow().as_ref(), Some(&editor));
+        let keys = editor
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .unwrap();
+        assert!(keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[&gdk::Key::Return, &0u32, &gdk::ModifierType::CONTROL_MASK,]
+        ));
+        assert!(!error.is_visible());
+        let request = requests.borrow_mut().pop().unwrap();
+        assert!(!editor.is_sensitive());
+        editor.close();
+        assert!(
+            controls.editor.borrow().is_some(),
+            "pending saves cannot be dismissed"
+        );
+        let Operation::Collection(CollectionOperation::Save { syncer, password }) =
+            &request.operation
+        else {
+            panic!("expected collection save");
+        };
+        assert_eq!(syncer.email().unwrap().name(), "Unsaved collection draft");
+        assert!(password.is_none());
+        view.finish(&request, false);
+        view.show_error(&request, "Test persistence failure");
+        assert!(error.is_visible());
+        assert!(error.text().contains("Test persistence failure"));
+        assert!(editor.is_visible());
+        assert!(editor.is_sensitive());
+        assert_eq!(name.text(), "Unsaved collection draft");
+        button(editor.upcast_ref(), "Save").emit_clicked();
+        let request = requests.borrow_mut().pop().unwrap();
+        view.finish(&request, true);
+        assert!(controls.editor.borrow().is_none());
+        assert!(!editor.is_visible());
+        button(controls.widget.upcast_ref(), "Edit").emit_clicked();
+        let editor = controls.editor.borrow().as_ref().unwrap().clone();
+        button(editor.upcast_ref(), "Cancel").emit_clicked();
+        assert!(controls.editor.borrow().is_none());
+        assert!(!editor.is_visible());
+        button(controls.widget.upcast_ref(), "Edit").emit_clicked();
+        let editor = controls.editor.borrow().as_ref().unwrap().clone();
+        editor.close();
+        assert!(controls.editor.borrow().is_none());
+        assert!(requests.borrow().is_empty());
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn collection_delete_reload_confirm_and_log_displays_contents() {
+        use crate::model::management::{CollectionOperation, Operation, Request};
+        use std::{cell::RefCell, rc::Rc};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let view = CalendarsView::new(eventix_locale::default().as_ref());
+        let requests = Rc::new(RefCell::new(Vec::<Request>::new()));
+        let received = requests.clone();
+        view.connect_action(move |request| received.borrow_mut().push(request));
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("collection.log");
+        std::fs::write(&log, "Collection sync log\nTest entry").unwrap();
+        let mut initial = snapshot();
+        initial.collections[0].calendars.clear();
+        initial.collections[0].log_path = log.to_string_lossy().into_owned();
+        view.set_snapshot(initial);
+        let window = gtk::Window::builder().child(&view.widget).build();
+        window.present();
+        let drain = || {
+            for _ in 0..15 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        let controls = view.rows.borrow()[0].controls.as_ref().unwrap().clone();
+        for (action, confirm) in [("Delete", false), ("Delete", true), ("Reload", true)] {
+            descendants(controls.widget.upcast_ref())
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+                .find(|button| button.tooltip_text().as_deref() == Some(action))
+                .unwrap()
+                .emit_clicked();
+            drain();
+            assert!(requests.borrow().is_empty());
+            let dialog = gtk::Window::list_toplevels()
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+                .find(|candidate| candidate != &window && candidate.is_visible())
+                .unwrap();
+            descendants(dialog.upcast_ref())
+                .into_iter()
+                .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+                .find(|button| {
+                    button.label().as_deref() == Some(if confirm { action } else { "Cancel" })
+                })
+                .unwrap()
+                .emit_clicked();
+            drain();
+            if confirm {
+                let request = requests.borrow_mut().pop().unwrap();
+                assert!(matches!(
+                    (&request.operation, action),
+                    (Operation::Collection(CollectionOperation::Delete), "Delete")
+                        | (Operation::Collection(CollectionOperation::Reload), "Reload")
+                ));
+                view.finish(&request, true);
+            } else {
+                assert!(requests.borrow().is_empty());
+            }
+        }
+        descendants(controls.widget.upcast_ref())
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Button>().ok())
+            .find(|button| button.tooltip_text().as_deref() == Some("Log"))
+            .unwrap()
+            .emit_clicked();
+        drain();
+        let log_window = gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|widget| widget.downcast::<gtk::Window>().ok())
+            .find(|candidate| {
+                candidate
+                    .title()
+                    .is_some_and(|title| title.starts_with("Log of collection"))
+            })
+            .unwrap();
+        let text = descendants(log_window.upcast_ref())
+            .into_iter()
+            .find_map(|widget| widget.downcast::<gtk::TextView>().ok())
+            .unwrap();
+        let buffer = text.buffer();
+        assert_eq!(
+            buffer.text(&buffer.start_iter(), &buffer.end_iter(), false),
+            "Collection sync log\nTest entry"
+        );
+        let keys = log_window
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .unwrap();
+        assert_eq!(keys.propagation_phase(), gtk::PropagationPhase::Capture);
+        assert!(!keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[&gdk::Key::a, &0u32, &gdk::ModifierType::empty()],
+        ));
+        assert!(log_window.is_visible());
+        assert!(keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[&gdk::Key::Escape, &0u32, &gdk::ModifierType::empty()],
+        ));
+        assert!(!log_window.is_visible());
+        window.close();
     }
 
     #[test]

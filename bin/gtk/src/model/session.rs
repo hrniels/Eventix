@@ -197,7 +197,13 @@ impl Message {
             Self::ManageCalendar(request) => (
                 request.description(),
                 vec![],
-                Some(request.calendar.clone()),
+                Some(
+                    if matches!(request.operation, management::Operation::Collection(_)) {
+                        request.collection.clone()
+                    } else {
+                        request.calendar.clone()
+                    },
+                ),
             ),
             Self::ToggleCalendar(calendar) => (
                 "Calendar visibility changed",
@@ -216,7 +222,9 @@ impl Message {
         };
         let mut activity = Activity::new(request, operation);
         activity.set_items(items);
-        if matches!(self, Self::Authenticate(..)) {
+        if matches!(self, Self::Authenticate(..))
+            || matches!(self, Self::ManageCalendar(command) if matches!(command.operation, management::Operation::Collection(_)))
+        {
             activity.set_collection(calendar);
         } else {
             activity.set_calendar(calendar);

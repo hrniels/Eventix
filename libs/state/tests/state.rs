@@ -13,8 +13,9 @@ use std::{sync::Arc, time::Duration};
 use tempfile::TempDir;
 
 use eventix_state::{
-    CollectionSettings, Settings, State, SyncCancellation, SyncColResult, SyncProgress, SyncerType,
-    load_from_file, log_file, write_to_file,
+    CalendarSettings, CollectionSettings, EmailAccount, Settings, State, SyncCancellation,
+    SyncColResult, SyncProgress, SyncTimeSpan, SyncerType, encrypt_password, load_from_file,
+    log_file, write_to_file,
 };
 
 mod common;
@@ -187,6 +188,134 @@ async fn refresh_store_removes_calendar_absent_from_settings() {
     );
 }
 
+// --- State::save_collection ---
+
+#[tokio::test]
+async fn save_collection_persists_settings_preserves_calendars_and_rolls_back_failed_writes() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let mut state = State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap();
+    let id = "local".to_owned();
+    let original = SyncerType::FileSystem {
+        path: dir.path().join("original").to_string_lossy().into_owned(),
+    };
+
+    // build simple collection
+    let mut collection = CollectionSettings::new(original.clone());
+    collection
+        .all_calendars_mut()
+        .insert("calendar".into(), CalendarSettings::default());
+    state
+        .settings_mut()
+        .collections_mut()
+        .insert(id.clone(), collection.clone());
+    let state = Arc::new(Mutex::new(state));
+
+    // change path and save collection
+    let updated = SyncerType::FileSystem {
+        path: dir.path().join("updated").to_string_lossy().into_owned(),
+    };
+    State::save_collection(&state, &id, updated.clone(), None)
+        .await
+        .unwrap();
+
+    // check if it was changed
+    let loaded = State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap();
+    assert_eq!(loaded.settings().collections()[&id].syncer(), &updated);
+    assert_eq!(
+        loaded.settings().collections()[&id].all_calendars(),
+        collection.all_calendars()
+    );
+
+    // force write failure by replacing settings.toml with directory
+    let config = xdg.place_config_file("settings.toml").unwrap();
+    std::fs::remove_file(&config).unwrap();
+    std::fs::create_dir(&config).unwrap();
+    assert!(
+        State::save_collection(&state, &id, original, None)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        state.lock().await.settings().collections()[&id].syncer(),
+        &updated
+    );
+
+    // force save error by saving non-existing collection
+    assert!(
+        State::save_collection(&state, &"missing".into(), updated, None)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn save_collection_preserves_current_credentials_and_rejects_backend_changes() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let mut state = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+
+    // build new collection
+    let id = "remote".to_owned();
+    let password = encrypt_password(b"test secret", "current password").unwrap();
+    let syncer = SyncerType::VDirSyncer {
+        email: EmailAccount::new("User".into(), "user@example.com".into()),
+        url: "https://example.invalid".into(),
+        read_only: true,
+        username: Some("user".into()),
+        password: Some(password.clone()),
+        time_span: SyncTimeSpan::default(),
+    };
+    state
+        .settings_mut()
+        .collections_mut()
+        .insert(id.clone(), CollectionSettings::new(syncer.clone()));
+    let state = Arc::new(Mutex::new(state));
+
+    // save collection, but leave password unchanged
+    let mut draft = syncer;
+    if let SyncerType::VDirSyncer { password, .. } = &mut draft {
+        *password = None;
+    }
+    State::save_collection(&state, &id, draft.clone(), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        state.lock().await.settings().collections()[&id]
+            .syncer()
+            .password(),
+        Some(&password)
+    );
+
+    // changing syncer type is disallowed
+    assert!(
+        State::save_collection(
+            &state,
+            &id,
+            SyncerType::FileSystem {
+                path: "/unused".into()
+            },
+            None
+        )
+        .await
+        .is_err()
+    );
+
+    // removing username clears password as well
+    if let SyncerType::VDirSyncer { username, .. } = &mut draft {
+        *username = None;
+    }
+    State::save_collection(&state, &id, draft, None)
+        .await
+        .unwrap();
+    assert!(
+        state.lock().await.settings().collections()[&id]
+            .syncer()
+            .password()
+            .is_none()
+    );
+}
+
 // --- State sync wrappers ---
 
 /// Builds a minimal `State` that has one FS-backed collection with one calendar.
@@ -313,6 +442,94 @@ async fn state_sync_collection_with_fs_syncer() {
         Some(&SyncColResult::Success(false))
     );
     assert!(!result.changed);
+}
+
+#[tokio::test]
+async fn collection_sync_reload_and_delete_preserve_local_source_files() {
+    let tmp = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
+    let file = tmp.path().join("data/col1/mycal/event.ics");
+    std::fs::write(&file, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:test\r\nDTSTART:20261031T100000Z\r\nSUMMARY:Test\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
+    State::refresh_store(&mut *state.lock().await)
+        .await
+        .unwrap();
+
+    for operation in [
+        SyncOperation::SyncCollection,
+        SyncOperation::ReloadCollection,
+    ] {
+        let result = operation
+            .run(&state, &SyncCancellation::default())
+            .await
+            .unwrap();
+        assert!(matches!(
+            result.collections.get("col1"),
+            Some(SyncColResult::Success(_))
+        ));
+        assert!(file.exists());
+    }
+
+    let mut state = state.lock().await;
+    State::delete_collection(&mut state, &"col1".into())
+        .await
+        .unwrap();
+    assert!(file.exists());
+    assert!(!state.settings().collections().contains_key("col1"));
+
+    state.settings().write_to_file().unwrap();
+    State::refresh_store(&mut state).await.unwrap();
+    assert!(state.store().directories().is_empty());
+    let loaded = State::new(Arc::new(state.xdg().clone())).unwrap();
+    assert!(!loaded.settings().collections().contains_key("col1"));
+}
+
+#[tokio::test]
+async fn calendar_reload_and_delete_preserve_local_source_files() {
+    let tmp = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
+    let file = tmp.path().join("data/col1/mycal/event.ics");
+    std::fs::write(
+        &file,
+        concat!(
+            "BEGIN:VCALENDAR\r\n",
+            "VERSION:2.0\r\n",
+            "BEGIN:VEVENT\r\n",
+            "UID:test\r\n",
+            "DTSTART:20261031T100000Z\r\n",
+            "SUMMARY:Test\r\n",
+            "END:VEVENT\r\n",
+            "END:VCALENDAR\r\n",
+        ),
+    )
+    .unwrap();
+
+    State::refresh_store(&mut *state.lock().await)
+        .await
+        .unwrap();
+    let result = SyncOperation::ReloadCalendar
+        .run(&state, &SyncCancellation::default())
+        .await
+        .unwrap();
+    assert!(matches!(
+        result.collections.get("col1"),
+        Some(SyncColResult::Success(_))
+    ));
+    assert!(file.exists());
+
+    let mut state = state.lock().await;
+    State::delete_calendar(&mut state, &"col1".into(), &"cal1".into())
+        .await
+        .unwrap();
+    assert!(file.exists());
+    assert!(
+        state.settings().collections()["col1"]
+            .all_calendars()
+            .is_empty()
+    );
 }
 
 #[tokio::test]

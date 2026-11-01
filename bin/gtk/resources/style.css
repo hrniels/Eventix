@@ -66,6 +66,34 @@
     background-color: alpha(@theme_fg_color, 0.12);
 }
 
+.ev_management_hover_area {
+    padding: 6px;
+}
+
+.ev_management_error {
+    color: @error_color;
+    border: 1px solid @error_color;
+    border-radius: 4px;
+    padding: 8px 12px;
+}
+
+checkbutton.ev_management_check {
+    margin: 0;
+    padding: 0;
+}
+
+checkbutton.ev_management_check > check,
+checkbutton.ev_management_check > radio {
+    margin: 0 6px 0 0;
+}
+
+.ev_management_sync_types > button {
+    font-size: 0.9em;
+    min-height: 20px;
+    min-width: 0;
+    padding: 2px 6px;
+}
+
 .ev_management_button {
     min-width: 20px;
     min-height: 20px;
@@ -246,7 +274,8 @@
     margin: 0 8px;
 }
 
-.ev_editor_row:hover {
+.ev_editor_row:hover,
+.ev_management_hover_area:hover {
     background: alpha(@theme_text_color, 0.055);
 }
 

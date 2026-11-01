@@ -37,6 +37,8 @@ pub struct Calendar {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Collection {
     pub id: String,
+    pub syncer: SyncerType,
+    pub log_path: String,
     pub backend: Backend,
     pub account: Option<String>,
     pub reload: bool,
@@ -65,7 +67,11 @@ impl Snapshot {
             .iter()
             .map(|(id, settings)| {
                 let path = settings.path(state.xdg(), id);
-                let (collection, warning) = load_collection(id, settings, &path);
+                let (mut collection, warning) = load_collection(id, settings, &path);
+                collection.log_path = settings
+                    .log_file(state.xdg(), id)
+                    .to_string_lossy()
+                    .into_owned();
                 if let Some(warning) = warning {
                     warnings.push(warning);
                 }
@@ -127,6 +133,8 @@ fn load_collection(
     (
         Collection {
             id: id.into(),
+            syncer: settings.syncer().clone(),
+            log_path: String::new(),
             backend,
             account: settings
                 .email()

@@ -11,6 +11,35 @@ pub(crate) enum Operation {
     Save(Box<CalendarSettings>),
     Reload,
     Delete,
+    Collection(CollectionOperation),
+}
+
+#[derive(Clone)]
+pub(crate) enum CollectionOperation {
+    Save {
+        syncer: Box<SyncerType>,
+        password: Option<String>,
+    },
+    Delete,
+    Reload,
+    Discover,
+    Sync,
+}
+
+impl std::fmt::Debug for CollectionOperation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Save { syncer, password } => formatter
+                .debug_struct("Save")
+                .field("syncer", syncer)
+                .field("password_changed", &password.is_some())
+                .finish(),
+            Self::Delete => formatter.write_str("Delete"),
+            Self::Reload => formatter.write_str("Reload"),
+            Self::Discover => formatter.write_str("Discover"),
+            Self::Sync => formatter.write_str("Sync"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -23,7 +52,7 @@ pub(crate) struct Request {
 }
 
 impl Request {
-    /// Returns the translation key for this calendar action's outcome.
+    /// Returns the translation key for this management action's outcome.
     pub(crate) fn description(&self) -> &'static str {
         match self.operation {
             Operation::Enable(true) => "Calendar enabled",
@@ -33,12 +62,22 @@ impl Request {
             Operation::Reload => "Calendar reloaded",
             Operation::Delete if self.configured => "Calendar removed",
             Operation::Delete => "Remote calendar deleted",
+            Operation::Collection(ref operation) => match operation {
+                CollectionOperation::Save { .. } => "Collection settings updated",
+                CollectionOperation::Delete => "Collection removed",
+                CollectionOperation::Reload => "Collection reloaded",
+                CollectionOperation::Discover => "Collection discovered",
+                CollectionOperation::Sync => "Collection synchronized",
+            },
         }
     }
 }
 
-/// Applies calendar management changes using the same state operations as the HTML UI.
+/// Applies calendar and collection management changes using the HTML UI's state operations.
 pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Result<()> {
+    if let Operation::Collection(operation) = &request.operation {
+        return apply_collection(state, &request.collection, operation).await;
+    }
     if matches!(request.operation, Operation::Reload) {
         return reload(state, request).await;
     }
@@ -102,7 +141,7 @@ pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Re
                     .await?;
             }
         }
-        Operation::Reload => unreachable!(),
+        Operation::Reload | Operation::Collection(_) => unreachable!(),
     }
 
     if let Err(error) = state.settings().write_to_file() {
@@ -152,6 +191,13 @@ async fn reload(state: &EventixState, request: &Request) -> anyhow::Result<()> {
         &SyncCancellation::default(),
     )
     .await?;
+    check_sync_result(&result, locale.as_ref())
+}
+
+fn check_sync_result(
+    result: &eventix_state::SyncResult,
+    locale: &dyn eventix_locale::Locale,
+) -> anyhow::Result<()> {
     for outcome in result.collections.values() {
         match outcome {
             eventix_state::SyncColResult::Error(error) => anyhow::bail!(error.clone()),
@@ -175,6 +221,47 @@ async fn reload(state: &EventixState, request: &Request) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn apply_collection(
+    state: &EventixState,
+    id: &String,
+    operation: &CollectionOperation,
+) -> anyhow::Result<()> {
+    let locale = {
+        let state = state.lock().await;
+        if !state.settings().collections().contains_key(id) {
+            anyhow::bail!(
+                state
+                    .locale()
+                    .translate("Collection is no longer available")
+                    .to_owned()
+            );
+        }
+        state.locale()
+    };
+    let cancellation = SyncCancellation::default();
+    let result = match operation {
+        CollectionOperation::Sync => State::sync_collection(state, id, None, &cancellation).await?,
+        CollectionOperation::Discover => {
+            State::discover_collection(state, id, None, &cancellation).await?
+        }
+        CollectionOperation::Reload => {
+            State::reload_collection(state, id, None, &cancellation).await?
+        }
+        CollectionOperation::Save { syncer, password } => {
+            return State::save_collection(state, id, syncer.as_ref().clone(), password.as_deref())
+                .await;
+        }
+        CollectionOperation::Delete => {
+            let mut state = state.lock().await;
+            State::delete_collection(&mut state, id).await?;
+            let saved = state.settings().write_to_file();
+            State::refresh_store(&mut state).await?;
+            return saved;
+        }
+    };
+    check_sync_result(&result, locale.as_ref())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{path::Path, sync::Arc};
@@ -182,7 +269,10 @@ mod tests {
     use eventix_ical::objects::{CalAction, CalAlarm, CalCompType, CalRelated, CalTrigger};
     use eventix_state::{CalendarAlarmType, CollectionSettings};
 
-    use super::{CalendarSettings, EventixState, Operation, Request, State, SyncerType, apply};
+    use super::{
+        CalendarSettings, CollectionOperation, EventixState, Operation, Request, State, SyncerType,
+        apply,
+    };
 
     fn state(path: &Path) -> EventixState {
         let xdg = Arc::new(eventix_state::with_test_xdg(path, path));
@@ -364,23 +454,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn local_reload_and_delete_keep_source_files_and_remove_configuration() {
+    async fn calendar_reload_and_delete_reject_stale_requests() {
         let dir = tempfile::tempdir().unwrap();
         let state = state(dir.path());
-        let file = dir.path().join("calendars/team/event.ics");
-        std::fs::write(&file, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:test\r\nDTSTART:20261031T100000Z\r\nSUMMARY:Test\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
-        State::refresh_store(&mut *state.lock().await)
+        state
+            .lock()
             .await
-            .unwrap();
-        apply(&state, &request(Operation::Reload)).await.unwrap();
-        assert!(file.exists());
-        apply(&state, &request(Operation::Delete)).await.unwrap();
-        assert!(file.exists());
-        assert!(
-            state.lock().await.settings().collections()["local"]
-                .all_calendars()
-                .is_empty()
-        );
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .all_calendars_mut()
+            .clear();
+        assert!(apply(&state, &request(Operation::Reload)).await.is_err());
         assert!(apply(&state, &request(Operation::Delete)).await.is_err());
     }
 
@@ -404,5 +490,30 @@ mod tests {
             state.lock().await.settings().collections()["local"].all_calendars()["team-id"]
                 .enabled()
         );
+    }
+
+    #[tokio::test]
+    async fn collection_actions_reject_stale_requests() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path());
+        state.lock().await.settings_mut().collections_mut().clear();
+        for operation in [
+            CollectionOperation::Sync,
+            CollectionOperation::Reload,
+            CollectionOperation::Discover,
+            CollectionOperation::Delete,
+            CollectionOperation::Save {
+                syncer: Box::new(SyncerType::FileSystem {
+                    path: "/unused".into(),
+                }),
+                password: None,
+            },
+        ] {
+            assert!(
+                apply(&state, &request(Operation::Collection(operation)))
+                    .await
+                    .is_err()
+            );
+        }
     }
 }

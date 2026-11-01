@@ -364,7 +364,7 @@ impl PageSession {
                 imp.management.receive(page, generation, result);
             }
             Event::ManagementFinished(request, result) => {
-                imp.management.finished(page, &request, result.is_ok());
+                imp.management.finished(page, &request, &result);
             }
             Event::FilepathLoaded(result) => {
                 if let Ok(path) = result {
