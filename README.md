@@ -86,6 +86,12 @@ directly, without starting the web server or embedding WebKit. It displays all-d
 overlaps, recurring occurrences, calendar colors, and daylight-saving transitions. Click an event
 for details, or focus it with Tab and press Enter.
 
+The Flatpak package includes it alongside the default web-based GUI:
+
+```bash
+flatpak run --socket=wayland --env=GDK_BACKEND=wayland --command=eventix-gtk io.github.hrniels.Eventix
+```
+
 To use the existing development data in `run/` (including the locale links prepared by `./b`):
 
 ```bash

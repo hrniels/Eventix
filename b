@@ -528,8 +528,8 @@ def _create_archives(app_id):
     subprocess.run([
         "tar", "czf", "flatpak/eventix.tar.gz",
         "--exclude=./contrib",
-        # put everything into a subdirectory
-        "--transform=s#^#eventix/#",
+        # Put entries into a subdirectory without changing relative symlink targets.
+        "--transform=flags=rh;s#^#eventix/#",
         ".git", "bin", "data", "libs", "Cargo.toml", "Cargo.lock", "package.json", "LICENSE", "b",
         "flatpak/" + app_id + "-Import.desktop",
         "flatpak/" + app_id + ".desktop",
@@ -630,7 +630,7 @@ def cmd_dist(args):
 
     # install binaries
     bins = Path("target") / "release"
-    for bin_name in ["eventix", "eventix-app", "eventix-import", "eventix-getpw"]:
+    for bin_name in ["eventix", "eventix-app", "eventix-gtk", "eventix-import", "eventix-getpw"]:
         subprocess.run(["install", "-Dm755", bins / bin_name, "-t", prefix / "bin"], check=True)
 
     # install desktop files
