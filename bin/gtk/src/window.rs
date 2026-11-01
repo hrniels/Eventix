@@ -77,6 +77,10 @@ glib::wrapper! {
 }
 
 impl Window {
+    pub fn setup_tray(&self) {
+        self.imp().page.install_tray(self);
+    }
+
     pub fn new(app: &gtk::Application, prefix: String, date: Option<NaiveDate>) -> Self {
         let obj = Self::build(app);
         obj.imp().page.start(prefix, date);

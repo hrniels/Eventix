@@ -18,6 +18,7 @@ regex.workspace = true
 xdg.workspace = true
 async-channel = "2.5.0"
 gtk = { version = "=0.11.5", package = "gtk4", features = ["v4_10"] }
+ksni = { version = "0.3.4", features = ["blocking"] }
 tracing.workspace = true
 tokio.workspace = true
 uuid = { version = "1.23.1", features = ["v4"] }

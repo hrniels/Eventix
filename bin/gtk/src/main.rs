@@ -7,6 +7,7 @@ include!(concat!(env!("OUT_DIR"), "/resources.rs"));
 mod actions;
 mod model;
 mod style;
+mod tray;
 mod view;
 mod window;
 
@@ -28,6 +29,9 @@ struct Args {
     /// Initially displayed date (YYYY-MM-DD); defaults to today in the calendar timezone.
     #[arg(long)]
     date: Option<NaiveDate>,
+    /// Disable the system tray icon.
+    #[arg(long)]
+    no_tray: bool,
 }
 
 fn main() -> glib::ExitCode {
@@ -61,7 +65,11 @@ fn main() -> glib::ExitCode {
         if let Some(window) = app.active_window() {
             window.present();
         } else {
-            window::Window::new(app, args.data_prefix.clone(), args.date).present();
+            let window = window::Window::new(app, args.data_prefix.clone(), args.date);
+            if !args.no_tray {
+                window.setup_tray();
+            }
+            window.present();
         }
     });
 

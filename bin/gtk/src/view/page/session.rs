@@ -425,6 +425,9 @@ impl PageSession {
             }
             Event::SidebarLoaded(result) => {
                 if let Ok(sidebar) = result {
+                    if let Some(tray) = imp.tray.borrow().as_ref() {
+                        tray.update(&sidebar);
+                    }
                     imp.sidebar.set_snapshot(sidebar);
                     page.update_styles();
                 }

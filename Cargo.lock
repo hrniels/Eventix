@@ -879,6 +879,7 @@ dependencies = [
  "eventix-view",
  "formatx",
  "gtk4",
+ "ksni",
  "regex",
  "tempfile",
  "tokio",

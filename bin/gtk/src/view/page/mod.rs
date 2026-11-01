@@ -102,6 +102,7 @@ mod imp {
         pub header_group: RefCell<Option<gtk::SizeGroup>>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
         pub locale: RefCell<Option<Arc<dyn Locale + Send + Sync>>>,
+        pub tray: RefCell<Option<crate::tray::Tray>>,
         pub(super) details: Rc<DetailsController>,
     }
     }
@@ -210,6 +211,24 @@ glib::wrapper! {
 }
 
 impl CalendarPage {
+    pub fn install_tray(&self, window: &crate::window::Window) {
+        if let Some(app) = window.application() {
+            let weak = self.downgrade();
+            app.connect_shutdown(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    page.stop();
+                }
+            });
+        }
+        match crate::tray::Tray::new(window, self.locale()) {
+            Ok(tray) => self.imp().tray.replace(Some(tray)),
+            Err(error) => {
+                tracing::warn!(%error, "Starting system tray failed");
+                None
+            }
+        };
+    }
+
     fn setup_details(&self) {
         let imp = self.imp();
         imp.weekly.imp().timed.set_details(imp.details.clone());
@@ -473,6 +492,7 @@ impl CalendarPage {
     }
 
     pub fn stop(&self) {
+        self.imp().tray.take();
         self.imp().session.stop(self);
     }
 }
