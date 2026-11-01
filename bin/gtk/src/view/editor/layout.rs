@@ -9,7 +9,6 @@ use gtk::prelude::*;
 pub(super) struct FormSection {
     pub toggle: gtk::ToggleButton,
     pub preview: gtk::Label,
-    error: gtk::Image,
 }
 
 impl FormSection {
@@ -39,7 +38,6 @@ impl FormSection {
         let section = Self {
             toggle: builder.object("toggle").expect("section toggle"),
             preview: builder.object("preview").expect("section preview"),
-            error: builder.object("error").expect("section error icon"),
         };
         section.connect_toggle(
             builder.object("arrow").expect("section expansion hint"),
@@ -49,16 +47,6 @@ impl FormSection {
         parent.append(&widget);
 
         section
-    }
-
-    pub fn set_invalid(&self, invalid: bool) {
-        self.error.set_visible(invalid);
-        self.toggle
-            .update_state(&[gtk::accessible::State::Invalid(if invalid {
-                gtk::AccessibleInvalidState::True
-            } else {
-                gtk::AccessibleInvalidState::False
-            })]);
     }
 
     fn connect_toggle(

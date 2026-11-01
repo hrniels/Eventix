@@ -24,9 +24,8 @@ impl ItemEditor {
                 .naive_local();
         }
 
-        let mut editor = Self::build(id, options);
+        let editor = Self::build(id, options);
         editor.populate_existing(&edit);
-        editor.install_feedback();
 
         let editor = Rc::new(editor);
         editor.initial.replace(editor.command().ok());

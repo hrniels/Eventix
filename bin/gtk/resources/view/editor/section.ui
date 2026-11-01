@@ -25,13 +25,6 @@
                   <object class="GtkBox" id="caption_slot"/>
                 </child>
                 <child>
-                  <object class="GtkImage" id="error">
-                    <property name="icon-name">dialog-error-symbolic</property>
-                    <property name="visible">false</property>
-                    <style><class name="ev_editor_section_error"/></style>
-                  </object>
-                </child>
-                <child>
                   <object class="GtkLabel" id="preview">
                     <property name="hexpand">true</property>
                     <property name="xalign">0</property>

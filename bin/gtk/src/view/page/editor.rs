@@ -207,7 +207,7 @@ impl PageEditor {
                     }
                 }
             }
-            Err(issues) => editor.show_validation_errors(&issues),
+            Err(issue) => editor.show_validation_error(&issue),
         }
     }
 

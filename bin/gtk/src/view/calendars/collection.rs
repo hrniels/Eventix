@@ -13,7 +13,10 @@ use eventix_state::{EmailAccount, SyncTimeBound, SyncerType};
 use eventix_view::calendars::{Backend, Collection};
 use gtk::prelude::*;
 
-use super::{ActionHandler, action, clear, icon_action};
+use super::{
+    ActionHandler, ErrorMessage, action, clear, clear_field_error_on_edit, field_error,
+    icon_action, show_error,
+};
 use crate::model::management::{CollectionOperation, Operation, Request};
 
 pub(super) struct CollectionActions {
@@ -50,6 +53,7 @@ impl CollectionActions {
             resize_tick: RefCell::default(),
         });
         controls.widget.set_halign(gtk::Align::Start);
+        clear_field_error_on_edit(&controls.collection_name);
         controls.buttons();
         controls
     }
@@ -394,21 +398,26 @@ impl CollectionActions {
         self.model.borrow_mut().syncer = syncer;
     }
 
-    fn connect_error_resize(self: &Rc<Self>, error: &gtk::Label) {
-        let weak = Rc::downgrade(self);
-        error.connect_notify_local(None, move |error, property| {
-            let resized =
-                property.name() == "visible" || (property.name() == "label" && error.is_visible());
-            if resized {
-                // Visibility notifications can precede GTK's size-cache invalidation.
-                let weak = weak.clone();
-                gtk::glib::idle_add_local_once(move || {
-                    if let Some(controls) = weak.upgrade() {
-                        controls.resize_editor();
-                    }
-                });
-            }
-        });
+    fn connect_error_resize(self: &Rc<Self>, error: &ErrorMessage) {
+        for widget in [
+            error.widget.clone().upcast::<gtk::Widget>(),
+            error.message.clone().upcast(),
+        ] {
+            let weak = Rc::downgrade(self);
+            widget.connect_notify_local(None, move |error, property| {
+                let resized = property.name() == "visible"
+                    || (property.name() == "label" && error.is_visible());
+                if resized {
+                    // Visibility notifications can precede GTK's size-cache invalidation.
+                    let weak = weak.clone();
+                    gtk::glib::idle_add_local_once(move || {
+                        if let Some(controls) = weak.upgrade() {
+                            controls.resize_editor();
+                        }
+                    });
+                }
+            });
+        }
     }
 
     fn resize_editor(self: &Rc<Self>) {
@@ -455,7 +464,9 @@ impl CollectionActions {
             return;
         }
         let result = self.draft.borrow().as_ref().map(|draft| {
-            draft.error.set_visible(false);
+            draft.error.widget.set_visible(false);
+            self.collection_name
+                .remove_css_class("ev_management_field_error");
             draft.operation(&self.model.borrow().syncer, self.locale.borrow().as_ref())
         });
         match result {
@@ -466,6 +477,8 @@ impl CollectionActions {
                         .chars()
                         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
                 {
+                    self.collection_name
+                        .add_css_class("ev_management_field_error");
                     self.error(
                         self.locale
                             .borrow()
@@ -479,6 +492,9 @@ impl CollectionActions {
                     }
                 ) && password.is_none()
                 {
+                    if let Some(form) = self.draft.borrow().as_ref() {
+                        form.password.add_css_class("ev_management_field_error");
+                    }
                     self.error(self.locale.borrow().translate("error.collection_password"));
                 } else {
                     self.submit(CollectionOperation::Create { syncer, password });
@@ -550,12 +566,12 @@ impl CollectionActions {
 
     pub(super) fn error(&self, message: &str) {
         if let Some(form) = self.draft.borrow().as_ref() {
-            form.error.set_text(&format!(
-                "{}: {message}",
-                self.locale.borrow().translate("Error")
-            ));
-            form.error.set_visible(true);
-            form.error.grab_focus();
+            show_error(
+                &form.error,
+                message,
+                self.locale.borrow().translate("Error"),
+            );
+            form.error.widget.grab_focus();
             return;
         }
         gtk::AlertDialog::builder()
@@ -708,7 +724,7 @@ struct CollectionForm {
     widget: gtk::Box,
     syncer_section: gtk::Box,
     labels: gtk::SizeGroup,
-    error: gtk::Label,
+    error: ErrorMessage,
     path: gtk::Entry,
     name: gtk::Entry,
     email: gtk::Entry,
@@ -731,14 +747,7 @@ impl CollectionForm {
             widget: gtk::Box::new(gtk::Orientation::Vertical, 6),
             syncer_section: gtk::Box::new(gtk::Orientation::Vertical, 6),
             labels: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
-            error: gtk::Label::builder()
-                .xalign(0.0)
-                .wrap(true)
-                .max_width_chars(60)
-                .focusable(true)
-                .accessible_role(gtk::AccessibleRole::Alert)
-                .visible(false)
-                .build(),
+            error: ErrorMessage::new(),
             path: gtk::Entry::new(),
             name: gtk::Entry::new(),
             email: gtk::Entry::new(),
@@ -750,6 +759,9 @@ impl CollectionForm {
             limited: gtk::CheckButton::with_label(locale.translate("Last N years")),
             years: gtk::SpinButton::with_range(1.0, 100.0, 1.0),
         };
+        for field in form.fields() {
+            clear_field_error_on_edit(&field);
+        }
         form.syncer_section
             .add_css_class("ev_management_hover_area");
         form.widget.append(&form.syncer_section);
@@ -895,8 +907,7 @@ impl CollectionForm {
         self.widget.append(&separator);
         self.widget
             .append(&self.explanation("info.required_fields", locale));
-        self.error.add_css_class("ev_management_error");
-        self.widget.append(&self.error);
+        self.widget.append(&self.error.widget);
     }
 
     fn row(
@@ -972,26 +983,53 @@ impl CollectionForm {
         row
     }
 
+    fn fields(&self) -> [gtk::Widget; 7] {
+        [
+            self.path.clone().upcast(),
+            self.name.clone().upcast(),
+            self.email.clone().upcast(),
+            self.url.clone().upcast(),
+            self.username.clone().upcast(),
+            self.password.clone().upcast(),
+            self.years.clone().upcast(),
+        ]
+    }
+
     fn operation(
         &self,
         current: &SyncerType,
         locale: &dyn Locale,
     ) -> anyhow::Result<CollectionOperation> {
+        for field in self.fields() {
+            field.remove_css_class("ev_management_field_error");
+        }
         let mut syncer = current.clone();
         if let SyncerType::FileSystem { path } = &mut syncer {
             *path = self.path.text().to_string();
             if path.is_empty() {
-                anyhow::bail!(locale.translate("error.collection_path").to_owned());
+                return Err(field_error(
+                    &self.path,
+                    locale.translate("error.collection_path").to_owned(),
+                ));
             }
             if !std::path::Path::new(path).is_dir() {
-                anyhow::bail!(locale.translate("error.collection_existing_dir").to_owned());
+                return Err(field_error(
+                    &self.path,
+                    locale.translate("error.collection_existing_dir").to_owned(),
+                ));
             }
         } else {
             if self.name.text().is_empty() {
-                anyhow::bail!(locale.translate("error.collection_your_name").to_owned());
+                return Err(field_error(
+                    &self.name,
+                    locale.translate("error.collection_your_name").to_owned(),
+                ));
             }
             if !email_address::EmailAddress::is_valid(&self.email.text()) {
-                anyhow::bail!(locale.translate("error.collection_your_email").to_owned());
+                return Err(field_error(
+                    &self.email,
+                    locale.translate("error.collection_your_email").to_owned(),
+                ));
             }
             let years = if self.limited.is_active() {
                 Some(
@@ -1001,10 +1039,11 @@ impl CollectionForm {
                         .ok()
                         .filter(|years| (1..=100).contains(years))
                         .ok_or_else(|| {
-                            anyhow::anyhow!(
+                            field_error(
+                                &self.years,
                                 locale
                                     .translate("error.collection_time_span_years_range")
-                                    .to_owned()
+                                    .to_owned(),
                             )
                         })?,
                 )
@@ -1016,10 +1055,11 @@ impl CollectionForm {
                 if !gtk::glib::Uri::parse(&value, gtk::glib::UriFlags::NONE).is_ok_and(|uri| {
                     matches!(uri.scheme().as_str(), "http" | "https") && uri.host().is_some()
                 }) {
-                    anyhow::bail!(
+                    return Err(field_error(
+                        &self.url,
                         formatx::formatx!(locale.translate("error.collection_location"), value)
-                            .unwrap()
-                    );
+                            .unwrap(),
+                    ));
                 }
                 *url = value.to_string();
                 *username =
@@ -1071,6 +1111,82 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn collection_validation_marks_fields_and_clears_borders_on_edit() {
+        gtk::init().unwrap();
+        let locale = eventix_locale::default();
+        let syncer = super::new_syncer(eventix_view::calendars::Backend::CalDav);
+        let form = CollectionForm::new(&syncer, locale.as_ref());
+        for (field, valid) in [
+            (&form.name, "User"),
+            (&form.email, "user@example.com"),
+            (&form.url, "https://example.com"),
+        ] {
+            assert!(form.operation(&syncer, locale.as_ref()).is_err());
+            assert!(field.has_css_class("ev_management_field_error"));
+            field.set_text(valid);
+            assert!(!field.has_css_class("ev_management_field_error"));
+        }
+        assert!(form.operation(&syncer, locale.as_ref()).is_ok());
+        form.limited.set_active(true);
+        form.years.set_text("invalid");
+        assert!(form.operation(&syncer, locale.as_ref()).is_err());
+        assert!(form.years.has_css_class("ev_management_field_error"));
+        form.years.set_text("5");
+        assert!(!form.years.has_css_class("ev_management_field_error"));
+
+        let local = super::new_syncer(eventix_view::calendars::Backend::FileSystem);
+        let local_form = CollectionForm::new(&local, locale.as_ref());
+        assert!(local_form.operation(&local, locale.as_ref()).is_err());
+        assert!(local_form.path.has_css_class("ev_management_field_error"));
+        let dir = tempfile::tempdir().unwrap();
+        local_form.path.set_text(&dir.path().to_string_lossy());
+        assert!(!local_form.path.has_css_class("ev_management_field_error"));
+        assert!(local_form.operation(&local, locale.as_ref()).is_ok());
+
+        let controls = super::CollectionActions::new_creation(locale.clone(), &Default::default());
+        controls.open();
+        {
+            let draft = controls.draft.borrow();
+            let form = draft.as_ref().unwrap();
+            form.name.set_text("User");
+            form.email.set_text("user@example.com");
+            form.url.set_text("https://example.com");
+        }
+        controls.save();
+        assert!(
+            controls
+                .collection_name
+                .has_css_class("ev_management_field_error")
+        );
+        controls.collection_name.set_text("valid-name");
+        assert!(
+            !controls
+                .collection_name
+                .has_css_class("ev_management_field_error")
+        );
+        controls
+            .draft
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .username
+            .set_text("user");
+        controls.save();
+        let draft = controls.draft.borrow();
+        let form = draft.as_ref().unwrap();
+        assert!(form.password.has_css_class("ev_management_field_error"));
+        form.password.set_text("secret");
+        assert!(!form.password.has_css_class("ev_management_field_error"));
+        super::show_error(&form.error, "<unsafe> & details", "Fehler");
+        assert_eq!(form.error.prefix.text(), "Fehler:");
+        assert_eq!(form.error.message.text(), "<unsafe> & details");
+        assert!(!form.error.message.uses_markup());
+        drop(draft);
+        controls.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn collection_popup_resizes_when_errors_appear_change_and_clear() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -1111,6 +1227,16 @@ mod tests {
         controls.error(&"A longer error message with additional details. ".repeat(12));
         settle();
         assert!(editor.height() > short_error_height);
+        {
+            let draft = controls.draft.borrow();
+            let error = &draft.as_ref().unwrap().error;
+            let prefix = error.prefix.compute_bounds(&error.widget).unwrap();
+            let message = error.message.compute_bounds(&error.widget).unwrap();
+            assert_eq!(prefix.y(), message.y());
+            assert_eq!(prefix.height(), message.height());
+            assert_eq!(prefix.x() + prefix.width(), message.x());
+            assert!(prefix.height() > 40.0, "prefix fills a multiline error box");
+        }
 
         controls.error("Short error");
         settle();
@@ -1126,7 +1252,16 @@ mod tests {
             .set_text(&dir.path().to_string_lossy());
         controls.save();
         settle();
-        assert!(!controls.draft.borrow().as_ref().unwrap().error.is_visible());
+        assert!(
+            !controls
+                .draft
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .error
+                .widget
+                .is_visible()
+        );
         assert_eq!(editor.height(), clean_height);
         assert_eq!(editor.width(), width);
         controls.close();

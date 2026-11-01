@@ -10,6 +10,8 @@ use eventix_locale::Locale;
 use eventix_view::calendars::{Backend, Calendar, Collection, Snapshot};
 use gtk::prelude::*;
 
+use super::error::{ErrorMessage, show_error};
+
 mod card;
 mod collection;
 
@@ -34,7 +36,7 @@ pub(crate) struct CalendarsView {
     creator: RefCell<Option<Rc<CollectionActions>>>,
     action_choices: RefCell<Vec<String>>,
     calendar_pending: Rc<Cell<bool>>,
-    calendar_form: RefCell<Option<(gtk::Box, gtk::Entry, gtk::Label)>>,
+    calendar_form: RefCell<Option<(gtk::Box, gtk::Entry)>>,
 }
 
 struct CollectionRow {
@@ -147,7 +149,7 @@ impl CalendarsView {
         }
         if matches!(request.operation, Operation::Create(_)) {
             self.calendar_pending.set(false);
-            if let Some((row, entry, _)) = self.calendar_form.borrow().as_ref() {
+            if let Some((row, entry)) = self.calendar_form.borrow().as_ref() {
                 row.set_sensitive(true);
                 if success {
                     entry.set_text("");
@@ -185,13 +187,6 @@ impl CalendarsView {
         ) {
             if let Some(creator) = self.creator.borrow().as_ref() {
                 creator.error(message);
-            }
-            return;
-        }
-        if matches!(request.operation, Operation::Create(_)) {
-            if let Some((_, _, error)) = self.calendar_form.borrow().as_ref() {
-                error.set_text(message);
-                error.set_visible(true);
             }
             return;
         }
@@ -285,41 +280,22 @@ impl CalendarsView {
         heights.add_widget(&add_calendar);
         row.append(&add_calendar);
 
-        let error = gtk::Label::builder()
-            .wrap(true)
-            .xalign(0.0)
-            .visible(false)
-            .accessible_role(gtk::AccessibleRole::Alert)
-            .build();
-        error.add_css_class("ev_management_error");
         let submit = {
             let entry = entry.downgrade();
             let row = row.downgrade();
-            let error = error.downgrade();
             let select = select.downgrade();
             let pending = self.calendar_pending.clone();
             let on_action = self.on_action.clone();
-            let locale = locale.clone();
             move || {
                 if pending.get() {
                     return;
                 }
-                let (Some(entry), Some(row), Some(error), Some(select)) = (
-                    entry.upgrade(),
-                    row.upgrade(),
-                    error.upgrade(),
-                    select.upgrade(),
-                ) else {
+                let (Some(entry), Some(row), Some(select)) =
+                    (entry.upgrade(), row.upgrade(), select.upgrade())
+                else {
                     return;
                 };
-                error.set_visible(false);
                 let name = entry.text().trim().to_owned();
-                if name.is_empty() {
-                    error.set_text(locale.translate("error.calendar_name"));
-                    error.set_visible(true);
-                    entry.grab_focus();
-                    return;
-                }
                 let Some(collection) = choices.get(select.selected() as usize) else {
                     return;
                 };
@@ -340,13 +316,9 @@ impl CalendarsView {
         let clicked = submit.clone();
         add_calendar.connect_clicked(move |_| clicked());
         entry.connect_activate(move |_| submit());
-        let form = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        form.set_hexpand(true);
-        form.append(&row);
-        form.append(&error);
-        self.actions.append(&form);
+        self.actions.append(&row);
         row.set_sensitive(!self.calendar_pending.get());
-        self.calendar_form.replace(Some((row, entry, error)));
+        self.calendar_form.replace(Some((row, entry)));
     }
 }
 
@@ -453,6 +425,17 @@ impl CollectionRow {
         // Reparent stable controls without discarding an open form or a pending action.
         self.description.append(&controls.widget);
     }
+}
+
+fn field_error(field: &impl IsA<gtk::Widget>, message: String) -> anyhow::Error {
+    field.add_css_class("ev_management_field_error");
+    anyhow::anyhow!(message)
+}
+
+fn clear_field_error_on_edit(field: &impl IsA<gtk::Widget>) {
+    field.connect_notify_local(Some("text"), |field, _| {
+        field.remove_css_class("ev_management_field_error");
+    });
 }
 
 fn clear(container: &gtk::Box) {
@@ -665,11 +648,21 @@ mod tests {
         let received = requests.clone();
         view.connect_action(move |request| received.borrow_mut().push(request));
         view.set_snapshot(snapshot());
-        let (_, entry, error) = view.calendar_form.borrow().as_ref().unwrap().clone();
+        let (row, entry) = view.calendar_form.borrow().as_ref().unwrap().clone();
         entry.emit_activate();
-        assert!(error.is_visible());
-        assert!(requests.borrow().is_empty());
+        let request = requests.borrow_mut().remove(0);
+        assert!(matches!(&request.operation, Operation::Create(name) if name.is_empty()));
+        view.finish(&request, false);
+        view.show_error(&request, "Calendar name is required");
+        assert!(row.is_sensitive());
+        assert!(!entry.has_css_class("ev_management_field_error"));
+        assert!(
+            descendants(row.upcast_ref())
+                .iter()
+                .all(|widget| !widget.has_css_class("ev_management_error"))
+        );
         entry.set_text("New calendar");
+        assert!(!entry.has_css_class("ev_management_field_error"));
         view.set_snapshot(snapshot());
         assert_eq!(entry.text(), "New calendar");
         entry.emit_activate();
@@ -680,10 +673,8 @@ mod tests {
         assert_eq!(request.description(), "Calendar added");
         view.finish(&request, false);
         view.show_error(&request, "Failed");
-        assert!(error.is_visible());
         assert_eq!(entry.text(), "New calendar");
         entry.emit_activate();
-        assert!(!error.is_visible());
         view.finish(&request, true);
         assert!(entry.text().is_empty());
         requests.borrow_mut().clear();
@@ -1382,14 +1373,15 @@ mod tests {
             .into_iter()
             .find_map(|widget| {
                 widget
-                    .downcast::<gtk::Label>()
+                    .downcast::<gtk::Box>()
                     .ok()
-                    .filter(|label| label.has_css_class("ev_management_error"))
+                    .filter(|widget| widget.has_css_class("ev_management_error"))
             })
             .unwrap();
         assert!(error.is_visible());
+        let message = error.last_child().and_downcast::<gtk::Label>().unwrap();
         assert!(
-            error
+            message
                 .text()
                 .contains(snapshot().locale.translate("error.collection_your_name"))
         );
@@ -1431,7 +1423,7 @@ mod tests {
         view.finish(&request, false);
         view.show_error(&request, "Test persistence failure");
         assert!(error.is_visible());
-        assert!(error.text().contains("Test persistence failure"));
+        assert!(message.text().contains("Test persistence failure"));
         assert!(editor.is_visible());
         assert!(editor.is_sensitive());
         assert_eq!(name.text(), "Unsaved collection draft");

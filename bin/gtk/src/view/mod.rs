@@ -10,6 +10,7 @@ pub(crate) mod card;
 mod creation_hint;
 pub mod details;
 pub(crate) mod editor;
+mod error;
 mod geometry;
 mod indicators;
 mod list;

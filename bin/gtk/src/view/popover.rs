@@ -489,13 +489,14 @@ impl DetailsController {
                                 .1,
                             root.width(),
                             root.height(),
+                            popover.placement_size().1,
                         )
                     })
                 })
                 .or_else(|| {
                     popover.root().map(|root| {
                         let (width, height) = popover.placement_size();
-                        (height, width, root.height())
+                        (height, width, root.height(), height)
                     })
                 });
             let transitioning = popover
@@ -852,6 +853,96 @@ mod tests {
         }
         window.close();
         drain();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn item_editor_bottom_errors_resize_the_popup_smoothly() {
+        use std::cell::RefCell;
+
+        use eventix_view::editor::{EditorCalendar, EditorOptions};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        gtk::Settings::default()
+            .unwrap()
+            .set_gtk_enable_animations(true);
+        let parent: crate::view::page::CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .child(&parent)
+            .default_width(1200)
+            .default_height(1000)
+            .build();
+        window.present();
+        let editor = crate::view::editor::ItemEditor::new(
+            1,
+            EditorOptions {
+                kind: eventix_ical::objects::CalCompType::Event,
+                calendars: vec![EditorCalendar {
+                    id: "test".into(),
+                    name: "Test".into(),
+                    background: "#27c281".into(),
+                    personal: false,
+                }],
+                last_calendar: None,
+                locations: vec![],
+                contacts: vec![],
+                start: "2026-10-15T10:00:00".parse().unwrap(),
+                locale: eventix_locale::default(),
+            },
+        );
+        let controller = Rc::new(super::DetailsController::default());
+        controller.show_new_editor(parent.upcast_ref(), &editor.popup_panel());
+        let popup = controller.current().unwrap();
+        let samples = Rc::new(RefCell::new(Vec::new()));
+        let observed = samples.clone();
+        popup.add_tick_callback(move |popup, _| {
+            observed.borrow_mut().push(popup.height());
+            gtk::glib::ControlFlow::Continue
+        });
+        let settle = || {
+            for _ in 0..40 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        settle();
+        let clean = popup.height();
+        let assert_animated = |from: i32, to: i32| {
+            assert!(
+                samples
+                    .borrow()
+                    .iter()
+                    .any(|height| (from.min(to) + 1..from.max(to)).contains(height)),
+                "popup resize includes intermediate heights: {:?}",
+                samples.borrow()
+            );
+        };
+        samples.borrow_mut().clear();
+        editor.show_error("Short error");
+        settle();
+        let short = popup.height();
+        assert!(short > clean);
+        assert_animated(clean, short);
+        samples.borrow_mut().clear();
+        editor.show_error(&"A longer error message with details. ".repeat(30));
+        settle();
+        let long = popup.height();
+        assert!(long > short);
+        assert_animated(short, long);
+        samples.borrow_mut().clear();
+        editor.show_error("Short error");
+        settle();
+        assert_eq!(popup.height(), short);
+        assert_animated(long, short);
+        samples.borrow_mut().clear();
+        editor.clear_errors();
+        settle();
+        assert_eq!(popup.height(), clean);
+        assert_animated(short, clean);
+        controller.close();
+        window.close();
     }
 
     #[test]

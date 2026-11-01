@@ -43,7 +43,7 @@ pub(crate) struct ItemEditor {
     initial: RefCell<Option<Box<CreateItem>>>,
     title: gtk::Label,
     form: gtk::Box,
-    error: gtk::Label,
+    error: super::error::AnimatedError,
     options: EditorOptions,
     calendar: CalendarSelector,
     summary: gtk::Entry,
@@ -67,7 +67,7 @@ pub(crate) struct ItemEditor {
     new_attendee: gtk::Entry,
     previews: Vec<gtk::Label>,
     sections: Vec<FormSection>,
-    feedback: Vec<feedback::FieldFeedback>,
+    invalid: RefCell<Option<gtk::Widget>>,
     _completions: Vec<completion::Completion>,
 }
 
@@ -77,7 +77,7 @@ impl ItemEditor {
     }
 
     pub(crate) fn new_at(id: u64, options: EditorOptions, all_day: bool) -> Rc<Self> {
-        let mut editor = Self::build(id, options);
+        let editor = Self::build(id, options);
         if all_day {
             editor
                 .end
@@ -85,8 +85,6 @@ impl ItemEditor {
                 .set_text(&editor.options.start.date().to_string());
             editor.all_day.set_active(true);
         }
-
-        editor.install_feedback();
 
         let editor = Rc::new(editor);
         editor.connect_timezone();
@@ -179,7 +177,7 @@ impl ItemEditor {
             new_attendee: attendees.new_entry,
             previews,
             sections,
-            feedback: Vec::new(),
+            invalid: RefCell::default(),
             _completions: vec![location_completion, attendees.completion],
         }
     }
@@ -464,8 +462,9 @@ impl ItemEditor {
     }
 
     pub fn show_error(&self, message: &str) {
-        self.error.set_text(message);
-        self.error.set_visible(true);
+        self.clear_errors();
+        self.error
+            .show(message, self.options.locale.translate("Error"));
     }
 
     fn timed_dates(
@@ -515,7 +514,7 @@ struct EditorShell {
     form: gtk::Box,
     save: gtk::Button,
     cancel: gtk::Button,
-    error: gtk::Label,
+    error: super::error::AnimatedError,
 }
 
 impl EditorShell {
@@ -530,8 +529,12 @@ impl EditorShell {
             form: builder.object("form").expect("editor form"),
             save: builder.object("save").expect("editor save button"),
             cancel: builder.object("cancel").expect("editor cancel button"),
-            error: builder.object("error").expect("editor error label"),
+            error: super::error::AnimatedError::new(),
         };
+        builder
+            .object::<gtk::Box>("error_slot")
+            .expect("editor error slot")
+            .append(&shell.error.widget);
         // Editor and details widths share the same popup-placement contract.
         shell.panel.set_size_request(super::ITEM_PANEL_WIDTH, -1);
         shell
@@ -549,10 +552,10 @@ impl EditorShell {
         }
 
         if options.calendars.is_empty() {
-            shell
-                .error
-                .set_text(locale.translate("error.create_calendar_first"));
-            shell.error.set_visible(true);
+            shell.error.show(
+                locale.translate("error.create_calendar_first"),
+                locale.translate("Error"),
+            );
             shell.save.set_sensitive(false);
         }
 
@@ -1787,24 +1790,18 @@ mod tests {
         assert!(editor.has_due.is_active());
         assert_eq!(editor.end.entry.text(), "2026-10-15");
         editor.recurrence.frequency.set_selected(2);
-        assert!(
-            editor
-                .command()
-                .unwrap_err()
-                .iter()
-                .any(|issue| issue.field == super::validation::Field::StartDate)
+        assert_eq!(
+            editor.command().unwrap_err().field,
+            super::validation::Field::StartDate
         );
         editor.recurrence.frequency.set_selected(0);
         let status = editor.task_status.as_ref().unwrap();
         status.status.set_selected(1);
         status.has_completed.set_active(true);
         status.completed.entry.set_text("invalid");
-        assert!(
-            editor
-                .command()
-                .unwrap_err()
-                .iter()
-                .any(|issue| issue.field == super::validation::Field::CompletedDate)
+        assert_eq!(
+            editor.command().unwrap_err().field,
+            super::validation::Field::CompletedDate
         );
         status.completed.entry.set_text("2026-10-16");
         let fields = editor.command().unwrap();
@@ -2437,7 +2434,7 @@ mod tests {
             editor.show_error("test error");
             assert_eq!(editor.summary.text(), "New event");
             assert!(editor.save.is_sensitive());
-            assert!(editor.error.is_visible());
+            assert!(editor.error.widget.reveals_child());
             editor.new_attendee.set_text("Guest <guest@example.org>");
             assert!(editor.command().is_err());
             // Enter accepts the pending attendee, clears the entry, and updates the summary.
