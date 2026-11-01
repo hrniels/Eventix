@@ -193,9 +193,9 @@ impl StatusBar {
                 locale.translate("Activity history"),
             )]);
         let cancel = &self.imp().cancel_sync;
-        cancel.set_tooltip_text(Some(locale.translate("Cancel synchronization")));
+        cancel.set_tooltip_text(Some(locale.translate("Cancel operation")));
         cancel.update_property(&[gtk::accessible::Property::Label(
-            locale.translate("Cancel synchronization"),
+            locale.translate("Cancel operation"),
         )]);
     }
 
@@ -204,14 +204,14 @@ impl StatusBar {
     }
 
     pub fn can_cancel(&self) -> bool {
-        self.imp().cancel_sync.is_sensitive()
+        self.imp().cancel_sync.is_visible() && self.imp().cancel_sync.is_sensitive()
     }
 
     pub fn cancelling(&self) {
         self.imp().cancel_sync.set_sensitive(false);
     }
 
-    pub fn start_sync(&self, locale: &dyn Locale) {
+    pub fn start_operation(&self, locale: &dyn Locale, description: &str, determinate: bool) {
         self.stop();
         let imp = self.imp();
         imp.sync_progress.set_fraction(0.0);
@@ -219,7 +219,22 @@ impl StatusBar {
         imp.cancel_sync.set_sensitive(true);
         imp.cancel_sync.set_visible(true);
         imp.sync_progress
-            .set_tooltip_text(Some(locale.translate("Synchronizing calendars…")));
+            .set_tooltip_text(Some(locale.translate(description)));
+        // Single-collection backends do not expose measurable intermediate progress.
+        if !determinate {
+            imp.sync_progress.pulse();
+            let weak = self.downgrade();
+            imp.progress_timer.replace(Some(glib::timeout_add_local(
+                std::time::Duration::from_millis(100),
+                move || {
+                    let Some(status) = weak.upgrade() else {
+                        return glib::ControlFlow::Break;
+                    };
+                    status.imp().sync_progress.pulse();
+                    glib::ControlFlow::Continue
+                },
+            )));
+        }
     }
 
     pub fn set_progress(&self, completed: usize, total: usize) {

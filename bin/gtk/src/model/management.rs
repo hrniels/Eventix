@@ -62,6 +62,27 @@ pub(crate) struct Request {
 }
 
 impl Request {
+    pub(crate) fn is_cancellable(&self) -> bool {
+        matches!(
+            self.operation,
+            Operation::Reload
+                | Operation::Collection(
+                    CollectionOperation::Reload
+                        | CollectionOperation::Discover
+                        | CollectionOperation::Sync
+                )
+        )
+    }
+
+    pub(crate) fn progress_description(&self) -> &'static str {
+        match self.operation {
+            Operation::Reload => "Reloading calendar…",
+            Operation::Collection(CollectionOperation::Reload) => "Reloading collection…",
+            Operation::Collection(CollectionOperation::Discover) => "Discovering collection…",
+            _ => "Synchronizing collection…",
+        }
+    }
+
     /// Returns the translation key for this management action's outcome.
     pub(crate) fn description(&self) -> &'static str {
         match self.operation {
@@ -87,14 +108,16 @@ impl Request {
 
 /// Applies calendar and collection management changes using the HTML UI's state operations.
 pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Result<()> {
+    if request.is_cancellable() {
+        return apply_cancellable(state, request, &SyncCancellation::default())
+            .await
+            .map(|_| ());
+    }
     if let Operation::Create(name) = &request.operation {
         return State::create_calendar(state, &request.collection, name).await;
     }
     if let Operation::Collection(operation) = &request.operation {
         return apply_collection(state, &request.collection, operation).await;
-    }
-    if matches!(request.operation, Operation::Reload) {
-        return reload(state, request).await;
     }
 
     let mut state = state.lock().await;
@@ -178,16 +201,22 @@ pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Re
     State::refresh_store(&mut state).await
 }
 
-async fn reload(state: &EventixState, request: &Request) -> anyhow::Result<()> {
+/// Runs reload, discovery, or synchronization and reports whether it was cancelled.
+pub(crate) async fn apply_cancellable(
+    state: &EventixState,
+    request: &Request,
+    cancellation: &SyncCancellation,
+) -> anyhow::Result<bool> {
     let locale = {
         let state = state.lock().await;
-        if !request.configured
-            || state
-                .settings()
-                .collections()
-                .get(&request.collection)
-                .and_then(|collection| collection.all_calendars().get(&request.calendar))
-                .is_none()
+        if matches!(request.operation, Operation::Reload)
+            && (!request.configured
+                || state
+                    .settings()
+                    .collections()
+                    .get(&request.collection)
+                    .and_then(|collection| collection.all_calendars().get(&request.calendar))
+                    .is_none())
         {
             anyhow::bail!(
                 state
@@ -198,15 +227,26 @@ async fn reload(state: &EventixState, request: &Request) -> anyhow::Result<()> {
         }
         state.locale()
     };
-    let result = State::reload_calendar(
-        state,
-        &request.collection,
-        &request.calendar,
-        None,
-        &SyncCancellation::default(),
-    )
-    .await?;
-    check_sync_result(&result, locale.as_ref())
+    let id = &request.collection;
+    let result = match request.operation {
+        Operation::Reload => {
+            State::reload_calendar(state, id, &request.calendar, None, cancellation).await?
+        }
+        Operation::Collection(CollectionOperation::Reload) => {
+            State::reload_collection(state, id, None, cancellation).await?
+        }
+        Operation::Collection(CollectionOperation::Discover) => {
+            State::discover_collection(state, id, None, cancellation).await?
+        }
+        Operation::Collection(CollectionOperation::Sync) => {
+            State::sync_collection(state, id, None, cancellation).await?
+        }
+        _ => anyhow::bail!("Operation does not support cancellation"),
+    };
+    if !result.cancelled {
+        check_sync_result(&result, locale.as_ref())?;
+    }
+    Ok(result.cancelled)
 }
 
 fn check_sync_result(
@@ -245,7 +285,7 @@ async fn apply_collection(
         return State::create_collection(state, id, syncer.as_ref().clone(), password.as_deref())
             .await;
     }
-    let locale = {
+    {
         let state = state.lock().await;
         if !state.settings().collections().contains_key(id) {
             anyhow::bail!(
@@ -255,31 +295,23 @@ async fn apply_collection(
                     .to_owned()
             );
         }
-        state.locale()
-    };
-    let cancellation = SyncCancellation::default();
-    let result = match operation {
-        CollectionOperation::Create { .. } => unreachable!(),
-        CollectionOperation::Sync => State::sync_collection(state, id, None, &cancellation).await?,
-        CollectionOperation::Discover => {
-            State::discover_collection(state, id, None, &cancellation).await?
-        }
-        CollectionOperation::Reload => {
-            State::reload_collection(state, id, None, &cancellation).await?
-        }
+    }
+    match operation {
+        CollectionOperation::Create { .. }
+        | CollectionOperation::Sync
+        | CollectionOperation::Discover
+        | CollectionOperation::Reload => unreachable!(),
         CollectionOperation::Save { syncer, password } => {
-            return State::save_collection(state, id, syncer.as_ref().clone(), password.as_deref())
-                .await;
+            State::save_collection(state, id, syncer.as_ref().clone(), password.as_deref()).await
         }
         CollectionOperation::Delete => {
             let mut state = state.lock().await;
             State::delete_collection(&mut state, id).await?;
             let saved = state.settings().write_to_file();
             State::refresh_store(&mut state).await?;
-            return saved;
+            saved
         }
-    };
-    check_sync_result(&result, locale.as_ref())
+    }
 }
 
 #[cfg(test)]

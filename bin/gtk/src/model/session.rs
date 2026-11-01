@@ -4,7 +4,7 @@
 
 //! Serialized queries and mutations with independent background sync; never accesses GTK objects.
 
-use std::{fmt, sync::Arc, thread};
+use std::{collections::VecDeque, fmt, sync::Arc, thread};
 
 use chrono::{Duration, NaiveDate, Utc};
 use eventix_ical::objects::CalCompType;
@@ -120,7 +120,18 @@ pub(crate) enum Event {
     SidebarLoaded(Result<SidebarSnapshot, String>),
     StateLoaded,
     ReloadFailed(String),
-    SyncProgress { completed: usize, total: usize },
+    SyncProgress {
+        completed: usize,
+        total: usize,
+    },
+    OperationStarted {
+        description: &'static str,
+        determinate: bool,
+    },
+    OperationFinished {
+        completed: bool,
+        cancelled: bool,
+    },
     SyncFinished(Result<SyncResult, String>),
     AuthPrompt(u64, AuthPrompt),
     AuthFinished(u64, Result<AuthOutcome, String>),
@@ -189,6 +200,7 @@ enum Message {
     AuthenticationFinished(u64, Result<AuthOutcome, String>),
     SyncFinished(Result<SyncResult, String>),
     Execute(Box<dyn Action>),
+    ManagementCompleted(ManagementRequest, Result<bool, String>),
 }
 
 impl Message {
@@ -554,6 +566,7 @@ struct RunningSync {
     _task: tokio::task::JoinHandle<()>,
     cancellation: SyncCancellation,
     activity: Activity,
+    management: bool,
 }
 
 struct RunningAuthentication {
@@ -569,6 +582,7 @@ struct WorkerRuntime {
     results: async_channel::Sender<Event>,
     sync: Option<RunningSync>,
     authentication: Option<RunningAuthentication>,
+    pending_operations: VecDeque<(Message, u64)>,
 }
 
 impl WorkerRuntime {
@@ -583,6 +597,7 @@ impl WorkerRuntime {
                 results,
                 sync: None,
                 authentication: None,
+                pending_operations: VecDeque::new(),
             }),
             Err(error) => {
                 let _ = results.send_blocking(Event::Activity(
@@ -673,6 +688,39 @@ impl Worker {
 
     fn dispatch(&mut self, runtime: &mut WorkerRuntime, message: Message, request: u64) {
         match message {
+            Message::ManageCalendar(command) if command.is_cancellable() => {
+                if runtime.sync.is_some() {
+                    runtime
+                        .pending_operations
+                        .push_back((Message::ManageCalendar(command), request));
+                } else {
+                    self.begin_management(runtime, command, request);
+                }
+            }
+            Message::ManagementCompleted(command, result) => {
+                let activity = runtime.sync.take().map(|sync| sync.activity);
+                let cancelled = result.as_ref().is_ok_and(|cancelled| *cancelled);
+                let completed = result.is_ok();
+                let mut events = vec![Event::CalendarsLoaded(self.calendars())];
+                events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
+                events.push(Event::ManagementFinished(command, result.map(|_| ())));
+                events.push(Event::OperationFinished {
+                    completed,
+                    cancelled,
+                });
+                let activity = if cancelled {
+                    if let Some(activity) = activity {
+                        let _ = runtime.results.send_blocking(Event::Activity(
+                            activity.finish(Phase::Cancelled, None),
+                        ));
+                    }
+                    None
+                } else {
+                    activity
+                };
+                publish_events(&runtime.results, events, activity, request);
+                self.next_operation(runtime);
+            }
             Message::ManageCalendar(command) => {
                 let activity = Message::ManageCalendar(command.clone()).activity(request);
                 if let Some(activity) = &activity {
@@ -705,20 +753,38 @@ impl Worker {
                 }
             }
             message => {
-                let activity = if matches!(message, Message::SyncFinished(_)) {
+                let finished = matches!(message, Message::SyncFinished(_));
+                let activity = if finished {
                     runtime.sync.take().map(|sync| sync.activity)
                 } else {
                     message.activity(request)
                 };
                 publish_events(&runtime.results, self.handle(message), activity, request);
+                if finished {
+                    self.next_operation(runtime);
+                }
             }
         }
     }
 
     fn begin_sync(&mut self, runtime: &mut WorkerRuntime, request: u64) {
-        if runtime.sync.is_some() {
+        if let Some(sync) = &runtime.sync {
+            if sync.management
+                && !runtime
+                    .pending_operations
+                    .iter()
+                    .any(|(message, _)| matches!(message, Message::SyncAll))
+            {
+                runtime
+                    .pending_operations
+                    .push_back((Message::SyncAll, request));
+            }
             return;
         }
+        let _ = runtime.results.send_blocking(Event::OperationStarted {
+            description: "Synchronizing calendars…",
+            determinate: true,
+        });
         let cancellation = SyncCancellation::default();
         let activity = Message::SyncAll.activity(request).unwrap();
         let _ = runtime
@@ -736,7 +802,59 @@ impl Worker {
                 _task: task,
                 cancellation,
                 activity,
+                management: false,
             });
+    }
+
+    fn next_operation(&mut self, runtime: &mut WorkerRuntime) {
+        while runtime.sync.is_none() {
+            let Some((message, request)) = runtime.pending_operations.pop_front() else {
+                break;
+            };
+            self.dispatch(runtime, message, request);
+        }
+    }
+
+    fn begin_management(
+        &mut self,
+        runtime: &mut WorkerRuntime,
+        command: ManagementRequest,
+        request: u64,
+    ) {
+        let activity = Message::ManageCalendar(command.clone())
+            .activity(request)
+            .unwrap();
+        let _ = runtime
+            .results
+            .send_blocking(Event::Activity(activity.clone()));
+        let _ = runtime.results.send_blocking(Event::OperationStarted {
+            description: command.progress_description(),
+            determinate: false,
+        });
+        let cancellation = SyncCancellation::default();
+        let token = cancellation.clone();
+        let state = self.state.clone();
+        let requests = runtime.requests.clone();
+        let task = runtime.runtime.spawn(async move {
+            let task_command = command.clone();
+            let result = tokio::spawn(async move {
+                let state = state.ok_or_else(|| anyhow::anyhow!("No loaded state"))?;
+                management::apply_cancellable(&state, &task_command, &token).await
+            })
+            .await
+            .map_err(anyhow::Error::from)
+            .and_then(|result| result)
+            .map_err(|error| format!("{error:#}"));
+            let _ = requests
+                .send(Message::ManagementCompleted(command, result))
+                .await;
+        });
+        runtime.sync = Some(RunningSync {
+            _task: task,
+            cancellation,
+            activity,
+            management: true,
+        });
     }
 
     fn begin_authentication(
@@ -890,7 +1008,7 @@ impl Worker {
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
-            Message::SyncAll | Message::CancelSync => {
+            Message::SyncAll | Message::CancelSync | Message::ManagementCompleted(..) => {
                 unreachable!("sync is dispatched independently of queries")
             }
             Message::Authenticate(..)
@@ -1541,6 +1659,162 @@ mod tests {
                 .iter()
                 .all(|entry| entry.phase() != Phase::Completed)
         );
+    }
+
+    #[test]
+    fn management_and_full_sync_share_one_background_operation_queue() {
+        use crate::model::management::{CollectionOperation, Operation, Request};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        let (requests, receiver) = async_channel::unbounded();
+        let (results, responses) = async_channel::unbounded();
+        let mut runtime = super::WorkerRuntime::new(requests, results).unwrap();
+        let command = Request {
+            collection: "local".into(),
+            calendar: "test".into(),
+            folder: String::new(),
+            configured: true,
+            operation: Operation::Collection(CollectionOperation::Sync),
+        };
+        worker.dispatch(&mut runtime, Message::ManageCalendar(command.clone()), 1);
+        worker.dispatch(&mut runtime, Message::ManageCalendar(command), 2);
+        worker.dispatch(&mut runtime, Message::SyncAll, 3);
+        worker.dispatch(&mut runtime, Message::SyncAll, 4);
+        assert_eq!(runtime.pending_operations.len(), 2);
+        for request in 5..8 {
+            let message = runtime.runtime.block_on(async {
+                tokio::time::timeout(std::time::Duration::from_secs(5), receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+            });
+            worker.dispatch(&mut runtime, message, request);
+        }
+        assert!(runtime.sync.is_none());
+        assert!(runtime.pending_operations.is_empty());
+        let mut lifecycle = Vec::new();
+        while let Ok(event) = responses.try_recv() {
+            match event {
+                Event::OperationStarted { determinate, .. } => lifecycle.push((true, determinate)),
+                Event::OperationFinished { .. } => lifecycle.push((false, false)),
+                Event::SyncFinished(_) => lifecycle.push((false, true)),
+                _ => {}
+            }
+        }
+        assert_eq!(
+            lifecycle,
+            [
+                (true, false),
+                (false, false),
+                (true, false),
+                (false, false),
+                (true, true),
+                (false, true),
+            ]
+        );
+    }
+
+    #[test]
+    fn management_background_operations_can_be_cancelled_without_blocking_queries() {
+        use crate::model::management::{CollectionOperation, Operation, Request};
+
+        for operation in [
+            Operation::Reload,
+            Operation::Collection(CollectionOperation::Reload),
+            Operation::Collection(CollectionOperation::Discover),
+            Operation::Collection(CollectionOperation::Sync),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            fs::create_dir(tmp.path().join("vdirsyncer")).unwrap();
+            let mut worker = worker(tmp.path());
+            subscribe(&mut worker, 17, "2026-10-12", View::Week);
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let listener = runtime
+                .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+                .unwrap();
+            let address = listener.local_addr().unwrap();
+            worker
+                .state()
+                .unwrap()
+                .settings_mut()
+                .collections_mut()
+                .get_mut("local")
+                .unwrap()
+                .set_syncer(SyncerType::VDirSyncer {
+                    email: eventix_state::EmailAccount::new(
+                        "Test".into(),
+                        "test@example.com".into(),
+                    ),
+                    url: format!("http://{address}/"),
+                    read_only: false,
+                    username: None,
+                    password: None,
+                    time_span: Default::default(),
+                });
+            let (session, responses) = super::CalendarSession::start_worker(worker);
+            session.manage_calendar(Request {
+                collection: "local".into(),
+                calendar: "test".into(),
+                folder: String::new(),
+                configured: true,
+                operation,
+            });
+            runtime.block_on(async {
+                tokio::time::timeout(std::time::Duration::from_secs(15), async {
+                    let (_connection, _) = listener.accept().await.unwrap();
+                    session.load_management(42);
+                    let mut started = false;
+                    loop {
+                        match responses.recv().await.unwrap() {
+                            Event::OperationStarted { determinate, .. } => {
+                                assert!(!determinate);
+                                started = true;
+                            }
+                            Event::ManagementLoaded(42, result) => {
+                                assert!(result.is_ok());
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                    assert!(started);
+                    session.cancel_sync();
+                    session.cancel_sync();
+                    let mut refreshed = false;
+                    let mut cancelled_activity = false;
+                    let mut finished = false;
+                    loop {
+                        match responses.recv().await.unwrap() {
+                            Event::ContentLoaded(response) => {
+                                assert_eq!(response.generation, 17);
+                                assert!(response.result.is_ok());
+                                refreshed = true;
+                            }
+                            Event::Activity(activity) => {
+                                assert_ne!(activity.phase(), super::Phase::Completed);
+                                cancelled_activity |= activity.phase() == super::Phase::Cancelled;
+                            }
+                            Event::ManagementFinished(_, result) => {
+                                assert!(result.is_ok());
+                                finished = true;
+                            }
+                            Event::OperationFinished {
+                                completed,
+                                cancelled,
+                            } => {
+                                assert!(completed && cancelled);
+                                assert!(refreshed && cancelled_activity && finished);
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                })
+                .await
+                .unwrap();
+            });
+        }
     }
 
     #[test]

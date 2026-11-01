@@ -142,12 +142,10 @@ impl PageSession {
         let imp = page.imp();
         self.pending_sync.set(true);
         imp.reload.set_sensitive(false);
-        imp.status.start_sync(page.locale().as_ref());
     }
 
     pub(super) fn cancel_sync(&self, page: &CalendarPage) {
-        if self.pending_sync.get()
-            && page.imp().status.can_cancel()
+        if page.imp().status.can_cancel()
             && let Some(session) = self.current.borrow().as_ref()
         {
             session.cancel_sync();
@@ -441,6 +439,19 @@ impl PageSession {
             Event::SyncProgress { completed, total } => {
                 imp.status.set_progress(completed, total);
             }
+            Event::OperationStarted {
+                description,
+                determinate,
+            } => {
+                imp.status
+                    .start_operation(page.locale().as_ref(), description, determinate);
+            }
+            Event::OperationFinished {
+                completed,
+                cancelled,
+            } => {
+                imp.status.finish_sync(completed, cancelled);
+            }
             Event::SyncFinished(result) => self.sync_finished(page, result),
             Event::AuthPrompt(id, prompt) => {
                 if id == self.auth_generation.get()
@@ -616,6 +627,15 @@ mod tests {
         assert!(!status.cancel_sync.is_visible());
         gtk::prelude::ActionGroupExt::activate_action(&window, "reload", None);
         assert!(imp.session.pending_sync.get());
+        glib::MainContext::default().block_on(async {
+            while let Ok(event) = responses.recv().await {
+                let started = matches!(event, Event::OperationStarted { .. });
+                imp.session.handle_event(&page, event);
+                if started {
+                    break;
+                }
+            }
+        });
         assert!(status.sync_progress.is_visible());
         assert!(status.cancel_sync.is_visible());
         assert!(status.cancel_sync.is_sensitive());
@@ -730,6 +750,41 @@ mod tests {
         assert!(imp.session.auth_popup.borrow().is_none());
         assert!(status.progress_timer.borrow().is_none());
         assert_eq!(imp.status.text(), latest);
+        for description in [
+            "Reloading calendar…",
+            "Reloading collection…",
+            "Discovering collection…",
+            "Synchronizing collection…",
+        ] {
+            imp.session.handle_event(
+                &page,
+                Event::OperationStarted {
+                    description,
+                    determinate: false,
+                },
+            );
+            assert!(!imp.session.pending_sync.get());
+            assert!(status.sync_progress.is_visible());
+            assert!(status.cancel_sync.is_visible());
+            assert!(status.cancel_sync.is_sensitive());
+            assert!(status.progress_timer.borrow().is_some());
+            assert_eq!(
+                status.sync_progress.tooltip_text().as_deref(),
+                Some(description)
+            );
+            status.cancel_sync.emit_clicked();
+            assert!(!status.cancel_sync.is_sensitive());
+            imp.session.handle_event(
+                &page,
+                Event::OperationFinished {
+                    completed: true,
+                    cancelled: true,
+                },
+            );
+            assert!(!status.sync_progress.is_visible());
+            assert!(!status.cancel_sync.is_visible());
+            assert!(status.progress_timer.borrow().is_none());
+        }
         window.close();
         assert!(status.progress_timer.borrow().is_none());
         assert!(!status.sync_progress.is_visible());
