@@ -103,7 +103,6 @@ checkbutton.ev_management_check > radio {
 }
 
 .ev_management_sync_types > button {
-    font-size: 0.9em;
     min-height: 20px;
     min-width: 0;
     padding: 2px 6px;
