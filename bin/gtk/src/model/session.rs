@@ -1562,15 +1562,21 @@ mod tests {
             .unwrap()
         });
         assert_eq!(entries.len(), 3);
-        let locale = eventix_locale::default();
+        let xdg = xdg::BaseDirectories::with_prefix(tmp.path().file_name().unwrap());
+        let locale = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::English,
+            chrono_tz::UTC,
+        )
+        .unwrap();
         assert_eq!(entries[0].summary(locale.as_ref()), "New event created");
         assert_eq!(entries[0].phase(), Phase::Completed);
         assert_eq!(entries[0].items(), std::slice::from_ref(&created));
         assert_ne!(created.uid, "move-me");
-        assert_eq!(entries[1].summary(locale.as_ref()), "Failed: Item deleted");
+        assert_eq!(entries[1].summary(locale.as_ref()), "Item deletion failed");
         assert_eq!(entries[1].phase(), Phase::Failed);
         assert_eq!(entries[1].items()[0].uid, "missing");
-        assert_eq!(entries[2].summary(locale.as_ref()), "Failed: Loading item");
+        assert_eq!(entries[2].summary(locale.as_ref()), "Item loading failed");
         assert_eq!(entries[2].phase(), Phase::Failed);
     }
 

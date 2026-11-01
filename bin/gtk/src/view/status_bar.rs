@@ -329,7 +329,14 @@ mod tests {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let status: StatusBar = glib::Object::new();
-        let locale = eventix_locale::default();
+        let temporary = tempfile::tempdir().unwrap();
+        let xdg = xdg::BaseDirectories::with_prefix(temporary.path().file_name().unwrap());
+        let locale = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::English,
+            chrono_tz::UTC,
+        )
+        .unwrap();
         status.set_locale(locale.as_ref());
         let imp = status.imp();
         status.set_calendars(&[crate::model::calendars::CalendarVisibility {
@@ -401,7 +408,7 @@ mod tests {
         let newest = newest.borrow::<super::HistoryEntry>();
         assert_eq!(newest.icon, "dialog-error-symbolic");
         let newest = &newest.text;
-        assert!(newest.contains("Failed: Item updated — Calendar: Work, UID: abc123"));
+        assert!(newest.contains("Item update failed — Calendar: Work, UID: abc123"));
         assert!(!newest.contains("#7"));
         assert!(!newest.contains("calendar-id-123"));
         assert!(newest.contains(": Could not save: detail"));
@@ -412,7 +419,7 @@ mod tests {
             .and_downcast::<glib::BoxedAnyObject>()
             .unwrap();
         let previous = previous.borrow::<super::HistoryEntry>();
-        assert!(previous.text.contains("Item updated started"));
+        assert!(previous.text.contains("Item update started"));
         assert_eq!(previous.icon, "dialog-information-symbolic");
         let label = first_entry_label(imp.history.upcast_ref()).unwrap();
         assert_eq!(label.selection_bounds(), None);
@@ -423,7 +430,7 @@ mod tests {
         );
         assert!(!imp.status.wraps());
         assert!(imp.status.is_single_line_mode());
-        assert_eq!(status.text(), "Failed: Item updated");
+        assert_eq!(status.text(), "Item update failed");
         assert_eq!(
             imp.status.tooltip_text().unwrap(),
             activity.text(locale.as_ref(), |_| "Work".into())

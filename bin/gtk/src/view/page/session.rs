@@ -619,6 +619,13 @@ mod tests {
         imp.session.current.replace(Some(session));
         window.present();
         let status = imp.status.imp();
+        let locale = eventix_locale::new_with_timezone(
+            &eventix_state::with_test_xdg(tmp.path(), tmp.path()),
+            eventix_locale::LocaleType::English,
+            chrono_tz::UTC,
+        )
+        .unwrap();
+        imp.locale.replace(Some(locale));
         let previous_sync = chrono::DateTime::from_timestamp(0, 0).unwrap();
         imp.session.last_sync.set(Some(previous_sync));
         imp.session.update_sync_time(&page);
@@ -667,7 +674,7 @@ mod tests {
             }
         });
         assert!(completed);
-        assert_eq!(imp.status.text(), "Synchronizing calendars completed");
+        assert_eq!(imp.status.text(), "Calendar synchronization completed");
         assert!(imp.session.last_sync.get().unwrap() > previous_sync);
         assert_ne!(imp.last_sync.text(), previous_label);
         let locale = page.locale();
