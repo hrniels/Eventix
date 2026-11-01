@@ -63,7 +63,11 @@ fn main() -> glib::ExitCode {
 
     app.connect_activate(move |app| {
         if let Some(window) = app.active_window() {
-            window.present();
+            if let Some(window) = window.downcast_ref::<window::Window>() {
+                window.present_from_tray();
+            } else {
+                window.present();
+            }
         } else {
             let window = window::Window::new(app, args.data_prefix.clone(), args.date);
             if !args.no_tray {

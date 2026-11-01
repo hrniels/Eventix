@@ -60,14 +60,14 @@ impl Tray {
                 };
                 match message {
                     Message::Action(action) => {
-                        window.present();
+                        window.present_from_tray();
                         gtk::prelude::ActionGroupExt::activate_action(&window, action, None);
                     }
                     Message::Toggle => {
                         if window.is_visible() {
-                            window.set_visible(false);
+                            window.hide_to_tray();
                         } else {
-                            window.present();
+                            window.present_from_tray();
                         }
                     }
                     Message::Quit => {

@@ -2,10 +2,18 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::cell::Cell;
+
 use chrono::NaiveDate;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
 use crate::view::{card::EventCard, details::EventDetails, page::CalendarPage};
+
+#[derive(Clone, Copy)]
+struct WindowState {
+    size: (i32, i32),
+    maximized: bool,
+}
 
 mod imp {
     use super::*;
@@ -14,6 +22,7 @@ mod imp {
     pub struct Window {
         #[template_child]
         pub page: gtk::TemplateChild<CalendarPage>,
+        pub(super) hidden_state: Cell<Option<WindowState>>,
     }
     }
 
@@ -77,6 +86,26 @@ glib::wrapper! {
 }
 
 impl Window {
+    /// Hides the window while retaining its size and maximized state.
+    pub fn hide_to_tray(&self) {
+        if self.is_visible() {
+            self.imp().hidden_state.set(Some(WindowState {
+                size: self.default_size(),
+                maximized: self.is_maximized(),
+            }));
+            self.set_visible(false);
+        }
+    }
+
+    /// Presents the window, restoring its state if it was hidden to the tray.
+    pub fn present_from_tray(&self) {
+        if let Some(state) = self.imp().hidden_state.take() {
+            self.set_default_size(state.size.0, state.size.1);
+            self.set_maximized(state.maximized);
+        }
+        self.present();
+    }
+
     pub fn setup_tray(&self) {
         self.imp().page.install_tray(self);
     }
@@ -399,5 +428,61 @@ pub(crate) fn dismiss_popups_on_surface(
     // remain usable, while every click on the main surface dismisses the current popup.
     if window.surface().as_ref() == Some(surface) {
         page.dismiss_popovers();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    fn settle() {
+        glib::MainContext::default().block_on(glib::timeout_future(Duration::from_millis(200)));
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn tray_restores_window_size_and_maximized_state() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.TrayTest")
+            .build();
+        app.register(gio::Cancellable::NONE).unwrap();
+        let (window, _) = Window::test_new(&app);
+        window.set_default_size(1000, 700);
+        window.present();
+        settle();
+
+        let size = window.default_size();
+        window.hide_to_tray();
+        assert!(!window.is_visible());
+        window.set_default_size(800, 600);
+        window.hide_to_tray();
+        window.present_from_tray();
+        settle();
+        assert_eq!(window.default_size(), size);
+        assert!(!window.is_maximized());
+
+        window.maximize();
+        settle();
+        assert!(window.is_maximized());
+        window.hide_to_tray();
+        settle();
+        window.unmaximize();
+        window.present_from_tray();
+        settle();
+        assert!(window.is_maximized());
+
+        window.unmaximize();
+        settle();
+        assert_eq!(window.default_size(), size);
+        window.hide_to_tray();
+        window.present_from_tray();
+        settle();
+        assert!(!window.is_maximized());
+        assert_eq!(window.default_size(), size);
+        window.destroy();
     }
 }
