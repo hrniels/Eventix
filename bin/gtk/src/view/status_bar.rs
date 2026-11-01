@@ -39,6 +39,8 @@ mod imp {
         #[template_child]
         pub status: gtk::TemplateChild<gtk::Label>,
         #[template_child]
+        pub version: gtk::TemplateChild<gtk::Label>,
+        #[template_child]
         pub history_button: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub history_popup: gtk::TemplateChild<gtk::Popover>,
@@ -81,6 +83,8 @@ mod imp {
     impl ObjectImpl for StatusBar {
         fn constructed(&self) {
             self.parent_constructed();
+            self.version
+                .set_text(concat!("Eventix v", env!("CARGO_PKG_VERSION")));
             self.history
                 .set_model(Some(&gtk::NoSelection::new(Some(self.entries().clone()))));
             let factory = gtk::SignalListItemFactory::new();

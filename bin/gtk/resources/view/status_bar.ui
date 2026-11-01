@@ -83,5 +83,12 @@
         <style><class name="ev_cancel_sync"/></style>
       </object>
     </child>
+    <child>
+      <object class="GtkLabel" id="version">
+        <property name="margin-start">8</property>
+        <property name="xalign">1</property>
+        <property name="selectable">true</property>
+      </object>
+    </child>
   </template>
 </interface>
