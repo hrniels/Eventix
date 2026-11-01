@@ -697,22 +697,22 @@ button.ev_details_uid:hover {
 }
 
 .ev_quick_task {
-    padding: 4px;
+    padding: 5px 4px;
     border-top: 1px solid alpha(@theme_fg_color, 0.16);
 }
 
 .ev_quick_task entry {
-    font-size: 0.9em;
+    font-size: 1em;
 }
 
 .ev_quick_task > entry,
 .ev_quick_task > button,
 .ev_quick_task > menubutton > button,
 .ev_quick_task > dropdown > button {
-    font-size: 0.9em;
-    min-height: 20px;
+    font-size: 1em;
+    min-height: 22px;
     min-width: 0;
-    padding: 3px 4px;
+    padding: 4px;
 }
 
 .ev_sidebar_day {
