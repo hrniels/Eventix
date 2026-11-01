@@ -304,7 +304,7 @@ impl CollectionActions {
             form.identity(&model.id, &model.syncer, locale.as_ref());
         }
         let content = &form.widget;
-        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         buttons.set_halign(gtk::Align::End);
         let cancel = action("window-close-symbolic", "Cancel", locale.as_ref());
         let weak = Rc::downgrade(self);
@@ -314,6 +314,20 @@ impl CollectionActions {
             }
         });
         let save = action("document-save-symbolic", "Save", locale.as_ref());
+        for (button, icon) in [
+            (&save, resource_path!("icons/floppy2-fill-symbolic.svg")),
+            (&cancel, resource_path!("icons/x-circle-symbolic.svg")),
+        ] {
+            button.remove_css_class("ev_management_button");
+            button.add_css_class("ev_editor_action");
+            if let Some(content) = button.child().and_downcast::<gtk::Box>() {
+                content.set_spacing(6);
+                if let Some(image) = content.first_child().and_downcast::<gtk::Image>() {
+                    image.set_resource(Some(icon));
+                    image.set_pixel_size(16);
+                }
+            }
+        }
         let weak = Rc::downgrade(self);
         save.connect_clicked(move |_| {
             if let Some(controls) = weak.upgrade() {
