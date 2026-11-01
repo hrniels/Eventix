@@ -7,6 +7,7 @@ use eventix_state::{CalendarSettings, EventixState, State, SyncCancellation, Syn
 
 #[derive(Clone, Debug)]
 pub(crate) enum Operation {
+    Create(String),
     Enable(bool),
     Save(Box<CalendarSettings>),
     Reload,
@@ -16,6 +17,10 @@ pub(crate) enum Operation {
 
 #[derive(Clone)]
 pub(crate) enum CollectionOperation {
+    Create {
+        syncer: Box<SyncerType>,
+        password: Option<String>,
+    },
     Save {
         syncer: Box<SyncerType>,
         password: Option<String>,
@@ -29,6 +34,11 @@ pub(crate) enum CollectionOperation {
 impl std::fmt::Debug for CollectionOperation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Create { syncer, password } => formatter
+                .debug_struct("Create")
+                .field("syncer", syncer)
+                .field("password_changed", &password.is_some())
+                .finish(),
             Self::Save { syncer, password } => formatter
                 .debug_struct("Save")
                 .field("syncer", syncer)
@@ -55,6 +65,7 @@ impl Request {
     /// Returns the translation key for this management action's outcome.
     pub(crate) fn description(&self) -> &'static str {
         match self.operation {
+            Operation::Create(_) => "Calendar added",
             Operation::Enable(true) => "Calendar enabled",
             Operation::Enable(false) => "Calendar disabled",
             Operation::Save(_) if self.configured => "Calendar settings updated",
@@ -63,6 +74,7 @@ impl Request {
             Operation::Delete if self.configured => "Calendar removed",
             Operation::Delete => "Remote calendar deleted",
             Operation::Collection(ref operation) => match operation {
+                CollectionOperation::Create { .. } => "Collection added",
                 CollectionOperation::Save { .. } => "Collection settings updated",
                 CollectionOperation::Delete => "Collection removed",
                 CollectionOperation::Reload => "Collection reloaded",
@@ -75,6 +87,9 @@ impl Request {
 
 /// Applies calendar and collection management changes using the HTML UI's state operations.
 pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Result<()> {
+    if let Operation::Create(name) = &request.operation {
+        return State::create_calendar(state, &request.collection, name).await;
+    }
     if let Operation::Collection(operation) = &request.operation {
         return apply_collection(state, &request.collection, operation).await;
     }
@@ -141,7 +156,7 @@ pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Re
                     .await?;
             }
         }
-        Operation::Reload | Operation::Collection(_) => unreachable!(),
+        Operation::Create(_) | Operation::Reload | Operation::Collection(_) => unreachable!(),
     }
 
     if let Err(error) = state.settings().write_to_file() {
@@ -226,6 +241,10 @@ async fn apply_collection(
     id: &String,
     operation: &CollectionOperation,
 ) -> anyhow::Result<()> {
+    if let CollectionOperation::Create { syncer, password } = operation {
+        return State::create_collection(state, id, syncer.as_ref().clone(), password.as_deref())
+            .await;
+    }
     let locale = {
         let state = state.lock().await;
         if !state.settings().collections().contains_key(id) {
@@ -240,6 +259,7 @@ async fn apply_collection(
     };
     let cancellation = SyncCancellation::default();
     let result = match operation {
+        CollectionOperation::Create { .. } => unreachable!(),
         CollectionOperation::Sync => State::sync_collection(state, id, None, &cancellation).await?,
         CollectionOperation::Discover => {
             State::discover_collection(state, id, None, &cancellation).await?

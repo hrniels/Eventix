@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ use gtk::prelude::*;
 mod card;
 mod collection;
 
-use crate::model::management::Request;
+use crate::model::management::{CollectionOperation, Operation, Request};
 use card::CalendarCard;
 use collection::CollectionActions;
 
@@ -31,6 +31,10 @@ pub(crate) struct CalendarsView {
     language: RefCell<String>,
     toggle_group: gtk::SizeGroup,
     on_action: ActionHandler,
+    creator: RefCell<Option<Rc<CollectionActions>>>,
+    action_choices: RefCell<Vec<String>>,
+    calendar_pending: Rc<Cell<bool>>,
+    calendar_form: RefCell<Option<(gtk::Box, gtk::Entry, gtk::Label)>>,
 }
 
 struct CollectionRow {
@@ -60,6 +64,10 @@ impl CalendarsView {
             language: RefCell::default(),
             toggle_group: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             on_action: Rc::default(),
+            creator: RefCell::default(),
+            action_choices: RefCell::default(),
+            calendar_pending: Rc::default(),
+            calendar_form: RefCell::default(),
         };
         view.title.set_text(locale.translate("Calendars"));
         view.empty.set_text(locale.translate("Loading calendar"));
@@ -105,7 +113,7 @@ impl CalendarsView {
             self.collections.remove(&row.widget);
         }
         self.rows.replace(rows);
-        self.update_actions(&snapshot.collections, locale);
+        self.update_actions(&snapshot.collections, &snapshot.locale, translated);
 
         // Replacing a focused changed card can make GTK reveal another label during allocation.
         // Restore the viewport after allocation, while allowing shorter content to clamp it.
@@ -128,6 +136,25 @@ impl CalendarsView {
     }
 
     pub fn finish(&self, request: &Request, success: bool) {
+        if matches!(
+            request.operation,
+            Operation::Collection(CollectionOperation::Create { .. })
+        ) {
+            if let Some(creator) = self.creator.borrow().as_ref() {
+                creator.finish(request, success);
+            }
+            return;
+        }
+        if matches!(request.operation, Operation::Create(_)) {
+            self.calendar_pending.set(false);
+            if let Some((row, entry, _)) = self.calendar_form.borrow().as_ref() {
+                row.set_sensitive(true);
+                if success {
+                    entry.set_text("");
+                }
+            }
+            return;
+        }
         for row in self
             .rows
             .borrow()
@@ -154,6 +181,22 @@ impl CalendarsView {
     pub fn show_error(&self, request: &Request, message: &str) {
         if matches!(
             request.operation,
+            Operation::Collection(CollectionOperation::Create { .. })
+        ) {
+            if let Some(creator) = self.creator.borrow().as_ref() {
+                creator.error(message);
+            }
+            return;
+        }
+        if matches!(request.operation, Operation::Create(_)) {
+            if let Some((_, _, error)) = self.calendar_form.borrow().as_ref() {
+                error.set_text(message);
+                error.set_visible(true);
+            }
+            return;
+        }
+        if matches!(
+            request.operation,
             crate::model::management::Operation::Collection(
                 crate::model::management::CollectionOperation::Save { .. }
             )
@@ -168,23 +211,52 @@ impl CalendarsView {
         }
     }
 
-    fn update_actions(&self, collections: &[Collection], locale: &dyn Locale) {
-        clear(&self.actions);
-
-        let add = action("list-add-symbolic", "Add Collection", locale);
-        add.set_halign(gtk::Align::Start);
-        let heights = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
-        heights.add_widget(&add);
-        self.actions.append(&add);
-
+    fn update_actions(
+        &self,
+        collections: &[Collection],
+        locale: &Arc<dyn Locale + Send + Sync>,
+        translated: bool,
+    ) {
         let choices: Vec<_> = collections
             .iter()
             .filter(|col| col.create_calendar)
+            .map(|col| col.id.clone())
             .collect();
+        if let Some(creator) = self.creator.borrow().as_ref() {
+            creator.set_locale(locale.clone());
+        }
+        if self.actions.first_child().is_some()
+            && !translated
+            && *self.action_choices.borrow() == choices
+        {
+            return;
+        }
+        self.action_choices.replace(choices.clone());
+        clear(&self.actions);
+
+        let mut creator = self.creator.borrow_mut();
+        let creator = creator.get_or_insert_with(|| {
+            CollectionActions::new_creation(locale.clone(), &self.on_action)
+        });
+        let add = &creator.widget;
+        add.set_halign(gtk::Align::Start);
+        let heights = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
+        heights.add_widget(&add.first_child().unwrap());
+        self.actions.append(add);
+
+        self.calendar_form.take();
         if choices.is_empty() {
             return;
         }
+        self.calendar_creation(choices, locale, &heights);
+    }
 
+    fn calendar_creation(
+        &self,
+        choices: Vec<String>,
+        locale: &Arc<dyn Locale + Send + Sync>,
+        heights: &gtk::SizeGroup,
+    ) {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         row.set_hexpand(true);
         row.set_halign(gtk::Align::End);
@@ -200,7 +272,7 @@ impl CalendarsView {
         )]);
         row.append(&entry);
 
-        let names: Vec<_> = choices.iter().map(|col| col.id.as_str()).collect();
+        let names: Vec<_> = choices.iter().map(String::as_str).collect();
         let select = gtk::DropDown::from_strings(&names);
         heights.add_widget(&select);
         select.set_tooltip_text(Some(locale.translate("Collections")));
@@ -209,11 +281,72 @@ impl CalendarsView {
         )]);
         row.append(&select);
 
-        let add_calendar = action("list-add-symbolic", "Add", locale);
+        let add_calendar = action("list-add-symbolic", "Add", locale.as_ref());
         heights.add_widget(&add_calendar);
         row.append(&add_calendar);
 
-        self.actions.append(&row);
+        let error = gtk::Label::builder()
+            .wrap(true)
+            .xalign(0.0)
+            .visible(false)
+            .accessible_role(gtk::AccessibleRole::Alert)
+            .build();
+        error.add_css_class("ev_management_error");
+        let submit = {
+            let entry = entry.downgrade();
+            let row = row.downgrade();
+            let error = error.downgrade();
+            let select = select.downgrade();
+            let pending = self.calendar_pending.clone();
+            let on_action = self.on_action.clone();
+            let locale = locale.clone();
+            move || {
+                if pending.get() {
+                    return;
+                }
+                let (Some(entry), Some(row), Some(error), Some(select)) = (
+                    entry.upgrade(),
+                    row.upgrade(),
+                    error.upgrade(),
+                    select.upgrade(),
+                ) else {
+                    return;
+                };
+                error.set_visible(false);
+                let name = entry.text().trim().to_owned();
+                if name.is_empty() {
+                    error.set_text(locale.translate("error.calendar_name"));
+                    error.set_visible(true);
+                    entry.grab_focus();
+                    return;
+                }
+                let Some(collection) = choices.get(select.selected() as usize) else {
+                    return;
+                };
+                if let Some(callback) = on_action.borrow().as_ref() {
+                    pending.set(true);
+                    row.set_sensitive(false);
+                    callback(Request {
+                        collection: collection.clone(),
+                        calendar: String::new(),
+                        folder: String::new(),
+                        configured: false,
+                        operation: Operation::Create(name),
+                    });
+                }
+            }
+        };
+        let submit = Rc::new(submit);
+        let clicked = submit.clone();
+        add_calendar.connect_clicked(move |_| clicked());
+        entry.connect_activate(move |_| submit());
+        let form = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        form.set_hexpand(true);
+        form.append(&row);
+        form.append(&error);
+        self.actions.append(&form);
+        row.set_sensitive(!self.calendar_pending.get());
+        self.calendar_form.replace(Some((row, entry, error)));
     }
 }
 
@@ -457,6 +590,192 @@ mod tests {
         result
     }
 
+    fn assert_collection_editor_layout(editor: &gtk::Window) {
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let widgets = descendants(editor.upcast_ref());
+        let main_rows: Vec<_> = widgets
+            .iter()
+            .filter(|widget| widget.has_css_class("ev_management_main_row"))
+            .collect();
+        assert_eq!(main_rows.len(), 2);
+        let name_row = main_rows[0];
+        let syncer_row = main_rows[1];
+        let section = syncer_row.parent().unwrap();
+        let content = name_row.parent().unwrap().parent().unwrap();
+        assert_eq!(section.parent().as_ref(), Some(&content));
+        assert!(name_row.has_css_class("ev_management_hover_area"));
+        assert!(section.has_css_class("ev_management_hover_area"));
+        assert_eq!(
+            widgets
+                .iter()
+                .filter(|widget| { widget.has_css_class("ev_management_hover_area") })
+                .count(),
+            2
+        );
+        assert_eq!(content.margin_start(), 8);
+        let selector = syncer_row.last_child().unwrap();
+        assert_eq!(selector.halign(), gtk::Align::End);
+        let selector_bounds = selector.compute_bounds(editor).unwrap();
+        let row_bounds = syncer_row.compute_bounds(editor).unwrap();
+        assert_eq!(
+            selector_bounds.x() + selector_bounds.width(),
+            row_bounds.x() + row_bounds.width()
+        );
+        let name_x = name_row
+            .last_child()
+            .unwrap()
+            .compute_bounds(editor)
+            .unwrap()
+            .x();
+        let fields: Vec<_> = widgets
+            .iter()
+            .filter(|widget| widget.has_css_class("ev_management_sync_row") && widget.is_mapped())
+            .collect();
+        assert!(!fields.is_empty());
+        for row in fields {
+            assert!(row.is_ancestor(&section));
+            assert_eq!(
+                row.last_child()
+                    .unwrap()
+                    .compute_bounds(editor)
+                    .unwrap()
+                    .x(),
+                name_x
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn calendars_creation_submits_keeps_drafts_and_retries_errors() {
+        use std::{cell::RefCell, rc::Rc};
+
+        use crate::model::management::{CollectionOperation, Operation};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gdk::Display::default().unwrap());
+        let view = CalendarsView::new(eventix_locale::default().as_ref());
+        let window = gtk::Window::builder().child(&view.widget).build();
+        window.present();
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let received = requests.clone();
+        view.connect_action(move |request| received.borrow_mut().push(request));
+        view.set_snapshot(snapshot());
+        let (_, entry, error) = view.calendar_form.borrow().as_ref().unwrap().clone();
+        entry.emit_activate();
+        assert!(error.is_visible());
+        assert!(requests.borrow().is_empty());
+        entry.set_text("New calendar");
+        view.set_snapshot(snapshot());
+        assert_eq!(entry.text(), "New calendar");
+        entry.emit_activate();
+        entry.emit_activate();
+        assert_eq!(requests.borrow().len(), 1);
+        let request = requests.borrow_mut().remove(0);
+        assert!(matches!(&request.operation, Operation::Create(name) if name == "New calendar"));
+        assert_eq!(request.description(), "Calendar added");
+        view.finish(&request, false);
+        view.show_error(&request, "Failed");
+        assert!(error.is_visible());
+        assert_eq!(entry.text(), "New calendar");
+        entry.emit_activate();
+        assert!(!error.is_visible());
+        view.finish(&request, true);
+        assert!(entry.text().is_empty());
+        requests.borrow_mut().clear();
+
+        let click = |root: &gtk::Widget, title: &str| {
+            descendants(root)
+                .iter()
+                .find_map(|widget| {
+                    widget
+                        .downcast_ref::<gtk::Button>()
+                        .filter(|button| button.tooltip_text().as_deref() == Some(title))
+                })
+                .unwrap()
+                .emit_clicked();
+        };
+        click(view.actions.upcast_ref(), "Add Collection");
+        let creator = view.creator.borrow().as_ref().unwrap().clone();
+        let editor = creator.editor.borrow().as_ref().unwrap().clone();
+        assert!(editor.is_modal());
+        assert_eq!(editor.transient_for().as_ref(), Some(&window));
+        assert_eq!(editor.title().as_deref(), Some("Add Collection"));
+        assert_collection_editor_layout(&editor);
+        let field = |title: &str| {
+            descendants(editor.upcast_ref())
+                .into_iter()
+                .find_map(|widget| {
+                    widget
+                        .downcast::<gtk::Entry>()
+                        .ok()
+                        .filter(|entry| entry.tooltip_text().as_deref() == Some(title))
+                })
+                .unwrap()
+        };
+        field("Name").set_text("new-local");
+        for backend in ["FileSystem", "CalDAV", "O365", "FileSystem"] {
+            descendants(editor.upcast_ref())
+                .iter()
+                .find_map(|widget| {
+                    widget
+                        .downcast_ref::<gtk::ToggleButton>()
+                        .filter(|button| button.label().as_deref() == Some(backend))
+                })
+                .unwrap()
+                .set_active(true);
+            assert_collection_editor_layout(&editor);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        field("Path").set_text(&dir.path().to_string_lossy());
+        for backend in ["CalDAV", "FileSystem"] {
+            descendants(editor.upcast_ref())
+                .iter()
+                .find_map(|widget| {
+                    widget
+                        .downcast_ref::<gtk::ToggleButton>()
+                        .filter(|button| button.label().as_deref() == Some(backend))
+                })
+                .unwrap()
+                .set_active(true);
+        }
+        assert_eq!(
+            field("Path").text().as_str(),
+            dir.path().to_string_lossy().as_ref()
+        );
+        view.set_snapshot(snapshot());
+        assert_eq!(field("Name").text(), "new-local");
+        click(editor.upcast_ref(), "Save");
+        click(editor.upcast_ref(), "Save");
+        assert_eq!(requests.borrow().len(), 1);
+        let request = requests.borrow_mut().remove(0);
+        assert_eq!(request.collection, "new-local");
+        assert_eq!(request.description(), "Collection added");
+        assert!(matches!(
+            request.operation,
+            Operation::Collection(CollectionOperation::Create { .. })
+        ));
+        view.finish(&request, false);
+        view.show_error(&request, "Already exists");
+        assert!(creator.editor.borrow().is_some());
+        assert_eq!(
+            field("Path").text().as_str(),
+            dir.path().to_string_lossy().as_ref()
+        );
+        click(editor.upcast_ref(), "Save");
+        view.finish(&request, true);
+        assert!(creator.editor.borrow().is_none());
+        click(view.actions.upcast_ref(), "Add Collection");
+        let editor = creator.editor.borrow().as_ref().unwrap().clone();
+        click(editor.upcast_ref(), "Cancel");
+        assert!(creator.editor.borrow().is_none());
+        window.destroy();
+    }
+
     #[test]
     #[ignore = "requires a GTK display"]
     fn calendars_management_renders_actions_and_preserves_cards_and_scroll() {
@@ -483,7 +802,7 @@ mod tests {
 
         assert!(!view.empty.is_visible());
         assert_eq!(view.actions.orientation(), gtk::Orientation::Horizontal);
-        let add_collection = view.actions.first_child().unwrap();
+        let add_collection = view.actions.first_child().unwrap().first_child().unwrap();
         let calendar_controls = view.actions.last_child().unwrap();
         let controls = descendants(&calendar_controls);
         let entry = controls
@@ -936,6 +1255,7 @@ mod tests {
         assert!(editor.is_modal());
         assert_eq!(editor.transient_for(), Some(window.clone()));
         assert_eq!(editor.title().as_deref(), Some("Edit Collection"));
+        assert_collection_editor_layout(&editor);
         for _ in 0..10 {
             while gtk::glib::MainContext::default().iteration(false) {}
             std::thread::sleep(std::time::Duration::from_millis(10));

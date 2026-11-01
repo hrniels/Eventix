@@ -188,6 +188,187 @@ async fn refresh_store_removes_calendar_absent_from_settings() {
     );
 }
 
+// --- State creation operations ---
+
+#[tokio::test]
+async fn create_collection_validates_ids_persists_settings_and_rolls_back_failed_writes() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let state = Arc::new(Mutex::new(
+        State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap(),
+    ));
+    let syncer = SyncerType::FileSystem {
+        path: dir.path().to_string_lossy().into_owned(),
+    };
+
+    for id in ["", "../invalid", "with spaces"] {
+        assert!(
+            State::create_collection(&state, id, syncer.clone(), None)
+                .await
+                .is_err()
+        );
+    }
+
+    State::create_collection(&state, "new-collection_1", syncer.clone(), None)
+        .await
+        .unwrap();
+    assert!(
+        State::create_collection(&state, "new-collection_1", syncer.clone(), None)
+            .await
+            .is_err()
+    );
+    let loaded = State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap();
+    let collection = &loaded.settings().collections()["new-collection_1"];
+    assert_eq!(collection.syncer(), &syncer);
+    assert!(collection.all_calendars().is_empty());
+
+    let config = xdg.place_config_file("settings.toml").unwrap();
+    std::fs::remove_file(&config).unwrap();
+    std::fs::create_dir(&config).unwrap();
+    assert!(
+        State::create_collection(&state, "failed", syncer, None)
+            .await
+            .is_err()
+    );
+    assert!(
+        !state
+            .lock()
+            .await
+            .settings()
+            .collections()
+            .contains_key("failed")
+    );
+}
+
+#[tokio::test]
+async fn create_collection_requires_a_password_for_authenticated_caldav() {
+    let dir = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(State::new(make_xdg_with_locale(&dir)).unwrap()));
+    let syncer = SyncerType::VDirSyncer {
+        email: EmailAccount::new("User".into(), "user@example.com".into()),
+        url: "https://example.invalid".into(),
+        read_only: false,
+        username: Some("user".into()),
+        password: None,
+        time_span: Default::default(),
+    };
+
+    for password in [None, Some("")] {
+        let error = State::create_collection(&state, "remote", syncer.clone(), password)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            state
+                .lock()
+                .await
+                .locale()
+                .translate("error.collection_password")
+        );
+    }
+
+    assert!(state.lock().await.settings().collections().is_empty());
+}
+
+#[tokio::test]
+async fn create_calendar_normalizes_names_avoids_existing_folders_and_refreshes_the_store() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let state = Arc::new(Mutex::new(
+        State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap(),
+    ));
+
+    let path = dir.path().join("calendars");
+    State::create_collection(
+        &state,
+        "local",
+        SyncerType::FileSystem {
+            path: path.to_string_lossy().into_owned(),
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    std::fs::create_dir_all(path.join("team-calendar-qa")).unwrap();
+    let id = "local".to_owned();
+    for _ in 0..2 {
+        State::create_calendar(&state, &id, " Team Calendar / QA ")
+            .await
+            .unwrap();
+    }
+    State::create_calendar(&state, &id, " !!! ").await.unwrap();
+    assert!(State::create_calendar(&state, &id, "  ").await.is_err());
+
+    let loaded = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+    let calendars = loaded.settings().collections()[&id].all_calendars();
+    for folder in ["team-calendar-qa-2", "team-calendar-qa-3"] {
+        let (id, calendar) = calendars
+            .iter()
+            .find(|(_, cal)| cal.folder() == folder)
+            .unwrap();
+        assert_eq!(calendar.name(), "Team Calendar / QA");
+        assert!(calendar.enabled());
+        assert_eq!(calendar.bgcolor(), "#555555");
+        assert!(path.join(folder).is_dir());
+        assert!(state.lock().await.store().directory(&make_id(id)).is_some());
+    }
+    let fallback = calendars.values().find(|cal| cal.name() == "!!!").unwrap();
+    assert_eq!(fallback.folder().len(), 32);
+    assert!(fallback.folder().chars().all(|ch| ch.is_ascii_hexdigit()));
+
+    let config = loaded.xdg().place_config_file("settings.toml").unwrap();
+    std::fs::remove_file(&config).unwrap();
+    std::fs::create_dir(&config).unwrap();
+    assert!(State::create_calendar(&state, &id, "Failed").await.is_err());
+    assert_eq!(
+        state.lock().await.settings().collections()[&id]
+            .all_calendars()
+            .len(),
+        3
+    );
+}
+
+#[tokio::test]
+async fn create_calendar_rejects_missing_read_only_and_unsupported_collections() {
+    let dir = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(State::new(make_xdg_with_locale(&dir)).unwrap()));
+
+    let id = "remote".to_owned();
+    assert!(State::create_calendar(&state, &id, "New").await.is_err());
+
+    let email = EmailAccount::new("User".into(), "user@example.com".into());
+    for syncer in [
+        SyncerType::VDirSyncer {
+            email: email.clone(),
+            url: "https://example.invalid".into(),
+            read_only: true,
+            username: None,
+            password: None,
+            time_span: Default::default(),
+        },
+        SyncerType::O365 {
+            email,
+            read_only: false,
+            password: Default::default(),
+            time_span: Default::default(),
+        },
+    ] {
+        state
+            .lock()
+            .await
+            .settings_mut()
+            .collections_mut()
+            .insert(id.clone(), CollectionSettings::new(syncer));
+        assert!(State::create_calendar(&state, &id, "New").await.is_err());
+        assert!(
+            state.lock().await.settings().collections()[&id]
+                .all_calendars()
+                .is_empty()
+        );
+    }
+}
+
 // --- State::save_collection ---
 
 #[tokio::test]

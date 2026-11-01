@@ -198,7 +198,10 @@ impl Message {
                 request.description(),
                 vec![],
                 Some(
-                    if matches!(request.operation, management::Operation::Collection(_)) {
+                    if matches!(
+                        request.operation,
+                        management::Operation::Collection(_) | management::Operation::Create(_)
+                    ) {
                         request.collection.clone()
                     } else {
                         request.calendar.clone()
@@ -223,7 +226,14 @@ impl Message {
         let mut activity = Activity::new(request, operation);
         activity.set_items(items);
         if matches!(self, Self::Authenticate(..))
-            || matches!(self, Self::ManageCalendar(command) if matches!(command.operation, management::Operation::Collection(_)))
+            || matches!(
+                self,
+                Self::ManageCalendar(command)
+                    if matches!(
+                        command.operation,
+                        management::Operation::Collection(_) | management::Operation::Create(_)
+                    )
+            )
         {
             activity.set_collection(calendar);
         } else {

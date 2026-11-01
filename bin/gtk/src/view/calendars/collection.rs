@@ -24,6 +24,10 @@ pub(super) struct CollectionActions {
     on_action: ActionHandler,
     pending: Cell<bool>,
     draft: RefCell<Option<CollectionForm>>,
+    creating: Cell<bool>,
+    collection_name: gtk::Entry,
+    alternatives: RefCell<Vec<(SyncerType, CollectionForm)>>,
+    resize_tick: RefCell<Option<gtk::TickCallbackId>>,
 }
 
 impl CollectionActions {
@@ -40,10 +44,44 @@ impl CollectionActions {
             on_action: on_action.clone(),
             pending: Cell::new(false),
             draft: RefCell::default(),
+            creating: Cell::new(false),
+            collection_name: gtk::Entry::new(),
+            alternatives: RefCell::default(),
+            resize_tick: RefCell::default(),
         });
         controls.widget.set_halign(gtk::Align::Start);
         controls.buttons();
         controls
+    }
+
+    pub(super) fn new_creation(
+        locale: Arc<dyn Locale + Send + Sync>,
+        on_action: &ActionHandler,
+    ) -> Rc<Self> {
+        let model = Collection {
+            id: String::new(),
+            syncer: new_syncer(Backend::CalDav),
+            log_path: String::new(),
+            backend: Backend::CalDav,
+            account: None,
+            reload: false,
+            discover: false,
+            create_calendar: false,
+            calendars: vec![],
+        };
+        let controls = Self::new(&model, locale, on_action);
+        controls.creating.set(true);
+        controls.buttons();
+        controls
+    }
+
+    pub(super) fn set_locale(self: &Rc<Self>, locale: Arc<dyn Locale + Send + Sync>) {
+        let translated =
+            self.locale.borrow().translate("Calendars") != locale.translate("Calendars");
+        self.locale.replace(locale);
+        if translated {
+            self.buttons();
+        }
     }
 
     pub(super) fn update(
@@ -68,6 +106,17 @@ impl CollectionActions {
         clear(&self.widget);
         let locale = self.locale.borrow();
         let model = self.model.borrow();
+        if self.creating.get() {
+            let add = action("list-add-symbolic", "Add Collection", locale.as_ref());
+            let weak = Rc::downgrade(self);
+            add.connect_clicked(move |_| {
+                if let Some(controls) = weak.upgrade() {
+                    controls.open();
+                }
+            });
+            self.widget.append(&add);
+            return;
+        }
         let delete = icon_action("user-trash-symbolic", "Delete", locale.as_ref());
         delete.add_css_class("ev_button_critical");
         self.connect_operation(&delete, CollectionOperation::Delete);
@@ -182,7 +231,11 @@ impl CollectionActions {
             editor.set_sensitive(false);
         }
         callback(Request {
-            collection: self.model.borrow().id.clone(),
+            collection: if self.creating.get() {
+                self.collection_name.text().to_string()
+            } else {
+                self.model.borrow().id.clone()
+            },
             calendar: String::new(),
             folder: String::new(),
             configured: true,
@@ -201,7 +254,9 @@ impl CollectionActions {
         if success
             && matches!(
                 request.operation,
-                Operation::Collection(CollectionOperation::Save { .. })
+                Operation::Collection(
+                    CollectionOperation::Save { .. } | CollectionOperation::Create { .. }
+                )
             )
         {
             self.close();
@@ -209,11 +264,17 @@ impl CollectionActions {
     }
 
     fn close(&self) {
+        if let Some(tick) = self.resize_tick.take() {
+            tick.remove();
+        }
         if let Some(editor) = self.editor.take() {
             editor.destroy();
         }
         if let Some(draft) = self.draft.take() {
             draft.password.set_text("");
+        }
+        for (_, form) in self.alternatives.take() {
+            form.password.set_text("");
         }
     }
 
@@ -223,9 +284,22 @@ impl CollectionActions {
             return;
         }
         let locale = self.locale.borrow();
+        if self.creating.get() {
+            self.model.borrow_mut().syncer = new_syncer(Backend::CalDav);
+            self.collection_name.set_text("");
+        }
         let model = self.model.borrow();
-        let form = CollectionForm::new(&model.syncer, locale.as_ref());
-        form.identity(&model.id, &model.syncer, locale.as_ref());
+        let mut form = if self.creating.get() {
+            CollectionForm::with_mode(&model.syncer, locale.as_ref(), true)
+        } else {
+            CollectionForm::new(&model.syncer, locale.as_ref())
+        };
+        if self.creating.get() {
+            self.creation_identity(&mut form, locale.as_ref());
+        } else {
+            form.identity(&model.id, &model.syncer, locale.as_ref());
+        }
+        let content = &form.widget;
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         buttons.set_halign(gtk::Align::End);
         let cancel = action("window-close-symbolic", "Cancel", locale.as_ref());
@@ -244,18 +318,136 @@ impl CollectionActions {
         });
         buttons.append(&save);
         buttons.append(&cancel);
-        form.widget.append(&buttons);
-        let editor = self.editor_window(&form.widget, locale.as_ref());
+        content.append(&buttons);
+        let editor = self.editor_window(content, locale.as_ref());
+        self.connect_error_resize(&form.error);
         self.draft.replace(Some(form));
         self.editor.replace(Some(editor.clone()));
         if let Some(form) = self.draft.borrow().as_ref() {
-            if matches!(self.model.borrow().syncer, SyncerType::FileSystem { .. }) {
+            if self.creating.get() {
+                gtk::prelude::GtkWindowExt::set_focus(&editor, Some(&self.collection_name));
+            } else if matches!(self.model.borrow().syncer, SyncerType::FileSystem { .. }) {
                 gtk::prelude::GtkWindowExt::set_focus(&editor, Some(&form.path));
             } else {
                 gtk::prelude::GtkWindowExt::set_focus(&editor, Some(&form.name));
             }
         }
         editor.present();
+    }
+
+    fn creation_identity(self: &Rc<Self>, form: &mut CollectionForm, locale: &dyn Locale) {
+        // Share the edit form's identity, hover area, footer and label widths. Only the backend
+        // fields change; their drafts remain alive in the stack.
+        let section = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        section.add_css_class("ev_management_hover_area");
+        let fields = std::mem::replace(&mut form.syncer_section, section);
+        form.widget.remove(&fields);
+        fields.remove_css_class("ev_management_hover_area");
+        form.widget.prepend(&form.syncer_section);
+        let stack = gtk::Stack::new();
+        stack.set_vhomogeneous(false);
+        stack.add_named(&fields, Some("CalDAV"));
+        for (title, backend) in [("O365", Backend::O365), ("FileSystem", Backend::FileSystem)] {
+            let syncer = new_syncer(backend);
+            let mut alternative = CollectionForm::with_mode(&syncer, locale, true);
+            alternative.widget.remove(&alternative.syncer_section);
+            alternative
+                .syncer_section
+                .remove_css_class("ev_management_hover_area");
+            for heading in alternative.labels.widgets() {
+                form.labels.add_widget(&heading);
+            }
+            alternative.error = form.error.clone();
+            stack.add_named(&alternative.syncer_section, Some(title));
+            self.alternatives.borrow_mut().push((syncer, alternative));
+        }
+        form.syncer_section.append(&stack);
+        let (modes, buttons) = syncer_choices(&new_syncer(Backend::CalDav), true, locale);
+        for (title, backend, button) in buttons {
+            let weak = Rc::downgrade(self);
+            let stack = stack.clone();
+            button.connect_toggled(move |button| {
+                if button.is_active()
+                    && let Some(controls) = weak.upgrade()
+                {
+                    controls.switch_backend(backend);
+                    stack.set_visible_child_name(title);
+                    controls.resize_editor();
+                }
+            });
+        }
+        form.identity_fields(&self.collection_name, true, &modes, locale);
+    }
+
+    /// Retains each backend's draft while switching the visible form.
+    fn switch_backend(&self, backend: Backend) {
+        let mut alternatives = self.alternatives.borrow_mut();
+        let Some(index) = alternatives.iter().position(|(syncer, _)| {
+            std::mem::discriminant(syncer) == std::mem::discriminant(&new_syncer(backend))
+        }) else {
+            return;
+        };
+        let (syncer, form) = alternatives.remove(index);
+        if let Some(old) = self.draft.replace(Some(form)) {
+            alternatives.push((self.model.borrow().syncer.clone(), old));
+        }
+        self.model.borrow_mut().syncer = syncer;
+    }
+
+    fn connect_error_resize(self: &Rc<Self>, error: &gtk::Label) {
+        let weak = Rc::downgrade(self);
+        error.connect_notify_local(None, move |error, property| {
+            let resized =
+                property.name() == "visible" || (property.name() == "label" && error.is_visible());
+            if resized {
+                // Visibility notifications can precede GTK's size-cache invalidation.
+                let weak = weak.clone();
+                gtk::glib::idle_add_local_once(move || {
+                    if let Some(controls) = weak.upgrade() {
+                        controls.resize_editor();
+                    }
+                });
+            }
+        });
+    }
+
+    fn resize_editor(self: &Rc<Self>) {
+        if let Some(tick) = self.resize_tick.take() {
+            tick.remove();
+        }
+        let editor = self.editor.borrow();
+        let Some(editor) = editor.as_ref() else {
+            return;
+        };
+        let Some(content) = editor.child() else {
+            return;
+        };
+        let width = editor.width();
+        let height = content.measure(gtk::Orientation::Vertical, width).1;
+        let Some(clock) = editor.frame_clock().filter(|_| {
+            editor.is_mapped() && editor.settings().property::<bool>("gtk-enable-animations")
+        }) else {
+            editor.set_default_size(width, height);
+            return;
+        };
+        let from = f64::from(editor.height());
+        let start = clock.frame_time();
+        let weak = Rc::downgrade(self);
+        let tick = editor.add_tick_callback(move |editor, clock| {
+            let progress = ((clock.frame_time() - start) as f64 / 200_000.0).clamp(0.0, 1.0);
+            let eased = 1.0 - (1.0 - progress).powi(3);
+            let current = (from + (f64::from(height) - from) * eased).round() as i32;
+            editor.set_default_size(width, current);
+            if progress == 1.0 {
+                if let Some(controls) = weak.upgrade() {
+                    controls.resize_tick.take();
+                }
+                gtk::glib::ControlFlow::Break
+            } else {
+                gtk::glib::ControlFlow::Continue
+            }
+        });
+        self.resize_tick.replace(Some(tick));
     }
 
     fn save(&self) {
@@ -267,6 +459,31 @@ impl CollectionActions {
             draft.operation(&self.model.borrow().syncer, self.locale.borrow().as_ref())
         });
         match result {
+            Some(Ok(CollectionOperation::Save { syncer, password })) if self.creating.get() => {
+                let name = self.collection_name.text();
+                if name.is_empty()
+                    || !name
+                        .chars()
+                        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'))
+                {
+                    self.error(
+                        self.locale
+                            .borrow()
+                            .translate("error.collection_name_chars"),
+                    );
+                } else if matches!(
+                    syncer.as_ref(),
+                    SyncerType::VDirSyncer {
+                        username: Some(_),
+                        ..
+                    }
+                ) && password.is_none()
+                {
+                    self.error(self.locale.borrow().translate("error.collection_password"));
+                } else {
+                    self.submit(CollectionOperation::Create { syncer, password });
+                }
+            }
             Some(Ok(operation)) => self.submit(operation),
             Some(Err(error)) => self.error(&error.to_string()),
             None => {}
@@ -285,7 +502,11 @@ impl CollectionActions {
             .child(content)
             .build();
         let editor = gtk::Window::builder()
-            .title(locale.translate("Edit Collection"))
+            .title(locale.translate(if self.creating.get() {
+                "Add Collection"
+            } else {
+                "Edit Collection"
+            }))
             .default_width(640)
             .modal(true)
             .destroy_with_parent(true)
@@ -427,6 +648,62 @@ impl Drop for CollectionActions {
     }
 }
 
+type SyncerChoice = (&'static str, Backend, gtk::ToggleButton);
+
+fn syncer_choices(
+    syncer: &SyncerType,
+    editable: bool,
+    locale: &dyn Locale,
+) -> (gtk::Box, Vec<SyncerChoice>) {
+    let modes = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    modes.add_css_class("linked");
+    modes.add_css_class("ev_management_sync_types");
+    modes.set_halign(gtk::Align::End);
+    let mut first = None;
+    let mut buttons = Vec::new();
+    for (title, backend) in [
+        ("CalDAV", Backend::CalDav),
+        ("O365", Backend::O365),
+        ("FileSystem", Backend::FileSystem),
+    ] {
+        let selected =
+            std::mem::discriminant(syncer) == std::mem::discriminant(&new_syncer(backend));
+        let button = gtk::ToggleButton::with_label(locale.translate(title));
+        button.set_group(first.as_ref());
+        if first.is_none() {
+            first = Some(button.clone());
+        }
+        button.set_active(selected);
+        button.set_sensitive(editable || selected);
+        modes.append(&button);
+        buttons.push((title, backend, button));
+    }
+    (modes, buttons)
+}
+
+fn new_syncer(backend: Backend) -> SyncerType {
+    let email = EmailAccount::new(String::new(), String::new());
+    match backend {
+        Backend::CalDav => SyncerType::VDirSyncer {
+            email,
+            url: String::new(),
+            username: None,
+            password: None,
+            read_only: false,
+            time_span: Default::default(),
+        },
+        Backend::O365 => SyncerType::O365 {
+            email,
+            password: Default::default(),
+            read_only: false,
+            time_span: Default::default(),
+        },
+        Backend::FileSystem => SyncerType::FileSystem {
+            path: String::new(),
+        },
+    }
+}
+
 struct CollectionForm {
     widget: gtk::Box,
     syncer_section: gtk::Box,
@@ -446,6 +723,10 @@ struct CollectionForm {
 
 impl CollectionForm {
     fn new(syncer: &SyncerType, locale: &dyn Locale) -> Self {
+        Self::with_mode(syncer, locale, false)
+    }
+
+    fn with_mode(syncer: &SyncerType, locale: &dyn Locale, creating: bool) -> Self {
         let form = Self {
             widget: gtk::Box::new(gtk::Orientation::Vertical, 6),
             syncer_section: gtk::Box::new(gtk::Orientation::Vertical, 6),
@@ -494,12 +775,12 @@ impl CollectionForm {
             form.footer(locale);
             return form;
         }
-        form.remote_fields(syncer, locale);
+        form.remote_fields(syncer, locale, creating);
         form.footer(locale);
         form
     }
 
-    fn remote_fields(&self, syncer: &SyncerType, locale: &dyn Locale) {
+    fn remote_fields(&self, syncer: &SyncerType, locale: &dyn Locale, creating: bool) {
         if let Some(email) = syncer.email() {
             self.name.set_text(email.name());
             self.email.set_text(email.org_address());
@@ -528,7 +809,7 @@ impl CollectionForm {
                 "Password",
                 false,
                 &self.password,
-                Some("info.edit_password_help"),
+                (!creating).then_some("info.edit_password_help"),
                 locale,
             );
         }
@@ -565,7 +846,6 @@ impl CollectionForm {
     }
 
     fn identity(&self, id: &str, syncer: &SyncerType, locale: &dyn Locale) {
-        let identity = gtk::Box::new(gtk::Orientation::Vertical, 8);
         let name = gtk::Label::builder()
             .label(id)
             .selectable(true)
@@ -574,33 +854,23 @@ impl CollectionForm {
             .wrap_mode(gtk::pango::WrapMode::WordChar)
             .max_width_chars(50)
             .build();
-        let name_row = self.field_row("Name", false, &name, None, locale);
+        let (modes, _) = syncer_choices(syncer, false, locale);
+        self.identity_fields(&name, false, &modes, locale);
+    }
+
+    fn identity_fields(
+        &self,
+        name: &impl IsA<gtk::Widget>,
+        required: bool,
+        modes: &gtk::Box,
+        locale: &dyn Locale,
+    ) {
+        let identity = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        let name_row = self.field_row("Name", required, name, None, locale);
         name_row.add_css_class("ev_management_hover_area");
         identity.append(&name_row);
-        let modes = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        modes.add_css_class("linked");
-        modes.add_css_class("ev_management_sync_types");
-        modes.set_halign(gtk::Align::End);
-        let mut first = None;
-        for (title, selected) in [
-            ("CalDAV", matches!(syncer, SyncerType::VDirSyncer { .. })),
-            ("O365", matches!(syncer, SyncerType::O365 { .. })),
-            (
-                "FileSystem",
-                matches!(syncer, SyncerType::FileSystem { .. }),
-            ),
-        ] {
-            let button = gtk::ToggleButton::with_label(locale.translate(title));
-            button.set_group(first.as_ref());
-            if first.is_none() {
-                first = Some(button.clone());
-            }
-            button.set_active(selected);
-            button.set_sensitive(selected);
-            modes.append(&button);
-        }
         self.syncer_section
-            .prepend(&self.field_row("Syncer", false, &modes, None, locale));
+            .prepend(&self.field_row("Syncer", false, modes, None, locale));
         self.widget.prepend(&identity);
     }
 
@@ -797,6 +1067,152 @@ mod tests {
             child = widget.next_sibling();
         }
         result
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn collection_popup_resizes_when_errors_appear_change_and_clear() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let controls =
+            super::CollectionActions::new_creation(eventix_locale::default(), &Default::default());
+        let parent = gtk::Window::builder().child(&controls.widget).build();
+        parent.present();
+        controls.open();
+        let editor = controls.editor.borrow().as_ref().unwrap().clone();
+        let settings = editor.settings();
+        let animations = settings.property::<bool>("gtk-enable-animations");
+        settings.set_property("gtk-enable-animations", true);
+        let settle = || {
+            for _ in 0..30 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        settle();
+        descendants(editor.upcast_ref())
+            .iter()
+            .find_map(|widget| {
+                widget
+                    .downcast_ref::<gtk::ToggleButton>()
+                    .filter(|button| button.label().as_deref() == Some("FileSystem"))
+            })
+            .unwrap()
+            .set_active(true);
+        settle();
+        let width = editor.width();
+        let clean_height = editor.height();
+        controls.save();
+        settle();
+        let short_error_height = editor.height();
+        assert!(short_error_height > clean_height);
+
+        controls.error(&"A longer error message with additional details. ".repeat(12));
+        settle();
+        assert!(editor.height() > short_error_height);
+
+        controls.error("Short error");
+        settle();
+        assert_eq!(editor.height(), short_error_height);
+        let dir = tempfile::tempdir().unwrap();
+        controls.collection_name.set_text("new-local");
+        controls
+            .draft
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .path
+            .set_text(&dir.path().to_string_lossy());
+        controls.save();
+        settle();
+        assert!(!controls.draft.borrow().as_ref().unwrap().error.is_visible());
+        assert_eq!(editor.height(), clean_height);
+        assert_eq!(editor.width(), width);
+        controls.close();
+        settings.set_property("gtk-enable-animations", animations);
+        parent.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn collection_add_resizes_for_each_backend_without_changing_width() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let controls =
+            super::CollectionActions::new_creation(eventix_locale::default(), &Default::default());
+        let parent = gtk::Window::builder().child(&controls.widget).build();
+        parent.present();
+        controls.open();
+        let editor = controls.editor.borrow().as_ref().unwrap().clone();
+        let settings = editor.settings();
+        let animations = settings.property::<bool>("gtk-enable-animations");
+        settings.set_property("gtk-enable-animations", true);
+        let settle = || {
+            for _ in 0..30 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        settle();
+        let width = editor.width();
+        let caldav_height = editor.height();
+        let heights = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let observed = heights.clone();
+        editor.connect_default_height_notify(move |editor| {
+            observed.borrow_mut().push(editor.default_height());
+        });
+        let activate = |title: &str| {
+            descendants(editor.upcast_ref())
+                .iter()
+                .find_map(|widget| {
+                    widget
+                        .downcast_ref::<gtk::ToggleButton>()
+                        .filter(|button| button.label().as_deref() == Some(title))
+                })
+                .unwrap()
+                .set_active(true);
+        };
+        let select = |title: &str| {
+            heights.borrow_mut().clear();
+            let before = editor.default_height();
+            activate(title);
+            let animated = settings.property::<bool>("gtk-enable-animations");
+            assert_eq!(controls.resize_tick.borrow().is_some(), animated);
+            if animated {
+                assert_eq!(editor.default_height(), before);
+            }
+            settle();
+            assert!(controls.resize_tick.borrow().is_none());
+            if animated {
+                assert!(
+                    heights.borrow().len() > 2,
+                    "resize uses intermediate heights"
+                );
+            }
+            assert_eq!(editor.width(), width);
+            editor.height()
+        };
+        let filesystem_height = select("FileSystem");
+        let o365_height = select("O365");
+        assert!(filesystem_height < o365_height);
+        assert!(o365_height < caldav_height);
+        assert_eq!(select("CalDAV"), caldav_height);
+        assert_eq!(select("FileSystem"), filesystem_height);
+        activate("CalDAV");
+        activate("O365");
+        settle();
+        assert_eq!(editor.height(), o365_height);
+        assert!(controls.resize_tick.borrow().is_none());
+        settings.set_property("gtk-enable-animations", false);
+        assert_eq!(select("FileSystem"), filesystem_height);
+        settings.set_property("gtk-enable-animations", true);
+        activate("CalDAV");
+        controls.close();
+        assert!(controls.resize_tick.borrow().is_none());
+        settings.set_property("gtk-enable-animations", animations);
+        parent.destroy();
     }
 
     #[test]
