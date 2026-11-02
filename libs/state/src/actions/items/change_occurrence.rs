@@ -12,7 +12,7 @@ use eventix_ical::{
 use formatx::formatx;
 
 use super::ItemId;
-use crate::{State, actions::Action};
+use crate::{State, actions::LockedAction};
 
 /// Selects whether an occurrence is hidden or retained with canceled status.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,7 +28,8 @@ pub struct ChangeOccurrence {
     pub action: OccurrenceAction,
 }
 
-impl Action for ChangeOccurrence {
+#[async_trait::async_trait]
+impl LockedAction for ChangeOccurrence {
     fn description(&self) -> &'static str {
         match self.action {
             OccurrenceAction::Exclude => "Occurrence exclusion toggled",
@@ -40,7 +41,7 @@ impl Action for ChangeOccurrence {
         std::slice::from_ref(&self.item)
     }
 
-    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+    async fn execute_locked(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let timezone = *state.timezone();
         let recurrence = self
@@ -155,7 +156,7 @@ mod tests {
         objects::{CalDate, CalEventStatus, EventLike},
     };
 
-    use super::{Action, ChangeOccurrence, ItemId, OccurrenceAction};
+    use super::{ChangeOccurrence, ItemId, LockedAction, OccurrenceAction};
     use crate::{CalendarSettings, CollectionSettings, EmailAccount, State, SyncerType};
 
     fn fixture(path: &Path, start: &str, organizer: &str, read_only: bool) -> State {
@@ -214,8 +215,8 @@ mod tests {
         CalDir::new_from_dir(Arc::new("test".into()), path.into(), "Test".into(), false).unwrap()
     }
 
-    #[test]
-    fn exclusion_normalizes_dates_and_toggles_only_the_selected_occurrence() {
+    #[tokio::test]
+    async fn exclusion_normalizes_dates_and_toggles_only_the_selected_occurrence() {
         for (start, recurrence, expected) in [
             (
                 "DTSTART:20261012T090000Z",
@@ -236,7 +237,8 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(tmp.path(), start, "", false);
             command(recurrence, OccurrenceAction::Exclude)
-                .execute(&mut state)
+                .execute_locked(&mut state)
+                .await
                 .unwrap();
             let disk = reload(tmp.path());
             let file = disk.file_by_id("meeting").unwrap();
@@ -264,7 +266,8 @@ mod tests {
                     .is_excluded()
             );
             command(recurrence, OccurrenceAction::Exclude)
-                .execute(&mut state)
+                .execute_locked(&mut state)
+                .await
                 .unwrap();
             assert!(
                 !fs::read_to_string(tmp.path().join("event.ics"))
@@ -274,8 +277,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn cancellation_creates_or_updates_an_override_and_preserves_the_series() {
+    #[tokio::test]
+    async fn cancellation_creates_or_updates_an_override_and_preserves_the_series() {
         for existing_override in [false, true] {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(
@@ -298,7 +301,8 @@ mod tests {
                 state.store_mut().add(reload(tmp.path()));
             }
             command(recurrence, OccurrenceAction::Cancel)
-                .execute(&mut state)
+                .execute_locked(&mut state)
+                .await
                 .unwrap();
             let disk = reload(tmp.path());
             let file = disk.file_by_id("meeting").unwrap();
@@ -326,15 +330,16 @@ mod tests {
             let before = fs::read(tmp.path().join("event.ics")).unwrap();
             assert!(
                 command(recurrence, OccurrenceAction::Cancel)
-                    .execute(&mut state)
+                    .execute_locked(&mut state)
+                    .await
                     .is_err()
             );
             assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), before);
         }
     }
 
-    #[test]
-    fn failed_actions_preserve_memory_and_disk() {
+    #[tokio::test]
+    async fn failed_actions_preserve_memory_and_disk() {
         for action in [OccurrenceAction::Exclude, OccurrenceAction::Cancel] {
             for case in [
                 "read_only",
@@ -385,7 +390,10 @@ mod tests {
                     fs::remove_file(&path).unwrap();
                     fs::create_dir(&path).unwrap();
                 }
-                assert!(cmd.execute(&mut state).is_err(), "{action:?}: {case}");
+                assert!(
+                    cmd.execute_locked(&mut state).await.is_err(),
+                    "{action:?}: {case}"
+                );
                 let mut memory_after = Vec::new();
                 state
                     .store()

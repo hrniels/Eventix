@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 use super::ItemId;
-use crate::{State, actions::Action};
+use crate::{State, actions::LockedAction};
 
 /// Deletes an item, including all occurrences and overrides of a recurring series.
 #[derive(Debug)]
@@ -15,7 +15,8 @@ pub struct DeleteItem {
     pub item: ItemId,
 }
 
-impl Action for DeleteItem {
+#[async_trait::async_trait]
+impl LockedAction for DeleteItem {
     fn description(&self) -> &'static str {
         "Item deleted"
     }
@@ -24,7 +25,7 @@ impl Action for DeleteItem {
         std::slice::from_ref(&self.item)
     }
 
-    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+    async fn execute_locked(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         state
             .settings()
@@ -53,8 +54,8 @@ mod tests {
 
     use eventix_ical::col::CalDir;
 
-    use super::{Action, DeleteItem, ItemId};
-    use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
+    use super::{DeleteItem, ItemId, LockedAction};
+    use crate::{CalendarSettings, CollectionSettings, State, SyncerType, actions::Action};
 
     fn fixture(path: &Path, read_only: bool) -> State {
         fs::write(
@@ -109,30 +110,45 @@ mod tests {
         })
     }
 
-    #[test]
-    fn deletion_removes_series_and_overrides_and_preserves_other_items() {
+    #[tokio::test]
+    async fn deletion_removes_series_and_overrides_and_preserves_other_items() {
         let tmp = tempfile::tempdir().unwrap();
-        let mut state = fixture(tmp.path(), false);
+        let state = Arc::new(tokio::sync::Mutex::new(fixture(tmp.path(), false)));
         let other = fs::read(tmp.path().join("other.ics")).unwrap();
-        let item = command("delete-me").execute(&mut state).unwrap();
+        let action: Box<dyn Action> = command("delete-me");
+        let item = action.execute(&state).await.unwrap();
         assert_eq!(item, command("delete-me").item);
         assert!(!tmp.path().join("event.ics").exists());
-        assert!(state.store_mut().file_by_id_mut("delete-me").is_err());
+        assert!(
+            state
+                .lock()
+                .await
+                .store_mut()
+                .file_by_id_mut("delete-me")
+                .is_err()
+        );
         assert_eq!(fs::read(tmp.path().join("other.ics")).unwrap(), other);
-        assert!(state.store_mut().file_by_id_mut("keep-me").is_ok());
+        assert!(
+            state
+                .lock()
+                .await
+                .store_mut()
+                .file_by_id_mut("keep-me")
+                .is_ok()
+        );
 
-        command("keep-me").execute(&mut state).unwrap();
+        command("keep-me").execute(&state).await.unwrap();
         assert!(!tmp.path().join("other.ics").exists());
     }
 
-    #[test]
-    fn read_only_and_missing_items_are_rejected_without_changing_files() {
+    #[tokio::test]
+    async fn read_only_and_missing_items_are_rejected_without_changing_files() {
         for read_only in [false, true] {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(tmp.path(), read_only);
             let before = fs::read(tmp.path().join("event.ics")).unwrap();
             let uid = if read_only { "delete-me" } else { "missing" };
-            assert!(command(uid).execute(&mut state).is_err());
+            assert!(command(uid).execute_locked(&mut state).await.is_err());
             assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), before);
             assert!(state.store().file_by_id("delete-me").is_some());
         }

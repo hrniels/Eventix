@@ -1563,11 +1563,23 @@ pub(crate) fn is_save_key(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
 mod tests {
     use chrono::NaiveDateTime;
     use eventix_ical::objects::{CalDateType, CalRRuleFreq};
-    use eventix_state::actions::Action;
     use eventix_view::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
     use super::{AlarmInput, CalDate, DateInput, DateSection, ItemEditor};
+
+    pub(super) fn execute(
+        action: Box<dyn eventix_state::actions::Action>,
+        state: eventix_state::State,
+    ) -> (eventix_state::State, eventix_state::actions::items::ItemId) {
+        let state = std::sync::Arc::new(tokio::sync::Mutex::new(state));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let item = runtime.block_on(action.execute(&state)).unwrap();
+        let state = std::sync::Arc::try_unwrap(state).ok().unwrap().into_inner();
+        (state, item)
+    }
 
     fn assert_slot_creation_defaults() {
         for (start, all_day, expected_end) in [
@@ -1746,7 +1758,7 @@ mod tests {
             fields.task_status.as_ref().unwrap().status,
             CalTodoStatus::NeedsAction
         );
-        let item = fields.execute(&mut state).unwrap();
+        let (state, item) = execute(fields, state);
 
         let options = || EditorOptions::load_for(&state, CalCompType::Todo).unwrap();
         let editor = ItemEditor::edit(
@@ -1780,7 +1792,7 @@ mod tests {
         );
         let mut edit = editor.existing.borrow().clone().unwrap();
         edit.fields = *fields;
-        Box::new(edit).execute(&mut state).unwrap();
+        let (state, _) = execute(Box::new(edit), state);
 
         let editor = ItemEditor::edit(
             3,
@@ -1862,7 +1874,7 @@ mod tests {
         editor.summary.set_text("Edited task");
         let mut edit = editor.existing.borrow().clone().unwrap();
         edit.fields = *editor.command().unwrap();
-        Box::new(edit).execute(&mut state).unwrap();
+        let (state, _) = execute(Box::new(edit), state);
         let saved = eventix_view::sidebar::SidebarRow::load(&state, &item).unwrap();
         assert_eq!(saved.summary, "Edited task");
         parent.test_saved_editor(crate::model::session::SavedItem::Task(Box::new(saved)));

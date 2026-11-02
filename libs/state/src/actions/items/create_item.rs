@@ -11,7 +11,7 @@ use eventix_ical::objects::{
 use super::ItemId;
 use crate::{
     CalendarAlarmType, State,
-    actions::{Action, create_component},
+    actions::{LockedAction, create_component},
 };
 
 /// Creates an event or task from frontend-independent, already parsed field values.
@@ -57,7 +57,8 @@ impl TaskStatus {
     }
 }
 
-impl Action for CreateItem {
+#[async_trait::async_trait]
+impl LockedAction for CreateItem {
     fn description(&self) -> &'static str {
         match self.kind {
             CalCompType::Event => "New event created",
@@ -69,7 +70,7 @@ impl Action for CreateItem {
         &[]
     }
 
-    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+    async fn execute_locked(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         self.validate(state)?;
         self.create(state)
     }
@@ -198,7 +199,7 @@ mod tests {
         objects::{CalCompType, CalDateType, CalRole, EventLike},
     };
 
-    use super::{Action, CalAlarm, CalAttendee, CalDate, CalRRule, CreateItem, State};
+    use super::{CalAlarm, CalAttendee, CalDate, CalRRule, CreateItem, LockedAction, State};
     use crate::{CalendarSettings, CollectionSettings, SyncerType};
 
     fn state(path: &Path, read_only: bool) -> State {
@@ -243,8 +244,8 @@ mod tests {
         })
     }
 
-    #[test]
-    fn tasks_allow_independent_dates_and_persist_inclusive_due_dates_and_status() {
+    #[tokio::test]
+    async fn tasks_allow_independent_dates_and_persist_inclusive_due_dates_and_status() {
         for (has_start, has_due) in [(false, false), (true, false), (false, true), (true, true)] {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = state(tmp.path(), false);
@@ -259,7 +260,7 @@ mod tests {
                 percent: Some(40),
                 completed: None,
             });
-            let item = request.execute(&mut state).unwrap();
+            let item = request.execute_locked(&mut state).await.unwrap();
             let file = state.store().file_by_id(&item.uid).unwrap();
             let task = file.components()[0].as_todo().unwrap();
             assert_eq!(task.start().is_some(), has_start);
@@ -276,15 +277,15 @@ mod tests {
         }
     }
 
-    #[test]
-    fn recurring_tasks_require_a_start_and_events_require_both_dates() {
+    #[tokio::test]
+    async fn recurring_tasks_require_a_start_and_events_require_both_dates() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = state(tmp.path(), false);
         let mut task = command();
         task.kind = CalCompType::Todo;
         task.start = None;
         task.recurrence = Some("FREQ=DAILY;COUNT=3".parse().unwrap());
-        assert!(task.execute(&mut state).is_err());
+        assert!(task.execute_locked(&mut state).await.is_err());
         for start in [true, false] {
             let mut event = command();
             if start {
@@ -292,13 +293,13 @@ mod tests {
             } else {
                 event.end = None;
             }
-            assert!(event.execute(&mut state).is_err());
+            assert!(event.execute_locked(&mut state).await.is_err());
         }
         assert_eq!(state.store().files().count(), 0);
     }
 
-    #[test]
-    fn creates_self_contained_recurring_event_with_alarm_and_attendee() {
+    #[tokio::test]
+    async fn creates_self_contained_recurring_event_with_alarm_and_attendee() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = state(tmp.path(), false);
         let mut request = command();
@@ -315,7 +316,7 @@ mod tests {
         attendee.set_common_name("Guest".into());
         attendee.set_role(CalRole::Optional);
         request.attendees.push(attendee);
-        let identity = request.execute(&mut state).unwrap();
+        let identity = request.execute_locked(&mut state).await.unwrap();
         let path = tmp.path().join(format!("{}.ics", identity.uid));
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("BEGIN:VTIMEZONE"));
@@ -354,8 +355,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn all_day_end_is_persisted_as_exclusive() {
+    #[tokio::test]
+    async fn all_day_end_is_persisted_as_exclusive() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = state(tmp.path(), false);
         let mut request = command();
@@ -367,14 +368,14 @@ mod tests {
             "2026-10-16".parse().unwrap(),
             CalDateType::Exclusive,
         ));
-        let identity = request.execute(&mut state).unwrap();
+        let identity = request.execute_locked(&mut state).await.unwrap();
         let content = fs::read_to_string(tmp.path().join(format!("{}.ics", identity.uid))).unwrap();
         assert!(content.contains("DTSTART;VALUE=DATE:20261015"));
         assert!(content.contains("DTEND;VALUE=DATE:20261016"));
     }
 
-    #[test]
-    fn rejects_invalid_or_stale_input_without_creating_files() {
+    #[tokio::test]
+    async fn rejects_invalid_or_stale_input_without_creating_files() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = state(tmp.path(), false);
         for case in 0..6 {
@@ -396,7 +397,10 @@ mod tests {
                     request.recurrence = Some(rule);
                 }
             }
-            assert!(request.execute(&mut state).is_err(), "case {case}");
+            assert!(
+                request.execute_locked(&mut state).await.is_err(),
+                "case {case}"
+            );
         }
         assert_eq!(state.store().files().count(), 0);
         assert!(state.misc().last_calendar(CalCompType::Event).is_none());
@@ -409,11 +413,11 @@ mod tests {
         }));
     }
 
-    #[test]
-    fn rejects_write_protected_directories_and_unsupported_types() {
+    #[tokio::test]
+    async fn rejects_write_protected_directories_and_unsupported_types() {
         let tmp = tempfile::tempdir().unwrap();
         let mut protected = state(tmp.path(), true);
-        assert!(command().execute(&mut protected).is_err());
+        assert!(command().execute_locked(&mut protected).await.is_err());
         let mut state = state(tmp.path(), false);
         state
             .settings_mut()
@@ -424,7 +428,7 @@ mod tests {
             .get_mut("test")
             .unwrap()
             .set_types(vec![CalCompType::Todo]);
-        assert!(command().execute(&mut state).is_err());
+        assert!(command().execute_locked(&mut state).await.is_err());
         assert_eq!(state.store().files().count(), 0);
     }
 }

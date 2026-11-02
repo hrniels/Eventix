@@ -13,7 +13,7 @@ use eventix_ical::{
 };
 
 use super::ItemId;
-use crate::{State, actions::Action};
+use crate::{State, actions::LockedAction};
 
 /// Selects a quick action for a single task occurrence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,7 +29,8 @@ pub struct ChangeTask {
     pub action: TaskAction,
 }
 
-impl Action for ChangeTask {
+#[async_trait::async_trait]
+impl LockedAction for ChangeTask {
     fn description(&self) -> &'static str {
         match self.action {
             TaskAction::Complete => "Task completed",
@@ -41,7 +42,7 @@ impl Action for ChangeTask {
         std::slice::from_ref(&self.item)
     }
 
-    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+    async fn execute_locked(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let timezone = *state.timezone();
         let invalid = || locale.translate("Could not apply changes").to_string();
@@ -134,7 +135,7 @@ mod tests {
         objects::{CalDate, CalTodoStatus, DateContext, EventLike, PRIORITY_MEDIUM},
     };
 
-    use super::{Action, ChangeTask, ItemId, TaskAction};
+    use super::{ChangeTask, ItemId, LockedAction, TaskAction};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, body: &str) -> State {
@@ -179,8 +180,8 @@ mod tests {
         })
     }
 
-    #[test]
-    fn completion_persists_all_completion_fields_for_only_the_selected_occurrence() {
+    #[tokio::test]
+    async fn completion_persists_all_completion_fields_for_only_the_selected_occurrence() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(
             tmp.path(),
@@ -188,7 +189,7 @@ mod tests {
         );
         let action = command(Some("TU2026-10-13T09:00:00"), TaskAction::Complete);
         let item = action.item.clone();
-        assert_eq!(action.execute(&mut state).unwrap(), item);
+        assert_eq!(action.execute_locked(&mut state).await.unwrap(), item);
         let dir = CalDir::new_from_dir(
             Arc::new("test".into()),
             tmp.path().into(),
@@ -217,8 +218,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn postponement_changes_due_only_and_preserves_other_occurrences() {
+    #[tokio::test]
+    async fn postponement_changes_due_only_and_preserves_other_occurrences() {
         for days in [1, 2, 3, 5, 7] {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(
@@ -226,7 +227,7 @@ mod tests {
                 "DUE:20261012T100000Z\r\nRRULE:FREQ=DAILY;COUNT=3",
             );
             let action = command(Some("TU2026-10-13T09:00:00"), TaskAction::Postpone { days });
-            let item = action.execute(&mut state).unwrap();
+            let item = action.execute_locked(&mut state).await.unwrap();
             let dir = CalDir::new_from_dir(
                 Arc::new("test".into()),
                 tmp.path().into(),
@@ -261,8 +262,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn invalid_postponement_and_unowned_tasks_leave_calendar_unchanged() {
+    #[tokio::test]
+    async fn invalid_postponement_and_unowned_tasks_leave_calendar_unchanged() {
         for (body, action) in [
             ("", TaskAction::Postpone { days: 1 }),
             ("DUE:20261012T100000Z", TaskAction::Postpone { days: 8 }),
@@ -271,7 +272,12 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(tmp.path(), body);
             let before = fs::read(tmp.path().join("task.ics")).unwrap();
-            assert!(command(None, action).execute(&mut state).is_err());
+            assert!(
+                command(None, action)
+                    .execute_locked(&mut state)
+                    .await
+                    .is_err()
+            );
             assert_eq!(fs::read(tmp.path().join("task.ics")).unwrap(), before);
         }
     }

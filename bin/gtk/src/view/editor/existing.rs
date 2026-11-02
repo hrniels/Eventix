@@ -241,10 +241,7 @@ mod tests {
     };
     use eventix_state::{
         CalendarSettings, CollectionSettings, State, SyncerType,
-        actions::{
-            Action,
-            items::{CreateItem, EditScope, UpdateItem},
-        },
+        actions::items::{CreateItem, EditScope, UpdateItem},
     };
     use eventix_view::{Event, editor::EditorOptions};
     use gtk::prelude::*;
@@ -330,7 +327,7 @@ mod tests {
             personal_alarms: None,
             attendees: vec![],
         };
-        let item = Box::new(fields).execute(&mut state).unwrap();
+        let (mut state, item) = crate::view::editor::tests::execute(Box::new(fields), state);
         state
             .settings_mut()
             .collections_mut()
@@ -397,7 +394,7 @@ mod tests {
         );
         editor.summary.set_text("Updated event");
         edit.fields = *editor.command().unwrap();
-        Box::new(edit).execute(&mut state).unwrap();
+        let (state, _) = crate::view::editor::tests::execute(Box::new(edit), state);
         assert_eq!(Event::load(&state, &item).unwrap().summary, "Updated event");
     }
 
@@ -476,7 +473,7 @@ mod tests {
                 personal_alarms: None,
                 attendees: vec![],
             };
-            let item = Box::new(fields).execute(&mut state).unwrap();
+            let (state, item) = crate::view::editor::tests::execute(Box::new(fields), state);
             let event = Event::load(&state, &item).unwrap();
             let locale = eventix_locale::new_with_timezone(
                 &xdg,
@@ -816,7 +813,7 @@ mod tests {
             assert_eq!(fields.end, before.end);
             let mut edit = editor.existing.borrow().clone().unwrap();
             edit.fields = *fields;
-            Box::new(edit).execute(&mut state).unwrap();
+            let (state, _) = crate::view::editor::tests::execute(Box::new(edit), state);
             parent.test_saved_editor(crate::model::session::SavedItem::Event(Box::new(
                 Event::load(&state, &item).unwrap(),
             )));

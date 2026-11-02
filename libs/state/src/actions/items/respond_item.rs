@@ -11,7 +11,7 @@ use eventix_ical::{
 };
 
 use super::ItemId;
-use crate::{State, actions::Action};
+use crate::{State, actions::LockedAction};
 
 /// Sets the current user's attendee response for a series or a single occurrence.
 #[derive(Debug)]
@@ -20,7 +20,8 @@ pub struct RespondItem {
     pub response: CalPartStat,
 }
 
-impl Action for RespondItem {
+#[async_trait::async_trait]
+impl LockedAction for RespondItem {
     fn description(&self) -> &'static str {
         match self.response {
             CalPartStat::Accepted => "Invitation accepted",
@@ -34,7 +35,7 @@ impl Action for RespondItem {
         std::slice::from_ref(&self.item)
     }
 
-    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+    async fn execute_locked(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let timezone = *state.timezone();
         let (collection, _) = state.settings().calendar(&self.item.calendar).context(
@@ -123,7 +124,7 @@ mod tests {
         objects::{CalDate, CalPartStat, EventLike},
     };
 
-    use super::{Action, ItemId, RespondItem};
+    use super::{ItemId, LockedAction, RespondItem};
     use crate::{CalendarSettings, CollectionSettings, EmailAccount, State, SyncerType};
 
     fn fixture(path: &Path, recurrent: bool, read_only: bool) -> State {
@@ -186,8 +187,8 @@ mod tests {
         })
     }
 
-    #[test]
-    fn responses_persist_and_preserve_other_attendees_and_event_fields() {
+    #[tokio::test]
+    async fn responses_persist_and_preserve_other_attendees_and_event_fields() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), false, false);
         for response in [
@@ -195,7 +196,10 @@ mod tests {
             CalPartStat::Tentative,
             CalPartStat::Declined,
         ] {
-            command(None, response).execute(&mut state).unwrap();
+            command(None, response)
+                .execute_locked(&mut state)
+                .await
+                .unwrap();
             let disk = CalDir::new_from_dir(
                 Arc::new("test".into()),
                 tmp.path().into(),
@@ -217,14 +221,15 @@ mod tests {
         }
     }
 
-    #[test]
-    fn occurrence_responses_inherit_attendees_and_series_responses_preserve_overrides() {
+    #[tokio::test]
+    async fn occurrence_responses_inherit_attendees_and_series_responses_preserve_overrides() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), true, false);
         let recurrence: CalDate = "TU2026-10-13T09:00:00".parse().unwrap();
         for response in [CalPartStat::Tentative, CalPartStat::Declined] {
             command(Some(recurrence.clone()), response)
-                .execute(&mut state)
+                .execute_locked(&mut state)
+                .await
                 .unwrap();
             let file = state.store().file_by_id("invitation").unwrap();
             assert_eq!(file.components().len(), 2);
@@ -247,7 +252,8 @@ mod tests {
             );
         }
         command(None, CalPartStat::Accepted)
-            .execute(&mut state)
+            .execute_locked(&mut state)
+            .await
             .unwrap();
         let file = state.store().file_by_id("invitation").unwrap();
         for component in file.components() {
@@ -262,8 +268,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn missing_attendee_is_added_using_the_collection_account() {
+    #[tokio::test]
+    async fn missing_attendee_is_added_using_the_collection_account() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), false, false);
         let collection = state
@@ -280,7 +286,8 @@ mod tests {
             time_span: Default::default(),
         });
         command(None, CalPartStat::Accepted)
-            .execute(&mut state)
+            .execute_locked(&mut state)
+            .await
             .unwrap();
         let file = state.store().file_by_id("invitation").unwrap();
         let attendees = file.components()[0].attendees().unwrap();
@@ -293,8 +300,8 @@ mod tests {
         assert_eq!(attendees[2].part_stat(), Some(CalPartStat::Accepted));
     }
 
-    #[test]
-    fn failed_responses_preserve_memory_and_disk() {
+    #[tokio::test]
+    async fn failed_responses_preserve_memory_and_disk() {
         for case in ["read_only", "missing_email", "missing_item", "save_failure"] {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(tmp.path(), false, case == "read_only");
@@ -318,7 +325,7 @@ mod tests {
                 fs::remove_file(&path).unwrap();
                 fs::create_dir(&path).unwrap();
             }
-            assert!(response.execute(&mut state).is_err(), "{case}");
+            assert!(response.execute_locked(&mut state).await.is_err(), "{case}");
             let file = state.store().file_by_id("invitation").unwrap();
             assert_eq!(
                 file.components()[0].attendees().unwrap()[0].part_stat(),

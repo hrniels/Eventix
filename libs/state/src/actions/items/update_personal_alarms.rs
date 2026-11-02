@@ -8,7 +8,7 @@ use anyhow::{Context, bail};
 use eventix_ical::objects::CalAlarm;
 
 use super::ItemId;
-use crate::{CalendarAlarmType, State, actions::Action};
+use crate::{CalendarAlarmType, State, actions::LockedAction};
 
 /// Updates a personal reminder override, or restores inherited reminders with `None`.
 #[derive(Debug)]
@@ -17,7 +17,8 @@ pub struct UpdatePersonalAlarms {
     pub alarms: Option<Vec<CalAlarm>>,
 }
 
-impl Action for UpdatePersonalAlarms {
+#[async_trait::async_trait]
+impl LockedAction for UpdatePersonalAlarms {
     fn description(&self) -> &'static str {
         "Reminders updated"
     }
@@ -26,7 +27,7 @@ impl Action for UpdatePersonalAlarms {
         std::slice::from_ref(&self.item)
     }
 
-    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+    async fn execute_locked(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let locale = state.locale();
         let (_, calendar) = state.settings().calendar(&self.item.calendar).context(
             locale
@@ -80,7 +81,7 @@ mod tests {
         objects::{CalAction, CalAlarm, CalRelated, CalTrigger},
     };
 
-    use super::{Action, ItemId, UpdatePersonalAlarms};
+    use super::{ItemId, LockedAction, UpdatePersonalAlarms};
     use crate::{
         CalendarAlarmType, CalendarSettings, CollectionSettings, PersonalAlarms, State, SyncerType,
     };
@@ -139,15 +140,19 @@ mod tests {
         )
     }
 
-    #[test]
-    fn saves_series_and_occurrence_overrides_and_restores_inheritance() {
+    #[tokio::test]
+    async fn saves_series_and_occurrence_overrides_and_restores_inheritance() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path());
         let original = fs::read(tmp.path().join("event.ics")).unwrap();
         command(false, Some(vec![alarm()]))
-            .execute(&mut state)
+            .execute_locked(&mut state)
+            .await
             .unwrap();
-        command(true, Some(vec![])).execute(&mut state).unwrap();
+        command(true, Some(vec![]))
+            .execute_locked(&mut state)
+            .await
+            .unwrap();
         let rid = command(true, None).item.recurrence;
         let persisted =
             PersonalAlarms::new_from_dir(&crate::with_test_xdg(tmp.path(), tmp.path())).unwrap();
@@ -161,13 +166,19 @@ mod tests {
                 .is_empty()
         );
 
-        command(true, None).execute(&mut state).unwrap();
+        command(true, None)
+            .execute_locked(&mut state)
+            .await
+            .unwrap();
         let personal = state.personal_alarms().get("test").unwrap();
         assert_eq!(
             personal.get("event", rid.as_ref()).unwrap().alarms(),
             &[alarm()]
         );
-        command(false, None).execute(&mut state).unwrap();
+        command(false, None)
+            .execute_locked(&mut state)
+            .await
+            .unwrap();
         assert!(
             state
                 .personal_alarms()
@@ -179,17 +190,23 @@ mod tests {
         assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
     }
 
-    #[test]
-    fn failed_persistence_preserves_active_overrides() {
+    #[tokio::test]
+    async fn failed_persistence_preserves_active_overrides() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path());
         command(false, Some(vec![alarm()]))
-            .execute(&mut state)
+            .execute_locked(&mut state)
+            .await
             .unwrap();
         let path = tmp.path().join("alarms/test.toml");
         fs::remove_file(&path).unwrap();
         fs::create_dir(&path).unwrap();
-        assert!(command(false, Some(vec![])).execute(&mut state).is_err());
+        assert!(
+            command(false, Some(vec![]))
+                .execute_locked(&mut state)
+                .await
+                .is_err()
+        );
         assert_eq!(
             state
                 .personal_alarms()
@@ -202,13 +219,13 @@ mod tests {
         );
     }
 
-    #[test]
-    fn rejects_stale_identity_and_calendars_without_personal_alarms() {
+    #[tokio::test]
+    async fn rejects_stale_identity_and_calendars_without_personal_alarms() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path());
         let mut stale = command(false, Some(vec![]));
         stale.item.uid = "missing".into();
-        assert!(stale.execute(&mut state).is_err());
+        assert!(stale.execute_locked(&mut state).await.is_err());
         state
             .settings_mut()
             .collections_mut()
@@ -218,7 +235,12 @@ mod tests {
             .get_mut("test")
             .unwrap()
             .set_alarms(CalendarAlarmType::Calendar);
-        assert!(command(false, Some(vec![])).execute(&mut state).is_err());
+        assert!(
+            command(false, Some(vec![]))
+                .execute_locked(&mut state)
+                .await
+                .is_err()
+        );
         assert!(state.personal_alarms().get("test").is_none());
     }
 }

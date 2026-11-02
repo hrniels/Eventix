@@ -764,7 +764,12 @@ impl Worker {
                 } else {
                     message.activity(request)
                 };
-                publish_events(&runtime.results, self.handle(message), activity, request);
+                publish_events(
+                    &runtime.results,
+                    self.handle(message, &runtime.runtime),
+                    activity,
+                    request,
+                );
                 if finished {
                     self.next_operation(runtime);
                 }
@@ -890,7 +895,7 @@ impl Worker {
             .map(|task| RunningAuthentication { id, task, activity });
     }
 
-    fn handle(&mut self, message: Message) -> Vec<Event> {
+    fn handle(&mut self, message: Message, runtime: &tokio::runtime::Runtime) -> Vec<Event> {
         tracing::debug!("handle(message={:?})", message);
         let mut events = Vec::new();
 
@@ -924,12 +929,16 @@ impl Worker {
             }
         }
 
-        events.extend(self.handle_request(message));
+        events.extend(self.handle_request(message, runtime));
 
         events
     }
 
-    fn handle_request(&mut self, message: Message) -> Vec<Event> {
+    fn handle_request(
+        &mut self,
+        message: Message,
+        runtime: &tokio::runtime::Runtime,
+    ) -> Vec<Event> {
         let event = match message {
             Message::SetLanguage(language) => {
                 if let Err(error) = self.set_language(language) {
@@ -954,7 +963,7 @@ impl Worker {
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::SaveReminders(selected, command) => Event::RemindersSaved(
-                self.save_reminders(selected, command)
+                self.save_reminders(selected, command, runtime)
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::LoadEdit(id, item, scope) => Event::EditLoaded(
@@ -964,7 +973,8 @@ impl Worker {
             ),
             Message::SaveEdit(id, edit) => Event::EditSaved(
                 id,
-                self.save_edit(edit).map_err(|error| format!("{error:#}")),
+                self.save_edit(edit, runtime)
+                    .map_err(|error| format!("{error:#}")),
             ),
             Message::PrepareEditor(id, kind) => Event::EditorLoaded(
                 id,
@@ -972,9 +982,11 @@ impl Worker {
                     .and_then(|state| EditorOptions::load_for(&state, kind))
                     .map_err(|error| format!("{error:#}")),
             ),
-            Message::CreateItem(id, item) => {
-                Event::EditorSaved(id, self.execute(item).map_err(|error| format!("{error:#}")))
-            }
+            Message::CreateItem(id, item) => Event::EditorSaved(
+                id,
+                self.execute(item, runtime)
+                    .map_err(|error| format!("{error:#}")),
+            ),
             Message::ShowContent(request) => {
                 let result = self
                     .show_content(&request)
@@ -1035,7 +1047,7 @@ impl Worker {
                 events.push(Event::SyncFinished(result));
                 return events;
             }
-            Message::Execute(command) => match self.execute(command) {
+            Message::Execute(command) => match self.execute(command, runtime) {
                 Ok(change) => Event::Changed(change),
                 Err(error) => Event::CommandFailed(format!("{error:#}")),
             },
@@ -1075,7 +1087,7 @@ impl Worker {
         activity: &Activity,
     ) -> Option<tokio::task::JoinHandle<()>> {
         if self.state.is_none() {
-            for event in self.handle(Message::Reload) {
+            for event in self.handle(Message::Reload, runtime) {
                 if let Event::ReloadFailed(error) = event {
                     publish_events(
                         results,
@@ -1227,9 +1239,13 @@ impl Worker {
         ))
     }
 
-    fn save_edit(&mut self, edit: Box<UpdateItem>) -> anyhow::Result<(ChangeSet, SavedItem)> {
+    fn save_edit(
+        &mut self,
+        edit: Box<UpdateItem>,
+        runtime: &tokio::runtime::Runtime,
+    ) -> anyhow::Result<(ChangeSet, SavedItem)> {
         let kind = edit.fields.kind;
-        let change = self.execute(edit)?;
+        let change = self.execute(edit, runtime)?;
         let event = self.saved_item(&change.item, kind)?;
 
         Ok((change, event))
@@ -1239,6 +1255,7 @@ impl Worker {
         &mut self,
         selected: ItemId,
         command: UpdatePersonalAlarms,
+        runtime: &tokio::runtime::Runtime,
     ) -> anyhow::Result<(ChangeSet, SavedItem)> {
         let state = self.state()?;
         let kind = state
@@ -1264,7 +1281,7 @@ impl Worker {
                 )
             })?;
         drop(state);
-        let change = self.execute(Box::new(command))?;
+        let change = self.execute(Box::new(command), runtime)?;
         let item = self.saved_item(&selected, kind)?;
         Ok((change, item))
     }
@@ -1357,8 +1374,12 @@ impl Worker {
         events
     }
 
-    fn execute(&mut self, command: Box<dyn Action>) -> anyhow::Result<ChangeSet> {
-        let mut state = self.state()?;
+    fn execute(
+        &mut self,
+        command: Box<dyn Action>,
+        runtime: &tokio::runtime::Runtime,
+    ) -> anyhow::Result<ChangeSet> {
+        let state = self.state()?;
 
         let mut affected = Vec::new();
         for item in command.affected_items() {
@@ -1369,7 +1390,13 @@ impl Worker {
             }
         }
 
-        let item = command.execute(&mut state)?;
+        drop(state);
+        let shared = self
+            .state
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No loaded state"))?;
+        let item = runtime.block_on(command.execute(shared))?;
+        let state = self.state()?;
         for id in self.subscriptions.matching(&state, &item) {
             if !affected.contains(&id) {
                 affected.push(id);
@@ -1428,6 +1455,13 @@ mod tests {
         load_local_state,
     };
 
+    fn test_runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
     fn worker(path: &Path) -> Worker {
         fs::write(
             path.join("event.ics"),
@@ -1463,18 +1497,21 @@ mod tests {
     fn language_change_refreshes_content_and_sidebar_and_persists_without_changing_timezone() {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
-        worker.handle(Message::ShowContent(ContentRequest {
-            generation: 42,
-            date: Some("2026-10-12".parse().unwrap()),
-            view: View::Week,
-            filter: Default::default(),
-        }));
-        worker.handle(Message::RefreshSidebar);
+        worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 42,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
+        worker.handle(Message::RefreshSidebar, &test_runtime());
         for language in [
             eventix_locale::LocaleType::German,
             eventix_locale::LocaleType::English,
         ] {
-            let events = worker.handle(Message::SetLanguage(language));
+            let events = worker.handle(Message::SetLanguage(language), &test_runtime());
             assert!(events.iter().any(|event| matches!(event,
                 Event::ContentLoaded(response) if response.generation == 42
                     && matches!(&response.result, Ok(Snapshot::Week(week))
@@ -1494,14 +1531,17 @@ mod tests {
     fn management_requests_return_current_owned_data_without_replacing_content_queries() {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
-        worker.handle(Message::ShowContent(ContentRequest {
-            generation: 42,
-            date: Some("2026-10-12".parse().unwrap()),
-            view: View::Week,
-            filter: Default::default(),
-        }));
+        worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 42,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
         let subscriptions = worker.subscriptions.ids();
-        let events = worker.handle(Message::LoadManagement(7));
+        let events = worker.handle(Message::LoadManagement(7), &test_runtime());
         let [Event::ManagementLoaded(7, Ok(snapshot))] = events.as_slice() else {
             panic!("expected a management snapshot");
         };
@@ -1516,7 +1556,7 @@ mod tests {
             .settings_mut()
             .collections_mut()
             .clear();
-        let events = worker.handle(Message::LoadManagement(8));
+        let events = worker.handle(Message::LoadManagement(8), &test_runtime());
         let [Event::ManagementLoaded(8, Ok(snapshot))] = events.as_slice() else {
             panic!("expected refreshed management data");
         };
@@ -1529,12 +1569,15 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
-        worker.handle(Message::ShowContent(ContentRequest {
-            generation: 42,
-            date: Some("2026-10-12".parse().unwrap()),
-            view: View::List,
-            filter: Default::default(),
-        }));
+        worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 42,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::List,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
         let (requests, _) = async_channel::unbounded();
         let (results, responses) = async_channel::unbounded();
         let mut runtime = super::WorkerRuntime::new(requests, results).unwrap();
@@ -2071,11 +2114,14 @@ mod tests {
             ("other", other_path),
         ] {
             for recurrence in [None, Some("TU2026-10-13T09:00:00".parse().unwrap())] {
-                let events = worker.handle(Message::LoadFilepath(ItemId {
-                    calendar: calendar.into(),
-                    uid: "move-me".into(),
-                    recurrence,
-                }));
+                let events = worker.handle(
+                    Message::LoadFilepath(ItemId {
+                        calendar: calendar.into(),
+                        uid: "move-me".into(),
+                        recurrence,
+                    }),
+                    &test_runtime(),
+                );
                 let [Event::FilepathLoaded(Ok(actual))] = events.as_slice() else {
                     panic!("expected the requested filepath");
                 };
@@ -2085,11 +2131,14 @@ mod tests {
         for (calendar, uid) in [("missing", "move-me"), ("test", "missing")] {
             assert!(matches!(
                 worker
-                    .handle(Message::LoadFilepath(ItemId {
-                        calendar: calendar.into(),
-                        uid: uid.into(),
-                        recurrence: None,
-                    }))
+                    .handle(
+                        Message::LoadFilepath(ItemId {
+                            calendar: calendar.into(),
+                            uid: uid.into(),
+                            recurrence: None,
+                        }),
+                        &test_runtime()
+                    )
                     .as_slice(),
                 [Event::FilepathLoaded(Err(_))]
             ));
@@ -2135,7 +2184,10 @@ mod tests {
             .set_types(vec![CalCompType::Event, CalCompType::Todo]);
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let Some(Event::EditorLoaded(1, Ok(options))) = worker
-            .handle(Message::PrepareEditor(1, CalCompType::Todo))
+            .handle(
+                Message::PrepareEditor(1, CalCompType::Todo),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected task editor options");
@@ -2161,7 +2213,7 @@ mod tests {
             completed: None,
         });
         let Some(Event::EditorSaved(2, Ok(change))) = worker
-            .handle(Message::CreateItem(2, Box::new(fields)))
+            .handle(Message::CreateItem(2, Box::new(fields)), &test_runtime())
             .pop()
         else {
             panic!("expected task creation");
@@ -2169,22 +2221,29 @@ mod tests {
         assert_eq!(change.affected, vec![SubscriptionId::Sidebar]);
         let item = change.item;
         let Some(Event::EditLoaded(3, Ok((options, mut edit)))) = worker
-            .handle(Message::LoadEdit(3, item, EditScope::Series))
+            .handle(
+                Message::LoadEdit(3, item, EditScope::Series),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected task edit");
         };
         assert_eq!(options.kind, CalCompType::Todo);
         edit.fields.task_status.as_mut().unwrap().status = CalTodoStatus::Completed;
-        let Some(Event::EditSaved(3, Ok((change, super::SavedItem::Task(task))))) =
-            worker.handle(Message::SaveEdit(3, edit)).pop()
+        let Some(Event::EditSaved(3, Ok((change, super::SavedItem::Task(task))))) = worker
+            .handle(Message::SaveEdit(3, edit), &test_runtime())
+            .pop()
         else {
             panic!("expected saved task details");
         };
         assert_eq!(task.summary, "Undated task");
         assert!(task.start.is_none() && task.due.is_none());
         assert_eq!(change.affected, vec![SubscriptionId::Sidebar]);
-        let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+        let events = worker.handle(
+            Message::RefreshSubscriptions(change.affected),
+            &test_runtime(),
+        );
         assert!(
             matches!(events.as_slice(), [Event::SidebarLoaded(Ok(snapshot))] if snapshot.tasks.is_empty())
         );
@@ -2210,7 +2269,10 @@ mod tests {
             .set_types(vec![CalCompType::Event]);
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let Some(Event::EditorLoaded(42, Ok(options))) = worker
-            .handle(Message::PrepareEditor(42, CalCompType::Event))
+            .handle(
+                Message::PrepareEditor(42, CalCompType::Event),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("editor options should echo the request identity");
@@ -2242,11 +2304,14 @@ mod tests {
         let mut invalid = make_request();
         invalid.summary.clear();
         assert!(matches!(
-            worker.handle(Message::CreateItem(43, invalid)).as_slice(),
+            worker
+                .handle(Message::CreateItem(43, invalid), &test_runtime())
+                .as_slice(),
             [Event::EditorSaved(43, Err(_))]
         ));
-        let Some(Event::EditorSaved(44, Ok(change))) =
-            worker.handle(Message::CreateItem(44, make_request())).pop()
+        let Some(Event::EditorSaved(44, Ok(change))) = worker
+            .handle(Message::CreateItem(44, make_request()), &test_runtime())
+            .pop()
         else {
             panic!("successful save must publish the request identity and committed changes");
         };
@@ -2254,7 +2319,7 @@ mod tests {
         assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
         assert!(change.affected.contains(&SubscriptionId::Sidebar));
         assert!(
-            matches!(worker.handle(Message::RefreshSubscriptions(change.affected)).as_slice(),
+            matches!(worker.handle(Message::RefreshSubscriptions(change.affected), &test_runtime()).as_slice(),
             [Event::ContentLoaded(response), Event::SidebarLoaded(Ok(_))] if response.result.is_ok())
         );
     }
@@ -2303,7 +2368,10 @@ mod tests {
 
         drop(state);
         let Some(Event::EditorLoaded(1, Ok(options))) = worker
-            .handle(Message::PrepareEditor(1, CalCompType::Event))
+            .handle(
+                Message::PrepareEditor(1, CalCompType::Event),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected creation options");
@@ -2317,7 +2385,10 @@ mod tests {
             recurrence: None,
         };
         let Some(Event::EditLoaded(2, Ok((options, _)))) = worker
-            .handle(Message::LoadEdit(2, item, EditScope::Series))
+            .handle(
+                Message::LoadEdit(2, item, EditScope::Series),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected edit options");
@@ -2345,7 +2416,10 @@ mod tests {
             recurrence: Some("TU2026-10-13T09:00:00".parse().unwrap()),
         };
         let Some(Event::EditLoaded(42, Ok((_, mut edit)))) = worker
-            .handle(Message::LoadEdit(42, item.clone(), EditScope::Occurrence))
+            .handle(
+                Message::LoadEdit(42, item.clone(), EditScope::Occurrence),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected edit draft");
@@ -2355,8 +2429,9 @@ mod tests {
         edit.fields.summary = "Edited occurrence".into();
         edit.fields.start = Some("TU2026-11-10T09:00:00".parse().unwrap());
         edit.fields.end = Some("TU2026-11-10T10:00:00".parse().unwrap());
-        let Some(Event::EditSaved(42, Ok((change, super::SavedItem::Event(event))))) =
-            worker.handle(Message::SaveEdit(42, edit)).pop()
+        let Some(Event::EditSaved(42, Ok((change, super::SavedItem::Event(event))))) = worker
+            .handle(Message::SaveEdit(42, edit), &test_runtime())
+            .pop()
         else {
             panic!("expected saved details");
         };
@@ -2365,10 +2440,15 @@ mod tests {
         assert_eq!(event.summary, "Edited occurrence");
         assert_eq!(event.start.date_naive().to_string(), "2026-11-10");
         assert!(matches!(
-            worker.handle(Message::SaveEdit(43, stale)).as_slice(),
+            worker
+                .handle(Message::SaveEdit(43, stale), &test_runtime())
+                .as_slice(),
             [Event::EditSaved(43, Err(_))]
         ));
-        let responses = worker.handle(Message::RefreshSubscriptions(change.affected));
+        let responses = worker.handle(
+            Message::RefreshSubscriptions(change.affected),
+            &test_runtime(),
+        );
         let Some(Event::ContentLoaded(response)) = responses.first() else {
             panic!("expected calendar refresh");
         };
@@ -2395,7 +2475,7 @@ mod tests {
         edit.fields.start = Some("TU2026-11-10T09:00:00".parse().unwrap());
         edit.fields.end = Some("TU2026-11-10T10:00:00".parse().unwrap());
 
-        let change = worker.execute(Box::new(edit)).unwrap();
+        let change = worker.execute(Box::new(edit), &test_runtime()).unwrap();
         assert_ne!(change.item.uid, item.uid);
         assert!(change.item.recurrence.is_none());
         assert!(change.affected.contains(&SubscriptionId::Sidebar));
@@ -2438,14 +2518,18 @@ mod tests {
             recurrence: None,
         };
         let Some(Event::EditLoaded(1, Ok((_, mut edit)))) = worker
-            .handle(Message::LoadEdit(1, item, EditScope::Series))
+            .handle(
+                Message::LoadEdit(1, item, EditScope::Series),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected series draft");
         };
         edit.fields.summary = "Edited series".into();
-        let Some(Event::EditSaved(1, Ok((change, _)))) =
-            worker.handle(Message::SaveEdit(1, edit)).pop()
+        let Some(Event::EditSaved(1, Ok((change, _)))) = worker
+            .handle(Message::SaveEdit(1, edit), &test_runtime())
+            .pop()
         else {
             panic!("expected saved series");
         };
@@ -2458,7 +2542,9 @@ mod tests {
         let mut worker = worker(tmp.path());
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let request = command(&worker, "2026-11-10T14:30:00");
-        let Some(Event::Changed(change)) = worker.handle(Message::Execute(Box::new(request))).pop()
+        let Some(Event::Changed(change)) = worker
+            .handle(Message::Execute(Box::new(request)), &test_runtime())
+            .pop()
         else {
             panic!("expected committed identity notification")
         };
@@ -2472,7 +2558,10 @@ mod tests {
             "old sidebar membership is invalidated"
         );
         let mut events = worker
-            .handle(Message::RefreshSubscriptions(change.affected))
+            .handle(
+                Message::RefreshSubscriptions(change.affected),
+                &test_runtime(),
+            )
             .into_iter();
         let Some(Event::ContentLoaded(response)) = events.next() else {
             panic!("expected query refresh")
@@ -2498,17 +2587,20 @@ mod tests {
             },
         );
         let request = command(&worker, "2026-11-11T14:30:00");
-        let change = worker.execute(Box::new(request)).unwrap();
+        let change = worker.execute(Box::new(request), &test_runtime()).unwrap();
         assert_eq!(change.affected, vec![SubscriptionId::Sidebar]);
         assert!(matches!(
             worker
-                .handle(Message::RefreshSubscriptions(change.affected))
+                .handle(
+                    Message::RefreshSubscriptions(change.affected),
+                    &test_runtime()
+                )
                 .as_slice(),
             [Event::SidebarLoaded(Ok(_))]
         ));
 
         let request = command(&worker, "2026-10-14T14:30:00");
-        let change = worker.execute(Box::new(request)).unwrap();
+        let change = worker.execute(Box::new(request), &test_runtime()).unwrap();
         assert!(
             change.affected.contains(&SubscriptionId::Calendar(1)),
             "entry into range is invalidated"
@@ -2555,10 +2647,13 @@ mod tests {
                 recurrence,
             };
             let Some(Event::Changed(change)) = worker
-                .handle(Message::Execute(Box::new(RespondItem {
-                    item: item.clone(),
-                    response: CalPartStat::Accepted,
-                })))
+                .handle(
+                    Message::Execute(Box::new(RespondItem {
+                        item: item.clone(),
+                        response: CalPartStat::Accepted,
+                    })),
+                    &test_runtime(),
+                )
                 .pop()
             else {
                 panic!("expected response notification")
@@ -2566,7 +2661,10 @@ mod tests {
             assert_eq!(change.item, item);
             assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
             assert!(change.affected.contains(&SubscriptionId::Sidebar));
-            let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+            let events = worker.handle(
+                Message::RefreshSubscriptions(change.affected),
+                &test_runtime(),
+            );
             let week = events
                 .iter()
                 .find_map(|event| match event {
@@ -2616,7 +2714,10 @@ mod tests {
             ..selected.clone()
         };
         let Some(Event::DetailsLoaded(17, Ok(SavedItem::Event(base)))) = worker
-            .handle(Message::LoadDetails(17, base, CalCompType::Event))
+            .handle(
+                Message::LoadDetails(17, base, CalCompType::Event),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected series reminder details")
@@ -2632,7 +2733,10 @@ mod tests {
             alarms: Some(vec![]),
         };
         let Some(Event::RemindersSaved(Ok((change, SavedItem::Event(event))))) = worker
-            .handle(Message::SaveReminders(selected.clone(), command))
+            .handle(
+                Message::SaveReminders(selected.clone(), command),
+                &test_runtime(),
+            )
             .pop()
         else {
             panic!("expected saved reminder details")
@@ -2659,14 +2763,18 @@ mod tests {
             recurrence: None,
         };
         let change = worker
-            .execute(Box::new(eventix_state::actions::items::DeleteItem {
-                item: item.clone(),
-            }))
+            .execute(
+                Box::new(eventix_state::actions::items::DeleteItem { item: item.clone() }),
+                &test_runtime(),
+            )
             .unwrap();
         assert_eq!(change.item, item);
         assert!(change.affected.contains(&SubscriptionId::Calendar(1)));
         assert!(change.affected.contains(&SubscriptionId::Sidebar));
-        let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+        let events = worker.handle(
+            Message::RefreshSubscriptions(change.affected),
+            &test_runtime(),
+        );
         let week = events
             .iter()
             .find_map(|event| match event {
@@ -2687,7 +2795,7 @@ mod tests {
         let mut worker = worker(tmp.path());
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let request = command(&worker, "2026-10-14T14:30:00");
-        let change = worker.execute(Box::new(request)).unwrap();
+        let change = worker.execute(Box::new(request), &test_runtime()).unwrap();
         subscribe(&mut worker, 2, "2026-11-01", View::Month);
         let old_calendar = change
             .affected
@@ -2696,11 +2804,11 @@ mod tests {
             .collect();
         assert!(
             worker
-                .handle(Message::RefreshSubscriptions(old_calendar))
+                .handle(Message::RefreshSubscriptions(old_calendar), &test_runtime())
                 .is_empty()
         );
         let request = command(&worker, "2026-11-10T14:30:00");
-        let change = worker.execute(Box::new(request)).unwrap();
+        let change = worker.execute(Box::new(request), &test_runtime()).unwrap();
         assert!(change.affected.contains(&SubscriptionId::Calendar(2)));
         assert!(!change.affected.contains(&SubscriptionId::Calendar(1)));
     }
@@ -2739,22 +2847,31 @@ mod tests {
                 UpdateItem::load(&worker.state().unwrap(), item.clone(), EditScope::Series)
                     .unwrap();
             edit.fields.summary = summary.into();
-            let change = worker.execute(Box::new(edit)).unwrap();
+            let change = worker.execute(Box::new(edit), &test_runtime()).unwrap();
             assert!(change.affected.contains(&SubscriptionId::Calendar(42)));
-            let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+            let events = worker.handle(
+                Message::RefreshSubscriptions(change.affected),
+                &test_runtime(),
+            );
             assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
                 if response.generation == 42 && matches!(&response.result, Ok(Snapshot::List(list)) if list.items.len() == expected)));
         }
-        let change = worker.execute(Box::new(DeleteItem { item })).unwrap();
-        let events = worker.handle(Message::RefreshSubscriptions(change.affected));
+        let change = worker
+            .execute(Box::new(DeleteItem { item }), &test_runtime())
+            .unwrap();
+        let events = worker.handle(
+            Message::RefreshSubscriptions(change.affected),
+            &test_runtime(),
+        );
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
             if matches!(&response.result, Ok(Snapshot::List(list)) if list.items.is_empty())));
         subscribe(&mut worker, 43, "2026-10-12", View::Week);
         assert!(
             worker
-                .handle(Message::RefreshSubscriptions(vec![
-                    SubscriptionId::Calendar(42)
-                ]))
+                .handle(
+                    Message::RefreshSubscriptions(vec![SubscriptionId::Calendar(42)]),
+                    &test_runtime()
+                )
                 .is_empty()
         );
     }
@@ -2779,10 +2896,13 @@ mod tests {
         assert_eq!(index.items.len(), 1);
         let mut missing = index.items[0].clone();
         missing.uid = "missing".into();
-        let events = worker.handle(Message::LoadListRows(ListRowsRequest {
-            revision: 7,
-            items: vec![index.items[0].clone(), missing.clone()],
-        }));
+        let events = worker.handle(
+            Message::LoadListRows(ListRowsRequest {
+                revision: 7,
+                items: vec![index.items[0].clone(), missing.clone()],
+            }),
+            &test_runtime(),
+        );
         let [Event::ListRowsLoaded(response)] = events.as_slice() else {
             panic!("expected row data")
         };
@@ -2812,7 +2932,7 @@ mod tests {
         for view in [View::Week, View::Month] {
             subscribe(&mut worker, 7, "2026-10-12", view);
             for enabled in [false, true] {
-                let events = worker.handle(Message::ToggleCalendar("test".into()));
+                let events = worker.handle(Message::ToggleCalendar("test".into()), &test_runtime());
                 let [
                     Event::CalendarsLoaded(calendars),
                     Event::ContentLoaded(response),
@@ -2847,7 +2967,7 @@ mod tests {
             },
         };
         worker.show_content(&request).unwrap();
-        let events = worker.handle(Message::ToggleCalendar("test".into()));
+        let events = worker.handle(Message::ToggleCalendar("test".into()), &test_runtime());
         assert!(matches!(events.as_slice(),
             [Event::CalendarsLoaded(calendars), Event::SidebarLoaded(Ok(_))]
             if !calendars[0].enabled));
@@ -2858,7 +2978,7 @@ mod tests {
         assert_eq!(list.filter.calendars, vec!["test".to_string()]);
         assert_eq!(list.items.len(), 1);
 
-        let events = worker.handle(Message::ToggleCalendar("missing".into()));
+        let events = worker.handle(Message::ToggleCalendar("missing".into()), &test_runtime());
         assert!(matches!(events.as_slice(),
             [Event::CalendarsLoaded(calendars), Event::CalendarToggleFailed(_)]
             if !calendars[0].enabled));
@@ -2870,7 +2990,7 @@ mod tests {
         let mut worker = worker(tmp.path());
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         fs::create_dir(tmp.path().join("misc.toml")).unwrap();
-        let events = worker.handle(Message::ToggleCalendar("test".into()));
+        let events = worker.handle(Message::ToggleCalendar("test".into()), &test_runtime());
         assert!(matches!(events.as_slice(),
             [Event::CalendarsLoaded(calendars), Event::CalendarToggleFailed(_)]
             if calendars[0].enabled));
@@ -2891,21 +3011,24 @@ mod tests {
             .unwrap();
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
         let mut worker = Worker::new(xdg);
-        let events = worker.handle(Message::ShowContent(ContentRequest {
-            generation: 17,
-            date: None,
-            view: View::List,
-            filter: eventix_view::list::Filter {
-                keywords: "needle".into(),
-                ..Default::default()
-            },
-        }));
+        let events = worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 17,
+                date: None,
+                view: View::List,
+                filter: eventix_view::list::Filter {
+                    keywords: "needle".into(),
+                    ..Default::default()
+                },
+            }),
+            &test_runtime(),
+        );
         assert!(
             matches!(events.as_slice(), [Event::StateLoaded, Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.items.is_empty()))
         );
         assert_eq!(worker.content.as_ref().unwrap().filter.keywords, "needle");
-        let events = worker.handle(Message::Reload);
+        let events = worker.handle(Message::Reload, &test_runtime());
         assert!(
             matches!(events.as_slice(), [Event::StateLoaded, Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.filter.keywords == "needle"))
@@ -2921,14 +3044,14 @@ mod tests {
         request.expected_start += Duration::minutes(15);
         assert!(matches!(
             worker
-                .handle(Message::Execute(Box::new(request)))
+                .handle(Message::Execute(Box::new(request)), &test_runtime())
                 .as_slice(),
             [Event::CommandFailed(_)]
         ));
         let request = command(&worker, "2026-10-14T14:30:00");
         assert!(matches!(
             worker
-                .handle(Message::Execute(Box::new(request)))
+                .handle(Message::Execute(Box::new(request)), &test_runtime())
                 .as_slice(),
             [Event::Changed(_)]
         ));
@@ -2943,7 +3066,9 @@ mod tests {
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
         let mut worker = Worker::new(xdg);
         assert!(matches!(
-            worker.handle(Message::RefreshSidebar).as_slice(),
+            worker
+                .handle(Message::RefreshSidebar, &test_runtime())
+                .as_slice(),
             [
                 Event::StateLoaded,
                 Event::CalendarsLoaded(_),
@@ -2953,17 +3078,22 @@ mod tests {
         assert!(worker.content.is_none());
         assert_eq!(worker.subscriptions.ids(), vec![SubscriptionId::Sidebar]);
 
-        let events = worker.handle(Message::ShowContent(ContentRequest {
-            generation: 1,
-            date: None,
-            view: View::Week,
-            filter: Default::default(),
-        }));
+        let events = worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 1,
+                date: None,
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
         assert!(matches!(events.as_slice(),
             [Event::ContentLoaded(response)] if response.result.is_ok()));
         let content = worker.content.clone().unwrap();
         assert!(matches!(
-            worker.handle(Message::RefreshSidebar).as_slice(),
+            worker
+                .handle(Message::RefreshSidebar, &test_runtime())
+                .as_slice(),
             [Event::SidebarLoaded(Ok(_))]
         ));
         assert_eq!(worker.content.as_ref().unwrap().date, content.date);
@@ -2972,9 +3102,10 @@ mod tests {
             content.generation
         );
 
-        let events = worker.handle(Message::RefreshSubscriptions(vec![
-            SubscriptionId::Calendar(1),
-        ]));
+        let events = worker.handle(
+            Message::RefreshSubscriptions(vec![SubscriptionId::Calendar(1)]),
+            &test_runtime(),
+        );
         assert!(
             matches!(events.as_slice(), [Event::ContentLoaded(response)] if response.result.is_ok())
         );
@@ -2988,29 +3119,35 @@ mod tests {
         subscribe(&mut worker, 1, "2026-10-12", View::Week);
         let ids = worker.subscriptions.ids();
         let date = worker.content.as_ref().unwrap().date;
-        let events = worker.handle(Message::ShowContent(ContentRequest {
-            generation: 2,
-            date: Some(NaiveDate::MAX),
-            view: View::Week,
-            filter: Default::default(),
-        }));
+        let events = worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 2,
+                date: Some(NaiveDate::MAX),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
             if response.generation == 2 && response.result.is_err()));
         assert_eq!(worker.content.as_ref().unwrap().date, date);
         assert_eq!(worker.subscriptions.ids(), ids);
         assert!(matches!(
-            worker.handle(Message::RefreshSidebar).as_slice(),
+            worker
+                .handle(Message::RefreshSidebar, &test_runtime())
+                .as_slice(),
             [Event::SidebarLoaded(Ok(_))]
         ));
         assert!(
             worker
-                .handle(Message::RefreshSubscriptions(vec![
-                    SubscriptionId::Calendar(2)
-                ]))
+                .handle(
+                    Message::RefreshSubscriptions(vec![SubscriptionId::Calendar(2)]),
+                    &test_runtime()
+                )
                 .is_empty()
         );
         assert!(
-            matches!(worker.handle(Message::RefreshSubscriptions(ids)).as_slice(),
+            matches!(worker.handle(Message::RefreshSubscriptions(ids), &test_runtime()).as_slice(),
             [Event::ContentLoaded(response), Event::SidebarLoaded(Ok(_))]
             if response.generation == 1 && response.result.is_ok())
         );
@@ -3026,7 +3163,7 @@ mod tests {
         eventix_state::Settings::new(tmp.path().join("settings.toml"))
             .write_to_file()
             .unwrap();
-        let events = worker.handle(Message::Reload);
+        let events = worker.handle(Message::Reload, &test_runtime());
         let [
             Event::StateLoaded,
             Event::CalendarsLoaded(_),
@@ -3058,17 +3195,17 @@ mod tests {
         fs::write(tmp.path().join("settings.toml"), "invalid TOML [").unwrap();
         let ids = worker.subscriptions.ids();
         assert!(matches!(
-            worker.handle(Message::Reload).as_slice(),
+            worker.handle(Message::Reload, &test_runtime()).as_slice(),
             [Event::ReloadFailed(_)]
         ));
         assert_eq!(worker.subscriptions.ids(), ids);
         assert!(!worker.state().unwrap().store().directories().is_empty());
         assert!(
-            matches!(worker.handle(Message::RefreshSubscriptions(ids)).as_slice(),
+            matches!(worker.handle(Message::RefreshSubscriptions(ids), &test_runtime()).as_slice(),
             [Event::ContentLoaded(response), Event::SidebarLoaded(Ok(_))] if response.result.is_ok())
         );
         let command = command(&worker, "2026-10-14T14:30:00");
-        assert!(worker.execute(Box::new(command)).is_ok());
+        assert!(worker.execute(Box::new(command), &test_runtime()).is_ok());
     }
 
     #[test]
@@ -3090,31 +3227,39 @@ mod tests {
         // A worker that failed before installing subscriptions must also recover on reload.
         let settings_path = tmp.path().join("settings.toml");
         fs::remove_file(&settings_path).unwrap();
-        let events = worker.handle(Message::ShowContent(ContentRequest {
-            generation: 1,
-            date: Some("2026-10-12".parse().unwrap()),
-            view: View::Week,
-            filter: Default::default(),
-        }));
+        let events = worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 1,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
             if response.generation == 1 && response.result.is_err()));
         assert!(worker.state.is_none());
         assert!(worker.subscriptions.ids().is_empty());
         fs::write(&settings_path, &before).unwrap();
         assert!(matches!(
-            worker.handle(Message::Reload).as_slice(),
+            worker.handle(Message::Reload, &test_runtime()).as_slice(),
             [Event::StateLoaded, Event::CalendarsLoaded(_)]
         ));
-        let events = worker.handle(Message::ShowContent(ContentRequest {
-            generation: 1,
-            date: Some("2026-10-12".parse().unwrap()),
-            view: View::Week,
-            filter: Default::default(),
-        }));
+        let events = worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 1,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
         assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
             if response.generation == 1 && response.result.is_ok()));
         assert!(matches!(
-            worker.handle(Message::RefreshSidebar).as_slice(),
+            worker
+                .handle(Message::RefreshSidebar, &test_runtime())
+                .as_slice(),
             [Event::SidebarLoaded(Ok(_))]
         ));
         let state = load_local_state(xdg).unwrap();

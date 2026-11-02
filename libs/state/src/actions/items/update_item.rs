@@ -14,7 +14,7 @@ use eventix_ical::{
 use eventix_locale::Locale;
 
 use super::{CreateItem, ItemId, TaskStatus};
-use crate::{State, actions::Action};
+use crate::{State, actions::LockedAction};
 
 /// Selects which part of an event or task series is edited.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,7 +163,8 @@ impl UpdateItem {
     }
 }
 
-impl Action for UpdateItem {
+#[async_trait::async_trait]
+impl LockedAction for UpdateItem {
     fn description(&self) -> &'static str {
         "Item updated"
     }
@@ -172,7 +173,7 @@ impl Action for UpdateItem {
         std::slice::from_ref(&self.item)
     }
 
-    fn execute(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
+    async fn execute_locked(self: Box<Self>, state: &mut State) -> anyhow::Result<ItemId> {
         let current = self.validate_revision(state)?;
         let locale = state.locale();
         let tz = *state.timezone();
@@ -514,7 +515,7 @@ mod tests {
         objects::{CalCompType, CalDate, CalPartStat, EventLike},
     };
 
-    use super::{Action, EditScope, ItemId, UpdateItem};
+    use super::{EditScope, ItemId, LockedAction, UpdateItem};
     use crate::{CalendarSettings, CollectionSettings, State, SyncerType};
 
     fn fixture(path: &Path, recurrent: bool) -> State {
@@ -599,8 +600,8 @@ mod tests {
             .insert("target".into(), collection);
     }
 
-    #[test]
-    fn task_edits_save_status_progress_completion_and_optional_dates() {
+    #[tokio::test]
+    async fn task_edits_save_status_progress_completion_and_optional_dates() {
         use super::TaskStatus;
         use eventix_ical::objects::CalTodoStatus;
 
@@ -615,7 +616,7 @@ mod tests {
             percent: Some(35),
             completed: None,
         });
-        Box::new(edit).execute(&mut state).unwrap();
+        Box::new(edit).execute_locked(&mut state).await.unwrap();
         let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         assert!(edit.fields.start.is_none() && edit.fields.end.is_none());
         assert_eq!(edit.fields.task_status.as_ref().unwrap().percent, Some(35));
@@ -624,7 +625,7 @@ mod tests {
             percent: None,
             completed: Some("TU2026-10-15T00:00:00".parse().unwrap()),
         });
-        Box::new(edit).execute(&mut state).unwrap();
+        Box::new(edit).execute_locked(&mut state).await.unwrap();
         let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
         assert!(disk.contains("STATUS:COMPLETED"));
         assert!(disk.contains("PERCENT-COMPLETE:100"));
@@ -632,14 +633,14 @@ mod tests {
         assert!(disk.contains("X-CUSTOM:keep-me"));
         let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         edit.fields.task_status.as_mut().unwrap().status = CalTodoStatus::NeedsAction;
-        Box::new(edit).execute(&mut state).unwrap();
+        Box::new(edit).execute_locked(&mut state).await.unwrap();
         let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
         assert!(!disk.contains("PERCENT-COMPLETE"));
         assert!(!disk.contains("COMPLETED:"));
     }
 
-    #[test]
-    fn recurring_tasks_support_occurrence_following_and_series_edits() {
+    #[tokio::test]
+    async fn recurring_tasks_support_occurrence_following_and_series_edits() {
         for scope in [
             EditScope::Occurrence,
             EditScope::Following,
@@ -650,7 +651,7 @@ mod tests {
             let target = item(Some("TU2026-10-14T09:00:00"));
             let mut edit = UpdateItem::load(&state, target, scope).unwrap();
             edit.fields.summary = "Changed task".into();
-            Box::new(edit).execute(&mut state).unwrap();
+            Box::new(edit).execute_locked(&mut state).await.unwrap();
             let start = chrono_tz::UTC
                 .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
                 .unwrap();
@@ -674,8 +675,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn series_edit_moves_standalone_events_and_complete_series_with_exceptions() {
+    #[tokio::test]
+    async fn series_edit_moves_standalone_events_and_complete_series_with_exceptions() {
         for recurrent in [false, true] {
             let source = tempfile::tempdir().unwrap();
             let target = tempfile::tempdir().unwrap();
@@ -686,12 +687,15 @@ mod tests {
                 let mut exception =
                     UpdateItem::load(&state, item(Some(rid)), EditScope::Occurrence).unwrap();
                 exception.fields.summary = "Exception".into();
-                Box::new(exception).execute(&mut state).unwrap();
+                Box::new(exception)
+                    .execute_locked(&mut state)
+                    .await
+                    .unwrap();
             }
             let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
             edit.fields.calendar = "target".into();
             edit.fields.summary = "Moved".into();
-            let result = Box::new(edit).execute(&mut state).unwrap();
+            let result = Box::new(edit).execute_locked(&mut state).await.unwrap();
             assert_eq!(result.calendar, "target");
             assert_eq!(result.uid, "edit-me");
             assert!(!source.path().join("event.ics").exists());
@@ -712,8 +716,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn following_edit_moves_only_selected_and_later_occurrences_to_target_calendar() {
+    #[tokio::test]
+    async fn following_edit_moves_only_selected_and_later_occurrences_to_target_calendar() {
         for day in [12, 14] {
             let source = tempfile::tempdir().unwrap();
             let target = tempfile::tempdir().unwrap();
@@ -727,7 +731,7 @@ mod tests {
             .unwrap();
             edit.fields.calendar = "target".into();
             edit.fields.summary = "Moved following".into();
-            let result = Box::new(edit).execute(&mut state).unwrap();
+            let result = Box::new(edit).execute_locked(&mut state).await.unwrap();
             assert_eq!(result.calendar, "target");
             assert_ne!(result.uid, "edit-me");
             assert!(result.recurrence.is_none());
@@ -768,8 +772,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn failed_following_calendar_move_preserves_the_original_series() {
+    #[tokio::test]
+    async fn failed_following_calendar_move_preserves_the_original_series() {
         for day in [12, 14] {
             let source = tempfile::tempdir().unwrap();
             let target = tempfile::tempdir().unwrap();
@@ -783,7 +787,7 @@ mod tests {
             .unwrap();
             edit.fields.calendar = "target".into();
             edit.fields.summary = "Must not be saved".into();
-            assert!(Box::new(edit).execute(&mut state).is_err());
+            assert!(Box::new(edit).execute_locked(&mut state).await.is_err());
             let file = state.store().file_by_id("edit-me").unwrap();
             assert_eq!(file.directory().as_str(), "test");
             assert_eq!(
@@ -801,8 +805,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn rejected_calendar_moves_preserve_the_event() {
+    #[tokio::test]
+    async fn rejected_calendar_moves_preserve_the_event() {
         for case in [
             "occurrence",
             "read_only",
@@ -835,7 +839,10 @@ mod tests {
             }
             .into();
             edit.fields.summary = "Must not be saved".into();
-            assert!(Box::new(edit).execute(&mut state).is_err(), "{case}");
+            assert!(
+                Box::new(edit).execute_locked(&mut state).await.is_err(),
+                "{case}"
+            );
             let file = state
                 .store()
                 .file_by_id("edit-me")
@@ -861,15 +868,18 @@ mod tests {
         }
     }
 
-    #[test]
-    fn saves_existing_event_preserving_identity_metadata_and_attendee_responses() {
+    #[tokio::test]
+    async fn saves_existing_event_preserving_identity_metadata_and_attendee_responses() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), false);
         let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         let stale = edit.clone();
         edit.fields.summary = "Edited".into();
         edit.fields.location = "Office".into();
-        assert_eq!(Box::new(edit).execute(&mut state).unwrap(), item(None));
+        assert_eq!(
+            Box::new(edit).execute_locked(&mut state).await.unwrap(),
+            item(None)
+        );
         let disk = fs::read_to_string(tmp.path().join("event.ics")).unwrap();
         assert!(disk.contains("SUMMARY:Edited"));
         assert!(disk.contains("X-CUSTOM:keep-me"));
@@ -882,15 +892,15 @@ mod tests {
             occurrence.attendees().unwrap()[0].part_stat(),
             Some(CalPartStat::Accepted)
         );
-        assert!(Box::new(stale).execute(&mut state).is_err());
+        assert!(Box::new(stale).execute_locked(&mut state).await.is_err());
         assert_eq!(
             fs::read_to_string(tmp.path().join("event.ics")).unwrap(),
             disk
         );
     }
 
-    #[test]
-    fn occurrence_edit_changes_only_selected_occurrence_and_keeps_its_original_identity() {
+    #[tokio::test]
+    async fn occurrence_edit_changes_only_selected_occurrence_and_keeps_its_original_identity() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), true);
         let target = item(Some("TU2026-10-13T09:00:00"));
@@ -898,7 +908,10 @@ mod tests {
         edit.fields.summary = "Exception".into();
         edit.fields.start = Some("TU2026-10-13T12:00:00".parse().unwrap());
         edit.fields.end = Some("TU2026-10-13T13:00:00".parse().unwrap());
-        assert_eq!(Box::new(edit).execute(&mut state).unwrap(), target);
+        assert_eq!(
+            Box::new(edit).execute_locked(&mut state).await.unwrap(),
+            target
+        );
         let occurrence = state
             .store()
             .occurrence_by_id("edit-me", target.recurrence.as_ref(), state.timezone())
@@ -920,7 +933,7 @@ mod tests {
         assert_eq!(other.rrule().unwrap().count(), Some(5));
         let mut series = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         series.fields.description = "Inherited description".into();
-        Box::new(series).execute(&mut state).unwrap();
+        Box::new(series).execute_locked(&mut state).await.unwrap();
         let occurrence = state
             .store()
             .occurrence_by_id("edit-me", target.recurrence.as_ref(), state.timezone())
@@ -929,8 +942,8 @@ mod tests {
         assert_eq!(occurrence.description().unwrap(), "Inherited description");
     }
 
-    #[test]
-    fn following_edit_splits_series_and_preserves_remaining_count() {
+    #[tokio::test]
+    async fn following_edit_splits_series_and_preserves_remaining_count() {
         for day in [12, 14] {
             let tmp = tempfile::tempdir().unwrap();
             let mut state = fixture(tmp.path(), true);
@@ -941,7 +954,7 @@ mod tests {
                 Some(5 - (day - 12))
             );
             edit.fields.summary = "Following".into();
-            let result = Box::new(edit).execute(&mut state).unwrap();
+            let result = Box::new(edit).execute_locked(&mut state).await.unwrap();
             assert_ne!(result.uid, "edit-me");
             let start = chrono_tz::UTC
                 .with_ymd_and_hms(2026, 10, 12, 0, 0, 0)
@@ -976,18 +989,18 @@ mod tests {
         }
     }
 
-    #[test]
-    fn invalid_edits_and_changed_files_do_not_modify_live_state_or_disk() {
+    #[tokio::test]
+    async fn invalid_edits_and_changed_files_do_not_modify_live_state_or_disk() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state = fixture(tmp.path(), false);
         let mut edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         let original = fs::read(tmp.path().join("event.ics")).unwrap();
         edit.fields.summary.clear();
-        assert!(Box::new(edit).execute(&mut state).is_err());
+        assert!(Box::new(edit).execute_locked(&mut state).await.is_err());
         assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
         let edit = UpdateItem::load(&state, item(None), EditScope::Series).unwrap();
         fs::write(tmp.path().join("event.ics"), b"external change").unwrap();
-        assert!(Box::new(edit).execute(&mut state).is_err());
+        assert!(Box::new(edit).execute_locked(&mut state).await.is_err());
         assert_eq!(
             fs::read(tmp.path().join("event.ics")).unwrap(),
             b"external change"
