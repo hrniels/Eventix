@@ -13,6 +13,176 @@ use support::{
 };
 
 #[tokio::test]
+async fn push_selected_resources_preserves_unselected_changes_and_reports_conflicts() {
+    use eventix_state::{
+        State, SyncCancellation, SyncColResult,
+        actions::{
+            Action,
+            items::{EditScope, ItemId, UpdateItem},
+        },
+    };
+    use std::sync::Arc;
+
+    if let Some(msg) = check_requirements() {
+        eprintln!("{msg}");
+        return;
+    }
+    let pair = RadicalePair::new(false, false).await;
+    let producer = pair.producer();
+    let consumer = pair.consumer();
+    let calendar = producer
+        .create_calendar(REMOTE_CALENDAR_NAME, REMOTE_CALENDAR_FOLDER)
+        .await;
+    let consumer_calendar = consumer
+        .create_calendar(REMOTE_CALENDAR_NAME, REMOTE_CALENDAR_FOLDER)
+        .await;
+    producer.create_todo(&calendar, "Selected").await.unwrap();
+    producer.create_todo(&calendar, "Unselected").await.unwrap();
+    let uid = producer.uid_for_summary("Selected").await;
+    let unselected = producer.uid_for_summary("Unselected").await;
+
+    // Exercise real filename resolution rather than the usual UID-derived filename.
+    {
+        let mut state = producer.state().lock().await;
+        let directory = state
+            .store_mut()
+            .directory_mut(&Arc::new(calendar.clone()))
+            .unwrap();
+        let old_path = directory.file_by_id(&uid).unwrap().path().clone();
+        std::fs::rename(&old_path, old_path.with_file_name("different-name.ics")).unwrap();
+        directory.rescan_for_deletions();
+        directory.rescan_for_additions().unwrap();
+    }
+    let item = ItemId {
+        calendar,
+        uid: uid.clone(),
+        recurrence: None,
+    };
+    let result = State::push_items(
+        producer.state(),
+        &[item.clone(), item.clone()],
+        None,
+        &SyncCancellation::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.items.len(), 1);
+    assert!(matches!(result.items[0].1, SyncColResult::Success(_)));
+    struct CancelAfterOne {
+        cancellation: SyncCancellation,
+        state: eventix_state::EventixState,
+    }
+    impl eventix_state::PushProgress for CancelAfterOne {
+        fn progress(&self, completed: usize, total: usize) {
+            assert_eq!(total, 2);
+            assert!(self.state.try_lock().is_ok());
+            if completed == 1 {
+                self.cancellation.cancel();
+            }
+        }
+    }
+    let cancellation = SyncCancellation::default();
+    let progress = CancelAfterOne {
+        cancellation: cancellation.clone(),
+        state: producer.state().clone(),
+    };
+    let other = ItemId {
+        uid: unselected.clone(),
+        ..item.clone()
+    };
+    let result = State::push_items(
+        producer.state(),
+        &[item.clone(), other],
+        Some(&progress),
+        &cancellation,
+    )
+    .await
+    .unwrap();
+    assert!(result.cancelled);
+    assert_eq!(result.items.len(), 1);
+    assert!(matches!(result.items[0].1, SyncColResult::Success(_)));
+    consumer.sync_collection().await;
+    consumer.assert_store_summary(&uid, "Selected").await;
+    consumer.assert_store_missing(&unselected).await;
+
+    consumer
+        .create_and_sync_todo(&consumer_calendar, "Remote only")
+        .await
+        .unwrap();
+    let remote_only = consumer.uid_for_summary("Remote only").await;
+    let mut edit = UpdateItem::load(
+        &*producer.state().lock().await,
+        item.clone(),
+        EditScope::Series,
+    )
+    .unwrap();
+    edit.fields.summary = "Selected updated".into();
+    Box::new(edit).execute(producer.state()).await.unwrap();
+    let result = State::push_items(
+        producer.state(),
+        std::slice::from_ref(&item),
+        None,
+        &SyncCancellation::default(),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(result.items[0].1, SyncColResult::Success(_)));
+    producer.assert_store_missing(&remote_only).await;
+    consumer.sync_collection().await;
+    consumer
+        .assert_store_summary(&uid, "Selected updated")
+        .await;
+
+    let mut remote_edit = UpdateItem::load(
+        &*consumer.state().lock().await,
+        ItemId {
+            calendar: consumer_calendar,
+            ..item.clone()
+        },
+        EditScope::Series,
+    )
+    .unwrap();
+    remote_edit.fields.summary = "Remote edit".into();
+    Box::new(remote_edit)
+        .execute(consumer.state())
+        .await
+        .unwrap();
+    consumer.sync_collection().await;
+    let mut local_edit = UpdateItem::load(
+        &*producer.state().lock().await,
+        item.clone(),
+        EditScope::Series,
+    )
+    .unwrap();
+    local_edit.fields.summary = "Conflicting local edit".into();
+    Box::new(local_edit)
+        .execute(producer.state())
+        .await
+        .unwrap();
+    let other = ItemId {
+        uid: unselected.clone(),
+        ..item.clone()
+    };
+    let result = State::push_items(
+        producer.state(),
+        &[item, other],
+        None,
+        &SyncCancellation::default(),
+    )
+    .await
+    .unwrap();
+    assert!(!result.cancelled);
+    assert_eq!(result.items.len(), 2);
+    assert!(matches!(result.items[0].1, SyncColResult::Error(_)));
+    assert!(matches!(result.items[1].1, SyncColResult::Success(_)));
+    consumer.sync_collection().await;
+    consumer.assert_store_summary(&uid, "Remote edit").await;
+    consumer
+        .assert_store_summary(&unselected, "Unselected")
+        .await;
+}
+
+#[tokio::test]
 async fn discover_collection_succeeds() {
     if let Some(msg) = check_requirements() {
         eprintln!("{msg}");

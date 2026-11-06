@@ -43,6 +43,9 @@ mod imp {
         #[template_child]
         pub history_button: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
+        pub history_count: gtk::TemplateChild<gtk::Label>,
+        pub pending_count: Cell<usize>,
+        #[template_child]
         pub history_popup: gtk::TemplateChild<gtk::Popover>,
         #[template_child]
         pub history_scroll: gtk::TemplateChild<gtk::ScrolledWindow>,
@@ -187,17 +190,32 @@ impl StatusBar {
         );
     }
 
-    pub fn clear(&self) {
+    pub fn clear(&self, locale: &dyn Locale) {
         let imp = self.imp();
         imp.history_popup.popdown();
         imp.entries().remove_all();
         imp.calendar_names.borrow_mut().clear();
         imp.status.set_text("");
         imp.status.set_tooltip_text(None);
-        imp.history_button.set_sensitive(false);
+        self.set_pending_pushes(0, locale);
+    }
+
+    pub(crate) fn set_pending_pushes(&self, count: usize, locale: &dyn Locale) {
+        let imp = self.imp();
+        imp.pending_count.set(count);
+        imp.history_count.set_text(&count.to_string());
+        imp.history_button
+            .set_sensitive(count > 0 || imp.entries().n_items() > 0);
+        let outstanding =
+            formatx::formatx!(locale.translate("{} outstanding pushes"), count).unwrap();
+        let tooltip = format!("{}\n{}", locale.translate("Activity history"), outstanding);
+        imp.history_button.set_tooltip_text(Some(&tooltip));
+        imp.history_button
+            .update_property(&[gtk::accessible::Property::Label(&tooltip)]);
     }
 
     pub fn set_locale(&self, locale: &dyn Locale) {
+        self.set_pending_pushes(self.imp().pending_count.get(), locale);
         let imp = self.imp();
         imp.language_icon
             .set_resource(Some(language_icon(locale.ty())));
@@ -220,14 +238,6 @@ impl StatusBar {
             button.set_child(Some(&row));
             button.set_sensitive(locale.ty() != language);
         }
-        self.imp()
-            .history_button
-            .set_tooltip_text(Some(locale.translate("Activity history")));
-        self.imp()
-            .history_button
-            .update_property(&[gtk::accessible::Property::Label(
-                locale.translate("Activity history"),
-            )]);
         let cancel = &self.imp().cancel_sync;
         cancel.set_tooltip_text(Some(locale.translate("Cancel operation")));
         cancel.update_property(&[gtk::accessible::Property::Label(
@@ -385,6 +395,68 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn activity_button_shows_outstanding_push_count_and_keeps_history_popup() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let status: StatusBar = glib::Object::new();
+        let locale = eventix_locale::default();
+        status.set_locale(locale.as_ref());
+        let imp = status.imp();
+        assert_eq!(imp.history_count.text(), "0");
+        assert!(!imp.history_button.is_sensitive());
+        assert_eq!(
+            imp.history_button.tooltip_text().as_deref(),
+            Some("Activity history\n0 outstanding pushes")
+        );
+        status.set_pending_pushes(3, locale.as_ref());
+        assert_eq!(imp.history_count.text(), "3");
+        assert!(imp.history_button.is_sensitive());
+        assert_eq!(
+            imp.history_button.tooltip_text().as_deref(),
+            Some("Activity history\n3 outstanding pushes")
+        );
+        assert_eq!(
+            imp.sync_progress.next_sibling().as_ref(),
+            Some(imp.cancel_sync.upcast_ref())
+        );
+        let row = imp
+            .history_button
+            .child()
+            .and_downcast::<gtk::Box>()
+            .unwrap();
+        assert_eq!(
+            row.first_child().as_ref(),
+            Some(imp.history_count.upcast_ref())
+        );
+        let icon = row.last_child().and_downcast::<gtk::Image>().unwrap();
+        assert_eq!(
+            icon.icon_name().as_deref(),
+            Some("document-open-recent-symbolic")
+        );
+        status.record(&Activity::new(1, "Items uploaded"), locale.as_ref());
+        let window = gtk::Window::new();
+        window.set_child(Some(&status));
+        window.present();
+        imp.history_button.popup();
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        assert!(imp.history_popup.is_mapped());
+        status.set_pending_pushes(0, locale.as_ref());
+        assert_eq!(imp.history_count.text(), "0");
+        assert!(imp.history_button.is_sensitive());
+        assert!(imp.history_popup.is_mapped());
+        assert_eq!(imp.entries().n_items(), 1);
+        status.clear(locale.as_ref());
+        assert!(!imp.history_button.is_sensitive());
+        assert_eq!(
+            imp.history_button.tooltip_text().as_deref(),
+            Some("Activity history\n0 outstanding pushes")
+        );
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn language_selector_opens_above_status_and_switches_language() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -436,7 +508,13 @@ mod tests {
             chrono_tz::UTC,
         )
         .unwrap();
+        status.set_pending_pushes(4, eventix_locale::default().as_ref());
         status.set_locale(german.as_ref());
+        assert_eq!(imp.history_count.text(), "4");
+        assert_eq!(
+            imp.history_button.tooltip_text().as_deref(),
+            Some("Aktivitätsverlauf\n4 ausstehende Uploads")
+        );
         assert!(imp.english.is_sensitive());
         assert!(!imp.german.is_sensitive());
         assert_eq!(
@@ -611,7 +689,7 @@ mod tests {
         imp.history_button.popup();
         context.block_on(glib::timeout_future(std::time::Duration::from_millis(150)));
         assert!((adjustment.value() - (adjustment.upper() - adjustment.page_size())).abs() < 1.0);
-        status.clear();
+        status.clear(locale.as_ref());
         assert_eq!(imp.entries().n_items(), 0);
         assert!(status.text().is_empty());
         assert!(!imp.history_button.is_sensitive());

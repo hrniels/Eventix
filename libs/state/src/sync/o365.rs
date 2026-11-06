@@ -452,6 +452,17 @@ impl O365 {
 
 #[async_trait]
 impl Syncer for O365 {
+    async fn push_item(&mut self, calendar: &str, filename: &str) -> anyhow::Result<SyncColResult> {
+        let calendar = calendar.to_owned();
+        let filename = filename.to_owned();
+        let res = self
+            .run_with_davmail(move |vdir| {
+                Box::pin(async move { vdir.push_item(&calendar, &filename).await })
+            })
+            .await;
+        self.remember_token(res).await
+    }
+
     async fn discover(&mut self) -> anyhow::Result<SyncColResult> {
         let res = self
             .run_with_davmail(|vdir| Box::pin(async { vdir.discover().await }))

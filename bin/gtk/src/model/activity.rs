@@ -217,6 +217,7 @@ mod tests {
             ("New task created", "New task created"),
             ("Item deleted", "Item deleted"),
             ("Item updated", "Item updated"),
+            ("Items uploaded", "Items uploaded"),
             ("Event moved", "Event moved"),
             (
                 "Synchronizing calendars",
@@ -230,6 +231,8 @@ mod tests {
         let activity =
             Activity::new(1, "Item deleted").finish(Phase::Failed, Some("failure".into()));
         assert_eq!(activity.summary(locale.as_ref()), "Item deletion failed");
+        let activity = Activity::new(1, "Items uploaded");
+        assert_eq!(activity.summary(locale.as_ref()), "Item upload started");
     }
 
     fn item(calendar: &str, uid: &str) -> eventix_state::actions::items::ItemId {

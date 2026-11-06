@@ -20,6 +20,7 @@ use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 use super::activity::{Activity, Phase};
 use super::calendars::{self, CalendarVisibility};
 use super::management::{self, Request as ManagementRequest};
+use super::push::{PendingItem, PushQueue, ResourceChanges};
 use super::query::{Query, SubscriptionId, Subscriptions};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -102,6 +103,8 @@ pub(crate) struct ChangeSet {
 }
 
 pub(crate) enum Event {
+    PushAuthenticationRequired(String),
+    PendingPushes(usize),
     Activity(Activity),
     CalendarsLoaded(Vec<CalendarVisibility>),
     ManagementLoaded(u64, Result<eventix_view::calendars::Snapshot, String>),
@@ -176,7 +179,9 @@ pub(crate) enum SavedItem {
 }
 
 #[derive(Debug)]
-enum Message {
+pub(super) enum Message {
+    PushItemReady(ItemId, eventix_state::SyncColResult),
+    PushFinished(Result<eventix_state::PushResult, String>),
     SetLanguage(eventix_locale::LocaleType),
     ManageCalendar(ManagementRequest),
     ToggleCalendar(String),
@@ -565,6 +570,7 @@ struct Worker {
     state: Option<EventixState>,
     content: Option<ContentSubscription>,
     subscriptions: Subscriptions,
+    pushes: PushQueue,
 }
 
 struct RunningSync {
@@ -572,6 +578,7 @@ struct RunningSync {
     cancellation: SyncCancellation,
     activity: Activity,
     management: bool,
+    batch: Vec<PendingItem>,
 }
 
 struct RunningAuthentication {
@@ -666,6 +673,7 @@ impl Worker {
             state: None,
             content: None,
             subscriptions: Subscriptions::default(),
+            pushes: PushQueue::default(),
         }
     }
 
@@ -682,7 +690,26 @@ impl Worker {
         let mut request = 0;
 
         // Queries and commands are ordered. Never discard a queued mutation.
-        while let Ok(message) = receiver.recv_blocking() {
+        loop {
+            let deadline = self.pushes.deadline().filter(|_| runtime.sync.is_none());
+            let message = runtime.runtime.block_on(async {
+                if let Some(deadline) = deadline {
+                    tokio::select! {
+                        message = receiver.recv() => message.ok(),
+                        _ = tokio::time::sleep_until(deadline.into()) => None,
+                    }
+                } else {
+                    receiver.recv().await.ok()
+                }
+            });
+            let Some(message) = message else {
+                if receiver.is_closed() {
+                    return;
+                }
+                request += 1;
+                self.begin_push(&mut runtime, request);
+                continue;
+            };
             request += 1;
             self.dispatch(&mut runtime, message, request);
             if runtime.results.is_closed() {
@@ -692,18 +719,42 @@ impl Worker {
     }
 
     fn dispatch(&mut self, runtime: &mut WorkerRuntime, message: Message, request: u64) {
+        let revision = self.pushes.revision();
+        let reconcile = matches!(
+            &message,
+            Message::ManagementCompleted(..)
+                | Message::ManageCalendar(..)
+                | Message::Reload
+                | Message::SyncFinished(..)
+        );
         match message {
-            Message::ManageCalendar(command) if command.is_cancellable() => {
-                if runtime.sync.is_some() {
-                    runtime
-                        .pending_operations
-                        .push_back((Message::ManageCalendar(command), request));
-                } else {
-                    self.begin_management(runtime, command, request);
+            Message::PushItemReady(item, outcome) => {
+                if let Some(running) = &runtime.sync {
+                    self.pushes
+                        .acknowledge_outcome(&running.batch, &item, &outcome);
                 }
             }
+            Message::PushFinished(result) => {
+                self.finish_push(runtime, result);
+                self.next_operation(runtime);
+            }
+            Message::ManageCalendar(command) if runtime.sync.is_some() => {
+                runtime
+                    .pending_operations
+                    .push_back((Message::ManageCalendar(command), request));
+            }
+            Message::ManageCalendar(command) if command.is_cancellable() => {
+                self.begin_management(runtime, command, request);
+            }
             Message::ManagementCompleted(command, result) => {
-                let activity = runtime.sync.take().map(|sync| sync.activity);
+                let activity = runtime.sync.take().map(|sync| {
+                    if result.as_ref().is_ok_and(|cancelled| !*cancelled) {
+                        for entry in &sync.batch {
+                            self.pushes.acknowledge(entry);
+                        }
+                    }
+                    sync.activity
+                });
                 let cancelled = result.as_ref().is_ok_and(|cancelled| *cancelled);
                 let completed = result.is_ok();
                 let mut events = vec![Event::CalendarsLoaded(self.calendars())];
@@ -760,7 +811,14 @@ impl Worker {
             message => {
                 let finished = matches!(message, Message::SyncFinished(_));
                 let activity = if finished {
-                    runtime.sync.take().map(|sync| sync.activity)
+                    runtime.sync.take().map(|sync| {
+                        if let Message::SyncFinished(Ok(result)) = &message
+                            && let Ok(state) = self.state()
+                        {
+                            self.pushes.acknowledge_sync(&state, &sync.batch, result);
+                        }
+                        sync.activity
+                    })
                 } else {
                     message.activity(request)
                 };
@@ -774,6 +832,58 @@ impl Worker {
                     self.next_operation(runtime);
                 }
             }
+        }
+        if reconcile && let Ok(state) = self.state() {
+            self.pushes.prune(&state);
+        }
+        if self.pushes.revision() != revision {
+            let _ = runtime
+                .results
+                .send_blocking(Event::PendingPushes(self.pushes.len()));
+        }
+        if runtime.sync.is_none() && self.pushes.due(std::time::Instant::now()) {
+            self.begin_push(runtime, request);
+        }
+    }
+
+    fn begin_push(&mut self, runtime: &mut WorkerRuntime, request: u64) {
+        let Some(state) = self.state.clone() else {
+            return;
+        };
+        runtime.sync = self
+            .pushes
+            .begin_upload(
+                state,
+                &runtime.runtime,
+                runtime.requests.clone(),
+                runtime.results.clone(),
+                request,
+            )
+            .map(|upload| RunningSync {
+                _task: upload.task,
+                cancellation: upload.cancellation,
+                activity: upload.activity,
+                management: true,
+                batch: upload.batch,
+            });
+    }
+
+    fn finish_push(
+        &mut self,
+        runtime: &mut WorkerRuntime,
+        result: Result<eventix_state::PushResult, String>,
+    ) {
+        let running = runtime.sync.take();
+        let (batch, activity) = running
+            .map(|running| (running.batch, Some(running.activity)))
+            .unwrap_or_default();
+        let state = self.state().ok();
+        let events = self
+            .pushes
+            .finish_upload(state.as_deref(), &batch, activity, result);
+        drop(state);
+        for event in events {
+            let _ = runtime.results.send_blocking(event);
         }
     }
 
@@ -813,6 +923,7 @@ impl Worker {
                 cancellation,
                 activity,
                 management: false,
+                batch: self.pushes.items(),
             });
     }
 
@@ -831,6 +942,10 @@ impl Worker {
         command: ManagementRequest,
         request: u64,
     ) {
+        let batch = self
+            .state()
+            .map(|state| self.pushes.management_batch(&state, &command))
+            .unwrap_or_default();
         let activity = Message::ManageCalendar(command.clone())
             .activity(request)
             .unwrap();
@@ -864,6 +979,7 @@ impl Worker {
             cancellation,
             activity,
             management: true,
+            batch,
         });
     }
 
@@ -940,6 +1056,9 @@ impl Worker {
         runtime: &tokio::runtime::Runtime,
     ) -> Vec<Event> {
         let event = match message {
+            Message::PushFinished(_) | Message::PushItemReady(..) => {
+                unreachable!("push completion is dispatched independently")
+            }
             Message::SetLanguage(language) => {
                 if let Err(error) = self.set_language(language) {
                     return vec![Event::CommandFailed(format!("{error:#}"))];
@@ -1382,6 +1501,7 @@ impl Worker {
         let state = self.state()?;
 
         let mut affected = Vec::new();
+        let changes = ResourceChanges::capture(&state, command.affected_items());
         for item in command.affected_items() {
             for id in self.subscriptions.matching(&state, item) {
                 if !affected.contains(&id) {
@@ -1397,6 +1517,7 @@ impl Worker {
             .ok_or_else(|| anyhow::anyhow!("No loaded state"))?;
         let item = runtime.block_on(command.execute(shared))?;
         let state = self.state()?;
+        changes.observe(&mut self.pushes, &state, &item);
         for id in self.subscriptions.matching(&state, &item) {
             if !affected.contains(&id) {
                 affected.push(id);
@@ -2162,6 +2283,53 @@ mod tests {
             expected_start: occurrence.occurrence_start().unwrap().to_utc(),
             expected_end: occurrence.occurrence_end().unwrap().to_utc(),
         }
+    }
+
+    #[test]
+    fn persisted_moves_and_series_splits_collect_all_changed_remote_resources() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .set_syncer(SyncerType::VDirSyncer {
+                email: eventix_state::EmailAccount::new("Test".into(), "test@example.com".into()),
+                url: "http://localhost/".into(),
+                username: None,
+                password: None,
+                read_only: false,
+                time_span: Default::default(),
+            });
+        let request = command(&worker, "2026-10-13T14:30:00");
+        let stale = command(&worker, "2026-10-13T15:30:00");
+        worker.execute(Box::new(request), &test_runtime()).unwrap();
+        assert_eq!(worker.pushes.items().len(), 1);
+        assert!(worker.pushes.items()[0].item.recurrence.is_none());
+        let revision = worker.pushes.revision();
+        assert!(worker.execute(Box::new(stale), &test_runtime()).is_err());
+        assert_eq!(worker.pushes.revision(), revision);
+        let item = ItemId {
+            calendar: "test".into(),
+            uid: "move-me".into(),
+            recurrence: Some("TU2026-10-14T09:00:00".parse().unwrap()),
+        };
+        let mut edit = eventix_state::actions::items::UpdateItem::load(
+            &worker.state().unwrap(),
+            item,
+            eventix_state::actions::items::EditScope::Following,
+        )
+        .unwrap();
+        edit.fields.summary = "Following events".into();
+        worker.execute(Box::new(edit), &test_runtime()).unwrap();
+        let items = worker.pushes.items();
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().any(|entry| entry.item.uid == "move-me"));
+        assert!(items.iter().any(|entry| entry.item.uid != "move-me"));
+        assert!(items.iter().all(|entry| entry.generation > revision));
     }
 
     #[test]

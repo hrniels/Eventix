@@ -286,7 +286,7 @@ impl PageSession {
     }
 
     pub(super) fn start(&self, page: &CalendarPage, prefix: String, date: Option<NaiveDate>) {
-        page.imp().status.clear();
+        page.imp().status.clear(page.locale().as_ref());
         let (session, responses) = CalendarSession::start(prefix);
         self.current.replace(Some(session));
         page.install_styles();
@@ -442,6 +442,10 @@ impl PageSession {
             Event::SyncProgress { completed, total } => {
                 imp.status.set_progress(completed, total);
             }
+            Event::PendingPushes(count) => {
+                imp.status.set_pending_pushes(count, page.locale().as_ref());
+            }
+            Event::PushAuthenticationRequired(collection) => self.authenticate(page, collection),
             Event::OperationStarted {
                 description,
                 determinate,

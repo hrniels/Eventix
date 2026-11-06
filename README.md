@@ -108,13 +108,24 @@ The `--data-prefix` option selects a different prefix, for example:
 
 English and German translations are bundled; installed XDG `locale/` files override them.
 The refresh button synchronizes all collections in the background and shows per-collection progress
-on the left of the status bar. Existing calendar visibility settings apply. The development launcher
+on the right of the status bar. Existing calendar visibility settings apply. The development launcher
 adds `run/venv/bin`, `contrib/davmail/dist`, and `target/debug` to `PATH` and builds `eventix-getpw`.
 Run `./b vdirsyncer` and `./b davmail` first if these development helpers are not installed.
 When launching directly with Cargo, these helper executables must be available on `PATH`.
 Hover over the status line to see the configuration file and calendar data directory being used.
 Missing settings are reported with their expected path. Close an existing GTK window before
 relaunching with a different profile or XDG environment: the application is single-instance.
+
+Calendar-file changes in the native UI are pushed automatically after five seconds without another
+edit. Repeated edits reset this delay; recurring occurrences share one pending resource. The number
+on the activity-history button shows outstanding pushes, also included in its tooltip.
+Uploads run in the background and can be cancelled using the status-bar cancel button. Failed or
+cancelled uploads remain pending until another edit or regular synchronization; the queue itself is
+not persisted across restarts, but local calendar changes are saved immediately.
+
+Regular synchronization is still needed to receive remote changes and propagate deletions,
+including the source-side deletion of an item moved to another calendar. Conflicting or uncertain
+uploads should be reconciled with regular synchronization rather than forced uploads.
 
 Keyboard shortcuts:
 

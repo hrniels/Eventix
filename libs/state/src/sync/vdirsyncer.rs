@@ -598,6 +598,32 @@ impl VDirSyncer {
 
 #[async_trait]
 impl Syncer for VDirSyncer {
+    async fn push_item(&mut self, calendar: &str, filename: &str) -> anyhow::Result<SyncColResult> {
+        let folder = self
+            .folder_id
+            .iter()
+            .find_map(|(folder, id)| (id == calendar).then_some(folder))
+            .ok_or_else(|| anyhow!("No calendar with id {}", calendar))?;
+        let target = format!("{}/{}", self.col_id, folder);
+        let args = [
+            "--config",
+            self.cfg.to_str().unwrap(),
+            "push",
+            &target,
+            "--",
+            filename,
+        ];
+        let output = self.runner.run("vdirsyncer", &args, None).await?;
+        for line in String::from_utf8_lossy(&output.stderr).lines() {
+            log_line(&self.log, &self.col_id, line).await?;
+        }
+        if output.status.success() {
+            Ok(SyncColResult::Success(false))
+        } else {
+            Err(self.command_failed(&args, output.status))
+        }
+    }
+
     async fn discover(&mut self) -> anyhow::Result<SyncColResult> {
         self.run_discover().await?;
 
@@ -1049,6 +1075,18 @@ mod tests {
         let err = result.unwrap_err().to_string();
         assert!(err.contains("collection 'testcol'"));
         assert!(err.contains("command `vdirsyncer"));
+    }
+
+    #[tokio::test]
+    async fn push_reports_failure_and_rejects_unknown_calendars() {
+        let runner = FakeCommandRunner::new(vec![CannedOutput::failure(b"conflict")], vec![]);
+        let (mut syncer, _tmp) = make_syncer_with_runner(runner.clone()).await;
+        assert!(syncer.push_item("missing", "event.ics").await.is_err());
+        assert!(runner.calls().is_empty());
+
+        syncer.folder_id.insert("folder".into(), "calendar".into());
+        assert!(syncer.push_item("calendar", "event.ics").await.is_err());
+        assert_eq!(runner.calls().len(), 1);
     }
 
     // --- escape_value tests ---

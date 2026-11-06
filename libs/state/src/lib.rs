@@ -48,7 +48,10 @@ use actions::{
         DiscoverCollection, ReloadCalendar, ReloadCollection, SaveCollection,
         StoreO365RefreshToken, SyncAll, SyncCollection,
     },
+    items::PushItems,
 };
+
+pub use actions::items::{PushProgress, PushResult};
 
 pub use crypto::{
     decrypt_password, encrypt_password, generate_local_password, retrieve_portal_secret,
@@ -447,6 +450,29 @@ impl State {
             col_id: col_id.to_owned(),
             cal_id: cal_id.to_owned(),
             auth_url: auth_url.cloned(),
+            cancellation: cancellation.clone(),
+        })
+        .execute(state)
+        .await
+    }
+
+    /// Pushes selected resources, retaining individual outcomes on failure or cancellation.
+    ///
+    /// Recurrence identities are ignored. Network work runs without holding the state lock.
+    /// Unattempted items are absent from the result; cancellation never rolls back remote writes.
+    /// Only selected files are uploaded; deletions and unrelated remote changes require normal
+    /// synchronization. Invalid identities and calendars without remote write support are rejected
+    /// before uploading. Interrupted writes can have uncertain outcomes and should be reconciled
+    /// with normal synchronization before retrying.
+    pub async fn push_items(
+        state: &EventixState,
+        items: &[actions::items::ItemId],
+        progress: Option<&dyn PushProgress>,
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<PushResult> {
+        Box::new(PushItems {
+            items: items.to_vec(),
+            progress,
             cancellation: cancellation.clone(),
         })
         .execute(state)

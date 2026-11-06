@@ -28,8 +28,14 @@
     </child>
     <child>
       <object class="GtkMenuButton" id="history_button">
-        <style><class name="ev_status_button"/></style>
-        <property name="icon-name">document-open-recent-symbolic</property>
+        <style><class name="ev_status_button"/><class name="ev_activity_button"/></style>
+        <property name="child">
+          <object class="GtkBox">
+            <property name="spacing">4</property>
+            <child><object class="GtkLabel" id="history_count"><property name="label">0</property></object></child>
+            <child><object class="GtkImage"><property name="icon-name">document-open-recent-symbolic</property></object></child>
+          </object>
+        </property>
         <property name="valign">center</property>
         <property name="sensitive">false</property>
         <property name="direction">up</property>

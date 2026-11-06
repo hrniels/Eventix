@@ -17,7 +17,7 @@ use items::ItemId;
 /// A validated asynchronous operation on shared application state.
 ///
 /// Item actions return an [`ItemId`] by default. Calendar management actions return `()`, and
-/// synchronization actions return [`crate::SyncResult`].
+/// synchronization actions return [`crate::SyncResult`]. Item pushing returns [`crate::PushResult`].
 #[async_trait::async_trait]
 pub trait Action<Output = ItemId>: std::fmt::Debug + Send {
     /// Returns the translation key describing the successful outcome for activity messages.

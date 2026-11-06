@@ -33,9 +33,19 @@ fn ensure_collection_writable(col_id: &str, col: &CollectionSettings) -> anyhow:
 /// Defines the interface for a calendar synchronisation backend.
 ///
 /// Each backend (filesystem, vdirsyncer, Microsoft 365) implements this trait to provide
-/// discover, sync, and delete operations for its collections and individual calendars.
+/// discover, sync, and delete operations for its collections and individual calendars. Remote
+/// backends also support pushing selected local resources.
 #[async_trait]
 pub trait Syncer: Send {
+    /// Pushes one local resource without downloading unrelated changes.
+    async fn push_item(
+        &mut self,
+        _calendar: &str,
+        _filename: &str,
+    ) -> anyhow::Result<SyncColResult> {
+        Err(anyhow!("Item pushing is not supported by this backend"))
+    }
+
     /// Discovers available calendars from the backend and updates state accordingly.
     async fn discover(&mut self) -> anyhow::Result<SyncColResult>;
 
@@ -156,9 +166,9 @@ pub(crate) type SyncExecution = (
     anyhow::Result<SyncColResult>,
 );
 
-struct CollectionSync {
+pub(crate) struct CollectionSync {
     snapshot: CollectionSettings,
-    syncer: Box<dyn Syncer + 'static>,
+    pub(crate) syncer: Box<dyn Syncer + 'static>,
 }
 
 /// Appends a timestamped line to the sync log, also emitting it at `DEBUG` level via tracing.
@@ -237,7 +247,7 @@ fn collection_index(state: &State, col_id: &String) -> anyhow::Result<usize> {
         .ok_or_else(|| anyhow!("No collection with id {}", col_id))
 }
 
-fn sync_snapshot(
+pub(crate) fn sync_snapshot(
     state: &State,
     col_id: &String,
 ) -> anyhow::Result<(
@@ -340,7 +350,7 @@ async fn get_sync_from_snapshot(
     .await
 }
 
-async fn get_sync_cancellable(
+pub(crate) async fn get_sync_cancellable(
     xdg: Arc<BaseDirectories>,
     idx: usize,
     id: String,

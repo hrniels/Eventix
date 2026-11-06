@@ -418,6 +418,11 @@ button.ev_editor_section_toggle:checked {
     padding: 2px;
 }
 
+.ev_activity_button > button {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
 .ev_cur_month {
     font-weight: bold;
 }

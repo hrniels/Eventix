@@ -183,6 +183,10 @@ pub struct RadicalePeer {
 }
 
 impl RadicalePeer {
+    pub fn state(&self) -> &EventixState {
+        &self.state
+    }
+
     fn new(state: EventixState, tmp: TempDir) -> Self {
         Self { state, tmp }
     }
