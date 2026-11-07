@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::LazyLock;
-
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
 use eventix_state::actions::items::{
@@ -15,7 +13,6 @@ use eventix_view::{
     sidebar::SidebarRow,
 };
 use gtk::{glib, prelude::*, subclass::prelude::*};
-use regex::Regex;
 
 use crate::style;
 
@@ -23,8 +20,10 @@ use super::indicators::EventIndicators;
 
 mod arrow;
 pub(crate) mod delete;
+mod description;
 mod reminders;
 mod size_transition;
+mod text_links;
 
 type ReminderHandler = std::rc::Rc<dyn Fn(UpdatePersonalAlarms)>;
 
@@ -439,7 +438,10 @@ impl EventDetails {
         }
 
         if !details.description.trim().is_empty() {
-            description_scroll.set_child(Some(&linked_label(details.description.trim())));
+            description_scroll.set_child(Some(&description::Description::new(
+                details.description.trim(),
+                locale,
+            )));
             row(
                 "journal-text",
                 "Description",
@@ -842,31 +844,12 @@ fn linked_label(text: &str) -> gtk::Label {
 
 /// Escapes calendar text before adding links, preserving literal markup and line breaks.
 fn text_markup(text: &str) -> String {
-    static LINKS: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(concat!(
-            r"(?:https?://|mailto:)?(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}",
-            r"\.[a-zA-Z0-9]{2,}\b(?:[-a-zA-Z0-9()@:;%_+.~#?&/=]*)"
-        ))
-        .expect("valid link regex")
-    });
-
     let mut result = String::new();
     let mut end = 0;
-    for found in LINKS.find_iter(text) {
-        result.push_str(&glib::markup_escape_text(&text[end..found.start()]));
-        let text = found.as_str().trim_end_matches(['.', ',', ';', ')']);
-        let uri = if text.starts_with("https:")
-            || text.starts_with("http:")
-            || text.starts_with("mailto:")
-        {
-            text.to_owned()
-        } else if text.contains('@') {
-            format!("mailto:{text}")
-        } else {
-            format!("https://{text}")
-        };
-        result.push_str(&link_markup(&uri, text));
-        end = found.start() + text.len();
+    for link in text_links::links(text) {
+        result.push_str(&glib::markup_escape_text(&text[end..link.start]));
+        result.push_str(&link_markup(&link.uri, link.text));
+        end = link.end;
     }
 
     result.push_str(&glib::markup_escape_text(&text[end..]));
