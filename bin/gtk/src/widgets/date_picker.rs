@@ -11,21 +11,9 @@ use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
 use eventix_locale::Locale;
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
+use super::MONTHS;
+
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MONTHS: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
 
 /// Returns the 42 cells of a month, leaving unrepresentable boundary dates empty.
 fn month_cells(month: NaiveDate, first: Weekday) -> [Option<NaiveDate>; 42] {

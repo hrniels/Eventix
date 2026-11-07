@@ -860,3 +860,8 @@ button.ev_sidebar_row.ev_cancelled > box > label {
     outline: 2px solid @theme_selected_bg_color;
     outline-offset: -2px;
 }
+
+.ev_month_picker button.ev_month_picker_month {
+    min-height: 42px;
+    padding: 6px;
+}

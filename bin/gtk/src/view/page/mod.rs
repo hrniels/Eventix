@@ -99,6 +99,8 @@ mod imp {
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub calendar: gtk::TemplateChild<crate::widgets::DatePicker>,
+        #[template_child]
+        pub month_picker: gtk::TemplateChild<crate::widgets::MonthPicker>,
 
         pub(super) editor: PageEditor,
         pub(super) content: PageContent,
@@ -123,6 +125,7 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             crate::widgets::DatePicker::ensure_type();
+            crate::widgets::MonthPicker::ensure_type();
             WeekContent::ensure_type();
             MonthGrid::ensure_type();
             Sidebar::ensure_type();

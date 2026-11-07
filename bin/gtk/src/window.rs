@@ -158,6 +158,23 @@ impl Window {
         if let Some(focus) = GtkWindowExt::focus(self)
             && let Some(picker) = focus
                 .clone()
+                .downcast::<crate::widgets::MonthPicker>()
+                .ok()
+                .or_else(|| {
+                    focus
+                        .ancestor(crate::widgets::MonthPicker::static_type())
+                        .and_downcast::<crate::widgets::MonthPicker>()
+                })
+        {
+            let propagation = picker.key_pressed(key, modifiers);
+            if propagation == glib::Propagation::Stop {
+                return propagation;
+            }
+        }
+
+        if let Some(focus) = GtkWindowExt::focus(self)
+            && let Some(picker) = focus
+                .clone()
                 .downcast::<crate::widgets::DatePicker>()
                 .ok()
                 .or_else(|| {
@@ -516,6 +533,7 @@ mod tests {
         window.present();
         settle();
 
+        page.switch_to_week();
         for (key, expected) in [
             (gtk::gdk::Key::Left, "2024-02-29"),
             (gtk::gdk::Key::Right, "2024-04-30"),
@@ -539,6 +557,43 @@ mod tests {
             );
             assert_eq!(
                 page.imp().calendar.date(),
+                expected.parse::<NaiveDate>().unwrap()
+            );
+            assert!(!page.imp().picker.is_active());
+        }
+
+        let week_size = (page.imp().calendar.width(), page.imp().calendar.height());
+        page.switch_to_month();
+        for (key, expected) in [
+            (gtk::gdk::Key::Left, "2024-02-01"),
+            (gtk::gdk::Key::Right, "2024-04-01"),
+            (gtk::gdk::Key::Up, "2023-03-01"),
+            (gtk::gdk::Key::Down, "2025-03-01"),
+        ] {
+            let date = "2024-03-31".parse().unwrap();
+            page.imp().month_picker.select_month(date);
+            page.imp().picker.popup();
+            settle();
+            assert!(page.imp().month_picker.has_focus());
+            assert!(!page.imp().calendar.is_mapped());
+            assert_eq!(
+                (
+                    page.imp().month_picker.width(),
+                    page.imp().month_picker.height()
+                ),
+                week_size,
+            );
+            assert_eq!(
+                window.handle_key_pressed(key, gtk::gdk::ModifierType::CONTROL_MASK),
+                glib::Propagation::Stop
+            );
+            assert_eq!(
+                page.imp().month_picker.date(),
+                "2024-03-01".parse::<NaiveDate>().unwrap()
+            );
+            window.handle_key_pressed(gtk::gdk::Key::Return, gtk::gdk::ModifierType::empty());
+            assert_eq!(
+                page.imp().month_picker.date(),
                 expected.parse::<NaiveDate>().unwrap()
             );
             assert!(!page.imp().picker.is_active());

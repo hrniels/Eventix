@@ -75,6 +75,20 @@ impl PageContent {
 
         self.translate_labels(page);
 
+        let size = gtk::SizeGroup::new(gtk::SizeGroupMode::Both);
+        size.add_widget(&*imp.calendar);
+        size.add_widget(&*imp.month_picker);
+
+        let weak = page.downgrade();
+        imp.month_picker.connect_month_selected(move |picker| {
+            let Some(page) = weak.upgrade() else { return };
+            if !page.imp().picker.is_active() {
+                return;
+            }
+            page.imp().picker.popdown();
+            page.show_content(Some(picker.date()));
+        });
+
         let weak = page.downgrade();
         imp.calendar.connect_day_selected(move |calendar| {
             let Some(page) = weak.upgrade() else { return };
@@ -96,6 +110,9 @@ impl PageContent {
             .set_locale(locale.as_ref(), chrono::Weekday::Mon);
         imp.calendar.set_weekly(self.view.get() == View::Week);
         let monthly = self.view.get() == View::Month;
+        imp.month_picker.set_locale(locale.as_ref());
+        imp.calendar.set_visible(!monthly);
+        imp.month_picker.set_visible(monthly);
 
         imp.search
             .set_placeholder_text(Some(locale.translate("Search")));
@@ -306,6 +323,7 @@ impl PageContent {
         self.date.set(Some(date));
 
         imp.calendar.select_day(date);
+        imp.month_picker.select_month(date);
     }
 
     pub(super) fn show_month(&self, page: &CalendarPage, month: MonthSnapshot) {

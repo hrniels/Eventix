@@ -182,7 +182,16 @@
                                 <property name="popover">
                                   <object class="GtkPopover">
                                     <property name="child">
-                                      <object class="EventixDatePicker" id="calendar"/>
+                                      <object class="GtkBox">
+                                        <child>
+                                          <object class="EventixDatePicker" id="calendar"/>
+                                        </child>
+                                        <child>
+                                          <object class="EventixMonthPicker" id="month_picker">
+                                            <property name="visible">false</property>
+                                          </object>
+                                        </child>
+                                      </object>
                                     </property>
                                   </object>
                                 </property>
