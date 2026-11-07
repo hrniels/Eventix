@@ -60,7 +60,7 @@ pub use misc::Misc;
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
 pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, EncryptedPassword,
-    Settings, SyncTimeBound, SyncTimeSpan, SyncerType,
+    Preferences, PreferencesError, Settings, SyncTimeBound, SyncTimeSpan, SyncerType,
 };
 pub use sync::{
     SyncCancellation, SyncColResult, SyncProgress, SyncResult, Syncer, create_calendar_by_folder,
@@ -110,8 +110,10 @@ impl State {
 
         let misc = misc::Misc::load_from_file(&xdg).context("load misc state")?;
         let locale = match tz_override {
-            Some(tz) => eventix_locale::new_with_timezone(&xdg, misc.locale_type(), tz)?,
-            None => eventix_locale::new(&xdg, misc.locale_type())?,
+            Some(tz) => {
+                eventix_locale::new_with_timezone(&xdg, settings.preferences().locale_type, tz)?
+            }
+            None => eventix_locale::new(&xdg, settings.preferences().locale_type)?,
         };
 
         let mut store = CalStore::default();
@@ -156,7 +158,7 @@ impl State {
         }
     }
 
-    /// Reloads the `Locale` implementation from persisted misc state.
+    /// Reloads the `Locale` implementation from the current settings.
     ///
     /// Call this after the user changes language/locale preferences so that formatting and
     /// translations are updated without restarting the application. Returns an error if creating
@@ -168,10 +170,32 @@ impl State {
     /// Reloads the locale, optionally overriding the timezone used for formatting.
     pub fn reload_locale_with_timezone(&mut self, tz_override: Option<Tz>) -> anyhow::Result<()> {
         self.locale = match tz_override {
-            Some(tz) => eventix_locale::new_with_timezone(&self.xdg, self.misc.locale_type(), tz)?,
-            None => eventix_locale::new(&self.xdg, self.misc.locale_type())?,
+            Some(tz) => eventix_locale::new_with_timezone(
+                &self.xdg,
+                self.settings.preferences().locale_type,
+                tz,
+            )?,
+            None => eventix_locale::new(&self.xdg, self.settings.preferences().locale_type)?,
         };
         Ok(())
+    }
+
+    /// Persists user preferences and updates translations without changing the timezone.
+    ///
+    /// Returns an error for invalid values, unavailable translations, or persistence failures.
+    /// On failure, the previous preferences and loaded locale remain active.
+    pub fn save_preferences(&mut self, preferences: Preferences) -> anyhow::Result<()> {
+        let previous = self.settings.preferences();
+        let locale = self.locale.clone();
+        self.settings.set_preferences(preferences)?;
+        let result = self
+            .reload_locale_with_timezone(Some(*locale.timezone()))
+            .and_then(|()| self.settings.write_to_file());
+        if result.is_err() {
+            self.settings.set_preferences(previous)?;
+            self.locale = locale;
+        }
+        result
     }
 
     /// Refreshes the in-memory calendar store from the current settings.

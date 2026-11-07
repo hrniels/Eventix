@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
+use eventix_locale::LocaleType;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -12,16 +13,63 @@ use xdg::BaseDirectories;
 
 const FILENAME: &str = "settings.toml";
 
-/// Top-level application settings, aggregating all collection and calendar configurations.
+/// User preferences shared by the application frontends.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Preferences {
+    /// Language used for translations and formatting.
+    pub locale_type: LocaleType,
+    /// Minutes between automatic full synchronizations (1–1,440).
+    pub sync_interval_minutes: u32,
+    /// Seconds to wait after the last edit before uploading (0–86,400).
+    pub post_delay_seconds: u32,
+}
+
+/// Reports unsupported preference values.
+#[derive(Debug, thiserror::Error)]
+pub enum PreferencesError {
+    #[error("Invalid sync interval")]
+    SyncInterval,
+    #[error("Invalid post delay")]
+    PostDelay,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            locale_type: LocaleType::default(),
+            sync_interval_minutes: 15,
+            post_delay_seconds: 5,
+        }
+    }
+}
+
+impl Preferences {
+    /// Checks that synchronization timings are within the supported ranges.
+    pub fn validate(&self) -> Result<(), PreferencesError> {
+        if !(1..=1440).contains(&self.sync_interval_minutes) {
+            return Err(PreferencesError::SyncInterval);
+        }
+        if self.post_delay_seconds > 86_400 {
+            return Err(PreferencesError::PostDelay);
+        }
+        Ok(())
+    }
+}
+
+/// Top-level application settings, including preferences and calendar configurations.
 ///
 /// Loaded from and persisted to a TOML file in the XDG config directory. Collections are keyed by
-/// name and each contains one or more calendar entries.
+/// name and each contains one or more calendar entries. User preferences are stored in the
+/// `preferences` table.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(default)]
     version: u32,
     #[serde(skip)]
     path: PathBuf,
+    #[serde(default)]
+    preferences: Preferences,
     #[serde(rename = "collection")]
     collections: BTreeMap<String, CollectionSettings>,
 }
@@ -32,8 +80,21 @@ impl Settings {
         Self {
             version: crate::CURRENT_VERSION,
             path,
+            preferences: Preferences::default(),
             collections: BTreeMap::new(),
         }
+    }
+
+    /// Returns the current user preferences.
+    pub fn preferences(&self) -> Preferences {
+        self.preferences
+    }
+
+    /// Replaces the user preferences after validating their timing ranges.
+    pub fn set_preferences(&mut self, preferences: Preferences) -> Result<(), PreferencesError> {
+        preferences.validate()?;
+        self.preferences = preferences;
+        Ok(())
     }
 
     /// Returns all collections as a map keyed by collection name.
@@ -99,17 +160,41 @@ impl Settings {
 
     /// Loads settings from the XDG config file, or returns empty settings if no file exists.
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
-        match xdg.find_config_file(FILENAME) {
+        let (mut settings, has_preferences) = match xdg.find_config_file(FILENAME) {
             Some(file) => {
-                let mut settings: Settings = super::load_from_file(&file)?;
+                let document: toml::Value = super::load_from_file(&file)?;
+                let has_preferences = document.get("preferences").is_some();
+                let mut settings: Settings = document.try_into()?;
                 settings.path = file;
-                Ok(settings)
+                (settings, has_preferences)
             }
             None => {
                 let path = xdg.get_config_home().unwrap().join(FILENAME);
-                Ok(Settings::new(path))
+                (Settings::new(path), false)
             }
+        };
+        if !has_preferences {
+            settings.import_legacy_preferences(xdg)?;
         }
+        settings.preferences.validate()?;
+        Ok(settings)
+    }
+
+    /// Imports old preferences once; an existing preferences table always takes precedence.
+    fn import_legacy_preferences(&mut self, xdg: &BaseDirectories) -> anyhow::Result<()> {
+        let Some(path) = xdg.find_data_file("misc.toml") else {
+            return Ok(());
+        };
+        let document: toml::Value = super::load_from_file(&path)?;
+        if ["locale_type", "sync_interval_minutes", "post_delay_seconds"]
+            .iter()
+            .any(|key| document.get(key).is_some())
+        {
+            self.set_preferences(document.try_into()?)?;
+            self.path = xdg.place_config_file(FILENAME)?;
+            self.write_to_file()?;
+        }
+        Ok(())
     }
 
     /// Persists the current settings to the associated TOML config file.
@@ -526,6 +611,90 @@ mod tests {
         CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, Settings,
         SyncTimeBound, SyncTimeSpan, SyncerType,
     };
+
+    #[test]
+    fn preferences_default_for_existing_files_and_validate_updates() {
+        let mut settings: Settings = toml::from_str("[collection]").unwrap();
+        let mut preferences = settings.preferences();
+        assert_eq!(preferences, super::Preferences::default());
+        for interval in [0, 1441, u32::MAX] {
+            preferences.sync_interval_minutes = interval;
+            assert!(settings.set_preferences(preferences).is_err());
+            assert_eq!(settings.preferences().sync_interval_minutes, 15);
+        }
+        preferences.sync_interval_minutes = 1440;
+        for delay in [86_401, u32::MAX] {
+            preferences.post_delay_seconds = delay;
+            assert!(settings.set_preferences(preferences).is_err());
+            assert_eq!(settings.preferences(), super::Preferences::default());
+        }
+        preferences.post_delay_seconds = 86_400;
+        settings.set_preferences(preferences).unwrap();
+        assert_eq!(settings.preferences(), preferences);
+        preferences.post_delay_seconds = 0;
+        preferences.locale_type = eventix_locale::LocaleType::German;
+        settings.set_preferences(preferences).unwrap();
+        let serialized = toml::to_string(&settings).unwrap();
+        assert!(serialized.contains("[preferences]"));
+        let loaded: Settings = toml::from_str(&serialized).unwrap();
+        assert_eq!(loaded.preferences(), preferences);
+    }
+
+    #[test]
+    fn preferences_import_legacy_values_once_and_keep_misc_state_separate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data = tmp.path().join("data");
+        let config = tmp.path().join("config");
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(&config).unwrap();
+        let xdg = crate::with_test_xdg(&data, &config);
+        std::fs::write(config.join("settings.toml"), "version = 3\n[collection]\n").unwrap();
+        std::fs::write(data.join("misc.toml"),
+            "version = 3\nlocale_type = \"German\"\nsync_interval_minutes = 30\npost_delay_seconds = 12\ndisabled_calendars = [\"test\"]\n").unwrap();
+        let settings = Settings::load_from_file(&xdg).unwrap();
+        assert_eq!(
+            settings.preferences(),
+            super::Preferences {
+                locale_type: eventix_locale::LocaleType::German,
+                sync_interval_minutes: 30,
+                post_delay_seconds: 12,
+            }
+        );
+        assert!(settings.collections().is_empty());
+        let mut misc = crate::Misc::load_from_file(&xdg).unwrap();
+        assert!(misc.calendar_disabled(&"test".into()));
+        misc.toggle_calendar(&"test".into());
+        misc.write_to_file().unwrap();
+        let contents = std::fs::read_to_string(data.join("misc.toml")).unwrap();
+        assert!(!contents.contains("locale_type"));
+        assert!(!contents.contains("sync_interval_minutes"));
+        assert!(!contents.contains("post_delay_seconds"));
+        // An older misc file cannot override preferences already stored in settings.
+        std::fs::write(
+            data.join("misc.toml"),
+            "version = 3\nlocale_type = \"English\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            Settings::load_from_file(&xdg).unwrap().preferences(),
+            settings.preferences()
+        );
+    }
+
+    #[test]
+    fn preferences_import_old_language_without_timing_values() {
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = crate::with_test_xdg(tmp.path(), tmp.path());
+        std::fs::write(
+            tmp.path().join("misc.toml"),
+            "version = 3\nlocale_type = \"German\"\n",
+        )
+        .unwrap();
+        let preferences = Settings::load_from_file(&xdg).unwrap().preferences();
+        assert_eq!(preferences.locale_type, eventix_locale::LocaleType::German);
+        assert_eq!(preferences.sync_interval_minutes, 15);
+        assert_eq!(preferences.post_delay_seconds, 5);
+    }
 
     // --- helpers ---
 

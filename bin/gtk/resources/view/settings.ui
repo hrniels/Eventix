@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkSizeGroup">
+    <property name="mode">horizontal</property>
+    <widgets>
+      <widget name="language"/>
+      <widget name="interval_controls"/>
+      <widget name="delay_controls"/>
+    </widgets>
+  </object>
+  <object class="GtkWindow" id="window">
+    <property name="modal">true</property>
+    <property name="resizable">false</property>
+    <property name="destroy-with-parent">true</property>
+    <property name="child">
+      <object class="GtkBox" id="content">
+        <property name="orientation">vertical</property>
+        <property name="spacing">12</property>
+        <property name="margin-start">6</property>
+        <property name="margin-end">6</property>
+        <property name="margin-top">6</property>
+        <property name="margin-bottom">6</property>
+        <child>
+          <object class="GtkBox" id="fields">
+            <property name="orientation">vertical</property>
+            <child>
+              <object class="GtkBox" id="language_row">
+                <property name="spacing">24</property>
+                <style><class name="ev_details_row"/><class name="ev_settings_row"/></style>
+                <child>
+                  <object class="GtkLabel" id="language_label">
+                    <property name="xalign">0</property>
+                    <property name="hexpand">true</property>
+                    <style><class name="ev_details_label"/></style>
+                  </object>
+                </child>
+                <child><object class="GtkDropDown" id="language"/></child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="interval_row">
+                <property name="spacing">24</property>
+                <style><class name="ev_details_row"/><class name="ev_settings_row"/></style>
+                <child>
+                  <object class="GtkBox" id="interval_heading">
+                    <property name="spacing">6</property>
+                    <property name="hexpand">true</property>
+                    <child>
+                      <object class="GtkLabel" id="interval_label">
+                        <property name="xalign">0</property>
+                        <style><class name="ev_details_label"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkImage" id="interval_help">
+                        <property name="icon-name">dialog-question-symbolic</property>
+                        <property name="pixel-size">16</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="interval_controls">
+                    <property name="spacing">8</property>
+                    <child>
+                      <object class="GtkSpinButton" id="interval">
+                        <property name="numeric">true</property>
+                        <property name="adjustment">
+                          <object class="GtkAdjustment">
+                            <property name="lower">1</property>
+                            <property name="upper">1440</property>
+                            <property name="step-increment">1</property>
+                            <property name="page-increment">15</property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="interval_unit">
+                        <property name="xalign">0</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="delay_row">
+                <property name="spacing">24</property>
+                <style><class name="ev_details_row"/><class name="ev_settings_row"/></style>
+                <child>
+                  <object class="GtkBox" id="delay_heading">
+                    <property name="spacing">6</property>
+                    <property name="hexpand">true</property>
+                    <child>
+                      <object class="GtkLabel" id="delay_label">
+                        <property name="xalign">0</property>
+                        <style><class name="ev_details_label"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkImage" id="delay_help">
+                        <property name="icon-name">dialog-question-symbolic</property>
+                        <property name="pixel-size">16</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="delay_controls">
+                    <property name="spacing">8</property>
+                    <child>
+                      <object class="GtkSpinButton" id="delay">
+                        <property name="numeric">true</property>
+                        <property name="adjustment">
+                          <object class="GtkAdjustment">
+                            <property name="upper">86400</property>
+                            <property name="step-increment">1</property>
+                            <property name="page-increment">5</property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="delay_unit">
+                        <property name="xalign">0</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </property>
+  </object>
+</interface>

@@ -7,6 +7,7 @@
     <file>view/action_menu/popover.ui</file>
     <file>view/action_menu/submenu.ui</file>
     <file>view/auth.ui</file>
+    <file>view/settings.ui</file>
     <file>view/card.ui</file>
     <file>view/calendars/content.ui</file>
     <file>view/calendars/collection.ui</file>

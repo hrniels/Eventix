@@ -144,6 +144,12 @@ impl PageContent {
         imp.sync_collections
             .set_tooltip_text(Some(locale.translate("Synchronize a collection")));
         imp.status.set_locale(locale.as_ref());
+        imp.settings_button
+            .set_tooltip_text(Some(locale.translate("Settings")));
+        imp.settings_button
+            .update_property(&[gtk::accessible::Property::Label(
+                locale.translate("Settings"),
+            )]);
         imp.picker
             .set_tooltip_text(Some(locale.translate("Choose date")));
     }

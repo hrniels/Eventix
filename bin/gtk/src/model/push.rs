@@ -18,7 +18,6 @@ use super::{
     session::{Event, Message},
 };
 
-const DELAY: Duration = Duration::from_secs(5);
 type Key = (String, String);
 
 /// Captures resources before an action and observes its persisted changes afterwards.
@@ -60,6 +59,7 @@ pub(super) struct PendingItem {
 pub(super) struct PushQueue {
     entries: BTreeMap<Key, PendingItem>,
     deadline: Option<Instant>,
+    last_edit: Option<Instant>,
     // Tracks additions, updates, and removals so the session can detect queue changes and
     // publish the pending count. Also supplies fresh resource generations: editing an
     // already queued resource must advance this counter even though the count stays the same.
@@ -86,6 +86,12 @@ fn resource_contents(state: &State, item: &ItemId) -> Option<Vec<u8>> {
 }
 
 impl PushQueue {
+    pub fn set_delay(&mut self, delay: Duration) {
+        if self.deadline.is_some() {
+            self.deadline = self.last_edit.map(|edit| edit + delay);
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -213,7 +219,12 @@ impl PushQueue {
             // no such file anymore? remove it and update revision+deadline
             if self.entries.remove(&key).is_some() {
                 self.revision += 1;
-                self.deadline = (!self.entries.is_empty()).then_some(now + DELAY);
+                self.last_edit = Some(now);
+                self.deadline = (!self.entries.is_empty()).then_some(
+                    now + Duration::from_secs(u64::from(
+                        state.settings().preferences().post_delay_seconds,
+                    )),
+                );
             }
             return;
         };
@@ -240,7 +251,10 @@ impl PushQueue {
                 generation: self.revision,
             },
         );
-        self.deadline = Some(now + DELAY);
+        self.last_edit = Some(now);
+        self.deadline = Some(
+            now + Duration::from_secs(u64::from(state.settings().preferences().post_delay_seconds)),
+        );
     }
 
     /// Reconciles upload outcomes and returns completion and authentication events.
@@ -438,7 +452,7 @@ mod tests {
         queue.observe(&state, item.clone(), None, now);
         assert_eq!(queue.items().len(), 1);
         assert!(!queue.due(now + Duration::from_secs(4)));
-        assert!(queue.due(now + DELAY));
+        assert!(queue.due(now + Duration::from_secs(5)));
 
         // An occurrence edit uploads the same resource and restarts the shared debounce.
         item.recurrence = Some(eventix_ical::objects::CalDate::Date(
@@ -449,8 +463,31 @@ mod tests {
 
         assert_eq!(queue.items().len(), 1);
         assert!(queue.items()[0].item.recurrence.is_none());
-        assert!(!queue.due(now + DELAY));
+        assert!(!queue.due(now + Duration::from_secs(5)));
         assert!(queue.due(now + Duration::from_secs(8)));
+    }
+
+    #[test]
+    fn configured_delay_and_changes_preserve_the_last_edit_and_active_uploads() {
+        let (_tmp, mut state, item) = fixture();
+        let mut preferences = state.settings().preferences();
+        preferences.post_delay_seconds = 30;
+        state.settings_mut().set_preferences(preferences).unwrap();
+        let mut queue = PushQueue::default();
+        let now = Instant::now();
+        queue.observe(&state, item.clone(), None, now);
+        assert_eq!(queue.deadline(), Some(now + Duration::from_secs(30)));
+        queue.set_delay(Duration::from_secs(60));
+        assert_eq!(queue.deadline(), Some(now + Duration::from_secs(60)));
+        queue.set_delay(Duration::ZERO);
+        assert!(queue.due(now));
+        queue.start();
+        queue.set_delay(Duration::from_secs(10));
+        assert_eq!(queue.deadline(), None);
+        preferences.post_delay_seconds = 0;
+        state.settings_mut().set_preferences(preferences).unwrap();
+        queue.observe(&state, item, None, now);
+        assert!(queue.due(now));
     }
 
     #[test]
@@ -467,7 +504,7 @@ mod tests {
         queue.observe(&state, item.clone(), None, now);
 
         queue.observe(&state, item, Some(&contents), now + Duration::from_secs(3));
-        assert_eq!(queue.deadline(), Some(now + DELAY));
+        assert_eq!(queue.deadline(), Some(now + Duration::from_secs(5)));
     }
 
     #[test]

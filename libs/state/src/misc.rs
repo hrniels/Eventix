@@ -5,13 +5,12 @@
 //! Helpers for persisted miscellaneous application state.
 //!
 //! This module provides the `Misc` type which encapsulates small pieces of persisted state
-//! (locale choice, alarm/check timestamps, UI selections, disabled calendars and per-collection
+//! (alarm/check timestamps, UI selections, disabled calendars and per-collection
 //! tokens). It also provides helpers to load and persist that state using the project's XDG data
 //! directory.
 
 use chrono::NaiveDateTime;
 use eventix_ical::objects::CalCompType;
-use eventix_locale::LocaleType;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -23,7 +22,7 @@ const FILENAME: &str = "misc.toml";
 
 /// Holds small pieces of persisted application state.
 ///
-/// Stores the configured locale type, timestamps used by alarm checks, the last selected calendar
+/// Stores timestamps used by alarm checks, the last selected calendar
 /// per component type, lists of disabled calendars and calendar error markers, and stored
 /// collection tokens.
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -32,8 +31,6 @@ pub struct Misc {
     version: u32,
     #[serde(skip)]
     path: PathBuf,
-    #[serde(default)]
-    locale_type: LocaleType,
     #[serde(default)]
     last_alarm_check: NaiveDateTime,
     #[serde(default)]
@@ -56,23 +53,12 @@ impl Misc {
         Self {
             version: crate::CURRENT_VERSION,
             path,
-            locale_type: LocaleType::default(),
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
             calendar_errors: HashSet::default(),
             collection_tokens: HashMap::default(),
         }
-    }
-
-    /// Returns the configured locale type used for formatting and translations.
-    pub fn locale_type(&self) -> LocaleType {
-        self.locale_type
-    }
-
-    /// Sets the configured locale type used for formatting and translations.
-    pub fn set_locale_type(&mut self, ty: LocaleType) {
-        self.locale_type = ty;
     }
 
     /// Returns the timestamp of the last performed alarm check.
@@ -172,21 +158,12 @@ impl Misc {
 mod tests {
     use chrono::NaiveDate;
     use eventix_ical::objects::CalCompType;
-    use eventix_locale::LocaleType;
     use std::os::unix::fs::PermissionsExt;
 
     use super::Misc;
 
     fn make_misc() -> Misc {
         Misc::new(std::path::PathBuf::default())
-    }
-
-    #[test]
-    fn locale_type_get_and_set() {
-        let mut m = make_misc();
-        assert_eq!(m.locale_type(), LocaleType::English);
-        m.set_locale_type(LocaleType::German);
-        assert_eq!(m.locale_type(), LocaleType::German);
     }
 
     #[test]
@@ -264,12 +241,10 @@ mod tests {
         std::fs::write(&path, "old content").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         let mut m = Misc::new(path.clone());
-        m.set_locale_type(LocaleType::German);
         m.set_collection_token(&"col".to_string(), "tok".to_string());
         m.write_to_file().unwrap();
 
         let loaded: Misc = crate::load_from_file(&path).unwrap();
-        assert_eq!(loaded.locale_type(), LocaleType::German);
         assert_eq!(
             loaded.collection_token(&"col".to_string()),
             Some(&"tok".to_string())

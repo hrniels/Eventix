@@ -24,6 +24,8 @@ use crate::view::details::{EventDetails, delete};
 /// Owns the model connection, command state, and periodic refresh lifecycle.
 #[derive(Default)]
 pub(super) struct PageSession {
+    preferences: Cell<Option<eventix_state::Preferences>>,
+    settings_popup: RefCell<Option<Rc<crate::view::settings::SettingsPopup>>>,
     pub(super) current: RefCell<Option<CalendarSession>>,
     pending_command: Cell<bool>,
     pending_quick_task: Cell<bool>,
@@ -40,6 +42,60 @@ pub(super) struct PageSession {
 }
 
 impl PageSession {
+    pub(super) fn open_settings(&self, page: &CalendarPage) {
+        if let Some(popup) = self.settings_popup.borrow().as_ref()
+            && popup.is_open()
+        {
+            popup.present();
+            return;
+        }
+        let Some(preferences) = self.preferences.get() else {
+            return;
+        };
+        let Some(window) = page.root().and_downcast::<gtk::Window>() else {
+            return;
+        };
+        page.dismiss_popovers();
+        let weak = page.downgrade();
+        let popup = crate::view::settings::SettingsPopup::new(
+            &window,
+            page.locale().as_ref(),
+            preferences,
+            move |preferences| {
+                weak.upgrade().is_some_and(|page| {
+                    page.imp()
+                        .session
+                        .current
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|session| session.save_preferences(preferences))
+                })
+            },
+        );
+        self.settings_popup.replace(Some(popup));
+    }
+
+    fn update_preferences(&self, page: &CalendarPage, preferences: eventix_state::Preferences) {
+        self.preferences.set(Some(preferences));
+        page.imp().settings_button.set_sensitive(true);
+        if let Some(timer) = self.sync_timer.take() {
+            timer.remove();
+        }
+        let weak = page.downgrade();
+        let timer =
+            glib::timeout_add_seconds_local(preferences.sync_interval_minutes * 60, move || {
+                let Some(page) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                if !page.imp().session.pending_sync.get() {
+                    page.imp().session.sync_collection.replace(None);
+                    page.imp().session.synchronize(&page, false);
+                }
+                glib::ControlFlow::Continue
+            });
+        self.sync_timer.replace(Some(timer));
+    }
+
     pub(super) fn update_sync_time(&self, page: &CalendarPage) {
         if let Some(time) = self.last_sync.get() {
             let locale = page.locale();
@@ -361,21 +417,6 @@ impl PageSession {
         });
         self.timer.replace(Some(timer));
 
-        let weak = page.downgrade();
-        let timer = glib::timeout_add_seconds_local(5 * 60, move || {
-            let Some(page) = weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-
-            if !page.imp().session.pending_sync.get() {
-                page.imp().session.sync_collection.replace(None);
-                page.imp().session.synchronize(&page, false);
-            }
-
-            glib::ControlFlow::Continue
-        });
-        self.sync_timer.replace(Some(timer));
-
         page.show_content(date);
         if let Some(session) = self.current.borrow().as_ref() {
             session.refresh_sidebar();
@@ -413,6 +454,15 @@ impl PageSession {
         // Result handlers only update their own controls and must not record the error again.
         let imp = page.imp();
         match event {
+            Event::PreferencesLoaded(preferences) => self.update_preferences(page, preferences),
+            Event::PreferencesSaved(result) => {
+                if let Ok(preferences) = &result {
+                    self.update_preferences(page, *preferences);
+                }
+                if let Some(popup) = self.settings_popup.borrow().as_ref() {
+                    popup.finished(&result);
+                }
+            }
             Event::Activity(activity) => imp.status.record(&activity, page.locale().as_ref()),
             Event::CalendarsLoaded(calendars) => {
                 imp.status.set_calendars(&calendars);
@@ -562,6 +612,9 @@ impl PageSession {
     }
 
     pub(super) fn stop(&self, page: &CalendarPage) {
+        self.settings_popup.take();
+        self.preferences.set(None);
+        page.imp().settings_button.set_sensitive(false);
         page.imp().editor.stop(page);
         self.auth_popup.take();
         if let Some(session) = self.current.take() {
@@ -594,6 +647,52 @@ mod tests {
     use gtk::{glib, prelude::*, subclass::prelude::*};
 
     use super::{CalendarSession, Event};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn settings_toolbar_opens_only_one_popup_and_replaces_the_sync_timer() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::new(None::<&str>, Default::default());
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        let imp = page.imp();
+        assert_eq!(
+            imp.settings_button.next_sibling().as_ref(),
+            imp.calendars_button.parent().as_ref()
+        );
+        assert_ne!(imp.settings_button.parent(), imp.calendars_button.parent());
+        assert_eq!(
+            imp.settings_button.icon_name().as_deref(),
+            Some("emblem-system-symbolic")
+        );
+        let preferences = eventix_state::Preferences::default();
+        imp.session.update_preferences(&page, preferences);
+        let timer = imp.session.sync_timer.borrow().as_ref().unwrap().as_raw();
+        window.present();
+        imp.settings_button.emit_clicked();
+        let popup = imp.session.settings_popup.borrow().clone().unwrap();
+        imp.settings_button.emit_clicked();
+        assert!(std::rc::Rc::ptr_eq(
+            &popup,
+            imp.session.settings_popup.borrow().as_ref().unwrap()
+        ));
+        imp.session.handle_event(
+            &page,
+            Event::PreferencesSaved(Ok(eventix_state::Preferences {
+                sync_interval_minutes: 30,
+                ..preferences
+            })),
+        );
+        assert!(!popup.is_open());
+        assert_ne!(
+            timer,
+            imp.session.sync_timer.borrow().as_ref().unwrap().as_raw()
+        );
+        imp.session.stop(&page);
+        assert!(imp.session.sync_timer.borrow().is_none());
+        window.close();
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]

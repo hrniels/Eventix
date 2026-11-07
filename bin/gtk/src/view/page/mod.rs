@@ -92,6 +92,8 @@ mod imp {
         #[template_child]
         pub calendars_button: gtk::TemplateChild<gtk::Button>,
         #[template_child]
+        pub settings_button: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
         pub calendars: gtk::TemplateChild<gtk::Box>,
         #[template_child]
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
@@ -189,12 +191,9 @@ mod imp {
                 }
             });
             let weak = obj.downgrade();
-            self.status.connect_language(move |language| {
+            self.settings_button.connect_clicked(move |_| {
                 if let Some(page) = weak.upgrade() {
-                    page.dismiss_popovers();
-                    if let Some(session) = page.imp().session.current.borrow().as_ref() {
-                        session.set_language(language);
-                    }
+                    page.imp().session.open_settings(&page);
                 }
             });
         }

@@ -240,7 +240,7 @@ async fn locations_matches_case_insensitively() {
 // --- POST /api/setlang ---
 
 #[tokio::test]
-async fn setlang_updates_locale_and_persists_misc_state() {
+async fn setlang_updates_locale_and_persists_settings() {
     let source_tmp = TempDir::new().unwrap();
     let (state, _xdg_tmp) = make_state_from_col(make_collection(&source_tmp));
     let data_home = state.lock().await.xdg().get_data_home().unwrap();
@@ -255,7 +255,10 @@ async fn setlang_updates_locale_and_persists_misc_state() {
 
     {
         let locked = state.lock().await;
-        assert_eq!(locked.misc().locale_type(), LocaleType::English);
+        assert_eq!(
+            locked.settings().preferences().locale_type,
+            LocaleType::English
+        );
         assert_eq!(locked.locale().ty(), LocaleType::English);
     }
 
@@ -266,11 +269,21 @@ async fn setlang_updates_locale_and_persists_misc_state() {
     assert_eq!(body, "null");
 
     let locked = state.lock().await;
-    assert_eq!(locked.misc().locale_type(), LocaleType::German);
+    assert_eq!(
+        locked.settings().preferences().locale_type,
+        LocaleType::German
+    );
     assert_eq!(locked.locale().ty(), LocaleType::German);
 
-    let misc = std::fs::read_to_string(data_home.join("misc.toml")).unwrap();
-    assert!(misc.contains("locale_type = \"German\""));
+    let settings = std::fs::read_to_string(
+        locked
+            .xdg()
+            .get_config_home()
+            .unwrap()
+            .join("settings.toml"),
+    )
+    .unwrap();
+    assert!(settings.contains("locale_type = \"German\""));
 }
 
 #[tokio::test]

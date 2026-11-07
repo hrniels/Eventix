@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -7,7 +7,7 @@ use clap::Parser;
 use eventix_cmd::Response;
 use eventix_ical::objects::{Calendar, EventLike};
 use eventix_locale::Locale;
-use eventix_state::{Misc, Settings};
+use eventix_state::Settings;
 use formatx::formatx;
 use gtk::gio::prelude::*;
 use gtk::gio::{Cancellable, File};
@@ -143,9 +143,9 @@ fn main() {
     ImportView::init();
 
     let xdg = Arc::new(BaseDirectories::with_prefix(APP_ID));
-    let misc = Misc::load_from_file(&xdg).expect("load misc state");
     let settings = Settings::load_from_file(&xdg).expect("load settings");
-    let locale = eventix_locale::new(&xdg, misc.locale_type()).expect("create locale");
+    let locale =
+        eventix_locale::new(&xdg, settings.preferences().locale_type).expect("create locale");
 
     // collect all calendars
     let calendars = settings

@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -10,7 +10,6 @@ use axum::routing::post;
 use eventix_locale::LocaleType;
 use eventix_state::EventixState;
 use serde::Deserialize;
-use tracing::warn;
 
 use crate::api::{JsonError, run_post};
 use crate::generated;
@@ -34,15 +33,11 @@ async fn handler(
 }
 
 async fn run_setlang(state: &mut eventix_state::State, req: Request) -> anyhow::Result<Json<()>> {
-    {
-        let misc = state.misc_mut();
-        misc.set_locale_type(req.lang);
-        if let Err(e) = misc.write_to_file() {
-            warn!("Unable to save misc state: {}", e);
-        }
-    }
-
-    state.reload_locale().context("Loading locale")?;
+    let mut preferences = state.settings().preferences();
+    preferences.locale_type = req.lang;
+    state
+        .save_preferences(preferences)
+        .context("Saving preferences")?;
     generated::invalidate().await;
 
     Ok(Json(()))

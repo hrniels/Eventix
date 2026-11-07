@@ -103,6 +103,8 @@ pub(crate) struct ChangeSet {
 }
 
 pub(crate) enum Event {
+    PreferencesLoaded(eventix_state::Preferences),
+    PreferencesSaved(Result<eventix_state::Preferences, String>),
     PushAuthenticationRequired(String),
     PendingPushes(usize),
     Activity(Activity),
@@ -181,9 +183,9 @@ pub(crate) enum SavedItem {
 
 #[derive(Debug)]
 pub(super) enum Message {
+    SavePreferences(eventix_state::Preferences),
     PushItemReady(ItemId, eventix_state::SyncColResult),
     PushFinished(Result<eventix_state::PushResult, String>),
-    SetLanguage(eventix_locale::LocaleType),
     ManageCalendar(ManagementRequest),
     ToggleCalendar(String),
     PrepareEditor(u64, CalCompType),
@@ -427,8 +429,10 @@ impl CalendarSession {
         let _ = self.requests.try_send(Message::ToggleCalendar(id));
     }
 
-    pub fn set_language(&self, language: eventix_locale::LocaleType) {
-        let _ = self.requests.try_send(Message::SetLanguage(language));
+    pub fn save_preferences(&self, preferences: eventix_state::Preferences) -> bool {
+        self.requests
+            .try_send(Message::SavePreferences(preferences))
+            .is_ok()
     }
 
     pub fn manage_calendar(&self, request: ManagementRequest) {
@@ -1058,6 +1062,9 @@ impl Worker {
             match self.load_state() {
                 Ok(event) => {
                     events.push(event);
+                    if let Ok(state) = self.state() {
+                        events.push(Event::PreferencesLoaded(state.settings().preferences()));
+                    }
                     events.push(Event::CalendarsLoaded(self.calendars()));
                 }
                 Err(error) => {
@@ -1086,10 +1093,23 @@ impl Worker {
         runtime: &tokio::runtime::Runtime,
     ) -> Vec<Event> {
         let event = match message {
+            Message::SavePreferences(preferences) => {
+                let result = self
+                    .save_preferences(preferences)
+                    .map_err(|error| format!("{error:#}"));
+                let mut events = vec![Event::PreferencesSaved(result)];
+                if matches!(events.first(), Some(Event::PreferencesSaved(Ok(_)))) {
+                    self.pushes
+                        .set_delay(std::time::Duration::from_secs(u64::from(
+                            preferences.post_delay_seconds,
+                        )));
+                    events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
+                }
+                return events;
+            }
             Message::PushFinished(_) | Message::PushItemReady(..) => {
                 unreachable!("push completion is dispatched independently")
             }
-            Message::SetLanguage(language) => return self.change_language(language),
             Message::ManageCalendar(_) => unreachable!("management is dispatched with the runtime"),
             Message::LoadManagement(id) => Event::ManagementLoaded(
                 id,
@@ -1157,13 +1177,6 @@ impl Worker {
         };
 
         vec![event]
-    }
-
-    fn change_language(&mut self, language: eventix_locale::LocaleType) -> Vec<Event> {
-        if let Err(error) = self.set_language(language) {
-            return vec![Event::CommandFailed(format!("{error:#}"))];
-        }
-        self.refresh_subscriptions(&self.subscriptions.ids())
     }
 
     fn handle_show_content(&mut self, request: ContentRequest) -> Event {
@@ -1252,18 +1265,16 @@ impl Worker {
         Ok(Event::StateLoaded)
     }
 
-    fn set_language(&self, language: eventix_locale::LocaleType) -> anyhow::Result<()> {
+    fn save_preferences(
+        &self,
+        preferences: eventix_state::Preferences,
+    ) -> anyhow::Result<eventix_state::Preferences> {
         let mut state = self.state()?;
-        let previous = state.locale();
-        state.misc_mut().set_locale_type(language);
-        let result = state
-            .reload_locale_with_timezone(Some(*previous.timezone()))
-            .and_then(|()| state.misc_mut().write_to_file());
-        if result.is_err() {
-            state.misc_mut().set_locale_type(previous.ty());
-            state.reload_locale_with_timezone(Some(*previous.timezone()))?;
-        }
-        result
+        preferences.validate().map_err(|error| {
+            anyhow::anyhow!(state.locale().translate(&error.to_string()).to_string())
+        })?;
+        state.save_preferences(preferences)?;
+        Ok(preferences)
     }
 
     /// Starts network work separately so the serialized request loop remains available.
@@ -1354,7 +1365,11 @@ impl Worker {
             Err(error) => return vec![Event::ReloadFailed(format!("{error:#}"))],
         };
 
-        let mut events = vec![event, Event::CalendarsLoaded(self.calendars())];
+        let mut events = vec![event];
+        if let Ok(state) = self.state() {
+            events.push(Event::PreferencesLoaded(state.settings().preferences()));
+        }
+        events.push(Event::CalendarsLoaded(self.calendars()));
         let ids = self.subscriptions.ids();
         events.extend(self.refresh_subscriptions(&ids));
 
@@ -1713,7 +1728,15 @@ mod tests {
             eventix_locale::LocaleType::German,
             eventix_locale::LocaleType::English,
         ] {
-            let events = worker.handle(Message::SetLanguage(language), &test_runtime());
+            let preferences = eventix_state::Preferences {
+                locale_type: language,
+                sync_interval_minutes: 30,
+                post_delay_seconds: 12,
+            };
+            let events = worker.handle(Message::SavePreferences(preferences), &test_runtime());
+            assert!(
+                matches!(events.first(), Some(Event::PreferencesSaved(Ok(saved))) if *saved == preferences)
+            );
             assert!(events.iter().any(|event| matches!(event,
                 Event::ContentLoaded(response) if response.generation == 42
                     && matches!(&response.result, Ok(Snapshot::Week(week))
@@ -1726,7 +1749,31 @@ mod tests {
             let reloaded =
                 State::new_with_timezone(worker.xdg.clone(), Some(chrono_tz::UTC)).unwrap();
             assert_eq!(reloaded.locale().ty(), language);
+            assert_eq!(reloaded.settings().preferences(), preferences);
         }
+    }
+
+    #[test]
+    fn settings_failed_persistence_restores_all_preferences_and_the_loaded_locale() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        let previous = worker.state().unwrap().settings().preferences();
+        let locale = worker.state().unwrap().locale();
+        // A directory at the destination prevents the atomic file replacement.
+        fs::create_dir(tmp.path().join("settings.toml")).unwrap();
+        let preferences = eventix_state::Preferences {
+            locale_type: eventix_locale::LocaleType::German,
+            sync_interval_minutes: 60,
+            post_delay_seconds: 0,
+        };
+        let events = worker.handle(Message::SavePreferences(preferences), &test_runtime());
+        assert!(matches!(
+            events.as_slice(),
+            [Event::PreferencesSaved(Err(_))]
+        ));
+        let state = worker.state().unwrap();
+        assert_eq!(state.settings().preferences(), previous);
+        assert!(Arc::ptr_eq(&state.locale(), &locale));
     }
 
     #[test]
@@ -3326,13 +3373,13 @@ mod tests {
             &test_runtime(),
         );
         assert!(
-            matches!(events.as_slice(), [Event::StateLoaded, Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
+            matches!(events.as_slice(), [Event::StateLoaded, Event::PreferencesLoaded(_), Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.items.is_empty()))
         );
         assert_eq!(worker.content.as_ref().unwrap().filter.keywords, "needle");
         let events = worker.handle(Message::Reload, &test_runtime());
         assert!(
-            matches!(events.as_slice(), [Event::StateLoaded, Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
+            matches!(events.as_slice(), [Event::StateLoaded, Event::PreferencesLoaded(_), Event::CalendarsLoaded(_), Event::ContentLoaded(response)]
             if response.generation == 17 && matches!(&response.result, Ok(Snapshot::List(list)) if list.filter.keywords == "needle"))
         );
     }
@@ -3373,6 +3420,7 @@ mod tests {
                 .as_slice(),
             [
                 Event::StateLoaded,
+                Event::PreferencesLoaded(_),
                 Event::CalendarsLoaded(_),
                 Event::SidebarLoaded(Ok(_))
             ]
@@ -3468,6 +3516,7 @@ mod tests {
         let events = worker.handle(Message::Reload, &test_runtime());
         let [
             Event::StateLoaded,
+            Event::PreferencesLoaded(_),
             Event::CalendarsLoaded(_),
             Event::ContentLoaded(response),
             Event::SidebarLoaded(Ok(_)),
@@ -3545,7 +3594,11 @@ mod tests {
         fs::write(&settings_path, &before).unwrap();
         assert!(matches!(
             worker.handle(Message::Reload, &test_runtime()).as_slice(),
-            [Event::StateLoaded, Event::CalendarsLoaded(_)]
+            [
+                Event::StateLoaded,
+                Event::PreferencesLoaded(_),
+                Event::CalendarsLoaded(_)
+            ]
         ));
         let events = worker.handle(
             Message::ShowContent(ContentRequest {
