@@ -47,7 +47,11 @@
             <child>
               <object class="GtkButton" id="settings_button">
                 <property name="sensitive">false</property>
-                <property name="icon-name">emblem-system-symbolic</property>
+                <property name="child">
+                  <object class="GtkImage">
+                    <property name="resource">@RESOURCE_PREFIX@/icons/gear-symbolic.svg</property>
+                  </object>
+                </property>
                 <style><class name="ev_settings_button"/></style>
               </object>
             </child>

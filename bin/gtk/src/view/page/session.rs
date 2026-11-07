@@ -662,9 +662,15 @@ mod tests {
             imp.calendars_button.parent().as_ref()
         );
         assert_ne!(imp.settings_button.parent(), imp.calendars_button.parent());
+        let settings_icon = imp
+            .settings_button
+            .child()
+            .unwrap()
+            .downcast::<gtk::Image>()
+            .unwrap();
         assert_eq!(
-            imp.settings_button.icon_name().as_deref(),
-            Some("emblem-system-symbolic")
+            settings_icon.resource().as_deref(),
+            Some(resource_path!("icons/gear-symbolic.svg"))
         );
         let preferences = eventix_state::Preferences::default();
         imp.session.update_preferences(&page, preferences);
