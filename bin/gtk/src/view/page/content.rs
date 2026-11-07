@@ -94,6 +94,7 @@ impl PageContent {
         let locale = page.locale();
         imp.calendar
             .set_locale(locale.as_ref(), chrono::Weekday::Mon);
+        imp.calendar.set_weekly(self.view.get() == View::Week);
         let monthly = self.view.get() == View::Month;
 
         imp.search

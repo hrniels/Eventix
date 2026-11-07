@@ -41,6 +41,8 @@ mod imp {
         pub cursor: Cell<NaiveDate>,
         pub month: Cell<NaiveDate>,
         pub first: Cell<Weekday>,
+        pub weekly: Cell<bool>,
+        pub hovered: Cell<Option<usize>>,
         pub today: Cell<NaiveDate>,
         pub timezone: Cell<chrono_tz::Tz>,
         pub heading: gtk::Label,
@@ -60,6 +62,8 @@ mod imp {
                 cursor: Cell::new(today),
                 month: Cell::new(today.with_day(1).unwrap()),
                 first: Cell::new(Weekday::Mon),
+                weekly: Cell::new(false),
+                hovered: Cell::new(None),
                 today: Cell::new(today),
                 timezone: Cell::new(chrono_tz::UTC),
                 heading: gtk::Label::new(None),
@@ -151,6 +155,23 @@ mod imp {
                         obj.confirm();
                     }
                 });
+
+                let motion = gtk::EventControllerMotion::new();
+                let weak = obj.downgrade();
+                motion.connect_enter(move |_, _, _| {
+                    if let Some(obj) = weak.upgrade() {
+                        obj.imp().hovered.set(Some(index));
+                        obj.refresh_hover();
+                    }
+                });
+                let weak = obj.downgrade();
+                motion.connect_leave(move |_| {
+                    if let Some(obj) = weak.upgrade() {
+                        obj.imp().hovered.set(None);
+                        obj.refresh_hover();
+                    }
+                });
+                button.add_controller(motion);
             }
             obj.append(&grid);
 
@@ -187,13 +208,22 @@ mod imp {
 }
 
 glib::wrapper! {
-    /// A single-date calendar with explicit Eventix locale and week ordering.
+    /// A day or week calendar with explicit Eventix locale and week ordering.
     pub struct DatePicker(ObjectSubclass<imp::DatePicker>)
         @extends gtk::Widget, gtk::Box,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
 }
 
 impl DatePicker {
+    /// Enables whole-week highlighting and week-sized arrow-key navigation.
+    ///
+    /// The committed date and browsing cursor are preserved. Weeks follow the configured
+    /// first weekday, and confirming a week returns its cursor date via the usual date signal.
+    pub fn set_weekly(&self, weekly: bool) {
+        self.imp().weekly.set(weekly);
+        self.refresh();
+    }
+
     /// Updates labels and week ordering without changing the committed date or cursor.
     pub fn set_locale(&self, locale: &dyn Locale, first: Weekday) {
         let imp = self.imp();
@@ -349,9 +379,10 @@ impl DatePicker {
         } else {
             1
         };
+        let horizontal_step = if self.imp().weekly.get() { 7 } else { 1 };
         let days = match key {
-            gdk::Key::Left | gdk::Key::KP_Left => -forward,
-            gdk::Key::Right | gdk::Key::KP_Right => forward,
+            gdk::Key::Left | gdk::Key::KP_Left => -forward * horizontal_step,
+            gdk::Key::Right | gdk::Key::KP_Right => forward * horizontal_step,
             gdk::Key::Up | gdk::Key::KP_Up => -7,
             gdk::Key::Down | gdk::Key::KP_Down => 7,
             _ => return glib::Propagation::Proceed,
@@ -397,8 +428,14 @@ impl DatePicker {
                     date.is_some_and(|date| date.month() != month.month()),
                 ),
                 ("ev_date_picker_today", date == Some(imp.today.get())),
-                ("ev_date_picker_selected", date == Some(imp.selected.get())),
-                ("ev_date_picker_cursor", date == Some(imp.cursor.get())),
+                (
+                    "ev_date_picker_selected",
+                    date.is_some_and(|date| self.matches_selection(date, imp.selected.get())),
+                ),
+                (
+                    "ev_date_picker_cursor",
+                    date.is_some_and(|date| self.matches_selection(date, imp.cursor.get())),
+                ),
             ] {
                 if active {
                     button.add_css_class(class);
@@ -421,6 +458,35 @@ impl DatePicker {
                 }
             }
         }
+        self.refresh_hover();
+    }
+
+    fn refresh_hover(&self) {
+        let imp = self.imp();
+        for (index, button) in imp.days.iter().enumerate() {
+            let hovered = imp.weekly.get()
+                && imp
+                    .hovered
+                    .get()
+                    .is_some_and(|hovered| index / 7 == hovered / 7);
+            // GTK owns PRELIGHT and updates it on pointer motion; keep week hover independent.
+            if hovered && button.is_sensitive() {
+                button.add_css_class("ev_date_picker_hover");
+            } else {
+                button.remove_css_class("ev_date_picker_hover");
+            }
+        }
+    }
+
+    fn matches_selection(&self, date: NaiveDate, selected: NaiveDate) -> bool {
+        if !self.imp().weekly.get() {
+            return date == selected;
+        }
+
+        // Compare offsets instead of constructing a week start that could precede NaiveDate::MIN.
+        let offset = (date - selected).num_days()
+            + i64::from(selected.weekday().days_since(self.imp().first.get()));
+        (0..7).contains(&offset)
     }
 }
 
@@ -564,6 +630,187 @@ mod tests {
         assert_eq!(imp.cursor.get(), NaiveDate::MIN);
         assert_eq!(selections.get(), 2);
         window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn date_picker_weekly_highlights_and_navigates_whole_weeks() {
+        use std::rc::Rc;
+
+        gtk::init().unwrap();
+        let picker: DatePicker = glib::Object::new();
+        let date = "2026-12-30".parse().unwrap();
+        picker.select_day(date);
+        picker.set_weekly(true);
+        let selections = Rc::new(Cell::new(0));
+        let selected = selections.clone();
+        picker.connect_day_selected(move |_| selected.set(selected.get() + 1));
+        let window = gtk::Window::builder().child(&picker).build();
+        gtk::prelude::GtkWindowExt::set_focus(&window, Some(&picker));
+        window.present();
+        gtk::test_widget_wait_for_draw(&picker);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !picker.has_focus() && std::time::Instant::now() < deadline {
+            while glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(picker.has_focus());
+
+        let imp = picker.imp();
+        let highlighted = |class| {
+            imp.days
+                .iter()
+                .zip(month_cells(imp.month.get(), imp.first.get()))
+                .filter_map(|(button, date)| button.has_css_class(class).then_some(date).flatten())
+                .collect::<Vec<_>>()
+        };
+        let week: Vec<_> = (0..7)
+            .map(|offset| "2026-12-28".parse::<NaiveDate>().unwrap() + Duration::days(offset))
+            .collect();
+        assert_eq!(highlighted("ev_date_picker_selected"), week);
+        assert_eq!(highlighted("ev_date_picker_cursor"), week);
+
+        for (key, days) in [
+            (gdk::Key::Left, -7),
+            (gdk::Key::Right, 7),
+            (gdk::Key::Up, -7),
+            (gdk::Key::Down, 7),
+            (gdk::Key::KP_Left, -7),
+            (gdk::Key::KP_Right, 7),
+            (gdk::Key::KP_Up, -7),
+            (gdk::Key::KP_Down, 7),
+        ] {
+            picker.select_day(date);
+            assert_eq!(
+                picker.key_pressed(key, gdk::ModifierType::empty()),
+                glib::Propagation::Stop
+            );
+            assert_eq!(imp.cursor.get(), date + Duration::days(days));
+            assert_eq!(highlighted("ev_date_picker_cursor").len(), 7);
+            assert_eq!(picker.date(), date);
+            assert_eq!(selections.get(), 0);
+        }
+        picker.key_pressed(gdk::Key::Return, gdk::ModifierType::empty());
+        assert_eq!(picker.date(), date + Duration::days(7));
+        assert_eq!(selections.get(), 1);
+
+        picker.select_day(date);
+        picker.set_direction(gtk::TextDirection::Rtl);
+        picker.key_pressed(gdk::Key::Left, gdk::ModifierType::empty());
+        assert_eq!(imp.cursor.get(), date + Duration::days(7));
+        picker.set_direction(gtk::TextDirection::Ltr);
+        picker.select_day(date);
+        picker.set_locale(eventix_locale::default().as_ref(), Weekday::Sun);
+        assert_eq!(
+            highlighted("ev_date_picker_selected")[0],
+            "2026-12-27".parse::<NaiveDate>().unwrap()
+        );
+        assert_eq!(highlighted("ev_date_picker_selected").len(), 7);
+
+        // Clicking any day of a row confirms that week, including across a year boundary.
+        let clicked = "2027-01-02".parse().unwrap();
+        let index = month_cells(imp.month.get(), imp.first.get())
+            .iter()
+            .position(|day| *day == Some(clicked))
+            .unwrap();
+        imp.days[index].emit_clicked();
+        assert_eq!(picker.date(), clicked);
+        assert_eq!(highlighted("ev_date_picker_selected").len(), 7);
+        assert_eq!(selections.get(), 2);
+
+        for boundary in [NaiveDate::MIN, NaiveDate::MAX] {
+            picker.select_day(boundary);
+            assert!(picker.matches_selection(boundary, boundary));
+            let key = if boundary == NaiveDate::MIN {
+                gdk::Key::Left
+            } else {
+                gdk::Key::Right
+            };
+            picker.key_pressed(key, gdk::ModifierType::empty());
+            assert_eq!(imp.cursor.get(), boundary);
+        }
+
+        picker.select_day(date);
+        picker.set_weekly(false);
+        assert_eq!(highlighted("ev_date_picker_selected"), vec![date]);
+        assert_eq!(highlighted("ev_date_picker_cursor"), vec![date]);
+        picker.key_pressed(gdk::Key::Right, gdk::ModifierType::empty());
+        assert_eq!(imp.cursor.get(), date + Duration::days(1));
+        assert_eq!(picker.date(), date);
+        assert_eq!(selections.get(), 2);
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn date_picker_hover_follows_selection_mode_without_committing() {
+        gtk::init().unwrap();
+        let picker: DatePicker = glib::Object::new();
+        let date = "2026-11-11".parse().unwrap();
+        picker.select_day(date);
+        picker.set_weekly(true);
+        let imp = picker.imp();
+        let index = month_cells(imp.month.get(), imp.first.get())
+            .iter()
+            .position(|day| *day == Some(date))
+            .unwrap();
+        let motion = |index: usize| {
+            let controllers = imp.days[index].observe_controllers();
+            (0..controllers.n_items())
+                .find_map(|index| {
+                    controllers
+                        .item(index)
+                        .and_downcast::<gtk::EventControllerMotion>()
+                })
+                .unwrap()
+        };
+        let hovered = || {
+            imp.days
+                .iter()
+                .enumerate()
+                .filter_map(|(index, button)| {
+                    button
+                        .has_css_class("ev_date_picker_hover")
+                        .then_some(index)
+                })
+                .collect::<Vec<_>>()
+        };
+        motion(index).emit_by_name::<()>("enter", &[&0.0f64, &0.0f64]);
+        let row = index / 7 * 7;
+        assert_eq!(hovered(), (row..row + 7).collect::<Vec<_>>());
+        assert_eq!(picker.date(), date);
+        assert_eq!(imp.cursor.get(), date);
+
+        // Native hover changes on every pointer move must not alter the weekly highlight.
+        for day in row..row + 7 {
+            imp.days[day].set_state_flags(gtk::StateFlags::PRELIGHT, false);
+            motion(index).emit_by_name::<()>("motion", &[&1.0f64, &1.0f64]);
+            assert_eq!(hovered(), (row..row + 7).collect::<Vec<_>>());
+            imp.days[day].unset_state_flags(gtk::StateFlags::PRELIGHT);
+            assert_eq!(hovered(), (row..row + 7).collect::<Vec<_>>());
+        }
+
+        imp.days[index].set_state_flags(gtk::StateFlags::PRELIGHT, false);
+        picker.set_weekly(false);
+        assert!(hovered().is_empty());
+        assert!(
+            imp.days[index]
+                .state_flags()
+                .contains(gtk::StateFlags::PRELIGHT)
+        );
+        imp.days[index].unset_state_flags(gtk::StateFlags::PRELIGHT);
+        picker.set_weekly(true);
+        assert_eq!(hovered().len(), 7);
+        motion(index).emit_by_name::<()>("leave", &[]);
+        assert!(hovered().is_empty());
+
+        let next = index + 7;
+        motion(next).emit_by_name::<()>("enter", &[&0.0f64, &0.0f64]);
+        assert_eq!(hovered(), (row + 7..row + 14).collect::<Vec<_>>());
+        motion(next).emit_by_name::<()>("leave", &[]);
+        assert!(hovered().is_empty());
+        assert_eq!(picker.date(), date);
+        assert_eq!(imp.cursor.get(), date);
     }
 
     #[test]

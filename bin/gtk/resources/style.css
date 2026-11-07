@@ -844,6 +844,18 @@ button.ev_sidebar_row.ev_cancelled > box > label {
     color: @theme_selected_fg_color;
 }
 
+.ev_date_picker button.ev_date_picker_hover,
+.ev_date_picker button.ev_date_picker_hover:hover {
+    background-image: none;
+    background-color: alpha(@theme_fg_color, 0.1);
+    box-shadow: none;
+}
+
+.ev_date_picker button.ev_date_picker_hover.ev_date_picker_selected,
+.ev_date_picker button.ev_date_picker_hover.ev_date_picker_selected:hover {
+    background-color: shade(@theme_selected_bg_color, 1.1);
+}
+
 .ev_date_picker:focus .ev_date_picker_cursor {
     outline: 2px solid @theme_selected_bg_color;
     outline-offset: -2px;
