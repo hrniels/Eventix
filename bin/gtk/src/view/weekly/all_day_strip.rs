@@ -141,11 +141,11 @@ mod imp {
                 );
             }
 
-            self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
-            obj.snapshot_drop_preview(snapshot);
             if self.drop_preview.borrow().is_none() {
                 obj.snapshot_creation_hint(snapshot);
             }
+            self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
+            obj.snapshot_drop_preview(snapshot);
         }
     }
 }
