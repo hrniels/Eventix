@@ -66,7 +66,7 @@ impl Resize {
         };
 
         self.value = Some(value);
-        self.grid.set_resize_preview(range);
+        self.grid.set_range_preview(range);
     }
 
     fn command(&self) -> Option<Box<dyn Action>> {

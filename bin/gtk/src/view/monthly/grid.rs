@@ -12,6 +12,7 @@ use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
 use crate::actions::items::move_event::{self, DraggedEvent, MoveTarget};
 use crate::style;
+use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::view::{
     card::EventCard,
     creation_hint::{CreationHint, snapshot_hint},
@@ -305,6 +306,61 @@ impl MonthGrid {
             .map(|day| day.date)
     }
 
+    pub(crate) fn selection_point(&self, x: f64, y: f64, clamp: bool) -> Option<SelectionPoint> {
+        let bottom =
+            self.weekday_header_height() + self.allocated_rows(self.height()).iter().sum::<i32>();
+        let (x, y) = if clamp && self.width() > GUTTER && bottom > self.weekday_header_height() {
+            (
+                x.clamp(f64::from(GUTTER), f64::from(self.width()) - 0.001),
+                y.clamp(
+                    f64::from(self.weekday_header_height()),
+                    f64::from(bottom) - 0.001,
+                ),
+            )
+        } else {
+            (x, y)
+        };
+        self.drop_date(x, y).map(SelectionPoint::AllDay)
+    }
+
+    pub(crate) fn set_selection_preview(&self, range: SelectionRange) -> bool {
+        let SelectionRange::AllDay(start, end) = range else {
+            return false;
+        };
+        let preview = {
+            let month = self.imp().month.borrow();
+            let Some(month) = month.as_ref() else {
+                return false;
+            };
+            let tz = month.locale.timezone();
+            let Some(bounds) = SelectionRange::Timed(
+                start.and_time(chrono::NaiveTime::MIN),
+                match end.succ_opt() {
+                    Some(end) => end.and_time(chrono::NaiveTime::MIN),
+                    None => return false,
+                },
+            )
+            .timed_bounds(tz) else {
+                return false;
+            };
+            DropPreview {
+                start: bounds.0,
+                end: bounds.1,
+                all_day: true,
+            }
+        };
+        self.set_range_preview(preview);
+        true
+    }
+
+    fn set_range_preview(&self, preview: DropPreview) {
+        self.imp().creation_hint.clear(self);
+        if self.imp().drop_preview.borrow().as_ref() != Some(&preview) {
+            self.imp().drop_preview.replace(Some(preview));
+            self.queue_draw();
+        }
+    }
+
     fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
         let preview = self.imp().drop_preview.borrow();
         let month = self.imp().month.borrow();
@@ -424,6 +480,7 @@ impl MonthGrid {
     }
 
     pub fn set_month(&self, month: Rc<MonthSnapshot>) {
+        selection::cancel(self);
         self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
 
@@ -623,10 +680,7 @@ impl MoveTarget for MonthGrid {
             end,
             all_day: payload.all_day,
         };
-        if self.imp().drop_preview.borrow().as_ref() != Some(&preview) {
-            self.imp().drop_preview.replace(Some(preview));
-            self.queue_draw();
-        }
+        self.set_range_preview(preview);
 
         true
     }

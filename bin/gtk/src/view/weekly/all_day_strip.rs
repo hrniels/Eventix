@@ -10,6 +10,7 @@ use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
 use crate::actions::items::move_event::{self, DraggedEvent, MoveTarget};
 use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, rect};
+use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::{
     style,
     view::{
@@ -185,6 +186,34 @@ impl AllDayStrip {
         Some(self.imp().week.borrow().as_ref()?.days.get(col)?.date)
     }
 
+    pub(crate) fn selection_point(&self, x: f64, y: f64, clamp: bool) -> Option<SelectionPoint> {
+        let (x, y) = if clamp && self.width() > GUTTER && self.height() > 0 {
+            (
+                x.clamp(f64::from(GUTTER), f64::from(self.width()) - 0.001),
+                y.clamp(0.0, f64::from(self.height()) - 0.001),
+            )
+        } else {
+            (x, y)
+        };
+        self.date_at(x, y).map(SelectionPoint::AllDay)
+    }
+
+    pub(crate) fn set_selection_preview(&self, range: SelectionRange) -> bool {
+        let SelectionRange::AllDay(start, end) = range else {
+            return false;
+        };
+        self.set_range_preview((start, end));
+        true
+    }
+
+    fn set_range_preview(&self, range: (NaiveDate, NaiveDate)) {
+        self.imp().creation_hint.clear(self);
+        if self.imp().drop_preview.borrow().as_ref() != Some(&range) {
+            self.imp().drop_preview.replace(Some(range));
+            self.queue_draw();
+        }
+    }
+
     fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
         let preview = self.imp().drop_preview.borrow();
         let week = self.imp().week.borrow();
@@ -245,6 +274,7 @@ impl AllDayStrip {
     }
 
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
+        selection::cancel(self);
         self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
 
@@ -292,10 +322,7 @@ impl MoveTarget for AllDayStrip {
         };
 
         let preview = (start.date_naive(), end.date_naive());
-        if self.imp().drop_preview.borrow().as_ref() != Some(&preview) {
-            self.imp().drop_preview.replace(Some(preview));
-            self.queue_draw();
-        }
+        self.set_range_preview(preview);
 
         true
     }

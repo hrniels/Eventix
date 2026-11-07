@@ -86,6 +86,12 @@ directly, without starting the web server or embedding WebKit. It displays all-d
 overlaps, recurring occurrences, calendar colors, and daylight-saving transitions. Click an event
 for details, or focus it with Tab and press Enter.
 
+Drag across empty space in the weekly time grid to prepare a new event, snapping to 15-minute
+boundaries. Selections can span multiple days. Drag across dates in the month view or the weekly
+all-day strip to prepare an all-day event, including both endpoint dates. Release to open the editor;
+the event is only created when saved. Escape cancels a selection. Double-click creation remains
+available for a default one-hour event or a single all-day date.
+
 The Flatpak package includes it alongside the default web-based GUI:
 
 ```bash

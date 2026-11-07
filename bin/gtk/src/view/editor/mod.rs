@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::bail;
-use chrono::{Datelike, Duration, NaiveDate, NaiveTime};
+use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use eventix_ical::objects::{
     CalAction, CalAlarm, CalAttendee, CalCompType, CalDate, CalRelated, CalRole, CalTrigger,
     DateContext,
@@ -77,6 +77,16 @@ impl ItemEditor {
     }
 
     pub(crate) fn new_at(id: u64, options: EditorOptions, all_day: bool) -> Rc<Self> {
+        Self::new_in_range(id, options, all_day, None)
+    }
+
+    /// Creates a draft with an optional explicit end, inclusive for all-day dates.
+    pub(crate) fn new_in_range(
+        id: u64,
+        options: EditorOptions,
+        all_day: bool,
+        end: Option<NaiveDateTime>,
+    ) -> Rc<Self> {
         let editor = Self::build(id, options);
         if all_day {
             editor
@@ -84,6 +94,10 @@ impl ItemEditor {
                 .entry
                 .set_text(&editor.options.start.date().to_string());
             editor.all_day.set_active(true);
+        }
+        if let Some(end) = end {
+            editor.end.entry.set_text(&end.date().to_string());
+            editor.end_time.set_text(&end.format("%H:%M").to_string());
         }
 
         let editor = Rc::new(editor);
@@ -1582,10 +1596,28 @@ mod tests {
     }
 
     fn assert_slot_creation_defaults() {
-        for (start, all_day, expected_end) in [
-            ("2026-10-22T10:00:00", false, "2026-10-22T11:00:00"),
-            ("2026-10-22T23:00:00", false, "2026-10-23T00:00:00"),
-            ("2026-10-22T00:00:00", true, "2026-10-23T00:00:00"),
+        for (start, all_day, selected_end, expected_end) in [
+            ("2026-10-22T10:00:00", false, None, "2026-10-22T11:00:00"),
+            ("2026-10-22T23:00:00", false, None, "2026-10-23T00:00:00"),
+            ("2026-10-22T00:00:00", true, None, "2026-10-23T00:00:00"),
+            (
+                "2026-10-22T09:30:00",
+                false,
+                Some("2026-10-22T11:00:00"),
+                "2026-10-22T11:00:00",
+            ),
+            (
+                "2026-10-22T09:30:00",
+                false,
+                Some("2026-10-24T11:00:00"),
+                "2026-10-24T11:00:00",
+            ),
+            (
+                "2026-10-24T00:00:00",
+                true,
+                Some("2026-10-26T00:00:00"),
+                "2026-10-27T00:00:00",
+            ),
         ] {
             let options = EditorOptions {
                 kind: eventix_ical::objects::CalCompType::Event,
@@ -1602,7 +1634,12 @@ mod tests {
                 locale: eventix_locale::default(),
             };
             let timezone = *options.locale.timezone();
-            let editor = ItemEditor::new_at(1, options, all_day);
+            let editor = ItemEditor::new_in_range(
+                1,
+                options,
+                all_day,
+                selected_end.map(|end| end.parse().unwrap()),
+            );
             editor.summary.set_text("Slot creation");
             let command = editor.command().unwrap();
             let context = eventix_ical::objects::DateContext::system();

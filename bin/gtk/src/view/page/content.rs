@@ -147,6 +147,7 @@ impl PageContent {
     }
 
     pub(super) fn show_content(&self, page: &CalendarPage, date: Option<NaiveDate>) {
+        page.cancel_event_selection();
         page.dismiss_popovers();
 
         let imp = page.imp();

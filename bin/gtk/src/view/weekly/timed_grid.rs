@@ -12,6 +12,7 @@ use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
 use crate::actions::items::move_event::DraggedEvent;
 use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, rect};
+use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::{
     style,
     view::{
@@ -383,10 +384,7 @@ impl TimedGrid {
             return false;
         };
 
-        if self.imp().drop_preview.borrow().as_ref() != Some(&range) {
-            self.imp().drop_preview.replace(Some(range));
-            self.queue_draw();
-        }
+        self.set_range_preview(range);
 
         true
     }
@@ -397,9 +395,47 @@ impl TimedGrid {
         }
     }
 
-    pub(crate) fn set_resize_preview(&self, range: (DateTime<Tz>, DateTime<Tz>)) {
-        self.imp().drop_preview.replace(Some(range));
-        self.queue_draw();
+    pub(crate) fn set_range_preview(&self, range: (DateTime<Tz>, DateTime<Tz>)) {
+        self.imp().creation_hint.clear(self);
+        if self.imp().drop_preview.borrow().as_ref() != Some(&range) {
+            self.imp().drop_preview.replace(Some(range));
+            self.queue_draw();
+        }
+    }
+
+    pub(crate) fn selection_point(&self, x: f64, y: f64, clamp: bool) -> Option<SelectionPoint> {
+        let (x, y) = if clamp && self.width() > GUTTER {
+            (
+                x.clamp(f64::from(GUTTER), f64::from(self.width()) - 0.001),
+                y.clamp(0.0, 1439.999),
+            )
+        } else {
+            (x, y)
+        };
+        self.drop_start(x, y, 0).and_then(|start| {
+            if !clamp && start.time() == chrono::NaiveTime::MIN && y > 1425.0 {
+                start
+                    .checked_sub_signed(Duration::minutes(15))
+                    .map(SelectionPoint::Timed)
+            } else {
+                Some(SelectionPoint::Timed(start))
+            }
+        })
+    }
+
+    pub(crate) fn set_selection_preview(&self, range: SelectionRange) -> bool {
+        let bounds = self
+            .imp()
+            .week
+            .borrow()
+            .as_ref()
+            .and_then(|week| range.timed_bounds(week.locale.timezone()));
+        if let Some(bounds) = bounds {
+            self.set_range_preview(bounds);
+            true
+        } else {
+            false
+        }
     }
 
     pub(crate) fn drop_start(&self, x: f64, y: f64, offset: i64) -> Option<NaiveDateTime> {
@@ -416,6 +452,7 @@ impl TimedGrid {
     }
 
     pub fn set_week(&self, week: Rc<WeekSnapshot>) {
+        selection::cancel(self);
         self.imp().creation_hint.clear(self);
         self.clear_drop_preview();
 

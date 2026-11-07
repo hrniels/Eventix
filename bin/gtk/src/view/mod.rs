@@ -18,6 +18,7 @@ pub(crate) mod monthly;
 pub(crate) mod page;
 pub(crate) mod popover;
 mod response_marker;
+mod selection;
 mod sidebar;
 mod status_bar;
 mod surface;

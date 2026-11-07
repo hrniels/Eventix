@@ -244,8 +244,8 @@ impl PageEditor {
                 options.start = slot.start;
             }
 
-            let editor = if slot.is_some_and(|slot| slot.all_day) {
-                ItemEditor::new_at(id, options, true)
+            let editor = if let Some(slot) = slot {
+                ItemEditor::new_in_range(id, options, slot.all_day, slot.end)
             } else {
                 ItemEditor::new(id, options)
             };
