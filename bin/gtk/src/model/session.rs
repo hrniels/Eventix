@@ -1089,12 +1089,7 @@ impl Worker {
             Message::PushFinished(_) | Message::PushItemReady(..) => {
                 unreachable!("push completion is dispatched independently")
             }
-            Message::SetLanguage(language) => {
-                if let Err(error) = self.set_language(language) {
-                    return vec![Event::CommandFailed(format!("{error:#}"))];
-                }
-                return self.refresh_subscriptions(&self.subscriptions.ids());
-            }
+            Message::SetLanguage(language) => return self.change_language(language),
             Message::ManageCalendar(_) => unreachable!("management is dispatched with the runtime"),
             Message::LoadManagement(id) => Event::ManagementLoaded(
                 id,
@@ -1136,72 +1131,10 @@ impl Worker {
                 self.execute(item, runtime)
                     .map_err(|error| format!("{error:#}")),
             ),
-            Message::ShowContent(request) => {
-                let result = self
-                    .show_content(&request)
-                    .map_err(|error| format!("{error:#}"));
-
-                Event::ContentLoaded(ContentResponse {
-                    generation: request.generation,
-                    result,
-                })
-            }
-            Message::LoadSyncCollections => {
-                let collections = self
-                    .state()
-                    .map(|state| {
-                        state
-                            .settings()
-                            .collections()
-                            .iter()
-                            .map(|(id, collection)| {
-                                use eventix_view::calendars::Backend;
-
-                                let backend = match collection.syncer() {
-                                    eventix_state::SyncerType::FileSystem { .. } => {
-                                        Backend::FileSystem
-                                    }
-                                    eventix_state::SyncerType::VDirSyncer { .. } => Backend::CalDav,
-                                    eventix_state::SyncerType::O365 { .. } => Backend::O365,
-                                };
-                                (id.clone(), backend)
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                Event::SyncCollectionsLoaded(collections)
-            }
-            Message::LoadListRows(request) => Event::ListRowsLoaded(ListRowsResponse {
-                revision: request.revision,
-                result: self
-                    .state()
-                    .map(|state| {
-                        request
-                            .items
-                            .into_iter()
-                            .map(|item| {
-                                let row = eventix_view::list::Row::load(&state, &item);
-                                (item, row)
-                            })
-                            .collect()
-                    })
-                    .map_err(|error| format!("{error:#}")),
-            }),
-            Message::LoadOccurrences(request) => {
-                let result = self
-                    .state()
-                    .map(|state| {
-                        eventix_view::list::occurrences::Page::load(
-                            &state,
-                            &request.item,
-                            &request.cursor,
-                            request.direction,
-                            request.count,
-                        )
-                    })
-                    .map_err(|error| format!("{error:#}"));
-                Event::OccurrencesLoaded(OccurrencesResponse { request, result })
-            }
+            Message::ShowContent(request) => self.handle_show_content(request),
+            Message::LoadSyncCollections => self.load_sync_collections(),
+            Message::LoadListRows(request) => self.load_list_rows(request),
+            Message::LoadOccurrences(request) => self.load_occurrences(request),
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
@@ -1216,14 +1149,7 @@ impl Worker {
             | Message::AuthenticationFinished(..) => {
                 unreachable!("authentication is dispatched independently of queries")
             }
-            Message::SyncFinished(result) => {
-                let mut events = vec![Event::CalendarsLoaded(self.calendars())];
-                if result.as_ref().map_or(true, |result| result.changed) {
-                    events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
-                }
-                events.push(Event::SyncFinished(result));
-                return events;
-            }
+            Message::SyncFinished(result) => return self.sync_finished(result),
             Message::Execute(command) => match self.execute(command, runtime) {
                 Ok(change) => Event::Changed(change),
                 Err(error) => Event::CommandFailed(format!("{error:#}")),
@@ -1231,6 +1157,92 @@ impl Worker {
         };
 
         vec![event]
+    }
+
+    fn change_language(&mut self, language: eventix_locale::LocaleType) -> Vec<Event> {
+        if let Err(error) = self.set_language(language) {
+            return vec![Event::CommandFailed(format!("{error:#}"))];
+        }
+        self.refresh_subscriptions(&self.subscriptions.ids())
+    }
+
+    fn handle_show_content(&mut self, request: ContentRequest) -> Event {
+        let result = self
+            .show_content(&request)
+            .map_err(|error| format!("{error:#}"));
+
+        Event::ContentLoaded(ContentResponse {
+            generation: request.generation,
+            result,
+        })
+    }
+
+    fn load_sync_collections(&self) -> Event {
+        let collections = self
+            .state()
+            .map(|state| {
+                state
+                    .settings()
+                    .collections()
+                    .iter()
+                    .map(|(id, collection)| {
+                        use eventix_view::calendars::Backend;
+
+                        let backend = match collection.syncer() {
+                            eventix_state::SyncerType::FileSystem { .. } => Backend::FileSystem,
+                            eventix_state::SyncerType::VDirSyncer { .. } => Backend::CalDav,
+                            eventix_state::SyncerType::O365 { .. } => Backend::O365,
+                        };
+                        (id.clone(), backend)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        Event::SyncCollectionsLoaded(collections)
+    }
+
+    fn load_list_rows(&self, request: ListRowsRequest) -> Event {
+        Event::ListRowsLoaded(ListRowsResponse {
+            revision: request.revision,
+            result: self
+                .state()
+                .map(|state| {
+                    request
+                        .items
+                        .into_iter()
+                        .map(|item| {
+                            let row = eventix_view::list::Row::load(&state, &item);
+                            (item, row)
+                        })
+                        .collect()
+                })
+                .map_err(|error| format!("{error:#}")),
+        })
+    }
+
+    fn load_occurrences(&self, request: OccurrencesRequest) -> Event {
+        let result = self
+            .state()
+            .map(|state| {
+                eventix_view::list::occurrences::Page::load(
+                    &state,
+                    &request.item,
+                    &request.cursor,
+                    request.direction,
+                    request.count,
+                )
+            })
+            .map_err(|error| format!("{error:#}"));
+        Event::OccurrencesLoaded(OccurrencesResponse { request, result })
+    }
+
+    fn sync_finished(&mut self, result: Result<SyncResult, String>) -> Vec<Event> {
+        let mut events = vec![Event::CalendarsLoaded(self.calendars())];
+        if result.as_ref().map_or(true, |result| result.changed) {
+            events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
+        }
+        events.push(Event::SyncFinished(result));
+        events
     }
 
     fn load_state(&mut self) -> anyhow::Result<Event> {
