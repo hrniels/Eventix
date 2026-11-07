@@ -82,6 +82,12 @@ mod imp {
         #[template_child]
         pub reload: gtk::TemplateChild<gtk::Button>,
         #[template_child]
+        pub sync_collections: gtk::TemplateChild<gtk::MenuButton>,
+        #[template_child]
+        pub sync_popover: gtk::TemplateChild<gtk::Popover>,
+        #[template_child]
+        pub sync_collection_list: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
         pub last_sync: gtk::TemplateChild<gtk::Label>,
         #[template_child]
         pub calendars_button: gtk::TemplateChild<gtk::Button>,
@@ -175,6 +181,7 @@ mod imp {
             self.content.connect_controls(&obj);
             obj.connect_event_creation();
             self.session.connect_quick_task(&obj);
+            self.session.connect_sync_collections(&obj);
             let weak = obj.downgrade();
             self.status.connect_cancel(move || {
                 if let Some(page) = weak.upgrade() {

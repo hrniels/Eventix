@@ -107,6 +107,7 @@ pub(crate) enum Event {
     PendingPushes(usize),
     Activity(Activity),
     CalendarsLoaded(Vec<CalendarVisibility>),
+    SyncCollectionsLoaded(Vec<(String, eventix_view::calendars::Backend)>),
     ManagementLoaded(u64, Result<eventix_view::calendars::Snapshot, String>),
     ManagementFinished(ManagementRequest, Result<(), String>),
     CalendarToggleFailed(String),
@@ -200,6 +201,8 @@ pub(super) enum Message {
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,
     SyncAll,
+    SyncCollection(String),
+    LoadSyncCollections,
     CancelSync,
     Authenticate(u64, String),
     CancelAuthentication(u64),
@@ -236,6 +239,9 @@ impl Message {
             Self::SaveReminders(item, _) => ("Reminders updated", vec![item.clone()], None),
             Self::Execute(action) => (action.description(), action.affected_items().to_vec(), None),
             Self::SyncAll => ("Synchronizing calendars", vec![], None),
+            Self::SyncCollection(collection) => {
+                ("Synchronizing calendars", vec![], Some(collection.clone()))
+            }
             Self::Authenticate(_, collection) => {
                 ("Authenticating", vec![], Some(collection.clone()))
             }
@@ -243,7 +249,7 @@ impl Message {
         };
         let mut activity = Activity::new(request, operation);
         activity.set_items(items);
-        if matches!(self, Self::Authenticate(..))
+        if matches!(self, Self::Authenticate(..) | Self::SyncCollection(_))
             || matches!(
                 self,
                 Self::ManageCalendar(command)
@@ -481,6 +487,16 @@ impl CalendarSession {
 
     pub fn sync_all(&self) -> bool {
         self.requests.try_send(Message::SyncAll).is_ok()
+    }
+
+    pub fn sync_collection(&self, collection: String) -> bool {
+        self.requests
+            .try_send(Message::SyncCollection(collection))
+            .is_ok()
+    }
+
+    pub fn load_sync_collections(&self) {
+        let _ = self.requests.try_send(Message::LoadSyncCollections);
     }
 
     pub fn cancel_sync(&self) {
@@ -802,7 +818,10 @@ impl Worker {
             Message::AuthenticationFinished(id, result) => {
                 runtime.finish_authentication(id, result);
             }
-            Message::SyncAll => self.begin_sync(runtime, request),
+            Message::SyncAll => self.begin_sync(runtime, request, None),
+            Message::SyncCollection(collection) => {
+                self.begin_sync(runtime, request, Some(collection));
+            }
             Message::CancelSync => {
                 if let Some(sync) = &runtime.sync {
                     sync.cancellation.cancel();
@@ -887,17 +906,27 @@ impl Worker {
         }
     }
 
-    fn begin_sync(&mut self, runtime: &mut WorkerRuntime, request: u64) {
+    fn begin_sync(
+        &mut self,
+        runtime: &mut WorkerRuntime,
+        request: u64,
+        collection: Option<String>,
+    ) {
+        let message = collection
+            .clone()
+            .map(Message::SyncCollection)
+            .unwrap_or(Message::SyncAll);
         if let Some(sync) = &runtime.sync {
             if sync.management
-                && !runtime
-                    .pending_operations
-                    .iter()
-                    .any(|(message, _)| matches!(message, Message::SyncAll))
+                && !runtime.pending_operations.iter().any(|(pending, _)| {
+                    match (pending, &message) {
+                        (Message::SyncAll, Message::SyncAll) => true,
+                        (Message::SyncCollection(a), Message::SyncCollection(b)) => a == b,
+                        _ => false,
+                    }
+                })
             {
-                runtime
-                    .pending_operations
-                    .push_back((Message::SyncAll, request));
+                runtime.pending_operations.push_back((message, request));
             }
             return;
         }
@@ -906,7 +935,7 @@ impl Worker {
             determinate: true,
         });
         let cancellation = SyncCancellation::default();
-        let activity = Message::SyncAll.activity(request).unwrap();
+        let activity = message.activity(request).unwrap();
         let _ = runtime
             .results
             .send_blocking(Event::Activity(activity.clone()));
@@ -917,6 +946,7 @@ impl Worker {
                 &runtime.requests,
                 cancellation.clone(),
                 &activity,
+                collection,
             )
             .map(|task| RunningSync {
                 _task: task,
@@ -1116,6 +1146,31 @@ impl Worker {
                     result,
                 })
             }
+            Message::LoadSyncCollections => {
+                let collections = self
+                    .state()
+                    .map(|state| {
+                        state
+                            .settings()
+                            .collections()
+                            .iter()
+                            .map(|(id, collection)| {
+                                use eventix_view::calendars::Backend;
+
+                                let backend = match collection.syncer() {
+                                    eventix_state::SyncerType::FileSystem { .. } => {
+                                        Backend::FileSystem
+                                    }
+                                    eventix_state::SyncerType::VDirSyncer { .. } => Backend::CalDav,
+                                    eventix_state::SyncerType::O365 { .. } => Backend::O365,
+                                };
+                                (id.clone(), backend)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                Event::SyncCollectionsLoaded(collections)
+            }
             Message::LoadListRows(request) => Event::ListRowsLoaded(ListRowsResponse {
                 revision: request.revision,
                 result: self
@@ -1150,7 +1205,10 @@ impl Worker {
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),
-            Message::SyncAll | Message::CancelSync | Message::ManagementCompleted(..) => {
+            Message::SyncAll
+            | Message::SyncCollection(_)
+            | Message::CancelSync
+            | Message::ManagementCompleted(..) => {
                 unreachable!("sync is dispatched independently of queries")
             }
             Message::Authenticate(..)
@@ -1204,6 +1262,7 @@ impl Worker {
         requests: &async_channel::Sender<Message>,
         cancellation: SyncCancellation,
         activity: &Activity,
+        collection: Option<String>,
     ) -> Option<tokio::task::JoinHandle<()>> {
         if self.state.is_none() {
             for event in self.handle(Message::Reload, runtime) {
@@ -1225,7 +1284,17 @@ impl Worker {
         Some(runtime.spawn(async move {
             // Await a child task so panics also produce a terminal UI event.
             let result = tokio::spawn(async move {
-                State::sync_all_cancellable(&state, None, Some(&progress), &cancellation).await
+                if let Some(collection) = collection {
+                    progress.started(1);
+                    let result =
+                        State::sync_collection(&state, &collection, None, &cancellation).await;
+                    if result.as_ref().is_ok_and(|result| !result.cancelled) {
+                        progress.collection_ready(&collection, 1, 1);
+                    }
+                    result
+                } else {
+                    State::sync_all_cancellable(&state, None, Some(&progress), &cancellation).await
+                }
             })
             .await
             .map_err(anyhow::Error::from)
@@ -2126,6 +2195,59 @@ mod tests {
                     if let Event::SyncFinished(result) = responses.recv().await.unwrap() {
                         assert!(!result.unwrap().cancelled);
                         break;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        });
+    }
+
+    #[test]
+    fn collection_sync_lists_all_collections_but_only_syncs_the_selected_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("vdirsyncer")).unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .insert(
+                "unrelated".into(),
+                CollectionSettings::new(SyncerType::FileSystem {
+                    path: tmp.path().join("missing").display().to_string(),
+                }),
+            );
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        assert!(matches!(
+            worker.handle(Message::LoadSyncCollections, &runtime).as_slice(),
+            [Event::SyncCollectionsLoaded(collections)] if collections == &[
+                ("local".into(), eventix_view::calendars::Backend::FileSystem),
+                ("unrelated".into(), eventix_view::calendars::Backend::FileSystem),
+            ]
+        ));
+        let (session, responses) = super::CalendarSession::start_worker(worker);
+        assert!(session.sync_collection("local".into()));
+        runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let mut progress = Vec::new();
+                loop {
+                    match responses.recv().await.unwrap() {
+                        Event::SyncProgress { completed, total } => {
+                            progress.push((completed, total))
+                        }
+                        Event::SyncFinished(result) => {
+                            let result = result.unwrap();
+                            assert!(!result.cancelled);
+                            assert_eq!(
+                                result.collections.keys().collect::<Vec<_>>(),
+                                vec!["local"]
+                            );
+                            assert_eq!(progress, [(0, 1), (1, 1)]);
+                            break;
+                        }
+                        _ => {}
                     }
                 }
             })

@@ -13,6 +13,7 @@ use eventix_state::actions::{
     items::{DeleteItem, ItemId, UpdatePersonalAlarms},
 };
 use eventix_state::{SyncColResult, SyncResult};
+use eventix_view::calendars::Backend;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
@@ -32,6 +33,7 @@ pub(super) struct PageSession {
     timer: RefCell<Option<glib::SourceId>>,
     sync_timer: RefCell<Option<glib::SourceId>>,
     pending_sync: Cell<bool>,
+    sync_collection: RefCell<Option<String>>,
     last_sync: Cell<Option<DateTime<Utc>>>,
     auth_popup: RefCell<Option<Rc<SyncPopup>>>,
     auth_generation: Cell<u64>,
@@ -122,7 +124,54 @@ impl PageSession {
     }
 
     pub(super) fn reload(&self, page: &CalendarPage) {
+        if self.pending_sync.get() {
+            return;
+        }
+        self.sync_collection.replace(None);
         self.synchronize(page, true);
+    }
+
+    pub(super) fn connect_sync_collections(&self, page: &CalendarPage) {
+        let weak = page.downgrade();
+        page.imp().sync_popover.connect_show(move |_| {
+            if let Some(page) = weak.upgrade()
+                && let Some(session) = page.imp().session.current.borrow().as_ref()
+            {
+                session.load_sync_collections();
+            }
+        });
+    }
+
+    fn update_sync_collections(&self, page: &CalendarPage, collections: Vec<(String, Backend)>) {
+        let imp = page.imp();
+        while let Some(child) = imp.sync_collection_list.first_child() {
+            imp.sync_collection_list.remove(&child);
+        }
+        for (collection, backend) in collections {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            let icon = crate::view::calendars::collection_icon(backend);
+            icon.set_pixel_size(20);
+            row.append(&icon);
+            let label = gtk::Label::new(Some(&collection));
+            label.set_xalign(0.0);
+            label.set_hexpand(true);
+            row.append(&label);
+            let button = gtk::Button::builder().child(&row).build();
+            button.update_property(&[gtk::accessible::Property::Label(&collection)]);
+            button.add_css_class("flat");
+            let weak = page.downgrade();
+            button.connect_clicked(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    let session = &page.imp().session;
+                    if !session.pending_sync.get() {
+                        session.sync_collection.replace(Some(collection.clone()));
+                        page.imp().sync_collections.popdown();
+                        session.synchronize(&page, true);
+                    }
+                }
+            });
+            imp.sync_collection_list.append(&button);
+        }
     }
 
     fn synchronize(&self, page: &CalendarPage, dismiss_popovers: bool) {
@@ -130,7 +179,12 @@ impl PageSession {
             return;
         }
         if let Some(session) = self.current.borrow().as_ref() {
-            if !session.sync_all() {
+            let sent = if let Some(collection) = self.sync_collection.borrow().as_ref() {
+                session.sync_collection(collection.clone())
+            } else {
+                session.sync_all()
+            };
+            if !sent {
                 return;
             }
         } else {
@@ -142,6 +196,7 @@ impl PageSession {
         let imp = page.imp();
         self.pending_sync.set(true);
         imp.reload.set_sensitive(false);
+        imp.sync_collections.set_sensitive(false);
     }
 
     pub(super) fn cancel_sync(&self, page: &CalendarPage) {
@@ -158,6 +213,7 @@ impl PageSession {
         imp.management.refresh(page);
         self.pending_sync.set(false);
         imp.reload.set_sensitive(true);
+        imp.sync_collections.set_sensitive(true);
         let cancelled = result.as_ref().is_ok_and(|result| result.cancelled);
         imp.status.finish_sync(result.is_ok(), cancelled);
         if result.is_ok() {
@@ -206,6 +262,7 @@ impl PageSession {
         self.auth_generation.set(id);
         self.pending_sync.set(true);
         page.imp().reload.set_sensitive(false);
+        page.imp().sync_collections.set_sensitive(false);
         let weak = page.downgrade();
         let popup = SyncPopup::new(
             &window,
@@ -232,8 +289,9 @@ impl PageSession {
         }
         self.pending_sync.set(false);
         page.imp().reload.set_sensitive(true);
+        page.imp().sync_collections.set_sensitive(true);
         if authenticated {
-            self.reload(page);
+            self.synchronize(page, true);
         }
     }
 
@@ -309,7 +367,10 @@ impl PageSession {
                 return glib::ControlFlow::Break;
             };
 
-            page.imp().session.synchronize(&page, false);
+            if !page.imp().session.pending_sync.get() {
+                page.imp().session.sync_collection.replace(None);
+                page.imp().session.synchronize(&page, false);
+            }
 
             glib::ControlFlow::Continue
         });
@@ -432,6 +493,9 @@ impl PageSession {
                     page.update_styles();
                 }
             }
+            Event::SyncCollectionsLoaded(collections) => {
+                self.update_sync_collections(page, collections)
+            }
             Event::StateLoaded => {
                 self.record_sync_time(page);
                 imp.management.refresh(page);
@@ -506,6 +570,8 @@ impl PageSession {
         self.pending_sync.set(false);
         page.imp().status.stop();
         page.imp().reload.set_sensitive(true);
+        page.imp().sync_collections.set_sensitive(true);
+        page.imp().sync_collections.popdown();
         if self.pending_quick_task.replace(false) {
             page.imp().sidebar.quick_task().finish(false);
         }
@@ -528,6 +594,73 @@ mod tests {
     use gtk::{glib, prelude::*, subclass::prelude::*};
 
     use super::{CalendarSession, Event};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn sync_dropdown_lists_collections_and_selects_only_the_clicked_collection() {
+        use eventix_view::calendars::Backend;
+
+        let row_label = |button: &gtk::Button| {
+            let row = button.child().and_downcast::<gtk::Box>().unwrap();
+            let icon = row.first_child().and_downcast::<gtk::Image>().unwrap();
+            assert!(icon.paintable().is_some());
+            assert_eq!(icon.pixel_size(), 20);
+            let label = icon.next_sibling().and_downcast::<gtk::Label>().unwrap();
+            assert_eq!(label.xalign(), 0.0);
+            assert!(label.hexpands());
+            label.text()
+        };
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("org.eventix.SyncDropdownTest")
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        let imp = page.imp();
+        window.present();
+        while glib::MainContext::default().iteration(false) {}
+        let reload = imp.reload.compute_bounds(&page).unwrap();
+        let dropdown = imp.sync_collections.compute_bounds(&page).unwrap();
+        assert!(dropdown.x() >= reload.x() + reload.width());
+        assert!(dropdown.width() < reload.width());
+        imp.session.update_sync_collections(
+            &page,
+            vec![
+                ("Personal".into(), Backend::FileSystem),
+                ("Work".into(), Backend::CalDav),
+            ],
+        );
+        let personal = imp
+            .sync_collection_list
+            .first_child()
+            .and_downcast::<gtk::Button>()
+            .unwrap();
+        let work = personal
+            .next_sibling()
+            .and_downcast::<gtk::Button>()
+            .unwrap();
+        assert_eq!(row_label(&personal), "Personal");
+        assert_eq!(row_label(&work), "Work");
+        assert!(work.next_sibling().is_none());
+        work.emit_clicked();
+        assert_eq!(
+            imp.session.sync_collection.borrow().as_deref(),
+            Some("Work")
+        );
+        imp.session.reload(&page);
+        assert!(imp.session.sync_collection.borrow().is_none());
+        imp.session
+            .update_sync_collections(&page, vec![("Renamed".into(), Backend::O365)]);
+        let renamed = imp
+            .sync_collection_list
+            .first_child()
+            .and_downcast::<gtk::Button>()
+            .unwrap();
+        assert_eq!(row_label(&renamed), "Renamed");
+        assert!(renamed.next_sibling().is_none());
+        window.close();
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]

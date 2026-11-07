@@ -68,23 +68,42 @@
           </object>
         </child>
         <child>
-          <object class="GtkButton" id="reload">
-            <property name="action-name">win.reload</property>
-            <property name="child">
-              <object class="GtkBox">
-                <property name="spacing">4</property>
-                <child>
-                  <object class="GtkImage">
-                    <property name="icon-name">view-refresh-symbolic</property>
+          <object class="GtkBox">
+            <style><class name="linked"/></style>
+            <child>
+              <object class="GtkButton" id="reload">
+                <property name="action-name">win.reload</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">4</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">view-refresh-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="last_sync">
+                        <property name="valign">center</property>
+                      </object>
+                    </child>
                   </object>
-                </child>
-                <child>
-                  <object class="GtkLabel" id="last_sync">
-                    <property name="valign">center</property>
-                  </object>
-                </child>
+                </property>
               </object>
-            </property>
+            </child>
+            <child>
+              <object class="GtkMenuButton" id="sync_collections">
+                <property name="icon-name">pan-down-symbolic</property>
+                <property name="popover">
+                  <object class="GtkPopover" id="sync_popover">
+                    <property name="child">
+                      <object class="GtkBox" id="sync_collection_list">
+                        <property name="orientation">vertical</property>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+              </object>
+            </child>
           </object>
         </child>
       </object>

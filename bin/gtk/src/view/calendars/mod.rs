@@ -400,12 +400,12 @@ impl CollectionRow {
         let locale_ref = locale.as_ref();
 
         let title = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        let (icon, backend) = match model.backend {
-            Backend::FileSystem => (resource_path!("icons/fs.png"), "FileSystem"),
-            Backend::CalDav => (resource_path!("icons/caldav.png"), "CalDAV"),
-            Backend::O365 => (resource_path!("icons/o365.png"), "O365"),
+        let backend = match model.backend {
+            Backend::FileSystem => "FileSystem",
+            Backend::CalDav => "CalDAV",
+            Backend::O365 => "O365",
         };
-        let image = gtk::Image::from_resource(icon);
+        let image = collection_icon(model.backend);
         image.set_pixel_size(32);
         image.set_tooltip_text(Some(locale_ref.translate(backend)));
         title.append(&image);
@@ -452,6 +452,15 @@ fn text(value: &str) -> gtk::Label {
         .wrap_mode(gtk::pango::WrapMode::WordChar)
         .selectable(true)
         .build()
+}
+
+pub(crate) fn collection_icon(backend: Backend) -> gtk::Image {
+    let resource = match backend {
+        Backend::FileSystem => resource_path!("icons/fs.png"),
+        Backend::CalDav => resource_path!("icons/caldav.png"),
+        Backend::O365 => resource_path!("icons/o365.png"),
+    };
+    gtk::Image::from_resource(resource)
 }
 
 fn action(icon: &str, label: &str, locale: &dyn Locale) -> gtk::Button {

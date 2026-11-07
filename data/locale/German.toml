@@ -526,6 +526,7 @@
 "Syncer" = "Synchronisierer"
 "Synchronization cancelled" = "Synchronisierung abgebrochen"
 "Synchronization completed" = "Synchronisierung abgeschlossen"
+"Synchronize a collection" = "Eine Sammlung synchronisieren"
 "Synchronize all calendars" = "Alle Kalender synchronisieren"
 "Synchronize all calendars (last sync at: {})" = "Alle Kalender synchronisieren (letzte Synchronisierung: {})"
 "Synchronizing calendars…" = "Kalender werden synchronisiert…"
