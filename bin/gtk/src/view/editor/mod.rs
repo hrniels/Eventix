@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::bail;
-use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use eventix_ical::objects::{
     CalAction, CalAlarm, CalAttendee, CalCompType, CalDate, CalRelated, CalRole, CalTrigger,
     DateContext,
@@ -1039,12 +1039,18 @@ pub(crate) struct DateInput {
     pub(super) widget: gtk::Box,
     pub(super) entry: gtk::Entry,
     pub(super) picker: gtk::MenuButton,
-    calendar: gtk::Calendar,
-    syncing: Rc<Cell<bool>>,
+    calendar: crate::widgets::DatePicker,
 }
 
 impl DateInput {
-    /// Creates a date input whose picker opens the calendar and entry together.
+    /// Updates the picker language without changing the date entry or current selection.
+    pub(crate) fn set_locale(&self, locale: &dyn Locale) {
+        self.calendar.set_locale(locale, chrono::Weekday::Mon);
+        self.picker
+            .set_tooltip_text(Some(locale.translate("Choose date")));
+    }
+
+    /// Creates a popup with a date entry above the calendar.
     pub(super) fn new_popup(locale: &dyn Locale, date: NaiveDate) -> Self {
         let input = Self::new(locale, date);
         let popover = input.picker.popover().expect("editor date popover");
@@ -1065,117 +1071,48 @@ impl DateInput {
                 calendar.grab_focus();
             }
         });
-        input.connect_popup_navigation();
         input
     }
 
-    /// Keeps keyboard navigation uncommitted until the user presses Enter or Space.
-    fn connect_popup_navigation(&self) {
-        let keys = gtk::EventControllerKey::new();
-        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-        let calendar = self.calendar.downgrade();
-        let syncing = self.syncing.clone();
-        keys.connect_key_pressed(move |_, key, _, modifiers| {
-            let Some(calendar) = calendar.upgrade() else {
-                return glib::Propagation::Proceed;
-            };
-            if !calendar.has_focus()
-                || modifiers.intersects(
-                    gdk::ModifierType::CONTROL_MASK
-                        | gdk::ModifierType::ALT_MASK
-                        | gdk::ModifierType::SUPER_MASK
-                        | gdk::ModifierType::META_MASK,
-                )
-            {
-                return glib::Propagation::Proceed;
-            }
-
-            if matches!(
-                key,
-                gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space | gdk::Key::KP_Space
-            ) {
-                calendar.emit_by_name::<()>("day-selected", &[]);
-                return glib::Propagation::Stop;
-            }
-
-            let forward = if calendar.direction() == gtk::TextDirection::Rtl {
-                -1
-            } else {
-                1
-            };
-            let days = match key {
-                gdk::Key::Left | gdk::Key::KP_Left => -forward,
-                gdk::Key::Right | gdk::Key::KP_Right => forward,
-                gdk::Key::Up | gdk::Key::KP_Up => -7,
-                gdk::Key::Down | gdk::Key::KP_Down => 7,
-                _ => return glib::Propagation::Proceed,
-            };
-            if let Ok(date) = calendar.date().add_days(days) {
-                // GTK's built-in calendar only confirms with Space and does not expose its
-                // focused day. Use the selected date as the cursor without saving the input.
-                syncing.set(true);
-                calendar.select_day(&date);
-                syncing.set(false);
-            }
-            glib::Propagation::Stop
-        });
-        self.calendar.add_controller(keys);
-    }
-
     pub(super) fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
+        crate::widgets::DatePicker::ensure_type();
         let builder = gtk::Builder::from_resource(resource_path!("view/editor/date_input.ui"));
         let widget = builder.object("date_input").expect("editor date input");
         let entry: gtk::Entry = builder.object("entry").expect("editor date entry");
         entry.set_text(&date.to_string());
-        let calendar = builder.object("calendar").expect("editor date calendar");
+        let calendar: crate::widgets::DatePicker =
+            builder.object("calendar").expect("editor date calendar");
+        calendar.set_locale(locale, chrono::Weekday::Mon);
+        calendar.select_day(date);
         let picker: gtk::MenuButton = builder.object("picker").expect("editor date picker");
         picker.set_tooltip_text(Some(locale.translate("Choose date")));
-        let syncing = Rc::new(Cell::new(false));
-        Self::connect_picker_open(&entry, &picker, &calendar, syncing.clone());
-        Self::connect_day_selected(&entry, &picker, &calendar, syncing.clone());
-        Self::connect_selected_day_click(&calendar);
+        Self::connect_picker_open(&entry, &picker, &calendar);
+        Self::connect_day_selected(&entry, &picker, &calendar);
 
         Self {
             widget,
             entry,
             picker,
             calendar,
-            syncing,
         }
     }
 
     fn connect_date_selected(&self, callback: impl Fn() + 'static) {
-        let syncing = self.syncing.clone();
-        self.calendar.connect_day_selected(move |_| {
-            if !syncing.get() {
-                callback();
-            }
-        });
+        self.calendar.connect_day_selected(move |_| callback());
     }
 
     fn connect_picker_open(
         entry: &gtk::Entry,
         picker: &gtk::MenuButton,
-        calendar: &gtk::Calendar,
-        syncing: Rc<Cell<bool>>,
+        calendar: &crate::widgets::DatePicker,
     ) {
         let input = entry.clone();
         let cal = calendar.clone();
         picker.connect_active_notify(move |picker| {
             if picker.is_active()
                 && let Ok(date) = NaiveDate::parse_from_str(input.text().as_str(), "%Y-%m-%d")
-                && let Ok(date) = glib::DateTime::from_local(
-                    date.year(),
-                    date.month() as i32,
-                    date.day() as i32,
-                    12,
-                    0,
-                    0.0,
-                )
             {
-                syncing.set(true);
-                cal.select_day(&date);
-                syncing.set(false);
+                cal.select_day(date);
             }
         });
     }
@@ -1183,52 +1120,18 @@ impl DateInput {
     fn connect_day_selected(
         entry: &gtk::Entry,
         picker: &gtk::MenuButton,
-        calendar: &gtk::Calendar,
-        syncing: Rc<Cell<bool>>,
+        calendar: &crate::widgets::DatePicker,
     ) {
         let input = entry.clone();
         let button = picker.downgrade();
         calendar.connect_day_selected(move |calendar| {
-            if syncing.get() {
-                return;
-            }
-
             let date = calendar.date();
-            input.set_text(&format!(
-                "{:04}-{:02}-{:02}",
-                date.year(),
-                date.month(),
-                date.day_of_month()
-            ));
+            input.set_text(&date.to_string());
 
             if let Some(button) = button.upgrade() {
                 button.popdown();
             }
         });
-    }
-
-    /// Closes the picker when the user clicks the day that is already selected.
-    fn connect_selected_day_click(calendar: &gtk::Calendar) {
-        let click = gtk::GestureClick::new();
-        click.set_propagation_phase(gtk::PropagationPhase::Capture);
-
-        let cal = calendar.downgrade();
-        click.connect_pressed(move |_, _, x, y| {
-            let Some(calendar) = cal.upgrade() else {
-                return;
-            };
-            // Clicking the selected day changes nothing and emits no day-selected signal.
-            // GTK marks only that day's label as selected, so detect the click here.
-            let Some(day) = calendar.pick(x, y, gtk::PickFlags::DEFAULT) else {
-                return;
-            };
-            if !day.is::<gtk::Label>() || !day.state_flags().contains(gtk::StateFlags::SELECTED) {
-                return;
-            }
-
-            calendar.emit_by_name::<()>("day-selected", &[]);
-        });
-        calendar.add_controller(click);
     }
 
     pub(super) fn date(&self, locale: &dyn Locale) -> anyhow::Result<NaiveDate> {
@@ -2106,29 +2009,29 @@ mod tests {
         other.grab_focus();
         assert_eq!(end.entry.text(), "2026-10-09");
 
-        let selected = gtk::glib::DateTime::from_local(2026, 10, 23, 12, 0, 0.0).unwrap();
-        start.calendar.select_day(&selected);
+        start.calendar.select_day("2026-10-23".parse().unwrap());
+        start.calendar.confirm();
         assert_eq!(start.entry.text(), "2026-10-23");
         assert_eq!(end.entry.text(), "2026-10-23");
 
-        let selected = gtk::glib::DateTime::from_local(2026, 10, 10, 12, 0, 0.0).unwrap();
-        end.calendar.select_day(&selected);
+        end.calendar.select_day("2026-10-10".parse().unwrap());
+        end.calendar.confirm();
         assert_eq!(start.entry.text(), "2026-10-10");
         assert_eq!(end.entry.text(), "2026-10-10");
         window.close();
     }
 
-    fn selected_day_label(widget: &gtk::Widget) -> Option<gtk::Label> {
-        if let Some(label) = widget.downcast_ref::<gtk::Label>()
-            && label.state_flags().contains(gtk::StateFlags::SELECTED)
+    fn selected_day_button(widget: &gtk::Widget) -> Option<gtk::Button> {
+        if let Some(button) = widget.downcast_ref::<gtk::Button>()
+            && button.has_css_class("ev_date_picker_selected")
         {
-            return Some(label.clone());
+            return Some(button.clone());
         }
 
         let mut child = widget.first_child();
         while let Some(widget) = child {
-            if let Some(label) = selected_day_label(&widget) {
-                return Some(label);
+            if let Some(button) = selected_day_button(&widget) {
+                return Some(button);
             }
             child = widget.next_sibling();
         }
@@ -2168,23 +2071,8 @@ mod tests {
         assert_eq!(selections.get(), 0);
         gtk::test_widget_wait_for_draw(&input.calendar);
 
-        let day = selected_day_label(input.calendar.upcast_ref()).expect("selected day");
-        let bounds = day
-            .compute_bounds(&input.calendar)
-            .expect("selected day bounds");
-        let (x, y) = (
-            f64::from(bounds.x() + bounds.width() / 2.0),
-            f64::from(bounds.y() + bounds.height() / 2.0),
-        );
-        let click = input
-            .calendar
-            .observe_controllers()
-            .snapshot()
-            .into_iter()
-            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
-            .find(|click| click.propagation_phase() == gtk::PropagationPhase::Capture)
-            .expect("date picker click gesture");
-        click.emit_by_name::<()>("pressed", &[&1i32, &x, &y]);
+        let day = selected_day_button(input.calendar.upcast_ref()).expect("selected day");
+        day.emit_clicked();
         iterate();
 
         assert!(!input.picker.is_active());

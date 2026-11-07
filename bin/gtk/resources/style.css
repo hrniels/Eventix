@@ -799,3 +799,52 @@ button.ev_sidebar_overdue {
 button.ev_sidebar_row.ev_cancelled > box > label {
     text-decoration-line: line-through;
 }
+.ev_date_picker {
+    padding: 6px;
+}
+
+.ev_date_picker button {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 3px;
+    transition: none;
+}
+
+.ev_date_picker_heading {
+    font-weight: bold;
+}
+
+.ev_date_picker_weekday {
+    padding: 3px;
+    border-bottom: 1px solid @ev_grid_line;
+}
+
+.ev_date_picker_week_number {
+    padding: 3px;
+    border-right: 1px solid @ev_grid_line;
+}
+
+.ev_date_picker button.ev_date_picker_day {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 3px;
+}
+
+.ev_date_picker_other_month {
+    opacity: 0.5;
+}
+
+.ev_date_picker_today {
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.ev_date_picker_selected {
+    background-color: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+}
+
+.ev_date_picker:focus .ev_date_picker_cursor {
+    outline: 2px solid @theme_selected_bg_color;
+    outline-offset: -2px;
+}

@@ -9,6 +9,7 @@ mod model;
 mod style;
 mod tray;
 mod view;
+mod widgets;
 mod window;
 
 use std::env;

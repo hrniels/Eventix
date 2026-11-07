@@ -98,7 +98,7 @@ mod imp {
         #[template_child]
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
-        pub calendar: gtk::TemplateChild<gtk::Calendar>,
+        pub calendar: gtk::TemplateChild<crate::widgets::DatePicker>,
 
         pub(super) editor: PageEditor,
         pub(super) content: PageContent,
@@ -122,6 +122,7 @@ mod imp {
         type ParentType = gtk::Box;
 
         fn class_init(klass: &mut Self::Class) {
+            crate::widgets::DatePicker::ensure_type();
             WeekContent::ensure_type();
             MonthGrid::ensure_type();
             Sidebar::ensure_type();
@@ -856,7 +857,7 @@ pub(crate) mod tests {
             .due
             .widget
             .last_child()
-            .and_downcast::<gtk::Calendar>()
+            .and_downcast::<crate::widgets::DatePicker>()
             .unwrap();
         assert!(
             calendar.is_mapped(),
@@ -867,9 +868,14 @@ pub(crate) mod tests {
             "opening the picker focuses the selected day"
         );
         assert_eq!(quick.due.entry.text(), "2026-10-24");
-        calendar.select_day(&gtk::glib::DateTime::from_local(2026, 10, 25, 12, 0, 0.0).unwrap());
+        calendar.select_day("2026-10-25".parse().unwrap());
+        calendar.confirm();
         assert_eq!(quick.due.entry.text(), "2026-10-25");
         assert!(!quick.due.picker.is_active());
+        assert_eq!(
+            quick.due.widget.first_child(),
+            Some(quick.due.entry.clone().upcast())
+        );
         quick.due.picker.popup();
         quick.due.entry.set_text("2026-10-26");
         quick.due.entry.emit_activate();
@@ -912,6 +918,16 @@ pub(crate) mod tests {
             assert!(!quick.due.picker.is_active());
             assert_eq!(quick.due.entry.text(), "2026-11-03");
         }
+        quick.due.picker.popup();
+        quick
+            .due
+            .entry
+            .emit_by_name::<()>("icon-press", &[&gtk::EntryIconPosition::Secondary]);
+        assert_eq!(quick.due.entry.text(), "");
+        assert_eq!(
+            quick.due.picker.icon_name().as_deref(),
+            Some("appointment-soon-symbolic")
+        );
         window.close();
     }
 

@@ -155,6 +155,23 @@ impl Window {
         key: gtk::gdk::Key,
         modifiers: gtk::gdk::ModifierType,
     ) -> glib::Propagation {
+        if let Some(focus) = GtkWindowExt::focus(self)
+            && let Some(picker) = focus
+                .clone()
+                .downcast::<crate::widgets::DatePicker>()
+                .ok()
+                .or_else(|| {
+                    focus
+                        .ancestor(crate::widgets::DatePicker::static_type())
+                        .and_downcast::<crate::widgets::DatePicker>()
+                })
+        {
+            let propagation = picker.key_pressed(key, modifiers);
+            if propagation == glib::Propagation::Stop {
+                return propagation;
+            }
+        }
+
         if let Some(propagation) = self.imp().page.handle_editor_key(key, modifiers) {
             return propagation;
         }
@@ -483,6 +500,49 @@ mod tests {
         settle();
         assert!(!window.is_maximized());
         assert_eq!(window.default_size(), size);
+        window.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn date_picker_shortcuts_take_precedence_over_window_navigation() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.DatePickerTest")
+            .build();
+        app.register(gio::Cancellable::NONE).unwrap();
+        let (window, page) = Window::test_new(&app);
+        window.present();
+        settle();
+
+        for (key, expected) in [
+            (gtk::gdk::Key::Left, "2024-02-29"),
+            (gtk::gdk::Key::Right, "2024-04-30"),
+            (gtk::gdk::Key::Up, "2023-03-31"),
+            (gtk::gdk::Key::Down, "2025-03-31"),
+        ] {
+            let date = "2024-03-31".parse().unwrap();
+            page.imp().calendar.select_day(date);
+            page.imp().picker.popup();
+            settle();
+            assert!(page.imp().calendar.has_focus());
+            assert_eq!(
+                window.handle_key_pressed(key, gtk::gdk::ModifierType::CONTROL_MASK),
+                glib::Propagation::Stop
+            );
+            assert!(page.imp().picker.is_active());
+            assert_eq!(page.imp().calendar.date(), date);
+            assert_eq!(
+                window.handle_key_pressed(gtk::gdk::Key::Return, gtk::gdk::ModifierType::empty()),
+                glib::Propagation::Stop
+            );
+            assert_eq!(
+                page.imp().calendar.date(),
+                expected.parse::<NaiveDate>().unwrap()
+            );
+            assert!(!page.imp().picker.is_active());
+        }
         window.destroy();
     }
 }

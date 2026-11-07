@@ -32,7 +32,12 @@ impl QuickTask {
         let summary: gtk::Entry = builder.object("summary").unwrap();
         summary.set_tooltip_text(Some(locale.translate("Summary")));
 
-        let due = DateInput::new_popup(locale, chrono::Local::now().date_naive());
+        let due = DateInput::new_popup(
+            locale,
+            chrono::Utc::now()
+                .with_timezone(locale.timezone())
+                .date_naive(),
+        );
         due.entry.set_text("");
         due.entry.set_width_chars(10);
         due.entry.set_max_width_chars(10);
@@ -42,6 +47,10 @@ impl QuickTask {
         due.entry.set_icon_from_icon_name(
             gtk::EntryIconPosition::Secondary,
             Some("edit-clear-symbolic"),
+        );
+        due.entry.set_icon_tooltip_text(
+            gtk::EntryIconPosition::Secondary,
+            Some(locale.translate("Clear date")),
         );
         due.entry.connect_icon_press(|entry, _| entry.set_text(""));
         let due_picker = due.picker.clone();
@@ -79,6 +88,11 @@ impl QuickTask {
         locale: &dyn Locale,
     ) {
         self.calendar.update(calendars, last_calendar);
+        self.due.set_locale(locale);
+        self.due.entry.set_icon_tooltip_text(
+            gtk::EntryIconPosition::Secondary,
+            Some(locale.translate("Clear date")),
+        );
         self.widget.set_visible(!calendars.is_empty());
         self.summary
             .set_tooltip_text(Some(locale.translate("Summary")));

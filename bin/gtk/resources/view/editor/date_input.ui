@@ -16,7 +16,7 @@
         <property name="popover">
           <object class="GtkPopover">
             <property name="child">
-              <object class="GtkCalendar" id="calendar"/>
+              <object class="EventixDatePicker" id="calendar"/>
             </property>
           </object>
         </property>

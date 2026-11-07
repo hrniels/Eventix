@@ -165,7 +165,12 @@ mod tests {
             window.present();
             drain();
             let error_slot = editor.error.widget.parent().unwrap();
-            assert!(error_slot.parent().unwrap().has_css_class("ev_editor_actions"));
+            assert!(
+                error_slot
+                    .parent()
+                    .unwrap()
+                    .has_css_class("ev_editor_actions")
+            );
             let actions = error_slot.next_sibling().unwrap();
             assert!(editor.save.is_ancestor(&actions));
             assert!(editor.cancel.is_ancestor(&actions));

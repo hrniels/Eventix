@@ -182,9 +182,7 @@
                                 <property name="popover">
                                   <object class="GtkPopover">
                                     <property name="child">
-                                      <object class="GtkCalendar" id="calendar">
-                                        <property name="show-week-numbers">true</property>
-                                      </object>
+                                      <object class="EventixDatePicker" id="calendar"/>
                                     </property>
                                   </object>
                                 </property>

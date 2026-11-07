@@ -25,7 +25,6 @@ pub(super) struct PageContent {
     pub(super) loaded_generation: Cell<Option<u64>>,
     pub(super) date: Cell<Option<NaiveDate>>,
     displayed: Cell<Option<NaiveDate>>,
-    updating_picker: Cell<bool>,
 }
 
 impl PageContent {
@@ -80,25 +79,21 @@ impl PageContent {
         imp.calendar.connect_day_selected(move |calendar| {
             let Some(page) = weak.upgrade() else { return };
 
-            if page.imp().content.updating_picker.get() || !page.imp().picker.is_active() {
+            if !page.imp().picker.is_active() {
                 return;
             }
 
             let date = calendar.date();
-            if let Some(date) = NaiveDate::from_ymd_opt(
-                date.year(),
-                date.month() as u32,
-                date.day_of_month() as u32,
-            ) {
-                page.imp().picker.popdown();
-                page.show_content(Some(date));
-            }
+            page.imp().picker.popdown();
+            page.show_content(Some(date));
         });
     }
 
     fn translate_labels(&self, page: &CalendarPage) {
         let imp = page.imp();
         let locale = page.locale();
+        imp.calendar
+            .set_locale(locale.as_ref(), chrono::Weekday::Mon);
         let monthly = self.view.get() == View::Month;
 
         imp.search
@@ -309,18 +304,7 @@ impl PageContent {
         });
         self.date.set(Some(date));
 
-        if let Ok(date) = glib::DateTime::from_local(
-            date.year(),
-            date.month() as i32,
-            date.day() as i32,
-            12,
-            0,
-            0.0,
-        ) {
-            self.updating_picker.set(true);
-            imp.calendar.select_day(&date);
-            self.updating_picker.set(false);
-        }
+        imp.calendar.select_day(date);
     }
 
     pub(super) fn show_month(&self, page: &CalendarPage, month: MonthSnapshot) {
