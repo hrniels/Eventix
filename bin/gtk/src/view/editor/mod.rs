@@ -1036,7 +1036,7 @@ fn parse_time(entry: &gtk::Entry, locale: &dyn Locale) -> anyhow::Result<NaiveTi
 pub(crate) struct DateInput {
     pub(super) widget: gtk::Box,
     pub(super) entry: gtk::Entry,
-    pub(super) picker: gtk::MenuButton,
+    picker: Option<gtk::MenuButton>,
     calendar: crate::widgets::DatePicker,
 }
 
@@ -1044,20 +1044,28 @@ impl DateInput {
     /// Updates the picker language without changing the date entry or current selection.
     pub(crate) fn set_locale(&self, locale: &dyn Locale) {
         self.calendar.set_locale(locale, chrono::Weekday::Mon);
-        self.picker
+        self.entry
             .set_tooltip_text(Some(locale.translate("Choose date")));
+        if let Some(picker) = &self.picker {
+            picker.set_tooltip_text(Some(locale.translate("Choose date")));
+        }
+    }
+
+    /// Returns the trigger for a button-only date input.
+    pub(crate) fn picker(&self) -> &gtk::MenuButton {
+        self.picker.as_ref().expect("button-only date input")
     }
 
     /// Creates a popup with a date entry above the calendar.
     pub(super) fn new_popup(locale: &dyn Locale, date: NaiveDate) -> Self {
-        let input = Self::new(locale, date);
-        let popover = input.picker.popover().expect("editor date popover");
+        let input = Self::new_button(locale, date);
+        let popover = input.picker().popover().expect("editor date popover");
         popover.set_child(None::<&gtk::Widget>);
-        input.widget.remove(&input.picker);
+        input.widget.remove(input.picker());
         input.widget.set_orientation(gtk::Orientation::Vertical);
         input.widget.append(&input.calendar);
         popover.set_child(Some(&input.widget));
-        let picker = input.picker.downgrade();
+        let picker = input.picker().downgrade();
         input.entry.connect_activate(move |_| {
             if let Some(picker) = picker.upgrade() {
                 picker.popdown();
@@ -1069,10 +1077,31 @@ impl DateInput {
                 calendar.grab_focus();
             }
         });
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let calendar = input.calendar.downgrade();
+        let entry = input.entry.downgrade();
+        keys.connect_key_pressed(move |_, key, _, modifiers| {
+            match (calendar.upgrade(), entry.upgrade()) {
+                (Some(calendar), Some(entry)) => calendar.entry_key_pressed(&entry, key, modifiers),
+                _ => glib::Propagation::Proceed,
+            }
+        });
+        input.entry.add_controller(keys);
         input
     }
 
     pub(super) fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
+        let input = crate::widgets::DateInput::new(locale, date);
+        Self {
+            entry: input.entry(),
+            calendar: input.calendar(),
+            widget: input.upcast(),
+            picker: None,
+        }
+    }
+
+    fn new_button(locale: &dyn Locale, date: NaiveDate) -> Self {
         crate::widgets::DatePicker::ensure_type();
         let builder = gtk::Builder::from_resource(resource_path!("view/editor/date_input.ui"));
         let widget = builder.object("date_input").expect("editor date input");
@@ -1082,6 +1111,20 @@ impl DateInput {
             builder.object("calendar").expect("editor date calendar");
         calendar.set_locale(locale, chrono::Weekday::Mon);
         calendar.select_day(date);
+        let input = entry.downgrade();
+        calendar.connect_day_adjusted(move |calendar| {
+            if let Some(input) = input.upgrade() {
+                input.set_text(&calendar.date().to_string());
+            }
+        });
+        let weak = calendar.downgrade();
+        entry.connect_changed(move |entry| {
+            if let Some(calendar) = weak.upgrade()
+                && let Ok(date) = NaiveDate::parse_from_str(&entry.text(), "%Y-%m-%d")
+            {
+                calendar.select_day(date);
+            }
+        });
         let picker: gtk::MenuButton = builder.object("picker").expect("editor date picker");
         picker.set_tooltip_text(Some(locale.translate("Choose date")));
         Self::connect_picker_open(&entry, &picker, &calendar);
@@ -1090,7 +1133,7 @@ impl DateInput {
         Self {
             widget,
             entry,
-            picker,
+            picker: Some(picker),
             calendar,
         }
     }
@@ -2148,9 +2191,15 @@ mod tests {
             while gtk::glib::MainContext::default().iteration(false) {}
         };
         iterate();
-        input.picker.set_active(true);
+        input.entry.grab_focus();
         iterate();
-        assert!(input.picker.is_active());
+        let popup = input
+            .calendar
+            .ancestor(gtk::Popover::static_type())
+            .unwrap()
+            .downcast::<gtk::Popover>()
+            .unwrap();
+        assert!(popup.is_visible());
         assert_eq!(selections.get(), 0);
         gtk::test_widget_wait_for_draw(&input.calendar);
 
@@ -2158,7 +2207,7 @@ mod tests {
         day.emit_clicked();
         iterate();
 
-        assert!(!input.picker.is_active());
+        assert!(!popup.is_visible());
         assert_eq!(input.entry.text(), "2026-10-15");
         assert_eq!(selections.get(), 1);
         window.close();

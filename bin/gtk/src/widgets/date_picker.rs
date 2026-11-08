@@ -33,6 +33,7 @@ mod imp {
         pub hovered: Cell<Option<usize>>,
         pub today: Cell<NaiveDate>,
         pub timezone: Cell<chrono_tz::Tz>,
+        pub focus_on_map: Cell<bool>,
         pub heading: gtk::Label,
         pub weekdays: [gtk::Label; 7],
         pub weeks: [gtk::Label; 6],
@@ -54,6 +55,7 @@ mod imp {
                 hovered: Cell::new(None),
                 today: Cell::new(today),
                 timezone: Cell::new(chrono_tz::UTC),
+                focus_on_map: Cell::new(true),
                 heading: gtk::Label::new(None),
                 weekdays: std::array::from_fn(|_| gtk::Label::new(None)),
                 weeks: std::array::from_fn(|_| gtk::Label::new(None)),
@@ -75,7 +77,12 @@ mod imp {
     impl ObjectImpl for DatePicker {
         fn signals() -> &'static [glib::subclass::Signal] {
             static SIGNALS: OnceLock<Vec<glib::subclass::Signal>> = OnceLock::new();
-            SIGNALS.get_or_init(|| vec![glib::subclass::Signal::builder("day-selected").build()])
+            SIGNALS.get_or_init(|| {
+                vec![
+                    glib::subclass::Signal::builder("day-selected").build(),
+                    glib::subclass::Signal::builder("day-adjusted").build(),
+                ]
+            })
         }
 
         fn constructed(&self) {
@@ -202,7 +209,9 @@ mod imp {
                             .date_naive(),
                     );
                     obj.select_day(obj.date());
-                    obj.grab_focus();
+                    if obj.imp().focus_on_map.get() {
+                        obj.grab_focus();
+                    }
                 }
             });
         }
@@ -220,6 +229,47 @@ glib::wrapper! {
 }
 
 impl DatePicker {
+    /// Controls whether opening the calendar takes keyboard focus.
+    pub(crate) fn set_focus_on_map(&self, focus: bool) {
+        self.imp().focus_on_map.set(focus);
+    }
+
+    /// Handles calendar shortcuts while preserving ordinary entry editing keys.
+    pub(crate) fn entry_key_pressed(
+        &self,
+        entry: &gtk::Entry,
+        key: gdk::Key,
+        modifiers: gdk::ModifierType,
+    ) -> glib::Propagation {
+        if key == gdk::Key::Escape {
+            return self.key_pressed(key, modifiers);
+        }
+        if modifiers.intersects(gdk::ModifierType::SUPER_MASK | gdk::ModifierType::META_MASK) {
+            return glib::Propagation::Proceed;
+        }
+        if !modifiers.contains(gdk::ModifierType::ALT_MASK)
+            && matches!(key, gdk::Key::Return | gdk::Key::KP_Enter)
+        {
+            if NaiveDate::parse_from_str(&entry.text(), "%Y-%m-%d").is_err() {
+                return self.key_pressed(gdk::Key::Escape, gdk::ModifierType::empty());
+            }
+            self.confirm();
+            return glib::Propagation::Stop;
+        }
+        if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK)
+            || matches!(
+                key,
+                gdk::Key::Page_Up
+                    | gdk::Key::KP_Page_Up
+                    | gdk::Key::Page_Down
+                    | gdk::Key::KP_Page_Down
+            )
+        {
+            return self.navigate_key(key, modifiers);
+        }
+        glib::Propagation::Proceed
+    }
+
     /// Enables whole-week highlighting and week-sized arrow-key navigation.
     ///
     /// The committed date and browsing cursor are preserved. Weeks follow the configured
@@ -312,6 +362,14 @@ impl DatePicker {
         });
     }
 
+    /// Calls `callback` when Ctrl+arrows adjust the date without closing the picker.
+    pub(crate) fn connect_day_adjusted(&self, callback: impl Fn(&Self) + 'static) {
+        self.connect_local("day-adjusted", false, move |values| {
+            callback(&values[0].get::<Self>().unwrap());
+            None
+        });
+    }
+
     fn set_cursor(&self, date: NaiveDate) {
         self.imp().cursor.set(date);
         self.imp().month.set(date.with_day(1).unwrap());
@@ -340,16 +398,32 @@ impl DatePicker {
         }
 
         let control = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
-        if (!self.has_focus() && !control)
-            || modifiers.intersects(
-                gdk::ModifierType::ALT_MASK
-                    | gdk::ModifierType::SUPER_MASK
-                    | gdk::ModifierType::META_MASK,
-            )
+        let alt = modifiers.contains(gdk::ModifierType::ALT_MASK);
+        if (!self.has_focus() && !control && !alt)
+            || modifiers.intersects(gdk::ModifierType::SUPER_MASK | gdk::ModifierType::META_MASK)
         {
             return glib::Propagation::Proceed;
         }
 
+        self.navigate_key(key, modifiers)
+    }
+
+    fn navigate_key(&self, key: gdk::Key, modifiers: gdk::ModifierType) -> glib::Propagation {
+        let control = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
+        if modifiers.contains(gdk::ModifierType::ALT_MASK) {
+            if control {
+                return glib::Propagation::Proceed;
+            }
+            let months = match key {
+                gdk::Key::Left | gdk::Key::KP_Left => -1,
+                gdk::Key::Right | gdk::Key::KP_Right => 1,
+                gdk::Key::Down | gdk::Key::KP_Down => -12,
+                gdk::Key::Up | gdk::Key::KP_Up => 12,
+                _ => return glib::Propagation::Proceed,
+            };
+            self.move_month(months);
+            return glib::Propagation::Stop;
+        }
         if matches!(
             key,
             gdk::Key::Page_Up | gdk::Key::KP_Page_Up | gdk::Key::Page_Down | gdk::Key::KP_Page_Down
@@ -359,22 +433,12 @@ impl DatePicker {
             return glib::Propagation::Stop;
         }
 
-        if control {
-            let months = match key {
-                gdk::Key::Left | gdk::Key::KP_Left => -1,
-                gdk::Key::Right | gdk::Key::KP_Right => 1,
-                gdk::Key::Up | gdk::Key::KP_Up => -12,
-                gdk::Key::Down | gdk::Key::KP_Down => 12,
-                _ => return glib::Propagation::Proceed,
-            };
-            self.move_month(months);
-            return glib::Propagation::Stop;
-        }
-
-        if matches!(
-            key,
-            gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space | gdk::Key::KP_Space
-        ) {
+        if !control
+            && matches!(
+                key,
+                gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space | gdk::Key::KP_Space
+            )
+        {
             self.confirm();
             return glib::Propagation::Stop;
         }
@@ -398,7 +462,12 @@ impl DatePicker {
             .get()
             .checked_add_signed(Duration::days(days))
         {
-            self.set_cursor(date);
+            if control {
+                self.select_day(date);
+                self.emit_by_name::<()>("day-adjusted", &[]);
+            } else {
+                self.set_cursor(date);
+            }
         }
         glib::Propagation::Stop
     }
@@ -562,12 +631,31 @@ mod tests {
         for (key, expected) in [
             (gdk::Key::Left, "2024-02-29"),
             (gdk::Key::Right, "2024-04-30"),
-            (gdk::Key::Up, "2023-03-31"),
-            (gdk::Key::Down, "2025-03-31"),
+            (gdk::Key::Down, "2023-03-31"),
+            (gdk::Key::Up, "2025-03-31"),
             (gdk::Key::KP_Left, "2024-02-29"),
             (gdk::Key::KP_Right, "2024-04-30"),
-            (gdk::Key::KP_Up, "2023-03-31"),
-            (gdk::Key::KP_Down, "2025-03-31"),
+            (gdk::Key::KP_Down, "2023-03-31"),
+            (gdk::Key::KP_Up, "2025-03-31"),
+        ] {
+            picker.set_cursor("2024-03-31".parse().unwrap());
+            assert_eq!(
+                press(key, gdk::ModifierType::ALT_MASK),
+                glib::Propagation::Stop
+            );
+            assert_eq!(imp.cursor.get(), expected.parse::<NaiveDate>().unwrap());
+            assert_eq!(picker.date(), date);
+            assert_eq!(selections.get(), 0);
+        }
+        for (key, expected) in [
+            (gdk::Key::Left, "2024-03-30"),
+            (gdk::Key::Right, "2024-04-01"),
+            (gdk::Key::Up, "2024-03-24"),
+            (gdk::Key::Down, "2024-04-07"),
+            (gdk::Key::KP_Left, "2024-03-30"),
+            (gdk::Key::KP_Right, "2024-04-01"),
+            (gdk::Key::KP_Up, "2024-03-24"),
+            (gdk::Key::KP_Down, "2024-04-07"),
         ] {
             picker.set_cursor("2024-03-31".parse().unwrap());
             assert_eq!(
@@ -575,8 +663,7 @@ mod tests {
                 glib::Propagation::Stop
             );
             assert_eq!(imp.cursor.get(), expected.parse::<NaiveDate>().unwrap());
-            assert_eq!(picker.date(), date);
-            assert_eq!(selections.get(), 0);
+            assert_eq!(picker.date(), expected.parse::<NaiveDate>().unwrap());
         }
         picker.select_day(date);
         assert_eq!(

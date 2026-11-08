@@ -53,7 +53,7 @@ impl QuickTask {
             Some(locale.translate("Clear date")),
         );
         due.entry.connect_icon_press(|entry, _| entry.set_text(""));
-        let due_picker = due.picker.clone();
+        let due_picker = due.picker().clone();
         due_picker.set_icon_name("appointment-soon-symbolic");
         due_picker.set_tooltip_text(Some(locale.translate("Due date")));
         let weak = due_picker.downgrade();

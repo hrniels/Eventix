@@ -295,8 +295,9 @@ mod tests {
             .unwrap()
             .last_child()
             .unwrap()
-            .downcast::<gtk::Entry>()
-            .unwrap();
+            .downcast::<crate::widgets::TimeInput>()
+            .unwrap()
+            .entry();
         time.set_text("invalid");
         editors[1].save.emit_clicked();
         assert_eq!(received.borrow().len(), 4);

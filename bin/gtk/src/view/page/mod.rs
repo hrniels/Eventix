@@ -854,7 +854,7 @@ pub(crate) mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert!(quick.summary.width() >= 40);
-        quick.due.picker.popup();
+        quick.due.picker().popup();
         while gtk::glib::MainContext::default().iteration(false) {}
         let calendar = quick
             .due
@@ -874,18 +874,18 @@ pub(crate) mod tests {
         calendar.select_day("2026-10-25".parse().unwrap());
         calendar.confirm();
         assert_eq!(quick.due.entry.text(), "2026-10-25");
-        assert!(!quick.due.picker.is_active());
+        assert!(!quick.due.picker().is_active());
         assert_eq!(
             quick.due.widget.first_child(),
             Some(quick.due.entry.clone().upcast())
         );
-        quick.due.picker.popup();
+        quick.due.picker().popup();
         quick.due.entry.set_text("2026-10-26");
         quick.due.entry.emit_activate();
-        assert!(!quick.due.picker.is_active());
+        assert!(!quick.due.picker().is_active());
         assert_eq!(quick.due.entry.text(), "2026-10-26");
 
-        quick.due.picker.popup();
+        quick.due.picker().popup();
         while gtk::glib::MainContext::default().iteration(false) {}
         assert!(calendar.has_focus());
         let controllers = calendar.observe_controllers();
@@ -907,28 +907,28 @@ pub(crate) mod tests {
         assert!(press(gtk::gdk::Key::Down));
         assert_eq!(quick.due.entry.text(), "2026-10-26");
         assert!(
-            quick.due.picker.is_active(),
+            quick.due.picker().is_active(),
             "arrow keys do not commit the date"
         );
         assert!(press(gtk::gdk::Key::KP_Enter));
         assert_eq!(quick.due.entry.text(), "2026-11-03");
-        assert!(!quick.due.picker.is_active());
+        assert!(!quick.due.picker().is_active());
 
         for key in [gtk::gdk::Key::Return, gtk::gdk::Key::space] {
-            quick.due.picker.popup();
+            quick.due.picker().popup();
             while gtk::glib::MainContext::default().iteration(false) {}
             assert!(press(key));
-            assert!(!quick.due.picker.is_active());
+            assert!(!quick.due.picker().is_active());
             assert_eq!(quick.due.entry.text(), "2026-11-03");
         }
-        quick.due.picker.popup();
+        quick.due.picker().popup();
         quick
             .due
             .entry
             .emit_by_name::<()>("icon-press", &[&gtk::EntryIconPosition::Secondary]);
         assert_eq!(quick.due.entry.text(), "");
         assert_eq!(
-            quick.due.picker.icon_name().as_deref(),
+            quick.due.picker().icon_name().as_deref(),
             Some("appointment-soon-symbolic")
         );
         window.close();

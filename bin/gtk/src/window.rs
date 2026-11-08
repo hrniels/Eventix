@@ -155,6 +155,34 @@ impl Window {
         key: gtk::gdk::Key,
         modifiers: gtk::gdk::ModifierType,
     ) -> glib::Propagation {
+        // Button-only date inputs have an entry beside the calendar inside their popup.
+        if let Some(focus) = GtkWindowExt::focus(self)
+            && let Some(entry) = focus
+                .ancestor(gtk::Entry::static_type())
+                .and_downcast::<gtk::Entry>()
+            && entry.ancestor(gtk::Popover::static_type()).is_some()
+            && let Some(picker) = entry
+                .parent()
+                .and_then(|parent| parent.last_child())
+                .and_downcast::<crate::widgets::DatePicker>()
+        {
+            let propagation = picker.entry_key_pressed(&entry, key, modifiers);
+            if propagation == glib::Propagation::Stop {
+                return propagation;
+            }
+        }
+
+        if let Some(focus) = GtkWindowExt::focus(self)
+            && let Some(input) = focus
+                .ancestor(crate::widgets::DateInput::static_type())
+                .and_downcast::<crate::widgets::DateInput>()
+        {
+            let propagation = input.key_pressed(key, modifiers);
+            if propagation == glib::Propagation::Stop {
+                return propagation;
+            }
+        }
+
         if let Some(focus) = GtkWindowExt::focus(self)
             && let Some(input) = focus
                 .ancestor(crate::widgets::TimeInput::static_type())
@@ -544,12 +572,71 @@ mod tests {
         window.present();
         settle();
 
+        let input = crate::widgets::DateInput::new(
+            eventix_locale::default().as_ref(),
+            "2024-03-31".parse().unwrap(),
+        );
+        page.append(&input);
+        input.entry().grab_focus();
+        settle();
+        assert_eq!(
+            window.handle_key_pressed(gtk::gdk::Key::Left, gtk::gdk::ModifierType::CONTROL_MASK),
+            glib::Propagation::Stop
+        );
+        assert_eq!(input.entry().text(), "2024-03-30");
+        assert_eq!(
+            window.handle_key_pressed(gtk::gdk::Key::Return, gtk::gdk::ModifierType::empty()),
+            glib::Propagation::Stop
+        );
+        assert_eq!(input.entry().text(), "2024-03-30");
+        page.remove(&input);
+
+        let quick = page.imp().sidebar.quick_task();
+        quick.widget.set_visible(true);
+        let entry = quick
+            .due
+            .picker()
+            .popover()
+            .unwrap()
+            .child()
+            .unwrap()
+            .first_child()
+            .unwrap()
+            .downcast::<gtk::Entry>()
+            .unwrap();
+        entry.set_text("2024-03-31");
+        quick.due.picker().popup();
+        settle();
+        entry.grab_focus();
+        settle();
+        assert_eq!(
+            window.handle_key_pressed(gtk::gdk::Key::Left, gtk::gdk::ModifierType::CONTROL_MASK),
+            glib::Propagation::Stop
+        );
+        assert_eq!(entry.text(), "2024-03-30");
+        assert_eq!(
+            window.handle_key_pressed(gtk::gdk::Key::Return, gtk::gdk::ModifierType::empty()),
+            glib::Propagation::Stop
+        );
+        assert_eq!(entry.text(), "2024-03-30");
+        assert!(!quick.due.picker().is_active());
+        quick.due.picker().popup();
+        settle();
+        entry.grab_focus();
+        entry.set_text("");
+        assert_eq!(
+            window.handle_key_pressed(gtk::gdk::Key::Return, gtk::gdk::ModifierType::empty()),
+            glib::Propagation::Stop
+        );
+        assert!(entry.text().is_empty());
+        assert!(!quick.due.picker().is_active());
+
         page.switch_to_week();
         for (key, expected) in [
             (gtk::gdk::Key::Left, "2024-02-29"),
             (gtk::gdk::Key::Right, "2024-04-30"),
-            (gtk::gdk::Key::Up, "2023-03-31"),
-            (gtk::gdk::Key::Down, "2025-03-31"),
+            (gtk::gdk::Key::Down, "2023-03-31"),
+            (gtk::gdk::Key::Up, "2025-03-31"),
         ] {
             let date = "2024-03-31".parse().unwrap();
             page.imp().calendar.select_day(date);
@@ -557,7 +644,7 @@ mod tests {
             settle();
             assert!(page.imp().calendar.has_focus());
             assert_eq!(
-                window.handle_key_pressed(key, gtk::gdk::ModifierType::CONTROL_MASK),
+                window.handle_key_pressed(key, gtk::gdk::ModifierType::ALT_MASK),
                 glib::Propagation::Stop
             );
             assert!(page.imp().picker.is_active());

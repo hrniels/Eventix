@@ -772,20 +772,16 @@ mod tests {
             );
             nested_editor.sections[0].toggle.set_active(true);
             drain();
+            nested_editor.start.entry.grab_focus();
+            drain();
             let picker = nested_editor
                 .start
-                .widget
-                .last_child()
-                .and_downcast::<gtk::MenuButton>()
+                .calendar
+                .ancestor(gtk::Popover::static_type())
+                .and_downcast::<gtk::Popover>()
                 .unwrap();
-            picker.popup();
-            drain();
-            assert!(picker.popover().unwrap().is_visible());
-            crate::window::dismiss_popups_on_surface(
-                &window,
-                &parent,
-                &picker.popover().unwrap().surface().unwrap(),
-            );
+            assert!(picker.is_visible());
+            crate::window::dismiss_popups_on_surface(&window, &parent, &picker.surface().unwrap());
             assert!(
                 parent.editor_open(),
                 "nested popup clicks must not discard the editor"
@@ -1040,15 +1036,15 @@ mod tests {
 
                         editor.sections[0].toggle.set_active(true);
                         drain();
+                        editor.start.entry.grab_focus();
+                        drain();
                         let picker = editor
                             .start
-                            .widget
-                            .last_child()
-                            .and_downcast::<gtk::MenuButton>()
+                            .calendar
+                            .ancestor(gtk::Popover::static_type())
+                            .and_downcast::<gtk::Popover>()
                             .unwrap();
-                        picker.popup();
-                        drain();
-                        assert!(picker.popover().unwrap().is_mapped());
+                        assert!(picker.is_mapped());
                         assert!(!press_escape(&popup));
                         assert!(parent.editor_open());
                         picker.popdown();
