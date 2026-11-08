@@ -597,8 +597,8 @@ impl DateSection {
         let end = DateInput::new(locale, end_value.date());
         Self::connect_dates(&start, &end);
 
-        let start_time = time_entry(options.start.time());
-        let end_time = time_entry(end_value.time());
+        let (start_clock, start_time) = time_entry(locale, options.start.time());
+        let (end_clock, end_time) = time_entry(locale, end_value.time());
         let all_day = gtk::CheckButton::new();
         all_day.set_halign(gtk::Align::Start);
         let timezone = Self::create_timezone(locale);
@@ -608,8 +608,8 @@ impl DateSection {
             .row_spacing(8)
             .build();
         dates.add_css_class("ev_editor_dates");
-        let start_fields = Self::date_fields(&start, &start_time);
-        let end_fields = Self::date_fields(&end, &end_time);
+        let start_fields = Self::date_fields(&start, &start_clock);
+        let end_fields = Self::date_fields(&end, &end_clock);
         let has_start = gtk::CheckButton::with_label(locale.translate("Start"));
         let has_due = gtk::CheckButton::with_label(locale.translate("Due"));
 
@@ -703,7 +703,7 @@ impl DateSection {
         grid.attach(&label, column, row, 1, 1);
     }
 
-    fn date_fields(date: &DateInput, time: &gtk::Entry) -> gtk::Box {
+    fn date_fields(date: &DateInput, time: &gtk::Box) -> gtk::Box {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         row.set_hexpand(true);
         date.widget.set_valign(gtk::Align::Center);
@@ -712,7 +712,6 @@ impl DateSection {
 
         time.set_hexpand(true);
         time.set_valign(gtk::Align::Center);
-        time.set_max_width_chars(5);
         row.append(&date.widget);
         row.append(time);
 
@@ -1022,12 +1021,11 @@ fn spin(min: f64, max: f64, value: f64) -> gtk::SpinButton {
     widget
 }
 
-fn time_entry(time: NaiveTime) -> gtk::Entry {
-    let builder = gtk::Builder::from_resource(resource_path!("view/editor/time_entry.ui"));
-    let entry: gtk::Entry = builder.object("time").expect("editor time entry");
-    entry.set_text(&time.format("%H:%M").to_string());
-
-    entry
+/// Creates an editable time field with a two-step clock popup.
+fn time_entry(locale: &dyn Locale, time: NaiveTime) -> (gtk::Box, gtk::Entry) {
+    let input = crate::widgets::TimeInput::new(locale, time);
+    let entry = input.entry();
+    (input.upcast(), entry)
 }
 
 fn parse_time(entry: &gtk::Entry, locale: &dyn Locale) -> anyhow::Result<NaiveTime> {
@@ -1202,9 +1200,9 @@ impl AlarmInput {
         let absolute: gtk::Box = builder.object("absolute").expect("editor absolute alarm");
         let date = DateInput::new(locale, date);
         date.widget.set_hexpand(false);
-        let time = time_entry(time);
+        let (clock, time) = time_entry(locale, time);
         absolute.append(&date.widget);
-        absolute.append(&time);
+        absolute.append(&clock);
         trigger.connect_selected_notify(move |combo| {
             relative.set_sensitive(combo.selected() == 1);
             absolute.set_sensitive(combo.selected() == 2);
@@ -2036,6 +2034,91 @@ mod tests {
             child = widget.next_sibling();
         }
         None
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn time_entry_popup_preserves_text_until_confirmation_and_tracks_sensitivity() {
+        use super::{NaiveTime, glib, time_entry};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let locale = eventix_locale::default();
+        let (widget, entry) = time_entry(locale.as_ref(), "09:17".parse().unwrap());
+        let picker = widget
+            .last_child()
+            .unwrap()
+            .downcast::<gtk::Popover>()
+            .unwrap();
+        let clock = picker
+            .child()
+            .unwrap()
+            .downcast::<crate::widgets::TimePicker>()
+            .unwrap();
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        let other = gtk::Entry::new();
+        content.append(&other);
+        content.append(&widget);
+        let window = gtk::Window::builder().child(&content).build();
+        window.present();
+        let iterate = || while glib::MainContext::default().iteration(false) {};
+        let focus = || {
+            other.grab_focus();
+            iterate();
+            entry.grab_focus();
+            iterate();
+        };
+        iterate();
+        entry.set_text("23:42");
+        focus();
+        iterate();
+        assert!(picker.is_visible());
+        assert!(
+            gtk::prelude::GtkWindowExt::focus(&window)
+                .unwrap()
+                .is_ancestor(&entry)
+        );
+        assert_eq!(clock.time(), "23:42".parse::<NaiveTime>().unwrap());
+        clock.select_time("01:05".parse().unwrap());
+        picker.popdown();
+        iterate();
+        assert_eq!(entry.text(), "23:42");
+        focus();
+        iterate();
+        assert_eq!(clock.time(), "23:42".parse::<NaiveTime>().unwrap());
+        clock.select_time("00:00".parse().unwrap());
+        clock.emit_by_name::<()>("time-selected", &[]);
+        iterate();
+        assert_eq!(entry.text(), "00:00");
+        assert!(!picker.is_visible());
+        assert!(
+            gtk::prelude::GtkWindowExt::focus(&window)
+                .unwrap()
+                .is_ancestor(&entry)
+        );
+        entry.set_text("invalid");
+        focus();
+        iterate();
+        assert_eq!(entry.text(), "invalid");
+        picker.popdown();
+        other.grab_focus();
+        iterate();
+        entry.set_sensitive(false);
+        assert!(!picker.is_visible());
+        entry.set_sensitive(true);
+        focus();
+        iterate();
+        assert!(picker.is_visible());
+        entry.emit_activate();
+        iterate();
+        assert!(!picker.is_visible());
+        focus();
+        iterate();
+        assert!(picker.is_visible());
+        other.grab_focus();
+        iterate();
+        assert!(!picker.is_visible());
+        window.close();
     }
 
     #[test]

@@ -22,7 +22,6 @@
     <file>view/editor/field_row.ui</file>
     <file>view/editor/section.ui</file>
     <file>view/editor/shell.ui</file>
-    <file>view/editor/time_entry.ui</file>
     <file>view/list/calendar.ui</file>
     <file>view/list/content.ui</file>
     <file>view/list/filtering.ui</file>

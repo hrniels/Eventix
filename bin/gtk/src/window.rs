@@ -156,6 +156,17 @@ impl Window {
         modifiers: gtk::gdk::ModifierType,
     ) -> glib::Propagation {
         if let Some(focus) = GtkWindowExt::focus(self)
+            && let Some(input) = focus
+                .ancestor(crate::widgets::TimeInput::static_type())
+                .and_downcast::<crate::widgets::TimeInput>()
+        {
+            let propagation = input.key_pressed(key, modifiers);
+            if propagation == glib::Propagation::Stop {
+                return propagation;
+            }
+        }
+
+        if let Some(focus) = GtkWindowExt::focus(self)
             && let Some(picker) = focus
                 .clone()
                 .downcast::<crate::widgets::MonthPicker>()

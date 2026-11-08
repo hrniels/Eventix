@@ -799,6 +799,22 @@ button.ev_sidebar_overdue {
 button.ev_sidebar_row.ev_cancelled > box > label {
     text-decoration-line: line-through;
 }
+.ev_time_picker button {
+    transition: none;
+}
+
+.ev_time_picker_face,
+.ev_time_picker_tick.flat {
+    color: #303030;
+}
+
+.ev_time_picker_tick {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+}
+
 .ev_date_picker {
     padding: 6px;
 }
