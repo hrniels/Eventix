@@ -26,6 +26,7 @@ impl PageCalendars {
         {
             for ((old, button), new) in choices.iter_mut().zip(calendars) {
                 button.set_active(new.enabled);
+                update_sync_error(button, &new);
                 *old = new;
             }
             return;
@@ -39,11 +40,16 @@ impl PageCalendars {
         for calendar in calendars {
             let dot = gtk::DrawingArea::new();
             dot.set_size_request(22, 22);
+            let content = gtk::Overlay::new();
+            content.set_child(Some(&dot));
+            let warning = gtk::DrawingArea::new();
+            warning.set_can_target(false);
+            content.add_overlay(&warning);
             let button = gtk::ToggleButton::builder()
-                .child(&dot)
+                .child(&content)
                 .active(calendar.enabled)
-                .tooltip_text(&calendar.name)
                 .build();
+            update_sync_error(&button, &calendar);
             draw_toggle_circle(&dot, &button, &calendar.background);
             button.add_css_class("ev_calendar_toggle");
             button.update_property(&[gtk::accessible::Property::Label(&calendar.name)]);
@@ -63,11 +69,76 @@ impl PageCalendars {
     }
 }
 
+fn update_sync_error(button: &gtk::ToggleButton, calendar: &CalendarVisibility) {
+    let tooltip = match &calendar.sync_error {
+        Some(error) => format!("{}\n{}", calendar.name, error),
+        None => calendar.name.clone(),
+    };
+    button.set_tooltip_text(Some(&tooltip));
+    if let Some(content) = button.child().and_downcast::<gtk::Overlay>()
+        && let Some(warning) = content.last_child().and_downcast::<gtk::DrawingArea>()
+    {
+        warning.set_visible(calendar.sync_error.is_some());
+        let color = sync_error_color(&calendar.background, calendar.enabled);
+        warning.set_draw_func(move |_, cr, width, height| {
+            cr.set_source_rgb(
+                color.red().into(),
+                color.green().into(),
+                color.blue().into(),
+            );
+            let x = f64::from(width) / 2.0;
+            let y = f64::from(height) / 2.0;
+            cr.rectangle(x - 1.0, y - 6.0, 2.0, 8.0);
+            cr.rectangle(x - 1.0, y + 4.0, 2.0, 2.0);
+            let _ = cr.fill();
+        });
+    }
+}
+
+/// Chooses a contrasting foreground, preferring white on darker mid-tone circles.
+fn sync_error_color(background: &str, enabled: bool) -> gtk::gdk::RGBA {
+    let background = if enabled {
+        gtk::gdk::RGBA::parse(background).unwrap_or(gtk::gdk::RGBA::BLACK)
+    } else {
+        gtk::gdk::RGBA::new(0.65, 0.65, 0.65, 1.0)
+    };
+    let linear = |channel: f32| {
+        let channel = f64::from(channel);
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let luminance = 0.2126 * linear(background.red())
+        + 0.7152 * linear(background.green())
+        + 0.0722 * linear(background.blue());
+    // Favor white beyond the equal-contrast point so saturated reds also use a light mark.
+    if luminance < 0.3 {
+        gtk::gdk::RGBA::WHITE
+    } else {
+        gtk::gdk::RGBA::BLACK
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use gtk::{prelude::*, subclass::prelude::*};
 
-    use super::{CalendarPage, CalendarVisibility};
+    use super::{CalendarPage, CalendarVisibility, sync_error_color};
+
+    #[test]
+    fn sync_error_mark_contrasts_with_calendar_colors_and_inactive_gray() {
+        for background in ["#000000", "#0000ff", "#333333", "#ff0000", "#ed3346"] {
+            assert_eq!(sync_error_color(background, true), gtk::gdk::RGBA::WHITE);
+        }
+        for background in ["#ffffff", "#ffff00", "#bbbbbb"] {
+            assert_eq!(sync_error_color(background, true), gtk::gdk::RGBA::BLACK);
+        }
+        for background in ["#000000", "#ffffff", "#0000ff"] {
+            assert_eq!(sync_error_color(background, false), gtk::gdk::RGBA::BLACK);
+        }
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]
@@ -83,12 +154,14 @@ mod tests {
                 name: "Same name".into(),
                 background: "#ff0000".into(),
                 enabled: false,
+                sync_error: None,
             },
             CalendarVisibility {
                 id: "blue".into(),
                 name: "Same name".into(),
                 background: "#0000ff".into(),
                 enabled: true,
+                sync_error: None,
             },
         ];
         imp.calendar_toggles.update(&page, calendars.clone());
@@ -135,6 +208,22 @@ mod tests {
         assert_eq!(imp.calendars.first_child(), Some(first.clone().upcast()));
         assert!(first.is_active());
         assert!(!second.is_active());
+
+        let warning = first.child().unwrap().last_child().unwrap();
+        assert!(!warning.is_visible());
+        calendars[0].sync_error = Some("Connection refused\nServer unavailable".into());
+        imp.calendar_toggles.update(&page, calendars.clone());
+        assert_eq!(imp.calendars.first_child(), Some(first.clone().upcast()));
+        assert!(warning.is_visible());
+        assert_eq!(
+            first.tooltip_text().as_deref(),
+            Some("Same name\nConnection refused\nServer unavailable")
+        );
+        assert_eq!(second.tooltip_text().as_deref(), Some("Same name"));
+        calendars[0].sync_error = None;
+        imp.calendar_toggles.update(&page, calendars.clone());
+        assert!(!warning.is_visible());
+        assert_eq!(first.tooltip_text().as_deref(), Some("Same name"));
 
         calendars.remove(0);
         calendars[0].name = "Renamed".into();

@@ -450,6 +450,7 @@ mod tests {
             name: "Work".into(),
             background: "#ffffff".into(),
             enabled: true,
+            sync_error: None,
         }]);
         assert!(!imp.history_button.is_sensitive());
         assert!(status.text().is_empty());

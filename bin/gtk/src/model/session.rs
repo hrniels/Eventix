@@ -591,6 +591,7 @@ struct Worker {
     content: Option<ContentSubscription>,
     subscriptions: Subscriptions,
     pushes: PushQueue,
+    sync_errors: calendars::SyncErrors,
 }
 
 struct RunningSync {
@@ -694,6 +695,7 @@ impl Worker {
             content: None,
             subscriptions: Subscriptions::default(),
             pushes: PushQueue::default(),
+            sync_errors: calendars::SyncErrors::default(),
         }
     }
 
@@ -777,6 +779,12 @@ impl Worker {
                 });
                 let cancelled = result.as_ref().is_ok_and(|cancelled| *cancelled);
                 let completed = result.is_ok();
+                if !cancelled {
+                    self.sync_errors.set_collection(
+                        &command.collection,
+                        result.as_ref().err().map(String::as_str),
+                    );
+                }
                 let mut events = vec![Event::CalendarsLoaded(self.calendars())];
                 events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
                 events.push(Event::ManagementFinished(command, result.map(|_| ())));
@@ -1250,6 +1258,9 @@ impl Worker {
     }
 
     fn sync_finished(&mut self, result: Result<SyncResult, String>) -> Vec<Event> {
+        if let Ok(result) = &result {
+            self.sync_errors.update(result);
+        }
         let mut events = vec![Event::CalendarsLoaded(self.calendars())];
         if result.as_ref().map_or(true, |result| result.changed) {
             events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
@@ -1385,7 +1396,7 @@ impl Worker {
 
     fn calendars(&self) -> Vec<CalendarVisibility> {
         self.state()
-            .map(|state| calendars::load(&state))
+            .map(|state| calendars::load(&state, &self.sync_errors))
             .unwrap_or_default()
     }
 
@@ -1711,6 +1722,47 @@ mod tests {
     }
 
     #[test]
+    fn sync_results_publish_calendar_errors_and_keep_them_across_visibility_refreshes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = worker(tmp.path());
+        worker
+            .state()
+            .unwrap()
+            .misc_mut()
+            .set_calendar_error(&"test".into(), true);
+        let events = worker.sync_finished(Ok(eventix_state::SyncResult {
+            collections: [(
+                "local".into(),
+                eventix_state::SyncColResult::Error("Connection refused".into()),
+            )]
+            .into(),
+            ..Default::default()
+        }));
+        let Event::CalendarsLoaded(calendars) = &events[0] else {
+            panic!("expected header calendars");
+        };
+        assert_eq!(
+            calendars[0].sync_error.as_deref(),
+            Some("Connection refused")
+        );
+        assert_eq!(
+            worker.calendars()[0].sync_error.as_deref(),
+            Some("Connection refused")
+        );
+
+        worker
+            .state()
+            .unwrap()
+            .misc_mut()
+            .set_calendar_error(&"test".into(), false);
+        worker.sync_finished(Ok(eventix_state::SyncResult {
+            collections: [("local".into(), eventix_state::SyncColResult::Success(false))].into(),
+            ..Default::default()
+        }));
+        assert_eq!(worker.calendars()[0].sync_error, None);
+    }
+
+    #[test]
     fn language_change_refreshes_content_and_sidebar_and_persists_without_changing_timezone() {
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -1959,6 +2011,7 @@ mod tests {
                     name: "My calendar".into(),
                     background: "#ffffff".into(),
                     enabled: true,
+                    sync_error: None,
                 }]),
             ],
             Some(activity.clone()),
