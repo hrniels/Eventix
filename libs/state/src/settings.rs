@@ -185,6 +185,7 @@ impl Settings {
         let Some(path) = xdg.find_data_file("misc.toml") else {
             return Ok(());
         };
+        crate::migration::migrate_misc_if_needed(xdg)?;
         let document: toml::Value = super::load_from_file(&path)?;
         if ["locale_type", "sync_interval_minutes", "post_delay_seconds"]
             .iter()

@@ -2,34 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::collections::HashMap;
-
-use eventix_state::{State, SyncColResult, SyncResult};
-
-/// Retains collection errors from sync responses for the current GTK session.
-#[derive(Default)]
-pub(crate) struct SyncErrors(HashMap<String, String>);
-
-impl SyncErrors {
-    pub fn update(&mut self, result: &SyncResult) {
-        for (collection, outcome) in &result.collections {
-            match outcome {
-                SyncColResult::Error(error) => self.set_collection(collection, Some(error)),
-                SyncColResult::Success(_) | SyncColResult::AuthFailed(_) => {
-                    self.set_collection(collection, None);
-                }
-            }
-        }
-    }
-
-    pub fn set_collection(&mut self, collection: &str, error: Option<&str>) {
-        if let Some(error) = error {
-            self.0.insert(collection.to_owned(), error.to_owned());
-        } else {
-            self.0.remove(collection);
-        }
-    }
-}
+use eventix_state::State;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CalendarVisibility {
@@ -41,7 +14,7 @@ pub(crate) struct CalendarVisibility {
 }
 
 /// Loads header calendars in name order, including those hidden from calendar views.
-pub(crate) fn load(state: &State, errors: &SyncErrors) -> Vec<CalendarVisibility> {
+pub(crate) fn load(state: &State) -> Vec<CalendarVisibility> {
     let mut calendars: Vec<_> = state
         .settings()
         .collections()
@@ -54,13 +27,15 @@ pub(crate) fn load(state: &State, errors: &SyncErrors) -> Vec<CalendarVisibility
                     name: settings.name().clone(),
                     background: settings.bgcolor().clone(),
                     enabled: !state.misc().calendar_disabled(id),
-                    sync_error: state.misc().has_calendar_error(id).then(|| {
-                        errors.0.get(col_id).cloned().unwrap_or_else(|| {
+                    sync_error: state.misc().collection_error(col_id).map(|message| {
+                        if message.is_empty() {
                             state
                                 .locale()
                                 .translate("Calendar synchronization failed")
                                 .to_string()
-                        })
+                        } else {
+                            message.to_owned()
+                        }
                     }),
                 })
         })
@@ -92,11 +67,9 @@ pub(crate) fn toggle(state: &mut State, id: &String) -> anyhow::Result<()> {
 mod tests {
     use std::sync::Arc;
 
-    use eventix_state::{
-        CalendarSettings, CollectionSettings, State, SyncColResult, SyncResult, SyncerType,
-    };
+    use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
-    use super::{SyncErrors, load};
+    use super::load;
 
     #[test]
     fn collection_errors_apply_to_all_header_calendars_but_not_other_collections() {
@@ -122,19 +95,15 @@ mod tests {
                 .insert(collection_id.into(), collection);
         }
         state.misc_mut().toggle_calendar(&"office".into());
-        for id in ["office", "team"] {
-            state.misc_mut().set_calendar_error(&id.into(), true);
-        }
-        let mut errors = SyncErrors::default();
-        errors.update(&SyncResult {
-            collections: [(
-                "work".into(),
-                SyncColResult::Error("Connection refused".into()),
-            )]
-            .into(),
-            ..Default::default()
-        });
-        let calendars = load(&state, &errors);
+        state
+            .misc_mut()
+            .set_collection_error("work", Some("Connection refused"));
+        state.settings().write_to_file().unwrap();
+        state.misc().write_to_file().unwrap();
+        // Recreate state as on startup, without any in-memory sync response cache.
+        let mut state =
+            State::new_with_timezone(state.xdg().clone().into(), Some(chrono_tz::UTC)).unwrap();
+        let calendars = load(&state);
         assert_eq!(
             calendars
                 .iter()
@@ -153,32 +122,18 @@ mod tests {
             Some("Connection refused")
         );
 
-        state
-            .misc_mut()
-            .set_calendar_error(&"personal".into(), true);
-        assert!(load(&state, &errors)[1].sync_error.is_some());
-
-        errors.update(&SyncResult::default());
+        state.misc_mut().set_collection_error("home", Some(""));
         assert_eq!(
-            load(&state, &errors)[0].sync_error.as_deref(),
+            load(&state)[1].sync_error.as_deref(),
+            Some("Calendar synchronization failed")
+        );
+        state.misc_mut().set_collection_error("home", None);
+        assert_eq!(
+            load(&state)[0].sync_error.as_deref(),
             Some("Connection refused")
         );
-        errors.update(&SyncResult {
-            collections: [("home".into(), SyncColResult::Success(false))].into(),
-            ..Default::default()
-        });
-        assert_eq!(
-            load(&state, &errors)[0].sync_error.as_deref(),
-            Some("Connection refused")
-        );
-        errors.update(&SyncResult {
-            collections: [("work".into(), SyncColResult::Success(false))].into(),
-            ..Default::default()
-        });
-        for id in ["office", "team"] {
-            state.misc_mut().set_calendar_error(&id.into(), false);
-        }
-        assert_eq!(load(&state, &errors)[0].sync_error, None);
-        assert_eq!(load(&state, &errors)[2].sync_error, None);
+        state.misc_mut().set_collection_error("work", None);
+        assert_eq!(load(&state)[0].sync_error, None);
+        assert_eq!(load(&state)[2].sync_error, None);
     }
 }

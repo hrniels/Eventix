@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Nils Asmussen
+// Copyright (C) 2026 Nils Asmussen
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -35,7 +35,7 @@ impl Calendars {
                             col_id: col_id.clone(),
                             name: settings.name().clone(),
                             enabled: !state.misc().calendar_disabled(id),
-                            sync_error: state.misc().has_calendar_error(id),
+                            sync_error: state.misc().collection_error(col_id).is_some(),
                             fgcolor: settings.fgcolor().clone(),
                             bgcolor: settings.bgcolor().clone(),
                             read_only: col.is_read_only(),

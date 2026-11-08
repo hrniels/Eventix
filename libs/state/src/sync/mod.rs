@@ -310,10 +310,13 @@ pub(crate) async fn handle_sync_result(
         SyncColResult::Error(msg) => Some(msg.clone()),
         _ => None,
     };
+    state
+        .misc_mut()
+        .set_collection_error(col_id, sync_error.as_deref());
 
     sync_res.collections.insert(col_id.clone(), res.clone());
 
-    // set the error for all calendars within this collection
+    // Keep per-calendar flags in the response for existing API clients, not in persisted state.
     let ids = state
         .settings()
         .collections()
@@ -323,9 +326,6 @@ pub(crate) async fn handle_sync_result(
         .map(|(cal_id, _)| cal_id.clone())
         .collect::<Vec<_>>();
     for cal_id in ids {
-        state
-            .misc_mut()
-            .set_calendar_error(&cal_id, sync_error.is_some());
         sync_res.calendars.insert(cal_id, sync_error.is_some());
     }
 }

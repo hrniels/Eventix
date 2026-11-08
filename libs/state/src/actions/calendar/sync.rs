@@ -99,6 +99,7 @@ where
         &mut sync_res,
     )
     .await;
+    state.misc().write_to_file()?;
     Ok(sync_res)
 }
 
@@ -181,7 +182,7 @@ async fn repair_o365_password(state: &mut State, col_id: &String) -> anyhow::Res
 /// Synchronizes one collection, retaining local changes if cancellation interrupts it.
 ///
 /// Returns only after backend processes have stopped and the local store has been reconciled.
-/// Cancellation preserves calendar error flags and is reported in the returned result.
+/// Cancellation preserves collection errors and is reported in the returned result.
 #[derive(Debug)]
 pub struct SyncCollection {
     pub col_id: String,
@@ -214,7 +215,7 @@ impl Action<SyncResult> for SyncCollection {
 /// Discovers a remote collection and returns information about it.
 ///
 /// Cancellation stops backend work and reconciles local files before returning a cancelled
-/// result, preserving existing calendar error flags.
+/// result, preserving existing collection errors.
 #[derive(Debug)]
 pub struct DiscoverCollection {
     pub col_id: String,

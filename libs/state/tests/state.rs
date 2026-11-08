@@ -848,7 +848,9 @@ async fn cancelling_sync_operations_reconciles_partial_files_and_releases_write_
 
         // Seed an existing error to verify cancellation preserves it rather than clearing it
         // as a successful sync would.
-        state.misc_mut().set_calendar_error(&"cal1".into(), true);
+        state
+            .misc_mut()
+            .set_collection_error("col1", Some("Previous sync failed"));
         let path = state
             .store()
             .directory(&make_id("cal1"))
@@ -896,7 +898,7 @@ async fn cancelling_sync_operations_reconciles_partial_files_and_releases_write_
             .unwrap();
 
         // Partial files count as changed data, but the interrupted collection must not be
-        // reported as successfully completed or assigned new calendar errors.
+        // reported as successfully completed or assigned new collection errors.
         assert!(result.cancelled, "{operation:?}");
         assert!(result.changed, "{operation:?}");
         assert!(result.collections.is_empty());
@@ -904,7 +906,10 @@ async fn cancelling_sync_operations_reconciles_partial_files_and_releases_write_
 
         let mut state = state.lock().await;
         assert_eq!(state.last_reload(), before);
-        assert!(state.misc().has_calendar_error(&"cal1".into()));
+        assert_eq!(
+            state.misc().collection_error("col1"),
+            Some("Previous sync failed")
+        );
 
         // Mutable access proves write protection was released; the loaded file proves the
         // in-memory store was reconciled with the partially updated cache before returning.

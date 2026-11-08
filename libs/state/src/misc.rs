@@ -12,10 +12,7 @@
 use chrono::NaiveDateTime;
 use eventix_ical::objects::CalCompType;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 use xdg::BaseDirectories;
 
 const FILENAME: &str = "misc.toml";
@@ -23,8 +20,7 @@ const FILENAME: &str = "misc.toml";
 /// Holds small pieces of persisted application state.
 ///
 /// Stores timestamps used by alarm checks, the last selected calendar
-/// per component type, lists of disabled calendars and calendar error markers, and stored
-/// collection tokens.
+/// per component type, disabled calendars, collection synchronization errors and stored tokens.
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Misc {
     #[serde(default)]
@@ -38,7 +34,7 @@ pub struct Misc {
     #[serde(default)]
     disabled_calendars: Vec<String>,
     #[serde(default)]
-    calendar_errors: HashSet<String>,
+    collection_errors: HashMap<String, String>,
     #[serde(default)]
     collection_tokens: HashMap<String, String>,
 }
@@ -56,7 +52,7 @@ impl Misc {
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
-            calendar_errors: HashSet::default(),
+            collection_errors: HashMap::default(),
             collection_tokens: HashMap::default(),
         }
     }
@@ -101,19 +97,20 @@ impl Misc {
         }
     }
 
-    /// Returns whether the calendar identified by `id` is currently marked as having an error.
-    pub fn has_calendar_error(&self, id: &String) -> bool {
-        self.calendar_errors.contains(id)
+    /// Returns the last synchronization error message for the collection, if present.
+    ///
+    /// An empty message indicates a migrated failure whose original message was not stored.
+    pub fn collection_error(&self, id: &str) -> Option<&str> {
+        self.collection_errors.get(id).map(String::as_str)
     }
 
-    /// Marks or clears an error flag for the calendar identified by `id`.
-    ///
-    /// When `error` is true the calendar is marked as errored; when false the marker is removed.
-    pub fn set_calendar_error(&mut self, id: &String, error: bool) {
-        if self.has_calendar_error(id) && !error {
-            self.calendar_errors.remove(id);
-        } else if error {
-            self.calendar_errors.insert(id.clone());
+    /// Stores the last synchronization error for the collection, or clears it on success.
+    pub fn set_collection_error(&mut self, id: &str, error: Option<&str>) {
+        if let Some(error) = error {
+            self.collection_errors
+                .insert(id.to_owned(), error.to_owned());
+        } else {
+            self.collection_errors.remove(id);
         }
     }
 
@@ -135,6 +132,7 @@ impl Misc {
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         match xdg.find_data_file(FILENAME) {
             Some(path) => {
+                crate::migration::migrate_misc_if_needed(xdg)?;
                 let mut misc: Self = super::load_from_file(&path)?;
                 misc.path = path;
                 Ok(misc)
@@ -206,23 +204,6 @@ mod tests {
     }
 
     #[test]
-    fn calendar_error_set_and_clear() {
-        let mut m = make_misc();
-        let id = "cal".to_string();
-        assert!(!m.has_calendar_error(&id));
-        m.set_calendar_error(&id, true);
-        assert!(m.has_calendar_error(&id));
-        // setting true again is a no-op
-        m.set_calendar_error(&id, true);
-        assert!(m.has_calendar_error(&id));
-        m.set_calendar_error(&id, false);
-        assert!(!m.has_calendar_error(&id));
-        // clearing an absent entry is a no-op
-        m.set_calendar_error(&id, false);
-        assert!(!m.has_calendar_error(&id));
-    }
-
-    #[test]
     fn collection_token_get_and_set() {
         let mut m = make_misc();
         let id = "col".to_string();
@@ -232,6 +213,19 @@ mod tests {
         // replace existing token
         m.set_collection_token(&id, "tok2".to_string());
         assert_eq!(m.collection_token(&id), Some(&"tok2".to_string()));
+    }
+
+    #[test]
+    fn collection_error_set_replace_and_clear() {
+        let mut misc = make_misc();
+        assert_eq!(misc.collection_error("work"), None);
+        misc.set_collection_error("work", Some("Connection refused"));
+        assert_eq!(misc.collection_error("work"), Some("Connection refused"));
+        misc.set_collection_error("work", Some("Server unavailable"));
+        assert_eq!(misc.collection_error("work"), Some("Server unavailable"));
+        misc.set_collection_error("work", None);
+        misc.set_collection_error("work", None);
+        assert_eq!(misc.collection_error("work"), None);
     }
 
     #[test]

@@ -591,7 +591,6 @@ struct Worker {
     content: Option<ContentSubscription>,
     subscriptions: Subscriptions,
     pushes: PushQueue,
-    sync_errors: calendars::SyncErrors,
 }
 
 struct RunningSync {
@@ -695,7 +694,6 @@ impl Worker {
             content: None,
             subscriptions: Subscriptions::default(),
             pushes: PushQueue::default(),
-            sync_errors: calendars::SyncErrors::default(),
         }
     }
 
@@ -779,12 +777,6 @@ impl Worker {
                 });
                 let cancelled = result.as_ref().is_ok_and(|cancelled| *cancelled);
                 let completed = result.is_ok();
-                if !cancelled {
-                    self.sync_errors.set_collection(
-                        &command.collection,
-                        result.as_ref().err().map(String::as_str),
-                    );
-                }
                 let mut events = vec![Event::CalendarsLoaded(self.calendars())];
                 events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
                 events.push(Event::ManagementFinished(command, result.map(|_| ())));
@@ -1258,9 +1250,6 @@ impl Worker {
     }
 
     fn sync_finished(&mut self, result: Result<SyncResult, String>) -> Vec<Event> {
-        if let Ok(result) = &result {
-            self.sync_errors.update(result);
-        }
         let mut events = vec![Event::CalendarsLoaded(self.calendars())];
         if result.as_ref().map_or(true, |result| result.changed) {
             events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
@@ -1396,7 +1385,7 @@ impl Worker {
 
     fn calendars(&self) -> Vec<CalendarVisibility> {
         self.state()
-            .map(|state| calendars::load(&state, &self.sync_errors))
+            .map(|state| calendars::load(&state))
             .unwrap_or_default()
     }
 
@@ -1729,7 +1718,7 @@ mod tests {
             .state()
             .unwrap()
             .misc_mut()
-            .set_calendar_error(&"test".into(), true);
+            .set_collection_error("local", Some("Connection refused"));
         let events = worker.sync_finished(Ok(eventix_state::SyncResult {
             collections: [(
                 "local".into(),
@@ -1754,7 +1743,7 @@ mod tests {
             .state()
             .unwrap()
             .misc_mut()
-            .set_calendar_error(&"test".into(), false);
+            .set_collection_error("local", None);
         worker.sync_finished(Ok(eventix_state::SyncResult {
             collections: [("local".into(), eventix_state::SyncColResult::Success(false))].into(),
             ..Default::default()

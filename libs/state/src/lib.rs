@@ -19,7 +19,7 @@ pub mod auth;
 pub mod util;
 
 /// The current version of the persisted state files.
-pub const CURRENT_VERSION: u32 = 3;
+pub const CURRENT_VERSION: u32 = 4;
 
 use anyhow::Context;
 use chrono::NaiveDateTime;
@@ -405,7 +405,7 @@ impl State {
     /// Synchronizes one collection, retaining local changes if cancellation interrupts it.
     ///
     /// Returns only after backend processes have stopped and the local store has been reconciled.
-    /// Cancellation preserves calendar error flags and is reported in the returned result.
+    /// Cancellation preserves collection errors and is reported in the returned result.
     pub async fn sync_collection(
         state: &EventixState,
         col_id: &String,
@@ -424,7 +424,7 @@ impl State {
     /// Discovers a remote collection and returns information about it.
     ///
     /// Cancellation stops backend work and reconciles local files before returning a cancelled
-    /// result, preserving existing calendar error flags.
+    /// result, preserving existing collection errors.
     pub async fn discover_collection(
         state: &EventixState,
         col_id: &String,
