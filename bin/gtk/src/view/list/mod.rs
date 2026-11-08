@@ -246,7 +246,7 @@ mod tests {
                             eventix_view::details::Response::Tentative,
                             eventix_view::details::Response::Declined,
                             eventix_view::details::Response::Pending,
-                        ][index % 4],
+                        ][offset.rem_euclid(4) as usize],
                     ),
                     task: true,
                     completed: false,
@@ -631,7 +631,7 @@ mod tests {
         assert_eq!(arrow.icon_name().as_deref(), Some("pan-end-symbolic"));
         click_row(&expand, 20.0, 20.0);
         drain();
-        assert_eq!(view.results.model.n_items(), 5012);
+        assert_eq!(view.results.model.n_items(), 5008);
         assert!(
             !descendants::<gtk::Label>(view.widget.upcast_ref())
                 .iter()
@@ -651,7 +651,7 @@ mod tests {
         click_row(&expanded, bounds.x() as f64 + 2.0, bounds.y() as f64 + 2.0);
         assert_eq!(
             view.results.model.n_items(),
-            5012,
+            5008,
             "menu clicks do not toggle expansion"
         );
         let occurrences: Vec<_> = descendants::<gtk::Box>(view.widget.upcast_ref())
@@ -744,7 +744,7 @@ mod tests {
         assert_eq!(earlier.label().as_deref(), Some("Loading occurrences…"));
         earlier.emit_clicked();
         drain();
-        assert_eq!(view.results.model.n_items(), 5017);
+        assert_eq!(view.results.model.n_items(), 5011);
         assert_eq!(
             adjustment.value(),
             position,
@@ -772,7 +772,7 @@ mod tests {
             position,
             "loading later occurrences must not scroll"
         );
-        assert_eq!(view.results.model.n_items(), 5022);
+        assert_eq!(view.results.model.n_items(), 5014);
         adjustment.set_value(adjustment.upper() - adjustment.page_size());
         drain();
         wait_until(|| {
@@ -797,7 +797,7 @@ mod tests {
         );
         view.set_snapshot(snapshot(Filter::default()));
         drain();
-        assert_eq!(view.results.model.n_items(), 5022);
+        assert_eq!(view.results.model.n_items(), 5014);
         assert!(
             descendants::<FixedRow>(view.widget.upcast_ref())
                 .iter()
