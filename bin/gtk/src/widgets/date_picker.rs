@@ -362,7 +362,7 @@ impl DatePicker {
         });
     }
 
-    /// Calls `callback` when Ctrl+arrows adjust the date without closing the picker.
+    /// Calls `callback` when Ctrl+arrows adjust the date in day mode without closing the picker.
     pub(crate) fn connect_day_adjusted(&self, callback: impl Fn(&Self) + 'static) {
         self.connect_local("day-adjusted", false, move |values| {
             callback(&values[0].get::<Self>().unwrap());
@@ -462,7 +462,7 @@ impl DatePicker {
             .get()
             .checked_add_signed(Duration::days(days))
         {
-            if control {
+            if control && !self.imp().weekly.get() {
                 self.select_day(date);
                 self.emit_by_name::<()>("day-adjusted", &[]);
             } else {
@@ -737,6 +737,9 @@ mod tests {
         let selections = Rc::new(Cell::new(0));
         let selected = selections.clone();
         picker.connect_day_selected(move |_| selected.set(selected.get() + 1));
+        let adjustments = Rc::new(Cell::new(0));
+        let adjusted = adjustments.clone();
+        picker.connect_day_adjusted(move |_| adjusted.set(adjusted.get() + 1));
         let window = gtk::Window::builder().child(&picker).build();
         gtk::prelude::GtkWindowExt::set_focus(&window, Some(&picker));
         window.present();
@@ -772,15 +775,15 @@ mod tests {
             (gdk::Key::KP_Up, -7),
             (gdk::Key::KP_Down, 7),
         ] {
-            picker.select_day(date);
-            assert_eq!(
-                picker.key_pressed(key, gdk::ModifierType::empty()),
-                glib::Propagation::Stop
-            );
-            assert_eq!(imp.cursor.get(), date + Duration::days(days));
-            assert_eq!(highlighted("ev_date_picker_cursor").len(), 7);
-            assert_eq!(picker.date(), date);
-            assert_eq!(selections.get(), 0);
+            for modifiers in [gdk::ModifierType::empty(), gdk::ModifierType::CONTROL_MASK] {
+                picker.select_day(date);
+                assert_eq!(picker.key_pressed(key, modifiers), glib::Propagation::Stop);
+                assert_eq!(imp.cursor.get(), date + Duration::days(days));
+                assert_eq!(highlighted("ev_date_picker_cursor").len(), 7);
+                assert_eq!(picker.date(), date);
+                assert_eq!(selections.get(), 0);
+                assert_eq!(adjustments.get(), 0);
+            }
         }
         picker.key_pressed(gdk::Key::Return, gdk::ModifierType::empty());
         assert_eq!(picker.date(), date + Duration::days(7));
