@@ -189,11 +189,15 @@ impl PageSession {
 
     pub(super) fn connect_sync_collections(&self, page: &CalendarPage) {
         let weak = page.downgrade();
-        page.imp().sync_popover.connect_show(move |_| {
-            if let Some(page) = weak.upgrade()
-                && let Some(session) = page.imp().session.current.borrow().as_ref()
-            {
-                session.load_sync_collections();
+        page.imp().sync_popover.connect_show(move |popover| {
+            if let Some(page) = weak.upgrade() {
+                let imp = page.imp();
+                if let Some(sync_control) = imp.sync_collections.parent() {
+                    popover.set_width_request(sync_control.width());
+                }
+                if let Some(session) = imp.session.current.borrow().as_ref() {
+                    session.load_sync_collections();
+                }
             }
         });
     }
@@ -214,7 +218,7 @@ impl PageSession {
             row.append(&label);
             let button = gtk::Button::builder().child(&row).build();
             button.update_property(&[gtk::accessible::Property::Label(&collection)]);
-            button.add_css_class("flat");
+            button.add_css_class("ev_details_button");
             let weak = page.downgrade();
             button.connect_clicked(move |_| {
                 if let Some(page) = weak.upgrade() {
@@ -729,6 +733,17 @@ mod tests {
         let dropdown = imp.sync_collections.compute_bounds(&page).unwrap();
         assert!(dropdown.x() >= reload.x() + reload.width());
         assert!(dropdown.width() < reload.width());
+        assert!(!imp.sync_popover.has_arrow());
+        assert_eq!(imp.sync_popover.position(), gtk::PositionType::Bottom);
+        assert_eq!(imp.sync_popover.halign(), gtk::Align::End);
+        assert!(imp.sync_popover.has_css_class("ev_details_menu"));
+        imp.sync_collections.popup();
+        assert_eq!(
+            imp.sync_popover.width_request(),
+            imp.sync_collections.parent().unwrap().width()
+        );
+        assert!(imp.sync_popover.width_request() >= (reload.width() + dropdown.width()) as i32);
+        imp.sync_collections.popdown();
         imp.session.update_sync_collections(
             &page,
             vec![
@@ -747,6 +762,10 @@ mod tests {
             .unwrap();
         assert_eq!(row_label(&personal), "Personal");
         assert_eq!(row_label(&work), "Work");
+        for button in [&personal, &work] {
+            assert!(button.has_css_class("ev_details_button"));
+            assert!(!button.has_css_class("flat"));
+        }
         assert!(work.next_sibling().is_none());
         work.emit_clicked();
         assert_eq!(
