@@ -3,6 +3,13 @@
   <object class="GtkSizeGroup">
     <property name="mode">horizontal</property>
     <widgets>
+      <widget name="interval"/>
+      <widget name="delay"/>
+    </widgets>
+  </object>
+  <object class="GtkSizeGroup">
+    <property name="mode">horizontal</property>
+    <widgets>
       <widget name="language"/>
       <widget name="interval_controls"/>
       <widget name="delay_controls"/>

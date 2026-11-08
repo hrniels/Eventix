@@ -274,6 +274,10 @@ mod tests {
         assert_eq!(popup.interval.adjustment().upper(), 1440.0);
         assert_eq!(popup.delay.adjustment().lower(), 0.0);
         assert_eq!(popup.delay.adjustment().upper(), 86_400.0);
+        assert_eq!(
+            popup.interval.measure(gtk::Orientation::Horizontal, -1),
+            popup.delay.measure(gtk::Orientation::Horizontal, -1)
+        );
         popup.delay.set_value(86_400.0);
         assert_eq!(popup.preferences().post_delay_seconds, 86_400);
         let content = popup.window.child().unwrap();
