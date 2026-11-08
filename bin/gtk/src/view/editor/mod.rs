@@ -735,6 +735,7 @@ impl DateSection {
             timezone.set_property("search-match-mode", gtk::StringFilterMatchMode::Substring);
         }
         timezone.set_enable_search(true);
+        Self::connect_timezone_search(&timezone);
         if let Some(index) = zones
             .iter()
             .position(|name| *name == locale.timezone().name())
@@ -743,6 +744,84 @@ impl DateSection {
         }
 
         timezone
+    }
+
+    fn connect_timezone_search(timezone: &gtk::DropDown) {
+        if let (Some(search), Some(list)) = (
+            Self::timezone_child::<gtk::SearchEntry>(timezone.upcast_ref()),
+            Self::timezone_child::<gtk::ListView>(timezone.upcast_ref()),
+        ) {
+            // Listen inside the native popup, rather than on its dropdown outside the surface.
+            let keys = gtk::EventControllerKey::new();
+            keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+            let weak_list = list.downgrade();
+            keys.connect_key_pressed(move |_, key, _, modifiers| {
+                if !matches!(key, gtk::gdk::Key::Down | gtk::gdk::Key::KP_Down)
+                    || modifiers.intersects(
+                        gtk::gdk::ModifierType::SHIFT_MASK
+                            | gtk::gdk::ModifierType::CONTROL_MASK
+                            | gtk::gdk::ModifierType::ALT_MASK
+                            | gtk::gdk::ModifierType::SUPER_MASK,
+                    )
+                {
+                    return gtk::glib::Propagation::Proceed;
+                }
+                let Some(list) = weak_list.upgrade() else {
+                    return gtk::glib::Propagation::Proceed;
+                };
+                let Some(model) = list.model().filter(|model| model.n_items() > 0) else {
+                    return gtk::glib::Propagation::Stop;
+                };
+                model.select_item(0, true);
+                let _ = list.activate_action("list.scroll-to-item", Some(&0u32.to_variant()));
+                // Scrolling must allocate the first row before it can receive focus. Grabbing
+                // focus on the list itself would restore GTK's previously focused row instead.
+                let weak_list = list.downgrade();
+                gtk::glib::idle_add_local_once(move || {
+                    if let Some(list) = weak_list.upgrade().filter(|list| list.is_mapped()) {
+                        Self::focus_first_timezone_result(&list);
+                    }
+                });
+                gtk::glib::Propagation::Stop
+            });
+            search.add_controller(keys);
+        }
+    }
+
+    fn focus_first_timezone_result(list: &gtk::ListView) {
+        let Some(first) = list
+            .model()
+            .and_then(|model| model.item(0))
+            .and_downcast::<gtk::StringObject>()
+        else {
+            return;
+        };
+        let mut row = list.first_child();
+        while let Some(current) = row {
+            if Self::timezone_child::<gtk::Label>(&current)
+                .is_some_and(|label| label.text() == first.string())
+            {
+                current.grab_focus();
+                break;
+            }
+            row = current.next_sibling();
+        }
+    }
+
+    fn timezone_child<T: IsA<gtk::Widget> + gtk::glib::object::IsClass>(
+        widget: &gtk::Widget,
+    ) -> Option<T> {
+        if let Ok(child) = widget.clone().downcast::<T>() {
+            return Some(child);
+        }
+        let mut child = widget.first_child();
+        while let Some(current) = child {
+            if let Some(child) = Self::timezone_child(&current) {
+                return Some(child);
+            }
+            child = current.next_sibling();
+        }
+        None
     }
 
     fn timezone_factory(compact: bool) -> gtk::SignalListItemFactory {
