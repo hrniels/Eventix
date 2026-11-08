@@ -15,7 +15,7 @@ use super::error::{ErrorMessage, show_error};
 mod card;
 mod collection;
 
-use crate::model::management::{CollectionOperation, Operation, Request};
+use crate::model::management::{CalendarOperation, CollectionOperation, Operation, Request};
 use card::CalendarCard;
 use collection::CollectionActions;
 
@@ -147,7 +147,10 @@ impl CalendarsView {
             }
             return;
         }
-        if matches!(request.operation, Operation::Create(_)) {
+        if matches!(
+            request.operation,
+            Operation::Calendar(CalendarOperation::Create(_))
+        ) {
             self.calendar_pending.set(false);
             if let Some((row, entry)) = self.calendar_form.borrow().as_ref() {
                 row.set_sensitive(true);
@@ -307,7 +310,7 @@ impl CalendarsView {
                         calendar: String::new(),
                         folder: String::new(),
                         configured: false,
-                        operation: Operation::Create(name),
+                        operation: Operation::Calendar(CalendarOperation::Create(name)),
                     });
                 }
             }
@@ -645,7 +648,7 @@ mod tests {
     fn calendars_creation_submits_keeps_drafts_and_retries_errors() {
         use std::{cell::RefCell, rc::Rc};
 
-        use crate::model::management::{CollectionOperation, Operation};
+        use crate::model::management::{CalendarOperation, CollectionOperation, Operation};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -660,7 +663,9 @@ mod tests {
         let (row, entry) = view.calendar_form.borrow().as_ref().unwrap().clone();
         entry.emit_activate();
         let request = requests.borrow_mut().remove(0);
-        assert!(matches!(&request.operation, Operation::Create(name) if name.is_empty()));
+        assert!(
+            matches!(&request.operation, Operation::Calendar(CalendarOperation::Create(name)) if name.is_empty())
+        );
         view.finish(&request, false);
         view.show_error(&request, "Calendar name is required");
         assert!(row.is_sensitive());
@@ -678,7 +683,9 @@ mod tests {
         entry.emit_activate();
         assert_eq!(requests.borrow().len(), 1);
         let request = requests.borrow_mut().remove(0);
-        assert!(matches!(&request.operation, Operation::Create(name) if name == "New calendar"));
+        assert!(
+            matches!(&request.operation, Operation::Calendar(CalendarOperation::Create(name)) if name == "New calendar")
+        );
         assert_eq!(request.description(), "Calendar added");
         view.finish(&request, false);
         view.show_error(&request, "Failed");
@@ -1083,7 +1090,7 @@ mod tests {
     fn calendars_management_actions_submit_drafts_and_recover_from_failures() {
         use std::{cell::RefCell, rc::Rc};
 
-        use crate::model::management::{Operation, Request};
+        use crate::model::management::{CalendarOperation, Operation, Request};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -1108,7 +1115,10 @@ mod tests {
             .unwrap();
         switch.set_active(true);
         let request = requests.borrow_mut().pop().unwrap();
-        assert!(matches!(request.operation, Operation::Enable(true)));
+        assert!(matches!(
+            request.operation,
+            Operation::Calendar(CalendarOperation::Enable(true))
+        ));
         assert_eq!(request.calendar, "1");
         assert!(!card.is_sensitive());
         view.finish(&request, false);
@@ -1134,7 +1144,7 @@ mod tests {
         colors[0].set_rgba(&gdk::RGBA::RED);
         button("Save").emit_clicked();
         let request = requests.borrow_mut().pop().unwrap();
-        let Operation::Save(settings) = &request.operation else {
+        let Operation::Calendar(CalendarOperation::Save(settings)) = &request.operation else {
             panic!("expected save");
         };
         assert_eq!(settings.name(), "Saved name");
@@ -1171,8 +1181,20 @@ mod tests {
         for (tooltip, reload) in [("Reload", true), ("Delete", false)] {
             button(tooltip).emit_clicked();
             let request = requests.borrow_mut().pop().unwrap();
-            assert_eq!(matches!(request.operation, Operation::Reload), reload);
-            assert_eq!(matches!(request.operation, Operation::Delete), !reload);
+            assert_eq!(
+                matches!(
+                    request.operation,
+                    Operation::Calendar(CalendarOperation::Reload)
+                ),
+                reload
+            );
+            assert_eq!(
+                matches!(
+                    request.operation,
+                    Operation::Calendar(CalendarOperation::Delete)
+                ),
+                !reload
+            );
             view.finish(&request, true);
         }
         let folder = descendants(card.upcast_ref())
@@ -1205,7 +1227,10 @@ mod tests {
         let request = requests.borrow_mut().pop().unwrap();
         assert!(!request.configured);
         assert_eq!(request.calendar, "0");
-        assert!(matches!(request.operation, Operation::Save(_)));
+        assert!(matches!(
+            request.operation,
+            Operation::Calendar(CalendarOperation::Save(_))
+        ));
     }
 
     #[test]

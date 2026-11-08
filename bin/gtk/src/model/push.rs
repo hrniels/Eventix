@@ -153,7 +153,9 @@ impl PushQueue {
         self.items()
             .into_iter()
             .filter(|entry| match &command.operation {
-                management::Operation::Reload => entry.item.calendar == command.calendar,
+                management::Operation::Calendar(management::CalendarOperation::Reload) => {
+                    entry.item.calendar == command.calendar
+                }
                 management::Operation::Collection(
                     management::CollectionOperation::Sync | management::CollectionOperation::Reload,
                 ) => state
@@ -676,7 +678,7 @@ mod tests {
             calendar: "calendar".into(),
             folder: String::new(),
             configured: true,
-            operation: management::Operation::Reload,
+            operation: management::Operation::Calendar(management::CalendarOperation::Reload),
         };
         assert_eq!(queue.management_batch(&state, &request).len(), 1);
 

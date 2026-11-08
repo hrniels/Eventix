@@ -7,12 +7,17 @@ use eventix_state::{CalendarSettings, EventixState, State, SyncCancellation, Syn
 
 #[derive(Clone, Debug)]
 pub(crate) enum Operation {
+    Calendar(CalendarOperation),
+    Collection(CollectionOperation),
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum CalendarOperation {
     Create(String),
     Enable(bool),
     Save(Box<CalendarSettings>),
     Reload,
     Delete,
-    Collection(CollectionOperation),
 }
 
 #[derive(Clone)]
@@ -65,7 +70,7 @@ impl Request {
     pub(crate) fn is_cancellable(&self) -> bool {
         matches!(
             self.operation,
-            Operation::Reload
+            Operation::Calendar(CalendarOperation::Reload)
                 | Operation::Collection(
                     CollectionOperation::Reload
                         | CollectionOperation::Discover
@@ -76,7 +81,7 @@ impl Request {
 
     pub(crate) fn progress_description(&self) -> &'static str {
         match self.operation {
-            Operation::Reload => "Reloading calendar…",
+            Operation::Calendar(CalendarOperation::Reload) => "Reloading calendar…",
             Operation::Collection(CollectionOperation::Reload) => "Reloading collection…",
             Operation::Collection(CollectionOperation::Discover) => "Discovering collection…",
             _ => "Synchronizing collection…",
@@ -86,14 +91,16 @@ impl Request {
     /// Returns the translation key for this management action's outcome.
     pub(crate) fn description(&self) -> &'static str {
         match self.operation {
-            Operation::Create(_) => "Calendar added",
-            Operation::Enable(true) => "Calendar enabled",
-            Operation::Enable(false) => "Calendar disabled",
-            Operation::Save(_) if self.configured => "Calendar settings updated",
-            Operation::Save(_) => "Calendar added",
-            Operation::Reload => "Calendar reloaded",
-            Operation::Delete if self.configured => "Calendar removed",
-            Operation::Delete => "Remote calendar deleted",
+            Operation::Calendar(ref operation) => match operation {
+                CalendarOperation::Create(_) => "Calendar added",
+                CalendarOperation::Enable(true) => "Calendar enabled",
+                CalendarOperation::Enable(false) => "Calendar disabled",
+                CalendarOperation::Save(_) if self.configured => "Calendar settings updated",
+                CalendarOperation::Save(_) => "Calendar added",
+                CalendarOperation::Reload => "Calendar reloaded",
+                CalendarOperation::Delete if self.configured => "Calendar removed",
+                CalendarOperation::Delete => "Remote calendar deleted",
+            },
             Operation::Collection(ref operation) => match operation {
                 CollectionOperation::Create { .. } => "Collection added",
                 CollectionOperation::Save { .. } => "Collection settings updated",
@@ -113,11 +120,14 @@ pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Re
             .await
             .map(|_| ());
     }
-    if let Operation::Create(name) = &request.operation {
+    let operation = match &request.operation {
+        Operation::Calendar(operation) => operation,
+        Operation::Collection(operation) => {
+            return apply_collection(state, &request.collection, operation).await;
+        }
+    };
+    if let CalendarOperation::Create(name) = operation {
         return State::create_calendar(state, &request.collection, name).await;
-    }
-    if let Operation::Collection(operation) = &request.operation {
-        return apply_collection(state, &request.collection, operation).await;
     }
 
     let mut state = state.lock().await;
@@ -135,15 +145,15 @@ pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Re
         anyhow::bail!(unavailable);
     }
 
-    match &request.operation {
-        Operation::Enable(enabled) => {
+    match operation {
+        CalendarOperation::Enable(enabled) => {
             let calendar = collection
                 .all_calendars_mut()
                 .get_mut(&request.calendar)
                 .ok_or_else(|| anyhow!(unavailable.clone()))?;
             calendar.set_enabled(*enabled);
         }
-        Operation::Save(settings) => {
+        CalendarOperation::Save(settings) => {
             let mut settings = settings.as_ref().clone();
             let existing = request
                 .configured
@@ -171,7 +181,7 @@ pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Re
             };
             collection.all_calendars_mut().insert(id, settings);
         }
-        Operation::Delete => {
+        CalendarOperation::Delete => {
             if request.configured {
                 State::delete_calendar(&mut state, &request.collection, &request.calendar).await?;
             } else {
@@ -179,12 +189,12 @@ pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Re
                     .await?;
             }
         }
-        Operation::Create(_) | Operation::Reload | Operation::Collection(_) => unreachable!(),
+        CalendarOperation::Create(_) | CalendarOperation::Reload => unreachable!(),
     }
 
     if let Err(error) = state.settings().write_to_file() {
         // Settings-only changes can be rolled back; deleted files cannot be restored.
-        if !matches!(request.operation, Operation::Delete) {
+        if !matches!(operation, CalendarOperation::Delete) {
             state
                 .settings_mut()
                 .collections_mut()
@@ -209,14 +219,16 @@ pub(crate) async fn apply_cancellable(
 ) -> anyhow::Result<bool> {
     let locale = {
         let state = state.lock().await;
-        if matches!(request.operation, Operation::Reload)
-            && (!request.configured
-                || state
-                    .settings()
-                    .collections()
-                    .get(&request.collection)
-                    .and_then(|collection| collection.all_calendars().get(&request.calendar))
-                    .is_none())
+        if matches!(
+            request.operation,
+            Operation::Calendar(CalendarOperation::Reload)
+        ) && (!request.configured
+            || state
+                .settings()
+                .collections()
+                .get(&request.collection)
+                .and_then(|collection| collection.all_calendars().get(&request.calendar))
+                .is_none())
         {
             anyhow::bail!(
                 state
@@ -229,7 +241,7 @@ pub(crate) async fn apply_cancellable(
     };
     let id = &request.collection;
     let result = match request.operation {
-        Operation::Reload => {
+        Operation::Calendar(CalendarOperation::Reload) => {
             State::reload_calendar(state, id, &request.calendar, None, cancellation).await?
         }
         Operation::Collection(CollectionOperation::Reload) => {
@@ -322,8 +334,8 @@ mod tests {
     use eventix_state::{CalendarAlarmType, CollectionSettings};
 
     use super::{
-        CalendarSettings, CollectionOperation, EventixState, Operation, Request, State, SyncerType,
-        apply,
+        CalendarOperation, CalendarSettings, CollectionOperation, EventixState, Operation, Request,
+        State, SyncerType, apply,
     };
 
     fn state(path: &Path) -> EventixState {
@@ -362,9 +374,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = state(dir.path());
         for enabled in [false, true] {
-            apply(&state, &request(Operation::Enable(enabled)))
-                .await
-                .unwrap();
+            apply(
+                &state,
+                &request(Operation::Calendar(CalendarOperation::Enable(enabled))),
+            )
+            .await
+            .unwrap();
             let state = state.lock().await;
             let settings = &state.settings().collections()["local"].all_calendars()["team-id"];
             assert_eq!(settings.enabled(), enabled);
@@ -383,9 +398,12 @@ mod tests {
     async fn save_preserves_enablement_and_updates_all_editable_settings() {
         let dir = tempfile::tempdir().unwrap();
         let state = state(dir.path());
-        apply(&state, &request(Operation::Enable(false)))
-            .await
-            .unwrap();
+        apply(
+            &state,
+            &request(Operation::Calendar(CalendarOperation::Enable(false))),
+        )
+        .await
+        .unwrap();
         let mut settings = CalendarSettings::default();
         settings.set_name("Updated".into());
         settings.set_folder("other".into());
@@ -402,9 +420,14 @@ mod tests {
             )),
         };
         settings.set_alarms(alarms.clone());
-        apply(&state, &request(Operation::Save(Box::new(settings))))
-            .await
-            .unwrap();
+        apply(
+            &state,
+            &request(Operation::Calendar(CalendarOperation::Save(Box::new(
+                settings,
+            )))),
+        )
+        .await
+        .unwrap();
         let state = state.lock().await;
         let saved = &state.settings().collections()["local"].all_calendars()["team-id"];
         assert_eq!(saved.name(), "Updated");
@@ -423,7 +446,9 @@ mod tests {
         let mut settings = CalendarSettings::default();
         settings.set_folder("discovered".into());
         settings.set_name("Discovered".into());
-        let mut request = request(Operation::Save(Box::new(settings)));
+        let mut request = request(Operation::Calendar(CalendarOperation::Save(Box::new(
+            settings,
+        ))));
         request.calendar = "discovered".into();
         request.configured = false;
         apply(&state, &request).await.unwrap();
@@ -455,7 +480,9 @@ mod tests {
         }
         let mut settings = CalendarSettings::default();
         settings.set_folder("discovered".into());
-        let mut request = request(Operation::Save(Box::new(settings)));
+        let mut request = request(Operation::Calendar(CalendarOperation::Save(Box::new(
+            settings,
+        ))));
         request.calendar = "discovered".into();
         request.configured = false;
         apply(&state, &request).await.unwrap();
@@ -496,7 +523,9 @@ mod tests {
         let mut settings = CalendarSettings::default();
         settings.set_name("Updated".into());
         settings.set_folder("not-the-remote-folder".into());
-        let mut request = request(Operation::Save(Box::new(settings)));
+        let mut request = request(Operation::Calendar(CalendarOperation::Save(Box::new(
+            settings,
+        ))));
         request.folder = "stale-folder".into();
         apply(&state, &request).await.unwrap();
         let state = state.lock().await;
@@ -518,8 +547,22 @@ mod tests {
             .unwrap()
             .all_calendars_mut()
             .clear();
-        assert!(apply(&state, &request(Operation::Reload)).await.is_err());
-        assert!(apply(&state, &request(Operation::Delete)).await.is_err());
+        assert!(
+            apply(
+                &state,
+                &request(Operation::Calendar(CalendarOperation::Reload))
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            apply(
+                &state,
+                &request(Operation::Calendar(CalendarOperation::Delete))
+            )
+            .await
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -534,9 +577,12 @@ mod tests {
             .unwrap();
         std::fs::create_dir(&path).unwrap();
         assert!(
-            apply(&state, &request(Operation::Enable(false)))
-                .await
-                .is_err()
+            apply(
+                &state,
+                &request(Operation::Calendar(CalendarOperation::Enable(false)))
+            )
+            .await
+            .is_err()
         );
         assert!(
             state.lock().await.settings().collections()["local"].all_calendars()["team-id"]

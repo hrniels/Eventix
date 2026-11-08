@@ -15,7 +15,7 @@ use eventix_view::calendars::{Backend, Calendar, Collection};
 use gtk::{gdk, prelude::*};
 
 use super::{ActionHandler, action, clear, icon_action, text};
-use crate::model::management::{Operation, Request};
+use crate::model::management::{CalendarOperation, Operation, Request};
 use crate::view::{calendar_selector::set_dot_color, editor::AlarmInput};
 
 const ROW_TITLES: [&str; 4] = ["Folder", "Color", "Creation", "Alarms"];
@@ -73,7 +73,7 @@ impl CalendarCard {
                 if card.model.borrow().enabled == enabled {
                     return gtk::glib::Propagation::Proceed;
                 }
-                card.submit(Operation::Enable(enabled));
+                card.submit(CalendarOperation::Enable(enabled));
             }
             gtk::glib::Propagation::Stop
         });
@@ -84,7 +84,7 @@ impl CalendarCard {
                     draft.settings(&card.header.entry.text(), card.locale.borrow().as_ref())
                 });
                 match result {
-                    Some(Ok(settings)) => card.submit(Operation::Save(Box::new(settings))),
+                    Some(Ok(settings)) => card.submit(CalendarOperation::Save(Box::new(settings))),
                     Some(Err(error)) => card.show_error(&error.to_string()),
                     None => {}
                 }
@@ -97,8 +97,8 @@ impl CalendarCard {
             }
         });
         for (button, operation) in [
-            (&self.actions.reload, Operation::Reload),
-            (&self.actions.delete, Operation::Delete),
+            (&self.actions.reload, CalendarOperation::Reload),
+            (&self.actions.delete, CalendarOperation::Delete),
         ] {
             let weak = Rc::downgrade(self);
             button.connect_clicked(move |_| {
@@ -121,7 +121,7 @@ impl CalendarCard {
         });
     }
 
-    fn submit(&self, operation: Operation) {
+    fn submit(&self, operation: CalendarOperation) {
         let callback = self.on_action.borrow();
         let Some(callback) = callback.as_ref() else {
             return;
@@ -136,7 +136,7 @@ impl CalendarCard {
             calendar: calendar.id.clone(),
             folder: calendar.folder.clone(),
             configured: calendar.configured,
-            operation,
+            operation: Operation::Calendar(operation),
         });
     }
 
@@ -145,11 +145,16 @@ impl CalendarCard {
             return;
         }
         self.widget.set_sensitive(true);
-        if success && let Operation::Enable(enabled) = request.operation {
+        if success
+            && let Operation::Calendar(CalendarOperation::Enable(enabled)) = request.operation
+        {
             self.model.borrow_mut().enabled = enabled;
         }
         if success
-            && matches!(request.operation, Operation::Save(_))
+            && matches!(
+                request.operation,
+                Operation::Calendar(CalendarOperation::Save(_))
+            )
             && self.revealer.reveals_child()
         {
             self.close();
@@ -167,16 +172,16 @@ impl CalendarCard {
         dialog.show(self.widget.root().and_downcast::<gtk::Window>().as_ref());
     }
 
-    fn confirm(self: &Rc<Self>, operation: Operation) {
+    fn confirm(self: &Rc<Self>, operation: CalendarOperation) {
         let calendar = self.model.borrow();
         let warning = match operation {
-            Operation::Delete if !calendar.configured => {
+            CalendarOperation::Delete if !calendar.configured => {
                 Some("warning.delete_calendar_remote_folder")
             }
-            Operation::Delete if self.backend.get() != Backend::FileSystem => {
+            CalendarOperation::Delete if self.backend.get() != Backend::FileSystem => {
                 Some("warning.delete_calendar")
             }
-            Operation::Reload if self.backend.get() != Backend::FileSystem => {
+            CalendarOperation::Reload if self.backend.get() != Backend::FileSystem => {
                 Some("warning.reload_calendar")
             }
             _ => None,
@@ -193,7 +198,7 @@ impl CalendarCard {
             .buttons(vec![
                 locale.translate("Cancel"),
                 locale.translate(match operation {
-                    Operation::Delete => "Delete",
+                    CalendarOperation::Delete => "Delete",
                     _ => "Reload",
                 }),
             ])

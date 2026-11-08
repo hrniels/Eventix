@@ -223,7 +223,10 @@ impl Message {
                 Some(
                     if matches!(
                         request.operation,
-                        management::Operation::Collection(_) | management::Operation::Create(_)
+                        management::Operation::Collection(_)
+                            | management::Operation::Calendar(
+                                management::CalendarOperation::Create(_)
+                            )
                     ) {
                         request.collection.clone()
                     } else {
@@ -257,7 +260,8 @@ impl Message {
                 Self::ManageCalendar(command)
                     if matches!(
                         command.operation,
-                        management::Operation::Collection(_) | management::Operation::Create(_)
+                        management::Operation::Collection(_)
+                            | management::Operation::Calendar(management::CalendarOperation::Create(_))
                     )
             )
         {
@@ -1855,7 +1859,7 @@ mod tests {
 
     #[test]
     fn management_mutations_refresh_subscriptions_and_publish_scoped_results() {
-        use crate::model::management::{Operation, Request};
+        use crate::model::management::{CalendarOperation, Operation, Request};
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -1878,7 +1882,7 @@ mod tests {
                 calendar: "test".into(),
                 folder: String::new(),
                 configured: true,
-                operation: Operation::Enable(false),
+                operation: Operation::Calendar(CalendarOperation::Enable(false)),
             }),
             1,
         );
@@ -2113,10 +2117,12 @@ mod tests {
 
     #[test]
     fn management_background_operations_can_be_cancelled_without_blocking_queries() {
-        use crate::model::management::{CollectionOperation, Operation, Request};
+        use crate::model::management::{
+            CalendarOperation, CollectionOperation, Operation, Request,
+        };
 
         for operation in [
-            Operation::Reload,
+            Operation::Calendar(CalendarOperation::Reload),
             Operation::Collection(CollectionOperation::Reload),
             Operation::Collection(CollectionOperation::Discover),
             Operation::Collection(CollectionOperation::Sync),
