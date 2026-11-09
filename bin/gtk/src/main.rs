@@ -12,7 +12,7 @@ mod view;
 mod widgets;
 mod window;
 
-use std::env;
+use std::{env, ffi::OsString};
 
 use chrono::NaiveDate;
 use clap::Parser;
@@ -33,6 +33,9 @@ struct Args {
     /// Disable the system tray icon.
     #[arg(long)]
     no_tray: bool,
+    /// iCalendar files to preview and import.
+    #[arg(value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+    files: Vec<OsString>,
 }
 
 fn main() -> glib::ExitCode {
@@ -55,28 +58,57 @@ fn main() -> glib::ExitCode {
     gio::resources_register_include!("eventix.gresource")
         .expect("compiled GTK resources are valid");
 
-    let app = gtk::Application::builder().application_id(APP_ID).build();
+    let app = application(&args, APP_ID);
+
+    // Let GApplication resolve paths/URIs and forward file opens to the primary instance.
+    // Clap-only options have already been consumed and must not reach GApplication's parser.
+    let mut application_args = vec![String::from("eventix-gtk")];
+    if !args.files.is_empty() {
+        application_args.push("--".into());
+        application_args.extend(
+            args.files
+                .iter()
+                .map(|file| gio::File::for_commandline_arg(file).uri().to_string()),
+        );
+    }
+    app.run_with_args(&application_args)
+}
+
+fn application(args: &Args, id: &str) -> gtk::Application {
+    let app = gtk::Application::builder()
+        .application_id(id)
+        .flags(gio::ApplicationFlags::HANDLES_OPEN)
+        .build();
     app.connect_startup(|_| {
         if let Some(display) = gtk::gdk::Display::default() {
             style::install(&display);
         }
     });
 
+    let activation_args = args.clone();
     app.connect_activate(move |app| {
-        if let Some(window) = app.active_window() {
-            if let Some(window) = window.downcast_ref::<window::Window>() {
-                window.present_from_tray();
-            } else {
-                window.present();
-            }
-        } else {
-            let window = window::Window::new(app, args.data_prefix.clone(), args.date);
-            if !args.no_tray {
-                window.setup_tray();
-            }
-            window.present();
-        }
+        main_window(app, &activation_args).present_from_tray();
     });
 
-    app.run_with_args(&[] as &[&str])
+    let open_args = args.clone();
+    app.connect_open(move |app, files, _| {
+        main_window(app, &open_args).open_imports(files);
+    });
+    app
+}
+
+fn main_window(app: &gtk::Application, args: &Args) -> window::Window {
+    if let Some(window) = app
+        .windows()
+        .into_iter()
+        .find_map(|window| window.downcast::<window::Window>().ok())
+    {
+        return window;
+    }
+
+    let window = window::Window::new(app, args.data_prefix.clone(), args.date);
+    if !args.no_tray {
+        window.setup_tray();
+    }
+    window
 }

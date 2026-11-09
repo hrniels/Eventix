@@ -30,6 +30,7 @@ mod calendars;
 mod content;
 mod create;
 mod editor;
+mod import;
 mod item_actions;
 mod management;
 mod session;
@@ -108,6 +109,7 @@ mod imp {
         pub(super) session: PageSession,
         pub(super) calendar_toggles: calendars::PageCalendars,
         pub(super) management: management::PageManagement,
+        pub(super) imports: import::PageImports,
         pub calendar_css: RefCell<String>,
         pub header_group: RefCell<Option<gtk::SizeGroup>>,
         pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,

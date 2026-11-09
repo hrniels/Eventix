@@ -21,7 +21,7 @@
 
 use anyhow::Context;
 use chrono::Local;
-use eventix_ical::{col::CalFile, objects::EventLike};
+use eventix_ical::col::CalFile;
 use eventix_state::EventixState;
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
@@ -175,13 +175,6 @@ async fn handle_request(state: EventixState, req: Request) -> anyhow::Result<Res
 }
 
 async fn handle_import(state: EventixState, req: ImportOptions) -> anyhow::Result<Response> {
-    let save_all = |files: &Vec<CalFile>| {
-        for f in files {
-            f.save()?;
-        }
-        Ok(())
-    };
-
     let mut state = state.lock().await;
     let cal = Arc::from(req.calendar.clone());
     let dir = state
@@ -189,31 +182,11 @@ async fn handle_import(state: EventixState, req: ImportOptions) -> anyhow::Resul
         .directory_mut(&cal)
         .map_err(anyhow::Error::from)?;
 
-    let files =
-        CalFile::new_from_external_file(cal.clone(), dir.path().clone(), req.file.clone().into())
-            .context(format!("Parsing file '{}' failed", req.file))?;
-
-    // first delete any existing files with those uids
-    for f in &files {
-        let uid = f.components().first().unwrap().uid();
-        // TODO note that we cannot undo this step
-        dir.delete_by_uid(uid).ok();
-    }
-
-    // now try to save all and undo these saves, if an error occurs
-    if let Err(e) = save_all(&files) {
-        for mut f in files {
-            f.remove().ok();
-        }
-        return Err(e);
-    }
-
-    // all good; add them to the directory
-    for f in files {
-        dir.add_file(f).map_err(anyhow::Error::from)?;
-    }
-
+    let file = CalFile::new_from_file(cal, req.file.clone().into())
+        .context(format!("Parsing file '{}' failed", req.file))?;
+    let result = dir.import(file.calendar().clone());
     state.notify_external_change();
+    result?;
 
     Ok(Response::Success)
 }
@@ -265,7 +238,7 @@ mod tests {
 
     use eventix_ical::{
         col::{CalDir, CalFile, CalStore},
-        objects::{CalComponent, CalEvent, Calendar},
+        objects::{CalComponent, CalEvent, Calendar, EventLike},
     };
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
     use tempfile::TempDir;
@@ -687,13 +660,13 @@ END:VCALENDAR\r\n",
         assert!(dir.file_by_id("uid-2").is_some());
         assert_eq!(dir.files().len(), 2);
 
-        let uid_1 = std::fs::read_to_string(cal_tmp.path().join("uid-1.ics")).unwrap();
+        let uid_1 = std::fs::read_to_string(dir.file_by_id("uid-1").unwrap().path()).unwrap();
         assert!(uid_1.contains("UID:uid-1"));
         assert!(uid_1.contains("SUMMARY:Older duplicate"));
         assert!(uid_1.contains("BEGIN:X-GLOBAL"));
         assert!(!uid_1.contains("UID:uid-2"));
 
-        let uid_2 = std::fs::read_to_string(cal_tmp.path().join("uid-2.ics")).unwrap();
+        let uid_2 = std::fs::read_to_string(dir.file_by_id("uid-2").unwrap().path()).unwrap();
         assert!(uid_2.contains("UID:uid-2"));
         assert!(uid_2.contains("BEGIN:X-GLOBAL"));
         assert!(!uid_2.contains("SUMMARY:Older duplicate"));

@@ -11,6 +11,7 @@ pub mod details;
 pub(crate) mod editor;
 mod error;
 mod geometry;
+mod import;
 mod indicators;
 mod list;
 pub(crate) mod monthly;

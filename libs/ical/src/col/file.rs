@@ -11,6 +11,7 @@ use std::time::SystemTime;
 
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
+use tempfile::NamedTempFile;
 use tracing::info;
 
 use crate::col::{AlarmOccurrence, ColError, Occurrence};
@@ -245,31 +246,6 @@ impl CalFile {
     pub fn new_from_file(dir: Arc<String>, path: PathBuf) -> Result<Self, ColError> {
         let cal = Self::read_calendar(&path)?;
         Ok(Self::new(dir, path, cal))
-    }
-
-    /// Creates multiple [`CalFile`]s from given external file.
-    ///
-    /// for given directory, one for each UID.
-    ///
-    /// In contrast to [`Self::new_from_file`], the given `path` is assumed to be outside of the
-    /// directory and may contain components with different UIDs in the same file. For that reason,
-    /// potentially multiple [`CalFile`] instances are created and one file per UID is created in
-    /// the given directory path `dir_path`.
-    pub fn new_from_external_file(
-        dir: Arc<String>,
-        dir_path: PathBuf,
-        path: PathBuf,
-    ) -> Result<Vec<CalFile>, ColError> {
-        let cal = Self::read_calendar(&path)?;
-        let cals = cal.split_by_uid();
-        Ok(cals
-            .into_iter()
-            .map(|cal| {
-                let mut new_path = dir_path.clone();
-                new_path.push(format!("{}.ics", cal.components().first().unwrap().uid()));
-                Self::new(dir.clone(), new_path, cal)
-            })
-            .collect())
     }
 
     /// Returns the id of the directory this file belongs to.
@@ -1033,17 +1009,32 @@ impl CalFile {
     }
 
     /// Saves the current state to file.
+    ///
+    /// Replaces the destination atomically after writing a temporary file in the same directory.
+    /// A failed write leaves the original file intact. Existing file permissions are preserved.
     pub fn save(&self) -> Result<(), ColError> {
         info!("{}: writing file {:?}", self.dir, self.path);
-        let file = File::options()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(&self.path)
-            .map_err(|e| ColError::FileOpen(self.path.clone(), e))?;
+        let parent = self
+            .path
+            .parent()
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let mut file =
+            NamedTempFile::new_in(parent).map_err(|e| ColError::FileOpen(self.path.clone(), e))?;
+        match fs::metadata(&self.path) {
+            Ok(metadata) => file
+                .as_file()
+                .set_permissions(metadata.permissions())
+                .map_err(|e| ColError::FileWrite(self.path.clone(), e))?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(ColError::FileMetadata(self.path.clone())),
+        }
         self.cal
-            .write(file)
-            .map_err(|e| ColError::FileWrite(self.path.clone(), e))
+            .write(&mut file)
+            .map_err(|e| ColError::FileWrite(self.path.clone(), e))?;
+        file.persist(&self.path)
+            .map(|_| ())
+            .map_err(|e| ColError::FileWrite(self.path.clone(), e.error))
     }
 
     /// Removes this file.

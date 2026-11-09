@@ -11,25 +11,25 @@ use std::path::PathBuf;
 
 use tempfile::TempDir;
 
-use eventix_ical::col::{CalFile, ColError};
+use eventix_ical::col::{CalDir, CalFile, ColError};
 use eventix_ical::objects::{CalComponent, CalEvent, Calendar, EventLike, UpdatableEventLike};
 
 mod common;
 use common::{copy_fixture, data_dir, make_id};
 
-// ---------------------------------------------------------------------------
-// new_from_external_file
-// ---------------------------------------------------------------------------
+// --- import ---
 
 #[test]
-fn new_from_external_file_splits_by_uid() {
+fn import_splits_by_uid() {
     // multi_uid.ics contains two VEVENTs with different UIDs in a single VCALENDAR.  The method
-    // must split them into two CalFile instances, each stored at <uid>.ics inside dir_path.
+    // must split them into two saved resources inside the destination directory.
     let tmp = TempDir::new().unwrap();
     let src = data_dir().join("multi_uid.ics");
 
-    let files =
-        CalFile::new_from_external_file(make_id("cal"), tmp.path().to_path_buf(), src).unwrap();
+    let source = CalFile::new_from_file(make_id("cal"), src).unwrap();
+    let mut dir = CalDir::new_empty(make_id("cal"), tmp.path().into(), "Calendar".into(), false);
+    dir.import(source.calendar().clone()).unwrap();
+    let files = dir.files();
 
     assert_eq!(files.len(), 2);
 
@@ -40,34 +40,15 @@ fn new_from_external_file_splits_by_uid() {
     assert!(uids.contains(&"multi-uid-alpha".to_string()));
     assert!(uids.contains(&"multi-uid-beta".to_string()));
 
-    // Each file's path should be derived from its UID inside dir_path.
-    for file in &files {
-        let expected_name = format!("{}.ics", file.components()[0].uid());
-        assert_eq!(
-            file.path().file_name().unwrap().to_str().unwrap(),
-            expected_name
+    // Filenames are generated independently of the imported UIDs.
+    for file in files {
+        assert_ne!(
+            file.path().file_stem().unwrap().to_str().unwrap(),
+            file.components()[0].uid()
         );
         assert_eq!(file.path().parent().unwrap(), tmp.path());
+        assert!(file.path().is_file());
     }
-}
-
-#[test]
-fn new_from_external_file_nonexistent_path_returns_error() {
-    let tmp = TempDir::new().unwrap();
-    let result = CalFile::new_from_external_file(
-        make_id("cal"),
-        tmp.path().to_path_buf(),
-        PathBuf::from("/nonexistent/file.ics"),
-    );
-    assert!(matches!(result, Err(ColError::FileOpen(_, _))));
-}
-
-#[test]
-fn new_from_external_file_parse_error_returns_error() {
-    let tmp = TempDir::new().unwrap();
-    let src = data_dir().join("invalid.ics");
-    let result = CalFile::new_from_external_file(make_id("cal"), tmp.path().to_path_buf(), src);
-    assert!(matches!(result, Err(ColError::FileParse(_, _))));
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +123,44 @@ fn save_creates_file_on_disk() {
     file.save().unwrap();
 
     assert!(path.exists());
+}
+
+#[test]
+#[cfg(unix)]
+fn save_preserves_existing_permissions_when_replacing_the_file() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = TempDir::new().unwrap();
+    let path = copy_fixture("event_a.ics", &tmp);
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640)).unwrap();
+    let mut file = CalFile::new_from_file(make_id("cal"), path.clone()).unwrap();
+    file.calendar_mut().components_mut()[0].set_summary(Some("Replacement".into()));
+    file.save().unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("Replacement")
+    );
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn save_failed_atomic_replacement_leaves_the_destination_and_no_temporary_files() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("blocked.ics");
+    std::fs::create_dir(&path).unwrap();
+    std::fs::write(path.join("keep"), "original").unwrap();
+    let file = CalFile::new(make_id("cal"), path.clone(), Calendar::default());
+    assert!(matches!(file.save(), Err(ColError::FileWrite(_, _))));
+    assert_eq!(
+        std::fs::read_to_string(path.join("keep")).unwrap(),
+        "original"
+    );
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 1);
 }
 
 #[test]

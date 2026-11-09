@@ -86,6 +86,11 @@ glib::wrapper! {
 }
 
 impl Window {
+    pub fn open_imports(&self, files: &[gio::File]) {
+        self.present_from_tray();
+        self.imp().page.open_imports(files);
+    }
+
     /// Hides the window while retaining its size and maximized state.
     pub fn hide_to_tray(&self) {
         if self.is_visible() {

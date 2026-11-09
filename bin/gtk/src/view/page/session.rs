@@ -467,6 +467,8 @@ impl PageSession {
         // Result handlers only update their own controls and must not record the error again.
         let imp = page.imp();
         match event {
+            Event::ImportPrepared(result) => imp.imports.prepared(page, result),
+            Event::ImportFinished(result) => imp.imports.finished(page, result),
             Event::Alarm(alarm) => {
                 if let Some(application) = page
                     .root()
@@ -637,6 +639,7 @@ impl PageSession {
     }
 
     pub(super) fn stop(&self, page: &CalendarPage) {
+        page.imp().imports.stop();
         self.settings_popup.take();
         self.preferences.set(None);
         page.imp().settings_button.set_sensitive(false);

@@ -92,7 +92,7 @@ all-day strip to prepare an all-day event, including both endpoint dates. Releas
 the event is only created when saved. Escape cancels a selection. Double-click creation remains
 available for a default one-hour event or a single all-day date.
 
-The Flatpak package includes it alongside the default web-based GUI:
+The Flatpak package launches the native GTK UI by default:
 
 ```bash
 flatpak run --socket=wayland --env=GDK_BACKEND=wayland --command=eventix-gtk io.github.hrniels.Eventix
@@ -111,6 +111,19 @@ The `--data-prefix` option selects a different prefix, for example:
 ```bash
 ./b gtk --data-prefix io.github.hrniels.Eventix
 ```
+
+Open an iCalendar file from the file manager with Eventix to preview and import its events/tasks.
+This starts the native UI when needed, or brings the running instance forward with a modal import
+dialog. Multiple files are presented one at a time. Files and file URIs can also be passed directly:
+
+```bash
+./b gtk /path/to/invitation.ics
+```
+
+Existing UIDs are shown with an overwrite warning; the matching calendar is selected as the only
+destination. Cancelling the dialog leaves the calendar unchanged and keeps Eventix running.
+Each item is saved atomically. If a later item fails, earlier successful imports are kept; retrying
+replaces those UIDs rather than adding duplicates.
 
 English and German translations are bundled; installed XDG `locale/` files override them.
 The refresh button synchronizes all collections in the background and shows per-collection progress

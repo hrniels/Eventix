@@ -103,6 +103,8 @@ pub(crate) struct ChangeSet {
 }
 
 pub(crate) enum Event {
+    ImportPrepared(Result<super::import::PreparedImport, String>),
+    ImportFinished(Result<(), String>),
     Alarm(super::alarms::Notification),
     PreferencesLoaded(eventix_state::Preferences),
     PreferencesSaved(Result<eventix_state::Preferences, String>),
@@ -149,6 +151,8 @@ pub(crate) enum Event {
 impl Event {
     fn failure(&self) -> Option<(&'static str, &str)> {
         let (operation, error) = match self {
+            Self::ImportPrepared(result) => ("Import", result.as_ref().err()),
+            Self::ImportFinished(result) => ("Import", result.as_ref().err()),
             Self::ManagementFinished(request, result) => {
                 (request.description(), result.as_ref().err())
             }
@@ -184,6 +188,8 @@ pub(crate) enum SavedItem {
 
 #[derive(Debug)]
 pub(super) enum Message {
+    PrepareImport(String),
+    Import(super::import::PreparedImport, String),
     SavePreferences(eventix_state::Preferences),
     PushItemReady(ItemId, eventix_state::SyncColResult),
     PushFinished(Result<eventix_state::PushResult, String>),
@@ -218,6 +224,7 @@ pub(super) enum Message {
 impl Message {
     fn activity(&self, request: u64) -> Option<Activity> {
         let (operation, items, calendar) = match self {
+            Self::Import(_, calendar) => ("Import", vec![], Some(calendar.clone())),
             Self::ManageCalendar(request) => (
                 request.description(),
                 vec![],
@@ -400,6 +407,13 @@ pub(crate) struct CalendarSession {
 }
 
 impl CalendarSession {
+    pub fn prepare_import(&self, input: String) {
+        let _ = self.requests.try_send(Message::PrepareImport(input));
+    }
+
+    pub fn import(&self, preview: super::import::PreparedImport, calendar: String) {
+        let _ = self.requests.try_send(Message::Import(preview, calendar));
+    }
     pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
         let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
         Self::start_worker(Worker::new(xdg))
@@ -1068,6 +1082,7 @@ impl Worker {
             && matches!(
                 message,
                 Message::ShowContent(_)
+                    | Message::PrepareImport(_)
                     | Message::LoadManagement(_)
                     | Message::RefreshSidebar
                     | Message::PrepareEditor(_, _)
@@ -1089,6 +1104,7 @@ impl Worker {
                             result: Err(error),
                         }),
                         Message::PrepareEditor(id, _) => Event::EditorLoaded(id, Err(error)),
+                        Message::PrepareImport(_) => Event::ImportPrepared(Err(error)),
                         Message::LoadManagement(id) => Event::ManagementLoaded(id, Err(error)),
                         _ => Event::SidebarLoaded(Err(error)),
                     }];
@@ -1107,6 +1123,21 @@ impl Worker {
         runtime: &tokio::runtime::Runtime,
     ) -> Vec<Event> {
         let event = match message {
+            Message::PrepareImport(input) => Event::ImportPrepared(
+                self.state()
+                    .and_then(|state| super::import::PreparedImport::prepare(&state, &input))
+                    .map_err(|error| format!("{error:#}")),
+            ),
+            Message::Import(preview, calendar) => {
+                let result = self
+                    .import(preview, &calendar)
+                    .map_err(|error| format!("{error:#}"));
+                let mut events = Vec::new();
+                // Earlier resources remain imported if a later resource fails to save.
+                events.extend(self.refresh_subscriptions(&self.subscriptions.ids()));
+                events.push(Event::ImportFinished(result));
+                return events;
+            }
             Message::SavePreferences(preferences) => {
                 let result = self
                     .save_preferences(preferences)
@@ -1636,6 +1667,43 @@ impl Worker {
 
         Ok(ChangeSet { item, affected })
     }
+
+    fn import(
+        &mut self,
+        preview: super::import::PreparedImport,
+        calendar: &str,
+    ) -> anyhow::Result<()> {
+        use eventix_ical::objects::EventLike;
+
+        let mut state = self.state()?;
+        let changes: Vec<_> = preview
+            .calendar
+            .clone()
+            .split_by_uid()
+            .iter()
+            .map(|group| {
+                let item = ItemId {
+                    calendar: calendar.into(),
+                    uid: group.components()[0].uid().clone(),
+                    recurrence: None,
+                };
+                let changes = ResourceChanges::capture(&state, std::slice::from_ref(&item));
+                (item, changes)
+            })
+            .collect();
+        let result = preview.apply(&mut state, calendar);
+        for (item, changes) in changes {
+            changes.observe(&mut self.pushes, &state, &item);
+        }
+        result.map_err(|error| {
+            error.context(
+                state
+                    .locale()
+                    .translate("Any items imported before the failure have been kept.")
+                    .to_string(),
+            )
+        })
+    }
 }
 
 struct SessionProgress(async_channel::Sender<Event>);
@@ -1722,6 +1790,162 @@ mod tests {
         let mut worker = Worker::new(xdg);
         worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
         worker
+    }
+
+    fn import_worker(path: &Path) -> Worker {
+        let worker = worker(path);
+        worker
+            .state()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .all_calendars_mut()
+            .get_mut("test")
+            .unwrap()
+            .set_types(vec![eventix_ical::objects::CalCompType::Event]);
+        worker
+            .state()
+            .unwrap()
+            .settings_mut()
+            .collections_mut()
+            .get_mut("local")
+            .unwrap()
+            .set_syncer(SyncerType::VDirSyncer {
+                email: eventix_state::EmailAccount::new("Test".into(), "test@example.com".into()),
+                url: "http://localhost/".into(),
+                username: None,
+                password: None,
+                read_only: false,
+                time_span: Default::default(),
+            });
+        worker
+    }
+
+    #[test]
+    fn import_refreshes_subscriptions_and_tracks_every_changed_remote_resource() {
+        use eventix_ical::objects::EventLike;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = import_worker(tmp.path());
+        let runtime = test_runtime();
+        worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 42,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &runtime,
+        );
+        worker.handle(Message::RefreshSidebar, &runtime);
+        let input = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n\
+            UID:move-me\r\nDTSTART:20261012T090000Z\r\nDTEND:20261012T100000Z\r\n\
+            SUMMARY:Imported replacement\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\n\
+            UID:new-import\r\nDTSTART:20261012T110000Z\r\nDTEND:20261012T120000Z\r\n\
+            SUMMARY:Imported addition\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let mut prepared = worker.handle(Message::PrepareImport(input.into()), &runtime);
+        let Event::ImportPrepared(Ok(preview)) = prepared.remove(0) else {
+            panic!("expected preview");
+        };
+        let events = worker.handle(Message::Import(preview, "test".into()), &runtime);
+        if let Some(Event::ImportFinished(Err(error))) = events.last() {
+            panic!("import failed: {error}");
+        }
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, Event::ContentLoaded(_)))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, Event::SidebarLoaded(_)))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, Event::ImportFinished(Ok(()))))
+        );
+        assert_eq!(worker.pushes.len(), 2);
+        let state = worker.state().unwrap();
+        assert_eq!(
+            state.store().file_by_id("move-me").unwrap().components()[0]
+                .summary()
+                .map(String::as_str),
+            Some("Imported replacement")
+        );
+        assert!(state.store().file_by_id("new-import").is_some());
+    }
+
+    #[test]
+    fn partial_import_failure_still_refreshes_views_and_schedules_successful_changes_for_upload() {
+        use eventix_ical::{
+            col::CalFile,
+            objects::{CalComponent, CalEvent, Calendar},
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut worker = import_worker(tmp.path());
+        let runtime = test_runtime();
+        let key = Arc::new(String::from("test"));
+        let blocked = tmp.path().join("blocked.ics");
+        fs::create_dir(&blocked).unwrap();
+        let mut calendar = Calendar::default();
+        calendar.add_component(CalComponent::Event(CalEvent::new("z-failure")));
+        worker
+            .state()
+            .unwrap()
+            .store_mut()
+            .directory_mut(&key)
+            .unwrap()
+            .add_file(CalFile::new(key.clone(), blocked, calendar))
+            .unwrap();
+        worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 42,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &runtime,
+        );
+        worker.handle(Message::RefreshSidebar, &runtime);
+        let input = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n\
+            UID:a-imported\r\nDTSTART:20261012T090000Z\r\nSUMMARY:Saved\r\nEND:VEVENT\r\n\
+            BEGIN:VEVENT\r\nUID:z-failure\r\nDTSTART:20261012T110000Z\r\n\
+            SUMMARY:Not saved\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let mut prepared = worker.handle(Message::PrepareImport(input.into()), &runtime);
+        let Event::ImportPrepared(Ok(preview)) = prepared.remove(0) else {
+            panic!("expected preview");
+        };
+        let events = worker.handle(Message::Import(preview, "test".into()), &runtime);
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, Event::ContentLoaded(_)))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, Event::SidebarLoaded(_)))
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, Event::ImportFinished(Err(_))))
+        );
+        assert_eq!(worker.pushes.len(), 1);
+        assert_eq!(worker.pushes.items()[0].item.uid, "a-imported");
+        assert!(
+            worker
+                .state()
+                .unwrap()
+                .store()
+                .file_by_id("a-imported")
+                .is_some()
+        );
     }
 
     #[test]

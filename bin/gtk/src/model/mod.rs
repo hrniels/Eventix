@@ -7,6 +7,7 @@
 pub(crate) mod activity;
 pub(crate) mod alarms;
 pub(crate) mod calendars;
+pub(crate) mod import;
 pub(crate) mod management;
 mod push;
 pub(crate) mod query;
