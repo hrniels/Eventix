@@ -591,7 +591,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tinytemplate",
- "tokio",
  "walkdir",
 ]
 
@@ -787,7 +786,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
- "criterion",
  "email_address",
  "eventix-cmd",
  "eventix-ical",
@@ -796,7 +794,6 @@ dependencies = [
  "eventix-view",
  "formatx",
  "futures",
- "iana-time-zone",
  "itertools 0.14.0",
  "numfmt",
  "once_cell",
@@ -895,6 +892,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "criterion",
  "formatx",
  "itertools 0.14.0",
  "once_cell",

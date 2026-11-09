@@ -986,6 +986,15 @@ mod tests {
                 reloaded.occurrences_between(start, end, |_| true).count(),
                 5
             );
+            if day == 12 {
+                // The native action reuses the source path rather than leaving an empty series.
+                assert!(state.store().file_by_id("edit-me").is_none());
+                assert!(reloaded.file_by_id("edit-me").is_none());
+                assert_eq!(reloaded.files().len(), 1);
+            } else {
+                assert!(tmp.path().join("event.ics").exists());
+                assert_eq!(reloaded.files().len(), 2);
+            }
         }
     }
 

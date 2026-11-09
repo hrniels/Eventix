@@ -6,20 +6,32 @@ use std::fs;
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use axum::http::StatusCode;
-use eventix_ical::objects::{CalCompType, EventLike};
+use eventix_ical::objects::{CalCompType, CalDate, CalDateType, EventLike};
 use eventix_state::{
-    CollectionSettings, EmailAccount, EventixState, SyncerType, encrypt_password,
-    retrieve_portal_secret,
+    CollectionSettings, EmailAccount, EventixState, Settings, State, SyncCancellation, SyncResult,
+    SyncerType,
+    actions::{
+        Action,
+        calendar::{
+            CreateCalendar, DeleteCalendarByFolder, DiscoverCollection, ReloadCalendar,
+            ReloadCollection, SyncAll, SyncCollection,
+        },
+        items::CreateItem,
+    },
+    encrypt_password, retrieve_portal_secret,
 };
-use serde_json::Value;
 use tempfile::TempDir;
 
-use crate::helper::{
-    COL_ID, encode_form, make_calendars_api_router, make_router, post, post_query,
+pub const COL_ID: &str = "col1";
+// Match eventix-getpw, which vdirsyncer invokes to read this peer's credentials.
+const APP_ID: &str = if cfg!(debug_assertions) {
+    "io.github.hrniels.Eventix-debug"
+} else {
+    "io.github.hrniels.Eventix"
 };
 
 pub const USERNAME: &str = "test";
@@ -197,14 +209,9 @@ impl RadicalePeer {
             "to-be-created calendar does exist?"
         );
 
-        // Drive remote calendar creation through Eventix itself so the tests exercise the same API
-        // path users would hit.
-        let (status, body) = post_query(
-            make_calendars_api_router(self.state.clone()),
-            &format!("/api/calendars/addcal?col_id={COL_ID}&name={name}"),
-        )
-        .await;
-        assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+        self.try_create_calendar(name)
+            .await
+            .expect("create calendar");
 
         let cal_id = self
             .calendar_id_for_folder(expected_folder)
@@ -230,43 +237,48 @@ impl RadicalePeer {
         cal_id
     }
 
-    pub async fn try_create_calendar(&self, name: &str) -> (StatusCode, String) {
-        post_query(
-            make_calendars_api_router(self.state.clone()),
-            &format!("/api/calendars/addcal?col_id={COL_ID}&name={name}"),
-        )
+    pub async fn try_create_calendar(&self, name: &str) -> anyhow::Result<()> {
+        Box::new(CreateCalendar {
+            id: COL_ID.into(),
+            name: name.into(),
+        })
+        .execute(&self.state)
         .await
     }
 
     pub async fn delete_calendar_by_folder(&self, folder: &str) {
-        let (status, body) = post_query(
-            make_calendars_api_router(self.state.clone()),
-            &format!("/api/calendars/calop?col_id={COL_ID}&folder={folder}&op=Delete"),
-        )
-        .await;
-        assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
+        self.try_delete_calendar_by_folder(folder)
+            .await
+            .expect("delete calendar");
     }
 
-    pub async fn try_delete_calendar_by_folder(&self, folder: &str) -> (StatusCode, String) {
-        post_query(
-            make_calendars_api_router(self.state.clone()),
-            &format!("/api/calendars/calop?col_id={COL_ID}&folder={folder}&op=Delete"),
-        )
+    pub async fn try_delete_calendar_by_folder(&self, folder: &str) -> anyhow::Result<()> {
+        Box::new(DeleteCalendarByFolder {
+            col_id: COL_ID.into(),
+            folder: folder.into(),
+        })
+        .execute(&self.state)
         .await
     }
 
     pub async fn create_todo(&self, cal_id: &str, summary: &str) -> anyhow::Result<()> {
-        let body = encode_form(&[
-            ("quicktodo_calendar", cal_id),
-            ("summary", summary),
-            ("due_date", "2026-04-20"),
-        ]);
-        let (status, resp) =
-            post(make_router(self.state.clone()), "/api/items/addtodo", &body).await;
-        if status != StatusCode::OK {
-            return Err(anyhow::anyhow!("add failed with {status}: {resp}"));
-        }
-        Ok(())
+        Box::new(CreateItem {
+            kind: CalCompType::Todo,
+            task_status: None,
+            calendar: cal_id.into(),
+            summary: summary.into(),
+            location: String::new(),
+            description: String::new(),
+            start: None,
+            end: Some(CalDate::Date("2026-04-20".parse()?, CalDateType::Inclusive)),
+            recurrence: None,
+            alarms: vec![],
+            personal_alarms: None,
+            attendees: vec![],
+        })
+        .execute(&self.state)
+        .await
+        .map(|_| ())
     }
 
     pub async fn create_and_sync_todo(&self, cal_id: &str, summary: &str) -> anyhow::Result<()> {
@@ -275,37 +287,60 @@ impl RadicalePeer {
         Ok(())
     }
 
-    pub async fn discover_collection(&self) -> Value {
-        self.syncop_json(&format!(
-            "/api/calendars/syncop?op[type]=DiscoverCollection&op[data][col_id]={COL_ID}"
-        ))
+    pub async fn discover_collection(&self) -> SyncResult {
+        Box::new(DiscoverCollection {
+            col_id: COL_ID.into(),
+            auth_url: None,
+            cancellation: SyncCancellation::default(),
+        })
+        .execute(&self.state)
         .await
+        .expect("discover collection")
     }
 
-    pub async fn sync_collection(&self) -> Value {
-        self.syncop_json(&format!(
-            "/api/calendars/syncop?op[type]=SyncCollection&op[data][col_id]={COL_ID}"
-        ))
+    pub async fn sync_collection(&self) -> SyncResult {
+        Box::new(SyncCollection {
+            col_id: COL_ID.into(),
+            auth_url: None,
+            cancellation: SyncCancellation::default(),
+        })
+        .execute(&self.state)
         .await
+        .expect("sync collection")
     }
 
-    pub async fn sync_all(&self) -> Value {
-        self.syncop_json("/api/calendars/syncop?op[type]=SyncAll")
-            .await
+    pub async fn sync_all(&self) -> SyncResult {
+        Box::new(SyncAll {
+            auth_url: None,
+            progress: None,
+            cancellation: SyncCancellation::default(),
+        })
+        .execute(&self.state)
+        .await
+        .expect("sync all")
     }
 
-    pub async fn reload_collection(&self) -> Value {
-        self.syncop_json(&format!(
-            "/api/calendars/syncop?op[type]=ReloadCollection&op[data][col_id]={COL_ID}"
-        ))
+    pub async fn reload_collection(&self) -> SyncResult {
+        Box::new(ReloadCollection {
+            col_id: COL_ID.into(),
+            auth_url: None,
+            cancellation: SyncCancellation::default(),
+        })
+        .execute(&self.state)
         .await
+        .expect("reload collection")
     }
 
-    pub async fn reload_calendar(&self, cal_id: &str) -> Value {
-        self.syncop_json(&format!(
-            "/api/calendars/syncop?op[type]=ReloadCalendar&op[data][col_id]={COL_ID}&op[data][cal_id]={cal_id}"
-        ))
+    pub async fn reload_calendar(&self, cal_id: &str) -> SyncResult {
+        Box::new(ReloadCalendar {
+            col_id: COL_ID.into(),
+            cal_id: cal_id.into(),
+            auth_url: None,
+            cancellation: SyncCancellation::default(),
+        })
+        .execute(&self.state)
         .await
+        .expect("reload calendar")
     }
 
     pub async fn uid_for_summary(&self, summary: &str) -> String {
@@ -349,7 +384,7 @@ impl RadicalePeer {
         self.tmp
             .path()
             .join("data")
-            .join(eventix::APP_ID)
+            .join(APP_ID)
             .join("vdirsyncer")
             .join(format!("{COL_ID}-data"))
             .join(folder)
@@ -380,12 +415,6 @@ impl RadicalePeer {
                     .find_map(|(id, calendar)| (calendar.folder() == folder).then(|| id.clone()))
             })
     }
-
-    async fn syncop_json(&self, uri: &str) -> Value {
-        let (status, body) = post_query(make_calendars_api_router(self.state.clone()), uri).await;
-        assert_eq!(status, StatusCode::OK, "unexpected body:\n{body}");
-        serde_json::from_str(&body).expect("parse JSON response")
-    }
 }
 
 pub struct RadicalePair {
@@ -399,12 +428,10 @@ impl RadicalePair {
         let server = RadicaleServer::start().expect("start Radicale test server");
         // Start two isolated Eventix peers against the same Radicale backend so tests can model
         // one side producing remote changes and the other side consuming them.
-        let (consumer_state, consumer_tmp) = crate::helper::make_state_from_col(
-            Self::make_collection(server.url(), consumer_read_only).await,
-        );
-        let (producer_state, producer_tmp) = crate::helper::make_state_from_col(
-            Self::make_collection(server.url(), producer_read_only).await,
-        );
+        let (consumer_state, consumer_tmp) =
+            make_state_from_col(Self::make_collection(server.url(), consumer_read_only).await);
+        let (producer_state, producer_tmp) =
+            make_state_from_col(Self::make_collection(server.url(), producer_read_only).await);
 
         Self {
             _server: server,
@@ -436,9 +463,20 @@ impl RadicalePair {
     }
 
     pub async fn spawn_peer(&self) -> RadicalePeer {
-        let (state, tmp) = crate::helper::make_state_from_col(
-            Self::make_collection(self._server.url(), false).await,
-        );
+        let (state, tmp) =
+            make_state_from_col(Self::make_collection(self._server.url(), false).await);
         RadicalePeer::new(state, tmp)
     }
+}
+
+fn make_state_from_col(collection: CollectionSettings) -> (EventixState, TempDir) {
+    let tmp = TempDir::new().unwrap();
+    let data = tmp.path().join("data");
+    let config = tmp.path().join("config");
+    let xdg = Arc::new(eventix_state::with_test_xdg_prefix(&data, &config, APP_ID));
+    let mut settings = Settings::new(xdg.place_config_file("settings.toml").unwrap());
+    settings.collections_mut().insert(COL_ID.into(), collection);
+    settings.write_to_file().unwrap();
+    let state = State::new(xdg).unwrap();
+    (Arc::new(tokio::sync::Mutex::new(state)), tmp)
 }

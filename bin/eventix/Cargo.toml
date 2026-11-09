@@ -41,26 +41,8 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.23.1", features = ["v4"] }
 
 [dev-dependencies]
-criterion = { version = "0.8.2", features = ["async_tokio"] }
-iana-time-zone = "0.1.65"
 tempfile.workspace = true
 tower = { version = "0.5.3", features = ["util"] }
-
-[[bench]]
-name = "list"
-harness = false
-
-[[bench]]
-name = "monthly"
-harness = false
-
-[[bench]]
-name = "weekly"
-harness = false
-
-[[bench]]
-name = "parse"
-harness = false
 
 [[test]]
 name = "api_items"
@@ -101,10 +83,6 @@ path = "tests/pages/items/edit_event.rs"
 [[test]]
 name = "pages_items_edit_todo"
 path = "tests/pages/items/edit_todo.rs"
-
-[[test]]
-name = "radicale_sync"
-path = "tests/radicale/sync.rs"
 
 [build-dependencies]
 askama = "0.16.0"

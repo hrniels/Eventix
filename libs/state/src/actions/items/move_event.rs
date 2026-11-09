@@ -291,6 +291,206 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn local_dst_gap_and_fold_moves_persist_resolved_utc_bounds() {
+        for (target, expected) in [
+            ("2026-03-29T02:30:00", "2026-03-29T01:30:00Z"),
+            ("2026-10-25T02:30:00", "2026-10-25T00:30:00Z"),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = fixture(tmp.path(), "", false);
+            state
+                .reload_locale_with_timezone(Some(chrono_tz::Europe::Berlin))
+                .unwrap();
+            let mut request = command(&state, None);
+            request.start = target.parse().unwrap();
+            Box::new(request).execute_locked(&mut state).await.unwrap();
+            let reloaded = CalDir::new_from_dir(
+                Arc::new("test".into()),
+                tmp.path().into(),
+                "Test".into(),
+                false,
+            )
+            .unwrap();
+            let occurrence = reloaded
+                .file_by_id("move-me")
+                .unwrap()
+                .occurrence_by_id("move-me", None, state.timezone())
+                .unwrap();
+            let expected: chrono::DateTime<chrono::Utc> = expected.parse().unwrap();
+            assert_eq!(occurrence.occurrence_start().unwrap().to_utc(), expected);
+            assert_eq!(
+                occurrence.occurrence_end().unwrap().to_utc(),
+                expected + chrono::Duration::hours(1)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn foreign_recurring_move_normalizes_display_local_identity_and_crosses_dst_gap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = fixture_with_dates(
+            tmp.path(),
+            "RRULE:FREQ=DAILY;COUNT=3\r\n",
+            false,
+            "DTSTART;TZID=America/New_York:20260307T023000\r\n\
+             DTEND;TZID=America/New_York:20260307T033000\r\n",
+        );
+        state
+            .reload_locale_with_timezone(Some(chrono_tz::Europe::Berlin))
+            .unwrap();
+        let mut request = command(
+            &state,
+            Some("TTEurope/Berlin;2026-03-07T08:30:00".parse().unwrap()),
+        );
+        request.start = "2026-03-08T08:30:00".parse().unwrap();
+        Box::new(request).execute_locked(&mut state).await.unwrap();
+        let reloaded = CalDir::new_from_dir(
+            Arc::new("test".into()),
+            tmp.path().into(),
+            "Test".into(),
+            false,
+        )
+        .unwrap();
+        let file = reloaded.file_by_id("move-me").unwrap();
+        let changed = file
+            .components()
+            .iter()
+            .find(|component| component.rid().is_some())
+            .unwrap();
+        assert_eq!(
+            changed.rid(),
+            Some(&"TTAmerica/New_York;2026-03-07T02:30:00".parse().unwrap())
+        );
+        assert_eq!(
+            changed.start(),
+            Some(&"TTAmerica/New_York;2026-03-08T03:30:00".parse().unwrap())
+        );
+        assert_eq!(file.components().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn copies_resolve_local_gaps_and_foreign_folds_without_changing_source() {
+        for (dates, target, expected) in [
+            (
+                "DTSTART:20261012T090000Z\r\nDTEND:20261012T100000Z\r\n",
+                "2026-03-29T02:30:00",
+                "2026-03-29T01:30:00Z",
+            ),
+            (
+                "DTSTART;TZID=America/New_York:20261012T090000\r\n\
+                 DTEND;TZID=America/New_York:20261012T100000\r\n",
+                "2026-11-01T06:30:00",
+                "2026-11-01T05:30:00Z",
+            ),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = fixture_with_dates(tmp.path(), "", false, dates);
+            state
+                .reload_locale_with_timezone(Some(chrono_tz::Europe::Berlin))
+                .unwrap();
+            let original = fs::read(tmp.path().join("event.ics")).unwrap();
+            let mut request = command(&state, None);
+            request.start = target.parse().unwrap();
+            let copied = Box::new(copy(request))
+                .execute_locked(&mut state)
+                .await
+                .unwrap();
+            let reloaded = CalDir::new_from_dir(
+                Arc::new("test".into()),
+                tmp.path().into(),
+                "Test".into(),
+                false,
+            )
+            .unwrap();
+            let occurrence = reloaded
+                .file_by_id(&copied.uid)
+                .unwrap()
+                .occurrence_by_id(&copied.uid, None, state.timezone())
+                .unwrap();
+            let expected: chrono::DateTime<chrono::Utc> = expected.parse().unwrap();
+            assert_eq!(occurrence.occurrence_start().unwrap().to_utc(), expected);
+            assert_eq!(
+                occurrence.occurrence_end().unwrap().to_utc(),
+                expected + chrono::Duration::hours(1)
+            );
+            assert_eq!(fs::read(tmp.path().join("event.ics")).unwrap(), original);
+        }
+    }
+
+    #[tokio::test]
+    async fn recurring_resize_preserves_embedded_timezone_rules_and_identity() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = fixture_with_dates(
+            tmp.path(),
+            "RRULE:FREQ=WEEKLY;BYDAY=SU\r\n",
+            false,
+            "DTSTART;TZID=X-CUSTOM-DST:20250323T013000\r\n\
+             DTEND;TZID=X-CUSTOM-DST:20250323T033000\r\n",
+        );
+        let content = fs::read_to_string(tmp.path().join("event.ics"))
+            .unwrap()
+            .replace(
+                "BEGIN:VEVENT",
+                "BEGIN:VTIMEZONE\r\nTZID:X-CUSTOM-DST\r\n\
+             BEGIN:STANDARD\r\nDTSTART:19700101T000000\r\n\
+             TZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\n\
+             BEGIN:DAYLIGHT\r\nDTSTART:20250330T040000\r\n\
+             TZOFFSETFROM:+0100\r\nTZOFFSETTO:+0200\r\nEND:DAYLIGHT\r\n\
+             END:VTIMEZONE\r\nBEGIN:VEVENT",
+            );
+        fs::write(tmp.path().join("event.ics"), content).unwrap();
+        *state.store_mut() = eventix_ical::col::CalStore::default();
+        state.store_mut().add(
+            CalDir::new_from_dir(
+                Arc::new("test".into()),
+                tmp.path().into(),
+                "Test".into(),
+                false,
+            )
+            .unwrap(),
+        );
+        let recurrence = "TTX-CUSTOM-DST;2025-03-30T01:30:00".parse().unwrap();
+        let request = command(&state, Some(recurrence));
+        Box::new(ResizeEvent {
+            item: request.item,
+            edge: eventix_ical::objects::RangeEdge::End,
+            value: "2025-03-30T02:30:00".parse().unwrap(),
+            expected_start: request.expected_start,
+            expected_end: request.expected_end,
+        })
+        .execute_locked(&mut state)
+        .await
+        .unwrap();
+        let reloaded = CalDir::new_from_dir(
+            Arc::new("test".into()),
+            tmp.path().into(),
+            "Test".into(),
+            false,
+        )
+        .unwrap();
+        let file = reloaded.file_by_id("move-me").unwrap();
+        let changed = file
+            .components()
+            .iter()
+            .find(|component| component.rid().is_some())
+            .unwrap();
+        assert_eq!(
+            changed.rid(),
+            Some(&"TTX-CUSTOM-DST;2025-03-30T01:30:00".parse().unwrap())
+        );
+        assert_eq!(changed.start(), changed.rid());
+        assert_eq!(
+            changed.end_or_due(),
+            Some(&"TTX-CUSTOM-DST;2025-03-30T03:30:00".parse().unwrap())
+        );
+        assert!(
+            fs::read_to_string(tmp.path().join("event.ics"))
+                .unwrap()
+                .contains("BEGIN:VTIMEZONE")
+        );
+    }
+
+    #[tokio::test]
     async fn copying_rejects_stale_read_only_and_recurring_events_without_creating_files() {
         for (recurrence, read_only, stale) in [
             ("", false, true),
