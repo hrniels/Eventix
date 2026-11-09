@@ -7,6 +7,8 @@ use std::cell::RefCell;
 use eventix_view::editor::EditorCalendar;
 use gtk::{gdk, prelude::*};
 
+use super::ColorDot;
+
 #[derive(PartialEq, Eq)]
 struct Choice {
     id: String,
@@ -148,9 +150,8 @@ fn calendar_factory(
         };
 
         let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        let dot = gtk::DrawingArea::new();
-        dot.set_size_request(18, 18);
-        content.append(&dot);
+        let dot = ColorDot::new(18);
+        content.append(&dot.widget);
         if show_name {
             let label = gtk::Label::new(None);
             label.set_xalign(0.0);
@@ -185,76 +186,10 @@ fn calendar_factory(
                 .and_then(|index| colors.get(index as usize))
                 .and_then(|color| gdk::RGBA::parse(color).ok())
                 .unwrap_or(gdk::RGBA::TRANSPARENT);
-            set_dot_color(&dot, color);
+            ColorDot::from_widget(dot).set_color(color);
         }
     });
     factory
-}
-
-/// Draws a bordered visibility toggle with a gray inactive circle and a black outline on hover.
-pub(super) fn draw_toggle_circle(
-    dot: &gtk::DrawingArea,
-    button: &gtk::ToggleButton,
-    background: &str,
-) {
-    let color = gdk::RGBA::parse(background).unwrap_or(gdk::RGBA::TRANSPARENT);
-    let weak = button.downgrade();
-    dot.set_draw_func(move |_, cr, width, height| {
-        let Some(button) = weak.upgrade() else { return };
-        if button.is_active() {
-            cr.set_source_rgba(
-                color.red().into(),
-                color.green().into(),
-                color.blue().into(),
-                color.alpha().into(),
-            );
-        } else {
-            cr.set_source_rgb(0.65, 0.65, 0.65);
-        }
-        cr.arc(
-            f64::from(width) / 2.0,
-            f64::from(height) / 2.0,
-            f64::from(width.min(height)) / 2.0 - 1.0,
-            0.0,
-            std::f64::consts::TAU,
-        );
-        let _ = cr.fill_preserve();
-        if button.state_flags().contains(gtk::StateFlags::PRELIGHT) {
-            cr.set_source_rgb(0.0, 0.0, 0.0);
-        } else {
-            cr.set_source_rgb(187.0 / 255.0, 187.0 / 255.0, 187.0 / 255.0);
-        }
-        cr.set_line_width(1.0);
-        let _ = cr.stroke();
-    });
-    let weak = dot.downgrade();
-    button.connect_state_flags_changed(move |_, _| {
-        if let Some(dot) = weak.upgrade() {
-            dot.queue_draw();
-        }
-    });
-}
-
-pub(super) fn set_dot_color(dot: &gtk::DrawingArea, color: gdk::RGBA) {
-    dot.set_draw_func(move |_, cr, width, height| {
-        cr.set_source_rgba(
-            color.red().into(),
-            color.green().into(),
-            color.blue().into(),
-            color.alpha().into(),
-        );
-        cr.arc(
-            f64::from(width) / 2.0,
-            f64::from(height) / 2.0,
-            f64::from(width.min(height)) / 2.0 - 1.0,
-            0.0,
-            std::f64::consts::TAU,
-        );
-        let _ = cr.fill_preserve();
-        cr.set_source_rgb(187.0 / 255.0, 187.0 / 255.0, 187.0 / 255.0);
-        cr.set_line_width(1.0);
-        let _ = cr.stroke();
-    });
 }
 
 #[cfg(test)]

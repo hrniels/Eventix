@@ -10,7 +10,7 @@ use eventix_state::actions::items::CreateItem;
 use eventix_view::editor::EditorCalendar;
 use gtk::prelude::*;
 
-use crate::view::{calendar_selector::CalendarSelector, editor::DateInput};
+use crate::{view::editor::DateInput, widgets::CalendarSelector};
 
 pub(crate) struct QuickTask {
     pub widget: gtk::Box,

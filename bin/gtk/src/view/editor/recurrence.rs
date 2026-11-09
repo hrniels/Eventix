@@ -7,8 +7,9 @@ use eventix_ical::objects::{CalDate, CalRRule, CalRRuleFreq, CalRRuleSide, CalWD
 use eventix_locale::Locale;
 use gtk::prelude::*;
 
-use super::layout::{body_label, choices, segments};
+use super::layout::{body_label, choices};
 use super::{DateInput, dropdown, spin};
+use crate::widgets::SegmentedControl;
 
 const WEEKDAYS: [Weekday; 7] = [
     Weekday::Mon,
@@ -30,7 +31,7 @@ struct PatternWidgets {
 
 pub(super) struct RecurrenceInput {
     pub widget: gtk::Box,
-    pub frequency: gtk::DropDown,
+    pub frequency: gtk::SingleSelection,
     pub segments: gtk::Box,
     interval: gtk::SpinButton,
     pub weekdays: Vec<gtk::CheckButton>,
@@ -104,15 +105,13 @@ impl RecurrenceInput {
     }
 
     pub fn new(locale: &dyn Locale, date: NaiveDate) -> Self {
-        let frequency = dropdown(
+        let segments = SegmentedControl::new(
             locale,
-            &["None", "Hourly", "Daily", "Weekly", "Monthly", "Yearly"],
-        );
-        let segments = segments(
-            locale,
-            &frequency,
             &["None", "Hourly", "Daily", "Weekly", "Monthly", "Annually"],
+            0,
         );
+        segments.widget.add_css_class("ev_editor_segments");
+        let frequency = segments.selection;
         let month = Self::create_month(locale, date);
         let weekday = dropdown(
             locale,
@@ -131,7 +130,7 @@ impl RecurrenceInput {
         let input = Self {
             widget: gtk::Box::new(gtk::Orientation::Vertical, 12),
             frequency,
-            segments,
+            segments: segments.widget,
             interval: spin(1.0, 255.0, 1.0),
             weekdays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
                 .iter()

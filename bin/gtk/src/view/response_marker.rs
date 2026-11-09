@@ -8,7 +8,7 @@ use eventix_locale::Locale;
 use eventix_view::details::Response;
 use gtk::{gdk, prelude::*};
 
-use super::calendar_selector::set_dot_color;
+use crate::widgets::ColorDot;
 
 /// Shows the invitation response inside a calendar-colored circle.
 pub(super) fn new(
@@ -26,7 +26,7 @@ pub(super) fn new(
 /// Reuses the calendar dot and response widgets as a presentation changes.
 pub(super) struct Marker {
     pub widget: gtk::Overlay,
-    dot: gtk::DrawingArea,
+    dot: ColorDot,
     inner: OnceCell<(gtk::Box, gtk::Image)>,
     size: i32,
     background: RefCell<String>,
@@ -35,11 +35,10 @@ pub(super) struct Marker {
 
 impl Marker {
     pub fn new(size: i32) -> Self {
-        let dot = gtk::DrawingArea::new();
-        dot.set_size_request(size, size);
+        let dot = ColorDot::new(size);
         let marker = gtk::Overlay::new();
         marker.set_valign(gtk::Align::Center);
-        marker.set_child(Some(&dot));
+        marker.set_child(Some(&dot.widget));
         Self {
             widget: marker,
             dot,
@@ -58,12 +57,9 @@ impl Marker {
         locale: &dyn Locale,
     ) {
         if *self.background.borrow() != background {
-            set_dot_color(
-                &self.dot,
-                gdk::RGBA::parse(background).unwrap_or(gdk::RGBA::TRANSPARENT),
-            );
+            self.dot
+                .set_color(gdk::RGBA::parse(background).unwrap_or(gdk::RGBA::TRANSPARENT));
             self.background.replace(background.into());
-            self.dot.queue_draw();
         }
         if let Some((inner, _)) = self.inner.get() {
             inner.set_visible(response.is_some());

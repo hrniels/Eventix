@@ -85,9 +85,9 @@ impl ItemEditor {
         let (start_date, end_date) = check.event_dates(self, start, end, timezone)?;
 
         let alarms = check.alarm(&self.alarm, Field::AlarmDate, Field::AlarmTime, timezone)?;
-        let personal_alarms = if calendar.personal && self.personal_override.is_active() {
+        let personal_alarms = if calendar.personal && self.personal.overwrite.is_active() {
             Some(check.alarm(
-                &self.personal_alarm,
+                &self.personal.input,
                 Field::PersonalAlarmDate,
                 Field::PersonalAlarmTime,
                 timezone,
@@ -306,7 +306,7 @@ impl<'a> Checks<'a> {
         let trigger = match input.trigger.selected() {
             1 => input.relative_trigger(),
             2 => {
-                let date = self.date(&input.date.entry, date_field)?;
+                let date = self.date(&input.date.entry(), date_field)?;
                 let time = self.time(&input.time, time_field)?;
 
                 let date = CalDate::new_datetime(date, Some(time), timezone.name());

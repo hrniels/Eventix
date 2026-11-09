@@ -18,6 +18,7 @@ use super::{
     icon_action, show_error,
 };
 use crate::model::management::{CollectionOperation, Operation, Request};
+use crate::widgets::SegmentedControl;
 
 pub(super) struct CollectionActions {
     pub widget: gtk::Box,
@@ -380,20 +381,20 @@ impl CollectionActions {
             self.alternatives.borrow_mut().push((syncer, alternative));
         }
         form.syncer_section.append(&stack);
-        let (modes, buttons) = syncer_choices(&new_syncer(Backend::CalDav), true, locale);
-        for (title, backend, button) in buttons {
-            let weak = Rc::downgrade(self);
-            let stack = stack.clone();
-            button.connect_toggled(move |button| {
-                if button.is_active()
-                    && let Some(controls) = weak.upgrade()
-                {
-                    controls.switch_backend(backend);
-                    stack.set_visible_child_name(title);
-                    controls.resize_editor();
-                }
-            });
-        }
+        let (modes, selection) = syncer_choices(&new_syncer(Backend::CalDav), true, locale);
+        let weak = Rc::downgrade(self);
+        selection.connect_selected_notify(move |selection| {
+            if let Some(controls) = weak.upgrade() {
+                let (title, backend) = match selection.selected() {
+                    1 => ("O365", Backend::O365),
+                    2 => ("FileSystem", Backend::FileSystem),
+                    _ => ("CalDAV", Backend::CalDav),
+                };
+                controls.switch_backend(backend);
+                stack.set_visible_child_name(title);
+                controls.resize_editor();
+            }
+        });
         form.identity_fields(&self.collection_name, true, &modes, locale);
     }
 
@@ -678,37 +679,23 @@ impl Drop for CollectionActions {
     }
 }
 
-type SyncerChoice = (&'static str, Backend, gtk::ToggleButton);
-
 fn syncer_choices(
     syncer: &SyncerType,
     editable: bool,
     locale: &dyn Locale,
-) -> (gtk::Box, Vec<SyncerChoice>) {
-    let modes = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    modes.add_css_class("linked");
-    modes.add_css_class("ev_management_sync_types");
-    modes.set_halign(gtk::Align::End);
-    let mut first = None;
-    let mut buttons = Vec::new();
-    for (title, backend) in [
-        ("CalDAV", Backend::CalDav),
-        ("O365", Backend::O365),
-        ("FileSystem", Backend::FileSystem),
-    ] {
-        let selected =
-            std::mem::discriminant(syncer) == std::mem::discriminant(&new_syncer(backend));
-        let button = gtk::ToggleButton::with_label(locale.translate(title));
-        button.set_group(first.as_ref());
-        if first.is_none() {
-            first = Some(button.clone());
-        }
-        button.set_active(selected);
-        button.set_sensitive(editable || selected);
-        modes.append(&button);
-        buttons.push((title, backend, button));
+) -> (gtk::Box, gtk::SingleSelection) {
+    let selected = match syncer {
+        SyncerType::VDirSyncer { .. } => 0,
+        SyncerType::O365 { .. } => 1,
+        SyncerType::FileSystem { .. } => 2,
+    };
+    let modes = SegmentedControl::new(locale, &["CalDAV", "O365", "FileSystem"], selected);
+    modes.widget.add_css_class("ev_management_sync_types");
+    modes.widget.set_halign(gtk::Align::End);
+    for index in 0..3 {
+        modes.set_option_sensitive(index, editable || index as u32 == selected);
     }
-    (modes, buttons)
+    (modes.widget, modes.selection)
 }
 
 fn new_syncer(backend: Backend) -> SyncerType {

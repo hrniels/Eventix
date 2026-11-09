@@ -9,26 +9,24 @@ use std::{
 
 use anyhow::bail;
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
-use eventix_ical::objects::{
-    CalAction, CalAlarm, CalAttendee, CalCompType, CalDate, CalRelated, CalRole, CalTrigger,
-    DateContext,
-};
+use eventix_ical::objects::{CalAttendee, CalCompType, CalDate, CalRole, DateContext};
 use eventix_locale::Locale;
 use eventix_state::actions::items::{CreateItem, UpdateItem};
 use eventix_view::editor::EditorOptions;
 use gtk::{gdk, glib, prelude::*};
 
-mod completion;
 mod existing;
 mod feedback;
 mod layout;
 mod recurrence;
 mod task_status;
 mod validation;
-use layout::{FormSection, bind_choice, body_label, row, segments};
+use layout::{FormSection, body_label, row};
 use recurrence::RecurrenceInput;
 
-use super::calendar_selector::CalendarSelector;
+use crate::widgets::{
+    AlarmInput, CalendarSelector, EntryCompletion, PersonalReminderInput, SegmentedControl,
+};
 
 /// Owns the draft independently of calendar refreshes and the details popup.
 pub(crate) struct ItemEditor {
@@ -59,16 +57,15 @@ pub(crate) struct ItemEditor {
     has_due: gtk::CheckButton,
     timezone: gtk::DropDown,
     alarm: AlarmInput,
-    personal_alarm: AlarmInput,
-    personal_override: gtk::CheckButton,
-    alarm_mode: gtk::DropDown,
+    personal: PersonalReminderInput,
+    alarm_mode: gtk::SingleSelection,
     recurrence: RecurrenceInput,
     attendees: Rc<RefCell<Vec<AttendeeInput>>>,
     new_attendee: gtk::Entry,
     previews: Vec<gtk::Label>,
     sections: Vec<FormSection>,
     invalid: RefCell<Option<gtk::Widget>>,
-    _completions: Vec<completion::Completion>,
+    _completions: Vec<EntryCompletion>,
 }
 
 impl ItemEditor {
@@ -123,7 +120,7 @@ impl ItemEditor {
 
         let location = gtk::Entry::new();
         row(&form, locale, "Location", &location);
-        let location_completion = completion::Completion::new(&location, options.locations.clone());
+        let location_completion = EntryCompletion::new(&location, options.locations.clone());
 
         let task_status = (options.kind == CalCompType::Todo)
             .then(|| task_status::TaskStatusInput::new(&form, &options));
@@ -183,8 +180,7 @@ impl ItemEditor {
             has_due: dates.has_due,
             timezone: dates.timezone,
             alarm: reminders.alarm,
-            personal_alarm: reminders.personal_alarm,
-            personal_override: reminders.personal_override,
+            personal: reminders.personal,
             alarm_mode: reminders.mode,
             recurrence,
             attendees: attendees.entries,
@@ -248,14 +244,14 @@ impl ItemEditor {
 
         // Selection models for segmented controls and hidden stack pages are not widget children.
         for selection in [
-            &self.recurrence.frequency,
-            &self.recurrence.end,
-            &self.alarm_mode,
-            &self.alarm.trigger,
-            &self.personal_alarm.trigger,
+            self.recurrence.frequency.clone().upcast::<glib::Object>(),
+            self.recurrence.end.clone().upcast(),
+            self.alarm_mode.clone().upcast(),
+            self.alarm.trigger.clone().upcast(),
+            self.personal.input.trigger.clone().upcast(),
         ] {
             let weak = Rc::downgrade(self);
-            selection.connect_selected_notify(move |_| {
+            selection.connect_notify_local(Some("selected"), move |_, _| {
                 if let Some(editor) = weak.upgrade() {
                     editor.update_previews();
                 }
@@ -263,10 +259,10 @@ impl ItemEditor {
         }
 
         watch_fields(self.alarm.widget.upcast_ref(), self);
-        watch_fields(self.personal_alarm.widget.upcast_ref(), self);
+        watch_fields(self.personal.widget.upcast_ref(), self);
 
         let weak = Rc::downgrade(self);
-        self.personal_override.connect_toggled(move |_| {
+        self.personal.overwrite.connect_toggled(move |_| {
             if let Some(editor) = weak.upgrade() {
                 editor.update_previews();
             }
@@ -330,7 +326,7 @@ impl ItemEditor {
     }
 
     fn update_task_reminders(&self) {
-        for alarm in [&self.alarm, &self.personal_alarm] {
+        for alarm in [&self.alarm, &self.personal.input] {
             alarm.set_dates(
                 self.has_start.is_active(),
                 self.has_due.is_active(),
@@ -410,8 +406,8 @@ impl ItemEditor {
         let (label, summary) = if self.alarm_mode.selected() == 1 {
             (
                 "Personal",
-                if self.personal_override.is_active() {
-                    self.personal_alarm.summary(timezone, locale)
+                if self.personal.overwrite.is_active() {
+                    self.personal.input.summary(timezone, locale)
                 } else {
                     locale.translate("Default").to_string()
                 },
@@ -878,9 +874,8 @@ impl DateSection {
 struct ReminderSection {
     section: FormSection,
     alarm: AlarmInput,
-    personal_alarm: AlarmInput,
-    personal_override: gtk::CheckButton,
-    mode: gtk::DropDown,
+    personal: PersonalReminderInput,
+    mode: gtk::SingleSelection,
 }
 
 impl ReminderSection {
@@ -892,10 +887,13 @@ impl ReminderSection {
 
         let alarm = AlarmInput::new(locale, options.start.date(), options.start.time());
         alarms.add_named(&alarm.widget, Some("calendar"));
-        let (personal_alarm, personal_override) = Self::append_personal(&alarms, options);
+        let personal =
+            PersonalReminderInput::new(locale, options.start.date(), options.start.time());
+        alarms.add_named(&personal.widget, Some("personal"));
 
-        let mode = dropdown(locale, &["Calendar", "Personal"]);
-        let modes = segments(locale, &mode, &["Calendar", "Personal"]);
+        let modes = Rc::new(SegmentedControl::new(locale, &["Calendar", "Personal"], 0));
+        modes.widget.add_css_class("ev_editor_segments");
+        let mode = modes.selection.clone();
         let panels = alarms.clone();
         mode.connect_selected_notify(move |mode| {
             panels.set_visible_child_name(if mode.selected() == 1 {
@@ -905,46 +903,31 @@ impl ReminderSection {
             });
         });
         Self::connect_availability(calendar, &mode, &modes, options);
-        let section = FormSection::new(form, locale, "Reminder", &alarms, Some(modes.upcast_ref()));
+        let section = FormSection::new(
+            form,
+            locale,
+            "Reminder",
+            &alarms,
+            Some(modes.widget.upcast_ref()),
+        );
 
         Self {
             section,
             alarm,
-            personal_alarm,
-            personal_override,
+            personal,
             mode,
         }
     }
 
-    fn append_personal(
-        alarms: &gtk::Stack,
-        options: &EditorOptions,
-    ) -> (AlarmInput, gtk::CheckButton) {
-        let locale = options.locale.as_ref();
-        let personal_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        let overwrite = gtk::CheckButton::with_label(locale.translate("Overwrite default"));
-        personal_box.append(&overwrite);
-
-        let alarm = AlarmInput::new(locale, options.start.date(), options.start.time());
-        alarm.widget.set_sensitive(false);
-        personal_box.append(&alarm.widget);
-
-        let personal = alarm.widget.clone();
-        overwrite.connect_toggled(move |button| personal.set_sensitive(button.is_active()));
-        alarms.add_named(&personal_box, Some("personal"));
-
-        (alarm, overwrite)
-    }
-
     fn connect_availability(
         calendar: &gtk::DropDown,
-        mode: &gtk::DropDown,
-        modes: &gtk::Box,
+        mode: &gtk::SingleSelection,
+        modes: &Rc<SegmentedControl>,
         options: &EditorOptions,
     ) {
         let available: Vec<_> = options.calendars.iter().map(|cal| cal.personal).collect();
-        let personal_mode = modes.last_child().unwrap();
-        personal_mode.set_sensitive(
+        modes.set_option_sensitive(
+            1,
             available
                 .get(calendar.selected() as usize)
                 .copied()
@@ -952,12 +935,13 @@ impl ReminderSection {
         );
 
         let mode = mode.clone();
+        let modes = modes.clone();
         calendar.connect_selected_notify(move |combo| {
             let personal = available
                 .get(combo.selected() as usize)
                 .copied()
                 .unwrap_or(false);
-            personal_mode.set_sensitive(personal);
+            modes.set_option_sensitive(1, personal);
             if !personal {
                 mode.set_selected(0);
             }
@@ -969,7 +953,7 @@ struct AttendeeSection {
     section: FormSection,
     entries: Rc<RefCell<Vec<AttendeeInput>>>,
     new_entry: gtk::Entry,
-    completion: completion::Completion,
+    completion: EntryCompletion,
 }
 
 impl AttendeeSection {
@@ -982,7 +966,7 @@ impl AttendeeSection {
         let new_entry = gtk::Entry::new();
         new_entry.set_placeholder_text(Some(locale.translate("New attendee")));
         new_entry.set_hexpand(true);
-        let completion = completion::Completion::new(&new_entry, options.contacts.clone());
+        let completion = EntryCompletion::new(&new_entry, options.contacts.clone());
 
         let add = gtk::Button::with_label(locale.translate("Add"));
         let add_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -1260,211 +1244,6 @@ impl DateInput {
     }
 }
 
-pub(super) struct AlarmInput {
-    pub(super) widget: gtk::Box,
-    trigger: gtk::DropDown,
-    duration: gtk::SpinButton,
-    unit: gtk::DropDown,
-    relation: gtk::DropDown,
-    relations: RefCell<Vec<u32>>,
-    relative_row: gtk::Widget,
-    date: DateInput,
-    time: gtk::Entry,
-}
-
-impl AlarmInput {
-    /// Creates a calendar default alarm input, with absolute dates hidden unless already configured.
-    pub(super) fn for_calendar(locale: &dyn Locale, alarm: Option<&CalAlarm>) -> Self {
-        let now = chrono::Utc::now().with_timezone(locale.timezone());
-        let input = Self::new(locale, now.date_naive(), now.time());
-        input.load(alarm, locale.timezone());
-        if !matches!(alarm.map(CalAlarm::trigger), Some(CalTrigger::Absolute(_))) {
-            // Calendar defaults normally apply relative to each item's dates, not a fixed date.
-            if let Some(absolute) = input.widget.last_child() {
-                absolute.set_visible(false);
-            }
-        }
-        input
-    }
-
-    pub(super) fn new(locale: &dyn Locale, date: NaiveDate, time: NaiveTime) -> Self {
-        let builder = gtk::Builder::from_resource(resource_path!("view/editor/alarm_input.ui"));
-        let widget = builder.object("alarm_input").expect("editor alarm input");
-        let trigger = dropdown(locale, &["None", "Relative", "Absolute"]);
-        for (index, (id, label)) in [
-            ("none", "None"),
-            ("relative_choice", "Relative"),
-            ("absolute_choice", "Absolute"),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let button: gtk::CheckButton = builder.object(id).expect("editor alarm choice");
-            button.set_label(Some(locale.translate(label)));
-            bind_choice(&button, &trigger, index as u32);
-        }
-
-        let duration = builder.object("duration").expect("editor alarm duration");
-        let unit: gtk::DropDown = builder.object("unit").expect("editor alarm unit");
-        let names: Vec<_> = ["Minutes", "Hours", "Days"]
-            .iter()
-            .map(|name| locale.translate(name))
-            .collect();
-        unit.set_model(Some(&gtk::StringList::new(&names)));
-        let relation: gtk::DropDown = builder.object("relation").expect("editor alarm relation");
-        let names: Vec<_> = ["BeforeStart", "AfterStart", "BeforeEnd", "AfterEnd"]
-            .iter()
-            .map(|name| locale.translate(name))
-            .collect();
-        relation.set_model(Some(&gtk::StringList::new(&names)));
-
-        let relative: gtk::Box = builder.object("relative").expect("editor relative alarm");
-        let absolute: gtk::Box = builder.object("absolute").expect("editor absolute alarm");
-        let date = DateInput::new(locale, date);
-        date.widget.set_hexpand(false);
-        let (clock, time) = time_entry(locale, time);
-        absolute.append(&date.widget);
-        absolute.append(&clock);
-        trigger.connect_selected_notify(move |combo| {
-            relative.set_sensitive(combo.selected() == 1);
-            absolute.set_sensitive(combo.selected() == 2);
-        });
-
-        Self {
-            widget,
-            trigger,
-            duration,
-            unit,
-            relation,
-            relations: RefCell::new(vec![0, 1, 2, 3]),
-            relative_row: builder.object("relative_row").expect("relative alarm row"),
-            date,
-            time,
-        }
-    }
-
-    fn summary(&self, timezone: &chrono_tz::Tz, locale: &dyn Locale) -> String {
-        match self.value(timezone, locale) {
-            Ok(alarms) => alarms.first().map_or_else(
-                || locale.translate("None").to_string(),
-                |alarm| alarm.human(locale).to_string(),
-            ),
-            Err(_) => locale
-                .translate(if self.trigger.selected() == 1 {
-                    "Relative"
-                } else {
-                    "Absolute"
-                })
-                .to_string(),
-        }
-    }
-
-    fn value(
-        &self,
-        timezone: &chrono_tz::Tz,
-        locale: &dyn Locale,
-    ) -> anyhow::Result<Vec<CalAlarm>> {
-        self.value_with_text(
-            timezone,
-            locale.translate("error.valid_date_time"),
-            locale.translate("Reminder"),
-        )
-    }
-
-    pub(super) fn value_with_text(
-        &self,
-        timezone: &chrono_tz::Tz,
-        invalid: &str,
-        description: &str,
-    ) -> anyhow::Result<Vec<CalAlarm>> {
-        let trigger = match self.trigger.selected() {
-            1 => self.relative_trigger(),
-            2 => self.absolute_trigger(timezone, invalid)?,
-            _ => return Ok(Vec::new()),
-        };
-
-        Ok(self.alarms(trigger, description))
-    }
-
-    fn alarms(&self, trigger: CalTrigger, description: &str) -> Vec<CalAlarm> {
-        let mut alarm = CalAlarm::new(CalAction::Display, trigger);
-        alarm.set_description(Some(description.to_owned()));
-
-        vec![alarm]
-    }
-
-    fn relative_trigger(&self) -> CalTrigger {
-        let relation = self
-            .relations
-            .borrow()
-            .get(self.relation.selected() as usize)
-            .copied()
-            .unwrap_or(0);
-        let amount = i64::from(self.duration.value_as_int());
-        let amount = if relation.is_multiple_of(2) {
-            -amount
-        } else {
-            amount
-        };
-        let duration = match self.unit.selected() {
-            1 => Duration::hours(amount),
-            2 => Duration::days(amount),
-            _ => Duration::minutes(amount),
-        };
-
-        CalTrigger::Relative {
-            duration: duration.into(),
-            related: if relation < 2 {
-                CalRelated::Start
-            } else {
-                CalRelated::End
-            },
-        }
-    }
-
-    fn set_dates(&self, start: bool, due: bool, locale: &dyn Locale) {
-        let current = self
-            .relations
-            .borrow()
-            .get(self.relation.selected() as usize)
-            .copied();
-        let available: Vec<_> = (0..4)
-            .filter(|index| if *index < 2 { start } else { due })
-            .collect();
-        let labels = ["BeforeStart", "AfterStart", "BeforeEnd", "AfterEnd"];
-        let names: Vec<_> = available
-            .iter()
-            .map(|index| locale.translate(labels[*index as usize]))
-            .collect();
-        let selected = current
-            .and_then(|current| available.iter().position(|index| *index == current))
-            .unwrap_or(0);
-
-        *self.relations.borrow_mut() = available;
-        self.relation.set_model(Some(&gtk::StringList::new(&names)));
-        self.relation.set_selected(selected as u32);
-        self.relative_row.set_visible(start || due);
-        if !start && !due && self.trigger.selected() == 1 {
-            self.trigger.set_selected(0);
-        }
-    }
-
-    fn absolute_trigger(
-        &self,
-        timezone: &chrono_tz::Tz,
-        invalid: &str,
-    ) -> anyhow::Result<CalTrigger> {
-        let date = NaiveDate::parse_from_str(&self.date.entry.text(), "%Y-%m-%d")
-            .map_err(|_| anyhow::anyhow!(invalid.to_owned()))?;
-        let time = NaiveTime::parse_from_str(&self.time.text(), "%H:%M")
-            .map_err(|_| anyhow::anyhow!(invalid.to_owned()))?;
-        let date = CalDate::new_datetime(date, Some(time), timezone.name());
-        Ok(CalTrigger::Absolute(
-            DateContext::system().date_to_utc(&date, timezone),
-        ))
-    }
-}
-
 struct AttendeeInput {
     original: Option<CalAttendee>,
     widget: gtk::Box,
@@ -1603,7 +1382,7 @@ mod tests {
     use eventix_view::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
-    use super::{AlarmInput, CalDate, DateInput, DateSection, ItemEditor};
+    use super::{CalDate, DateInput, DateSection, ItemEditor};
 
     pub(super) fn execute(
         action: Box<dyn eventix_state::actions::Action>,
@@ -1677,87 +1456,6 @@ mod tests {
                 );
                 assert_eq!(matches!(date, CalDate::Date(..)), all_day);
             }
-        }
-    }
-
-    #[test]
-    #[ignore = "requires a GTK display"]
-    fn alarm_choices_synchronize_modes_and_preserve_trigger_values() {
-        use eventix_ical::objects::{CalRelated, CalTrigger};
-
-        gtk::init().unwrap();
-        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
-        let tmp = tempfile::tempdir().unwrap();
-        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
-        for language in [
-            eventix_locale::LocaleType::English,
-            eventix_locale::LocaleType::German,
-        ] {
-            let locale = eventix_locale::new_with_timezone(&xdg, language, chrono_tz::UTC).unwrap();
-            let alarm = AlarmInput::new(
-                locale.as_ref(),
-                "2026-10-15".parse().unwrap(),
-                "10:30:00".parse().unwrap(),
-            );
-            let none = alarm
-                .widget
-                .first_child()
-                .and_downcast::<gtk::CheckButton>()
-                .unwrap();
-            let relative = alarm
-                .relative_row
-                .first_child()
-                .and_downcast::<gtk::CheckButton>()
-                .unwrap();
-            let absolute = alarm
-                .widget
-                .last_child()
-                .unwrap()
-                .first_child()
-                .and_downcast::<gtk::CheckButton>()
-                .unwrap();
-            let relative_controls = alarm.relative_row.last_child().unwrap();
-            let absolute_controls = alarm.widget.last_child().unwrap().last_child().unwrap();
-            assert!(none.is_active());
-            assert!(
-                alarm
-                    .value(&chrono_tz::UTC, locale.as_ref())
-                    .unwrap()
-                    .is_empty()
-            );
-            assert!(!relative_controls.is_sensitive() && !absolute_controls.is_sensitive());
-
-            relative.set_active(true);
-            assert_eq!(alarm.trigger.selected(), 1);
-            assert!(!none.is_active() && relative_controls.is_sensitive());
-            assert!(!absolute_controls.is_sensitive());
-            assert!(matches!(
-                alarm.value(&chrono_tz::UTC, locale.as_ref()).unwrap()[0].trigger(),
-                CalTrigger::Relative { duration, related: CalRelated::Start }
-                    if *duration == chrono::Duration::minutes(-15).into()
-            ));
-
-            absolute.set_active(true);
-            assert_eq!(alarm.trigger.selected(), 2);
-            assert!(!relative.is_active() && !relative_controls.is_sensitive());
-            assert!(absolute_controls.is_sensitive());
-            assert!(matches!(
-                alarm.value(&chrono_tz::UTC, locale.as_ref()).unwrap()[0].trigger(),
-                CalTrigger::Absolute(date)
-                    if date.to_string() == "TU2026-10-15T10:30:00"
-            ));
-
-            alarm.trigger.set_selected(1);
-            assert!(relative.is_active() && !absolute.is_active());
-            alarm.set_dates(false, false, locale.as_ref());
-            assert!(none.is_active());
-            assert!(!alarm.relative_row.is_visible());
-            assert!(
-                alarm
-                    .value(&chrono_tz::UTC, locale.as_ref())
-                    .unwrap()
-                    .is_empty()
-            );
         }
     }
 
@@ -2557,8 +2255,8 @@ mod tests {
             editor.recurrence.weekdays[3].set_active(true);
             editor.recurrence.end.set_selected(1);
             editor.recurrence.count.set_value(5.0);
-            editor.personal_override.set_active(true);
-            editor.personal_alarm.trigger.set_selected(1);
+            editor.personal.overwrite.set_active(true);
+            editor.personal.input.trigger.set_selected(1);
             let request = editor.command().unwrap();
             assert_eq!(
                 request.recurrence.as_ref().unwrap().frequency(),
@@ -2631,7 +2329,7 @@ mod tests {
             editor.all_day.set_active(false);
             editor.recurrence.end.set_selected(2);
             editor.recurrence.until.entry.set_text("2026-10-16");
-            editor.personal_alarm.trigger.set_selected(2);
+            editor.personal.input.trigger.set_selected(2);
             assert!(editor.command().is_ok());
             // Expanded sections remain scrollable inside a smaller application window.
             for section in &editor.sections {

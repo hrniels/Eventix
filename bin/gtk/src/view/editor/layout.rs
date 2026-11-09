@@ -131,43 +131,6 @@ pub(super) fn image(name: &str) -> gtk::Image {
     icon
 }
 
-/// Binds grouped native toggles to the same selection model used by draft conversion.
-pub(super) fn segments(locale: &dyn Locale, model: &gtk::DropDown, labels: &[&str]) -> gtk::Box {
-    let widget = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    widget.add_css_class("ev_editor_segments");
-    let mut first = None;
-    for (index, label) in labels.iter().enumerate() {
-        let button = gtk::ToggleButton::with_label(locale.translate(label));
-        button.set_group(first.as_ref());
-        if first.is_none() {
-            first = Some(button.clone());
-        }
-        button.set_active(model.selected() == index as u32);
-        bind_segment(&button, model, index as u32);
-        widget.append(&button);
-    }
-
-    widget
-}
-
-fn bind_segment(button: &gtk::ToggleButton, model: &gtk::DropDown, index: u32) {
-    let selection = model.downgrade();
-    button.connect_toggled(move |button| {
-        if button.is_active()
-            && let Some(model) = selection.upgrade()
-        {
-            model.set_selected(index);
-        }
-    });
-
-    let weak = button.downgrade();
-    model.connect_selected_notify(move |model| {
-        if let Some(button) = weak.upgrade() {
-            button.set_active(model.selected() == index);
-        }
-    });
-}
-
 pub(super) fn choices(
     locale: &dyn Locale,
     model: &gtk::DropDown,

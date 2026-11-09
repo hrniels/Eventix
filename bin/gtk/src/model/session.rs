@@ -398,14 +398,6 @@ pub(crate) struct CalendarSession {
     requests: async_channel::Sender<Message>,
 }
 
-struct AuthenticationTask(tokio::task::JoinHandle<()>);
-
-impl Drop for AuthenticationTask {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
-
 impl CalendarSession {
     pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
         let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
@@ -603,6 +595,14 @@ struct RunningSync {
     activity: Activity,
     management: bool,
     batch: Vec<PendingItem>,
+}
+
+struct AuthenticationTask(tokio::task::JoinHandle<()>);
+
+impl Drop for AuthenticationTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 struct RunningAuthentication {

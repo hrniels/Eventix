@@ -8,12 +8,12 @@ use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::calendars::CalendarVisibility;
-use crate::view::calendar_selector::draw_toggle_circle;
+use crate::widgets::CalendarToggle;
 
 /// Keeps header visibility controls synchronized without replacing focused buttons on a toggle.
 #[derive(Default)]
 pub(super) struct PageCalendars {
-    choices: RefCell<Vec<(CalendarVisibility, gtk::ToggleButton)>>,
+    choices: RefCell<Vec<(CalendarVisibility, CalendarToggle)>>,
 }
 
 impl PageCalendars {
@@ -25,8 +25,7 @@ impl PageCalendars {
             })
         {
             for ((old, button), new) in choices.iter_mut().zip(calendars) {
-                button.set_active(new.enabled);
-                update_sync_error(button, &new);
+                button.update(&new.name, new.enabled, new.sync_error.as_deref());
                 *old = new;
             }
             return;
@@ -38,24 +37,15 @@ impl PageCalendars {
         }
         choices.clear();
         for calendar in calendars {
-            let dot = gtk::DrawingArea::new();
-            dot.set_size_request(22, 22);
-            let content = gtk::Overlay::new();
-            content.set_child(Some(&dot));
-            let warning = gtk::DrawingArea::new();
-            warning.set_can_target(false);
-            content.add_overlay(&warning);
-            let button = gtk::ToggleButton::builder()
-                .child(&content)
-                .active(calendar.enabled)
-                .build();
-            update_sync_error(&button, &calendar);
-            draw_toggle_circle(&dot, &button, &calendar.background);
-            button.add_css_class("ev_calendar_toggle");
-            button.update_property(&[gtk::accessible::Property::Label(&calendar.name)]);
+            let button = CalendarToggle::new(&calendar.name, &calendar.background, 22);
+            button.update(
+                &calendar.name,
+                calendar.enabled,
+                calendar.sync_error.as_deref(),
+            );
             let weak = page.downgrade();
             let id = calendar.id.clone();
-            button.connect_clicked(move |_| {
+            button.widget.connect_clicked(move |_| {
                 if let Some(page) = weak.upgrade()
                     && let Some(session) = page.imp().session.current.borrow().as_ref()
                 {
@@ -63,61 +53,9 @@ impl PageCalendars {
                     session.toggle_calendar(id.clone());
                 }
             });
-            container.append(&button);
+            container.append(&button.widget);
             choices.push((calendar, button));
         }
-    }
-}
-
-fn update_sync_error(button: &gtk::ToggleButton, calendar: &CalendarVisibility) {
-    let tooltip = match &calendar.sync_error {
-        Some(error) => format!("{}\n{}", calendar.name, error),
-        None => calendar.name.clone(),
-    };
-    button.set_tooltip_text(Some(&tooltip));
-    if let Some(content) = button.child().and_downcast::<gtk::Overlay>()
-        && let Some(warning) = content.last_child().and_downcast::<gtk::DrawingArea>()
-    {
-        warning.set_visible(calendar.sync_error.is_some());
-        let color = sync_error_color(&calendar.background, calendar.enabled);
-        warning.set_draw_func(move |_, cr, width, height| {
-            cr.set_source_rgb(
-                color.red().into(),
-                color.green().into(),
-                color.blue().into(),
-            );
-            let x = f64::from(width) / 2.0;
-            let y = f64::from(height) / 2.0;
-            cr.rectangle(x - 1.0, y - 6.0, 2.0, 8.0);
-            cr.rectangle(x - 1.0, y + 4.0, 2.0, 2.0);
-            let _ = cr.fill();
-        });
-    }
-}
-
-/// Chooses a contrasting foreground, preferring white on darker mid-tone circles.
-fn sync_error_color(background: &str, enabled: bool) -> gtk::gdk::RGBA {
-    let background = if enabled {
-        gtk::gdk::RGBA::parse(background).unwrap_or(gtk::gdk::RGBA::BLACK)
-    } else {
-        gtk::gdk::RGBA::new(0.65, 0.65, 0.65, 1.0)
-    };
-    let linear = |channel: f32| {
-        let channel = f64::from(channel);
-        if channel <= 0.04045 {
-            channel / 12.92
-        } else {
-            ((channel + 0.055) / 1.055).powf(2.4)
-        }
-    };
-    let luminance = 0.2126 * linear(background.red())
-        + 0.7152 * linear(background.green())
-        + 0.0722 * linear(background.blue());
-    // Favor white beyond the equal-contrast point so saturated reds also use a light mark.
-    if luminance < 0.3 {
-        gtk::gdk::RGBA::WHITE
-    } else {
-        gtk::gdk::RGBA::BLACK
     }
 }
 
@@ -125,20 +63,7 @@ fn sync_error_color(background: &str, enabled: bool) -> gtk::gdk::RGBA {
 mod tests {
     use gtk::{prelude::*, subclass::prelude::*};
 
-    use super::{CalendarPage, CalendarVisibility, sync_error_color};
-
-    #[test]
-    fn sync_error_mark_contrasts_with_calendar_colors_and_inactive_gray() {
-        for background in ["#000000", "#0000ff", "#333333", "#ff0000", "#ed3346"] {
-            assert_eq!(sync_error_color(background, true), gtk::gdk::RGBA::WHITE);
-        }
-        for background in ["#ffffff", "#ffff00", "#bbbbbb"] {
-            assert_eq!(sync_error_color(background, true), gtk::gdk::RGBA::BLACK);
-        }
-        for background in ["#000000", "#ffffff", "#0000ff"] {
-            assert_eq!(sync_error_color(background, false), gtk::gdk::RGBA::BLACK);
-        }
-    }
+    use super::{CalendarPage, CalendarVisibility};
 
     #[test]
     #[ignore = "requires a GTK display"]

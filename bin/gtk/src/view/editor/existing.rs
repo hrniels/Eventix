@@ -4,14 +4,12 @@
 
 use std::rc::Rc;
 
-use eventix_ical::objects::{
-    CalAttendee, CalDate, CalDateTime, CalRelated, CalRole, CalTrigger, DateContext,
-};
+use eventix_ical::objects::{CalAttendee, CalDate, CalDateTime, CalRole, DateContext};
 use eventix_state::actions::items::{CreateItem, EditScope, UpdateItem};
 use eventix_view::editor::EditorOptions;
 use gtk::prelude::*;
 
-use super::{AlarmInput, AttendeeInput, AttendeeSection, ItemEditor};
+use super::{AttendeeInput, AttendeeSection, ItemEditor};
 
 impl ItemEditor {
     pub fn edit(id: u64, mut options: EditorOptions, edit: UpdateItem) -> Rc<Self> {
@@ -133,15 +131,8 @@ impl ItemEditor {
 
     fn load_existing_alarms(&self, fields: &CreateItem, timezone: &chrono_tz::Tz) {
         self.alarm.load(fields.alarms.first(), timezone);
-        self.personal_override
-            .set_active(fields.personal_alarms.is_some());
-        self.personal_alarm.load(
-            fields
-                .personal_alarms
-                .as_ref()
-                .and_then(|alarms| alarms.first()),
-            timezone,
-        );
+        self.personal
+            .load(fields.personal_alarms.as_deref(), timezone);
     }
 
     fn load_existing_attendees(&self, attendees: &[CalAttendee]) {
@@ -186,44 +177,6 @@ impl ItemEditor {
         self.scroll.set_max_content_height(500);
 
         self.panel.clone().upcast()
-    }
-}
-
-impl AlarmInput {
-    pub(in crate::view) fn load(
-        &self,
-        alarm: Option<&eventix_ical::objects::CalAlarm>,
-        timezone: &chrono_tz::Tz,
-    ) {
-        let Some(alarm) = alarm else {
-            self.trigger.set_selected(0);
-            return;
-        };
-
-        match alarm.trigger() {
-            CalTrigger::Relative { duration, related } => {
-                let seconds = duration.num_seconds();
-                let (unit, divisor) = if seconds % 86400 == 0 {
-                    (2, 86400)
-                } else if seconds % 3600 == 0 {
-                    (1, 3600)
-                } else {
-                    (0, 60)
-                };
-                self.duration.set_value((seconds.abs() / divisor) as f64);
-                self.unit.set_selected(unit);
-                self.relation.set_selected(
-                    if *related == CalRelated::End { 2 } else { 0 } + u32::from(seconds > 0),
-                );
-                self.trigger.set_selected(1);
-            }
-            CalTrigger::Absolute(date) => {
-                let date = DateContext::system().date(date).start_in(timezone);
-                self.date.entry.set_text(&date.date_naive().to_string());
-                self.time.set_text(&date.format("%H:%M").to_string());
-                self.trigger.set_selected(2);
-            }
-        }
     }
 }
 

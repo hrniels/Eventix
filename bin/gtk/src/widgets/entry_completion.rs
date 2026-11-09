@@ -10,7 +10,7 @@ use std::{
 use gtk::{gdk, glib, prelude::*};
 
 /// Keeps suggestions outside the form layout while typing retains focus in the entry.
-pub(super) struct Completion {
+pub(crate) struct EntryCompletion {
     popup: gtk::Popover,
     list: gtk::ListBox,
     scroll: gtk::ScrolledWindow,
@@ -18,7 +18,7 @@ pub(super) struct Completion {
     entry: gtk::Entry,
 }
 
-impl Completion {
+impl EntryCompletion {
     pub fn new(entry: &gtk::Entry, candidates: Vec<String>) -> Self {
         let list = gtk::ListBox::new();
         list.set_selection_mode(gtk::SelectionMode::Single);
@@ -325,7 +325,7 @@ fn match_score(normalized: &str, query: &str) -> Option<(u8, usize, usize)> {
     Some((category, position, normalized.len()))
 }
 
-impl Drop for Completion {
+impl Drop for EntryCompletion {
     fn drop(&mut self) {
         self.popup.unparent();
     }

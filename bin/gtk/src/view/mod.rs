@@ -4,7 +4,6 @@
 
 mod action_menu;
 pub(crate) mod auth;
-mod calendar_selector;
 mod calendars;
 pub(crate) mod card;
 mod creation_hint;

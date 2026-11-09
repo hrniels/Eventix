@@ -69,6 +69,8 @@ impl ItemEditor {
     }
 
     fn error_target(&self, field: Field) -> (gtk::Widget, Option<usize>) {
+        let alarm_date = self.alarm.date.entry();
+        let personal_date = self.personal.input.date.entry();
         let (input, section): (&gtk::Widget, _) = match field {
             Field::Calendar => (self.calendar.widget.upcast_ref(), None),
             Field::Summary => (self.summary.upcast_ref(), None),
@@ -85,10 +87,10 @@ impl ItemEditor {
             Field::EndDate => (self.end.entry.upcast_ref(), Some(0)),
             Field::EndTime => (self.end_time.upcast_ref(), Some(0)),
             Field::Timezone => (self.timezone.upcast_ref(), Some(0)),
-            Field::AlarmDate => (self.alarm.date.entry.upcast_ref(), Some(1)),
+            Field::AlarmDate => (alarm_date.upcast_ref(), Some(1)),
             Field::AlarmTime => (self.alarm.time.upcast_ref(), Some(1)),
-            Field::PersonalAlarmDate => (self.personal_alarm.date.entry.upcast_ref(), Some(1)),
-            Field::PersonalAlarmTime => (self.personal_alarm.time.upcast_ref(), Some(1)),
+            Field::PersonalAlarmDate => (personal_date.upcast_ref(), Some(1)),
+            Field::PersonalAlarmTime => (self.personal.input.time.upcast_ref(), Some(1)),
             Field::RecurrenceUntil => (self.recurrence.until.entry.upcast_ref(), Some(3)),
             Field::NewAttendee => (self.new_attendee.upcast_ref(), Some(4)),
         };
@@ -179,12 +181,12 @@ mod tests {
             editor.start_time.set_text("bad time");
             editor.end_time.set_text("bad time");
             editor.alarm.trigger.set_selected(2);
-            editor.alarm.date.entry.set_text("bad date");
+            editor.alarm.date.entry().set_text("bad date");
             editor.alarm.time.set_text("bad time");
-            editor.personal_override.set_active(true);
-            editor.personal_alarm.trigger.set_selected(2);
-            editor.personal_alarm.date.entry.set_text("bad date");
-            editor.personal_alarm.time.set_text("bad time");
+            editor.personal.overwrite.set_active(true);
+            editor.personal.input.trigger.set_selected(2);
+            editor.personal.input.date.entry().set_text("bad date");
+            editor.personal.input.time.set_text("bad time");
             editor.recurrence.frequency.set_selected(2);
             editor.recurrence.end.set_selected(2);
             editor.recurrence.until.entry.set_text("bad date");

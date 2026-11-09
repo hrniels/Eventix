@@ -11,7 +11,7 @@ use eventix_locale::Locale;
 use eventix_view::list::{Calendar, Filter};
 use gtk::{gdk, prelude::*};
 
-use crate::view::calendar_selector::draw_toggle_circle;
+use crate::widgets::CalendarToggle;
 
 type Changed = Rc<dyn Fn()>;
 
@@ -23,7 +23,7 @@ pub(super) struct Filtering {
     apply: gtk::Button,
     reset: gtk::Button,
     title: gtk::Label,
-    choices: RefCell<Vec<(Calendar, gtk::ToggleButton)>>,
+    choices: RefCell<Vec<(Calendar, CalendarToggle)>>,
     updating: Cell<bool>,
     changed: RefCell<Option<Changed>>,
 }
@@ -60,7 +60,7 @@ impl Filtering {
                 filtering.updating.set(true);
                 filtering.search.set_text("");
                 for (_, button) in filtering.choices.borrow().iter() {
-                    button.set_active(true);
+                    button.widget.set_active(true);
                 }
                 filtering.updating.set(false);
                 filtering.emit_changed();
@@ -109,7 +109,7 @@ impl Filtering {
                 .choices
                 .borrow()
                 .iter()
-                .filter(|(_, button)| button.is_active())
+                .filter(|(_, button)| button.widget.is_active())
                 .map(|(calendar, _)| calendar.id.clone())
                 .collect(),
         }
@@ -142,28 +142,24 @@ impl Filtering {
             self.choices.borrow_mut().clear();
             for calendar in calendars {
                 let button = self.calendar_button(calendar);
-                self.calendars.append(&button);
+                self.calendars.append(&button.widget);
                 self.choices.borrow_mut().push((calendar.clone(), button));
             }
         }
         // Do not replace draft keywords while an unrelated refresh is arriving.
         for (calendar, button) in self.choices.borrow().iter() {
             button
+                .widget
                 .set_active(filter.calendars.is_empty() || filter.calendars.contains(&calendar.id));
         }
         self.updating.set(false);
     }
 
-    fn calendar_button(self: &Rc<Self>, calendar: &Calendar) -> gtk::ToggleButton {
-        let builder = gtk::Builder::from_resource(resource_path!("view/list/calendar.ui"));
-        let button: gtk::ToggleButton = builder.object("calendar").unwrap();
-        button.set_tooltip_text(Some(&calendar.name));
-        button.update_property(&[gtk::accessible::Property::Label(&calendar.name)]);
-        let dot: gtk::DrawingArea = builder.object("dot").unwrap();
-        draw_toggle_circle(&dot, &button, &calendar.background);
+    fn calendar_button(self: &Rc<Self>, calendar: &Calendar) -> CalendarToggle {
+        let button = CalendarToggle::new(&calendar.name, &calendar.background, 22);
 
         let weak = Rc::downgrade(self);
-        button.connect_toggled(move |button| {
+        button.widget.connect_toggled(move |button| {
             let Some(filtering) = weak.upgrade() else {
                 return;
             };
@@ -175,7 +171,7 @@ impl Filtering {
                     .choices
                     .borrow()
                     .iter()
-                    .all(|(_, button)| !button.is_active())
+                    .all(|(_, button)| !button.widget.is_active())
             {
                 filtering.updating.set(true);
                 button.set_active(true);

@@ -1195,7 +1195,8 @@ mod tests {
                 .collect();
             for button in &toggles {
                 assert!(button.allocated_height() <= search.allocated_height());
-                let dot = button.child().and_downcast::<gtk::DrawingArea>().unwrap();
+                let content = button.child().and_downcast::<gtk::Overlay>().unwrap();
+                let dot = content.child().and_downcast::<gtk::DrawingArea>().unwrap();
                 assert_eq!(dot.allocated_width(), 22);
                 assert_eq!(dot.allocated_height(), 22);
             }

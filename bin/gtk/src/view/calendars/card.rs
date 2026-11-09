@@ -16,7 +16,7 @@ use gtk::{gdk, prelude::*};
 
 use super::{ActionHandler, action, clear, icon_action, text};
 use crate::model::management::{CalendarOperation, Operation, Request};
-use crate::view::{calendar_selector::set_dot_color, editor::AlarmInput};
+use crate::widgets::{AlarmInput, ColorDot, SegmentedControl};
 
 const ROW_TITLES: [&str; 4] = ["Folder", "Color", "Creation", "Alarms"];
 
@@ -267,7 +267,9 @@ impl CalendarCard {
 
     fn close(&self) {
         self.set_editing(false);
-        set_dot_color(&self.header.dot, color(&self.model.borrow().background));
+        self.header
+            .dot
+            .set_color(color(&self.model.borrow().background));
         self.actions.edit.grab_focus();
     }
 
@@ -285,7 +287,7 @@ struct CardHeader {
     title: gtk::Stack,
     name: gtk::Label,
     entry: gtk::Entry,
-    dot: gtk::DrawingArea,
+    dot: ColorDot,
     enabled: gtk::Switch,
 }
 
@@ -318,11 +320,7 @@ impl CardHeader {
             title,
             name,
             entry,
-            dot: gtk::DrawingArea::builder()
-                .width_request(22)
-                .height_request(22)
-                .valign(gtk::Align::Center)
-                .build(),
+            dot: ColorDot::new(22),
             enabled: gtk::Switch::builder().valign(gtk::Align::Center).build(),
         };
         header.append_to(container, calendar.configured, toggle_group);
@@ -346,7 +344,7 @@ impl CardHeader {
             toggle_slot.append(&self.enabled);
         }
         leading.append(&toggle_slot);
-        leading.append(&self.dot);
+        leading.append(&self.dot.widget);
         container.append(&leading);
         container.append(&self.title);
     }
@@ -356,7 +354,7 @@ impl CardHeader {
         self.name.set_tooltip_text(Some(&calendar.name));
         self.enabled.set_active(calendar.enabled);
         if !editing {
-            set_dot_color(&self.dot, color(&calendar.background));
+            self.dot.set_color(color(&calendar.background));
         }
     }
 
@@ -486,7 +484,7 @@ struct CalendarForm {
     foreground: gtk::ColorDialogButton,
     events: gtk::CheckButton,
     tasks: gtk::CheckButton,
-    personal: gtk::ToggleButton,
+    personal: gtk::SingleSelection,
     alarm: Rc<AlarmInput>,
 }
 
@@ -506,7 +504,7 @@ impl CalendarForm {
             .filter_map(|(active, kind)| active.then_some(kind))
             .collect(),
         );
-        settings.set_alarms(if self.personal.is_active() {
+        settings.set_alarms(if self.personal.selected() == 1 {
             CalendarAlarmType::Personal {
                 default: self
                     .alarm
@@ -538,7 +536,7 @@ fn calendar_form(
     calendar: &Calendar,
     backend: Backend,
     locale: &dyn Locale,
-    dot: &gtk::DrawingArea,
+    dot: &ColorDot,
     labels: &[gtk::Label; 4],
 ) -> CalendarForm {
     let form = gtk::Box::new(gtk::Orientation::Vertical, 6);
@@ -581,7 +579,7 @@ fn calendar_form(
 fn color_controls(
     calendar: &Calendar,
     locale: &dyn Locale,
-    dot: &gtk::DrawingArea,
+    dot: &ColorDot,
 ) -> (gtk::Grid, gtk::ColorDialogButton, gtk::ColorDialogButton) {
     let colors = gtk::Grid::builder()
         .column_spacing(8)
@@ -654,14 +652,14 @@ fn append_color_row(
 }
 
 struct ColorPreviews {
-    dot: gtk::DrawingArea,
+    dot: ColorDot,
     timed: gtk::DrawingArea,
     all_day: gtk::DrawingArea,
     title: String,
 }
 
 impl ColorPreviews {
-    fn new(locale: &dyn Locale, dot: &gtk::DrawingArea) -> Self {
+    fn new(locale: &dyn Locale, dot: &ColorDot) -> Self {
         let timed = gtk::DrawingArea::builder()
             .width_request(22)
             .height_request(22)
@@ -674,7 +672,7 @@ impl ColorPreviews {
         label_control(&all_day, "Preview (all-day)", locale);
 
         Self {
-            dot: dot.clone(),
+            dot: ColorDot::from_widget(dot.widget.clone()),
             timed,
             all_day,
             title,
@@ -682,8 +680,8 @@ impl ColorPreviews {
     }
 
     fn update(&self, bg: gdk::RGBA, fg: gdk::RGBA) {
-        set_dot_color(&self.dot, bg);
-        set_dot_color(&self.timed, bg);
+        self.dot.set_color(bg);
+        ColorDot::from_widget(self.timed.clone()).set_color(bg);
         let title = self.title.clone();
         self.all_day
             .set_draw_func(move |_, context, width, height| {
@@ -723,27 +721,25 @@ impl ColorPreviews {
 fn alarm_controls(
     calendar: &Calendar,
     locale: &dyn Locale,
-) -> (gtk::Box, gtk::ToggleButton, Rc<AlarmInput>) {
+) -> (gtk::Box, gtk::SingleSelection, Rc<AlarmInput>) {
     let alarms = gtk::Box::new(gtk::Orientation::Vertical, 8);
-    let modes = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    modes.add_css_class("linked");
-    let calendar_mode = gtk::ToggleButton::with_label(locale.translate("Calendar"));
-    let personal_mode = gtk::ToggleButton::with_label(locale.translate("Personal"));
-    personal_mode.set_group(Some(&calendar_mode));
-    modes.append(&calendar_mode);
-    modes.append(&personal_mode);
-    alarms.append(&modes);
+    let modes = SegmentedControl::new(
+        locale,
+        &["Calendar", "Personal"],
+        u32::from(calendar.personal_alarms),
+    );
+    alarms.append(&modes.widget);
     let input = Rc::new(AlarmInput::for_calendar(
         locale,
         calendar.default_alarm.as_ref(),
     ));
     input.widget.set_visible(calendar.personal_alarms);
     alarms.append(&input.widget);
-    personal_mode.set_active(calendar.personal_alarms);
-    calendar_mode.set_active(!calendar.personal_alarms);
     let widget = input.widget.clone();
-    personal_mode.connect_toggled(move |button| widget.set_visible(button.is_active()));
-    (alarms, personal_mode, input)
+    modes
+        .selection
+        .connect_selected_notify(move |selection| widget.set_visible(selection.selected() == 1));
+    (alarms, modes.selection, input)
 }
 
 fn append_row(

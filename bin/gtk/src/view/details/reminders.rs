@@ -13,12 +13,11 @@ use gtk::prelude::*;
 
 use super::size_transition::SizeTransition;
 use super::{DetailItem, ReminderHandler, button, label};
-use crate::view::editor::AlarmInput;
+use crate::widgets::PersonalReminderInput;
 
 pub(super) struct ReminderEditor {
     save: gtk::Button,
-    overwrite: gtk::CheckButton,
-    input: Rc<AlarmInput>,
+    input: Rc<PersonalReminderInput>,
     error: gtk::Label,
     occurrence: bool,
     timezone: chrono_tz::Tz,
@@ -38,11 +37,7 @@ impl ReminderEditor {
             &details.personal_reminders.series
         };
         self.initial.replace(initial.clone());
-        self.input.load(
-            initial.as_ref().and_then(|alarms| alarms.first()),
-            &self.timezone,
-        );
-        self.overwrite.set_active(initial.is_some());
+        self.input.load(initial.as_deref(), &self.timezone);
         self.error.set_visible(false);
         self.summary
             .set_text(details.reminders.as_deref().unwrap_or("−"));
@@ -55,23 +50,18 @@ impl ReminderEditor {
             item.recurrence = None;
         }
         let input = self.input.clone();
-        let overwrite = self.overwrite.clone();
         let error = self.error.clone();
         let timezone = self.timezone;
         let invalid = self.invalid.clone();
         let description = self.description.clone();
         self.save.connect_clicked(move |_| {
-            let alarms = if overwrite.is_active() {
-                match input.value_with_text(&timezone, &invalid, &description) {
-                    Ok(alarms) => Some(alarms),
-                    Err(err) => {
-                        error.set_text(&err.to_string());
-                        error.set_visible(true);
-                        return;
-                    }
+            let alarms = match input.value(&timezone, &invalid, &description) {
+                Ok(alarms) => alarms,
+                Err(err) => {
+                    error.set_text(&err.to_string());
+                    error.set_visible(true);
+                    return;
                 }
-            } else {
-                None
             };
             error.set_visible(false);
             callback(UpdatePersonalAlarms {
@@ -113,24 +103,18 @@ pub(super) fn content(
         buttons.append(&edit);
         let panel = gtk::Box::new(gtk::Orientation::Vertical, 8);
         stack.add_child(&panel);
-        let overwrite = gtk::CheckButton::with_label(locale.translate("Overwrite default"));
         let initial = if occurrence {
             &event.details.personal_reminders.occurrence
         } else {
             &event.details.personal_reminders.series
         };
-        overwrite.set_active(initial.is_some());
-        panel.append(&overwrite);
         let now = Utc::now().with_timezone(locale.timezone());
-        let input = Rc::new(AlarmInput::new(locale, now.date_naive(), now.time()));
-        input.load(initial.as_ref().and_then(|a| a.first()), locale.timezone());
-        input.widget.set_sensitive(overwrite.is_active());
-        let widget = input.widget.downgrade();
-        overwrite.connect_toggled(move |check| {
-            if let Some(widget) = widget.upgrade() {
-                widget.set_sensitive(check.is_active());
-            }
-        });
+        let input = Rc::new(PersonalReminderInput::new(
+            locale,
+            now.date_naive(),
+            now.time(),
+        ));
+        input.load(initial.as_deref(), locale.timezone());
         panel.append(&input.widget);
         let error = label("");
         error.set_visible(false);
@@ -153,13 +137,11 @@ pub(super) fn content(
         let initial = Rc::new(RefCell::new(initial.clone()));
         let reset_initial = initial.clone();
         let reset_input = input.clone();
-        let reset_overwrite = overwrite.clone();
         let reset_error = error.clone();
         let timezone = *locale.timezone();
         cancel.connect_clicked(move |_| {
             let initial = reset_initial.borrow();
-            reset_input.load(initial.as_ref().and_then(|a| a.first()), &timezone);
-            reset_overwrite.set_active(initial.is_some());
+            reset_input.load(initial.as_deref(), &timezone);
             reset_error.set_visible(false);
             if let (Some(display), Some(area)) = (weak_display.upgrade(), weak_area.upgrade()) {
                 area.show(&display);
@@ -167,7 +149,6 @@ pub(super) fn content(
         });
         editors.push(ReminderEditor {
             save,
-            overwrite,
             input,
             error,
             occurrence,
@@ -269,8 +250,8 @@ mod tests {
         assert_eq!(received.borrow()[1].item, item);
         assert!(received.borrow()[1].alarms.as_ref().unwrap().is_empty());
 
-        editors[1].overwrite.set_active(false);
-        assert!(!editors[1].input.widget.is_sensitive());
+        editors[1].input.overwrite.set_active(false);
+        assert!(!editors[1].input.input.widget.is_sensitive());
         editors[1].save.emit_clicked();
         assert!(received.borrow()[2].alarms.is_none());
 
@@ -278,31 +259,22 @@ mod tests {
             CalAction::Display,
             CalTrigger::Absolute("TU2026-10-13T08:30:00".parse().unwrap()),
         );
-        editors[1].input.load(Some(&absolute), locale.timezone());
-        editors[1].overwrite.set_active(true);
+        editors[1]
+            .input
+            .input
+            .load(Some(&absolute), locale.timezone());
+        editors[1].input.overwrite.set_active(true);
         editors[1].save.emit_clicked();
         assert_eq!(
             received.borrow()[3].alarms.as_ref().unwrap()[0].trigger(),
             absolute.trigger()
         );
 
-        let time = editors[1]
-            .input
-            .widget
-            .last_child()
-            .unwrap()
-            .last_child()
-            .unwrap()
-            .last_child()
-            .unwrap()
-            .downcast::<crate::widgets::TimeInput>()
-            .unwrap()
-            .entry();
-        time.set_text("invalid");
+        editors[1].input.input.time.set_text("invalid");
         editors[1].save.emit_clicked();
         assert_eq!(received.borrow().len(), 4);
         assert!(editors[1].error.is_visible());
-        editors[1].overwrite.set_active(false);
+        editors[1].input.overwrite.set_active(false);
         editors[1].save.emit_clicked();
         assert!(received.borrow()[4].alarms.is_none());
 
@@ -364,7 +336,7 @@ mod tests {
 
         edit.emit_clicked();
         assert!(animate(&panel) > 2);
-        editors[1].overwrite.set_active(false);
+        editors[1].input.overwrite.set_active(false);
         let panel = stack.visible_child().unwrap();
         panel
             .last_child()
@@ -376,9 +348,10 @@ mod tests {
             .emit_clicked();
         assert_eq!(stack.visible_child().as_ref(), Some(&display));
         assert!(animate(&display) > 2);
-        assert!(editors[1].overwrite.is_active());
+        assert!(editors[1].input.overwrite.is_active());
         assert_eq!(
             editors[1]
+                .input
                 .input
                 .value_with_text(locale.timezone(), "invalid", "Reminder")
                 .unwrap()[0]
