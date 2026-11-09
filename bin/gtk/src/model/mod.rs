@@ -5,6 +5,7 @@
 //! Session-owned state and query subscriptions, independent of GTK objects.
 
 pub(crate) mod activity;
+pub(crate) mod alarms;
 pub(crate) mod calendars;
 pub(crate) mod management;
 mod push;

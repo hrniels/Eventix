@@ -103,6 +103,7 @@ pub(crate) struct ChangeSet {
 }
 
 pub(crate) enum Event {
+    Alarm(super::alarms::Notification),
     PreferencesLoaded(eventix_state::Preferences),
     PreferencesSaved(Result<eventix_state::Preferences, String>),
     PushAuthenticationRequired(String),
@@ -712,26 +713,35 @@ impl Worker {
             return;
         };
         let mut request = 0;
+        let mut next_alarm_check = std::time::Instant::now();
 
         // Queries and commands are ordered. Never discard a queued mutation.
         loop {
-            let deadline = self.pushes.deadline().filter(|_| runtime.sync.is_none());
-            let message = runtime.runtime.block_on(async {
-                if let Some(deadline) = deadline {
-                    tokio::select! {
-                        message = receiver.recv() => message.ok(),
-                        _ = tokio::time::sleep_until(deadline.into()) => None,
+            if std::time::Instant::now() >= next_alarm_check {
+                if let Ok(mut state) = self.state() {
+                    for notification in super::alarms::check(&mut state, Utc::now()) {
+                        let _ = runtime.results.send_blocking(Event::Alarm(notification));
                     }
-                } else {
-                    receiver.recv().await.ok()
+                }
+                next_alarm_check = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            }
+            let push_deadline = self.pushes.deadline().filter(|_| runtime.sync.is_none());
+            let deadline =
+                push_deadline.map_or(next_alarm_check, |deadline| deadline.min(next_alarm_check));
+            let message = runtime.runtime.block_on(async {
+                tokio::select! {
+                    message = receiver.recv() => message.ok(),
+                    _ = tokio::time::sleep_until(deadline.into()) => None,
                 }
             });
             let Some(message) = message else {
                 if receiver.is_closed() {
                     return;
                 }
-                request += 1;
-                self.begin_push(&mut runtime, request);
+                if push_deadline.is_some_and(|deadline| deadline <= std::time::Instant::now()) {
+                    request += 1;
+                    self.begin_push(&mut runtime, request);
+                }
                 continue;
             };
             request += 1;

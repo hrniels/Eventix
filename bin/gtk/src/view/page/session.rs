@@ -467,6 +467,18 @@ impl PageSession {
         // Result handlers only update their own controls and must not record the error again.
         let imp = page.imp();
         match event {
+            Event::Alarm(alarm) => {
+                if let Some(application) = page
+                    .root()
+                    .and_downcast::<gtk::Window>()
+                    .and_then(|window| window.application())
+                {
+                    let notification = gtk::gio::Notification::new(&alarm.summary);
+                    notification.set_body(Some(&alarm.body));
+                    notification.set_priority(gtk::gio::NotificationPriority::Urgent);
+                    application.send_notification(None, &notification);
+                }
+            }
             Event::PreferencesLoaded(preferences) => self.update_preferences(page, preferences),
             Event::PreferencesSaved(result) => {
                 if let Ok(preferences) = &result {

@@ -129,6 +129,10 @@ Uploads run in the background and can be cancelled using the status-bar cancel b
 cancelled uploads remain pending until another edit or regular synchronization; the queue itself is
 not persisted across restarts, but local calendar changes are saved immediately.
 
+The native application checks calendar and personal reminders every 30 seconds and delivers desktop
+notifications. Reminders remain active while the window is hidden in the system tray, but stop when
+the application quits. The last check time is saved so missed reminders can be delivered on restart.
+
 Regular synchronization is still needed to receive remote changes and propagate deletions,
 including the source-side deletion of an item moved to another calendar. Conflicting or uncertain
 uploads should be reconciled with regular synchronization rather than forced uploads.
