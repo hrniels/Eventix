@@ -20,11 +20,10 @@ pub(crate) struct EntryCompletion {
 
 impl EntryCompletion {
     pub fn new(entry: &gtk::Entry, candidates: Vec<String>) -> Self {
-        let list = gtk::ListBox::new();
-        list.set_selection_mode(gtk::SelectionMode::Single);
-        list.set_focusable(false);
-
-        let (scroll, popup) = Self::create_popup(&list);
+        let builder = gtk::Builder::from_resource(resource_path!("widgets/entry_completion.ui"));
+        let list = builder.object("list").expect("completion list");
+        let scroll = builder.object("scroll").expect("completion scroll");
+        let popup: gtk::Popover = builder.object("popup").expect("completion popup");
         popup.set_parent(entry);
 
         let completion = Self {
@@ -44,28 +43,6 @@ impl EntryCompletion {
         completion.connect_focus_leave(&focus);
 
         completion
-    }
-
-    fn create_popup(list: &gtk::ListBox) -> (gtk::ScrolledWindow, gtk::Popover) {
-        let scroll = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
-            .vscrollbar_policy(gtk::PolicyType::Automatic)
-            .propagate_natural_height(true)
-            .propagate_natural_width(true)
-            .max_content_height(240)
-            .child(list)
-            .build();
-        scroll.set_focusable(false);
-
-        let popup = gtk::Popover::builder()
-            .autohide(false)
-            .has_arrow(false)
-            .position(gtk::PositionType::Bottom)
-            .child(&scroll)
-            .build();
-        popup.set_halign(gtk::Align::Start);
-
-        (scroll, popup)
     }
 
     fn connect_refresh(

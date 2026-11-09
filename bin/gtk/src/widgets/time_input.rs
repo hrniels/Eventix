@@ -196,6 +196,7 @@ mod tests {
     #[ignore = "requires a GTK display"]
     fn time_input_shortcuts_adjust_components_and_leave_normal_editing_keys_untouched() {
         gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let input = TimeInput::new(eventix_locale::default().as_ref(), "23:58".parse().unwrap());
         let entry = input.entry();
         let press = |key| input.key_pressed(key, gdk::ModifierType::CONTROL_MASK);

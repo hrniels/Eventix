@@ -18,15 +18,19 @@ const RING_BOUNDARY: f64 = (INNER_RADIUS + OUTER_RADIUS) / 2.0;
 mod imp {
     use super::*;
 
-    #[derive(Default)]
+    resource_template! { "widgets/time_picker.ui",
     pub struct TimePicker {
         pub time: Cell<NaiveTime>,
         pub minutes: Cell<bool>,
         pub dragging: Cell<bool>,
         pub face_minutes: Cell<Option<bool>>,
-        pub hours: gtk::Button,
-        pub minutes_button: gtk::Button,
-        pub face: gtk::Fixed,
+        #[template_child]
+        pub hours: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub minutes_button: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub face: gtk::TemplateChild<gtk::Fixed>,
+    }
     }
 
     #[glib::object_subclass]
@@ -34,6 +38,14 @@ mod imp {
         const NAME: &'static str = "EventixTimePicker";
         type Type = super::TimePicker;
         type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
     }
 
     impl ObjectImpl for TimePicker {
@@ -45,18 +57,8 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
-            obj.set_orientation(gtk::Orientation::Vertical);
-            obj.set_spacing(8);
-            obj.add_css_class("ev_time_picker");
-            let header = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-            header.set_halign(gtk::Align::Center);
-            header.append(&self.hours);
-            header.append(&gtk::Label::new(Some(":")));
-            header.append(&self.minutes_button);
-            obj.append(&header);
+            // Keep the face dimensions shared with hit testing and hand drawing.
             self.face.set_size_request(FACE_SIZE, FACE_SIZE);
-            self.face.add_css_class("ev_time_picker_face");
-            obj.append(&self.face);
             obj.connect_drag();
             let click = gtk::GestureClick::new();
             let weak = obj.downgrade();
@@ -89,8 +91,6 @@ mod imp {
             });
             self.face.add_controller(click);
             for (button, minutes) in [(&self.hours, false), (&self.minutes_button, true)] {
-                button.set_focus_on_click(false);
-                button.set_focusable(false);
                 let weak = obj.downgrade();
                 button.connect_clicked(move |_| {
                     if let Some(obj) = weak.upgrade() {
@@ -101,6 +101,10 @@ mod imp {
             }
             obj.set_locale(eventix_locale::default().as_ref());
             obj.refresh();
+        }
+
+        fn dispose(&self) {
+            self.dispose_template();
         }
     }
 
@@ -376,6 +380,7 @@ mod tests {
         use std::rc::Rc;
 
         gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let picker: TimePicker = glib::Object::new();
         let count = Rc::new(Cell::new(0));
         let selected = count.clone();

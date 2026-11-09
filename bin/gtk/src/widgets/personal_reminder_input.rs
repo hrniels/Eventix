@@ -18,8 +18,13 @@ pub(crate) struct PersonalReminderInput {
 
 impl PersonalReminderInput {
     pub fn new(locale: &dyn Locale, date: NaiveDate, time: NaiveTime) -> Self {
-        let widget = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        let overwrite = gtk::CheckButton::with_label(locale.translate("Overwrite default"));
+        let builder =
+            gtk::Builder::from_resource(resource_path!("widgets/personal_reminder_input.ui"));
+        let widget: gtk::Box = builder
+            .object("personal_reminder_input")
+            .expect("personal reminder");
+        let overwrite: gtk::CheckButton = builder.object("overwrite").expect("reminder override");
+        overwrite.set_label(Some(locale.translate("Overwrite default")));
         let input = AlarmInput::new(locale, date, time);
         input.widget.set_sensitive(false);
         let weak = input.widget.downgrade();
@@ -28,7 +33,6 @@ impl PersonalReminderInput {
                 widget.set_sensitive(check.is_active());
             }
         });
-        widget.append(&overwrite);
         widget.append(&input.widget);
         Self {
             widget,

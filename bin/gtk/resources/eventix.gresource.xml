@@ -16,6 +16,12 @@
     <file>view/details/details.ui</file>
     <file>view/details/scrollers.ui</file>
     <file>widgets/alarm_input.ui</file>
+    <file>widgets/calendar_choice.ui</file>
+    <file>widgets/calendar_selector.ui</file>
+    <file>widgets/calendar_toggle.ui</file>
+    <file>widgets/entry_completion.ui</file>
+    <file>widgets/personal_reminder_input.ui</file>
+    <file>widgets/time_picker.ui</file>
     <file>view/editor/caption.ui</file>
     <file>view/editor/date_input.ui</file>
     <file>view/editor/description.ui</file>

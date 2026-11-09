@@ -25,8 +25,10 @@ pub(crate) struct CalendarSelector {
 
 impl CalendarSelector {
     pub fn new(calendars: &[EditorCalendar], selected: Option<&str>, compact: bool) -> Self {
-        let widget = gtk::DropDown::from_strings(&[]);
-        widget.add_css_class("ev_calendar_selector");
+        let builder = gtk::Builder::from_resource(resource_path!("widgets/calendar_selector.ui"));
+        let widget: gtk::DropDown = builder
+            .object("calendar_selector")
+            .expect("calendar selector");
         widget.connect_selected_notify(update_tooltip);
         connect_arrow_keys(&widget);
         let selector = Self {
@@ -149,15 +151,10 @@ fn calendar_factory(
             return;
         };
 
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        let dot = ColorDot::new(18);
-        content.append(&dot.widget);
-        if show_name {
-            let label = gtk::Label::new(None);
-            label.set_xalign(0.0);
-            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-            content.append(&label);
-        }
+        let builder = gtk::Builder::from_resource(resource_path!("widgets/calendar_choice.ui"));
+        let content: gtk::Box = builder.object("calendar_choice").expect("calendar choice");
+        let label: gtk::Label = builder.object("name").expect("calendar name");
+        label.set_visible(show_name);
         item.set_child(Some(&content));
     });
 
@@ -216,6 +213,7 @@ mod tests {
     #[ignore = "requires a GTK display"]
     fn compact_and_full_selectors_preserve_calendar_identity_and_refresh_colors() {
         gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         for compact in [false, true] {
             let mut calendars = vec![
                 EditorCalendar {

@@ -15,19 +15,12 @@ pub(crate) struct CalendarToggle {
 
 impl CalendarToggle {
     pub fn new(name: &str, background: &str, size: i32) -> Self {
-        let dot = ColorDot::new(size);
-        let content = gtk::Overlay::new();
-        content.set_child(Some(&dot.widget));
-        let warning = gtk::DrawingArea::builder()
-            .can_target(false)
-            .visible(false)
-            .build();
-        content.add_overlay(&warning);
-        let widget = gtk::ToggleButton::builder()
-            .child(&content)
-            .tooltip_text(name)
-            .build();
-        widget.add_css_class("ev_calendar_toggle");
+        let builder = gtk::Builder::from_resource(resource_path!("widgets/calendar_toggle.ui"));
+        let widget: gtk::ToggleButton = builder.object("calendar_toggle").expect("calendar toggle");
+        let warning = builder.object("warning").expect("calendar warning");
+        let dot = ColorDot::from_widget(builder.object("dot").expect("calendar dot"));
+        dot.widget.set_size_request(size, size);
+        widget.set_tooltip_text(Some(name));
         widget.update_property(&[gtk::accessible::Property::Label(name)]);
         dot.bind_toggle(
             &widget,
