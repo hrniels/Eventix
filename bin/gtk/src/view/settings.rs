@@ -95,11 +95,16 @@ impl SettingsPopup {
         content.append(&error);
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         buttons.set_halign(gtk::Align::End);
-        let cancel = gtk::Button::with_label(locale.translate("Cancel"));
-        let save = gtk::Button::with_label(locale.translate("Save"));
-        save.add_css_class("suggested-action");
-        buttons.append(&cancel);
+        let cancel = action_button(
+            locale.translate("Cancel"),
+            resource_path!("icons/x-circle-symbolic.svg"),
+        );
+        let save = action_button(
+            locale.translate("Save"),
+            resource_path!("icons/floppy2-fill-symbolic.svg"),
+        );
         buttons.append(&save);
+        buttons.append(&cancel);
         content.append(&buttons);
         let popup = Rc::new(Self {
             window,
@@ -212,6 +217,19 @@ impl Drop for SettingsPopup {
     }
 }
 
+fn action_button(label: &str, resource: &str) -> gtk::Button {
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    content.set_halign(gtk::Align::Center);
+    let image = gtk::Image::from_resource(resource);
+    image.set_pixel_size(16);
+    content.append(&image);
+    content.append(&gtk::Label::new(Some(label)));
+    gtk::Button::builder()
+        .child(&content)
+        .css_classes(["ev_editor_action"])
+        .build()
+}
+
 /// Displays the same flag and translated language name in the selection and dropdown list.
 fn language_factory() -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
@@ -270,6 +288,27 @@ mod tests {
         assert!(popup.window.is_modal());
         assert_eq!(popup.window.transient_for(), Some(parent.clone()));
         assert_eq!(popup.preferences(), Preferences::default());
+        for (button, label, resource) in [
+            (
+                &popup.cancel,
+                "Cancel",
+                resource_path!("icons/x-circle-symbolic.svg"),
+            ),
+            (
+                &popup.save,
+                "Save",
+                resource_path!("icons/floppy2-fill-symbolic.svg"),
+            ),
+        ] {
+            assert!(button.has_css_class("ev_editor_action"));
+            let content = button.child().and_downcast::<gtk::Box>().unwrap();
+            assert_eq!(content.halign(), gtk::Align::Center);
+            let image = content.first_child().and_downcast::<gtk::Image>().unwrap();
+            assert_eq!(image.resource().as_deref(), Some(resource));
+            assert_eq!(image.pixel_size(), 16);
+            let text = content.last_child().and_downcast::<gtk::Label>().unwrap();
+            assert_eq!(text.text(), label);
+        }
         assert_eq!(popup.interval.adjustment().lower(), 1.0);
         assert_eq!(popup.interval.adjustment().upper(), 1440.0);
         assert_eq!(popup.delay.adjustment().lower(), 0.0);
