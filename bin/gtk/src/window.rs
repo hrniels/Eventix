@@ -376,7 +376,7 @@ impl Window {
         for (name, keys, days) in [
             ("previous", vec!["<Control>Left"], Some(-1)),
             ("next", vec!["<Control>Right"], Some(1)),
-            ("today", vec!["<Control>Home", "period"], None),
+            ("today", vec!["<Control>Home", "<Control>period"], None),
             ("reload", vec!["<Primary>r", "F5"], None),
             ("week-view", vec!["<Control>w"], None),
             ("month-view", vec!["<Control>m"], None),
