@@ -312,11 +312,11 @@ pub trait Locale: CalLocale + Debug {
     /// - Date-only start + date-only end where end is the day immediately after start →
     ///   the single start date (all-day event spanning exactly one day).
     /// - Date-only start + date-only end spanning multiple days →
-    ///   `"<start> &#x2012; <end>"`.
+    ///   `"<start> ‒ <end>"`.
     /// - DateTime start and end on the same calendar day →
-    ///   `"<date>, <start-time> &#x2012; <end-time>"`.
+    ///   `"<date>, <start-time> ‒ <end-time>"`.
     /// - DateTime start and end on different days →
-    ///   `"<start-datetime> &#x2012; <end-datetime>"`.
+    ///   `"<start-datetime> ‒ <end-datetime>"`.
     /// - DateTime-only start or end → formatted with [`Locale::fmt_datetime`].
     ///
     /// All dates are formatted in the short style using the given timezone.
@@ -337,14 +337,14 @@ pub trait Locale: CalLocale + Debug {
             }
             (Some(CalDate::Date(start, ..)), Some(end @ CalDate::Date(..))) => {
                 format!(
-                    "{} &#x2012; {}",
+                    "{} ‒ {}",
                     self.fmt_date(&start, date_flags),
                     self.fmt_date(&ctx.date(&end).end_in(tz), date_flags)
                 )
             }
             (Some(start), Some(end)) if start.as_naive_date() == end.as_naive_date() => {
                 format!(
-                    "{}, {} &#x2012; {}",
+                    "{}, {} ‒ {}",
                     self.fmt_date(&start.as_naive_date(), date_flags),
                     self.fmt_time(&ctx.date(&start).start_in(tz), time_flags),
                     self.fmt_time(&ctx.date(&end).end_in(tz), time_flags)
@@ -352,7 +352,7 @@ pub trait Locale: CalLocale + Debug {
             }
             (Some(start), Some(end)) => {
                 format!(
-                    "{} &#x2012; {}",
+                    "{} ‒ {}",
                     self.fmt_datetime(&ctx.date(&start).start_in(tz), date_flags),
                     self.fmt_datetime(&ctx.date(&end).end_in(tz), date_flags)
                 )
@@ -644,7 +644,7 @@ mod tests {
         let result = locale.date_range(Some(start), Some(end), &DateContext::system(), tz);
         // End with Exclusive type: as_end_with_tz returns midnight-1s, i.e. June 16 23:59:59.
         // The formatted date of that is Jun 16.
-        assert_eq!(result, "Jun 15, 2024 &#x2012; Jun 16, 2024");
+        assert_eq!(result, "Jun 15, 2024 ‒ Jun 16, 2024");
     }
 
     #[test]
@@ -679,8 +679,8 @@ mod tests {
             NaiveDateTime::new(d, NaiveTime::from_hms_opt(17, 30, 0).unwrap()).and_utc(),
         ));
         let result = locale.date_range(Some(start), Some(end), &DateContext::system(), tz);
-        // Expects: "<date>, <start_time> &#x2012; <end_time>"
-        assert_eq!(result, "Jun 15, 2024, 09:00 &#x2012; 17:30");
+        // Expects: "<date>, <start_time> ‒ <end_time>"
+        assert_eq!(result, "Jun 15, 2024, 09:00 ‒ 17:30");
     }
 
     #[test]
@@ -698,7 +698,7 @@ mod tests {
             .and_utc(),
         ));
         let result = locale.date_range(Some(start), Some(end), &DateContext::system(), tz);
-        assert_eq!(result, "Jun 15, 2024, 09:00 &#x2012; Jun 16, 2024, 17:00");
+        assert_eq!(result, "Jun 15, 2024, 09:00 ‒ Jun 16, 2024, 17:00");
     }
 
     // --- Translations ---

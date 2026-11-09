@@ -236,15 +236,12 @@ impl Row {
                 matches!(settings.alarms(), CalendarAlarmType::Personal { .. }),
                 part_stat,
             ),
-            // Locale's web-oriented range formatter encodes its separator as an HTML entity.
-            date_range: locale
-                .date_range(
-                    comp.start().cloned(),
-                    comp.end_or_due().cloned(),
-                    &ctx,
-                    locale.timezone(),
-                )
-                .replace("&#x2012;", "‒"),
+            date_range: locale.date_range(
+                comp.start().cloned(),
+                comp.end_or_due().cloned(),
+                &ctx,
+                locale.timezone(),
+            ),
             recurrence: comp
                 .rrule()
                 .map(|rule| rule.human_interval(locale).to_string())

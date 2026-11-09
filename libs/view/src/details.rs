@@ -101,23 +101,21 @@ impl Details {
             .effective_alarms(occ, calendar.alarms());
         let start = occ.occurrence_startdate();
         let end = occ.occurrence_enddate();
-        // Locale's range formatter uses one HTML entity for its separator. The snapshot is text.
-        let plain = |text: String| text.replace("&#x2012;", "‒");
-        let date = plain(locale.date_range(
+        let date = locale.date_range(
             start.clone(),
             end.clone(),
             &DateContext::system(),
             locale.timezone(),
-        ));
+        );
         let source_date = occ.occurrence_range_in_tz(locale.timezone()).map(|range| {
             format!(
                 "{} ({})",
-                plain(locale.date_range(
+                locale.date_range(
                     range.start().cloned(),
                     range.end().cloned(),
                     &DateContext::system(),
                     &range.tz()
-                )),
+                ),
                 range.tz_name()
             )
         });
