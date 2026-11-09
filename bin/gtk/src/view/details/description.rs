@@ -693,6 +693,7 @@ mod tests {
             scroll.height() < 80,
             "short descriptions must not reserve a 150px area"
         );
+        assert!(!scroll.vscrollbar().is_mapped());
         window.destroy();
 
         let text = "Long description <&> https://example.org\n".repeat(1000);
@@ -705,6 +706,8 @@ mod tests {
         window.present();
         wait_until(|| long.is_mapped() && long.height() > 0);
         assert!(scroll.height() <= 150);
+        wait_until(|| scroll.vscrollbar().is_mapped());
+        assert!(scroll.is_overlay_scrolling());
         wait_until(|| {
             let end = long.iter_location(&long.buffer().end_iter());
             let adjustment = scroll.vadjustment();
