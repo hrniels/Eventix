@@ -189,11 +189,20 @@ impl PageSession {
 
     pub(super) fn connect_sync_collections(&self, page: &CalendarPage) {
         let weak = page.downgrade();
-        page.imp().sync_popover.connect_show(move |popover| {
+        // GtkPopover::show runs after GTK has already presented the native popup.
+        // Prepare its size and initial content before that first presentation instead.
+        page.imp().sync_collections.set_create_popup_func(move |_| {
             if let Some(page) = weak.upgrade() {
                 let imp = page.imp();
                 if let Some(sync_control) = imp.sync_collections.parent() {
-                    popover.set_width_request(sync_control.width());
+                    imp.sync_popover.set_width_request(sync_control.width());
+                }
+                if imp.sync_collection_list.first_child().is_none() {
+                    let loading =
+                        gtk::Button::with_label(page.locale().translate("Loading collections…"));
+                    loading.set_sensitive(false);
+                    loading.add_css_class("ev_details_button");
+                    imp.sync_collection_list.append(&loading);
                 }
                 if let Some(session) = imp.session.current.borrow().as_ref() {
                     session.load_sync_collections();
@@ -737,13 +746,43 @@ mod tests {
         assert_eq!(imp.sync_popover.position(), gtk::PositionType::Bottom);
         assert_eq!(imp.sync_popover.halign(), gtk::Align::End);
         assert!(imp.sync_popover.has_css_class("ev_details_menu"));
-        imp.sync_collections.popup();
+        let initial_popup = std::rc::Rc::new(std::cell::Cell::new(None));
+        let initial = initial_popup.clone();
+        let weak = page.downgrade();
+        imp.sync_popover.connect_realize(move |popover| {
+            let page = weak.upgrade().unwrap();
+            initial.set(Some((
+                popover.width_request(),
+                page.imp().sync_collection_list.first_child().is_some(),
+            )));
+        });
+        let toggle = imp
+            .sync_collections
+            .first_child()
+            .and_downcast::<gtk::ToggleButton>()
+            .unwrap();
+        toggle.emit_clicked();
+        assert_eq!(
+            initial_popup.get(),
+            Some((imp.sync_collections.parent().unwrap().width(), true)),
+            "the popup must have its width and content before GTK realizes its native surface"
+        );
         assert_eq!(
             imp.sync_popover.width_request(),
             imp.sync_collections.parent().unwrap().width()
         );
         assert!(imp.sync_popover.width_request() >= (reload.width() + dropdown.width()) as i32);
-        imp.sync_collections.popdown();
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        let loading = imp
+            .sync_collection_list
+            .first_child()
+            .and_downcast::<gtk::Button>()
+            .expect("the first opening must have content before collections arrive");
+        assert_eq!(loading.label().as_deref(), Some("Loading collections…"));
+        assert!(!loading.is_sensitive());
+        assert!(loading.is_mapped());
+        assert!(loading.height() > 0);
         imp.session.update_sync_collections(
             &page,
             vec![
@@ -751,6 +790,13 @@ mod tests {
                 ("Work".into(), Backend::CalDav),
             ],
         );
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        assert!(
+            imp.sync_popover.is_mapped(),
+            "the first opening must stay visible"
+        );
+        assert!(imp.sync_collection_list.height() > 0);
         let personal = imp
             .sync_collection_list
             .first_child()
