@@ -78,13 +78,13 @@ impl CalendarPage {
             &*imp.monthly,
             |grid, x, y, clamp| grid.selection_point(x, y, clamp),
             |grid, range| grid.set_selection_preview(range),
-            crate::actions::items::move_event::MoveTarget::clear_drop_preview,
+            crate::actions::move_event::MoveTarget::clear_drop_preview,
         );
         selection::install(
             &*imp.weekly.imp().all_day,
             |grid, x, y, clamp| grid.selection_point(x, y, clamp),
             |grid, range| grid.set_selection_preview(range),
-            crate::actions::items::move_event::MoveTarget::clear_drop_preview,
+            crate::actions::move_event::MoveTarget::clear_drop_preview,
         );
     }
 

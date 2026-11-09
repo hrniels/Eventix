@@ -10,7 +10,7 @@ use eventix_locale::TimeFlags;
 use eventix_view::WeekSnapshot;
 use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
-use crate::actions::items::move_event::DraggedEvent;
+use crate::actions::move_event::DraggedEvent;
 use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, rect};
 use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::{
@@ -55,7 +55,7 @@ mod imp {
                 self.hours.borrow_mut().push(label);
             }
 
-            crate::actions::items::move_event::install_target(&*self.obj());
+            crate::actions::move_event::install_target(&*self.obj());
             self.creation_hint.install(&*self.obj(), |grid, x, y| {
                 grid.drop_start(x, y, 0).is_some()
             });

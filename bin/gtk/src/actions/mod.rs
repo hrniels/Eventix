@@ -2,4 +2,5 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub(crate) mod items;
+pub(crate) mod move_event;
+pub(crate) mod resize_event;

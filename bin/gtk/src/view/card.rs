@@ -10,7 +10,7 @@ use eventix_view::details::Response;
 use eventix_view::{AllDaySpan, Event, MonthEvent, TimedEvent};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-use crate::actions::items::move_event::{self, DraggedEvent};
+use crate::actions::move_event::{self, DraggedEvent};
 use crate::style;
 
 use super::indicators::EventIndicators;
@@ -58,7 +58,7 @@ mod imp {
             // Allocate the content ourselves so indicators adapt before the box lays them out.
             self.obj().set_layout_manager(None::<gtk::LayoutManager>);
             move_event::install_source(&self.obj());
-            crate::actions::items::resize_event::install(&self.obj());
+            crate::actions::resize_event::install(&self.obj());
         }
 
         fn dispose(&self) {
