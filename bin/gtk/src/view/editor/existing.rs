@@ -9,7 +9,7 @@ use eventix_state::actions::items::{CreateItem, EditScope, UpdateItem};
 use gtk::prelude::*;
 
 use super::{AttendeeInput, AttendeeSection, ItemEditor};
-use crate::presentation::editor::EditorOptions;
+use crate::model::editor::EditorOptions;
 
 impl ItemEditor {
     pub fn edit(id: u64, mut options: EditorOptions, edit: UpdateItem) -> Rc<Self> {
@@ -188,7 +188,6 @@ mod tests {
         sync::Arc,
     };
 
-    use crate::presentation::{Event, editor::EditorOptions};
     use eventix_ical::{
         col::CalDir,
         objects::{CalCompType, CalDate, CalDateType},
@@ -199,6 +198,7 @@ mod tests {
     };
     use gtk::prelude::*;
 
+    use crate::model::editor::EditorOptions;
     use crate::view::details::EventDetails;
 
     fn press_escape(popup: &EventDetails) -> bool {
@@ -290,7 +290,7 @@ mod tests {
             .get_mut("current")
             .unwrap()
             .set_types(vec![CalCompType::Todo]);
-        let creation = EditorOptions::load(&state).unwrap();
+        let creation = EditorOptions::from_state(&state).unwrap();
         assert_eq!(creation.calendars.len(), 1);
         assert_eq!(creation.calendars[0].id, "other");
         for recurrent in [false, true] {
@@ -299,7 +299,7 @@ mod tests {
                 edit.fields.recurrence = Some("FREQ=DAILY;COUNT=5".parse().unwrap());
             }
             let mut options =
-                EditorOptions::load_for_edit(&state, CalCompType::Event, "current").unwrap();
+                EditorOptions::for_edit(&state, CalCompType::Event, "current").unwrap();
             options.last_calendar = Some("other".into());
             let editor = super::ItemEditor::edit(1, options, edit.clone());
             let window = gtk::Window::builder().child(&editor.layer).build();
@@ -324,7 +324,7 @@ mod tests {
                 edit.scope = scope;
                 let editor = super::ItemEditor::edit(
                     2,
-                    EditorOptions::load_for_edit(&state, CalCompType::Event, "current").unwrap(),
+                    EditorOptions::for_edit(&state, CalCompType::Event, "current").unwrap(),
                     edit.clone(),
                 );
                 assert_eq!(editor.command().unwrap().calendar, "current");
@@ -342,13 +342,18 @@ mod tests {
         let mut edit = UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap();
         let editor = super::ItemEditor::edit(
             3,
-            EditorOptions::load_for_edit(&state, CalCompType::Event, "current").unwrap(),
+            EditorOptions::for_edit(&state, CalCompType::Event, "current").unwrap(),
             edit.clone(),
         );
         editor.summary.set_text("Updated event");
         edit.fields = *editor.command().unwrap();
         let (state, _) = crate::view::editor::tests::execute(Box::new(edit), state);
-        assert_eq!(Event::load(&state, &item).unwrap().summary, "Updated event");
+        assert_eq!(
+            crate::model::Event::from_state(&state, &item)
+                .unwrap()
+                .summary,
+            "Updated event"
+        );
     }
 
     #[test]
@@ -427,7 +432,7 @@ mod tests {
                 attendees: vec![],
             };
             let (state, item) = crate::view::editor::tests::execute(Box::new(fields), state);
-            let event = Event::load(&state, &item).unwrap();
+            let event = crate::model::Event::from_state(&state, &item).unwrap();
             let locale = eventix_locale::new_with_timezone(
                 &xdg,
                 if all_day {
@@ -439,7 +444,7 @@ mod tests {
             )
             .unwrap();
             let options = || {
-                let mut options = EditorOptions::load(&state).unwrap();
+                let mut options = EditorOptions::from_state(&state).unwrap();
                 options.locale = locale.clone();
                 options
             };
@@ -763,12 +768,12 @@ mod tests {
             let mut edit = editor.existing.borrow().clone().unwrap();
             edit.fields = *fields;
             let (state, _) = crate::view::editor::tests::execute(Box::new(edit), state);
-            parent.test_saved_editor(crate::model::session::SavedItem::Event(Box::new(
-                Event::load(&state, &item).unwrap(),
+            parent.test_saved_editor(crate::model::SavedItem::Event(Box::new(
+                crate::model::Event::from_state(&state, &item).unwrap(),
             )));
             assert!(stack.is_transition_running());
             drain();
-            let mut options = EditorOptions::load(&state).unwrap();
+            let mut options = EditorOptions::from_state(&state).unwrap();
             options.locale = locale.clone();
             parent.test_existing_editor(
                 options,
@@ -786,7 +791,7 @@ mod tests {
             gtk::Settings::default()
                 .unwrap()
                 .set_gtk_enable_animations(false);
-            let mut options = EditorOptions::load(&state).unwrap();
+            let mut options = EditorOptions::from_state(&state).unwrap();
             options.locale = locale.clone();
             parent.test_existing_editor(
                 options,
@@ -831,7 +836,7 @@ mod tests {
                         window.is_active(),
                         "Eventix must be active before opening a popup"
                     );
-                    let event = Event::load(&state, &item).unwrap();
+                    let event = crate::model::Event::from_state(&state, &item).unwrap();
                     let popup = EventDetails::new(&event, locale.as_ref());
                     controller.show_details(
                         anchor.upcast_ref(),
@@ -843,7 +848,7 @@ mod tests {
                         popup.is_mapped(),
                         "details must open before {dismissal}, all_day={all_day}"
                     );
-                    let mut options = EditorOptions::load(&state).unwrap();
+                    let mut options = EditorOptions::from_state(&state).unwrap();
                     options.locale = locale.clone();
                     let editor = parent.test_existing_editor(
                         options,
@@ -948,14 +953,19 @@ mod tests {
                     assert!(!popup.is_mapped(), "{dismissal} must dismiss the editor");
                     assert!(!parent.editor_open(), "{dismissal} must clear editor state");
                     assert!(controller.current().is_none());
-                    assert_eq!(Event::load(&state, &item).unwrap().summary, "Saved");
+                    assert_eq!(
+                        crate::model::Event::from_state(&state, &item)
+                            .unwrap()
+                            .summary,
+                        "Saved"
+                    );
                     window.present();
                     drain();
                     controller.allocate(parent.upcast_ref());
                     assert!(!popup.is_mapped(), "dismissed drafts must not reappear");
                 }
                 for dismissal in ["click", "cancel", "escape"] {
-                    let mut options = EditorOptions::load(&state).unwrap();
+                    let mut options = EditorOptions::from_state(&state).unwrap();
                     options.locale = locale.clone();
                     let editor = parent.test_new_editor(options);
                     editor.summary.set_text("Unsaved new event");
@@ -1041,7 +1051,7 @@ mod tests {
             }
             parent.dismiss_popovers();
             let standalone = parent.test_existing_editor(
-                EditorOptions::load(&state).unwrap(),
+                EditorOptions::from_state(&state).unwrap(),
                 UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
             );
             drain();

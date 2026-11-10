@@ -2,11 +2,13 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::model::weekly::Columns;
+
 /// Assigns rows to half-open day ranges, returning placements in input order.
 ///
 /// Adjacent spans share a row. Earlier starts are placed first, with longer spans first at
 /// equal starts. Input order breaks remaining ties, so callers should supply a stable order.
-pub fn rows(intervals: &[(usize, usize)]) -> Vec<usize> {
+pub(super) fn rows(intervals: &[(usize, usize)]) -> Vec<usize> {
     let mut order: Vec<_> = (0..intervals.len()).collect();
     order.sort_by_key(|&i| (intervals[i].0, std::cmp::Reverse(intervals[i].1), i));
     let mut ends = Vec::new();
@@ -27,19 +29,11 @@ pub fn rows(intervals: &[(usize, usize)]) -> Vec<usize> {
     result
 }
 
-/// Horizontal placement within a group of overlapping events.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Columns {
-    pub count: usize,
-    pub offset: usize,
-    pub span: usize,
-}
-
 /// Assigns columns to half-open intervals, returning placements in input order.
 ///
 /// Adjacent intervals share a column. Empty intervals occupy one unit. Events expand rightward
 /// into columns that contain no conflicting interval. Input need not be sorted.
-pub fn columns(intervals: &[(i64, i64)]) -> Vec<Columns> {
+pub(super) fn columns(intervals: &[(i64, i64)]) -> Vec<Columns> {
     let intervals: Vec<_> = intervals.iter().map(|&(s, e)| (s, e.max(s + 1))).collect();
     let mut order: Vec<_> = (0..intervals.len()).collect();
     order.sort_by_key(|&i| (intervals[i].0, i));

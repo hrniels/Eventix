@@ -9,7 +9,7 @@ use eventix_state::actions::items::{
 };
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-use crate::presentation::{
+use crate::model::{
     Event,
     details::{Attendee, Contact, Details, Response},
     sidebar::SidebarRow,
@@ -175,7 +175,7 @@ impl EventDetails {
         obj
     }
 
-    fn set_identity(&self, id: &crate::presentation::OccurrenceId) {
+    fn set_identity(&self, id: &crate::model::OccurrenceId) {
         self.imp().item.replace(Some(ItemId {
             calendar: id.calendar.clone(),
             uid: id.uid.clone(),
@@ -212,19 +212,15 @@ impl EventDetails {
         self.imp().item.borrow().clone()
     }
 
-    pub(crate) fn reminders_saved(
-        &self,
-        item: &crate::model::session::SavedItem,
-        locale: &dyn Locale,
-    ) {
+    pub(crate) fn reminders_saved(&self, item: &crate::model::SavedItem, locale: &dyn Locale) {
         let (details, recurrent, exception, alarm) = match item {
-            crate::model::session::SavedItem::Event(event) => (
+            crate::model::SavedItem::Event(event) => (
                 &event.details,
                 event.recurrent,
                 event.exception,
                 event.alarm,
             ),
-            crate::model::session::SavedItem::Task(task) => {
+            crate::model::SavedItem::Task(task) => {
                 (&task.details, task.recurrent, task.exception, task.alarm)
             }
         };
@@ -861,7 +857,7 @@ fn text_markup(text: &str) -> String {
 mod tests {
     use std::sync::Arc;
 
-    use crate::presentation::{
+    use crate::model::{
         AllDaySpan, Event, OccurrenceId, TimedEvent,
         details::{Attendee, Contact, DetailActions, Details, Response},
     };
@@ -1129,10 +1125,10 @@ mod tests {
                     assert!(responses.is_empty());
                 }
                 let colors = gtk::CssProvider::new();
-                let week = std::rc::Rc::new(crate::presentation::WeekSnapshot {
+                let week = std::rc::Rc::new(crate::model::WeekSnapshot {
                     start: start.date_naive(),
                     locale: locale.clone(),
-                    days: vec![crate::presentation::Day {
+                    days: vec![crate::model::Day {
                         date: start.date_naive(),
                         timed: if full {
                             vec![TimedEvent {
@@ -1140,7 +1136,7 @@ mod tests {
                                 date: start.date_naive(),
                                 minute_start: 540,
                                 minute_end: 600,
-                                columns: crate::presentation::layout::Columns {
+                                columns: crate::model::weekly::Columns {
                                     count: 1,
                                     offset: 0,
                                     span: 1,
@@ -1503,7 +1499,7 @@ mod tests {
                 gtk::style_context_remove_provider_for_display(&display, &colors);
                 if variant == "sparse" {
                     crate::view::page::tests::assert_sidebar_layout_and_details(
-                        crate::presentation::WeekSnapshot {
+                        crate::model::WeekSnapshot {
                             start: week.start,
                             days: week.days.clone(),
                             all_day: week.all_day.clone(),
@@ -1511,7 +1507,7 @@ mod tests {
                         },
                     );
                     crate::view::page::tests::assert_month_layout_and_navigation(
-                        crate::presentation::WeekSnapshot {
+                        crate::model::WeekSnapshot {
                             start: week.start,
                             days: week.days.clone(),
                             all_day: week.all_day.clone(),
@@ -1521,7 +1517,7 @@ mod tests {
                 }
                 if variant == "sparse" && language == eventix_locale::LocaleType::English {
                     crate::view::page::tests::assert_span_layout_and_refresh(
-                        crate::presentation::WeekSnapshot {
+                        crate::model::WeekSnapshot {
                             start: week.start,
                             days: week.days.clone(),
                             all_day: week.all_day.clone(),

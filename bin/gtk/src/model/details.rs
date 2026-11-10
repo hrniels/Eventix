@@ -89,7 +89,8 @@ pub struct PersonalReminders {
 }
 
 impl Details {
-    pub(crate) fn load(state: &State, occ: &Occurrence<'_>) -> Option<Self> {
+    /// Builds localized details and available actions for an occurrence.
+    pub(crate) fn from_occurrence(state: &State, occ: &Occurrence<'_>) -> Option<Self> {
         let locale = state.locale();
         let (collection, calendar) = state.settings().calendar(occ.directory())?;
         let mail = collection.email().map(|email| email.address());
@@ -159,7 +160,7 @@ impl Details {
         } else {
             None
         };
-        Some(Self {
+        Some(Details {
             date_label: match (start.is_some(), end.is_some()) {
                 (true, true) => "Date",
                 (true, false) => "Start",
@@ -242,7 +243,6 @@ mod tests {
     use eventix_state::{CalendarSettings, CollectionSettings, EmailAccount, SyncerType};
 
     use super::{Details, Response};
-    use crate::presentation::WeekSnapshot;
 
     fn details(body: &str, mail: &str, read_only: bool, personal: bool) -> Arc<Details> {
         let tmp = tempfile::tempdir().unwrap();
@@ -284,8 +284,11 @@ mod tests {
         ))
         .unwrap();
         state.store_mut().add(dir);
-        let week =
-            WeekSnapshot::load(&state, NaiveDate::from_ymd_opt(2026, 10, 5).unwrap()).unwrap();
+        let week = crate::model::WeekSnapshot::from_state(
+            &state,
+            NaiveDate::from_ymd_opt(2026, 10, 5).unwrap(),
+        )
+        .unwrap();
         week.days[0].timed[0].event.details.clone()
     }
 

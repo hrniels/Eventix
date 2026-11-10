@@ -8,9 +8,9 @@ use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::activity::{Activity, Phase};
-use crate::model::management::Request;
-use crate::presentation::calendars::Snapshot;
+use crate::model::calendars::Snapshot;
 use crate::view::calendars::CalendarsView;
+use crate::worker::management::Request;
 
 #[derive(Default)]
 pub(super) struct PageManagement {
@@ -138,7 +138,7 @@ mod tests {
     use gtk::{prelude::*, subclass::prelude::*};
 
     use super::Snapshot;
-    use crate::model::session::View;
+    use crate::model::View;
 
     fn contains_text(widget: &gtk::Widget, text: &str) -> bool {
         if widget

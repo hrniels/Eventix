@@ -14,9 +14,9 @@ use eventix_state::{CalendarAlarmType, CalendarSettings};
 use gtk::{gdk, prelude::*};
 
 use super::{ActionHandler, action, clear, icon_action, text};
-use crate::model::management::{CalendarOperation, Operation, Request};
-use crate::presentation::calendars::{Backend, Calendar, Collection};
+use crate::model::calendars::{Backend, Calendar, Collection};
 use crate::widgets::{AlarmInput, ColorDot, SegmentedControl};
+use crate::worker::management::{CalendarOperation, Operation, Request};
 
 const ROW_TITLES: [&str; 4] = ["Folder", "Color", "Creation", "Alarms"];
 

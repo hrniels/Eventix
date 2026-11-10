@@ -19,7 +19,7 @@ use super::{
     row::ROW_HEIGHT,
     scroll::ScrollPosition,
 };
-use crate::presentation::list::{Row, Snapshot};
+use crate::model::list::{Row, Snapshot};
 use crate::view::action_menu::{Actions, OccurrenceTarget};
 
 type Bindings = RefCell<HashMap<gtk::ListItem, (ListItem, glib::SignalHandlerId)>>;

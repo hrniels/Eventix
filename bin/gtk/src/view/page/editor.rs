@@ -13,10 +13,11 @@ use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use super::create::EventSlot;
-use crate::model::session::{ChangeSet, SavedItem};
-use crate::presentation::editor::EditorOptions;
+use crate::model::SavedItem;
+use crate::model::editor::EditorOptions;
 use crate::view::details::EventDetails;
 use crate::view::editor::{ItemEditor, has_nested_popup, is_save_key};
+use crate::worker::event::ChangeSet;
 
 /// Owns editor requests and the active editor's lifecycle.
 #[derive(Default)]

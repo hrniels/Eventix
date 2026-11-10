@@ -4,549 +4,30 @@
 
 //! Serialized queries and mutations with independent background sync; never accesses GTK objects.
 
-use std::{collections::VecDeque, fmt, sync::Arc, thread};
+use std::{collections::VecDeque, sync::Arc};
 
 use chrono::{Duration, NaiveDate, Utc};
 use eventix_ical::objects::CalCompType;
 use eventix_state::actions::{
     Action,
-    items::{CreateItem, EditScope, ItemId, UpdateItem, UpdatePersonalAlarms},
+    items::{EditScope, ItemId, UpdateItem, UpdatePersonalAlarms},
 };
-use eventix_state::auth::{AuthOutcome, AuthPrompt, monitor_o365_auth};
+use eventix_state::auth::{AuthOutcome, monitor_o365_auth};
 use eventix_state::{EventixState, State, SyncCancellation, SyncProgress, SyncResult};
 
-use super::activity::{Activity, Phase};
-use super::calendars::{self, CalendarVisibility};
+use super::event::{
+    ChangeSet, ContentResponse, Event, ListRowsResponse, OccurrencesResponse, SessionProgress,
+    publish_events,
+};
 use super::management::{self, Request as ManagementRequest};
+use super::message::{ContentRequest, ListRowsRequest, Message, OccurrencesRequest};
 use super::push::{PendingItem, PushQueue, ResourceChanges};
-use super::query::{Query, SubscriptionId, Subscriptions};
-use crate::presentation::{MonthSnapshot, WeekSnapshot};
-use crate::presentation::{editor::EditorOptions, sidebar::SidebarSnapshot};
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum View {
-    #[default]
-    Week,
-    Month,
-    List,
-}
-
-pub(crate) enum Snapshot {
-    Week(WeekSnapshot),
-    Month(MonthSnapshot),
-    List(crate::presentation::list::Snapshot),
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct ContentRequest {
-    /// Identifies the page's content selection; incremented for each show-content request.
-    ///
-    /// Responses echo this value so the page can reject results superseded by navigation.
-    /// It also identifies the installed calendar subscription, surviving refreshes and reloads.
-    pub generation: u64,
-    pub date: Option<NaiveDate>,
-    pub view: View,
-    pub filter: crate::presentation::list::Filter,
-}
-
-pub(crate) struct ContentResponse {
-    /// Identifies the content selection this result belongs to, including on failure.
-    ///
-    /// The page accepts the result only if this matches its current generation.
-    pub generation: u64,
-    pub result: Result<Snapshot, String>,
-}
-
-pub(crate) struct ListRowsRequest {
-    /// Identifies the view's index revision so late row data cannot update a newer list.
-    pub revision: u64,
-    pub items: Vec<ItemId>,
-}
-
-impl fmt::Debug for ListRowsRequest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_struct("ListRowsRequest");
-        debug.field("revision", &self.revision);
-        if self.items.len() > 2 {
-            debug.field("item-count", &self.items.len());
-        } else {
-            debug.field("items", &self.items);
-        }
-        debug.finish()
-    }
-}
-
-pub(crate) struct ListRowsResponse {
-    pub revision: u64,
-    pub result: Result<Vec<(ItemId, Option<crate::presentation::list::Row>)>, String>,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct OccurrencesRequest {
-    pub revision: u64,
-    pub token: u64,
-    pub item: ItemId,
-    pub cursor: crate::presentation::list::occurrences::Cursor,
-    pub direction: crate::presentation::list::occurrences::Direction,
-    pub count: usize,
-}
-
-pub(crate) struct OccurrencesResponse {
-    pub request: OccurrencesRequest,
-    pub result: Result<crate::presentation::list::occurrences::Page, String>,
-}
-
-/// Notifications carry identities and invalidations; snapshots are refetched separately.
-pub(crate) struct ChangeSet {
-    pub item: ItemId,
-    pub affected: Vec<SubscriptionId>,
-}
-
-pub(crate) enum Event {
-    ImportPrepared(Result<super::import::PreparedImport, String>),
-    ImportFinished(Result<(), String>),
-    Alarm(super::alarms::Notification),
-    PreferencesLoaded(eventix_state::Preferences),
-    PreferencesSaved(Result<eventix_state::Preferences, String>),
-    PushAuthenticationRequired(String),
-    PendingPushes(usize),
-    Activity(Activity),
-    CalendarsLoaded(Vec<CalendarVisibility>),
-    SyncCollectionsLoaded(Vec<(String, crate::presentation::calendars::Backend)>),
-    ManagementLoaded(
-        u64,
-        Result<crate::presentation::calendars::Snapshot, String>,
-    ),
-    ManagementFinished(ManagementRequest, Result<(), String>),
-    CalendarToggleFailed(String),
-    EditorLoaded(u64, Result<EditorOptions, String>),
-    EditorSaved(u64, Result<ChangeSet, String>),
-    EditLoaded(u64, Result<(EditorOptions, Box<UpdateItem>), String>),
-    EditSaved(u64, Result<(ChangeSet, SavedItem), String>),
-    RemindersSaved(Result<(ChangeSet, SavedItem), String>),
-    DetailsLoaded(u64, Result<SavedItem, String>),
-    FilepathLoaded(Result<String, String>),
-    ContentLoaded(ContentResponse),
-    ListRowsLoaded(ListRowsResponse),
-    OccurrencesLoaded(OccurrencesResponse),
-    SidebarLoaded(Result<SidebarSnapshot, String>),
-    StateLoaded,
-    ReloadFailed(String),
-    SyncProgress {
-        completed: usize,
-        total: usize,
-    },
-    OperationStarted {
-        description: &'static str,
-        determinate: bool,
-    },
-    OperationFinished {
-        completed: bool,
-        cancelled: bool,
-    },
-    SyncFinished(Result<SyncResult, String>),
-    AuthPrompt(u64, AuthPrompt),
-    AuthFinished(u64, Result<AuthOutcome, String>),
-    Changed(ChangeSet),
-    CommandFailed(String),
-}
-
-impl Event {
-    fn failure(&self) -> Option<(&'static str, &str)> {
-        let (operation, error) = match self {
-            Self::ImportPrepared(result) => ("Import", result.as_ref().err()),
-            Self::ImportFinished(result) => ("Import", result.as_ref().err()),
-            Self::ManagementFinished(request, result) => {
-                (request.description(), result.as_ref().err())
-            }
-            Self::CalendarToggleFailed(error) => ("Calendar visibility changed", Some(error)),
-            Self::CommandFailed(error) => ("Applying changes", Some(error)),
-            Self::EditorLoaded(_, result) => ("Preparing editor", result.as_ref().err()),
-            Self::EditorSaved(_, result) => ("New item created", result.as_ref().err()),
-            Self::EditLoaded(_, result) => ("Loading item", result.as_ref().err()),
-            Self::EditSaved(_, result) => ("Item updated", result.as_ref().err()),
-            Self::RemindersSaved(result) => ("Reminders updated", result.as_ref().err()),
-            Self::DetailsLoaded(_, result) => ("Loading item", result.as_ref().err()),
-            Self::FilepathLoaded(result) => ("Loading filepath", result.as_ref().err()),
-            Self::ContentLoaded(response) => ("Loading calendar", response.result.as_ref().err()),
-            Self::ListRowsLoaded(response) => ("Loading calendar", response.result.as_ref().err()),
-            Self::OccurrencesLoaded(response) => {
-                ("Loading calendar", response.result.as_ref().err())
-            }
-            Self::SidebarLoaded(result) => ("Loading sidebar", result.as_ref().err()),
-            Self::ManagementLoaded(_, result) => ("Loading calendar", result.as_ref().err()),
-            Self::ReloadFailed(error) => ("Loading calendar", Some(error)),
-            Self::SyncFinished(result) => ("Synchronizing calendars", result.as_ref().err()),
-            Self::AuthFinished(_, result) => ("Authenticating", result.as_ref().err()),
-            _ => return None,
-        };
-        error.map(|error| (operation, error.as_str()))
-    }
-}
-
-pub(crate) enum SavedItem {
-    Event(Box<crate::presentation::Event>),
-    Task(Box<crate::presentation::sidebar::SidebarRow>),
-}
-
-#[derive(Debug)]
-pub(super) enum Message {
-    PrepareImport(String),
-    Import(super::import::PreparedImport, String),
-    SavePreferences(eventix_state::Preferences),
-    PushItemReady(ItemId, eventix_state::SyncColResult),
-    PushFinished(Result<eventix_state::PushResult, String>),
-    ManageCalendar(ManagementRequest),
-    ToggleCalendar(String),
-    PrepareEditor(u64, CalCompType),
-    CreateItem(u64, Box<CreateItem>),
-    LoadEdit(u64, ItemId, EditScope),
-    SaveEdit(u64, Box<UpdateItem>),
-    SaveReminders(ItemId, UpdatePersonalAlarms),
-    LoadDetails(u64, ItemId, CalCompType),
-    LoadFilepath(ItemId),
-    ShowContent(ContentRequest),
-    LoadManagement(u64),
-    LoadListRows(ListRowsRequest),
-    LoadOccurrences(OccurrencesRequest),
-    RefreshSidebar,
-    RefreshSubscriptions(Vec<SubscriptionId>),
-    Reload,
-    SyncAll,
-    SyncCollection(String),
-    LoadSyncCollections,
-    CancelSync,
-    Authenticate(u64, String),
-    CancelAuthentication(u64),
-    AuthenticationFinished(u64, Result<AuthOutcome, String>),
-    SyncFinished(Result<SyncResult, String>),
-    Execute(Box<dyn Action>),
-    ManagementCompleted(ManagementRequest, Result<bool, String>),
-}
-
-impl Message {
-    fn activity(&self, request: u64) -> Option<Activity> {
-        let (operation, items, calendar) = match self {
-            Self::Import(_, calendar) => ("Import", vec![], Some(calendar.clone())),
-            Self::ManageCalendar(request) => (
-                request.description(),
-                vec![],
-                Some(
-                    if matches!(
-                        request.operation,
-                        management::Operation::Collection(_)
-                            | management::Operation::Calendar(
-                                management::CalendarOperation::Create(_)
-                            )
-                    ) {
-                        request.collection.clone()
-                    } else {
-                        request.calendar.clone()
-                    },
-                ),
-            ),
-            Self::ToggleCalendar(calendar) => (
-                "Calendar visibility changed",
-                vec![],
-                Some(calendar.clone()),
-            ),
-            Self::CreateItem(_, item) => (item.description(), vec![], Some(item.calendar.clone())),
-            Self::SaveEdit(_, item) => (item.description(), vec![item.item.clone()], None),
-            Self::SaveReminders(item, _) => ("Reminders updated", vec![item.clone()], None),
-            Self::Execute(action) => (action.description(), action.affected_items().to_vec(), None),
-            Self::SyncAll => ("Synchronizing calendars", vec![], None),
-            Self::SyncCollection(collection) => {
-                ("Synchronizing calendars", vec![], Some(collection.clone()))
-            }
-            Self::Authenticate(_, collection) => {
-                ("Authenticating", vec![], Some(collection.clone()))
-            }
-            _ => return None,
-        };
-        let mut activity = Activity::new(request, operation);
-        activity.set_items(items);
-        if matches!(self, Self::Authenticate(..) | Self::SyncCollection(_))
-            || matches!(
-                self,
-                Self::ManageCalendar(command)
-                    if matches!(
-                        command.operation,
-                        management::Operation::Collection(_)
-                            | management::Operation::Calendar(management::CalendarOperation::Create(_))
-                    )
-            )
-        {
-            activity.set_collection(calendar);
-        } else {
-            activity.set_calendar(calendar);
-        }
-        Some(activity)
-    }
-}
-
-/// Publishes activity before results, so ignored stale results still leave an audit trail.
-fn publish_events(
-    results: &async_channel::Sender<Event>,
-    events: Vec<Event>,
-    activity: Option<Activity>,
-    request: u64,
-) {
-    // Calendar names from this response must be available when its activity is displayed.
-    let events: Vec<_> = events
-        .into_iter()
-        .filter_map(|event| {
-            if matches!(event, Event::CalendarsLoaded(_)) {
-                let _ = results.send_blocking(event);
-                None
-            } else {
-                Some(event)
-            }
-        })
-        .collect();
-
-    let mut failed = false;
-    let mut cancelled = false;
-    let mut activity = activity;
-    for event in &events {
-        if let Some((operation, error)) = event.failure() {
-            let mutation_failed = matches!(
-                event,
-                Event::CalendarToggleFailed(_)
-                    | Event::ManagementFinished(_, Err(_))
-                    | Event::CommandFailed(_)
-                    | Event::EditorSaved(..)
-                    | Event::EditSaved(..)
-                    | Event::RemindersSaved(_)
-                    | Event::SyncFinished(_)
-                    | Event::AuthFinished(..)
-            );
-            failed |= mutation_failed;
-            let entry = if mutation_failed {
-                activity.clone()
-            } else {
-                None
-            }
-            .unwrap_or_else(|| Activity::new(request, operation));
-            let _ = results.send_blocking(Event::Activity(
-                entry.finish(Phase::Failed, Some(error.into())),
-            ));
-        }
-
-        let item = match event {
-            Event::EditorSaved(_, Ok(change)) | Event::Changed(change) => Some(&change.item),
-            Event::EditSaved(_, Ok((change, _))) | Event::RemindersSaved(Ok((change, _))) => {
-                Some(&change.item)
-            }
-            _ => None,
-        };
-
-        if let (Some(activity), Some(item)) = (&mut activity, item) {
-            activity.add_item(item.clone());
-        }
-
-        if let Event::SyncFinished(Ok(result)) = event {
-            cancelled = result.cancelled;
-            let mut errors = Vec::new();
-            for (collection, outcome) in &result.collections {
-                let error = match outcome {
-                    eventix_state::SyncColResult::Error(error) => Some(error.clone()),
-                    eventix_state::SyncColResult::AuthFailed(_) => {
-                        Some("Authentication required".to_string())
-                    }
-                    _ => None,
-                };
-                if let Some(error) = error {
-                    errors.push((collection.clone(), error, true));
-                }
-            }
-
-            for (calendar, failed) in &result.calendars {
-                if *failed {
-                    errors.push((
-                        calendar.clone(),
-                        "Calendar synchronization failed".into(),
-                        false,
-                    ));
-                }
-            }
-            errors.sort();
-
-            for (scope, error, collection) in errors {
-                failed = true;
-                let mut entry = activity
-                    .clone()
-                    .unwrap_or_else(|| Activity::new(request, "Synchronizing calendars"));
-                if collection {
-                    entry.set_collection(Some(scope));
-                } else {
-                    entry.set_calendar(Some(scope));
-                }
-                let _ = results
-                    .send_blocking(Event::Activity(entry.finish(Phase::Failed, Some(error))));
-            }
-        }
-    }
-
-    if let Some(activity) = activity {
-        // Cancellation is terminal even if some collections also reported errors.
-        if cancelled || !failed {
-            let phase = if cancelled {
-                Phase::Cancelled
-            } else {
-                Phase::Completed
-            };
-            let _ = results.send_blocking(Event::Activity(activity.finish(phase, None)));
-        }
-    }
-
-    for event in events {
-        let _ = results.send_blocking(event);
-    }
-}
-
-/// Owns the request channel, closing the worker when the page stops or is dropped.
-pub(crate) struct CalendarSession {
-    requests: async_channel::Sender<Message>,
-}
-
-impl CalendarSession {
-    pub fn prepare_import(&self, input: String) {
-        let _ = self.requests.try_send(Message::PrepareImport(input));
-    }
-
-    pub fn import(&self, preview: super::import::PreparedImport, calendar: String) {
-        let _ = self.requests.try_send(Message::Import(preview, calendar));
-    }
-    pub fn start(prefix: String) -> (Self, async_channel::Receiver<Event>) {
-        let xdg = Arc::new(xdg::BaseDirectories::with_prefix(prefix));
-        Self::start_worker(Worker::new(xdg))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_start(state: State) -> (Self, async_channel::Receiver<Event>) {
-        let mut worker = Worker::new(Arc::new(state.xdg().clone()));
-        worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
-        Self::start_worker(worker)
-    }
-
-    fn start_worker(worker: Worker) -> (Self, async_channel::Receiver<Event>) {
-        let (requests, rx) = async_channel::unbounded::<Message>();
-        let (results, responses) = async_channel::unbounded();
-        let worker_requests = requests.clone();
-
-        thread::spawn(move || worker.run(rx, worker_requests, results));
-
-        (Self { requests }, responses)
-    }
-
-    pub fn toggle_calendar(&self, id: String) {
-        let _ = self.requests.try_send(Message::ToggleCalendar(id));
-    }
-
-    pub fn save_preferences(&self, preferences: eventix_state::Preferences) -> bool {
-        self.requests
-            .try_send(Message::SavePreferences(preferences))
-            .is_ok()
-    }
-
-    pub fn manage_calendar(&self, request: ManagementRequest) {
-        let _ = self.requests.try_send(Message::ManageCalendar(request));
-    }
-
-    pub fn load_filepath(&self, item: ItemId) {
-        let _ = self.requests.try_send(Message::LoadFilepath(item));
-    }
-
-    pub fn load_details(&self, id: u64, item: ItemId, kind: CalCompType) {
-        let _ = self.requests.try_send(Message::LoadDetails(id, item, kind));
-    }
-
-    pub fn save_reminders(&self, selected: ItemId, command: UpdatePersonalAlarms) {
-        let _ = self
-            .requests
-            .try_send(Message::SaveReminders(selected, command));
-    }
-
-    pub fn load_edit(&self, id: u64, item: ItemId, scope: EditScope) {
-        let _ = self.requests.try_send(Message::LoadEdit(id, item, scope));
-    }
-
-    pub fn save_edit(&self, id: u64, edit: Box<UpdateItem>) {
-        let _ = self.requests.try_send(Message::SaveEdit(id, edit));
-    }
-
-    pub fn prepare_editor(&self, id: u64, kind: CalCompType) {
-        let _ = self.requests.try_send(Message::PrepareEditor(id, kind));
-    }
-
-    pub fn create_item(&self, id: u64, item: Box<CreateItem>) {
-        let _ = self.requests.try_send(Message::CreateItem(id, item));
-    }
-
-    pub fn show_content(&self, request: ContentRequest) {
-        let _ = self.requests.try_send(Message::ShowContent(request));
-    }
-
-    pub fn load_management(&self, generation: u64) {
-        let _ = self.requests.try_send(Message::LoadManagement(generation));
-    }
-
-    pub fn load_list_rows(&self, request: ListRowsRequest) {
-        let _ = self.requests.try_send(Message::LoadListRows(request));
-    }
-
-    pub fn load_occurrences(&self, request: OccurrencesRequest) {
-        let _ = self.requests.try_send(Message::LoadOccurrences(request));
-    }
-
-    pub fn refresh_sidebar(&self) {
-        let _ = self.requests.try_send(Message::RefreshSidebar);
-    }
-
-    pub fn sync_all(&self) -> bool {
-        self.requests.try_send(Message::SyncAll).is_ok()
-    }
-
-    pub fn sync_collection(&self, collection: String) -> bool {
-        self.requests
-            .try_send(Message::SyncCollection(collection))
-            .is_ok()
-    }
-
-    pub fn load_sync_collections(&self) {
-        let _ = self.requests.try_send(Message::LoadSyncCollections);
-    }
-
-    pub fn cancel_sync(&self) {
-        let _ = self.requests.try_send(Message::CancelSync);
-    }
-
-    pub fn authenticate(&self, id: u64, collection: String) {
-        let _ = self
-            .requests
-            .try_send(Message::Authenticate(id, collection));
-    }
-
-    pub fn cancel_authentication(&self, id: u64) {
-        let _ = self.requests.try_send(Message::CancelAuthentication(id));
-    }
-
-    pub fn execute(&self, command: Box<dyn Action>) {
-        let _ = self.requests.try_send(Message::Execute(command));
-    }
-
-    pub fn refresh_subscriptions(&self, subscriptions: Vec<SubscriptionId>) {
-        let _ = self
-            .requests
-            .try_send(Message::RefreshSubscriptions(subscriptions));
-    }
-}
-
-impl Drop for CalendarSession {
-    fn drop(&mut self) {
-        self.requests.close();
-    }
-}
+use super::subscriptions::{Query, SubscriptionId, Subscriptions};
+use crate::model::activity::{Activity, Phase};
+use crate::model::calendars::CalendarVisibility;
+use crate::model::import::PreparedImport;
+use crate::model::{SavedItem, Snapshot, View};
+use crate::model::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
 #[derive(Clone)]
 struct ContentSubscription {
@@ -554,7 +35,7 @@ struct ContentSubscription {
     generation: u64,
     date: NaiveDate,
     view: View,
-    filter: crate::presentation::list::Filter,
+    filter: crate::model::list::Filter,
 }
 
 impl ContentSubscription {
@@ -562,7 +43,7 @@ impl ContentSubscription {
         let (start, end) = match self.view {
             View::List => return Ok(Query::List),
             View::Week => {
-                let start = crate::presentation::week_start(self.date)
+                let start = crate::dates::week_start(self.date)
                     .ok_or_else(|| anyhow::anyhow!("Week start out of range"))?;
                 let end = start
                     .checked_add_signed(Duration::days(7))
@@ -570,7 +51,7 @@ impl ContentSubscription {
 
                 (start, end)
             }
-            View::Month => crate::presentation::month_range(self.date)
+            View::Month => crate::dates::month_range(self.date)
                 .ok_or_else(|| anyhow::anyhow!("Month out of range"))?,
         };
 
@@ -589,9 +70,13 @@ impl ContentSubscription {
 
     fn snapshot(&self, state: &eventix_state::State) -> anyhow::Result<Snapshot> {
         match self.view {
-            View::Week => WeekSnapshot::load(state, self.date).map(Snapshot::Week),
-            View::Month => MonthSnapshot::load(state, self.date).map(Snapshot::Month),
-            View::List => Ok(Snapshot::List(crate::presentation::list::Snapshot::load(
+            View::Week => {
+                crate::model::WeekSnapshot::from_state(state, self.date).map(Snapshot::Week)
+            }
+            View::Month => {
+                crate::model::MonthSnapshot::from_state(state, self.date).map(Snapshot::Month)
+            }
+            View::List => Ok(Snapshot::List(crate::model::list::Snapshot::from_state(
                 state,
                 &self.filter,
             ))),
@@ -599,7 +84,7 @@ impl ContentSubscription {
     }
 }
 
-struct Worker {
+pub(super) struct Worker {
     xdg: Arc<xdg::BaseDirectories>,
     state: Option<EventixState>,
     content: Option<ContentSubscription>,
@@ -709,7 +194,7 @@ impl WorkerRuntime {
 }
 
 impl Worker {
-    fn new(xdg: Arc<xdg::BaseDirectories>) -> Self {
+    pub(super) fn new(xdg: Arc<xdg::BaseDirectories>) -> Self {
         Self {
             xdg,
             state: None,
@@ -720,7 +205,14 @@ impl Worker {
     }
 
     /// Processes queued requests in order while synchronization and authentication run separately.
-    fn run(
+    #[cfg(test)]
+    pub(super) fn with_state(state: State) -> Self {
+        let mut worker = Self::new(Arc::new(state.xdg().clone()));
+        worker.state = Some(Arc::new(tokio::sync::Mutex::new(state)));
+        worker
+    }
+
+    pub(super) fn run(
         mut self,
         receiver: async_channel::Receiver<Message>,
         requests: async_channel::Sender<Message>,
@@ -1128,7 +620,7 @@ impl Worker {
         let event = match message {
             Message::PrepareImport(input) => Event::ImportPrepared(
                 self.state()
-                    .and_then(|state| super::import::PreparedImport::prepare(&state, &input))
+                    .and_then(|state| super::import::prepare(&state, &input))
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::Import(preview, calendar) => {
@@ -1162,7 +654,7 @@ impl Worker {
             Message::LoadManagement(id) => Event::ManagementLoaded(
                 id,
                 self.state()
-                    .map(|state| crate::presentation::calendars::Snapshot::load(&state))
+                    .map(|state| crate::model::calendars::Snapshot::from_state(&state))
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::ToggleCalendar(id) => return self.toggle_calendar(id),
@@ -1191,7 +683,7 @@ impl Worker {
             Message::PrepareEditor(id, kind) => Event::EditorLoaded(
                 id,
                 self.state()
-                    .and_then(|state| EditorOptions::load_for(&state, kind))
+                    .and_then(|state| EditorOptions::for_kind(&state, kind))
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::CreateItem(id, item) => Event::EditorSaved(
@@ -1247,7 +739,7 @@ impl Worker {
                     .collections()
                     .iter()
                     .map(|(id, collection)| {
-                        use crate::presentation::calendars::Backend;
+                        use crate::model::calendars::Backend;
 
                         let backend = match collection.syncer() {
                             eventix_state::SyncerType::FileSystem { .. } => Backend::FileSystem,
@@ -1272,7 +764,7 @@ impl Worker {
                         .items
                         .into_iter()
                         .map(|item| {
-                            let row = crate::presentation::list::Row::load(&state, &item);
+                            let row = crate::model::list::Row::from_state(&state, &item);
                             (item, row)
                         })
                         .collect()
@@ -1285,7 +777,7 @@ impl Worker {
         let result = self
             .state()
             .map(|state| {
-                crate::presentation::list::occurrences::Page::load(
+                crate::model::list_occurrences::Page::from_state(
                     &state,
                     &request.item,
                     &request.cursor,
@@ -1433,14 +925,14 @@ impl Worker {
 
     fn calendars(&self) -> Vec<CalendarVisibility> {
         self.state()
-            .map(|state| calendars::load(&state))
+            .map(|state| CalendarVisibility::from_state(&state))
             .unwrap_or_default()
     }
 
     fn toggle_calendar(&mut self, id: String) -> Vec<Event> {
         let result = (|| -> anyhow::Result<()> {
             let mut state = self.state()?;
-            calendars::toggle(&mut state, &id)
+            toggle_calendar_visibility(&mut state, &id)
         })();
 
         let mut events = vec![Event::CalendarsLoaded(self.calendars())];
@@ -1497,7 +989,7 @@ impl Worker {
         let edit = UpdateItem::load(&state, item, scope)?;
 
         Ok((
-            EditorOptions::load_for_edit(&state, edit.fields.kind, &edit.item.calendar)?,
+            EditorOptions::for_edit(&state, edit.fields.kind, &edit.item.calendar)?,
             Box::new(edit),
         ))
     }
@@ -1552,9 +1044,9 @@ impl Worker {
     fn saved_item(&self, item: &ItemId, kind: CalCompType) -> anyhow::Result<SavedItem> {
         let state = self.state()?;
         let event = match kind {
-            CalCompType::Event => crate::presentation::Event::load(&state, item)
+            CalCompType::Event => crate::model::Event::from_state(&state, item)
                 .map(|event| SavedItem::Event(Box::new(event))),
-            CalCompType::Todo => crate::presentation::sidebar::SidebarRow::load(&state, item)
+            CalCompType::Todo => crate::model::sidebar::SidebarRow::from_state(&state, item)
                 .map(|task| SavedItem::Task(Box::new(task))),
         }
         .ok_or_else(|| {
@@ -1604,7 +1096,7 @@ impl Worker {
         let result = (|| -> anyhow::Result<SidebarSnapshot> {
             let state = self.state()?;
             let now = Utc::now().with_timezone(state.timezone());
-            let snapshot = SidebarSnapshot::load(&state, now);
+            let snapshot = SidebarSnapshot::from_state(&state, now);
             self.subscriptions
                 .register(SubscriptionId::Sidebar, Query::Sidebar { now });
 
@@ -1671,11 +1163,7 @@ impl Worker {
         Ok(ChangeSet { item, affected })
     }
 
-    fn import(
-        &mut self,
-        preview: super::import::PreparedImport,
-        calendar: &str,
-    ) -> anyhow::Result<()> {
+    fn import(&mut self, preview: PreparedImport, calendar: &str) -> anyhow::Result<()> {
         use eventix_ical::objects::EventLike;
 
         let mut state = self.state()?;
@@ -1694,7 +1182,7 @@ impl Worker {
                 (item, changes)
             })
             .collect();
-        let result = preview.apply(&mut state, calendar);
+        let result = super::import::apply(&preview, &mut state, calendar);
         for (item, changes) in changes {
             changes.observe(&mut self.pushes, &state, &item);
         }
@@ -1709,19 +1197,23 @@ impl Worker {
     }
 }
 
-struct SessionProgress(async_channel::Sender<Event>);
-
-impl SyncProgress for SessionProgress {
-    fn started(&self, total: usize) {
-        let _ = self.0.try_send(Event::SyncProgress {
-            completed: 0,
-            total,
-        });
+/// Persists a calendar visibility toggle, restoring its previous state if writing fails.
+fn toggle_calendar_visibility(state: &mut State, id: &String) -> anyhow::Result<()> {
+    if state.settings().calendar(id).is_none() {
+        anyhow::bail!(
+            state
+                .locale()
+                .translate("Calendar is no longer available")
+                .to_string()
+        );
     }
-
-    fn collection_ready(&self, _collection: &str, completed: usize, total: usize) {
-        let _ = self.0.try_send(Event::SyncProgress { completed, total });
+    let misc = state.misc_mut();
+    misc.toggle_calendar(id);
+    if let Err(error) = misc.write_to_file() {
+        misc.toggle_calendar(id);
+        return Err(error);
     }
+    Ok(())
 }
 
 /// Loads an existing local profile, reporting missing settings instead of an empty calendar.
@@ -1751,6 +1243,8 @@ mod tests {
     use eventix_ical::col::CalDir;
     use eventix_state::actions::items::MoveEvent;
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
+
+    use crate::worker::session::Session;
 
     use super::{
         ContentRequest, Event, ItemId, Message, Query, Snapshot, SubscriptionId, View, Worker,
@@ -2096,7 +1590,7 @@ mod tests {
 
     #[test]
     fn management_mutations_refresh_subscriptions_and_publish_scoped_results() {
-        use crate::model::management::{CalendarOperation, Operation, Request};
+        use crate::worker::management::{CalendarOperation, Operation, Request};
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -2136,7 +1630,6 @@ mod tests {
 
     #[test]
     fn activity_records_mutations_new_uids_and_read_errors_but_not_successful_reads() {
-        use super::CalendarSession;
         use crate::model::activity::Phase;
         use eventix_state::actions::items::{DeleteItem, EditScope, UpdateItem};
 
@@ -2164,7 +1657,7 @@ mod tests {
         };
         let mut missing = item.clone();
         missing.uid = "missing".into();
-        let (session, responses) = CalendarSession::start_worker(worker);
+        let (session, responses) = Session::start_worker(worker);
         session.load_details(91, item, eventix_ical::objects::CalCompType::Event);
         session.create_item(92, Box::new(fields));
         session.execute(Box::new(DeleteItem {
@@ -2211,96 +1704,8 @@ mod tests {
     }
 
     #[test]
-    fn sync_activity_keeps_partial_failures_and_cancellation_without_claiming_success() {
-        use super::publish_events;
-        use crate::model::activity::{Activity, Phase};
-
-        let (sender, receiver) = async_channel::unbounded();
-        let activity = Activity::new(7, "Synchronizing calendars");
-        let result = || eventix_state::SyncResult {
-            collections: [
-                (
-                    "Work".into(),
-                    eventix_state::SyncColResult::Error("Connection\nrefused".into()),
-                ),
-                (
-                    "Office".into(),
-                    eventix_state::SyncColResult::AuthFailed("https://secret.invalid".into()),
-                ),
-            ]
-            .into(),
-            calendars: [("Personal".into(), true)].into(),
-            ..Default::default()
-        };
-        publish_events(
-            &sender,
-            vec![
-                Event::SyncFinished(Ok(result())),
-                Event::CalendarsLoaded(vec![super::CalendarVisibility {
-                    id: "Personal".into(),
-                    name: "My calendar".into(),
-                    background: "#ffffff".into(),
-                    enabled: true,
-                    sync_error: None,
-                }]),
-            ],
-            Some(activity.clone()),
-            8,
-        );
-        let Event::CalendarsLoaded(calendars) = receiver.try_recv().unwrap() else {
-            panic!("calendar names must be published before the sync activity");
-        };
-        assert_eq!(calendars[0].name, "My calendar");
-        let mut entries = Vec::new();
-        while let Ok(event) = receiver.try_recv() {
-            if let Event::Activity(entry) = event {
-                entries.push(entry);
-            }
-        }
-        assert_eq!(entries.len(), 3);
-        assert!(
-            entries
-                .iter()
-                .all(|entry| entry.phase() == Phase::Failed && entry.request() == 7)
-        );
-        assert!(entries.iter().all(|entry| {
-            !entry
-                .text(eventix_locale::default().as_ref(), str::to_owned)
-                .contains("secret.invalid")
-        }));
-        assert!(entries.iter().any(|entry| {
-            entry
-                .text(eventix_locale::default().as_ref(), str::to_owned)
-                .contains("Collection: Work")
-        }));
-
-        publish_events(
-            &sender,
-            vec![Event::SyncFinished(Ok(eventix_state::SyncResult {
-                cancelled: true,
-                ..result()
-            }))],
-            Some(activity),
-            9,
-        );
-        let mut entries = Vec::new();
-        while let Ok(event) = receiver.try_recv() {
-            if let Event::Activity(entry) = event {
-                entries.push(entry);
-            }
-        }
-        assert_eq!(entries.len(), 4);
-        assert_eq!(entries.last().unwrap().phase(), Phase::Cancelled);
-        assert!(
-            entries
-                .iter()
-                .all(|entry| entry.phase() != Phase::Completed)
-        );
-    }
-
-    #[test]
     fn management_and_full_sync_share_one_background_operation_queue() {
-        use crate::model::management::{CollectionOperation, Operation, Request};
+        use crate::worker::management::{CollectionOperation, Operation, Request};
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -2354,7 +1759,7 @@ mod tests {
 
     #[test]
     fn management_background_operations_can_be_cancelled_without_blocking_queries() {
-        use crate::model::management::{
+        use crate::worker::management::{
             CalendarOperation, CollectionOperation, Operation, Request,
         };
 
@@ -2391,7 +1796,7 @@ mod tests {
                     password: None,
                     time_span: Default::default(),
                 });
-            let (session, responses) = super::CalendarSession::start_worker(worker);
+            let (session, responses) = Session::start_worker(worker);
             session.manage_calendar(Request {
                 collection: "local".into(),
                 calendar: "test".into(),
@@ -2458,8 +1863,6 @@ mod tests {
 
     #[test]
     fn background_sync_cancellation_finishes_once_refreshes_content_and_allows_another_sync() {
-        use super::CalendarSession;
-
         let tmp = tempfile::tempdir().unwrap();
         fs::create_dir(tmp.path().join("vdirsyncer")).unwrap();
         let mut worker = worker(tmp.path());
@@ -2489,7 +1892,7 @@ mod tests {
                     time_span: Default::default(),
                 });
         }
-        let (session, responses) = CalendarSession::start_worker(worker);
+        let (session, responses) = Session::start_worker(worker);
         session.sync_all();
         runtime.block_on(async {
             tokio::time::timeout(std::time::Duration::from_secs(10), async {
@@ -2567,11 +1970,11 @@ mod tests {
         assert!(matches!(
             worker.handle(Message::LoadSyncCollections, &runtime).as_slice(),
             [Event::SyncCollectionsLoaded(collections)] if collections == &[
-                ("local".into(), crate::presentation::calendars::Backend::FileSystem),
-                ("unrelated".into(), crate::presentation::calendars::Backend::FileSystem),
+                ("local".into(), crate::model::calendars::Backend::FileSystem),
+                ("unrelated".into(), crate::model::calendars::Backend::FileSystem),
             ]
         ));
-        let (session, responses) = super::CalendarSession::start_worker(worker);
+        let (session, responses) = Session::start_worker(worker);
         assert!(session.sync_collection("local".into()));
         runtime.block_on(async {
             tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -2602,8 +2005,6 @@ mod tests {
 
     #[test]
     fn background_sync_streams_progress_refreshes_subscriptions_and_suppresses_duplicates() {
-        use super::CalendarSession;
-
         let tmp = tempfile::tempdir().unwrap();
         fs::create_dir(tmp.path().join("vdirsyncer")).unwrap();
         let mut worker = worker(tmp.path());
@@ -2617,7 +2018,7 @@ mod tests {
         .unwrap();
         let shared = worker.state.clone().unwrap();
         let guard = shared.blocking_lock();
-        let (session, responses) = CalendarSession::start_worker(worker);
+        let (session, responses) = Session::start_worker(worker);
         session.sync_all();
         session.sync_all();
         session.refresh_sidebar();
@@ -3243,7 +2644,7 @@ mod tests {
 
     #[test]
     fn responses_invalidate_visible_series_and_refresh_attendee_status() {
-        use crate::presentation::details::Response;
+        use crate::model::details::Response;
         use eventix_ical::objects::{CalOrganizer, CalPartStat, EventLike, UpdatableEventLike};
         use eventix_state::{EmailAccount, actions::items::RespondItem};
 
@@ -3449,7 +2850,7 @@ mod tests {
 
     #[test]
     fn filtered_list_refreshes_for_changes_into_and_out_of_membership_and_deletion() {
-        use crate::presentation::list::Filter;
+        use crate::model::list::Filter;
         use eventix_state::actions::items::{DeleteItem, EditScope, UpdateItem};
 
         let tmp = tempfile::tempdir().unwrap();
@@ -3595,7 +2996,7 @@ mod tests {
             generation: 8,
             date: None,
             view: View::List,
-            filter: crate::presentation::list::Filter {
+            filter: crate::model::list::Filter {
                 keywords: "Move".into(),
                 calendars: vec!["test".into()],
             },
@@ -3650,7 +3051,7 @@ mod tests {
                 generation: 17,
                 date: None,
                 view: View::List,
-                filter: crate::presentation::list::Filter {
+                filter: crate::model::list::Filter {
                     keywords: "needle".into(),
                     ..Default::default()
                 },

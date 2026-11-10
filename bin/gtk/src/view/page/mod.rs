@@ -22,7 +22,7 @@ use super::{
     card::EventCard, monthly::grid::MonthGrid, popover::DetailsController, sidebar::Sidebar,
     weekly::content::WeekContent,
 };
-use crate::model::session::View;
+use crate::model::View;
 use crate::view::list::ListView;
 use crate::view::status_bar::StatusBar;
 
@@ -522,9 +522,9 @@ impl CalendarPage {
 pub(crate) mod tests {
     use std::rc::Rc;
 
-    use crate::presentation::editor::EditorOptions;
-    use crate::presentation::{
-        Day, MonthDay, MonthEvent, MonthSnapshot, TimedEvent, WeekSnapshot, layout::Columns,
+    use crate::model::editor::EditorOptions;
+    use crate::model::{
+        Day, MonthDay, MonthEvent, MonthSnapshot, TimedEvent, WeekSnapshot, weekly::Columns,
     };
     use chrono::{Datelike, Duration, TimeZone};
     use eventix_state::actions::items::UpdateItem;
@@ -532,8 +532,9 @@ pub(crate) mod tests {
 
     use super::content::event_focus_index;
     use super::{CalendarPage, DetailsController};
-    use crate::model::session::{ContentResponse, SavedItem, Snapshot, View};
+    use crate::model::{SavedItem, Snapshot, View};
     use crate::view::editor::ItemEditor;
+    use crate::worker::event::ContentResponse;
 
     impl CalendarPage {
         fn show_week(&self, week: WeekSnapshot) {
@@ -710,7 +711,7 @@ pub(crate) mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn list_switching_preserves_filters_dates_and_rejects_stale_responses() {
-        use crate::presentation::list::{Filter, Snapshot as ListSnapshot};
+        use crate::model::list::{Filter, Snapshot as ListSnapshot};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -795,7 +796,7 @@ pub(crate) mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn quick_task_row_fits_beneath_the_task_list() {
-        use crate::presentation::{editor::EditorCalendar, sidebar::SidebarSnapshot};
+        use crate::model::{editor::EditorCalendar, sidebar::SidebarSnapshot};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -1096,7 +1097,7 @@ pub(crate) mod tests {
 
     /// Checks sidebar geometry, independent scrolling, retained rows and task popups.
     pub(crate) fn assert_sidebar_layout_and_details(mut week: WeekSnapshot) {
-        use crate::presentation::sidebar::{SidebarGroup, SidebarRow, SidebarSnapshot};
+        use crate::model::sidebar::{SidebarGroup, SidebarRow, SidebarSnapshot};
 
         while week.days.len() < 7 {
             week.days.push(Day {
@@ -1149,7 +1150,7 @@ pub(crate) mod tests {
                 })
                 .collect();
             SidebarSnapshot {
-                task_calendars: vec![crate::presentation::editor::EditorCalendar {
+                task_calendars: vec![crate::model::editor::EditorCalendar {
                     id: event.calendar.clone(),
                     name: "Task calendar".into(),
                     background: "#803366".into(),
@@ -1277,7 +1278,7 @@ pub(crate) mod tests {
         );
         window.set_default_size(1000, 450);
         imp.month_view.set_active(true);
-        let (start, end) = crate::presentation::month_range(week.start).unwrap();
+        let (start, end) = crate::dates::month_range(week.start).unwrap();
         page.show_month(MonthSnapshot {
             month: week.start.with_day(1).unwrap(),
             start,
@@ -1337,7 +1338,7 @@ pub(crate) mod tests {
         }
         let selected = week.start + Duration::days(2);
         let make_month = || {
-            let (start, end) = crate::presentation::month_range(selected).unwrap();
+            let (start, end) = crate::dates::month_range(selected).unwrap();
             let mut days: Vec<_> = (0..(end - start).num_days())
                 .map(|offset| {
                     let date = start + Duration::days(offset);
@@ -1631,7 +1632,7 @@ pub(crate) mod tests {
         page.navigate(1);
         assert_eq!(
             imp.content.date.get(),
-            crate::presentation::shift_month(selected + Duration::days(7), 1)
+            crate::dates::shift_month(selected + Duration::days(7), 1)
         );
         let monday = make_month().start;
         imp.monthly.imp().weeks.borrow()[0].emit_clicked();
@@ -1682,7 +1683,7 @@ pub(crate) mod tests {
     fn week_switch_resets_scroll_despite_focused_card() {
         use std::sync::Arc;
 
-        use crate::presentation::{Event, OccurrenceId, details::Details};
+        use crate::model::{Event, OccurrenceId, details::Details};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -1789,7 +1790,7 @@ pub(crate) mod tests {
 
     /// Exercises the window capture handler with real focus, cards, and editor popups.
     fn assert_arrow_key_routing(week: &WeekSnapshot) {
-        use crate::presentation::{editor::EditorCalendar, sidebar::SidebarSnapshot};
+        use crate::model::{editor::EditorCalendar, sidebar::SidebarSnapshot};
         use eventix_ical::objects::CalCompType;
 
         let app = gtk::Application::builder()

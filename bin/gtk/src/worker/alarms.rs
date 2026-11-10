@@ -2,54 +2,17 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Due alarm collection and localized notification content, independent of GTK.
+//! Due alarm collection and persisted delivery checkpoints, independent of GTK.
 
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use eventix_ical::{
-    col::AlarmOccurrence,
-    objects::{AlarmOverlay, CalAlarm, CalComponent, CalDate, DefaultAlarmOverlay, EventLike},
+use eventix_ical::objects::{
+    AlarmOverlay, CalAlarm, CalComponent, CalDate, DefaultAlarmOverlay, EventLike,
 };
-use eventix_locale::{DateFlags, Locale};
 use eventix_state::{CalendarAlarmType, PersonalCalendarAlarms, State};
 
-pub(crate) struct Notification {
-    pub summary: String,
-    pub body: String,
-}
-
-impl Notification {
-    fn new(alarm: &AlarmOccurrence<'_>, locale: &dyn Locale) -> Self {
-        let occurrence = alarm.occurrence();
-        let mut lines = Vec::new();
-        if let Some(start) = occurrence.occurrence_start() {
-            lines.push(format!(
-                "{}: {}",
-                locale.translate("Start"),
-                locale.fmt_datetime(&start, DateFlags::None)
-            ));
-        }
-        if let Some(location) = occurrence.location() {
-            lines.push(format!("{}: {location}", locale.translate("Location")));
-        }
-        if let Some(date) = alarm.alarm_date() {
-            lines.push(format!(
-                "{}: {}",
-                locale.translate("Reminder"),
-                locale.fmt_datetime(&date, DateFlags::Short)
-            ));
-        }
-        Self {
-            summary: occurrence
-                .summary()
-                .filter(|summary| !summary.is_empty())
-                .cloned()
-                .unwrap_or_else(|| locale.translate("Reminder").into()),
-            body: lines.join("\n"),
-        }
-    }
-}
+use crate::model::notifications::Notification;
 
 struct PersonalOverlay<'a> {
     personal: Option<&'a PersonalCalendarAlarms>,
@@ -116,7 +79,7 @@ pub(crate) fn check(state: &mut State, now: DateTime<Utc>) -> Vec<Notification> 
         alarms.sort_by_key(|alarm| alarm.alarm_date());
         alarms
             .iter()
-            .map(|alarm| Notification::new(alarm, locale.as_ref()))
+            .map(|alarm| Notification::from_alarm(alarm, locale.as_ref()))
             .collect()
     };
     let misc = state.misc_mut();

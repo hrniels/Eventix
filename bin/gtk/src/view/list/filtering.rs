@@ -10,7 +10,7 @@ use std::{
 use eventix_locale::Locale;
 use gtk::{gdk, prelude::*};
 
-use crate::presentation::list::{Calendar, Filter};
+use crate::model::list::{Calendar, Filter};
 use crate::widgets::CalendarToggle;
 
 type Changed = Rc<dyn Fn()>;

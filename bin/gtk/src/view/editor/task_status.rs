@@ -7,7 +7,7 @@ use eventix_state::actions::items::TaskStatus;
 use gtk::prelude::*;
 
 use super::{DateInput, dropdown, layout::row, spin};
-use crate::presentation::editor::EditorOptions;
+use crate::model::editor::EditorOptions;
 
 pub(super) struct TaskStatusInput {
     pub status: gtk::DropDown,

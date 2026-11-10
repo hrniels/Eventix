@@ -10,7 +10,7 @@ use eventix_locale::TimeFlags;
 use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
 use crate::actions::move_event::{self, DraggedEvent, MoveTarget};
-use crate::presentation::MonthSnapshot;
+use crate::model::MonthSnapshot;
 use crate::style;
 use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::view::{

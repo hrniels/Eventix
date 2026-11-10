@@ -7,7 +7,7 @@ use eventix_state::actions::items::{ChangeOccurrence, ChangeTask, EditScope, Ite
 use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
-use crate::presentation::list::Row;
+use crate::model::list::Row;
 use crate::view::action_menu::{MenuAction, OccurrenceTarget};
 
 impl CalendarPage {

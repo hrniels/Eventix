@@ -9,8 +9,8 @@ use eventix_locale::{Locale, TimeFlags};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use crate::actions::move_event::{self, DraggedEvent};
-use crate::presentation::details::Response;
-use crate::presentation::{AllDaySpan, Event, MonthEvent, TimedEvent};
+use crate::model::details::Response;
+use crate::model::{AllDaySpan, Event, MonthEvent, TimedEvent};
 use crate::style;
 
 use super::indicators::EventIndicators;
@@ -294,7 +294,7 @@ impl EventCard {
 mod tests {
     use std::sync::Arc;
 
-    use crate::presentation::{
+    use crate::model::{
         OccurrenceId,
         details::{DetailActions, Details},
     };

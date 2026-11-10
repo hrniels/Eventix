@@ -158,12 +158,13 @@ impl CalendarPage {
 mod tests {
     use std::sync::Arc;
 
-    use crate::presentation::{Day, MonthDay, MonthSnapshot, WeekSnapshot, editor::EditorCalendar};
+    use crate::model::{Day, MonthDay, MonthSnapshot, WeekSnapshot, editor::EditorCalendar};
     use chrono::{Duration, NaiveDate, NaiveDateTime};
     use gtk::{glib, prelude::*, subclass::prelude::*};
 
     use super::CalendarPage;
-    use crate::model::session::{CalendarSession, Event};
+    use crate::worker::event::Event;
+    use crate::worker::session::Session;
 
     fn drag(widget: &impl IsA<gtk::Widget>) -> gtk::GestureDrag {
         widget
@@ -238,7 +239,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
         let state = eventix_state::State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
-        let (session, responses) = CalendarSession::test_start(state);
+        let (session, responses) = Session::test_start(state);
         let page: CalendarPage = glib::Object::new();
         page.imp().session.current.replace(Some(session));
         let start: NaiveDate = "2026-10-19".parse().unwrap();
@@ -343,7 +344,7 @@ mod tests {
             true,
         );
 
-        let (month_start, month_end) = crate::presentation::month_range(start).unwrap();
+        let (month_start, month_end) = crate::dates::month_range(start).unwrap();
         page.imp().month_view.set_active(true);
         page.imp().content.show_month(
             &page,

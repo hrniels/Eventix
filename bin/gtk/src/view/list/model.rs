@@ -14,10 +14,9 @@ use eventix_ical::objects::{CalDate, CalDateType, DateContext};
 use eventix_state::actions::items::ItemId;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
-use crate::model::session::{
-    ListRowsRequest, ListRowsResponse, OccurrencesRequest, OccurrencesResponse,
-};
-use crate::presentation::list::occurrences::{Cursor, Direction};
+use crate::model::list_occurrences::{Cursor, Direction};
+use crate::worker::event::{ListRowsResponse, OccurrencesResponse};
+use crate::worker::message::{ListRowsRequest, OccurrencesRequest};
 
 use super::item::{Entry, ListItem};
 
@@ -32,7 +31,7 @@ const OCCURRENCES_PER_PAGE: usize = 3;
 struct Expansion {
     token: u64,
     anchor: Cursor,
-    rows: Vec<std::sync::Arc<crate::presentation::list::occurrences::Row>>,
+    rows: Vec<std::sync::Arc<crate::model::list_occurrences::Row>>,
     earlier: Option<Cursor>,
     later: Option<Cursor>,
     loading_earlier: bool,

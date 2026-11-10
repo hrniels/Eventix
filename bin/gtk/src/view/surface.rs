@@ -10,7 +10,7 @@ use eventix_locale::Locale;
 use gtk::{glib, prelude::*};
 
 use super::{card::EventCard, popover::DetailsController};
-use crate::presentation::{OccurrenceId, TimedSegmentId};
+use crate::model::{OccurrenceId, TimedSegmentId};
 
 #[derive(PartialEq, Eq)]
 pub(crate) enum CardKey {

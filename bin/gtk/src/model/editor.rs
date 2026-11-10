@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Owned calendar choices, completions, and defaults for event and task editors.
+//! Calendar choices, completions, and defaults projected from application state.
 
 use std::sync::Arc;
 
@@ -19,20 +19,31 @@ pub struct EditorCalendar {
     pub personal: bool,
 }
 
+/// Owned choices and initial defaults for an item, independent of UI widgets.
+pub struct EditorOptions {
+    pub kind: CalCompType,
+    pub calendars: Vec<EditorCalendar>,
+    pub last_calendar: Option<String>,
+    pub locations: Vec<String>,
+    pub contacts: Vec<String>,
+    pub start: NaiveDateTime,
+    pub locale: Arc<dyn Locale + Send + Sync>,
+}
+
 impl EditorCalendar {
     /// Returns writable calendars supporting the requested component type, sorted by name and ID.
-    pub fn load(state: &State, kind: CalCompType) -> Vec<Self> {
-        Self::load_with_current(state, kind, None)
+    pub(crate) fn for_kind(state: &State, kind: CalCompType) -> Vec<Self> {
+        Self::with_current(state, kind, None)
     }
 
-    fn load_with_current(state: &State, kind: CalCompType, current: Option<&str>) -> Vec<Self> {
+    fn with_current(state: &State, kind: CalCompType, current: Option<&str>) -> Vec<Self> {
         let mut calendars = Vec::new();
         for collection in state.settings().collections().values() {
             for (id, settings) in collection.calendars() {
                 if current == Some(id.as_str())
                     || (!collection.is_read_only() && settings.types().contains(&kind))
                 {
-                    calendars.push(Self {
+                    calendars.push(EditorCalendar {
                         id: id.clone(),
                         name: settings.name().clone(),
                         background: settings.bgcolor().clone(),
@@ -49,17 +60,6 @@ impl EditorCalendar {
     }
 }
 
-/// Owned choices and initial defaults for an item, independent of UI widgets.
-pub struct EditorOptions {
-    pub kind: CalCompType,
-    pub calendars: Vec<EditorCalendar>,
-    pub last_calendar: Option<String>,
-    pub locations: Vec<String>,
-    pub contacts: Vec<String>,
-    pub start: NaiveDateTime,
-    pub locale: Arc<dyn Locale + Send + Sync>,
-}
-
 impl EditorOptions {
     /// Loads calendar choices, completions, and defaults for a new event.
     ///
@@ -67,28 +67,32 @@ impl EditorOptions {
     /// and ID. The initial start is the next whole hour in the configured timezone; returns
     /// an error if that date and time cannot be represented.
     #[cfg(test)]
-    pub fn load(state: &State) -> anyhow::Result<Self> {
-        Self::load_for(state, CalCompType::Event)
+    pub(crate) fn from_state(state: &State) -> anyhow::Result<Self> {
+        Self::for_kind(state, CalCompType::Event)
     }
 
     /// Loads writable calendars and defaults for the requested component type.
-    pub fn load_for(state: &State, kind: CalCompType) -> anyhow::Result<Self> {
-        Self::load_with_current(state, kind, None)
+    pub(crate) fn for_kind(state: &State, kind: CalCompType) -> anyhow::Result<Self> {
+        Self::with_current(state, kind, None)
     }
 
     /// Loads defaults and calendar choices for editing an existing item.
     ///
     /// Includes the current calendar in addition to writable calendars supporting the item type.
-    pub fn load_for_edit(state: &State, kind: CalCompType, current: &str) -> anyhow::Result<Self> {
-        Self::load_with_current(state, kind, Some(current))
+    pub(crate) fn for_edit(
+        state: &State,
+        kind: CalCompType,
+        current: &str,
+    ) -> anyhow::Result<Self> {
+        Self::with_current(state, kind, Some(current))
     }
 
-    fn load_with_current(
+    fn with_current(
         state: &State,
         kind: CalCompType,
         current: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let calendars = EditorCalendar::load_with_current(state, kind, current);
+        let calendars = EditorCalendar::with_current(state, kind, current);
         let now = Utc::now().with_timezone(state.timezone());
         let start = now
             .with_minute(0)
@@ -119,7 +123,7 @@ impl EditorOptions {
             })
             .collect();
         contacts.sort();
-        Ok(Self {
+        Ok(EditorOptions {
             kind,
             calendars,
             locations,

@@ -9,7 +9,7 @@ use std::{
 
 use gtk::{gdk, prelude::*};
 
-use crate::presentation::{Event, WeekSnapshot};
+use crate::model::{Event, WeekSnapshot};
 
 pub fn install(display: &gdk::Display) {
     let provider = gtk::CssProvider::new();

@@ -14,10 +14,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use gtk::prelude::*;
 
-use crate::model::session::{
-    ListRowsRequest, ListRowsResponse, OccurrencesRequest, OccurrencesResponse,
-};
-use crate::presentation::list::{Filter, Snapshot};
+use crate::model::list::{Filter, Snapshot};
+use crate::worker::event::{ListRowsResponse, OccurrencesResponse};
+use crate::worker::message::{ListRowsRequest, OccurrencesRequest};
 
 use self::{filtering::Filtering, results::Results};
 
@@ -102,10 +101,7 @@ impl ListView {
         self.results.model.set_occurrences(response)
     }
 
-    pub fn connect_action(
-        &self,
-        handler: impl Fn(&crate::presentation::list::Row, MenuAction) + 'static,
-    ) {
+    pub fn connect_action(&self, handler: impl Fn(&crate::model::list::Row, MenuAction) + 'static) {
         self.results.actions.connect(handler);
     }
 
@@ -125,12 +121,13 @@ impl ListView {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use crate::presentation::list::{Action, Calendar, Filter, Row, Snapshot};
+    use crate::model::Action;
+    use crate::model::list::{Calendar, Filter, Row, Snapshot};
     use eventix_state::actions::items::ItemId;
     use gtk::prelude::*;
 
     use super::{ListView, MenuAction, item::ListItem, row::FixedRow};
-    use crate::model::session::ListRowsResponse;
+    use crate::worker::event::ListRowsResponse;
 
     fn wait_until(ready: impl Fn() -> bool) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
@@ -210,11 +207,11 @@ mod tests {
     }
 
     fn occurrence_page(
-        request: &crate::model::session::OccurrencesRequest,
-    ) -> crate::presentation::list::occurrences::Page {
-        use crate::presentation::{
+        request: &crate::worker::message::OccurrencesRequest,
+    ) -> crate::model::list_occurrences::Page {
+        use crate::model::{
             details::{DetailActions, Details, PersonalReminders},
-            list::occurrences::{Cursor, Direction, Page, Row},
+            list_occurrences::{Cursor, Direction, Page, Row},
         };
         use chrono::Duration;
         use eventix_ical::objects::{CalDate, CalDateType, DateContext};
@@ -245,10 +242,10 @@ mod tests {
                     background: "#803366".into(),
                     response: Some(
                         [
-                            crate::presentation::details::Response::Accepted,
-                            crate::presentation::details::Response::Tentative,
-                            crate::presentation::details::Response::Declined,
-                            crate::presentation::details::Response::Pending,
+                            crate::model::details::Response::Accepted,
+                            crate::model::details::Response::Tentative,
+                            crate::model::details::Response::Declined,
+                            crate::model::details::Response::Pending,
                         ][offset.rem_euclid(4) as usize],
                     ),
                     task: true,
@@ -286,8 +283,9 @@ mod tests {
     #[test]
     fn expansion_pages_refresh_preserve_identity_and_reject_collapsed_or_stale_responses() {
         use super::{item::Entry, model::ListModel};
-        use crate::model::session::{OccurrencesRequest, OccurrencesResponse};
-        use crate::presentation::list::occurrences::Direction;
+        use crate::model::list_occurrences::Direction;
+        use crate::worker::event::OccurrencesResponse;
+        use crate::worker::message::OccurrencesRequest;
         let model: ListModel = gtk::glib::Object::new();
         let requests = Rc::new(RefCell::new(Vec::<OccurrencesRequest>::new()));
         let pending = requests.clone();
@@ -558,7 +556,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn expanded_occurrences_use_ellipsis_menus_and_survive_virtualized_scrolling() {
-        use crate::model::session::OccurrencesResponse;
+        use crate::worker::event::OccurrencesResponse;
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         crate::style::install(&gtk::gdk::Display::default().unwrap());
@@ -821,7 +819,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn action_refreshes_and_exhausted_pages_preserve_scroll_far_from_the_first_row() {
-        use crate::model::session::OccurrencesResponse;
+        use crate::worker::event::OccurrencesResponse;
         use std::cell::Cell;
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -1653,7 +1651,7 @@ mod tests {
     fn recycled_content_resets_presentation_and_dispatches_only_current_item_actions() {
         use std::sync::Arc;
 
-        use crate::presentation::details::Response;
+        use crate::model::details::Response;
 
         use super::{content::Content, item::Entry, model::ListModel};
 
@@ -1756,15 +1754,15 @@ mod tests {
         assert!(!model.is_expanded(&id));
         assert!(!model.is_expanded(&event_id));
 
-        let request = crate::model::session::OccurrencesRequest {
+        let request = crate::worker::message::OccurrencesRequest {
             revision: 0,
             token: 0,
             item: id.clone(),
-            cursor: crate::presentation::list::occurrences::Cursor {
+            cursor: crate::model::list_occurrences::Cursor {
                 start: chrono::Utc::now().with_timezone(locale.timezone()),
                 recurrence: String::new(),
             },
-            direction: crate::presentation::list::occurrences::Direction::From,
+            direction: crate::model::list_occurrences::Direction::From,
             count: 1,
         };
         let mut occurrence = occurrence_page(&request).rows.remove(0);
@@ -1828,8 +1826,8 @@ mod tests {
     #[ignore = "requires a GTK display"]
     fn recycled_pagination_buttons_use_the_current_series_and_direction() {
         use super::{content::Content, item::Entry, model::ListModel};
-        use crate::model::session::OccurrencesResponse;
-        use crate::presentation::list::occurrences::Direction;
+        use crate::model::list_occurrences::Direction;
+        use crate::worker::event::OccurrencesResponse;
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();

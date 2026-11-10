@@ -8,7 +8,7 @@ use chrono::{NaiveDate, NaiveDateTime, Utc};
 use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
 use crate::actions::move_event::{self, DraggedEvent, MoveTarget};
-use crate::presentation::WeekSnapshot;
+use crate::model::WeekSnapshot;
 use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, rect};
 use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::{

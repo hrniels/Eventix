@@ -4,8 +4,6 @@
 
 //! Base-component browsing and occurrence expansion, independent of calendar visibility.
 
-pub mod occurrences;
-
 use std::sync::Arc;
 
 use eventix_ical::{
@@ -16,48 +14,13 @@ use eventix_locale::Locale;
 use eventix_state::actions::items::ItemId;
 use eventix_state::{CalendarAlarmType, State};
 
-pub use crate::presentation::item_actions::Action;
+use super::Action;
 
 /// Applied list selection. An empty calendar selection means all calendars.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Filter {
     pub keywords: String,
     pub calendars: Vec<String>,
-}
-
-/// Case-insensitive AND groups separated by the standalone word `OR`.
-#[derive(Debug, PartialEq, Eq)]
-pub struct KeywordExpression(Vec<Vec<String>>);
-
-impl KeywordExpression {
-    /// Parses whitespace-separated terms and ignores empty alternatives.
-    pub fn parse(input: &str) -> Self {
-        let mut groups = Vec::new();
-        let mut current = Vec::new();
-        for token in input.split_whitespace() {
-            if token.eq_ignore_ascii_case("OR") {
-                if !current.is_empty() {
-                    groups.push(std::mem::take(&mut current));
-                }
-            } else {
-                current.push(token.to_lowercase());
-            }
-        }
-        if !current.is_empty() {
-            groups.push(current);
-        }
-        Self(groups)
-    }
-
-    /// Matches text using case-insensitive substring comparisons.
-    pub fn matches(&self, text: &str) -> bool {
-        let text = text.to_lowercase();
-        self.0.is_empty()
-            || self
-                .0
-                .iter()
-                .any(|group| group.iter().all(|term| text.contains(term)))
-    }
 }
 
 /// A calendar offered by the list's independent filter.
@@ -96,9 +59,44 @@ pub struct Snapshot {
     pub locale: Arc<dyn Locale + Send + Sync>,
 }
 
+/// Case-insensitive AND groups separated by the standalone word `OR`.
+#[derive(Debug, PartialEq, Eq)]
+struct KeywordExpression(Vec<Vec<String>>);
+
+impl KeywordExpression {
+    /// Parses whitespace-separated terms and ignores empty alternatives.
+    pub fn parse(input: &str) -> Self {
+        let mut groups = Vec::new();
+        let mut current = Vec::new();
+        for token in input.split_whitespace() {
+            if token.eq_ignore_ascii_case("OR") {
+                if !current.is_empty() {
+                    groups.push(std::mem::take(&mut current));
+                }
+            } else {
+                current.push(token.to_lowercase());
+            }
+        }
+        if !current.is_empty() {
+            groups.push(current);
+        }
+        Self(groups)
+    }
+
+    /// Matches text using case-insensitive substring comparisons.
+    pub fn matches(&self, text: &str) -> bool {
+        let text = text.to_lowercase();
+        self.0.is_empty()
+            || self
+                .0
+                .iter()
+                .any(|group| group.iter().all(|term| text.contains(term)))
+    }
+}
+
 impl Snapshot {
     /// Loads base components, including past events and completed or undated tasks.
-    pub fn load(state: &State, filter: &Filter) -> Self {
+    pub(crate) fn from_state(state: &State, filter: &Filter) -> Self {
         let locale = state.locale();
         let calendars: Vec<_> = state
             .store()
@@ -158,7 +156,7 @@ impl Snapshot {
                 recurrence: None,
             })
             .collect();
-        Self {
+        Snapshot {
             filter,
             calendars,
             items,
@@ -175,7 +173,7 @@ fn modified(comp: &CalComponent) -> &CalDate {
 
 impl Row {
     /// Loads presentation data for a single base component, or returns none if unavailable.
-    pub fn load(state: &State, item: &ItemId) -> Option<Self> {
+    pub(crate) fn from_state(state: &State, item: &ItemId) -> Option<Self> {
         if item.recurrence.is_some() {
             return None;
         }
@@ -216,7 +214,7 @@ impl Row {
                     .unwrap_or(CalPartStat::NeedsAction)
             });
 
-        Some(Self {
+        Some(Row {
             calendar: file.directory().to_string(),
             uid: comp.uid().to_string(),
             calendar_name: settings.name().clone(),
@@ -304,7 +302,8 @@ mod tests {
     use eventix_state::actions::items::ItemId;
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
-    use super::{Action, Filter, KeywordExpression, Row, Snapshot, actions};
+    use super::{Action, Filter, KeywordExpression, actions};
+    use crate::model::list_occurrences as occurrences;
 
     fn available_actions(
         component: &str,
@@ -450,7 +449,7 @@ mod tests {
 
     #[test]
     fn occurrence_pages_include_boundaries_exclusions_and_equal_start_overrides_once() {
-        use crate::presentation::list::occurrences::{Cursor, Direction, Page};
+        use crate::model::list_occurrences::{Cursor, Direction};
         use chrono::TimeZone;
         let (_tmp, state) = state(&["BEGIN:VEVENT\nUID:series\nDTSTART;VALUE=DATE:20261015\n\
              RRULE:FREQ=DAILY;COUNT=20\nEXDATE;VALUE=DATE:20261024\nSUMMARY:Base\nEND:VEVENT\n\
@@ -467,12 +466,12 @@ mod tests {
                 .unwrap(),
             recurrence: String::new(),
         };
-        let earlier = Page::load(&state, &item, &cursor, Direction::Earlier, 5);
+        let earlier = occurrences::Page::from_state(&state, &item, &cursor, Direction::Earlier, 5);
         assert_eq!(earlier.rows.len(), 5);
         assert!(earlier.more);
         assert!(earlier.rows.last().unwrap().excluded);
         assert_eq!(earlier.rows.last().unwrap().item.calendar, "work");
-        let oldest = Page::load(
+        let oldest = occurrences::Page::from_state(
             &state,
             &item,
             &earlier.rows[0].cursor,
@@ -481,11 +480,17 @@ mod tests {
         );
         assert_eq!(oldest.rows.len(), 5);
         assert!(!oldest.more);
-        let first = Page::load(&state, &item, &cursor, Direction::From, 1);
+        let first = occurrences::Page::from_state(&state, &item, &cursor, Direction::From, 1);
         assert_eq!(first.rows.len(), 1);
         assert_eq!(first.rows[0].cursor.start, cursor.start);
         assert!(first.more);
-        let second = Page::load(&state, &item, &first.rows[0].cursor, Direction::Later, 1);
+        let second = occurrences::Page::from_state(
+            &state,
+            &item,
+            &first.rows[0].cursor,
+            Direction::Later,
+            1,
+        );
         assert_eq!(second.rows[0].cursor.start, cursor.start);
         assert_ne!(first.rows[0].item, second.rows[0].item);
         assert!(second.rows[0].overwritten);
@@ -495,7 +500,7 @@ mod tests {
         let mut boundary = cursor;
         let mut dir = Direction::From;
         loop {
-            let page = Page::load(&state, &item, &boundary, dir, 3);
+            let page = occurrences::Page::from_state(&state, &item, &boundary, dir, 3);
             if let Some(last) = page.rows.last() {
                 boundary = last.cursor.clone();
             }
@@ -516,7 +521,7 @@ mod tests {
 
     #[test]
     fn occurrence_pages_support_tasks_without_due_dates_and_respect_calendar_identity() {
-        use crate::presentation::list::occurrences::{Cursor, Direction, Page};
+        use crate::model::list_occurrences::{Cursor, Direction};
         use chrono::TimeZone;
         let (_tmp, state) = state(&["BEGIN:VTODO\nUID:task\nDTSTART;VALUE=DATE:20261025\n\
              RRULE:FREQ=DAILY;COUNT=2\nSTATUS:COMPLETED\nEND:VTODO"]);
@@ -531,7 +536,7 @@ mod tests {
                 .unwrap(),
             recurrence: String::new(),
         };
-        let page = Page::load(&state, &item, &cursor, Direction::From, 5);
+        let page = occurrences::Page::from_state(&state, &item, &cursor, Direction::From, 5);
         assert_eq!(page.rows.len(), 2);
         assert!(!page.more);
         for row in &page.rows {
@@ -543,7 +548,7 @@ mod tests {
         }
         item.calendar = "missing".into();
         assert!(
-            Page::load(&state, &item, &cursor, Direction::From, 5)
+            occurrences::Page::from_state(&state, &item, &cursor, Direction::From, 5)
                 .rows
                 .is_empty()
         );
@@ -551,9 +556,9 @@ mod tests {
 
     #[test]
     fn occurrence_markers_inherit_calendar_colors_and_use_overridden_attendee_responses() {
-        use crate::presentation::{
+        use crate::model::{
             details::Response,
-            list::occurrences::{Cursor, Direction, Page},
+            list_occurrences::{Cursor, Direction},
         };
         use chrono::TimeZone;
         let (_tmp, mut state) = state(&[
@@ -597,7 +602,7 @@ mod tests {
                 .unwrap(),
             recurrence: String::new(),
         };
-        let page = Page::load(&state, &item, &cursor, Direction::From, 5);
+        let page = occurrences::Page::from_state(&state, &item, &cursor, Direction::From, 5);
         assert_eq!(
             page.rows.iter().map(|row| row.response).collect::<Vec<_>>(),
             [
@@ -608,7 +613,7 @@ mod tests {
             ]
             .map(Some)
         );
-        let base = Row::load(&state, &item).unwrap();
+        let base = super::Row::from_state(&state, &item).unwrap();
         for row in page.rows {
             assert_eq!(row.background, base.background);
             assert_eq!(row.calendar_name, base.calendar_name);
@@ -620,7 +625,7 @@ mod tests {
             .unwrap()
             .set_syncer(syncer("owner@example.org"));
         assert!(
-            Page::load(&state, &item, &cursor, Direction::From, 5)
+            occurrences::Page::from_state(&state, &item, &cursor, Direction::From, 5)
                 .rows
                 .iter()
                 .all(|row| row.response.is_none())
@@ -653,14 +658,14 @@ mod tests {
                 recurrence: None,
             };
             assert_eq!(
-                crate::presentation::Event::load(&state, &item)
+                crate::model::Event::from_state(&state, &item)
                     .unwrap()
                     .summary,
                 calendar
             );
             item.uid = "task".into();
             assert_eq!(
-                crate::presentation::sidebar::SidebarRow::load(&state, &item)
+                crate::model::sidebar::SidebarRow::from_state(&state, &item)
                     .unwrap()
                     .summary,
                 calendar
@@ -676,7 +681,7 @@ mod tests {
             "BEGIN:VEVENT\nUID:series\nDTSTART:20261005T090000Z\nDTEND:20261005T100000Z\nRRULE:FREQ=DAILY;COUNT=3\nBEGIN:VALARM\nACTION:DISPLAY\nTRIGGER:-PT10M\nDESCRIPTION:Reminder\nEND:VALARM\nEND:VEVENT\nBEGIN:VEVENT\nUID:series\nRECURRENCE-ID:20261006T090000Z\nDTSTART:20261006T100000Z\nDTEND:20261006T110000Z\nEND:VEVENT",
         ]);
         state.misc_mut().toggle_calendar(&"work".to_string());
-        let snapshot = Snapshot::load(
+        let snapshot = super::Snapshot::from_state(
             &state,
             &Filter {
                 calendars: vec!["work".into()],
@@ -688,7 +693,7 @@ mod tests {
         let rows: Vec<_> = snapshot
             .items
             .iter()
-            .filter_map(|item| Row::load(&state, item))
+            .filter_map(|item| super::Row::from_state(&state, item))
             .collect();
         let done = rows.iter().find(|row| row.uid == "done").unwrap();
         assert!(done.task && done.completed);
@@ -712,7 +717,7 @@ mod tests {
             "BEGIN:VTODO\nUID:other\nSUMMARY:Gamma\nEND:VTODO",
         ]);
         for keywords in ["ALPHA beta", "office", "uid-needle", "missing OR gamma"] {
-            let snapshot = Snapshot::load(
+            let snapshot = super::Snapshot::from_state(
                 &state,
                 &Filter {
                     keywords: keywords.into(),
@@ -722,7 +727,7 @@ mod tests {
             assert_eq!(snapshot.items.len(), 1, "{keywords}");
         }
         assert_eq!(
-            Snapshot::load(
+            super::Snapshot::from_state(
                 &state,
                 &Filter {
                     keywords: "alpha missing".into(),
@@ -746,14 +751,14 @@ mod tests {
             calendars: vec!["home".into()],
             ..Default::default()
         };
-        let snapshot = Snapshot::load(&state, &filter);
+        let snapshot = super::Snapshot::from_state(&state, &filter);
         assert_eq!(snapshot.items.len(), 14);
         assert_eq!(snapshot.items[0].uid, "item-14");
         assert_eq!(snapshot.items[13].uid, "item-01");
-        let last = Row::load(&state, &snapshot.items[13]).unwrap();
+        let last = super::Row::from_state(&state, &snapshot.items[13]).unwrap();
         assert_eq!(last.uid, "item-01");
         filter.keywords = "not-found".into();
-        let empty = Snapshot::load(&state, &filter);
+        let empty = super::Snapshot::from_state(&state, &filter);
         assert!(empty.items.is_empty());
 
         let (_tmp, state) = self::state(&[
@@ -761,7 +766,7 @@ mod tests {
             "BEGIN:VTODO\nUID:created\nDTSTAMP:20260101T000000Z\nCREATED:20260103T000000Z\nEND:VTODO",
             "BEGIN:VTODO\nUID:stamp\nDTSTAMP:20260102T000000Z\nEND:VTODO",
         ]);
-        let snapshot = Snapshot::load(
+        let snapshot = super::Snapshot::from_state(
             &state,
             &Filter {
                 calendars: vec!["home".into()],
@@ -790,15 +795,15 @@ mod tests {
     #[test]
     fn row_loading_rejects_missing_components_and_recurrence_exceptions() {
         let (_tmp, state) = state(&["BEGIN:VTODO\nUID:task\nSUMMARY:Task\nEND:VTODO"]);
-        let snapshot = Snapshot::load(&state, &Filter::default());
+        let snapshot = super::Snapshot::from_state(&state, &Filter::default());
         let mut item = snapshot.items[0].clone();
         item.calendar = "missing".into();
-        assert!(Row::load(&state, &item).is_none());
+        assert!(super::Row::from_state(&state, &item).is_none());
         item = snapshot.items[0].clone();
         item.uid = "missing".into();
-        assert!(Row::load(&state, &item).is_none());
+        assert!(super::Row::from_state(&state, &item).is_none());
         item = snapshot.items[0].clone();
         item.recurrence = Some("TU2026-10-25T09:00:00".parse().unwrap());
-        assert!(Row::load(&state, &item).is_none());
+        assert!(super::Row::from_state(&state, &item).is_none());
     }
 }

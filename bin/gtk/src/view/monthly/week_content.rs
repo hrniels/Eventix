@@ -9,7 +9,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 use eventix_locale::Locale;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-use crate::presentation::{AllDaySpan, MonthDay};
+use crate::model::{AllDaySpan, MonthDay};
 use crate::view::{
     card::EventCard,
     geometry::{GUTTER, day_x},

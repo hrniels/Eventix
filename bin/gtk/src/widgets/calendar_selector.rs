@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use gtk::{gdk, prelude::*};
 
 use super::ColorDot;
-use crate::presentation::editor::EditorCalendar;
+use crate::model::editor::EditorCalendar;
 
 #[derive(PartialEq, Eq)]
 struct Choice {
@@ -191,7 +191,7 @@ fn calendar_factory(
 
 #[cfg(test)]
 mod tests {
-    use crate::presentation::editor::EditorCalendar;
+    use crate::model::editor::EditorCalendar;
     use gtk::prelude::*;
 
     use super::CalendarSelector;

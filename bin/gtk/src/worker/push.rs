@@ -13,10 +13,11 @@ use std::{
 use eventix_state::{EventixState, State, SyncCancellation, SyncerType, actions::items::ItemId};
 
 use super::{
-    activity::{Activity, Phase},
+    event::Event,
     management::{self, Request as ManagementRequest},
-    session::{Event, Message},
+    message::Message,
 };
+use crate::model::activity::{Activity, Phase};
 
 type Key = (String, String);
 

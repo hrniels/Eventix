@@ -14,7 +14,7 @@ use eventix_ical::{
 };
 use eventix_state::{State, actions::items::ItemId};
 
-use crate::presentation::details::{Details, Response};
+use crate::model::details::{Details, Response};
 
 /// Stable pagination boundary, including identity when occurrences share a start time.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -61,14 +61,14 @@ impl Page {
     ///
     /// Boundaries use effective start times and recurrence identities, avoiding duplicates for
     /// overlapping or rescheduled occurrences. Missing calendars and series return an empty page.
-    pub fn load(
+    pub(crate) fn from_state(
         state: &State,
         item: &ItemId,
         cursor: &Cursor,
         dir: Direction,
         count: usize,
     ) -> Self {
-        let empty = || Self {
+        let empty = || Page {
             rows: Vec::new(),
             more: false,
         };
@@ -126,7 +126,7 @@ impl Page {
             .into_iter()
             .take(count)
             .filter_map(|(cursor, occ)| {
-                let mut details = Details::load(state, &occ)?;
+                let mut details = Details::from_occurrence(state, &occ)?;
                 let completed = occ.todo_status() == Some(CalTodoStatus::Completed);
                 let excluded = occ.is_excluded();
                 details.actions.cancel &= occ.ctype() == CalCompType::Event;
@@ -163,7 +163,7 @@ impl Page {
                 }))
             })
             .collect();
-        Self { rows, more }
+        Page { rows, more }
     }
 }
 

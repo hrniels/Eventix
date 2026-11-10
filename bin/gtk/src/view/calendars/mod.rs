@@ -10,12 +10,12 @@ use eventix_locale::Locale;
 use gtk::prelude::*;
 
 use super::error::{ErrorMessage, show_error};
-use crate::presentation::calendars::{Backend, Calendar, Collection, Snapshot};
+use crate::model::calendars::{Backend, Calendar, Collection, Snapshot};
 
 mod card;
 mod collection;
 
-use crate::model::management::{CalendarOperation, CollectionOperation, Operation, Request};
+use crate::worker::management::{CalendarOperation, CollectionOperation, Operation, Request};
 use card::CalendarCard;
 use collection::CollectionActions;
 
@@ -168,7 +168,7 @@ impl CalendarsView {
         {
             if matches!(
                 request.operation,
-                crate::model::management::Operation::Collection(_)
+                crate::worker::management::Operation::Collection(_)
             ) {
                 if let Some(controls) = &row.controls {
                     controls.finish(request, success);
@@ -195,8 +195,8 @@ impl CalendarsView {
         }
         if matches!(
             request.operation,
-            crate::model::management::Operation::Collection(
-                crate::model::management::CollectionOperation::Save { .. }
+            crate::worker::management::Operation::Collection(
+                crate::worker::management::CollectionOperation::Save { .. }
             )
         ) && let Some(controls) = self
             .rows
@@ -507,7 +507,7 @@ fn action_button(icon: &str, label: &str, show_label: bool, locale: &dyn Locale)
 
 #[cfg(test)]
 mod tests {
-    use crate::presentation::calendars::{Backend, Calendar, Collection, Snapshot};
+    use crate::model::calendars::{Backend, Calendar, Collection, Snapshot};
     use gtk::{gdk, prelude::*};
 
     use super::CalendarsView;
@@ -648,7 +648,7 @@ mod tests {
     fn calendars_creation_submits_keeps_drafts_and_retries_errors() {
         use std::{cell::RefCell, rc::Rc};
 
-        use crate::model::management::{CalendarOperation, CollectionOperation, Operation};
+        use crate::worker::management::{CalendarOperation, CollectionOperation, Operation};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -1090,7 +1090,7 @@ mod tests {
     fn calendars_management_actions_submit_drafts_and_recover_from_failures() {
         use std::{cell::RefCell, rc::Rc};
 
-        use crate::model::management::{CalendarOperation, Operation, Request};
+        use crate::worker::management::{CalendarOperation, Operation, Request};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
@@ -1236,7 +1236,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn collection_actions_submit_recover_and_preserve_edit_drafts() {
-        use crate::model::management::{CollectionOperation, Operation, Request};
+        use crate::worker::management::{CollectionOperation, Operation, Request};
         use std::{cell::RefCell, rc::Rc};
 
         gtk::init().unwrap();
@@ -1482,7 +1482,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn collection_delete_reload_confirm_and_log_displays_contents() {
-        use crate::model::management::{CollectionOperation, Operation, Request};
+        use crate::worker::management::{CollectionOperation, Operation, Request};
         use std::{cell::RefCell, rc::Rc};
 
         gtk::init().unwrap();

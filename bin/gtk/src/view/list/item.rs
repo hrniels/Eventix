@@ -10,8 +10,8 @@ use std::{
 use eventix_state::actions::items::ItemId;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
-use crate::presentation::list::Row;
-use crate::presentation::list::occurrences::{Direction, Row as OccurrenceRow};
+use crate::model::list::Row;
+use crate::model::list_occurrences::{Direction, Row as OccurrenceRow};
 
 #[derive(Clone, Debug)]
 pub(super) enum Entry {

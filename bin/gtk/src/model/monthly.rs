@@ -7,16 +7,16 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use chrono::{Datelike, Duration, Months, NaiveDate};
+use chrono::{Datelike, Duration, NaiveDate};
 use eventix_locale::Locale;
 use eventix_state::State;
 
-use crate::presentation::{
-    AllDaySpan, Event, TimedSegmentId,
-    projection::{day_minutes, event_order, events_between},
-    week_start,
+use super::{AllDaySpan, Event, TimedSegmentId};
+use super::{
+    occurrence::{day_minutes, event_order, events_between},
     weekly::strip_spans,
 };
+use crate::dates::month_range;
 
 /// One occurrence displayed in a monthly day cell.
 #[derive(Clone, Debug)]
@@ -58,38 +58,13 @@ pub struct MonthSnapshot {
     pub locale: Arc<dyn Locale + Send + Sync>,
 }
 
-/// Moves by calendar months, clamping the day to the destination month's last day.
-///
-/// Returns `None` if the destination is outside the supported date range.
-pub fn shift_month(date: NaiveDate, months: i32) -> Option<NaiveDate> {
-    if months < 0 {
-        date.checked_sub_months(Months::new(months.unsigned_abs()))
-    } else {
-        date.checked_add_months(Months::new(months as u32))
-    }
-}
-
-/// Returns the Monday-aligned visible range, with an exclusive end.
-///
-/// Includes a trailing week when the month ends Sunday.
-/// Returns `None` if the padded range exceeds the supported date range.
-pub fn month_range(date: NaiveDate) -> Option<(NaiveDate, NaiveDate)> {
-    let month = date.with_day(1)?;
-    let next = shift_month(month, 1)?;
-    let start = week_start(month)?;
-    let end = next.checked_add_signed(Duration::days(
-        7 - i64::from(next.weekday().num_days_from_monday()),
-    ))?;
-    Some((start, end))
-}
-
 impl MonthSnapshot {
     /// Projects visible, non-excluded events into the month containing `date`.
     ///
     /// Uses the configured timezone and preserves original occurrence details. All-day events and
     /// interior days of timed events form week-local spans; midnight endings remain exclusive.
     /// Returns an error if the padded month exceeds the supported date range.
-    pub fn load(state: &State, date: NaiveDate) -> Result<Self> {
+    pub(crate) fn from_state(state: &State, date: NaiveDate) -> Result<Self> {
         let month = date.with_day(1).context("month start out of range")?;
         let (start, end) = month_range(date).context("month range out of range")?;
         let occurrences = events_between(state, start, end);
@@ -125,7 +100,7 @@ impl MonthSnapshot {
                 events,
             });
         }
-        Ok(Self {
+        Ok(MonthSnapshot {
             month,
             start,
             days,
@@ -147,41 +122,6 @@ mod tests {
     use chrono_tz::Europe::Berlin;
     use eventix_ical::col::{CalDir, CalFile};
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
-
-    use super::{MonthSnapshot, month_range, shift_month};
-
-    #[test]
-    fn padded_months_cover_leap_days_and_year_boundaries() {
-        for (year, month, first, last, count) in [
-            (2024, 2, (2024, 1, 29), (2024, 3, 4), 35),
-            (2026, 2, (2026, 1, 26), (2026, 3, 2), 35),
-            (2026, 5, (2026, 4, 27), (2026, 6, 8), 42),
-            (2026, 12, (2026, 11, 30), (2027, 1, 4), 35),
-        ] {
-            let date = NaiveDate::from_ymd_opt(year, month, 15).unwrap();
-            let (start, end) = month_range(date).unwrap();
-            assert_eq!(
-                start,
-                NaiveDate::from_ymd_opt(first.0, first.1, first.2).unwrap()
-            );
-            assert_eq!(
-                end,
-                NaiveDate::from_ymd_opt(last.0, last.1, last.2).unwrap()
-            );
-            assert_eq!((end - start).num_days(), count);
-            assert_eq!(start.weekday(), chrono::Weekday::Mon);
-            assert_eq!(end.weekday(), chrono::Weekday::Mon);
-        }
-        assert!(month_range(NaiveDate::MAX).is_none());
-    }
-
-    #[test]
-    fn month_navigation_clamps_days_and_crosses_years() {
-        let jan = NaiveDate::from_ymd_opt(2024, 1, 31).unwrap();
-        assert_eq!(shift_month(jan, 1), NaiveDate::from_ymd_opt(2024, 2, 29));
-        assert_eq!(shift_month(jan, -1), NaiveDate::from_ymd_opt(2023, 12, 31));
-        assert!(shift_month(NaiveDate::MAX, 1).is_none());
-    }
 
     #[test]
     fn projects_day_cells_with_padding_order_exclusions_and_timezone_boundaries() {
@@ -263,7 +203,7 @@ mod tests {
         }
         state.store_mut().add(dir);
         let date = NaiveDate::from_ymd_opt(2026, 10, 5).unwrap();
-        let month = MonthSnapshot::load(&state, date).unwrap();
+        let month = super::MonthSnapshot::from_state(&state, date).unwrap();
         assert_eq!(month.month, date.with_day(1).unwrap());
         assert_eq!(month.start, NaiveDate::from_ymd_opt(2026, 9, 28).unwrap());
         assert_eq!(month.days.len(), 35);
@@ -341,11 +281,11 @@ mod tests {
             month.days[18].events.is_empty(),
             "strip segments are not duplicated"
         );
-        let refreshed = MonthSnapshot::load(&state, date).unwrap();
+        let refreshed = super::MonthSnapshot::from_state(&state, date).unwrap();
         assert_eq!(monday.events[1].id(), refreshed.days[7].events[1].id());
         assert_ne!(month.days[6].events[0].id(), month.days[8].events[0].id());
         state.misc_mut().toggle_calendar(&"cal".into());
-        let hidden = MonthSnapshot::load(&state, date).unwrap();
+        let hidden = super::MonthSnapshot::from_state(&state, date).unwrap();
         assert!(hidden.days.iter().all(|day| day.events.is_empty()));
         assert!(hidden.spans.iter().all(Vec::is_empty));
     }

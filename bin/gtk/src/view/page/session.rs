@@ -16,17 +16,20 @@ use eventix_state::{SyncColResult, SyncResult};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
-use crate::model::session::{CalendarSession, ChangeSet, ContentRequest, Event, SavedItem};
-use crate::presentation::calendars::Backend;
+use crate::model::SavedItem;
+use crate::model::calendars::Backend;
 use crate::view::auth::SyncPopup;
 use crate::view::details::{EventDetails, delete};
+use crate::worker::event::{ChangeSet, Event};
+use crate::worker::message::ContentRequest;
+use crate::worker::session::Session;
 
 /// Owns the model connection, command state, and periodic refresh lifecycle.
 #[derive(Default)]
 pub(super) struct PageSession {
     preferences: Cell<Option<eventix_state::Preferences>>,
     settings_popup: RefCell<Option<Rc<crate::view::settings::SettingsPopup>>>,
-    pub(super) current: RefCell<Option<CalendarSession>>,
+    pub(super) current: RefCell<Option<Session>>,
     pending_command: Cell<bool>,
     pending_quick_task: Cell<bool>,
     pending_reminders: RefCell<Option<glib::WeakRef<EventDetails>>>,
@@ -414,7 +417,7 @@ impl PageSession {
 
     pub(super) fn start(&self, page: &CalendarPage, prefix: String, date: Option<NaiveDate>) {
         page.imp().status.clear(page.locale().as_ref());
-        let (session, responses) = CalendarSession::start(prefix);
+        let (session, responses) = Session::start(prefix);
         self.current.replace(Some(session));
         page.install_styles();
 
@@ -674,7 +677,7 @@ mod tests {
 
     use gtk::{glib, prelude::*, subclass::prelude::*};
 
-    use super::{CalendarSession, Event};
+    use super::{Event, Session};
 
     #[test]
     #[ignore = "requires a GTK display"]
@@ -731,7 +734,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn sync_dropdown_lists_collections_and_selects_only_the_clicked_collection() {
-        use crate::presentation::calendars::Backend;
+        use crate::model::calendars::Backend;
 
         let row_label = |button: &gtk::Button| {
             let row = button.child().and_downcast::<gtk::Box>().unwrap();
@@ -861,7 +864,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
         let state = eventix_state::State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
-        let (session, responses) = CalendarSession::test_start(state);
+        let (session, responses) = Session::test_start(state);
         let imp = page.imp();
         imp.session.current.replace(Some(session));
         window.present();
@@ -939,7 +942,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
         let state = eventix_state::State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
-        let (session, responses) = CalendarSession::test_start(state);
+        let (session, responses) = Session::test_start(state);
         let imp = page.imp();
         imp.session.current.replace(Some(session));
         window.present();

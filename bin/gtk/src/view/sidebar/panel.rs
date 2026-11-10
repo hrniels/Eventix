@@ -11,7 +11,7 @@ use gtk::prelude::*;
 use super::super::{
     details::EventDetails, indicators::EventIndicators, popover::DetailsController, response_marker,
 };
-use crate::presentation::{
+use crate::model::{
     OccurrenceId,
     sidebar::{SidebarGroup, SidebarRow},
 };

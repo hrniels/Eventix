@@ -13,7 +13,7 @@ use eventix_state::actions::{
 };
 use gtk::{gdk, graphene, prelude::*};
 
-use crate::presentation::TimedEvent;
+use crate::model::TimedEvent;
 use crate::view::{card::EventCard, page::CalendarPage, weekly::timed_grid::TimedGrid};
 
 type TimeRange = (DateTime<Tz>, DateTime<Tz>);

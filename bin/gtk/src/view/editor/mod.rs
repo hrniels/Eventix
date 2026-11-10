@@ -14,7 +14,7 @@ use eventix_locale::Locale;
 use eventix_state::actions::items::{CreateItem, UpdateItem};
 use gtk::{gdk, glib, prelude::*};
 
-use crate::presentation::editor::EditorOptions;
+use crate::model::editor::EditorOptions;
 
 mod existing;
 mod feedback;
@@ -1378,7 +1378,7 @@ pub(crate) fn is_save_key(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::presentation::editor::{EditorCalendar, EditorOptions};
+    use crate::model::editor::{EditorCalendar, EditorOptions};
     use chrono::NaiveDateTime;
     use eventix_ical::objects::{CalDateType, CalRRuleFreq};
     use gtk::prelude::*;
@@ -1501,8 +1501,13 @@ mod tests {
             .settings_mut()
             .collections_mut()
             .insert("local".into(), collection);
-        assert!(EditorOptions::load(&state).unwrap().calendars.is_empty());
-        let options = || EditorOptions::load_for(&state, CalCompType::Todo).unwrap();
+        assert!(
+            EditorOptions::from_state(&state)
+                .unwrap()
+                .calendars
+                .is_empty()
+        );
+        let options = || EditorOptions::for_kind(&state, CalCompType::Todo).unwrap();
         let editor = ItemEditor::new(1, options());
         assert_eq!(editor.title.text(), "New Task");
         assert!(editor.all_day.is_active());
@@ -1519,7 +1524,7 @@ mod tests {
         );
         let (state, item) = execute(fields, state);
 
-        let options = || EditorOptions::load_for(&state, CalCompType::Todo).unwrap();
+        let options = || EditorOptions::for_kind(&state, CalCompType::Todo).unwrap();
         let editor = ItemEditor::edit(
             2,
             options(),
@@ -1555,7 +1560,7 @@ mod tests {
 
         let editor = ItemEditor::edit(
             3,
-            EditorOptions::load_for(&state, CalCompType::Todo).unwrap(),
+            EditorOptions::for_kind(&state, CalCompType::Todo).unwrap(),
             UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
         );
         assert!(editor.has_due.is_active());
@@ -1608,7 +1613,7 @@ mod tests {
             }
         };
         drain();
-        let task = crate::presentation::sidebar::SidebarRow::load(&state, &item).unwrap();
+        let task = crate::model::sidebar::SidebarRow::from_state(&state, &item).unwrap();
         let controller = parent.test_details();
         let clicked = Rc::new(Cell::new(false));
         let flag = clicked.clone();
@@ -1624,7 +1629,7 @@ mod tests {
         popup.imp().edits.borrow()[0].0.emit_clicked();
         assert!(clicked.get());
         let editor = parent.test_existing_editor(
-            EditorOptions::load_for(&state, CalCompType::Todo).unwrap(),
+            EditorOptions::for_kind(&state, CalCompType::Todo).unwrap(),
             UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
         );
         assert!(parent.editor_open());
@@ -1634,9 +1639,9 @@ mod tests {
         let mut edit = editor.existing.borrow().clone().unwrap();
         edit.fields = *editor.command().unwrap();
         let (state, _) = execute(Box::new(edit), state);
-        let saved = crate::presentation::sidebar::SidebarRow::load(&state, &item).unwrap();
+        let saved = crate::model::sidebar::SidebarRow::from_state(&state, &item).unwrap();
         assert_eq!(saved.summary, "Edited task");
-        parent.test_saved_editor(crate::model::session::SavedItem::Task(Box::new(saved)));
+        parent.test_saved_editor(crate::model::SavedItem::Task(Box::new(saved)));
         drain();
         assert!(!parent.editor_open());
         assert_eq!(controller.current(), Some(popup));

@@ -5,13 +5,14 @@
 include!(concat!(env!("OUT_DIR"), "/resources.rs"));
 
 mod actions;
+mod dates;
 mod model;
-mod presentation;
 mod style;
 mod tray;
 mod view;
 mod widgets;
 mod window;
+mod worker;
 
 use std::{env, ffi::OsString};
 

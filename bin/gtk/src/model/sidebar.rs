@@ -16,7 +16,7 @@ use eventix_ical::{
 use eventix_locale::{Locale, TimeFlags};
 use eventix_state::State;
 
-use crate::presentation::{
+use super::{
     OccurrenceId,
     details::{Details, Response},
     editor::EditorCalendar,
@@ -45,21 +45,6 @@ pub struct SidebarRow {
     pub response: Option<Response>,
 }
 
-impl SidebarRow {
-    /// Loads an occurrence for details even when it is outside the upcoming task list.
-    pub fn load(state: &State, item: &eventix_state::actions::items::ItemId) -> Option<Self> {
-        let file = state
-            .store()
-            .directories()
-            .iter()
-            .find(|dir| dir.id().as_str() == item.calendar)?
-            .file_by_id(&item.uid)?;
-        let occ = file.occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())?;
-        let now = chrono::Utc::now().with_timezone(state.timezone());
-        row(state, &occ, now.date_naive(), now)
-    }
-}
-
 /// A dated group, or the final unplanned-task group when `date` is absent.
 #[derive(Clone, Debug)]
 pub struct SidebarGroup {
@@ -76,12 +61,30 @@ pub struct SidebarSnapshot {
     pub locale: Arc<dyn Locale + Send + Sync>,
 }
 
+impl SidebarRow {
+    /// Loads an occurrence for details even when it is outside the upcoming task list.
+    pub(crate) fn from_state(
+        state: &State,
+        item: &eventix_state::actions::items::ItemId,
+    ) -> Option<Self> {
+        let file = state
+            .store()
+            .directories()
+            .iter()
+            .find(|dir| dir.id().as_str() == item.calendar)?
+            .file_by_id(&item.uid)?;
+        let occ = file.occurrence_by_id(&item.uid, item.recurrence.as_ref(), state.timezone())?;
+        let now = chrono::Utc::now().with_timezone(state.timezone());
+        row(state, &occ, now.date_naive(), now)
+    }
+}
+
 impl SidebarSnapshot {
     /// Loads seven days of events, overdue and next-21-day tasks, and unplanned tasks.
     ///
     /// Uses `now` in the configured timezone. The final date of each window is
     /// excluded from display; completed, excluded and disabled-calendar tasks are omitted.
-    pub fn load(state: &State, now: DateTime<Tz>) -> Self {
+    pub(crate) fn from_state(state: &State, now: DateTime<Tz>) -> Self {
         let tz = state.timezone();
         let now = now.with_timezone(tz);
         let events = event_groups(state, now);
@@ -89,10 +92,10 @@ impl SidebarSnapshot {
         if let Some(unplanned) = unplanned_task_group(state, now) {
             tasks.push(unplanned);
         }
-        Self {
+        SidebarSnapshot {
             events,
             tasks,
-            task_calendars: EditorCalendar::load(state, CalCompType::Todo),
+            task_calendars: EditorCalendar::for_kind(state, CalCompType::Todo),
             last_task_calendar: state.misc().last_calendar(CalCompType::Todo).cloned(),
             locale: state.locale(),
         }
@@ -265,7 +268,7 @@ fn row(
         calendar: calendar.name().clone(),
         foreground: calendar.fgcolor().clone(),
         background: calendar.bgcolor().clone(),
-        details: Arc::new(Details::load(state, occ)?),
+        details: Arc::new(Details::from_occurrence(state, occ)?),
         start,
         due,
         full_day,
@@ -354,8 +357,6 @@ mod tests {
     use eventix_ical::col::{CalDir, CalFile};
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
-    use super::SidebarSnapshot;
-
     fn state(components: &[&str]) -> (tempfile::TempDir, State) {
         let tmp = tempfile::tempdir().unwrap();
         let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
@@ -403,7 +404,7 @@ mod tests {
             "BEGIN:VEVENT\nUID:cancelled\nDTSTART:20261005T150000Z\nDTEND:20261005T160000Z\nSTATUS:CANCELLED\nEND:VEVENT",
         ]);
         let now = Berlin.with_ymd_and_hms(2026, 10, 5, 10, 0, 0).unwrap();
-        let snapshot = SidebarSnapshot::load(&state, now);
+        let snapshot = super::SidebarSnapshot::from_state(&state, now);
         let rows = &snapshot.events[0].rows;
         assert_eq!(
             rows.iter()
@@ -446,7 +447,7 @@ mod tests {
             "BEGIN:VTODO\nUID:series\nDTSTART:20261006T100000Z\nDUE:20261006T110000Z\nRRULE:FREQ=DAILY;COUNT=2\nEXDATE:20261007T100000Z\nEND:VTODO",
         ]);
         let now = Berlin.with_ymd_and_hms(2026, 10, 5, 10, 0, 0).unwrap();
-        let snapshot = SidebarSnapshot::load(&state, now);
+        let snapshot = super::SidebarSnapshot::from_state(&state, now);
         assert_eq!(snapshot.tasks.len(), 4);
         assert_eq!(snapshot.tasks[0].rows[0].id.uid, "old");
         assert!(snapshot.tasks[0].rows[0].overdue);
@@ -480,7 +481,7 @@ mod tests {
         assert!(unplanned.rows.iter().all(|row| row.due.is_none()));
         assert!(unplanned.rows[1].start.is_none());
         state.misc_mut().toggle_calendar(&"cal".to_string());
-        let hidden = SidebarSnapshot::load(&state, now);
+        let hidden = super::SidebarSnapshot::from_state(&state, now);
         assert!(hidden.tasks.is_empty() && hidden.events.is_empty());
     }
 }

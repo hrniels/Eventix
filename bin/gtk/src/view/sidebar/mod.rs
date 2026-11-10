@@ -7,7 +7,7 @@ use std::{cell::RefCell, rc::Rc};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::popover::DetailsController;
-use crate::presentation::sidebar::SidebarSnapshot;
+use crate::model::sidebar::SidebarSnapshot;
 use crate::style;
 
 mod panel;

@@ -7,23 +7,31 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use chrono::{Datelike, Duration, MappedLocalTime, NaiveDate, TimeZone};
+use chrono::{Duration, MappedLocalTime, NaiveDate, TimeZone};
 use chrono_tz::Tz;
 use eventix_ical::util;
 use eventix_locale::Locale;
 use eventix_state::State;
 
-use crate::presentation::{
-    Event, OccurrenceId,
-    layout::{self, Columns},
-    projection::{day_minutes, event_order, events_between},
+use super::{
+    Event, OccurrenceId, layout,
+    occurrence::{day_minutes, event_order, events_between},
 };
+use crate::dates::week_start;
 
 /// Stable identity of a timed day segment.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TimedSegmentId {
     pub occurrence: OccurrenceId,
     pub date: NaiveDate,
+}
+
+/// Horizontal placement within a group of overlapping events.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Columns {
+    pub count: usize,
+    pub offset: usize,
+    pub span: usize,
 }
 
 /// One timed day segment and its wall-clock placement.
@@ -88,11 +96,6 @@ pub struct WeekSnapshot {
     pub locale: Arc<dyn Locale + Send + Sync>,
 }
 
-/// Returns the Monday of the week containing `date`, if representable.
-pub fn week_start(date: NaiveDate) -> Option<NaiveDate> {
-    date.checked_sub_signed(Duration::days(date.weekday().num_days_from_monday().into()))
-}
-
 impl WeekSnapshot {
     /// Projects visible, non-excluded events into the week containing `date`.
     ///
@@ -100,7 +103,7 @@ impl WeekSnapshot {
     /// Timed events are split into day segments; contiguous strip days of an occurrence are
     /// combined into one span and packed into non-overlapping rows.
     /// Returns an error if the requested week exceeds the supported date range.
-    pub fn load(state: &State, date: NaiveDate) -> Result<Self> {
+    pub(crate) fn from_state(state: &State, date: NaiveDate) -> Result<Self> {
         let start = week_start(date).context("week start out of range")?;
         let end = start
             .checked_add_signed(Duration::days(7))
@@ -154,7 +157,7 @@ impl WeekSnapshot {
             }
             days.push(day);
         }
-        Ok(Self {
+        Ok(WeekSnapshot {
             start,
             days,
             all_day: strip_spans(start, &strip_days),
@@ -164,7 +167,7 @@ impl WeekSnapshot {
 }
 
 /// Combines only adjacent strip segments, retaining the existing timed/strip classification.
-pub(crate) fn strip_spans(start: NaiveDate, days: &[Vec<Event>]) -> Vec<AllDaySpan> {
+pub(super) fn strip_spans(start: NaiveDate, days: &[Vec<Event>]) -> Vec<AllDaySpan> {
     let mut spans: Vec<AllDaySpan> = Vec::new();
     for (day, events) in days.iter().enumerate() {
         for event in events {
@@ -238,7 +241,7 @@ mod tests {
     use eventix_ical::col::{CalDir, CalFile};
     use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
 
-    use super::{WeekSnapshot, day_minutes, dst_ranges};
+    use super::{day_minutes, dst_ranges};
 
     #[test]
     fn midnight_end_and_multiday_clipping() {
@@ -310,7 +313,7 @@ mod tests {
         }
         state.store_mut().add(dir);
         let date = NaiveDate::from_ymd_opt(2026, 10, 5).unwrap();
-        let week = WeekSnapshot::load(&state, date).unwrap();
+        let week = super::WeekSnapshot::from_state(&state, date).unwrap();
         let long = week
             .all_day
             .iter()
@@ -343,7 +346,7 @@ mod tests {
                 assert!(a.row != b.row || a.end_day <= b.start_day || b.end_day <= a.start_day);
             }
         }
-        let refreshed = WeekSnapshot::load(&state, date).unwrap();
+        let refreshed = super::WeekSnapshot::from_state(&state, date).unwrap();
         assert_eq!(
             week.all_day
                 .iter()
@@ -418,7 +421,7 @@ mod tests {
         }
         state.store_mut().add(dir);
         let date = NaiveDate::from_ymd_opt(2026, 10, 5).unwrap();
-        let week = WeekSnapshot::load(&state, date).unwrap();
+        let week = super::WeekSnapshot::from_state(&state, date).unwrap();
         assert_eq!(week.all_day.len(), 1);
         assert_eq!((week.all_day[0].start_day, week.all_day[0].end_day), (0, 2));
         assert!(!week.all_day[0].continues_before);
@@ -443,10 +446,10 @@ mod tests {
         assert_eq!(moved.details.status.as_deref(), Some("TENTATIVE"));
         assert_eq!(moved.background, "#123456");
         assert!(!moved.id.recurrence.is_empty());
-        let refreshed = WeekSnapshot::load(&state, date).unwrap();
+        let refreshed = super::WeekSnapshot::from_state(&state, date).unwrap();
         assert_eq!(segment.id(), refreshed.days[2].timed[0].id());
         state.misc_mut().toggle_calendar(&"cal".into());
-        let hidden = WeekSnapshot::load(&state, date).unwrap();
+        let hidden = super::WeekSnapshot::from_state(&state, date).unwrap();
         assert!(hidden.days.iter().all(|d| d.timed.is_empty()));
         assert!(hidden.all_day.is_empty());
     }

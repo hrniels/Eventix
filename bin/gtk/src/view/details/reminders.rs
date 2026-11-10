@@ -12,7 +12,7 @@ use gtk::prelude::*;
 
 use super::size_transition::SizeTransition;
 use super::{DetailItem, ReminderHandler, button, label};
-use crate::presentation::details::Details;
+use crate::model::details::Details;
 use crate::widgets::PersonalReminderInput;
 
 pub(super) struct ReminderEditor {
@@ -168,7 +168,7 @@ pub(super) fn content(
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use crate::presentation::details::{DetailActions, Details, PersonalReminders};
+    use crate::model::details::{DetailActions, Details, PersonalReminders};
     use chrono::Duration;
     use eventix_ical::objects::{CalAction, CalAlarm, CalRelated, CalTrigger};
     use eventix_state::actions::items::ItemId;

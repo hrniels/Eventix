@@ -9,10 +9,13 @@ use eventix_locale::DateFlags;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
-use crate::model::session::{ContentRequest, ContentResponse, Snapshot, View};
-use crate::presentation::{MonthSnapshot, WeekSnapshot, shift_month};
+use crate::dates::shift_month;
+use crate::model::{MonthSnapshot, WeekSnapshot};
+use crate::model::{Snapshot, View};
 use crate::style;
 use crate::view::card::EventCard;
+use crate::worker::event::ContentResponse;
+use crate::worker::message::ContentRequest;
 
 /// Owns the selected period and the state of calendar content requests.
 #[derive(Default)]

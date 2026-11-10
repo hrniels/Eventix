@@ -9,7 +9,7 @@ use eventix_locale::Locale;
 use gtk::{glib, prelude::*};
 
 use super::error::{ErrorMessage, show_error};
-use crate::presentation::editor::EditorCalendar;
+use crate::model::editor::EditorCalendar;
 use crate::{model::import::PreparedImport, widgets::CalendarSelector};
 
 /// The standalone importer's preview, hosted as a child of the main application window.
@@ -290,7 +290,7 @@ mod tests {
     use gtk::{gio, prelude::*};
 
     use super::ImportView;
-    use crate::model::import::PreparedImport;
+    use crate::worker::import::{apply, prepare};
 
     #[test]
     #[ignore = "requires a GTK display"]
@@ -323,11 +323,9 @@ mod tests {
         let input = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:test\r\n\
             DTSTART:20261109T090000Z\r\nDTEND:20261109T100000Z\r\n\
             SUMMARY:<Meeting> & friends\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        PreparedImport::prepare(&state, input)
-            .unwrap()
-            .apply(&mut state, "test")
-            .unwrap();
-        let preview = PreparedImport::prepare(&state, input).unwrap();
+        let initial = prepare(&state, input).unwrap();
+        apply(&initial, &mut state, "test").unwrap();
+        let preview = prepare(&state, input).unwrap();
         let app = gtk::Application::builder()
             .flags(gio::ApplicationFlags::NON_UNIQUE)
             .build();
@@ -417,7 +415,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
         let state = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
-        let preview = PreparedImport::prepare(&state,
+        let preview = prepare(&state,
             "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:test\r\nSUMMARY:Task\r\nEND:VTODO\r\nEND:VCALENDAR\r\n").unwrap();
         let parent = gtk::Window::new();
         parent.present();
@@ -461,7 +459,7 @@ mod tests {
             })
             .collect::<String>();
         let input = format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n{components}END:VCALENDAR\r\n");
-        let preview = PreparedImport::prepare(&state, &input).unwrap();
+        let preview = prepare(&state, &input).unwrap();
         let long = ImportView::new(
             &parent,
             state.locale().as_ref(),

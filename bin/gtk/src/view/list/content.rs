@@ -11,10 +11,8 @@ use eventix_locale::Locale;
 use eventix_state::actions::items::ItemId;
 use gtk::{glib, prelude::*};
 
-use crate::presentation::list::{
-    Row,
-    occurrences::{Direction, Row as OccurrenceRow},
-};
+use crate::model::list::Row;
+use crate::model::list_occurrences::{Direction, Row as OccurrenceRow};
 use crate::view::{
     action_menu::{self as actions, Actions, OccurrenceTarget},
     indicators::EventIndicators,
