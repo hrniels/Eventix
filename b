@@ -489,8 +489,9 @@ def _create_archives(app_id):
 
 def _run_flatpak_builder(manifest_path, extra_args):
     """Run the flatpak builder command with given extra arguments."""
+    # Ctrl-C stops the launcher; also tear down its sandboxed build processes.
     subprocess.run([
-        "flatpak", "run", "--command=flathub-build",
+        "flatpak", "run", "--die-with-parent", "--command=flathub-build",
         "--filesystem=" + str(Path.cwd()), "org.flatpak.Builder",
         "--state-dir=" + str(STATE_DIR),
         "--repo=" + str(REPO_DIR),
