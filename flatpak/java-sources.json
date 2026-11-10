@@ -91,6 +91,18 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-9/zstd-jni-1.5.7-9.jar",
+        "sha256": "087d02f39a46ab79b18f883ac7c3a3d6c2df1fd3bf7eaafeade699e0743d0dbe",
+        "dest": "flatpak/java-deps/com/github/luben/zstd-jni/1.5.7-9"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-9/zstd-jni-1.5.7-9.pom",
+        "sha256": "4412e133520b8f9d01d3601080ce7fe146ee486f6a5a69ca9278d4a4ec69704d",
+        "dest": "flatpak/java-deps/com/github/luben/zstd-jni/1.5.7-9"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/com/sun/mail/all/1.6.2/all-1.6.2.pom",
         "sha256": "4b7e83aa9b77d65e007e97cb50f9b89cdb754faaf16411e5fd94d1e3dab76eb3",
         "dest": "flatpak/java-deps/com/sun/mail/all/1.6.2"
@@ -190,6 +202,18 @@
         "url": "https://repo.maven.apache.org/maven2/commons-io/commons-io/2.21.0/commons-io-2.21.0.pom",
         "sha256": "ae47795e721803ec8ff1deed74be28a811a02713bd5a3ab0ac67c2b58cb635ab",
         "dest": "flatpak/java-deps/commons-io/commons-io/2.21.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/commons-io/commons-io/2.22.0/commons-io-2.22.0.jar",
+        "sha256": "2b9a7b1f726fb86216dbd2c8321eabe0221dbd5b1be81c18e1cb53811b104758",
+        "dest": "flatpak/java-deps/commons-io/commons-io/2.22.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/commons-io/commons-io/2.22.0/commons-io-2.22.0.pom",
+        "sha256": "6425cec0ea760035efa77277de85f89fa6dbed147ab3dd95b8d2cbc55340accf",
+        "dest": "flatpak/java-deps/commons-io/commons-io/2.22.0"
     },
     {
         "type": "file",
@@ -385,6 +409,18 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/apache/37/apache-37.pom",
+        "sha256": "524ec4787aff73af6b3a9fafa154c7f1881b648299b663fdbfcadda1286f2353",
+        "dest": "flatpak/java-deps/org/apache/apache/37"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/apache/39/apache-39.pom",
+        "sha256": "71752ed4c2435a1d8385fe0a4d330f39d04efec89f0d1ba5d1598d39f7397a44",
+        "dest": "flatpak/java-deps/org/apache/apache/39"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/apache/apache/5/apache-5.pom",
         "sha256": "1933a6037439b389bda2feaccfc0113880fd8d88f7d240d2052b91108dd5ae89",
         "dest": "flatpak/java-deps/org/apache/apache/5"
@@ -493,6 +529,12 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/98/commons-parent-98.pom",
+        "sha256": "d40318527f56033e0ff0789971cc38c856aa99a685eea11270814e7f1eda9fba",
+        "dest": "flatpak/java-deps/org/apache/commons/commons-parent/98"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.5.14/httpclient-4.5.14.jar",
         "sha256": "c8bc7e1c51a6d4ce72f40d2ebbabf1c4b68bfe76e732104b04381b493478e9d6",
         "dest": "flatpak/java-deps/org/apache/httpcomponents/httpclient/4.5.14"
@@ -562,6 +604,18 @@
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-archiver/3.6.5/maven-archiver-3.6.5.pom",
         "sha256": "87b2c403256b17c3903a3ba35320ac32a79b3838b62ab9eda010a0976ca49ba3",
         "dest": "flatpak/java-deps/org/apache/maven/maven-archiver/3.6.5"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-archiver/3.6.6/maven-archiver-3.6.6.jar",
+        "sha256": "9037dee318a68d7ee5dd2e20f2e657a39597ed2622b52e325ab9becddfbc4d38",
+        "dest": "flatpak/java-deps/org/apache/maven/maven-archiver/3.6.6"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-archiver/3.6.6/maven-archiver-3.6.6.pom",
+        "sha256": "4232a2477bcaacca4cb1b67af032d8683fc6a61aebd96a61a901ebc7e7e391e1",
+        "dest": "flatpak/java-deps/org/apache/maven/maven-archiver/3.6.6"
     },
     {
         "type": "file",
@@ -694,6 +748,18 @@
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-parent/45/maven-parent-45.pom",
         "sha256": "94fe869eb9b4ce9fce3995d05ea86b168c85d927f9d17beb814a1960c76d7e6f",
         "dest": "flatpak/java-deps/org/apache/maven/maven-parent/45"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-parent/47/maven-parent-47.pom",
+        "sha256": "82d0112ba1907ff5fd13a2485829c97df66c6a81e075359a561a422f7d1582d3",
+        "dest": "flatpak/java-deps/org/apache/maven/maven-parent/47"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/maven-parent/49/maven-parent-49.pom",
+        "sha256": "ca906201ee34de09e76632c5dec04a9b868ee38ce68c134b765fd1871d1d3eed",
+        "dest": "flatpak/java-deps/org/apache/maven/maven-parent/49"
     },
     {
         "type": "file",
@@ -853,6 +919,18 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-install-plugin/3.2.0/maven-install-plugin-3.2.0.jar",
+        "sha256": "6fd9d26eb6f473d123f6138bf54d5bae80466a84dab95ab5017590c010621e35",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-install-plugin/3.2.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-install-plugin/3.2.0/maven-install-plugin-3.2.0.pom",
+        "sha256": "f9be07e1b32d3ddd387d14a3de9fcb9f4f5301ef71dc7ff2d104619e15ca644c",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-install-plugin/3.2.0"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.5.0/maven-jar-plugin-3.5.0.jar",
         "sha256": "7562657fc3492649dee836ffdda07990aaf46f4133cad048c4dcd7330bfd3917",
         "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-jar-plugin/3.5.0"
@@ -862,6 +940,18 @@
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.5.0/maven-jar-plugin-3.5.0.pom",
         "sha256": "571d9446537993c3a7226cecb3169ee3df75710bcae8daeefb0d80768ec35917",
         "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-jar-plugin/3.5.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.5.1/maven-jar-plugin-3.5.1.jar",
+        "sha256": "c83db6059be3fec9a4a68a0e226caefaa944663008617c697e087444415181d5",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-jar-plugin/3.5.1"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-jar-plugin/3.5.1/maven-jar-plugin-3.5.1.pom",
+        "sha256": "32de38ee39a6985e777019a6364774c02781ee312f9f4e530bbdb45b875b1e38",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-jar-plugin/3.5.1"
     },
     {
         "type": "file",
@@ -883,6 +973,18 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-plugins/47/maven-plugins-47.pom",
+        "sha256": "58ddbb8e429cb5e9054c2f5f7b7cdfeb7adbcdfda21d92b67f67fa2b94edf982",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-plugins/47"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-plugins/49/maven-plugins-49.pom",
+        "sha256": "4225f860bccdcb48a315de478e70ab817b411077974de5c9d1b8e2761be5f515",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-plugins/49"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-resources-plugin/3.4.0/maven-resources-plugin-3.4.0.jar",
         "sha256": "72c7d66ea49256ea64a82b28a15df69177d13066d12afeb4a1ee0616da4648f1",
         "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-resources-plugin/3.4.0"
@@ -892,6 +994,18 @@
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-resources-plugin/3.4.0/maven-resources-plugin-3.4.0.pom",
         "sha256": "3879fb442ab95cc8a3f07459667873dab832fa99fe5f17be3e474f90ea6f6d2a",
         "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-resources-plugin/3.4.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-resources-plugin/3.5.0/maven-resources-plugin-3.5.0.jar",
+        "sha256": "2c923c63a197565a3e78f2b16d762d0f49bb83250dd2b1e6286704ea0f447060",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-resources-plugin/3.5.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-resources-plugin/3.5.0/maven-resources-plugin-3.5.0.pom",
+        "sha256": "9f2275ca2ba3a3ab38caf6c2bc21be787c7305ea5333d1c33f52a530afc0bc7f",
+        "dest": "flatpak/java-deps/org/apache/maven/plugins/maven-resources-plugin/3.5.0"
     },
     {
         "type": "file",
@@ -931,6 +1045,18 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-api/1.9.27/maven-resolver-api-1.9.27.jar",
+        "sha256": "a895d222283666a7320ddc76615e2e93a41fabd93ce9a6bf9ddee39272bb87b4",
+        "dest": "flatpak/java-deps/org/apache/maven/resolver/maven-resolver-api/1.9.27"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-api/1.9.27/maven-resolver-api-1.9.27.pom",
+        "sha256": "98dc031f75f2c9b7efeef344e1c74bb3d009c584e36e82a0ec3d263d2bfef373",
+        "dest": "flatpak/java-deps/org/apache/maven/resolver/maven-resolver-api/1.9.27"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.22/maven-resolver-util-1.9.22.jar",
         "sha256": "4aaea1584c39294ca926fc474723d9684473609ef4490c4eb169d6ea7daca6b5",
         "dest": "flatpak/java-deps/org/apache/maven/resolver/maven-resolver-util/1.9.22"
@@ -943,9 +1069,27 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.27/maven-resolver-util-1.9.27.jar",
+        "sha256": "74a12548f0d6aad13c728666288c1e81201c24bd05bb4e4ec8c1558517b379a7",
+        "dest": "flatpak/java-deps/org/apache/maven/resolver/maven-resolver-util/1.9.27"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver-util/1.9.27/maven-resolver-util-1.9.27.pom",
+        "sha256": "b2b3c7774cdc61887da814b42338c9421babbab9b1e87c3e6493885ffda53231",
+        "dest": "flatpak/java-deps/org/apache/maven/resolver/maven-resolver-util/1.9.27"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver/1.9.22/maven-resolver-1.9.22.pom",
         "sha256": "32c74899ae919b52bdc07cac28aba2c6651b73172ab9f4111f7c527b60760adb",
         "dest": "flatpak/java-deps/org/apache/maven/resolver/maven-resolver/1.9.22"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/resolver/maven-resolver/1.9.27/maven-resolver-1.9.27.pom",
+        "sha256": "8924b41711cce058f83c46d79ad83d6e04edcf13ed5631ec11135656e0b87f56",
+        "dest": "flatpak/java-deps/org/apache/maven/resolver/maven-resolver/1.9.27"
     },
     {
         "type": "file",
@@ -970,6 +1114,18 @@
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-filtering/3.4.0/maven-filtering-3.4.0.pom",
         "sha256": "bb698e6a90534e82a8842a199b7dff470781a822d4e5868fb76ba953ed08ed6a",
         "dest": "flatpak/java-deps/org/apache/maven/shared/maven-filtering/3.4.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-filtering/3.5.0/maven-filtering-3.5.0.jar",
+        "sha256": "7adb0e46b5fff4fc03aab4baafbdee0b29e444cffe4478858c63082d497220bf",
+        "dest": "flatpak/java-deps/org/apache/maven/shared/maven-filtering/3.5.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-filtering/3.5.0/maven-filtering-3.5.0.pom",
+        "sha256": "06b492b0244a82434470161f851b247271ec8fdaeea1c29de98abde066f80c64",
+        "dest": "flatpak/java-deps/org/apache/maven/shared/maven-filtering/3.5.0"
     },
     {
         "type": "file",
@@ -1006,6 +1162,12 @@
         "url": "https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/45/maven-shared-components-45.pom",
         "sha256": "5879e023d9bcafda006d28b42b2495c6f3db587d3e71eefa0a3cedeeea36d987",
         "dest": "flatpak/java-deps/org/apache/maven/shared/maven-shared-components/45"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/apache/maven/shared/maven-shared-components/47/maven-shared-components-47.pom",
+        "sha256": "3bd3d07c910477091bb9602f931f696c4aa115c86a322bff6a604ec7543afc07",
+        "dest": "flatpak/java-deps/org/apache/maven/shared/maven-shared-components/47"
     },
     {
         "type": "file",
@@ -1114,6 +1276,30 @@
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-archiver/4.10.4/plexus-archiver-4.10.4.pom",
         "sha256": "53a2103d9257c801a8fc9c211d9fedea7e3ee1bf516bbbc28021ef45c1a219c5",
         "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-archiver/4.10.4"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-archiver/4.12.0/plexus-archiver-4.12.0.jar",
+        "sha256": "b1e9798a6d711d1e7760d50c78be8be746bb546b87df0a2d7ef67db5eda5431e",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-archiver/4.12.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-archiver/4.12.0/plexus-archiver-4.12.0.pom",
+        "sha256": "4b3b26c438d0b41d5a0613787115ea4013adeae1478314535976b2b3a65fc2f8",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-archiver/4.12.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-build-api/1.2.0/plexus-build-api-1.2.0.jar",
+        "sha256": "570ae55a95e1887c3004882d30dc4e9035d2a46ba8d58b991de04175f141d88f",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-build-api/1.2.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-build-api/1.2.0/plexus-build-api-1.2.0.pom",
+        "sha256": "47c7b0e65718ca89df6fdf5cb3f24a49e076cacd9499236c7e18ad78e993cddb",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-build-api/1.2.0"
     },
     {
         "type": "file",
@@ -1249,6 +1435,18 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.29/plexus-interpolation-1.29.jar",
+        "sha256": "088d444dbcedfb384630d8686697ece3c401d6f33c8f8b3aa7259ea1c6996878",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-interpolation/1.29"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-interpolation/1.29/plexus-interpolation-1.29.pom",
+        "sha256": "ce0d5634297bb1e065dddfdc8a2a5675717c08e8f4783edcf581543711516938",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-interpolation/1.29"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-io/3.5.1/plexus-io-3.5.1.pom",
         "sha256": "f7a76d3a3bbeb53f5f36e19ee57ddc2099f3be1d599039090254d1f0fdf0b854",
         "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-io/3.5.1"
@@ -1339,6 +1537,18 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/3.6.0/plexus-utils-3.6.0.jar",
+        "sha256": "27ef130e32c236090e408fb5498d94cb9ea26d14070fb1c8985d607b62d098d1",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-utils/3.6.0"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/3.6.0/plexus-utils-3.6.0.pom",
+        "sha256": "6138300481471c7fe6aeb115f912961f886e1a46ee9c2bd2841b65184824da28",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-utils/3.6.0"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.1/plexus-utils-4.0.1.jar",
         "sha256": "96b9cc44439191d2d0635974e2d44e768736b4fb2abcb65f94cd95e41912fa8b",
         "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-utils/4.0.1"
@@ -1360,6 +1570,18 @@
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.2/plexus-utils-4.0.2.pom",
         "sha256": "5151c13bdd7cc3a5569583a7f4267392f013ffd3115eab8db5f86de420a366af",
         "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-utils/4.0.2"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.3/plexus-utils-4.0.3.jar",
+        "sha256": "421ff6ed146c53a9d4eaade8f629b52b12af7187101f1bd06c2c64e904019f3c",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-utils/4.0.3"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus-utils/4.0.3/plexus-utils-4.0.3.pom",
+        "sha256": "35736658f3fe1efa395086c91df2592664fafa24c3f2608fdaba1136d17fd360",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus-utils/4.0.3"
     },
     {
         "type": "file",
@@ -1387,6 +1609,12 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/13/plexus-13.pom",
+        "sha256": "575945dc08966c66eb03d5bae9135bd22ca3920a1865bb99d3ecd93bef55abd3",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus/13"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/16/plexus-16.pom",
         "sha256": "68d4eed65a3dbbc342ed80dd138fbe9c67cb7fb4c2abc4f5201cdb5b9f645868",
         "dest": "flatpak/java-deps/org/codehaus/plexus/plexus/16"
@@ -1402,6 +1630,12 @@
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/18/plexus-18.pom",
         "sha256": "b43ee89c8890b9e5bc48d079fcb4c44f082b5139253356dc455806a33c3dd8fd",
         "dest": "flatpak/java-deps/org/codehaus/plexus/plexus/18"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/19/plexus-19.pom",
+        "sha256": "8d3e51c3902fd7596e548eab121ebf6b0d4aa73857077f26a24fc86f9b8455b4",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus/19"
     },
     {
         "type": "file",
@@ -1426,6 +1660,12 @@
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/24/plexus-24.pom",
         "sha256": "89a1bc79e46c35ab108b7e215bb2c5c215ff8f3af1ae3cfef82d9a2b33b06c51",
         "dest": "flatpak/java-deps/org/codehaus/plexus/plexus/24"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/codehaus/plexus/plexus/25/plexus-25.pom",
+        "sha256": "faa7947c2020967ad0c92b259ee9fa361d05e90cd036d17c37098bb1edaea3a3",
+        "dest": "flatpak/java-deps/org/codehaus/plexus/plexus/25"
     },
     {
         "type": "file",
@@ -1456,6 +1696,24 @@
         "url": "https://repo.maven.apache.org/maven2/org/codehaus/woodstox/stax2-api/4.2.1/stax2-api-4.2.1.pom",
         "sha256": "79da410c8c0f46a3f8e8adb30d6c24ccd6065b6ef6bfde87bd97e9881ea0a2e7",
         "dest": "flatpak/java-deps/org/codehaus/woodstox/stax2-api/4.2.1"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4/org.eclipse.sisu.plexus-0.9.0.M4.jar",
+        "sha256": "b90579bc652eac7331436e0a25533fce14130b9c6e015f2dd3a3d4bb07e942b7",
+        "dest": "flatpak/java-deps/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4/org.eclipse.sisu.plexus-0.9.0.M4.pom",
+        "sha256": "90b4be7a71c979d0c4dea20c20a28eb9e76a29df68ab9018cf011019a3e4f562",
+        "dest": "flatpak/java-deps/org/eclipse/sisu/org.eclipse.sisu.plexus/0.9.0.M4"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/eclipse/sisu/sisu-inject/0.9.0.M4/sisu-inject-0.9.0.M4.pom",
+        "sha256": "0c829c9641ccac870d7d7ff012cbbad8447e912eb9a26d0d7283f09cba44c0d9",
+        "dest": "flatpak/java-deps/org/eclipse/sisu/sisu-inject/0.9.0.M4"
     },
     {
         "type": "file",
@@ -1513,6 +1771,12 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.11.1/junit-bom-5.11.1.pom",
+        "sha256": "c72124a9c9a79910c1858766b72c350e1a39244cbfb4b076348fbfe078281965",
+        "dest": "flatpak/java-deps/org/junit/junit-bom/5.11.1"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.11.4/junit-bom-5.11.4.pom",
         "sha256": "19d4b747b204805325b6334553296f986562277a4ac1cb5e593a5e4c4f5e4115",
         "dest": "flatpak/java-deps/org/junit/junit-bom/5.11.4"
@@ -1522,6 +1786,12 @@
         "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.12.1/junit-bom-5.12.1.pom",
         "sha256": "7c826bc72beddc817dad9263027f9012a0f55a377d38df89c42932a2501c2bf0",
         "dest": "flatpak/java-deps/org/junit/junit-bom/5.12.1"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.12.2/junit-bom-5.12.2.pom",
+        "sha256": "cef80fec86454f6806bfb0df24669b5c6f32e2cb728539ea859f47dfdc9bbc17",
+        "dest": "flatpak/java-deps/org/junit/junit-bom/5.12.2"
     },
     {
         "type": "file",
@@ -1537,6 +1807,24 @@
     },
     {
         "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.14.1/junit-bom-5.14.1.pom",
+        "sha256": "01b01dfa366550b40ac5760548a7d728b6109d17c451e83864d1e5e0ce862c94",
+        "dest": "flatpak/java-deps/org/junit/junit-bom/5.14.1"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.14.2/junit-bom-5.14.2.pom",
+        "sha256": "ed2dcc7855bd460bccc93a1bf0c962e63b566ff7d8f1ded0f1f2593ba8183aaf",
+        "dest": "flatpak/java-deps/org/junit/junit-bom/5.14.2"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.14.4/junit-bom-5.14.4.pom",
+        "sha256": "5706e8f29a0a07f56efbbea4a0670793414194bb8d24d8143ba1e787a2f32856",
+        "dest": "flatpak/java-deps/org/junit/junit-bom/5.14.4"
+    },
+    {
+        "type": "file",
         "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.8.0-M1/junit-bom-5.8.0-M1.pom",
         "sha256": "77144432ffc68bd98a790ab1069619d91032cfc0e4e13c08163aa03da36fd6e2",
         "dest": "flatpak/java-deps/org/junit/junit-bom/5.8.0-M1"
@@ -1546,6 +1834,12 @@
         "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.8.2/junit-bom-5.8.2.pom",
         "sha256": "836069ca9e8ee3c56e48376222da291263f137bd3fd16d84fdd47efcc3f286e2",
         "dest": "flatpak/java-deps/org/junit/junit-bom/5.8.2"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.9.3/junit-bom-5.9.3.pom",
+        "sha256": "4d0329cd9e72f2420e5ca15724cbfe6ffa6e5fd2888361516271190fdc342ed7",
+        "dest": "flatpak/java-deps/org/junit/junit-bom/5.9.3"
     },
     {
         "type": "file",
@@ -1936,5 +2230,17 @@
         "url": "https://repo.maven.apache.org/maven2/org/tukaani/xz/1.10/xz-1.10.pom",
         "sha256": "ef608b83c3bb6c8e3e6b3beaa38842ba15963b46495e4af91b0746c8b750f3b9",
         "dest": "flatpak/java-deps/org/tukaani/xz/1.10"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/tukaani/xz/1.12/xz-1.12.jar",
+        "sha256": "3e158a87bd73d8afb4b6e8239c013b7d049c48563f45860ce99cd2e448cf4a6b",
+        "dest": "flatpak/java-deps/org/tukaani/xz/1.12"
+    },
+    {
+        "type": "file",
+        "url": "https://repo.maven.apache.org/maven2/org/tukaani/xz/1.12/xz-1.12.pom",
+        "sha256": "937b44d869c059c39f07ae194d8cd6219f5aebf2200ef9707f0b50b7837da281",
+        "dest": "flatpak/java-deps/org/tukaani/xz/1.12"
     }
 ]
