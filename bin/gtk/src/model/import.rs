@@ -115,7 +115,6 @@ impl PreparedImport {
         let key = Arc::new(destination.to_string());
         let dir = state.store_mut().directory_mut(&key)?;
         let result = dir.import(self.calendar.clone());
-        state.notify_external_change();
         result.map_err(anyhow::Error::from)
     }
 }

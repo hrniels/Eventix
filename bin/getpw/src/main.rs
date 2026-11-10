@@ -17,7 +17,7 @@ struct Args {
     col_id: String,
 }
 
-include!(concat!(env!("OUT_DIR"), "/icons.rs"));
+include!(concat!(env!("OUT_DIR"), "/app_id.rs"));
 
 fn main() -> Result<()> {
     let args = Args::parse();

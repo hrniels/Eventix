@@ -213,7 +213,7 @@ mod imp {
             }
             self.surface.snapshot_cards(obj.upcast_ref(), snapshot);
 
-            // Keep time changes visible over event cards, as in the HTML weekly view.
+            // Keep time changes visible over event cards.
             if let Some(week) = self.week.borrow().as_ref() {
                 for (i, day) in week.days.iter().enumerate() {
                     for range in &day.dst {

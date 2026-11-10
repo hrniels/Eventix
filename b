@@ -6,7 +6,6 @@ import fnmatch
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import shlex
 import subprocess
@@ -30,9 +29,8 @@ def dev_env():
     run_dir = Path("run")
     os.makedirs(run_dir / APP_ID_DEBUG, 0o700, exist_ok=True)
 
-    # (re-)create symlinks to data/static and data/icons
-    # we use symlinks here so that `./b watch` sees changes to these files
-    dirs = ["static", "icons", "locale"]
+    # Locale overrides remain editable without reinstalling development data.
+    dirs = ["locale"]
     for dirname in dirs:
         dir_in_run = run_dir / APP_ID_DEBUG / dirname
         if dir_in_run.exists():
@@ -65,52 +63,27 @@ def dev_env():
 
 def run_cmd(args):
     """Executes a command with the prepared development environment."""
-    try:
-        subprocess.run(args, env=dev_env())
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        print(e)
+    subprocess.run(args, env=dev_env(), check=True)
 
 
 def cmd_run(args):
-    """Runs the Eventix application in development mode."""
-    cmd_args = [
-        "cargo", "run", "--bin", "eventix", "--",
-        "--address", args.address,
-        "--port", str(args.port)
-    ]
-    run_cmd(cmd_args)
+    """Runs the native application with the development synchronization helpers."""
+    subprocess.run(["cargo", "build", "--bin", "eventix-getpw"], check=True)
+    run_cmd(["cargo", "run", "--bin", "eventix-gtk", "--", *args.app_args])
 
 
 def cmd_watch(args):
     """Watches for changes in the source code and reruns Eventix on changes."""
-    cmd = shlex.join([
-        "run", "--",
-        "--address", args.address,
-        "--port", str(args.port)
-    ])
+    cmd = shlex.join(["run", "--bin", "eventix-gtk", "--", *args.app_args])
     cmd_args = [
-        "cargo", "watch", "-C", "bin/eventix",
-        "-w", "../../bin/eventix",
-        "-w", "../../bin/build.rs",
-        "-w", "../../libs",
-        "-w", "../../data",
-        "-w", "../../Cargo.toml",
+        "cargo", "watch",
+        "-w", "bin/gtk",
+        "-w", "bin/getpw",
+        "-w", "libs",
+        "-w", "data",
+        "-w", "Cargo.toml",
+        "-x", "build --bin eventix-getpw",
         "-x", cmd
-    ]
-    run_cmd(cmd_args)
-
-
-def cmd_app(args):
-    """Runs the Eventix app."""
-    # ensure that the server and getpw are up-to-date as well
-    subprocess.run(["cargo", "build", "--bin", "eventix", "--bin", "eventix-getpw"], check=True)
-
-    cmd_args = [
-        "cargo", "run", "--bin", "eventix-app", "--",
-        "--address", args.address,
-        "--port", str(args.port)
     ]
     run_cmd(cmd_args)
 
@@ -118,16 +91,8 @@ def cmd_app(args):
 def cmd_import(args):
     """Imports an ICS file into Eventix."""
     path = Path(args.file).resolve().as_uri()
-    cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", path]
-    run_cmd(cmd_args)
-
-
-def cmd_gtk(args):
-    """Runs the GTK application with the development synchronization helpers."""
-    subprocess.run(["cargo", "build", "--bin", "eventix-getpw"], check=True)
-    subprocess.run(
-        ["cargo", "run", "--bin", "eventix-gtk", "--", *args.gtk_args],
-        env=dev_env(), check=True)
+    args.app_args = [path]
+    cmd_run(args)
 
 
 def cmd_davmail(args):
@@ -288,8 +253,6 @@ def cmd_coverage(args):
         "cargo", "llvm-cov",
         "--all-features",
         "--workspace",
-        "--exclude", "eventix-import",
-        "--exclude", "eventix-app",
     ]
     cmd.extend(args.cargo_args)
 
@@ -366,44 +329,16 @@ def print_file_coverage(file_data):
         print(f"{marker} {idx:>5} | {line}")
 
 
-NPM_PREFIX = Path("target")
-PRETTIER = ["npx", "--prefix", str(NPM_PREFIX), "prettier"]
-
-
-def _ensure_npm_deps():
-    """Installs npm dependencies into target/node_modules if not already present.
-
-    Uses ``npm install --prefix target`` so that node_modules stays out of the
-    repository root. A symlink from target/package.json to the root package.json
-    is created first so that npm can locate the dependency list.
-    """
-    NPM_PREFIX.mkdir(exist_ok=True)
-    pkg_link = NPM_PREFIX / "package.json"
-    if not pkg_link.exists():
-        pkg_link.symlink_to("../package.json")
-    if not (NPM_PREFIX / "node_modules").exists():
-        subprocess.run(["npm", "install", "--prefix", str(NPM_PREFIX)], check=True)
-
-
 def cmd_format(args):
-    """Formats Rust, JS, CSS, and HTML template files."""
-    _ensure_npm_deps()
-    subprocess.run(["cargo", "fmt"])
-    subprocess.run(["yamlfmt", "-conf", ".yamlfmt.yaml", ".github"])
-    subprocess.run(PRETTIER + ["--write",
-                               "data/static/**/*.js",
-                               "data/static/style.css",
-                               "bin/eventix/templates/**/*.htm"], check=True)
+    """Formats Rust and GitHub workflow YAML."""
+    subprocess.run(["cargo", "fmt"], check=True)
+    subprocess.run(["yamlfmt", "-conf", ".yamlfmt.yaml", ".github"], check=True)
 
 
 def cmd_format_check(args):
-    """Checks Rust, JS, CSS, and HTML template files (exits non-zero on diff)."""
-    _ensure_npm_deps()
-    subprocess.run(["cargo", "fmt", "--", "--check"])
-    subprocess.run(PRETTIER + ["--check",
-                               "data/static/**/*.js",
-                               "data/static/style.css",
-                               "bin/eventix/templates/**/*.htm"], check=True)
+    """Checks Rust and GitHub workflow YAML formatting."""
+    subprocess.run(["cargo", "fmt", "--", "--check"], check=True)
+    subprocess.run(["yamlfmt", "-lint", "-conf", ".yamlfmt.yaml", ".github"], check=True)
 
 
 def cmd_flatpak_sources(args):
@@ -527,11 +462,9 @@ def _create_archives(app_id):
     # 1. Eventix (core)
     subprocess.run([
         "tar", "czf", "flatpak/eventix.tar.gz",
-        "--exclude=./contrib",
         # Put entries into a subdirectory without changing relative symlink targets.
         "--transform=flags=rh;s#^#eventix/#",
-        ".git", "bin", "data", "libs", "Cargo.toml", "Cargo.lock", "package.json", "LICENSE", "b",
-        "flatpak/" + app_id + "-Import.desktop",
+        "bin", "data", "libs", "Cargo.toml", "Cargo.lock", "LICENSE", "b",
         "flatpak/" + app_id + ".desktop",
         "flatpak/" + app_id + ".metainfo.xml",
     ], check=True)
@@ -630,14 +563,13 @@ def cmd_dist(args):
 
     # install binaries
     bins = Path("target") / "release"
-    for bin_name in ["eventix", "eventix-app", "eventix-gtk", "eventix-import", "eventix-getpw"]:
+    for bin_name in ["eventix-gtk", "eventix-getpw"]:
         subprocess.run(["install", "-Dm755", bins / bin_name, "-t", prefix / "bin"], check=True)
 
     # install desktop files
     apps = prefix / "share" / "applications"
-    for suffix in ["", "-Import"]:
-        src = Path("flatpak") / f"{APP_ID}{suffix}.desktop"
-        subprocess.run(["install", "-Dm644", src, "-t", apps], check=True)
+    src = Path("flatpak") / f"{APP_ID}.desktop"
+    subprocess.run(["install", "-Dm644", src, "-t", apps], check=True)
 
     # install icons
     data = Path("data")
@@ -660,41 +592,26 @@ def cmd_dist(args):
     # install data folders
     dst = prefix / "share" / APP_ID
     os.makedirs(dst, 0o755, exist_ok=True)
-    for dir_name in ["locale", "static", "icons"]:
+    for dir_name in ["locale"]:
         if (dst / dir_name).exists():
             shutil.rmtree(dst / dir_name)
         shutil.copytree(data / dir_name, dst / dir_name)
 
 
 def main():
-    parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument(
-        "--address", default="127.0.0.1", help="Server address")
-    parent_parser.add_argument(
-        "--port", type=int, default=8083, help="Server port")
-
     parser = argparse.ArgumentParser(description="Eventix builder and runner")
     subparsers = parser.add_subparsers(
         dest="command", help="Available commands")
     subparsers.required = True
 
     run_parser = subparsers.add_parser(
-        "run", parents=[parent_parser], help="Run eventix in development mode")
-    run_parser.set_defaults(func=cmd_run)
+        "run", help="Run the GTK app with bundled development sync tools")
+    run_parser.set_defaults(app_args=[], func=cmd_run)
 
     watch_parser = subparsers.add_parser(
-        "watch", parents=[parent_parser],
+        "watch",
         help="Watch and rerun eventix on changes")
-    watch_parser.set_defaults(func=cmd_watch)
-
-    app_parser = subparsers.add_parser(
-        "app", parents=[parent_parser],
-        help="Run the eventix app with tray icon")
-    app_parser.set_defaults(func=cmd_app)
-
-    gtk_parser = subparsers.add_parser(
-        "gtk", help="Run the GTK app with bundled development sync tools")
-    gtk_parser.set_defaults(gtk_args=[], func=cmd_gtk)
+    watch_parser.set_defaults(app_args=[], func=cmd_watch)
 
     import_parser = subparsers.add_parser("import", help="Import an ICS file")
     import_parser.add_argument("file", help="Path to the ICS file to import")
@@ -746,11 +663,11 @@ def main():
     flatpak_parser.set_defaults(func=cmd_flatpak)
 
     format_parser = subparsers.add_parser(
-        "format", help="Format JS, CSS, and HTML templates with Prettier")
+        "format", help="Format Rust and GitHub workflow YAML")
     format_parser.set_defaults(func=cmd_format)
 
     format_check_parser = subparsers.add_parser(
-        "format-check", help="Check JS, CSS, and HTML template formatting with Prettier")
+        "format-check", help="Check Rust and GitHub workflow YAML formatting")
     format_check_parser.set_defaults(func=cmd_format_check)
 
     dist_parser = subparsers.add_parser(
@@ -759,8 +676,8 @@ def main():
     dist_parser.set_defaults(func=cmd_dist)
 
     args, unknown = parser.parse_known_args()
-    if args.command == "gtk":
-        args.gtk_args = unknown[1:] if unknown[:1] == ["--"] else unknown
+    if args.command in ("run", "watch"):
+        args.app_args = unknown[1:] if unknown[:1] == ["--"] else unknown
     elif args.command == "test" or args.command == "coverage":
         args.cargo_args = unknown
     elif unknown:

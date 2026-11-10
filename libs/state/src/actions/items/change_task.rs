@@ -93,7 +93,7 @@ impl LockedAction for ChangeTask {
                         todo.set_status(Some(CalTodoStatus::Completed));
                         todo.set_percent(Some(100));
                         todo.set_completed(Some(CalDate::now()));
-                        // Exchange requires a priority on completed tasks, as in the HTML UI.
+                        // Exchange requires a priority on completed tasks.
                         todo.set_priority(Some(PRIORITY_MEDIUM));
                     }
                     TaskAction::Postpone { days } => {

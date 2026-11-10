@@ -1,11 +1,8 @@
 [workspace]
 resolver = "2"
-members = [ "bin/app",
+members = [
     "bin/gtk",
-    "bin/eventix",
-    "bin/import",
     "bin/getpw",
-    "libs/cmd",
     "libs/ical",
     "libs/locale",
     "libs/state",
@@ -20,7 +17,6 @@ bytes = "1.10.1"
 chrono = { version = "0.4.41", features = ["serde"] }
 chrono-tz = "0.10.4"
 clap = { version = "4.5.41", features = ["derive"] }
-eventix-cmd = { path = "libs/cmd" }
 eventix-ical = { path = "libs/ical" }
 eventix-locale = { path = "libs/locale" }
 eventix-state = { path = "libs/state" }

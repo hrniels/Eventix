@@ -335,7 +335,7 @@ mod tests {
         assert!(!owned.actions.exclude);
         assert_eq!(owned.actions.series_response, None);
         let read_only = details(INVITATION, "amy@example.org", true, false);
-        // Like the HTML UI, the projection respects State's debug-mode writable override.
+        // The projection respects State's debug-mode writable override.
         assert_eq!(read_only.actions.read_only, !cfg!(debug_assertions));
         assert_eq!(read_only.actions.delete, cfg!(debug_assertions));
         assert!(!read_only.actions.edit && !read_only.actions.cancel);

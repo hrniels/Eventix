@@ -71,7 +71,7 @@ pub fn shift_month(date: NaiveDate, months: i32) -> Option<NaiveDate> {
 
 /// Returns the Monday-aligned visible range, with an exclusive end.
 ///
-/// Matches the HTML calendar's padding, including a trailing week when the month ends Sunday.
+/// Includes a trailing week when the month ends Sunday.
 /// Returns `None` if the padded range exceeds the supported date range.
 pub fn month_range(date: NaiveDate) -> Option<(NaiveDate, NaiveDate)> {
     let month = date.with_day(1)?;

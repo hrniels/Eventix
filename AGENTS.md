@@ -16,6 +16,8 @@ Workspace layout:
 
 - Cargo.toml (workspace root)
 - bin/ -> binary crates (app entrypoints)
+- bin/gtk/ -> native GTK4 application (eventix-gtk)
+- bin/getpw/ -> password helper for vdirsyncer (eventix-getpw)
 - libs/ -> reusable domain libraries
 - tools/ -> helper scripts (not part of core build)
 
@@ -177,21 +179,15 @@ Adding a new translatable string:
    English: "My Label" = "My Label"
    German: "My Label" = "Mein Label"
 
-2a. In Askama templates (.htm), use the |t(locale) filter:
-{{ "My Label"|t(locale) }}
-The template struct must have a `locale` field of type
-Arc<dyn Locale + Send + Sync> and `use crate::html::filters;`.
-
-2b. In Rust code, call translate() on any CalLocale/Locale implementor:
+2. In Rust code, call translate() on any CalLocale/Locale implementor:
 locale.translate("My Label")
 
-2c. For parameterized strings, use formatx!:
+3. For parameterized strings, use formatx!:
 TOML key: "{} items" = "{} Einträge"
 Code: formatx!(locale.translate("{} items"), count).unwrap()
 
-When text is needed inside JavaScript in templates, emit the translated
-strings as JS variables in the template and reference those variables
-from the JS code. Do not hardcode user-facing strings in JavaScript.
+GTK composite templates live in bin/gtk/resources/. Set translated labels from Rust;
+the application uses the TOML locale system rather than GtkBuilder gettext support.
 
 If a key is missing from a TOML file, the system falls back to the
 English key string.

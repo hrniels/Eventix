@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Now-relative upcoming events and incomplete tasks, matching the HTML sidebar.
+//! Now-relative upcoming events and incomplete tasks for the sidebar.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -79,7 +79,7 @@ pub struct SidebarSnapshot {
 impl SidebarSnapshot {
     /// Loads seven days of events, overdue and next-21-day tasks, and unplanned tasks.
     ///
-    /// Uses `now` in the configured timezone. Like HTML, the final date of each window is
+    /// Uses `now` in the configured timezone. The final date of each window is
     /// excluded from display; completed, excluded and disabled-calendar tasks are omitted.
     pub fn load(state: &State, now: DateTime<Tz>) -> Self {
         let tz = state.timezone();
@@ -391,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn events_match_html_order_continuations_exclusions_and_window() {
+    fn events_order_continuations_exclusions_and_window() {
         let (_tmp, state) = state(&[
             "BEGIN:VEVENT\nUID:past\nDTSTART:20261005T060000Z\nDTEND:20261005T070000Z\nEND:VEVENT",
             "BEGIN:VEVENT\nUID:all\nDTSTART;VALUE=DATE:20261005\nDTEND;VALUE=DATE:20261006\nEND:VEVENT",

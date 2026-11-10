@@ -2,24 +2,22 @@
 
 [![codecov](https://codecov.io/github/hrniels/Eventix/graph/badge.svg?token=MVGTKGG6J9)](https://codecov.io/github/hrniels/Eventix)
 
-Eventix is an iCalendar event and task manager for Linux desktops supporting CalDAV and Microsoft
-365 (Exchange). It runs a local web server that provides a calendar UI, and ships a GTK desktop
-wrapper that embeds that UI in a native application window with system tray integration.
+Eventix is a native GTK4 calendar and task manager for Linux desktops, supporting CalDAV and
+Microsoft 365 (Exchange).
 
 ## Features
 
 - Monthly, weekly, and list calendar views
-- Event and task management with full create / edit / delete support
+- Event and task creation, editing, deletion, and recurring items
 - Mostly complete implementation of the iCalendar standard (RFC 5545)
-- Recurrent events and tasks
 - Organized events with attendees and accept/decline
-- Alarm / notification system with per-calendar personal alarm overrides
+- Calendar alarms and per-calendar personal reminder overrides
 - CalDAV synchronization via [vdirsyncer](https://github.com/pimutils/vdirsyncer) (bundled)
 - Microsoft 365 synchronization via [DavMail](http://davmail.sourceforge.net/) (bundled)
-- Local filesystem calendar support (no sync required)
-- iCalendar (`.ics`) file import via a GTK dialog
+- Local filesystem calendars (no synchronization required)
+- iCalendar (`.ics`) import with a preview and overwrite warnings
 - System tray icon showing due-today and overdue task counts
-- Multi-language UI (English and German)
+- English and German translations
 - XDG-compliant configuration and data storage
 - Flatpak packaging (`io.github.hrniels.Eventix`)
 
@@ -34,9 +32,8 @@ wrapper that embeds that UI in a native application window with system tray inte
 
 ## Installation
 
-Eventix is intended to be run as a Flatpak application and available on
-[Flathub](https://flathub.org/en/apps/io.github.hrniels.Eventix). It can also be built and installed
-from source:
+Eventix is distributed through [Flathub](https://flathub.org/en/apps/io.github.hrniels.Eventix).
+To build and install a Flatpak from source instead:
 
 ```bash
 ./b flatpak
@@ -45,200 +42,115 @@ flatpak install --user flatpak/Eventix.flatpak
 
 ## Running
 
-When using the default command, the GUI is started which will automatically start the server if it's
-not already running. However, the server can also be started beforehand and run in the background.
-One advantage is that the server can send notifications for calendar alarms even if the GUI is not
-running.
-
-You can start the server via:
-
-```bash
-flatpak run --command=eventix io.github.hrniels.Eventix
-```
-
-The flatpak package comes with a `.desktop` file for the GUI, but it can also be started via:
+Launch Eventix from the desktop application menu or run:
 
 ```bash
 flatpak run io.github.hrniels.Eventix
 ```
 
-It might also make sense to run the server via systemd:
+The package launches `eventix-gtk`. Click the tray icon to hide or restore the window; alarms and
+background synchronization continue while it is hidden. Closing the window or using the tray's
+Quit action exits the application. Use `--no-tray` to disable tray integration. There is no separate
+background daemon; alarms and synchronization stop when Eventix exits.
 
-```ini
-[Unit]
-Description=Eventix webserver
-
-[Service]
-Environment=RUST_LOG=info
-ExecStart=/usr/bin/flatpak run --command=eventix io.github.hrniels.Eventix
-ExecStop=/usr/bin/flatpak kill io.github.hrniels.Eventix
-Restart=on-failure
-KillMode=process
-
-[Install]
-WantedBy=default.target
-```
-
-### Native GTK week-view prototype
-
-`eventix-gtk` is an experimental GTK4 application. It loads configured local calendars
-directly, without starting the web server or embedding WebKit. It displays all-day and timed events,
-overlaps, recurring occurrences, calendar colors, and daylight-saving transitions. Click an event
-for details, or focus it with Tab and press Enter.
-
-Drag across empty space in the weekly time grid to prepare a new event, snapping to 15-minute
-boundaries. Selections can span multiple days. Drag across dates in the month view or the weekly
-all-day strip to prepare an all-day event, including both endpoint dates. Release to open the editor;
-the event is only created when saved. Escape cancels a selection. Double-click creation remains
-available for a default one-hour event or a single all-day date.
-
-The Flatpak package launches the native GTK UI by default:
-
-```bash
-flatpak run --socket=wayland --env=GDK_BACKEND=wayland --command=eventix-gtk io.github.hrniels.Eventix
-```
-
-To use the existing development data in `run/` (including the locale links prepared by `./b`):
-
-```bash
-./b gtk
-```
-
-Use `--date YYYY-MM-DD` to open a specific week. Debug builds default to the
-`io.github.hrniels.Eventix-debug` data/config prefix; release builds use `io.github.hrniels.Eventix`.
-The `--data-prefix` option selects a different prefix, for example:
-
-```bash
-./b gtk --data-prefix io.github.hrniels.Eventix
-```
+### Importing calendar files
 
 Open an iCalendar file from the file manager with Eventix to preview and import its events/tasks.
-This starts the native UI when needed, or brings the running instance forward with a modal import
-dialog. Multiple files are presented one at a time. Files and file URIs can also be passed directly:
+This starts Eventix when needed, or brings the running instance forward with a modal import dialog.
+Multiple files are presented one at a time. Files and file URIs can also be passed directly:
 
 ```bash
-./b gtk /path/to/invitation.ics
+flatpak run --file-forwarding io.github.hrniels.Eventix @@ /path/to/invitation.ics @@
 ```
 
-Existing UIDs are shown with an overwrite warning; the matching calendar is selected as the only
-destination. Cancelling the dialog leaves the calendar unchanged and keeps Eventix running.
-Each item is saved atomically. If a later item fails, earlier successful imports are kept; retrying
-replaces those UIDs rather than adding duplicates.
+## Configuration and data
 
-English and German translations are bundled; installed XDG `locale/` files override them.
-The refresh button synchronizes all collections in the background and shows per-collection progress
-on the right of the status bar. Existing calendar visibility settings apply. The development launcher
-adds `run/venv/bin`, `contrib/davmail/dist`, and `target/debug` to `PATH` and builds `eventix-getpw`.
-Run `./b vdirsyncer` and `./b davmail` first if these development helpers are not installed.
-When launching directly with Cargo, these helper executables must be available on `PATH`.
-Hover over the status line to see the configuration file and calendar data directory being used.
-Missing settings are reported with their expected path. Close an existing GTK window before
-relaunching with a different profile or XDG environment: the application is single-instance.
+Collections, calendars, and preferences can be managed in the GTK UI. Configuration and data use
+XDG-standard locations under the application ID `io.github.hrniels.Eventix`. In Flatpak, the base
+directory is `$HOME/.var/app/io.github.hrniels.Eventix`:
 
-Calendar-file changes in the native UI are pushed automatically after five seconds without another
-edit. Repeated edits reset this delay; recurring occurrences share one pending resource. The number
-on the activity-history button shows outstanding pushes, also included in its tooltip.
-Uploads run in the background and can be cancelled using the status-bar cancel button. Failed or
-cancelled uploads remain pending until another edit or regular synchronization; the queue itself is
-not persisted across restarts, but local calendar changes are saved immediately.
+| File | Purpose |
+| --- | --- |
+| `<base>/config/io.github.hrniels.Eventix/settings.toml` | Collections, calendars, preferences |
+| `<base>/data/io.github.hrniels.Eventix/misc.toml` | Last alarm check, calendar visibility, sync state |
+| `<base>/data/io.github.hrniels.Eventix/alarms/` | Personal reminders |
+| `<base>/data/io.github.hrniels.Eventix/vdirsyncer/` | Calendar files from remote servers |
 
-The native application checks calendar and personal reminders every 30 seconds and delivers desktop
-notifications. Reminders remain active while the window is hidden in the system tray, but stop when
-the application quits. The last check time is saved so missed reminders can be delivered on restart.
+## Development
 
-Regular synchronization is still needed to receive remote changes and propagate deletions,
-including the source-side deletion of an item moved to another calendar. Conflicting or uncertain
-uploads should be reconciled with regular synchronization rather than forced uploads.
+Building requires stable Rust, GTK4 development libraries (GTK 4.10 or newer), `pkg-config`, and
+`glib-compile-resources` from the GLib development tools. Synchronization helpers require Python
+with venv/pip and a Java JDK with Maven and Ant.
 
-Keyboard shortcuts:
+Prepare the bundled helpers and launch with project-local configuration/data in `run/`:
 
-- **Ctrl+Left / Ctrl+Right:** previous / next week
-- **Ctrl+Home:** current week
-- **Ctrl+R / F5:** synchronize all calendars
-- **Escape:** dismiss event details or the date picker
+```bash
+./b vdirsyncer
+./b davmail
+./b run
+./b run --date 2026-11-09
+./b import /path/to/invitation.ics
+```
 
-The native UI is defined by GTK composite templates in `bin/gtk/resources/`: `window.ui`,
-`week_page.ui`, `event_card.ui`, and `event_details.ui`. Static appearance and named timeline colors
-live in `style.css`; Rust supplies translated labels, calendar-specific colors, actions, and event
-geometry. Event cards are updated in place when their occurrence identity survives a refresh.
-Translations use the existing TOML locale system, rather than GtkBuilder's gettext support.
+`./b watch` rebuilds and relaunches on changes (requires `cargo-watch`). Both `run` and `watch` pass
+additional arguments to `eventix-gtk`; use `--` to separate them from the launcher's own options.
 
-Cargo bundles these files into the executable using GResource. Building requires
-`glib-compile-resources` from the GLib development tools, in addition to the GTK4 development
-libraries. Editing a resource triggers recompilation; no loose `.ui` or CSS files are needed at
-runtime.
+Debug builds default to the `io.github.hrniels.Eventix-debug` data/config prefix; release builds use
+`io.github.hrniels.Eventix`. `--data-prefix` selects another prefix:
 
-### GTK UI tests
+```bash
+./b run --data-prefix io.github.hrniels.Eventix
+```
 
-Run the display-dependent GTK tests on an invisible Xvfb display with an Openbox window
-manager and a separate D-Bus session:
+### Tests and formatting
+
+```bash
+./b test
+./b test -p eventix-state
+./b format
+./b format-check
+cargo clippy --all-targets --all-features
+```
+
+Use `./b test` rather than invoking Cargo tests directly so bundled helpers are available.
+CalDAV integration tests require Radicale. Run display-dependent GTK tests on an invisible Xvfb
+display with Openbox and a separate D-Bus session:
 
 ```bash
 ./b test-ui
 ./b test-ui styled_hour_labels
 ```
 
-These tests remain ignored by ordinary `./b test` runs. `test-ui` selects the ignored tests
-in `eventix-gtk` and runs each in its own process so GTK initialization stays on one thread.
-The GTK test binary is built once, and the command prints a combined pass/fail summary,
-elapsed time, and output from failing tests.
-Rendering uses the software Cairo backend.
-The virtual display and window manager are cleaned up when the command exits, including on
-test failure.
-
-Use `./b test-ui --visible` to debug tests on your current desktop, and `--nocapture` to
-show output from passing tests. Both options can be combined with a test name filter.
-
-## Relevant Files
-
-Eventix can be configured completely via its web UI. However, in case manual inspection is desired,
-configuration and other files are stored in XDG-standard locations under the app ID prefix
-`io.github.hrniels.Eventix`. With flatpak, the base directory will be under
-`$HOME/.var/app/io.github.hrniels.Eventix`. The relevant files and directories are:
-
-| File                                                    | Purpose                                                   |
-| ------------------------------------------------------- | --------------------------------------------------------- |
-| `<base>/config/io.github.hrniels.Eventix/settings.toml` | Collection and calendar settings                          |
-| `<base>/data/io.github.hrniels.Eventix/misc.toml`       | Runtime state: last alarm check, disabled calendars, etc. |
-| `<base>/data/io.github.hrniels.Eventix/alarms`          | Personal alarms                                           |
-| `<base>/data/io.github.hrniels.Eventix/vdirsyncer`      | Calendar files from remote servers                        |
+Required tools are `xvfb-run`, `Xvfb`, `xauth`, `dbus-run-session`, `openbox`, and `xprop`. Use `./b
+test-ui --visible` only for interactive debugging on the current desktop, and `--nocapture` to show
+output from passing tests. Formatting also requires `yamlfmt`.
 
 ## Architecture
 
-The project is organized into binaries and libraries.
-
-```
+```text
 eventix/
 ├── bin/
-│   ├── eventix/        # Core: Axum web server + calendar UI
-│   ├── app/            # GTK desktop wrapper with system tray
-│   ├── gtk/            # Standalone local GTK4 week-view prototype
-│   ├── import/         # GTK dialog for importing .ics files
-│   ├── getpw/          # Helper to access passwords from vdirsyncer
+│   ├── gtk/            # GTK4 UI, tray, imports, notifications
+│   └── getpw/          # Password helper for vdirsyncer
 ├── libs/
-│   ├── ical/           # RFC 5545 iCalendar parser and object model
-│   ├── state/          # Application state: settings, sync backends, alarms
-│   ├── locale/         # Locale/i18n trait and English + German implementations
-│   ├── view/           # Owned week snapshots and shared event overlap layout
-│   └── cmd/            # IPC protocol over a Unix domain socket
-├── data/               # Runtime assets: icons, locale files, static web files
-├── flatpak/            # Flatpak build manifests and .desktop files
-├── contrib/davmail/    # DavMail submodule for Microsoft 365 CalDAV bridging
-└── contrib/vdirsyncer/ # vdirsyncer submodule bundled with Eventix
+│   ├── ical/           # RFC 5545 parser, object model, recurrence
+│   ├── state/          # Settings, actions, synchronization, personal alarms
+│   ├── locale/         # Locale/i18n support
+│   └── view/           # Calendar snapshots, details, editors, overlap layout
+├── data/               # Application icons and locale overrides
+├── flatpak/            # Build manifest, desktop entry, AppStream metadata
+├── contrib/davmail/    # Microsoft 365 CalDAV bridge
+└── contrib/vdirsyncer/ # Bundled CalDAV synchronization
 ```
 
-## Notes
-
-There is a [known problem](https://github.com/WebKit/WebKit/pull/34556) in WebKit when using
-Wayland with fractional scaling at the moment, leading to suboptimal rendering quality. If you run
-into this, you can switch to the X11 windowing system in the flatpak settings.
+GTK composite templates, styles, and UI icons live in `bin/gtk/resources/` and are bundled into the
+executable using GResource. Translations use the TOML locale system rather than GtkBuilder gettext
+support.
 
 ## License
 
 Eventix is licensed under the [GNU General Public License v3.0 or later](LICENSE)
-(SPDX: `GPL-3.0-or-later`).
-
-Bundled third-party components retain their own licenses:
+(SPDX: `GPL-3.0-or-later`). Bundled third-party components retain their own licenses:
 
 - [DavMail](http://davmail.sourceforge.net/) (`contrib/davmail/`) — GPL-2.0
 - [vdirsyncer](https://github.com/pimutils/vdirsyncer) (`contrib/vdirsyncer/`) — BSD-3-Clause

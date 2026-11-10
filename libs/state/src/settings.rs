@@ -5,10 +5,7 @@
 use eventix_ical::objects::{CalAlarm, CalCompType, CalOrganizer};
 use eventix_locale::LocaleType;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 use xdg::BaseDirectories;
 
 const FILENAME: &str = "settings.toml";
@@ -142,20 +139,6 @@ impl Settings {
             }
         }
         None
-    }
-
-    /// Returns a map from calendar ID to formatted email address for all calendars in collections
-    /// that have an associated email account.
-    pub fn emails(&self) -> HashMap<String, String> {
-        let mut res = HashMap::new();
-        for col in self.collections.values() {
-            if let Some(email) = col.email() {
-                for id in col.calendars.keys() {
-                    res.insert(id.clone(), email.pretty_name());
-                }
-            }
-        }
-        res
     }
 
     /// Loads settings from the XDG config file, or returns empty settings if no file exists.
@@ -917,41 +900,5 @@ mod tests {
 
         // Not found — returns None.
         assert!(settings.calendar(&"missing".to_string()).is_none());
-    }
-
-    #[test]
-    fn settings_emails() {
-        let mut settings = Settings::new("/tmp/settings.toml".into());
-
-        // Collection with no email account — no entries added.
-        let mut col_fs = CollectionSettings::new(make_filesystem_syncer());
-        col_fs
-            .all_calendars_mut()
-            .insert("cal-fs".to_string(), make_cal_settings(true, "fs", "FS"));
-        settings
-            .collections_mut()
-            .insert("fs-col".to_string(), col_fs);
-
-        // Collection with an email account — all calendar IDs mapped to pretty_name.
-        let mut col_remote = CollectionSettings::new(make_vdirsyncer());
-        col_remote.all_calendars_mut().insert(
-            "cal-remote".to_string(),
-            make_cal_settings(true, "remote", "Remote"),
-        );
-        settings
-            .collections_mut()
-            .insert("remote-col".to_string(), col_remote);
-
-        let emails = settings.emails();
-        assert!(
-            !emails.contains_key("cal-fs"),
-            "FileSystem collection must not appear in emails"
-        );
-        assert_eq!(
-            emails
-                .get("cal-remote")
-                .expect("remote calendar must have email"),
-            "Alice Example <Alice@Example.COM>"
-        );
     }
 }

@@ -113,7 +113,7 @@ impl Request {
     }
 }
 
-/// Applies calendar and collection management changes using the HTML UI's state operations.
+/// Applies calendar and collection management changes through shared state operations.
 pub(crate) async fn apply(state: &EventixState, request: &Request) -> anyhow::Result<()> {
     if request.is_cancellable() {
         return apply_cancellable(state, request, &SyncCancellation::default())

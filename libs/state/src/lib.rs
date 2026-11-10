@@ -37,7 +37,7 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::Mutex;
 use tracing::debug;
 use xdg::BaseDirectories;
 
@@ -86,7 +86,6 @@ pub struct State {
     misc: misc::Misc,
     locale: Arc<dyn Locale + Send + Sync>,
     last_reload: NaiveDateTime,
-    external_changes: broadcast::Sender<()>,
 }
 
 impl State {
@@ -125,7 +124,6 @@ impl State {
             }
         }
 
-        let (external_changes, _) = broadcast::channel(16);
         Ok(Self {
             xdg,
             locale,
@@ -134,7 +132,6 @@ impl State {
             store,
             misc,
             last_reload: chrono::Utc::now().naive_utc(),
-            external_changes,
         })
     }
 
@@ -145,7 +142,6 @@ impl State {
     /// snapshot (from the current environment at call time).
     #[cfg(test)]
     pub(crate) fn new_for_test(store: CalStore, misc: misc::Misc) -> Self {
-        let (external_changes, _) = broadcast::channel(16);
         Self {
             xdg: Arc::new(xdg::BaseDirectories::with_prefix("")),
             store,
@@ -154,7 +150,6 @@ impl State {
             misc,
             locale: eventix_locale::default(),
             last_reload: chrono::Utc::now().naive_utc(),
-            external_changes,
         }
     }
 
@@ -560,18 +555,6 @@ impl State {
     /// Returns a mutable reference to the in-memory calendar store.
     pub fn store_mut(&mut self) -> &mut CalStore {
         &mut self.store
-    }
-
-    /// Subscribes to notifications that contents have changed externally.
-    ///
-    /// These are changes not triggered by the client (web UI), but by imports, for example.
-    pub fn subscribe_external_changes(&self) -> broadcast::Receiver<()> {
-        self.external_changes.subscribe()
-    }
-
-    /// Notifies subscribers that contents have changed externally.
-    pub fn notify_external_change(&self) {
-        let _ = self.external_changes.send(());
     }
 
     /// Borrows the calendar store and personal alarms mutably at the same time.

@@ -219,7 +219,7 @@ impl ksni::Tray for EventixTray {
 
 /// Renders the task badge and converts Cairo's native premultiplied pixels to SNI ARGB.
 fn render_icon(status: TaskStatus) -> anyhow::Result<Icon> {
-    let bytes = glib::Bytes::from_static(include_bytes!("../../../data/static/icon.png"));
+    let bytes = glib::Bytes::from_static(include_bytes!("../../../data/icons/512x512.png"));
     let stream = gtk::gio::MemoryInputStream::from_bytes(&bytes);
     let pixbuf = Pixbuf::from_stream(&stream, gtk::gio::Cancellable::NONE)?;
     let (width, height) = (pixbuf.width(), pixbuf.height());
