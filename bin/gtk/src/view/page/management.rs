@@ -4,12 +4,12 @@
 
 use std::cell::{Cell, OnceCell};
 
-use eventix_view::calendars::Snapshot;
 use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::activity::{Activity, Phase};
 use crate::model::management::Request;
+use crate::presentation::calendars::Snapshot;
 use crate::view::calendars::CalendarsView;
 
 #[derive(Default)]

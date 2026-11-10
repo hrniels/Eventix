@@ -7,8 +7,9 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use eventix_view::{Event, WeekSnapshot};
 use gtk::{gdk, prelude::*};
+
+use crate::presentation::{Event, WeekSnapshot};
 
 pub fn install(display: &gdk::Display) {
     let provider = gtk::CssProvider::new();

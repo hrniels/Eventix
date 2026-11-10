@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Weekly rendering of spans and timed collision placements from eventix-view.
+//! Weekly rendering of spans and timed collision placements from presentation snapshots.
 
 pub mod all_day_strip;
 pub(crate) mod content;

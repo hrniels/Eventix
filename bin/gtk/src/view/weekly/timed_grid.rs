@@ -7,10 +7,10 @@ use std::{cell::RefCell, rc::Rc};
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, Timelike, Utc};
 use chrono_tz::Tz;
 use eventix_locale::TimeFlags;
-use eventix_view::WeekSnapshot;
 use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 
 use crate::actions::move_event::DraggedEvent;
+use crate::presentation::WeekSnapshot;
 use crate::view::geometry::{GUTTER, MIN_WIDTH, day_x, rect};
 use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::{
@@ -276,7 +276,7 @@ impl TimedGrid {
         &self,
         snapshot: &gtk::Snapshot,
         day: usize,
-        range: &eventix_view::DstRange,
+        range: &crate::presentation::DstRange,
     ) {
         let x = day_x(self.width(), day as f64) as f32;
         let width = (self.width() - GUTTER) as f32 / 7.0;

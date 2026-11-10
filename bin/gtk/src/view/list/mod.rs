@@ -12,12 +12,12 @@ mod scroll;
 
 use std::{cell::RefCell, rc::Rc};
 
-use eventix_view::list::{Filter, Snapshot};
 use gtk::prelude::*;
 
 use crate::model::session::{
     ListRowsRequest, ListRowsResponse, OccurrencesRequest, OccurrencesResponse,
 };
+use crate::presentation::list::{Filter, Snapshot};
 
 use self::{filtering::Filtering, results::Results};
 
@@ -102,7 +102,10 @@ impl ListView {
         self.results.model.set_occurrences(response)
     }
 
-    pub fn connect_action(&self, handler: impl Fn(&eventix_view::list::Row, MenuAction) + 'static) {
+    pub fn connect_action(
+        &self,
+        handler: impl Fn(&crate::presentation::list::Row, MenuAction) + 'static,
+    ) {
         self.results.actions.connect(handler);
     }
 
@@ -122,8 +125,8 @@ impl ListView {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
+    use crate::presentation::list::{Action, Calendar, Filter, Row, Snapshot};
     use eventix_state::actions::items::ItemId;
-    use eventix_view::list::{Action, Calendar, Filter, Row, Snapshot};
     use gtk::prelude::*;
 
     use super::{ListView, MenuAction, item::ListItem, row::FixedRow};
@@ -208,13 +211,13 @@ mod tests {
 
     fn occurrence_page(
         request: &crate::model::session::OccurrencesRequest,
-    ) -> eventix_view::list::occurrences::Page {
-        use chrono::Duration;
-        use eventix_ical::objects::{CalDate, CalDateType, DateContext};
-        use eventix_view::{
+    ) -> crate::presentation::list::occurrences::Page {
+        use crate::presentation::{
             details::{DetailActions, Details, PersonalReminders},
             list::occurrences::{Cursor, Direction, Page, Row},
         };
+        use chrono::Duration;
+        use eventix_ical::objects::{CalDate, CalDateType, DateContext};
         use std::sync::Arc;
         let rows = (0..request.count)
             .map(|index| {
@@ -242,10 +245,10 @@ mod tests {
                     background: "#803366".into(),
                     response: Some(
                         [
-                            eventix_view::details::Response::Accepted,
-                            eventix_view::details::Response::Tentative,
-                            eventix_view::details::Response::Declined,
-                            eventix_view::details::Response::Pending,
+                            crate::presentation::details::Response::Accepted,
+                            crate::presentation::details::Response::Tentative,
+                            crate::presentation::details::Response::Declined,
+                            crate::presentation::details::Response::Pending,
                         ][offset.rem_euclid(4) as usize],
                     ),
                     task: true,
@@ -284,7 +287,7 @@ mod tests {
     fn expansion_pages_refresh_preserve_identity_and_reject_collapsed_or_stale_responses() {
         use super::{item::Entry, model::ListModel};
         use crate::model::session::{OccurrencesRequest, OccurrencesResponse};
-        use eventix_view::list::occurrences::Direction;
+        use crate::presentation::list::occurrences::Direction;
         let model: ListModel = gtk::glib::Object::new();
         let requests = Rc::new(RefCell::new(Vec::<OccurrencesRequest>::new()));
         let pending = requests.clone();
@@ -1650,7 +1653,7 @@ mod tests {
     fn recycled_content_resets_presentation_and_dispatches_only_current_item_actions() {
         use std::sync::Arc;
 
-        use eventix_view::details::Response;
+        use crate::presentation::details::Response;
 
         use super::{content::Content, item::Entry, model::ListModel};
 
@@ -1757,11 +1760,11 @@ mod tests {
             revision: 0,
             token: 0,
             item: id.clone(),
-            cursor: eventix_view::list::occurrences::Cursor {
+            cursor: crate::presentation::list::occurrences::Cursor {
                 start: chrono::Utc::now().with_timezone(locale.timezone()),
                 recurrence: String::new(),
             },
-            direction: eventix_view::list::occurrences::Direction::From,
+            direction: crate::presentation::list::occurrences::Direction::From,
             count: 1,
         };
         let mut occurrence = occurrence_page(&request).rows.remove(0);
@@ -1826,7 +1829,7 @@ mod tests {
     fn recycled_pagination_buttons_use_the_current_series_and_direction() {
         use super::{content::Content, item::Entry, model::ListModel};
         use crate::model::session::OccurrencesResponse;
-        use eventix_view::list::occurrences::Direction;
+        use crate::presentation::list::occurrences::Direction;
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();

@@ -7,13 +7,13 @@ use eventix_locale::Locale;
 use eventix_state::actions::items::{
     EditScope, ItemId, OccurrenceAction, TaskAction, UpdatePersonalAlarms,
 };
-use eventix_view::{
+use gtk::{glib, prelude::*, subclass::prelude::*};
+
+use crate::presentation::{
     Event,
     details::{Attendee, Contact, Details, Response},
     sidebar::SidebarRow,
 };
-use gtk::{glib, prelude::*, subclass::prelude::*};
-
 use crate::style;
 
 use super::indicators::EventIndicators;
@@ -175,7 +175,7 @@ impl EventDetails {
         obj
     }
 
-    fn set_identity(&self, id: &eventix_view::OccurrenceId) {
+    fn set_identity(&self, id: &crate::presentation::OccurrenceId) {
         self.imp().item.replace(Some(ItemId {
             calendar: id.calendar.clone(),
             uid: id.uid.clone(),
@@ -861,11 +861,11 @@ fn text_markup(text: &str) -> String {
 mod tests {
     use std::sync::Arc;
 
-    use chrono::TimeZone;
-    use eventix_view::{
+    use crate::presentation::{
         AllDaySpan, Event, OccurrenceId, TimedEvent,
         details::{Attendee, Contact, DetailActions, Details, Response},
     };
+    use chrono::TimeZone;
     use gtk::{prelude::*, subclass::prelude::*};
 
     use super::text_markup;
@@ -1129,10 +1129,10 @@ mod tests {
                     assert!(responses.is_empty());
                 }
                 let colors = gtk::CssProvider::new();
-                let week = std::rc::Rc::new(eventix_view::WeekSnapshot {
+                let week = std::rc::Rc::new(crate::presentation::WeekSnapshot {
                     start: start.date_naive(),
                     locale: locale.clone(),
-                    days: vec![eventix_view::Day {
+                    days: vec![crate::presentation::Day {
                         date: start.date_naive(),
                         timed: if full {
                             vec![TimedEvent {
@@ -1140,7 +1140,7 @@ mod tests {
                                 date: start.date_naive(),
                                 minute_start: 540,
                                 minute_end: 600,
-                                columns: eventix_view::layout::Columns {
+                                columns: crate::presentation::layout::Columns {
                                     count: 1,
                                     offset: 0,
                                     span: 1,
@@ -1503,7 +1503,7 @@ mod tests {
                 gtk::style_context_remove_provider_for_display(&display, &colors);
                 if variant == "sparse" {
                     crate::view::page::tests::assert_sidebar_layout_and_details(
-                        eventix_view::WeekSnapshot {
+                        crate::presentation::WeekSnapshot {
                             start: week.start,
                             days: week.days.clone(),
                             all_day: week.all_day.clone(),
@@ -1511,7 +1511,7 @@ mod tests {
                         },
                     );
                     crate::view::page::tests::assert_month_layout_and_navigation(
-                        eventix_view::WeekSnapshot {
+                        crate::presentation::WeekSnapshot {
                             start: week.start,
                             days: week.days.clone(),
                             all_day: week.all_day.clone(),
@@ -1521,7 +1521,7 @@ mod tests {
                 }
                 if variant == "sparse" && language == eventix_locale::LocaleType::English {
                     crate::view::page::tests::assert_span_layout_and_refresh(
-                        eventix_view::WeekSnapshot {
+                        crate::presentation::WeekSnapshot {
                             start: week.start,
                             days: week.days.clone(),
                             all_day: week.all_day.clone(),

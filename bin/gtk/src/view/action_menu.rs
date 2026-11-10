@@ -11,12 +11,13 @@ use std::{
 use eventix_ical::objects::CalPartStat;
 use eventix_locale::Locale;
 use eventix_state::actions::items::{ItemId, OccurrenceAction, TaskAction};
-use eventix_view::item_actions::Action;
-use eventix_view::{
+use gtk::{gio, glib, prelude::*};
+
+use crate::presentation::item_actions::Action;
+use crate::presentation::{
     OccurrenceId,
     details::{DetailActions, Details, Response},
 };
-use gtk::{gio, glib, prelude::*};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MenuAction {
@@ -218,7 +219,7 @@ pub(super) fn update_button<T: Clone + 'static>(
 
 pub(super) fn update_occurrence_button(
     button: &gtk::MenuButton,
-    row: &eventix_view::list::occurrences::Row,
+    row: &crate::presentation::list::occurrences::Row,
     locale: &dyn Locale,
     handlers: &Rc<Actions<OccurrenceTarget>>,
 ) {
@@ -734,9 +735,9 @@ fn string_attribute(item: &gio::MenuItem, name: &str) -> Option<String> {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
+    use crate::presentation::list::{Action, Row};
     use eventix_ical::objects::CalPartStat;
     use eventix_state::actions::items::TaskAction;
-    use eventix_view::list::{Action, Row};
     use gtk::{gio, prelude::*};
 
     use super::{Actions, MenuAction, OccurrenceTarget, bind, menu, occurrence_menu};
@@ -829,7 +830,7 @@ mod tests {
 
     #[test]
     fn german_occurrence_menu_uses_full_response_labels_and_groups_destructive_actions() {
-        use eventix_view::details::{DetailActions, Response};
+        use crate::presentation::details::{DetailActions, Response};
 
         let tmp = tempfile::tempdir().unwrap();
         let xdg = xdg::BaseDirectories::with_prefix(tmp.path().file_name().unwrap());
@@ -952,7 +953,7 @@ mod tests {
 
     #[test]
     fn occurrence_commands_preserve_recurrence_and_offer_explicit_edit_scopes() {
-        use eventix_view::{OccurrenceId, details::DetailActions};
+        use crate::presentation::{OccurrenceId, details::DetailActions};
 
         let id = OccurrenceId {
             calendar: "work".into(),
@@ -967,8 +968,8 @@ mod tests {
                 complete: true,
                 postpone: true,
                 exclude: true,
-                occurrence_response: Some(eventix_view::details::Response::Tentative),
-                series_response: Some(eventix_view::details::Response::Accepted),
+                occurrence_response: Some(crate::presentation::details::Response::Tentative),
+                series_response: Some(crate::presentation::details::Response::Accepted),
                 ..Default::default()
             },
             true,
@@ -1027,8 +1028,8 @@ mod tests {
         let (_, read_only) = occurrence_menu(
             &DetailActions {
                 read_only: true,
-                occurrence_response: Some(eventix_view::details::Response::Accepted),
-                series_response: Some(eventix_view::details::Response::Tentative),
+                occurrence_response: Some(crate::presentation::details::Response::Accepted),
+                series_response: Some(crate::presentation::details::Response::Tentative),
                 personal_reminders: true,
                 ..Default::default()
             },
@@ -1219,7 +1220,7 @@ mod tests {
     #[test]
     fn excluded_occurrence_menu_offers_include_without_reminder_entry() {
         let (menu, actions) = super::occurrence_menu_for(
-            &eventix_view::details::DetailActions {
+            &crate::presentation::details::DetailActions {
                 exclude: true,
                 personal_reminders: true,
                 ..Default::default()
@@ -1244,14 +1245,14 @@ mod tests {
     #[test]
     fn list_occurrence_menu_only_offers_actions_for_the_selected_occurrence() {
         let (menu, actions) = super::occurrence_menu_for(
-            &eventix_view::details::DetailActions {
+            &crate::presentation::details::DetailActions {
                 edit: true,
                 delete: true,
                 complete: true,
                 postpone: true,
                 exclude: true,
-                occurrence_response: Some(eventix_view::details::Response::Tentative),
-                series_response: Some(eventix_view::details::Response::Accepted),
+                occurrence_response: Some(crate::presentation::details::Response::Tentative),
+                series_response: Some(crate::presentation::details::Response::Accepted),
                 ..Default::default()
             },
             true,

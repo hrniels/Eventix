@@ -6,11 +6,11 @@ use std::cell::RefCell;
 
 use eventix_ical::objects::RangeEdge;
 use eventix_locale::{Locale, TimeFlags};
-use eventix_view::details::Response;
-use eventix_view::{AllDaySpan, Event, MonthEvent, TimedEvent};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use crate::actions::move_event::{self, DraggedEvent};
+use crate::presentation::details::Response;
+use crate::presentation::{AllDaySpan, Event, MonthEvent, TimedEvent};
 use crate::style;
 
 use super::indicators::EventIndicators;
@@ -294,7 +294,7 @@ impl EventCard {
 mod tests {
     use std::sync::Arc;
 
-    use eventix_view::{
+    use crate::presentation::{
         OccurrenceId,
         details::{DetailActions, Details},
     };

@@ -5,9 +5,9 @@
 use std::{rc::Rc, sync::Arc};
 
 use eventix_locale::Locale;
-use eventix_view::MonthDay;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
+use crate::presentation::MonthDay;
 use crate::view::{
     card::EventCard,
     popover::DetailsController,

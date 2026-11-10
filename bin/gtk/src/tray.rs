@@ -5,10 +5,10 @@
 use std::sync::Arc;
 
 use eventix_locale::Locale;
-use eventix_view::sidebar::SidebarSnapshot;
 use gtk::{cairo, gdk::prelude::GdkCairoContextExt, gdk_pixbuf::Pixbuf, glib, prelude::*};
 use ksni::{Icon, ToolTip, blocking::TrayMethods, menu::StandardItem};
 
+use crate::presentation::sidebar::SidebarSnapshot;
 use crate::window::Window;
 
 enum Message {

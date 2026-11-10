@@ -11,11 +11,11 @@ use std::{
 use eventix_ical::objects::CalCompType;
 use eventix_locale::Locale;
 use eventix_state::{CalendarAlarmType, CalendarSettings};
-use eventix_view::calendars::{Backend, Calendar, Collection};
 use gtk::{gdk, prelude::*};
 
 use super::{ActionHandler, action, clear, icon_action, text};
 use crate::model::management::{CalendarOperation, Operation, Request};
+use crate::presentation::calendars::{Backend, Calendar, Collection};
 use crate::widgets::{AlarmInput, ColorDot, SegmentedControl};
 
 const ROW_TITLES: [&str; 4] = ["Folder", "Color", "Creation", "Alarms"];

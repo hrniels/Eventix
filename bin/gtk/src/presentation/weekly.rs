@@ -13,7 +13,7 @@ use eventix_ical::util;
 use eventix_locale::Locale;
 use eventix_state::State;
 
-use crate::{
+use crate::presentation::{
     Event, OccurrenceId,
     layout::{self, Columns},
     projection::{day_minutes, event_order, events_between},

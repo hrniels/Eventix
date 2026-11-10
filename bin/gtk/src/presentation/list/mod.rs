@@ -16,7 +16,7 @@ use eventix_locale::Locale;
 use eventix_state::actions::items::ItemId;
 use eventix_state::{CalendarAlarmType, State};
 
-pub use crate::item_actions::Action;
+pub use crate::presentation::item_actions::Action;
 
 /// Applied list selection. An empty calendar selection means all calendars.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn occurrence_pages_include_boundaries_exclusions_and_equal_start_overrides_once() {
-        use crate::list::occurrences::{Cursor, Direction, Page};
+        use crate::presentation::list::occurrences::{Cursor, Direction, Page};
         use chrono::TimeZone;
         let (_tmp, state) = state(&["BEGIN:VEVENT\nUID:series\nDTSTART;VALUE=DATE:20261015\n\
              RRULE:FREQ=DAILY;COUNT=20\nEXDATE;VALUE=DATE:20261024\nSUMMARY:Base\nEND:VEVENT\n\
@@ -516,7 +516,7 @@ mod tests {
 
     #[test]
     fn occurrence_pages_support_tasks_without_due_dates_and_respect_calendar_identity() {
-        use crate::list::occurrences::{Cursor, Direction, Page};
+        use crate::presentation::list::occurrences::{Cursor, Direction, Page};
         use chrono::TimeZone;
         let (_tmp, state) = state(&["BEGIN:VTODO\nUID:task\nDTSTART;VALUE=DATE:20261025\n\
              RRULE:FREQ=DAILY;COUNT=2\nSTATUS:COMPLETED\nEND:VTODO"]);
@@ -551,7 +551,7 @@ mod tests {
 
     #[test]
     fn occurrence_markers_inherit_calendar_colors_and_use_overridden_attendee_responses() {
-        use crate::{
+        use crate::presentation::{
             details::Response,
             list::occurrences::{Cursor, Direction, Page},
         };
@@ -652,10 +652,15 @@ mod tests {
                 uid: "event".into(),
                 recurrence: None,
             };
-            assert_eq!(crate::Event::load(&state, &item).unwrap().summary, calendar);
+            assert_eq!(
+                crate::presentation::Event::load(&state, &item)
+                    .unwrap()
+                    .summary,
+                calendar
+            );
             item.uid = "task".into();
             assert_eq!(
-                crate::sidebar::SidebarRow::load(&state, &item)
+                crate::presentation::sidebar::SidebarRow::load(&state, &item)
                     .unwrap()
                     .summary,
                 calendar

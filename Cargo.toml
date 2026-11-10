@@ -6,7 +6,6 @@ members = [
     "libs/ical",
     "libs/locale",
     "libs/state",
-    "libs/view",
 ]
 
 [workspace.dependencies]
@@ -20,7 +19,6 @@ clap = { version = "4.5.41", features = ["derive"] }
 eventix-ical = { path = "libs/ical" }
 eventix-locale = { path = "libs/locale" }
 eventix-state = { path = "libs/state" }
-eventix-view = { path = "libs/view" }
 formatx = "0.2.4"
 itertools = "0.14.0"
 once_cell = "1.21.3"

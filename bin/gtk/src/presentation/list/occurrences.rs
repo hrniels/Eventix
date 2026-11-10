@@ -14,7 +14,7 @@ use eventix_ical::{
 };
 use eventix_state::{State, actions::items::ItemId};
 
-use crate::details::{Details, Response};
+use crate::presentation::details::{Details, Response};
 
 /// Stable pagination boundary, including identity when occurrences share a start time.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

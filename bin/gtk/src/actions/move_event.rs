@@ -11,9 +11,9 @@ use eventix_state::actions::{
     Action,
     items::{CopyEvent, ItemId, MoveEvent},
 };
-use eventix_view::{Event, TimedEvent};
 use gtk::{gdk, glib, prelude::*};
 
+use crate::presentation::{Event, TimedEvent};
 use crate::view::{card::EventCard, page::CalendarPage, weekly::timed_grid::TimedGrid};
 
 /// A process-local drag carries identity and timing, never a calendar object or a widget.

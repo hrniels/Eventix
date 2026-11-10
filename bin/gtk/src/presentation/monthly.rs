@@ -11,7 +11,7 @@ use chrono::{Datelike, Duration, Months, NaiveDate};
 use eventix_locale::Locale;
 use eventix_state::State;
 
-use crate::{
+use crate::presentation::{
     AllDaySpan, Event, TimedSegmentId,
     projection::{day_minutes, event_order, events_between},
     week_start,

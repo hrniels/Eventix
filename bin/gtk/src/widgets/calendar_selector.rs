@@ -4,10 +4,10 @@
 
 use std::cell::RefCell;
 
-use eventix_view::editor::EditorCalendar;
 use gtk::{gdk, prelude::*};
 
 use super::ColorDot;
+use crate::presentation::editor::EditorCalendar;
 
 #[derive(PartialEq, Eq)]
 struct Choice {
@@ -191,7 +191,7 @@ fn calendar_factory(
 
 #[cfg(test)]
 mod tests {
-    use eventix_view::editor::EditorCalendar;
+    use crate::presentation::editor::EditorCalendar;
     use gtk::prelude::*;
 
     use super::CalendarSelector;

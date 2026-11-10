@@ -9,12 +9,12 @@ use std::{
 
 use eventix_ical::objects::CalCompType;
 use eventix_state::actions::items::{EditScope, ItemId, UpdateItem};
-use eventix_view::editor::EditorOptions;
 use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use super::create::EventSlot;
 use crate::model::session::{ChangeSet, SavedItem};
+use crate::presentation::editor::EditorOptions;
 use crate::view::details::EventDetails;
 use crate::view::editor::{ItemEditor, has_nested_popup, is_save_key};
 

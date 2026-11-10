@@ -12,8 +12,9 @@ use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use eventix_ical::objects::{CalAttendee, CalCompType, CalDate, CalRole, DateContext};
 use eventix_locale::Locale;
 use eventix_state::actions::items::{CreateItem, UpdateItem};
-use eventix_view::editor::EditorOptions;
 use gtk::{gdk, glib, prelude::*};
+
+use crate::presentation::editor::EditorOptions;
 
 mod existing;
 mod feedback;
@@ -1377,9 +1378,9 @@ pub(crate) fn is_save_key(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::presentation::editor::{EditorCalendar, EditorOptions};
     use chrono::NaiveDateTime;
     use eventix_ical::objects::{CalDateType, CalRRuleFreq};
-    use eventix_view::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
     use super::{CalDate, DateInput, DateSection, ItemEditor};
@@ -1607,7 +1608,7 @@ mod tests {
             }
         };
         drain();
-        let task = eventix_view::sidebar::SidebarRow::load(&state, &item).unwrap();
+        let task = crate::presentation::sidebar::SidebarRow::load(&state, &item).unwrap();
         let controller = parent.test_details();
         let clicked = Rc::new(Cell::new(false));
         let flag = clicked.clone();
@@ -1633,7 +1634,7 @@ mod tests {
         let mut edit = editor.existing.borrow().clone().unwrap();
         edit.fields = *editor.command().unwrap();
         let (state, _) = execute(Box::new(edit), state);
-        let saved = eventix_view::sidebar::SidebarRow::load(&state, &item).unwrap();
+        let saved = crate::presentation::sidebar::SidebarRow::load(&state, &item).unwrap();
         assert_eq!(saved.summary, "Edited task");
         parent.test_saved_editor(crate::model::session::SavedItem::Task(Box::new(saved)));
         drain();

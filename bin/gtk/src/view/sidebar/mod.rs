@@ -4,10 +4,10 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use eventix_view::sidebar::SidebarSnapshot;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::popover::DetailsController;
+use crate::presentation::sidebar::SidebarSnapshot;
 use crate::style;
 
 mod panel;

@@ -7,10 +7,10 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use eventix_locale::Locale;
-use eventix_view::{OccurrenceId, TimedSegmentId};
 use gtk::{glib, prelude::*};
 
 use super::{card::EventCard, popover::DetailsController};
+use crate::presentation::{OccurrenceId, TimedSegmentId};
 
 #[derive(PartialEq, Eq)]
 pub(crate) enum CardKey {

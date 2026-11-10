@@ -5,9 +5,9 @@
 use std::cell::{Cell, OnceCell, RefCell};
 
 use eventix_locale::Locale;
-use eventix_view::details::Response;
 use gtk::{gdk, prelude::*};
 
+use crate::presentation::details::Response;
 use crate::widgets::ColorDot;
 
 /// Shows the invitation response inside a calendar-colored circle.

@@ -242,7 +242,7 @@ mod tests {
     use eventix_state::{CalendarSettings, CollectionSettings, EmailAccount, SyncerType};
 
     use super::{Details, Response};
-    use crate::WeekSnapshot;
+    use crate::presentation::WeekSnapshot;
 
     fn details(body: &str, mail: &str, read_only: bool, personal: bool) -> Arc<Details> {
         let tmp = tempfile::tempdir().unwrap();

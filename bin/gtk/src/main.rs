@@ -6,6 +6,7 @@ include!(concat!(env!("OUT_DIR"), "/resources.rs"));
 
 mod actions;
 mod model;
+mod presentation;
 mod style;
 mod tray;
 mod view;

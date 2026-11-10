@@ -16,7 +16,7 @@ use eventix_ical::{
 use eventix_locale::{Locale, TimeFlags};
 use eventix_state::State;
 
-use crate::{
+use crate::presentation::{
     OccurrenceId,
     details::{Details, Response},
     editor::EditorCalendar,

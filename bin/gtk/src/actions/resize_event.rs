@@ -11,9 +11,9 @@ use eventix_state::actions::{
     Action,
     items::{ItemId, ResizeEvent},
 };
-use eventix_view::TimedEvent;
 use gtk::{gdk, graphene, prelude::*};
 
+use crate::presentation::TimedEvent;
 use crate::view::{card::EventCard, page::CalendarPage, weekly::timed_grid::TimedGrid};
 
 type TimeRange = (DateTime<Tz>, DateTime<Tz>);

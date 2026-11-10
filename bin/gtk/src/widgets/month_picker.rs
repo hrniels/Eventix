@@ -193,7 +193,7 @@ impl MonthPicker {
     }
 
     fn move_month(&self, months: i32) {
-        if let Some(date) = eventix_view::shift_month(self.imp().cursor.get(), months) {
+        if let Some(date) = crate::presentation::shift_month(self.imp().cursor.get(), months) {
             self.set_cursor(date);
         }
     }
@@ -263,7 +263,7 @@ impl MonthPicker {
         let cursor = imp.cursor.get();
         imp.heading.set_text(&cursor.year().to_string());
         for (button, months) in imp.navigation.iter().zip([-12, 12]) {
-            button.set_sensitive(eventix_view::shift_month(cursor, months).is_some());
+            button.set_sensitive(crate::presentation::shift_month(cursor, months).is_some());
         }
         for (index, button) in imp.months.iter().enumerate() {
             let date = cursor.with_month(index as u32 + 1).unwrap();

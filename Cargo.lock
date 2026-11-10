@@ -663,7 +663,6 @@ dependencies = [
  "eventix-ical",
  "eventix-locale",
  "eventix-state",
- "eventix-view",
  "formatx",
  "gtk4",
  "ksni",
@@ -745,19 +744,6 @@ dependencies = [
  "tracing",
  "uuid",
  "xdg",
-]
-
-[[package]]
-name = "eventix-view"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "chrono-tz",
- "eventix-ical",
- "eventix-locale",
- "eventix-state",
- "tempfile",
 ]
 
 [[package]]

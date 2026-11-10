@@ -6,14 +6,14 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use chrono::NaiveDate;
 use eventix_locale::{DateFlags, Locale};
-use eventix_view::{
-    OccurrenceId,
-    sidebar::{SidebarGroup, SidebarRow},
-};
 use gtk::prelude::*;
 
 use super::super::{
     details::EventDetails, indicators::EventIndicators, popover::DetailsController, response_marker,
+};
+use crate::presentation::{
+    OccurrenceId,
+    sidebar::{SidebarGroup, SidebarRow},
 };
 use crate::style;
 

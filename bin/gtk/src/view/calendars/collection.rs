@@ -10,7 +10,6 @@ use std::{
 
 use eventix_locale::Locale;
 use eventix_state::{EmailAccount, SyncTimeBound, SyncerType};
-use eventix_view::calendars::{Backend, Collection};
 use gtk::prelude::*;
 
 use super::{
@@ -18,6 +17,7 @@ use super::{
     icon_action, show_error,
 };
 use crate::model::management::{CollectionOperation, Operation, Request};
+use crate::presentation::calendars::{Backend, Collection};
 use crate::widgets::SegmentedControl;
 
 pub(super) struct CollectionActions {
@@ -1115,7 +1115,7 @@ mod tests {
     fn collection_validation_marks_fields_and_clears_borders_on_edit() {
         gtk::init().unwrap();
         let locale = eventix_locale::default();
-        let syncer = super::new_syncer(eventix_view::calendars::Backend::CalDav);
+        let syncer = super::new_syncer(crate::presentation::calendars::Backend::CalDav);
         let form = CollectionForm::new(&syncer, locale.as_ref());
         for (field, valid) in [
             (&form.name, "User"),
@@ -1135,7 +1135,7 @@ mod tests {
         form.years.set_text("5");
         assert!(!form.years.has_css_class("ev_management_field_error"));
 
-        let local = super::new_syncer(eventix_view::calendars::Backend::FileSystem);
+        let local = super::new_syncer(crate::presentation::calendars::Backend::FileSystem);
         let local_form = CollectionForm::new(&local, locale.as_ref());
         assert!(local_form.operation(&local, locale.as_ref()).is_err());
         assert!(local_form.path.has_css_class("ev_management_field_error"));

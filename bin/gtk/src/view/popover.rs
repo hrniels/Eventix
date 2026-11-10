@@ -860,7 +860,7 @@ mod tests {
     fn item_editor_bottom_errors_resize_the_popup_smoothly() {
         use std::cell::RefCell;
 
-        use eventix_view::editor::{EditorCalendar, EditorOptions};
+        use crate::presentation::editor::{EditorCalendar, EditorOptions};
 
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();

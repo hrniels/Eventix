@@ -6,10 +6,10 @@ use std::{cell::Cell, rc::Rc};
 
 use eventix_ical::objects::{CalCompType, CalComponent, EventLike};
 use eventix_locale::Locale;
-use eventix_view::editor::EditorCalendar;
 use gtk::{glib, prelude::*};
 
 use super::error::{ErrorMessage, show_error};
+use crate::presentation::editor::EditorCalendar;
 use crate::{model::import::PreparedImport, widgets::CalendarSelector};
 
 /// The standalone importer's preview, hosted as a child of the main application window.

@@ -377,7 +377,7 @@ impl DatePicker {
     }
 
     fn move_month(&self, months: i32) {
-        if let Some(date) = eventix_view::shift_month(self.imp().cursor.get(), months) {
+        if let Some(date) = crate::presentation::shift_month(self.imp().cursor.get(), months) {
             self.set_cursor(date);
         }
     }
@@ -490,7 +490,9 @@ impl DatePicker {
         ));
 
         for (button, months) in imp.navigation.iter().zip([-12, -1, 1, 12]) {
-            button.set_sensitive(eventix_view::shift_month(imp.cursor.get(), months).is_some());
+            button.set_sensitive(
+                crate::presentation::shift_month(imp.cursor.get(), months).is_some(),
+            );
         }
 
         for (button, date) in imp.days.iter().zip(cells) {
@@ -582,7 +584,8 @@ mod tests {
                         .flatten()
                         .filter(|date| date.month() == month.month())
                         .count(),
-                    (eventix_view::shift_month(month, 1).unwrap() - month).num_days() as usize
+                    (crate::presentation::shift_month(month, 1).unwrap() - month).num_days()
+                        as usize
                 );
                 for days in cells.windows(2) {
                     assert_eq!(days[1].unwrap() - days[0].unwrap(), Duration::days(1));

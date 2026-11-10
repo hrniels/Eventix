@@ -7,10 +7,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use eventix_locale::Locale;
-use eventix_view::calendars::{Backend, Calendar, Collection, Snapshot};
 use gtk::prelude::*;
 
 use super::error::{ErrorMessage, show_error};
+use crate::presentation::calendars::{Backend, Calendar, Collection, Snapshot};
 
 mod card;
 mod collection;
@@ -507,7 +507,7 @@ fn action_button(icon: &str, label: &str, show_label: bool, locale: &dyn Locale)
 
 #[cfg(test)]
 mod tests {
-    use eventix_view::calendars::{Backend, Calendar, Collection, Snapshot};
+    use crate::presentation::calendars::{Backend, Calendar, Collection, Snapshot};
     use gtk::{gdk, prelude::*};
 
     use super::CalendarsView;

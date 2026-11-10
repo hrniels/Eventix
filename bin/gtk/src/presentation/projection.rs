@@ -15,7 +15,7 @@ use eventix_ical::{
 };
 use eventix_state::State;
 
-use crate::{Event, OccurrenceId, details};
+use crate::presentation::{Event, OccurrenceId, details};
 
 pub(crate) fn events_between(
     state: &State,

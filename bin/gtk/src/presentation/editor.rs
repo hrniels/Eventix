@@ -66,6 +66,7 @@ impl EditorOptions {
     /// Includes enabled event calendars from writable collections and sorts choices by name
     /// and ID. The initial start is the next whole hour in the configured timezone; returns
     /// an error if that date and time cannot be represented.
+    #[cfg(test)]
     pub fn load(state: &State) -> anyhow::Result<Self> {
         Self::load_for(state, CalCompType::Event)
     }

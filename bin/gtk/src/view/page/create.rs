@@ -158,8 +158,8 @@ impl CalendarPage {
 mod tests {
     use std::sync::Arc;
 
+    use crate::presentation::{Day, MonthDay, MonthSnapshot, WeekSnapshot, editor::EditorCalendar};
     use chrono::{Duration, NaiveDate, NaiveDateTime};
-    use eventix_view::{Day, MonthDay, MonthSnapshot, WeekSnapshot, editor::EditorCalendar};
     use gtk::{glib, prelude::*, subclass::prelude::*};
 
     use super::CalendarPage;
@@ -343,7 +343,7 @@ mod tests {
             true,
         );
 
-        let (month_start, month_end) = eventix_view::month_range(start).unwrap();
+        let (month_start, month_end) = crate::presentation::month_range(start).unwrap();
         page.imp().month_view.set_active(true);
         page.imp().content.show_month(
             &page,

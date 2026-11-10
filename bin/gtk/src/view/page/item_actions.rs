@@ -4,10 +4,10 @@
 
 use eventix_ical::objects::CalCompType;
 use eventix_state::actions::items::{ChangeOccurrence, ChangeTask, EditScope, ItemId, RespondItem};
-use eventix_view::list::Row;
 use gtk::{prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
+use crate::presentation::list::Row;
 use crate::view::action_menu::{MenuAction, OccurrenceTarget};
 
 impl CalendarPage {

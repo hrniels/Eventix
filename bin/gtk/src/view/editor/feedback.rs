@@ -102,7 +102,7 @@ impl ItemEditor {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use eventix_view::editor::{EditorCalendar, EditorOptions};
+    use crate::presentation::editor::{EditorCalendar, EditorOptions};
     use gtk::prelude::*;
 
     use super::{Field, ItemEditor};

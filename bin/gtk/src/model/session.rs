@@ -14,14 +14,14 @@ use eventix_state::actions::{
 };
 use eventix_state::auth::{AuthOutcome, AuthPrompt, monitor_o365_auth};
 use eventix_state::{EventixState, State, SyncCancellation, SyncProgress, SyncResult};
-use eventix_view::{MonthSnapshot, WeekSnapshot};
-use eventix_view::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
 use super::activity::{Activity, Phase};
 use super::calendars::{self, CalendarVisibility};
 use super::management::{self, Request as ManagementRequest};
 use super::push::{PendingItem, PushQueue, ResourceChanges};
 use super::query::{Query, SubscriptionId, Subscriptions};
+use crate::presentation::{MonthSnapshot, WeekSnapshot};
+use crate::presentation::{editor::EditorOptions, sidebar::SidebarSnapshot};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum View {
@@ -34,7 +34,7 @@ pub(crate) enum View {
 pub(crate) enum Snapshot {
     Week(WeekSnapshot),
     Month(MonthSnapshot),
-    List(eventix_view::list::Snapshot),
+    List(crate::presentation::list::Snapshot),
 }
 
 #[derive(Clone, Debug)]
@@ -46,7 +46,7 @@ pub(crate) struct ContentRequest {
     pub generation: u64,
     pub date: Option<NaiveDate>,
     pub view: View,
-    pub filter: eventix_view::list::Filter,
+    pub filter: crate::presentation::list::Filter,
 }
 
 pub(crate) struct ContentResponse {
@@ -78,7 +78,7 @@ impl fmt::Debug for ListRowsRequest {
 
 pub(crate) struct ListRowsResponse {
     pub revision: u64,
-    pub result: Result<Vec<(ItemId, Option<eventix_view::list::Row>)>, String>,
+    pub result: Result<Vec<(ItemId, Option<crate::presentation::list::Row>)>, String>,
 }
 
 #[derive(Clone, Debug)]
@@ -86,14 +86,14 @@ pub(crate) struct OccurrencesRequest {
     pub revision: u64,
     pub token: u64,
     pub item: ItemId,
-    pub cursor: eventix_view::list::occurrences::Cursor,
-    pub direction: eventix_view::list::occurrences::Direction,
+    pub cursor: crate::presentation::list::occurrences::Cursor,
+    pub direction: crate::presentation::list::occurrences::Direction,
     pub count: usize,
 }
 
 pub(crate) struct OccurrencesResponse {
     pub request: OccurrencesRequest,
-    pub result: Result<eventix_view::list::occurrences::Page, String>,
+    pub result: Result<crate::presentation::list::occurrences::Page, String>,
 }
 
 /// Notifications carry identities and invalidations; snapshots are refetched separately.
@@ -112,8 +112,11 @@ pub(crate) enum Event {
     PendingPushes(usize),
     Activity(Activity),
     CalendarsLoaded(Vec<CalendarVisibility>),
-    SyncCollectionsLoaded(Vec<(String, eventix_view::calendars::Backend)>),
-    ManagementLoaded(u64, Result<eventix_view::calendars::Snapshot, String>),
+    SyncCollectionsLoaded(Vec<(String, crate::presentation::calendars::Backend)>),
+    ManagementLoaded(
+        u64,
+        Result<crate::presentation::calendars::Snapshot, String>,
+    ),
     ManagementFinished(ManagementRequest, Result<(), String>),
     CalendarToggleFailed(String),
     EditorLoaded(u64, Result<EditorOptions, String>),
@@ -182,8 +185,8 @@ impl Event {
 }
 
 pub(crate) enum SavedItem {
-    Event(Box<eventix_view::Event>),
-    Task(Box<eventix_view::sidebar::SidebarRow>),
+    Event(Box<crate::presentation::Event>),
+    Task(Box<crate::presentation::sidebar::SidebarRow>),
 }
 
 #[derive(Debug)]
@@ -551,7 +554,7 @@ struct ContentSubscription {
     generation: u64,
     date: NaiveDate,
     view: View,
-    filter: eventix_view::list::Filter,
+    filter: crate::presentation::list::Filter,
 }
 
 impl ContentSubscription {
@@ -559,7 +562,7 @@ impl ContentSubscription {
         let (start, end) = match self.view {
             View::List => return Ok(Query::List),
             View::Week => {
-                let start = eventix_view::week_start(self.date)
+                let start = crate::presentation::week_start(self.date)
                     .ok_or_else(|| anyhow::anyhow!("Week start out of range"))?;
                 let end = start
                     .checked_add_signed(Duration::days(7))
@@ -567,7 +570,7 @@ impl ContentSubscription {
 
                 (start, end)
             }
-            View::Month => eventix_view::month_range(self.date)
+            View::Month => crate::presentation::month_range(self.date)
                 .ok_or_else(|| anyhow::anyhow!("Month out of range"))?,
         };
 
@@ -588,7 +591,7 @@ impl ContentSubscription {
         match self.view {
             View::Week => WeekSnapshot::load(state, self.date).map(Snapshot::Week),
             View::Month => MonthSnapshot::load(state, self.date).map(Snapshot::Month),
-            View::List => Ok(Snapshot::List(eventix_view::list::Snapshot::load(
+            View::List => Ok(Snapshot::List(crate::presentation::list::Snapshot::load(
                 state,
                 &self.filter,
             ))),
@@ -1159,7 +1162,7 @@ impl Worker {
             Message::LoadManagement(id) => Event::ManagementLoaded(
                 id,
                 self.state()
-                    .map(|state| eventix_view::calendars::Snapshot::load(&state))
+                    .map(|state| crate::presentation::calendars::Snapshot::load(&state))
                     .map_err(|error| format!("{error:#}")),
             ),
             Message::ToggleCalendar(id) => return self.toggle_calendar(id),
@@ -1244,7 +1247,7 @@ impl Worker {
                     .collections()
                     .iter()
                     .map(|(id, collection)| {
-                        use eventix_view::calendars::Backend;
+                        use crate::presentation::calendars::Backend;
 
                         let backend = match collection.syncer() {
                             eventix_state::SyncerType::FileSystem { .. } => Backend::FileSystem,
@@ -1269,7 +1272,7 @@ impl Worker {
                         .items
                         .into_iter()
                         .map(|item| {
-                            let row = eventix_view::list::Row::load(&state, &item);
+                            let row = crate::presentation::list::Row::load(&state, &item);
                             (item, row)
                         })
                         .collect()
@@ -1282,7 +1285,7 @@ impl Worker {
         let result = self
             .state()
             .map(|state| {
-                eventix_view::list::occurrences::Page::load(
+                crate::presentation::list::occurrences::Page::load(
                     &state,
                     &request.item,
                     &request.cursor,
@@ -1549,9 +1552,9 @@ impl Worker {
     fn saved_item(&self, item: &ItemId, kind: CalCompType) -> anyhow::Result<SavedItem> {
         let state = self.state()?;
         let event = match kind {
-            CalCompType::Event => eventix_view::Event::load(&state, item)
+            CalCompType::Event => crate::presentation::Event::load(&state, item)
                 .map(|event| SavedItem::Event(Box::new(event))),
-            CalCompType::Todo => eventix_view::sidebar::SidebarRow::load(&state, item)
+            CalCompType::Todo => crate::presentation::sidebar::SidebarRow::load(&state, item)
                 .map(|task| SavedItem::Task(Box::new(task))),
         }
         .ok_or_else(|| {
@@ -2564,8 +2567,8 @@ mod tests {
         assert!(matches!(
             worker.handle(Message::LoadSyncCollections, &runtime).as_slice(),
             [Event::SyncCollectionsLoaded(collections)] if collections == &[
-                ("local".into(), eventix_view::calendars::Backend::FileSystem),
-                ("unrelated".into(), eventix_view::calendars::Backend::FileSystem),
+                ("local".into(), crate::presentation::calendars::Backend::FileSystem),
+                ("unrelated".into(), crate::presentation::calendars::Backend::FileSystem),
             ]
         ));
         let (session, responses) = super::CalendarSession::start_worker(worker);
@@ -3240,9 +3243,9 @@ mod tests {
 
     #[test]
     fn responses_invalidate_visible_series_and_refresh_attendee_status() {
+        use crate::presentation::details::Response;
         use eventix_ical::objects::{CalOrganizer, CalPartStat, EventLike, UpdatableEventLike};
         use eventix_state::{EmailAccount, actions::items::RespondItem};
-        use eventix_view::details::Response;
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -3446,8 +3449,8 @@ mod tests {
 
     #[test]
     fn filtered_list_refreshes_for_changes_into_and_out_of_membership_and_deletion() {
+        use crate::presentation::list::Filter;
         use eventix_state::actions::items::{DeleteItem, EditScope, UpdateItem};
-        use eventix_view::list::Filter;
 
         let tmp = tempfile::tempdir().unwrap();
         let mut worker = worker(tmp.path());
@@ -3592,7 +3595,7 @@ mod tests {
             generation: 8,
             date: None,
             view: View::List,
-            filter: eventix_view::list::Filter {
+            filter: crate::presentation::list::Filter {
                 keywords: "Move".into(),
                 calendars: vec!["test".into()],
             },
@@ -3647,7 +3650,7 @@ mod tests {
                 generation: 17,
                 date: None,
                 view: View::List,
-                filter: eventix_view::list::Filter {
+                filter: crate::presentation::list::Filter {
                     keywords: "needle".into(),
                     ..Default::default()
                 },

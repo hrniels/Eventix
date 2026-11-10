@@ -6,10 +6,10 @@ use std::rc::Rc;
 
 use eventix_ical::objects::{CalAttendee, CalDate, CalDateTime, CalRole, DateContext};
 use eventix_state::actions::items::{CreateItem, EditScope, UpdateItem};
-use eventix_view::editor::EditorOptions;
 use gtk::prelude::*;
 
 use super::{AttendeeInput, AttendeeSection, ItemEditor};
+use crate::presentation::editor::EditorOptions;
 
 impl ItemEditor {
     pub fn edit(id: u64, mut options: EditorOptions, edit: UpdateItem) -> Rc<Self> {
@@ -188,6 +188,7 @@ mod tests {
         sync::Arc,
     };
 
+    use crate::presentation::{Event, editor::EditorOptions};
     use eventix_ical::{
         col::CalDir,
         objects::{CalCompType, CalDate, CalDateType},
@@ -196,7 +197,6 @@ mod tests {
         CalendarSettings, CollectionSettings, State, SyncerType,
         actions::items::{CreateItem, EditScope, UpdateItem},
     };
-    use eventix_view::{Event, editor::EditorOptions};
     use gtk::prelude::*;
 
     use crate::view::details::EventDetails;

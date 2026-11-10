@@ -12,7 +12,6 @@ email_address = "0.2.9"
 eventix-locale.workspace = true
 eventix-ical.workspace = true
 eventix-state.workspace = true
-eventix-view.workspace = true
 formatx.workspace = true
 regex.workspace = true
 xdg.workspace = true

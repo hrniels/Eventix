@@ -9,12 +9,12 @@ use std::{
 
 use eventix_locale::Locale;
 use eventix_state::actions::items::ItemId;
-use eventix_view::list::{
+use gtk::{glib, prelude::*};
+
+use crate::presentation::list::{
     Row,
     occurrences::{Direction, Row as OccurrenceRow},
 };
-use gtk::{glib, prelude::*};
-
 use crate::view::{
     action_menu::{self as actions, Actions, OccurrenceTarget},
     indicators::EventIndicators,

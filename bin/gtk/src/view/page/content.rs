@@ -6,11 +6,11 @@ use std::{cell::Cell, rc::Rc};
 
 use chrono::{Datelike, NaiveDate, Utc};
 use eventix_locale::DateFlags;
-use eventix_view::{MonthSnapshot, WeekSnapshot, shift_month};
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::session::{ContentRequest, ContentResponse, Snapshot, View};
+use crate::presentation::{MonthSnapshot, WeekSnapshot, shift_month};
 use crate::style;
 use crate::view::card::EventCard;
 

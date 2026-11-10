@@ -8,11 +8,11 @@ use chrono::Utc;
 use eventix_ical::objects::CalAlarm;
 use eventix_locale::Locale;
 use eventix_state::actions::items::{ItemId, UpdatePersonalAlarms};
-use eventix_view::details::Details;
 use gtk::prelude::*;
 
 use super::size_transition::SizeTransition;
 use super::{DetailItem, ReminderHandler, button, label};
+use crate::presentation::details::Details;
 use crate::widgets::PersonalReminderInput;
 
 pub(super) struct ReminderEditor {
@@ -168,10 +168,10 @@ pub(super) fn content(
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
+    use crate::presentation::details::{DetailActions, Details, PersonalReminders};
     use chrono::Duration;
     use eventix_ical::objects::{CalAction, CalAlarm, CalRelated, CalTrigger};
     use eventix_state::actions::items::ItemId;
-    use eventix_view::details::{DetailActions, Details, PersonalReminders};
     use gtk::prelude::*;
 
     use super::{DetailItem, content};

@@ -4,10 +4,10 @@
 
 use eventix_ical::objects::{CalDate, CalDateType, CalTodoStatus};
 use eventix_state::actions::items::TaskStatus;
-use eventix_view::editor::EditorOptions;
 use gtk::prelude::*;
 
 use super::{DateInput, dropdown, layout::row, spin};
+use crate::presentation::editor::EditorOptions;
 
 pub(super) struct TaskStatusInput {
     pub status: gtk::DropDown,

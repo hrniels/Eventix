@@ -12,12 +12,12 @@ use std::{
 use chrono::Utc;
 use eventix_ical::objects::{CalDate, CalDateType, DateContext};
 use eventix_state::actions::items::ItemId;
-use eventix_view::list::occurrences::{Cursor, Direction};
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
 use crate::model::session::{
     ListRowsRequest, ListRowsResponse, OccurrencesRequest, OccurrencesResponse,
 };
+use crate::presentation::list::occurrences::{Cursor, Direction};
 
 use super::item::{Entry, ListItem};
 
@@ -32,7 +32,7 @@ const OCCURRENCES_PER_PAGE: usize = 3;
 struct Expansion {
     token: u64,
     anchor: Cursor,
-    rows: Vec<std::sync::Arc<eventix_view::list::occurrences::Row>>,
+    rows: Vec<std::sync::Arc<crate::presentation::list::occurrences::Row>>,
     earlier: Option<Cursor>,
     later: Option<Cursor>,
     loading_earlier: bool,

@@ -7,9 +7,9 @@ use std::rc::Rc;
 use eventix_ical::objects::{CalCompType, CalDate, CalDateType};
 use eventix_locale::Locale;
 use eventix_state::actions::items::CreateItem;
-use eventix_view::editor::EditorCalendar;
 use gtk::prelude::*;
 
+use crate::presentation::editor::EditorCalendar;
 use crate::{view::editor::DateInput, widgets::CalendarSelector};
 
 pub(crate) struct QuickTask {
@@ -166,8 +166,8 @@ impl QuickTask {
 
 #[cfg(test)]
 mod tests {
+    use crate::presentation::editor::EditorCalendar;
     use eventix_ical::objects::{CalDate, CalDateType};
-    use eventix_view::editor::EditorCalendar;
     use gtk::prelude::*;
 
     use super::QuickTask;

@@ -13,11 +13,11 @@ use eventix_state::actions::{
     items::{DeleteItem, ItemId, UpdatePersonalAlarms},
 };
 use eventix_state::{SyncColResult, SyncResult};
-use eventix_view::calendars::Backend;
 use gtk::{glib, prelude::*, subclass::prelude::*};
 
 use super::CalendarPage;
 use crate::model::session::{CalendarSession, ChangeSet, ContentRequest, Event, SavedItem};
+use crate::presentation::calendars::Backend;
 use crate::view::auth::SyncPopup;
 use crate::view::details::{EventDetails, delete};
 
@@ -731,7 +731,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn sync_dropdown_lists_collections_and_selects_only_the_clicked_collection() {
-        use eventix_view::calendars::Backend;
+        use crate::presentation::calendars::Backend;
 
         let row_label = |button: &gtk::Button| {
             let row = button.child().and_downcast::<gtk::Box>().unwrap();

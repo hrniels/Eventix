@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Owned, toolkit-independent data for calendar views.
+//! Owned calendar presentation data and builders, independent of GTK objects.
 
 pub mod calendars;
 pub mod details;
@@ -16,7 +16,9 @@ pub mod sidebar;
 pub mod weekly;
 
 pub use monthly::{MonthDay, MonthEvent, MonthSnapshot, month_range, shift_month};
-pub use weekly::{AllDaySpan, Day, DstRange, TimedEvent, TimedSegmentId, WeekSnapshot, week_start};
+#[cfg(test)]
+pub use weekly::Day;
+pub use weekly::{AllDaySpan, DstRange, TimedEvent, TimedSegmentId, WeekSnapshot, week_start};
 
 use std::sync::Arc;
 

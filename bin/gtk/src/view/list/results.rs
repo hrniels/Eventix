@@ -10,7 +10,6 @@ use std::{
 };
 
 use eventix_locale::Locale;
-use eventix_view::list::{Row, Snapshot};
 use gtk::{glib, prelude::*};
 
 use super::{
@@ -20,6 +19,7 @@ use super::{
     row::ROW_HEIGHT,
     scroll::ScrollPosition,
 };
+use crate::presentation::list::{Row, Snapshot};
 use crate::view::action_menu::{Actions, OccurrenceTarget};
 
 type Bindings = RefCell<HashMap<gtk::ListItem, (ListItem, glib::SignalHandlerId)>>;
