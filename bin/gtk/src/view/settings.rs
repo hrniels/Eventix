@@ -92,8 +92,12 @@ impl SettingsPopup {
         error.set_xalign(0.0);
         error.set_visible(false);
         error.add_css_class("error");
+        error.set_margin_start(6);
+        error.set_margin_end(6);
         content.append(&error);
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        buttons.set_margin_start(6);
+        buttons.set_margin_end(6);
         buttons.set_halign(gtk::Align::End);
         let cancel = action_button(
             locale.translate("Cancel"),
@@ -320,8 +324,8 @@ mod tests {
         popup.delay.set_value(86_400.0);
         assert_eq!(popup.preferences().post_delay_seconds, 86_400);
         let content = popup.window.child().unwrap();
-        assert_eq!(content.margin_start(), 6);
-        assert_eq!(content.margin_end(), 6);
+        assert_eq!(content.margin_start(), 0);
+        assert_eq!(content.margin_end(), 0);
         assert!(popup.language.factory().is_some());
         assert!(popup.language.list_factory().is_some());
         let fields = content.first_child().and_downcast::<gtk::Box>().unwrap();

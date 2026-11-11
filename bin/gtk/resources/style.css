@@ -136,7 +136,11 @@ label link:hover {
 }
 
 .ev_management_hover_area {
-    padding: 6px;
+    padding: 6px 14px;
+}
+
+.ev_management_form_inset {
+    margin: 0 8px;
 }
 
 .ev_management_error {
@@ -358,10 +362,6 @@ checkbutton.ev_management_check > radio {
     border-top: 1px solid alpha(@theme_text_color, 0.18);
 }
 
-.ev_editor_row {
-    margin: 0 8px;
-}
-
 .ev_editor_row:hover,
 .ev_management_hover_area:hover {
     background: alpha(@theme_text_color, 0.055);
@@ -369,7 +369,7 @@ checkbutton.ev_management_check > radio {
 
 .ev_editor_field_row,
 .ev_editor_row_header {
-    padding: 11px 4px;
+    padding: 11px 12px;
 }
 
 .ev_editor_row_header {
@@ -413,7 +413,7 @@ button.ev_editor_section_toggle:checked {
 }
 
 .ev_editor_expanded {
-    padding: 0 4px 12px;
+    padding: 0 12px 12px;
 }
 
 .ev_editor_dates entry {
@@ -613,8 +613,7 @@ button.ev_event.ev_cancelled > box > label {
 }
 
 .ev_details_row {
-    margin: 0 8px;
-    padding: 9px 4px;
+    padding: 9px 12px;
 }
 
 .ev_details_row + .ev_details_row {
@@ -626,8 +625,7 @@ button.ev_event.ev_cancelled > box > label {
 }
 
 .ev_settings_row {
-    margin: 0;
-    padding: 6px 4px;
+    padding: 6px 10px;
 }
 
 .ev_details_label {

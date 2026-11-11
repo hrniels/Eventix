@@ -306,6 +306,7 @@ impl CollectionActions {
         }
         let content = &form.widget;
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        buttons.add_css_class("ev_management_form_inset");
         buttons.set_halign(gtk::Align::End);
         let cancel = action("window-close-symbolic", "Cancel", locale.as_ref());
         let weak = Rc::downgrade(self);
@@ -524,8 +525,6 @@ impl CollectionActions {
     fn editor_window(self: &Rc<Self>, content: &gtk::Box, locale: &dyn Locale) -> gtk::Window {
         content.set_margin_top(8);
         content.set_margin_bottom(8);
-        content.set_margin_start(8);
-        content.set_margin_end(8);
         let scroll = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             .propagate_natural_height(true)
@@ -905,9 +904,12 @@ impl CollectionForm {
     fn footer(&self, locale: &dyn Locale) {
         let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
         separator.add_css_class("ev_management_form_separator");
+        separator.add_css_class("ev_management_form_inset");
         self.widget.append(&separator);
-        self.widget
-            .append(&self.explanation("info.required_fields", locale));
+        let explanation = self.explanation("info.required_fields", locale);
+        explanation.add_css_class("ev_management_form_inset");
+        self.widget.append(&explanation);
+        self.error.widget.add_css_class("ev_management_form_inset");
         self.widget.append(&self.error.widget);
     }
 

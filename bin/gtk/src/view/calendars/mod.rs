@@ -610,7 +610,13 @@ mod tests {
                 .count(),
             2
         );
-        assert_eq!(content.margin_start(), 8);
+        assert_eq!(content.margin_start(), 0);
+        assert_eq!(content.margin_end(), 0);
+        for area in [name_row, &section] {
+            let bounds = area.compute_bounds(editor).unwrap();
+            assert_eq!(bounds.x(), 0.0);
+            assert_eq!(bounds.width(), content.width() as f32);
+        }
         let selector = syncer_row.last_child().unwrap();
         assert_eq!(selector.halign(), gtk::Align::End);
         let selector_bounds = selector.compute_bounds(editor).unwrap();
@@ -1336,8 +1342,8 @@ mod tests {
         assert!(main_rows[0].has_css_class("ev_management_hover_area"));
         assert!(syncer_section.has_css_class("ev_management_hover_area"));
         assert_eq!(syncer_section.parent(), Some(content.clone()));
-        assert_eq!(content.margin_start(), 8);
-        assert_eq!(content.margin_end(), 8);
+        assert_eq!(content.margin_start(), 0);
+        assert_eq!(content.margin_end(), 0);
         assert_eq!(content.margin_top(), 8);
         assert_eq!(content.margin_bottom(), 8);
         assert!(!content.has_css_class("ev_management_form"));
