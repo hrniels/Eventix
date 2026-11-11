@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use chrono::NaiveDate;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
@@ -23,6 +23,7 @@ mod imp {
         #[template_child]
         pub page: gtk::TemplateChild<CalendarPage>,
         pub(super) hidden_state: Cell<Option<WindowState>>,
+        pub(super) shortcuts: RefCell<Option<gtk::Window>>,
     }
     }
 
@@ -44,11 +45,21 @@ mod imp {
 
     impl ObjectImpl for Window {
         fn dispose(&self) {
+            if let Some(shortcuts) = self.shortcuts.take() {
+                shortcuts.destroy();
+            }
             self.dispose_template();
         }
     }
 
     impl WidgetImpl for Window {
+        fn unmap(&self) {
+            if let Some(shortcuts) = self.shortcuts.borrow().as_ref() {
+                shortcuts.set_visible(false);
+            }
+            self.parent_unmap();
+        }
+
         fn move_focus(&self, direction: gtk::DirectionType) {
             // Unhandled arrows reach GTK's window bindings after the focused control.
             // Do not let that fallback move focus out of the active popup.
@@ -338,6 +349,34 @@ impl Window {
     }
 
     fn setup_actions(&self, app: &gtk::Application) {
+        let action = gio::SimpleAction::new("show-help-overlay", None);
+        let weak = self.downgrade();
+        action.connect_activate(move |_, _| {
+            if let Some(window) = weak.upgrade() {
+                let locale = window.imp().page.locale();
+                let title = locale.translate("Keyboard Shortcuts");
+                if window
+                    .imp()
+                    .shortcuts
+                    .borrow()
+                    .as_ref()
+                    .is_none_or(|overlay| overlay.title().as_deref() != Some(title))
+                {
+                    if let Some(overlay) = window.imp().shortcuts.take() {
+                        overlay.destroy();
+                    }
+                    let overlay = crate::view::shortcuts::build(locale.as_ref());
+                    overlay.set_transient_for(Some(&window));
+                    window.imp().shortcuts.replace(Some(overlay));
+                }
+                if let Some(overlay) = window.imp().shortcuts.borrow().as_ref() {
+                    overlay.present();
+                }
+            }
+        });
+        self.add_action(&action);
+        app.set_accels_for_action("win.show-help-overlay", &["<Primary>question"]);
+
         let action = gio::SimpleAction::new("search", None);
         let page = self.imp().page.downgrade();
         action.connect_activate(move |_, _| {
@@ -517,6 +556,70 @@ mod tests {
 
     fn settle() {
         glib::MainContext::default().block_on(glib::timeout_future(Duration::from_millis(200)));
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn shortcuts_help_opens_from_toolbar_and_action_and_closes() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.ShortcutsTest")
+            .build();
+        app.register(gio::Cancellable::NONE).unwrap();
+        let (window, page) = Window::test_new(&app);
+        window.present();
+        settle();
+
+        let toolbar = page.first_child().unwrap();
+        let sync = toolbar.last_child().unwrap();
+        let help = sync
+            .prev_sibling()
+            .unwrap()
+            .downcast::<gtk::Button>()
+            .unwrap();
+        assert_eq!(help.action_name().as_deref(), Some("win.show-help-overlay"));
+        assert_eq!(help.tooltip_text().as_deref(), Some("Keyboard Shortcuts"));
+        assert!(help.prev_sibling().is_some());
+        assert_eq!(
+            app.accels_for_action("win.show-help-overlay"),
+            ["<Control>question"]
+        );
+
+        help.emit_clicked();
+        settle();
+        let overlay = window.imp().shortcuts.borrow().clone().unwrap();
+        assert!(overlay.is_visible());
+        assert!(overlay.is_modal());
+        assert_eq!(overlay.transient_for().as_ref(), Some(window.upcast_ref()));
+        assert_eq!(overlay.title().as_deref(), Some("Keyboard Shortcuts"));
+        overlay.close();
+        settle();
+        assert!(!overlay.is_visible());
+
+        gio::prelude::ActionGroupExt::activate_action(&window, "show-help-overlay", None);
+        settle();
+        assert_eq!(window.imp().shortcuts.borrow().as_ref(), Some(&overlay));
+        assert!(overlay.is_visible());
+        let keys = overlay
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .unwrap();
+        assert!(keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[
+                &gtk::gdk::Key::Escape,
+                &0u32,
+                &gtk::gdk::ModifierType::empty(),
+            ]
+        ));
+        assert!(!overlay.is_visible());
+        help.emit_clicked();
+        assert!(overlay.is_visible());
+        window.destroy();
+        assert!(!overlay.is_visible());
     }
 
     #[test]

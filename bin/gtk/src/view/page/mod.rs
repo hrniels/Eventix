@@ -95,6 +95,8 @@ mod imp {
         #[template_child]
         pub settings_button: gtk::TemplateChild<gtk::Button>,
         #[template_child]
+        pub shortcuts_button: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
         pub calendars: gtk::TemplateChild<gtk::Box>,
         #[template_child]
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
@@ -341,7 +343,7 @@ impl CalendarPage {
         imp.header_group.replace(Some(group));
     }
 
-    fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
+    pub(crate) fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
         self.imp()
             .locale
             .borrow()

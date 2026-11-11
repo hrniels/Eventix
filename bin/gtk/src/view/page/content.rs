@@ -156,6 +156,12 @@ impl PageContent {
             .set_tooltip_text(Some(locale.translate("Calendars")));
         imp.reload
             .set_tooltip_text(Some(locale.translate("Synchronize all calendars")));
+        imp.shortcuts_button
+            .set_tooltip_text(Some(locale.translate("Keyboard Shortcuts")));
+        imp.shortcuts_button
+            .update_property(&[gtk::accessible::Property::Label(
+                locale.translate("Keyboard Shortcuts"),
+            )]);
         imp.session.update_sync_time(page);
         imp.sync_collections
             .set_tooltip_text(Some(locale.translate("Synchronize a collection")));

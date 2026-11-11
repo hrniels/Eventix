@@ -84,6 +84,16 @@
           </object>
         </child>
         <child>
+          <object class="GtkButton" id="shortcuts_button">
+            <property name="action-name">win.show-help-overlay</property>
+            <property name="child">
+              <object class="GtkImage">
+                <property name="resource">@RESOURCE_PREFIX@/icons/question-lg-symbolic.svg</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
           <object class="GtkBox">
             <style><class name="linked"/></style>
             <child>
