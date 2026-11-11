@@ -161,7 +161,10 @@ const SECTIONS: &[Section] = &[
             ("Return space", "Confirm picker selection"),
             ("Escape", "Close picker"),
         ],
-        mouse: &[("Confirm picker selection", "Click a month.")],
+        mouse: &[
+            ("Confirm picker selection", "Click a month."),
+            ("Previous or next year", "Scroll over the month picker."),
+        ],
     },
     Section {
         name: "time",

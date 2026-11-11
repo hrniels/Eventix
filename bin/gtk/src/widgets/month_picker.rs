@@ -116,6 +116,23 @@ mod imp {
             });
             obj.add_controller(keys);
 
+            let scroll = gtk::EventControllerScroll::new(
+                gtk::EventControllerScrollFlags::VERTICAL
+                    | gtk::EventControllerScrollFlags::DISCRETE,
+            );
+            let weak = obj.downgrade();
+            scroll.connect_scroll(move |_, _, dy| {
+                let Some(obj) = weak.upgrade() else {
+                    return glib::Propagation::Proceed;
+                };
+                if dy == 0.0 {
+                    return glib::Propagation::Proceed;
+                }
+                obj.move_month(if dy > 0.0 { 12 } else { -12 });
+                glib::Propagation::Stop
+            });
+            obj.add_controller(scroll);
+
             let weak = obj.downgrade();
             obj.connect_map(move |_| {
                 if let Some(obj) = weak.upgrade() {
@@ -383,6 +400,57 @@ mod tests {
             assert!(!imp.navigation[navigation].is_sensitive());
         }
         window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn month_picker_scroll_browses_years_without_committing() {
+        gtk::init().unwrap();
+        let picker: MonthPicker = glib::Object::new();
+        let date = "2026-11-01".parse().unwrap();
+        picker.select_month(date);
+        let selections = Rc::new(Cell::new(0));
+        let selected = selections.clone();
+        picker.connect_month_selected(move |_| selected.set(selected.get() + 1));
+
+        let controllers = picker.observe_controllers();
+        let scroll = (0..controllers.n_items())
+            .find_map(|index| {
+                controllers
+                    .item(index)
+                    .and_downcast::<gtk::EventControllerScroll>()
+            })
+            .unwrap();
+        assert_eq!(
+            scroll.flags(),
+            gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE
+        );
+        let emit = |dx, dy| scroll.emit_by_name::<bool>("scroll", &[&dx, &dy]);
+        assert!(!emit(1.0f64, 0.0f64));
+        assert_eq!(picker.imp().cursor.get(), date);
+
+        for (dy, expected) in [(1.0f64, "2027-11-01"), (-1.0, "2025-11-01")] {
+            picker.select_month(date);
+            assert!(emit(0.0f64, dy));
+            let expected = expected.parse::<NaiveDate>().unwrap();
+            assert_eq!(picker.imp().cursor.get(), expected);
+            assert_eq!(picker.imp().heading.text(), expected.year().to_string());
+            assert_eq!(picker.date(), date);
+            assert_eq!(selections.get(), 0);
+        }
+
+        for (boundary, dy) in [(NaiveDate::MIN, -1.0f64), (NaiveDate::MAX, 1.0)] {
+            let boundary = boundary.with_day(1).unwrap();
+            picker.set_cursor(boundary);
+            assert!(emit(0.0f64, dy));
+            assert_eq!(picker.imp().cursor.get(), boundary);
+            assert_eq!(picker.date(), date);
+            assert_eq!(selections.get(), 0);
+        }
+
+        picker.confirm();
+        assert_eq!(picker.date(), NaiveDate::MAX.with_day(1).unwrap());
+        assert_eq!(selections.get(), 1);
     }
 
     #[test]
