@@ -755,10 +755,27 @@ mod tests {
         let (window, page) = crate::window::Window::test_new(&app);
         let imp = page.imp();
         window.present();
-        while glib::MainContext::default().iteration(false) {}
+        // Draining pending events does not wait for the frame clock's first layout.
+        glib::MainContext::default().block_on(async {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while !imp.reload.is_mapped()
+                || imp.reload.width() <= 0
+                || !imp.sync_collections.is_mapped()
+                || imp.sync_collections.width() <= 0
+            {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "sync controls did not receive their initial layout"
+                );
+                glib::timeout_future(std::time::Duration::from_millis(10)).await;
+            }
+        });
         let reload = imp.reload.compute_bounds(&page).unwrap();
         let dropdown = imp.sync_collections.compute_bounds(&page).unwrap();
-        assert!(dropdown.x() >= reload.x() + reload.width());
+        assert!(
+            dropdown.x() >= reload.x() + reload.width(),
+            "dropdown bounds {dropdown:?} overlap reload bounds {reload:?}"
+        );
         assert!(dropdown.width() < reload.width());
         assert!(!imp.sync_popover.has_arrow());
         assert_eq!(imp.sync_popover.position(), gtk::PositionType::Bottom);
