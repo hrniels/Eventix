@@ -12,13 +12,7 @@ use std::{
 use eventix_locale::Locale;
 use gtk::{glib, prelude::*};
 
-use super::{
-    content::Content,
-    item::{Entry, ListItem},
-    model::ListModel,
-    row::ROW_HEIGHT,
-    scroll::ScrollPosition,
-};
+use super::{content::Content, item::ListItem, model::ListModel, row::ROW_HEIGHT};
 use crate::model::list::{Row, Snapshot};
 use crate::view::action_menu::{Actions, OccurrenceTarget};
 
@@ -36,7 +30,6 @@ pub(super) struct Results {
     slots: Slots,
     empty: gtk::Label,
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
-    scroll_position: Rc<ScrollPosition>,
     reset_pending: Cell<bool>,
 }
 
@@ -49,7 +42,6 @@ impl Results {
         let builder = gtk::Builder::from_resource(resource_path!("view/list/results.ui"));
         let list: gtk::ListView = builder.object("list").unwrap();
         let scroll: gtk::ScrolledWindow = builder.object("scroll").unwrap();
-        let scroll_position = ScrollPosition::new(&scroll, &list);
         let slots = Slots::default();
         let factory = factory(
             &list,
@@ -58,7 +50,6 @@ impl Results {
             locale.clone(),
             actions.clone(),
             occurrence_actions.clone(),
-            scroll_position.clone(),
         );
         let selection = gtk::SingleSelection::new(Some(model.clone()));
         selection.set_can_unselect(false);
@@ -78,14 +69,13 @@ impl Results {
             slots,
             empty: builder.object("empty").unwrap(),
             locale,
-            scroll_position,
             reset_pending: Cell::new(false),
         }
     }
 
     pub fn reset_scroll(&self) {
         self.reset_pending.set(true);
-        self.scroll_position.reset();
+        self.scroll.vadjustment().set_value(0.0);
     }
 
     pub fn focus_first(&self) -> bool {
@@ -95,7 +85,7 @@ impl Results {
         if let Some(selection) = self.list.model().and_downcast::<gtk::SingleSelection>() {
             selection.set_selected(0);
         }
-        self.scroll_position.reset();
+        self.scroll.vadjustment().set_value(0.0);
         // A jump from the filter can target a row outside GTK's current widget pool.
         // Wait for that row's allocation before moving keyboard focus to it.
         let slots = Rc::downgrade(&self.slots);
@@ -125,9 +115,8 @@ impl Results {
         let empty = snapshot.items.is_empty();
         let reset = self.reset_pending.replace(false);
         if reset {
-            // A filter reset starts a new viewport. GTK otherwise follows a
-            // surviving item's identity to its new index while our scroll guard
-            // retains the old offset, leaving visible rows outside the load range.
+            // A filter reset starts a new viewport and selection instead of
+            // retaining GTK's previous row anchor and keyboard focus position.
             self.list.set_model(None::<&gtk::SelectionModel>);
         }
         self.model.set_items(snapshot.items);
@@ -210,17 +199,14 @@ fn factory(
     locale: Rc<RefCell<Arc<dyn Locale + Send + Sync>>>,
     actions: Rc<Actions<Row>>,
     occurrence_actions: Rc<Actions<OccurrenceTarget>>,
-    scroll_position: Rc<ScrollPosition>,
 ) -> gtk::SignalListItemFactory {
     let factory = gtk::SignalListItemFactory::new();
     let bindings = Rc::new(Bindings::default());
     install_keyboard(list, slots);
     let weak = Rc::downgrade(&bindings);
-    let position = scroll_position.clone();
-    model.connect_changing(move |start, removed| {
-        position.hold_for_change();
+    model.connect_truncating(move |length| {
         if let Some(bindings) = weak.upgrade() {
-            move_focus_before_change(&bindings, start, removed);
+            move_focus_before_truncate(&bindings, length);
         }
     });
     let setup_slots = slots.clone();
@@ -244,14 +230,8 @@ fn factory(
         let locale = locale.clone();
         let actions = actions.clone();
         let occurrence_actions = occurrence_actions.clone();
-        let scroll_position = scroll_position.clone();
         let handler = data.connect_notify_local(Some("loaded"), move |data, _| {
             if let Some(content) = weak.upgrade() {
-                if matches!(&*data.entry(), Some(Entry::Base(_))) {
-                    scroll_position.hold_for_content();
-                } else {
-                    scroll_position.hold();
-                }
                 content.update(data, &**locale.borrow(), &actions, &occurrence_actions);
             }
         });
@@ -309,7 +289,8 @@ fn track_viewport(model: &ListModel, scroll: &gtk::ScrolledWindow) {
     scroll.connect_unmap(move |_| update());
 }
 
-fn move_focus_before_change(bindings: &Bindings, start: u32, removed: u32) {
+/// Keeps keyboard focus in the surviving rows when the list gets shorter.
+fn move_focus_before_truncate(bindings: &Bindings, length: u32) {
     let bindings = bindings.borrow();
     let Some(focus) = bindings
         .keys()
@@ -319,33 +300,24 @@ fn move_focus_before_change(bindings: &Bindings, start: u32, removed: u32) {
     };
     let Some(source) = bindings.keys().find(|item| {
         item.child()
+            .and_then(|row| row.parent())
             .is_some_and(|row| focus == row || focus.is_ancestor(&row))
     }) else {
         return;
     };
-    let end = start + removed;
-    if (removed == 0 && source.position() < start)
-        || (removed != 0 && !(start..end).contains(&source.position()))
-    {
+    if source.position() < length {
         return;
     }
-    // Keep focus on a surviving, stationary row: removing a focused control sends
-    // focus to the first item, while inserting before it makes GTK scroll after it.
     let target = bindings
         .keys()
-        .filter(|item| {
-            if removed == 0 {
-                item.position() < start
-            } else {
-                !(start..end).contains(&item.position())
-            }
-        })
+        .filter(|item| item.position() < length)
         .filter_map(|item| {
             item.child()
                 .filter(|row| row.is_mapped())
+                .and_then(|row| row.parent())
                 .map(|row| (item.position(), row))
         })
-        .min_by_key(|(position, _)| position.abs_diff(source.position()));
+        .max_by_key(|(position, _)| *position);
     drop(bindings);
     if let Some((_, row)) = target {
         row.set_focusable(true);

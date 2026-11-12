@@ -8,7 +8,6 @@ mod item;
 mod model;
 mod results;
 mod row;
-mod scroll;
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -128,6 +127,9 @@ mod tests {
 
     use super::{ListView, MenuAction, item::ListItem, row::FixedRow};
     use crate::worker::event::ListRowsResponse;
+
+    // These display-independent model tests still share GLib's default main context.
+    static MODEL_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn wait_until(ready: impl Fn() -> bool) {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
@@ -286,6 +288,7 @@ mod tests {
         use crate::model::list_occurrences::Direction;
         use crate::worker::event::OccurrencesResponse;
         use crate::worker::message::OccurrencesRequest;
+        let _guard = MODEL_TEST_LOCK.lock().unwrap();
         let model: ListModel = gtk::glib::Object::new();
         let requests = Rc::new(RefCell::new(Vec::<OccurrencesRequest>::new()));
         let pending = requests.clone();
@@ -397,6 +400,130 @@ mod tests {
         model.set_items(vec![b]);
         assert!(!model.is_expanded(&a));
         assert_eq!(model.n_items(), 1);
+    }
+
+    #[test]
+    fn presentation_slots_keep_position_and_cached_data_when_items_move() {
+        use super::{item::Entry, model::ListModel};
+
+        let _guard = MODEL_TEST_LOCK.lock().unwrap();
+        let model: ListModel = gtk::glib::Object::new();
+        let ids = snapshot(Filter::default()).items[..4].to_vec();
+        model.set_items(ids.clone());
+        let slots: Vec<_> = (0..4)
+            .map(|index| model.item(index).unwrap().downcast::<ListItem>().unwrap())
+            .collect();
+        model.set_viewport(0, 4, false);
+        model
+            .set_rows(ListRowsResponse {
+                revision: 1,
+                result: Ok(ids.iter().map(|id| (id.clone(), Some(row(id)))).collect()),
+            })
+            .unwrap();
+        let changes = Rc::new(RefCell::new(Vec::new()));
+        let recorded = changes.clone();
+        model.connect_items_changed(move |_, start, removed, added| {
+            recorded.borrow_mut().push((start, removed, added));
+        });
+
+        let mut reordered = ids.clone();
+        reordered.rotate_left(1);
+        model.set_items(reordered.clone());
+        assert!(
+            changes.borrow().is_empty(),
+            "reordering updates slot contents, not identities"
+        );
+        for (position, (slot, id)) in slots.iter().zip(&reordered).enumerate() {
+            assert_eq!(
+                model.item(position as u32).unwrap(),
+                slot.clone().upcast::<gtk::glib::Object>()
+            );
+            assert!(matches!(slot.entry().as_ref(), Some(Entry::Base(item)) if item == id));
+            assert_eq!(slot.row().as_ref().unwrap().uid, id.uid);
+            assert!(slot.loaded());
+        }
+
+        model.toggle(&ids[0], &chrono_tz::Europe::Berlin);
+        assert_eq!(*changes.borrow(), vec![(4, 0, 2)]);
+        assert_eq!(
+            model.item(3).unwrap(),
+            slots[3].clone().upcast::<gtk::glib::Object>()
+        );
+        model.toggle(&ids[0], &chrono_tz::Europe::Berlin);
+        assert_eq!(*changes.borrow(), vec![(4, 0, 2), (4, 2, 0)]);
+        for (position, slot) in slots.iter().enumerate() {
+            assert_eq!(
+                model.item(position as u32).unwrap(),
+                slot.clone().upcast::<gtk::glib::Object>()
+            );
+        }
+    }
+
+    #[test]
+    fn exhausted_pagination_reuses_the_anchor_slot_for_occurrences() {
+        use super::{item::Entry, model::ListModel};
+        use crate::model::list_occurrences::Direction;
+        use crate::worker::event::OccurrencesResponse;
+
+        let _guard = MODEL_TEST_LOCK.lock().unwrap();
+        let model: ListModel = gtk::glib::Object::new();
+        let ids = snapshot(Filter::default()).items[..2].to_vec();
+        model.set_items(ids.clone());
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let recorded = requests.clone();
+        model.connect_load_occurrences(move |request| recorded.borrow_mut().push(request));
+        model.toggle(&ids[0], &chrono_tz::Europe::Berlin);
+        for request in requests.take() {
+            model
+                .set_occurrences(OccurrencesResponse {
+                    result: Ok(occurrence_page(&request)),
+                    request,
+                })
+                .unwrap();
+        }
+        let changes = Rc::new(RefCell::new(Vec::new()));
+        let recorded = changes.clone();
+        model.connect_items_changed(move |_, start, removed, added| {
+            recorded.borrow_mut().push((start, removed, added));
+        });
+
+        for (direction, position, remaining) in
+            [(Direction::Earlier, 1, 0), (Direction::Later, 7, 1)]
+        {
+            let anchor = model
+                .item(position)
+                .unwrap()
+                .downcast::<ListItem>()
+                .unwrap();
+            assert!(
+                matches!(anchor.entry().as_ref(), Some(Entry::More(_, target, _)) if *target == direction)
+            );
+            model.load_more(&ids[0], direction);
+            let request = requests.take().pop().unwrap();
+            let mut page = occurrence_page(&request);
+            page.more = false;
+            page.rows.truncate(remaining);
+            model
+                .set_occurrences(OccurrencesResponse {
+                    request,
+                    result: Ok(page),
+                })
+                .unwrap();
+            assert_eq!(
+                model.item(position).unwrap(),
+                anchor.clone().upcast::<gtk::glib::Object>()
+            );
+            assert!(matches!(
+                anchor.entry().as_ref(),
+                Some(Entry::Occurrence(_))
+            ));
+            assert_eq!(model.n_items(), 9);
+        }
+        assert_eq!(
+            *changes.borrow(),
+            vec![(9, 1, 0)],
+            "only a tail removal is reported to GTK"
+        );
     }
 
     #[test]
@@ -819,6 +946,8 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn action_refreshes_and_exhausted_pages_preserve_scroll_far_from_the_first_row() {
+        use super::item::Entry;
+        use crate::model::list_occurrences::Direction;
         use crate::worker::event::OccurrencesResponse;
         use std::cell::Cell;
         gtk::init().unwrap();
@@ -857,6 +986,10 @@ mod tests {
             gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(140), move || {
                 let mut page = occurrence_page(&request);
                 page.more = !exhausted;
+                if exhausted {
+                    page.rows
+                        .truncate(usize::from(request.direction == Direction::Later));
+                }
                 weak.upgrade()
                     .unwrap()
                     .set_occurrences(OccurrencesResponse {
@@ -932,7 +1065,7 @@ mod tests {
         for label in ["Load earlier", "Load later"] {
             // Bring the respective control into view without placing it on the first page.
             adjustment.set_value(if label == "Load earlier" {
-                45000.0
+                45080.0
             } else {
                 45300.0
             });
@@ -941,6 +1074,20 @@ mod tests {
                 .into_iter()
                 .find(|button| button.label().as_deref() == Some(label))
                 .unwrap();
+            let list = descendants::<gtk::ListView>(view.widget.upcast_ref()).remove(0);
+            let selection = list.model().and_downcast::<gtk::SingleSelection>().unwrap();
+            let position = (0..view.results.model.n_items())
+                .find(|position| {
+                    let item = view.results.model.item(*position).unwrap();
+                    let item = item.downcast::<ListItem>().unwrap();
+                    matches!(item.entry().as_ref(), Some(Entry::More(_, direction, _))
+                        if (*direction == Direction::Earlier)
+                            == (label == "Load earlier"))
+                })
+                .unwrap();
+            selection.set_selected(position);
+            button.parent().unwrap().parent().unwrap().grab_focus();
+            drain();
             button.grab_focus();
             drain();
             let position = adjustment.value();
@@ -952,8 +1099,34 @@ mod tests {
                 "loading {label} away from the first page must not scroll"
             );
             exhausted.set(true);
+            let button = descendants::<gtk::Button>(view.widget.upcast_ref())
+                .into_iter()
+                .find(|button| button.is_mapped() && button.label().as_deref() == Some(label))
+                .unwrap();
+            button.grab_focus();
+            drain();
+            let position = adjustment.value();
+            assert!(button.has_focus());
+            // Keep the hovered-control layout transition covered without injecting
+            // platform-specific pointer events.
+            button.set_state_flags(gtk::StateFlags::PRELIGHT, false);
             button.emit_clicked();
             drain();
+            button.unset_state_flags(gtk::StateFlags::PRELIGHT);
+            assert!(!button.is_mapped());
+            assert!(
+                selection.selected() >= 1000,
+                "focus and selection stay near the exhausted page"
+            );
+            let focus = RootExt::focus(&window).unwrap();
+            assert!(
+                descendants::<FixedRow>(list.upcast_ref())
+                    .iter()
+                    .any(|row| row
+                        .parent()
+                        .is_some_and(|parent| { focus == parent || focus.is_ancestor(&parent) })),
+                "focus stays in a surviving list row"
+            );
             assert_eq!(
                 adjustment.value(),
                 position,
@@ -961,6 +1134,27 @@ mod tests {
             );
             exhausted.set(false);
         }
+        let position = adjustment.value();
+        assert!(
+            view.results
+                .scroll
+                .emit_scroll_child(gtk::ScrollType::StepForward, false)
+        );
+        drain();
+        let scrolled = adjustment.value();
+        assert!(
+            scrolled > position,
+            "scroll actions still work after exhaustion"
+        );
+        assert!(
+            view.results
+                .scroll
+                .emit_scroll_child(gtk::ScrollType::StepBackward, false)
+        );
+        drain();
+        assert!(adjustment.value() < scrolled);
+        adjustment.set_value(position);
+        drain();
         let occurrence = descendants::<gtk::Box>(view.widget.upcast_ref())
             .into_iter()
             .find(|widget| widget.is_mapped() && widget.has_css_class("ev_list_occurrence"))

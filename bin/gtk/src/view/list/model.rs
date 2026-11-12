@@ -14,6 +14,7 @@ use eventix_ical::objects::{CalDate, CalDateType, DateContext};
 use eventix_state::actions::items::ItemId;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
+use crate::model::list::Row;
 use crate::model::list_occurrences::{Cursor, Direction};
 use crate::worker::event::{ListRowsResponse, OccurrencesResponse};
 use crate::worker::message::{ListRowsRequest, OccurrencesRequest};
@@ -23,10 +24,16 @@ use super::item::{Entry, ListItem};
 type Key = (String, String);
 type LoadRows = Rc<dyn Fn(ListRowsRequest)>;
 type LoadOccurrences = Rc<dyn Fn(OccurrencesRequest)>;
-type Changing = Rc<dyn Fn(u32, u32)>;
+type Truncating = Rc<dyn Fn(u32)>;
 const SCROLL_DELAY: Duration = Duration::from_millis(35);
 const MAX_SCROLL_DELAY: Duration = Duration::from_millis(75);
 const OCCURRENCES_PER_PAGE: usize = 3;
+
+struct CachedRow {
+    row: Option<Row>,
+    loaded: bool,
+    fresh: bool,
+}
 
 struct Expansion {
     token: u64,
@@ -54,7 +61,7 @@ mod imp {
         pub(super) expanded: RefCell<BTreeMap<Key, Expansion>>,
         pub token: Cell<u64>,
         pub live: RefCell<BTreeMap<Key, glib::WeakRef<ListItem>>>,
-        pub(super) live_children: RefCell<Vec<(Entry, glib::WeakRef<ListItem>)>>,
+        pub slots: RefCell<BTreeMap<u32, glib::WeakRef<ListItem>>>,
         pub viewport: Cell<(u32, u32)>,
         pub scrolling_since: Cell<Option<Instant>>,
         pub requested: RefCell<BTreeSet<Key>>,
@@ -63,7 +70,7 @@ mod imp {
         pub revision: Cell<u64>,
         pub(super) load: RefCell<Option<LoadRows>>,
         pub(super) load_occurrences: RefCell<Option<LoadOccurrences>>,
-        pub(super) changing: RefCell<Option<Changing>>,
+        pub(super) truncating: RefCell<Option<Truncating>>,
     }
 
     #[glib::object_subclass]
@@ -90,32 +97,21 @@ mod imp {
 
         fn item(&self, position: u32) -> Option<glib::Object> {
             let entry = self.entries.borrow().get(position as usize)?.clone();
-            let Entry::Base(id) = &entry else {
-                let mut live = self.live_children.borrow_mut();
-                live.retain(|(_, item)| item.upgrade().is_some());
-                if let Some(item) = live.iter().find_map(|(existing, item)| {
-                    (existing == &entry).then(|| item.upgrade()).flatten()
-                }) {
-                    return Some(item.upcast());
-                }
-                let item: ListItem = glib::Object::new();
-                item.set_entry(entry.clone());
-                live.push((entry, item.downgrade()));
-                return Some(item.upcast());
-            };
-            let key = key(id);
             if let Some(item) = self
-                .live
+                .slots
                 .borrow()
-                .get(&key)
+                .get(&position)
                 .and_then(glib::WeakRef::upgrade)
             {
                 return Some(item.upcast());
             }
             let item: ListItem = glib::Object::new();
+            if let Entry::Base(id) = &entry {
+                self.live.borrow_mut().insert(key(id), item.downgrade());
+                self.obj().schedule_load(Duration::ZERO, false);
+            }
             item.set_entry(entry);
-            self.live.borrow_mut().insert(key.clone(), item.downgrade());
-            self.obj().schedule_load(Duration::ZERO, false);
+            self.slots.borrow_mut().insert(position, item.downgrade());
             Some(item.upcast())
         }
     }
@@ -127,8 +123,8 @@ glib::wrapper! {
 }
 
 impl ListModel {
-    pub(super) fn connect_changing(&self, changing: impl Fn(u32, u32) + 'static) {
-        self.imp().changing.replace(Some(Rc::new(changing)));
+    pub(super) fn connect_truncating(&self, truncating: impl Fn(u32) + 'static) {
+        self.imp().truncating.replace(Some(Rc::new(truncating)));
     }
     pub(super) fn connect_load_rows(&self, load: impl Fn(ListRowsRequest) + 'static) {
         self.imp().load.replace(Some(Rc::new(load)));
@@ -149,10 +145,11 @@ impl ListModel {
         self.rebuild();
         self.schedule_load(Duration::ZERO, true);
         let children: Vec<_> = imp
-            .live_children
+            .slots
             .borrow()
-            .iter()
-            .filter_map(|(_, item)| item.upgrade())
+            .values()
+            .filter_map(glib::WeakRef::upgrade)
+            .filter(|item| !matches!(item.entry().as_ref(), Some(Entry::Base(_))))
             .collect();
         for child in children {
             child.notify("loaded");
@@ -381,67 +378,99 @@ impl ListModel {
                 }
             }
         }
-        let (prefix, removed, added) = {
-            let old = imp.entries.borrow();
-            let prefix = old
-                .iter()
-                .zip(entries.iter())
-                .take_while(|(a, b)| a == b)
-                .count();
-            let suffix = old[prefix..]
-                .iter()
-                .rev()
-                .zip(entries[prefix..].iter().rev())
-                .take_while(|(a, b)| a == b)
-                .count();
-            (
-                prefix,
-                old.len() - prefix - suffix,
-                entries.len() - prefix - suffix,
-            )
-        };
-        if removed != 0 || added != 0 {
-            // Moving focus can reenter GTK's factory, which must still see the old index.
-            let changing = imp.changing.borrow().clone();
-            if let Some(changing) = changing {
-                changing(prefix as u32, removed as u32);
-            }
+        self.replace_entries(entries);
+    }
+
+    /// Updates fixed-position slots so GTK never loses its viewport anchor to an insertion.
+    fn replace_entries(&self, entries: Vec<Entry>) {
+        let imp = self.imp();
+        let old_len = imp.entries.borrow().len() as u32;
+        let new_len = entries.len() as u32;
+        let revision = imp.revision.get();
+        if new_len < old_len
+            && let Some(truncating) = imp.truncating.borrow().clone()
+        {
+            truncating(new_len);
         }
+
+        // Preserve loaded domain data while the presentation slots change their targets.
+        let rows: BTreeMap<_, _> = imp
+            .live
+            .borrow()
+            .iter()
+            .filter_map(|(key, item)| {
+                let item = item.upgrade()?;
+                let fresh = imp.fresh.borrow().get(key).and_then(glib::WeakRef::upgrade);
+                Some((
+                    key.clone(),
+                    CachedRow {
+                        row: item.row().clone(),
+                        loaded: item.loaded(),
+                        fresh: fresh.as_ref() == Some(&item),
+                    },
+                ))
+            })
+            .collect();
         imp.entries.replace(entries);
+        let updates = self.update_slots(&rows);
+        // Only the tail grows or shrinks. Existing GTK row identities stay at their
+        // original positions even when occurrences are inserted or a series moves.
+        if old_len != new_len {
+            self.items_changed(
+                old_len.min(new_len),
+                old_len.saturating_sub(new_len),
+                new_len.saturating_sub(old_len),
+            );
+        }
+        for item in updates {
+            if imp.revision.get() != revision {
+                return;
+            }
+            item.notify("loaded");
+        }
+        self.schedule_load(Duration::ZERO, false);
+    }
+
+    fn update_slots(&self, rows: &BTreeMap<Key, CachedRow>) -> Vec<ListItem> {
+        let imp = self.imp();
         let mut updates = Vec::new();
-        imp.live_children.borrow_mut().retain_mut(|(entry, item)| {
-            let Some(item) = item.upgrade() else {
+        let mut live = BTreeMap::new();
+        let mut fresh = BTreeMap::new();
+        imp.slots.borrow_mut().retain(|position, weak| {
+            let Some(item) = weak.upgrade() else {
                 return false;
             };
-            let entries = imp.entries.borrow();
-            let Some(current) = entries.iter().find(|current| *current == entry) else {
+            let Some(entry) = imp.entries.borrow().get(*position as usize).cloned() else {
                 return false;
             };
-            let changed = match (&*entry, current) {
-                (Entry::More(_, _, old), Entry::More(_, _, new)) => old != new,
-                (Entry::Occurrence(old), Entry::Occurrence(new)) => {
-                    !std::sync::Arc::ptr_eq(old, new)
+            let changed = item
+                .entry()
+                .as_ref()
+                .is_none_or(|old| !old.same_content(&entry));
+            if let Entry::Base(id) = &entry {
+                let key = key(id);
+                if rows.get(&key).is_some_and(|row| row.fresh) {
+                    fresh.insert(key.clone(), item.downgrade());
                 }
-                _ => false,
-            };
+                live.insert(key, item.downgrade());
+            }
             if changed {
-                *entry = current.clone();
-                updates.push((item, current.clone()));
+                let row = match &entry {
+                    Entry::Base(id) => rows.get(&key(id)),
+                    _ => None,
+                };
+                item.replace_content(
+                    entry,
+                    row.and_then(|row| row.row.clone()),
+                    row.is_some_and(|row| row.loaded),
+                );
+                updates.push(item);
             }
             true
         });
-        if removed != 0 || added != 0 {
-            self.items_changed(prefix as u32, removed as u32, added as u32);
-        }
-        for (item, entry) in updates {
-            item.set_entry(entry);
-            item.notify("loaded");
-        }
-        if removed != 0 || added != 0 {
-            // Expansion changes can expose cached, unloaded base rows even when
-            // the viewport's pixel offset and index range stay unchanged.
-            self.schedule_load(Duration::ZERO, false);
-        }
+        imp.live.replace(live);
+        imp.fresh.replace(fresh);
+        updates
     }
 
     /// Updates the visible index range, coalescing small scroll movements but not page jumps.
@@ -504,6 +533,9 @@ impl ListModel {
         let imp = self.imp();
         imp.scrolling_since.set(None);
         imp.live
+            .borrow_mut()
+            .retain(|_, item| item.upgrade().is_some());
+        imp.slots
             .borrow_mut()
             .retain(|_, item| item.upgrade().is_some());
         imp.fresh

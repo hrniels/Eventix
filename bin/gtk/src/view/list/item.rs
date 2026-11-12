@@ -21,11 +21,21 @@ pub(super) enum Entry {
     Empty(ItemId),
 }
 
+impl Entry {
+    pub fn same_content(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::More(_, _, loading), Self::More(_, _, busy)) => self == other && loading == busy,
+            (Self::Occurrence(old), Self::Occurrence(new)) => Arc::ptr_eq(old, new),
+            _ => self == other,
+        }
+    }
+}
+
 impl PartialEq for Entry {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Base(a), Self::Base(b)) | (Self::Empty(a), Self::Empty(b)) => a == b,
-            // Loading changes must retain the focused control's model identity.
+            // Loading state does not change the pagination target.
             (Self::More(a, ad, _), Self::More(b, bd, _)) => a == b && ad == bd,
             (Self::Occurrence(a), Self::Occurrence(b)) => a.item == b.item,
             _ => false,
@@ -76,5 +86,12 @@ impl ListItem {
         self.imp().row.replace(row);
         self.imp().loaded.set(true);
         self.notify("loaded");
+    }
+
+    /// Updates a slot without notifying until the entire model change is consistent.
+    pub(super) fn replace_content(&self, entry: Entry, row: Option<Row>, loaded: bool) {
+        self.set_entry(entry);
+        self.imp().row.replace(row);
+        self.imp().loaded.set(loaded);
     }
 }
