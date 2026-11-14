@@ -145,6 +145,7 @@ pub(super) fn choices(
         buttons.push(button);
     }
 
+    crate::widgets::radio_group::enable_arrow_keys(&buttons);
     buttons
 }
 

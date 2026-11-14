@@ -830,6 +830,10 @@ impl CollectionForm {
     fn sync_window(&self, syncer: &SyncerType, locale: &dyn Locale) {
         let span = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         self.limited.set_group(Some(&self.unlimited));
+        crate::widgets::radio_group::enable_arrow_keys(&[
+            self.unlimited.clone(),
+            self.limited.clone(),
+        ]);
         span.append(&self.unlimited);
         span.append(&self.limited);
         span.append(&self.years);

@@ -47,6 +47,7 @@ impl AlarmInput {
             .map(|name| locale.translate(name))
             .collect();
         let trigger = super::dropdown::from_strings(&names);
+        let mut buttons = Vec::new();
         for (index, (id, label)) in [
             ("none", "None"),
             ("relative_choice", "Relative"),
@@ -71,7 +72,9 @@ impl AlarmInput {
                     button.set_active(trigger.selected() == index as u32);
                 }
             });
+            buttons.push(button);
         }
+        super::radio_group::enable_arrow_keys(&buttons);
         let duration = builder.object("duration").expect("alarm duration");
         let unit: gtk::DropDown = builder.object("unit").expect("alarm unit");
         super::dropdown::enable_arrow_keys(&unit);
@@ -298,6 +301,30 @@ mod tests {
             .unwrap();
         let relative_controls = alarm.relative_row.last_child().unwrap();
         let absolute_controls = absolute_row.last_child().unwrap();
+        let window = gtk::Window::new();
+        window.set_child(Some(&alarm.widget));
+        window.present();
+        while gtk::glib::MainContext::default().iteration(false) {}
+        let next = |button: &gtk::CheckButton| {
+            assert!(button.grab_focus());
+            let controllers = button.observe_controllers();
+            let keys = (0..controllers.n_items())
+                .filter_map(|index| {
+                    controllers
+                        .item(index)
+                        .and_downcast::<gtk::EventControllerKey>()
+                })
+                .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+                .unwrap();
+            assert!(keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[
+                    &gtk::gdk::Key::Down,
+                    &0u32,
+                    &gtk::gdk::ModifierType::empty()
+                ],
+            ));
+        };
         assert!(none.is_active());
         assert!(
             alarm
@@ -307,7 +334,8 @@ mod tests {
         );
         assert!(!relative_controls.is_sensitive() && !absolute_controls.is_sensitive());
 
-        relative.set_active(true);
+        next(&none);
+        assert!(relative.has_focus());
         assert_eq!(alarm.trigger.selected(), 1);
         assert!(!none.is_active() && relative_controls.is_sensitive());
         assert!(!absolute_controls.is_sensitive());
@@ -317,7 +345,8 @@ mod tests {
                 if *duration == chrono::Duration::minutes(-15).into())
         );
 
-        absolute.set_active(true);
+        next(&relative);
+        assert!(absolute.has_focus());
         assert_eq!(alarm.trigger.selected(), 2);
         assert!(!relative.is_active() && !relative_controls.is_sensitive());
         assert!(absolute_controls.is_sensitive());
@@ -337,5 +366,9 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+        next(&none);
+        assert!(absolute.is_active() && absolute.has_focus());
+        assert_eq!(alarm.trigger.selected(), 2);
+        window.close();
     }
 }

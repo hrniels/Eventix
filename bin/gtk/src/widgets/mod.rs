@@ -12,6 +12,7 @@ pub(crate) mod dropdown;
 mod entry_completion;
 mod month_picker;
 mod personal_reminder_input;
+pub(crate) mod radio_group;
 mod segmented_control;
 mod time_input;
 mod time_picker;
