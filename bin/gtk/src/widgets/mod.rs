@@ -15,6 +15,7 @@ mod personal_reminder_input;
 mod segmented_control;
 mod time_input;
 mod time_picker;
+pub(crate) mod timezone;
 
 pub(crate) use alarm_input::AlarmInput;
 pub(crate) use calendar_selector::CalendarSelector;
