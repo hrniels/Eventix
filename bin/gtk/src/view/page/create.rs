@@ -213,7 +213,7 @@ mod tests {
         });
         let editor = page.imp().editor.current.borrow().clone().unwrap();
         // The summary is the first entry in the editor form.
-        entries(&editor.popup_panel())[0].set_text("Drag selection");
+        entries(&editor.content())[0].set_text("Drag selection");
         let command = editor.command().unwrap();
         let context = eventix_ical::objects::DateContext::system();
         let tz = *page.locale().timezone();

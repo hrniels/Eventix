@@ -36,10 +36,6 @@ impl PageContent {
         let weak = page.downgrade();
         imp.search.connect_activate(move |entry| {
             let Some(page) = weak.upgrade() else { return };
-            if page.editor_open() {
-                return;
-            }
-
             if let Some(list) = page.imp().list.get() {
                 list.set_keywords(entry.text().as_str());
             }
@@ -195,7 +191,7 @@ impl PageContent {
     }
 
     pub(super) fn navigate(&self, page: &CalendarPage, direction: i32) {
-        if page.editor_open() || self.view.get() == View::List {
+        if self.view.get() == View::List {
             return;
         }
 
@@ -215,10 +211,6 @@ impl PageContent {
     }
 
     pub(super) fn switch_view(&self, page: &CalendarPage, view: View) {
-        if page.editor_open() {
-            return;
-        }
-
         let imp = page.imp();
         let was_management = imp.management.leave(page);
         if self.view.replace(view) == view && !was_management {

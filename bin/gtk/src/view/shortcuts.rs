@@ -175,7 +175,7 @@ const SECTIONS: &[Section] = &[
         title: "Editing",
         shortcuts: &[
             ("<Control>Return", "Save event or task"),
-            ("Escape", "Close popup or cancel editing"),
+            ("Escape", "Close nested popup"),
             ("Up Down", "Select completion suggestion"),
             ("Tab Return", "Accept completion suggestion"),
         ],

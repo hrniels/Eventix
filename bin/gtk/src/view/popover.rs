@@ -12,14 +12,13 @@ use eventix_locale::Locale;
 use eventix_state::actions::items::{
     EditScope, ItemId, OccurrenceAction, TaskAction, UpdatePersonalAlarms,
 };
-use gtk::{glib, graphene, prelude::*, subclass::prelude::ObjectSubclassIsExt};
+use gtk::{glib, graphene, prelude::*};
 
 use super::card::EventCard;
 use crate::view::details::EventDetails;
 
 const PLACEMENT_MARGIN: i32 = 16;
 const PLACEMENT_HYSTERESIS: i32 = 64;
-const TRANSITION_DURATION: u32 = 180;
 
 type EditHandler = Rc<dyn Fn(ItemId, EditScope)>;
 type DeleteHandler = Rc<dyn Fn(ItemId, bool, String)>;
@@ -28,7 +27,7 @@ type OccurrenceHandler = Rc<dyn Fn(ItemId, OccurrenceAction)>;
 type TaskHandler = Rc<dyn Fn(ItemId, TaskAction)>;
 type ReminderHandler = Rc<dyn Fn(UpdatePersonalAlarms)>;
 
-/// Owns the shared details and event-editor popup for the calendar.
+/// Owns the shared details popup for the calendar.
 #[derive(Default)]
 pub(crate) struct DetailsController {
     edit: RefCell<Option<EditHandler>>,
@@ -37,9 +36,6 @@ pub(crate) struct DetailsController {
     occurrence: RefCell<Option<OccurrenceHandler>>,
     task: RefCell<Option<TaskHandler>>,
     reminders: RefCell<Option<ReminderHandler>>,
-    dismissed: RefCell<Option<Box<dyn Fn()>>>,
-    original: RefCell<Option<gtk::Widget>>,
-    editor_scroll: RefCell<Option<gtk::ScrolledWindow>>,
     popover: RefCell<Option<EventDetails>>,
     presentation: RefCell<Option<EventDetails>>,
     parent: RefCell<Option<glib::WeakRef<gtk::Widget>>>,
@@ -61,10 +57,6 @@ impl DetailsController {
 
     pub fn connect_delete(&self, callback: impl Fn(ItemId, bool, String) + 'static) {
         self.delete.replace(Some(Rc::new(callback)));
-    }
-
-    pub fn connect_dismissed(&self, callback: impl Fn() + 'static) {
-        self.dismissed.replace(Some(Box::new(callback)));
     }
 
     pub fn connect_respond(&self, callback: impl Fn(ItemId, CalPartStat) + 'static) {
@@ -97,12 +89,6 @@ impl DetailsController {
         }
     }
 
-    pub fn show_new_editor(self: &Rc<Self>, parent: &gtk::Widget, panel: &gtk::Widget) {
-        let popover: EventDetails = glib::Object::new();
-        popover.set_child(Some(panel));
-        self.show_popup(parent, None, popover, Some(panel));
-    }
-
     pub fn connect_occurrence(&self, callback: impl Fn(ItemId, OccurrenceAction) + 'static) {
         self.occurrence.replace(Some(Rc::new(callback)));
     }
@@ -125,123 +111,6 @@ impl DetailsController {
         self.presentation.borrow().as_ref() == Some(popover)
     }
 
-    pub fn show_editor(&self, panel: &gtk::Widget) -> bool {
-        let Some(popover) = self.popover.borrow().clone() else {
-            return false;
-        };
-
-        let Some(stack) = popover.child().and_downcast::<gtk::Stack>() else {
-            return false;
-        };
-
-        self.retained.set(true);
-        self.original.replace(stack.visible_child());
-        self.set_editor_scroll(panel);
-        // Keep autohide disabled: only clicks within Eventix should dismiss the popup.
-        stack.add_child(panel);
-        stack.set_visible_child(panel);
-        self.force_centered.set(false);
-        self.centered.set(false);
-        self.remeasure(&popover);
-
-        true
-    }
-
-    fn set_editor_scroll(&self, panel: &gtk::Widget) {
-        self.editor_scroll.replace(
-            panel
-                .first_child()
-                .and_then(|header| header.next_sibling())
-                .and_downcast::<gtk::ScrolledWindow>(),
-        );
-    }
-
-    pub fn restore_details(&self, updated: Option<EventDetails>) {
-        let Some(popover) = self.popover.borrow().clone() else {
-            return;
-        };
-
-        let original = self.original.take();
-        self.editor_scroll.take();
-        let Some(stack) = popover.child().and_downcast::<gtk::Stack>() else {
-            return;
-        };
-
-        let child = if let Some(updated) = updated {
-            self.presentation.replace(Some(updated.clone()));
-            popover.update_property(&[gtk::accessible::Property::Label(
-                &updated.imp().summary.text(),
-            )]);
-            self.bind_actions(&updated);
-            let child = updated.child();
-            updated.set_child(None::<&gtk::Widget>);
-            child
-        } else {
-            original
-        };
-
-        if let Some(child) = &child {
-            if child.parent().is_none() {
-                stack.add_child(child);
-            }
-            stack.set_visible_child(child);
-            Self::clean_stack(&stack);
-        }
-
-        self.force_centered.set(false);
-        self.centered.set(false);
-        self.remeasure(&popover);
-        if let Some(child) = child {
-            child.child_focus(gtk::DirectionType::TabForward);
-        }
-    }
-
-    fn content_stack(popover: &EventDetails) {
-        let content = popover.child();
-        popover.set_child(None::<&gtk::Widget>);
-
-        let stack = gtk::Stack::builder()
-            .hhomogeneous(false)
-            .vhomogeneous(false)
-            .interpolate_size(true)
-            .transition_type(gtk::StackTransitionType::Crossfade)
-            .transition_duration(TRANSITION_DURATION)
-            .build();
-        if let Some(content) = content {
-            stack.add_child(&content);
-        }
-
-        stack.connect_transition_running_notify(Self::clean_stack);
-        popover.set_child(Some(&stack));
-    }
-
-    /// Keeps the original details while editing and releases old pages after returning to details.
-    fn clean_stack(stack: &gtk::Stack) {
-        if stack.is_transition_running() {
-            return;
-        }
-
-        let Some(visible) = stack.visible_child() else {
-            return;
-        };
-
-        if visible.has_css_class("ev_item_editor") {
-            return;
-        }
-
-        let children: Vec<_> = stack
-            .pages()
-            .iter::<gtk::StackPage>()
-            .filter_map(Result::ok)
-            .map(|page| page.child())
-            .collect();
-        for child in children {
-            if child != visible {
-                stack.remove(&child);
-            }
-        }
-    }
-
     fn connect_keys(self: &Rc<Self>, popover: &EventDetails) {
         // Native popovers handle Escape themselves, so dismiss through the controller before
         // GTK's animated popdown can be mistaken for a rejected native allocation.
@@ -249,16 +118,7 @@ impl DetailsController {
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
 
         let weak = Rc::downgrade(self);
-        keys.connect_key_pressed(move |keys, key, _, modifiers| {
-            if let Some(propagation) = keys
-                .widget()
-                .and_then(|widget| widget.ancestor(super::page::CalendarPage::static_type()))
-                .and_downcast::<super::page::CalendarPage>()
-                .and_then(|page| page.handle_editor_key(key, modifiers))
-            {
-                return propagation;
-            }
-
+        keys.connect_key_pressed(move |keys, key, _, _| {
             if key == gtk::gdk::Key::Escape
                 && keys
                     .widget()
@@ -290,8 +150,6 @@ impl DetailsController {
 
     pub fn close(&self) {
         self.presentation.take();
-        self.original.take();
-        self.editor_scroll.take();
         self.anchor.take();
         self.parent.take();
         self.source.take();
@@ -300,17 +158,10 @@ impl DetailsController {
         if let Some(popover) = self.popover.take() {
             popover.popdown();
             Self::defer_unparent(&popover);
-            self.notify_dismissed();
         }
     }
 
-    fn notify_dismissed(&self) {
-        if let Some(callback) = self.dismissed.borrow().as_ref() {
-            callback();
-        }
-    }
-
-    /// Hides or restores the popup with its owner without dismissing an edit draft.
+    /// Hides or restores the popup with its owner.
     pub fn set_owner_visible(self: &Rc<Self>, visible: bool) {
         if self.owner_hidden.replace(!visible) == !visible {
             return;
@@ -382,29 +233,21 @@ impl DetailsController {
         button: &gtk::Widget,
         popover: EventDetails,
     ) {
-        self.show_popup(parent, Some(button), popover, None);
+        self.show_popup(parent, button, popover);
     }
 
     fn show_popup(
         self: &Rc<Self>,
         parent: &gtk::Widget,
-        anchor: Option<&gtk::Widget>,
+        anchor: &gtk::Widget,
         popover: EventDetails,
-        editor: Option<&gtk::Widget>,
     ) {
         self.close();
-        if let Some(panel) = editor {
-            self.set_editor_scroll(panel);
-            self.retained.set(true);
-        }
-
         self.bind_actions(&popover);
-        Self::content_stack(&popover);
         self.connect_keys(&popover);
         self.source.replace(Some(parent.downgrade()));
 
-        // A page-owned popup keeps its native surface when editing or refreshing replaces
-        // the event widget underneath it.
+        // A page-owned popup keeps its native surface when refreshing replaces its event widget.
         let page = parent.ancestor(super::page::CalendarPage::static_type());
         let parent = page.as_ref().unwrap_or(parent);
         popover.set_parent(parent);
@@ -417,7 +260,7 @@ impl DetailsController {
         self.force_centered.set(false);
         self.rejected.set(false);
         self.parent.replace(Some(parent.downgrade()));
-        self.anchor.replace(anchor.map(gtk::Widget::downgrade));
+        self.anchor.replace(Some(anchor.downgrade()));
         self.place(&popover);
 
         let weak = Rc::downgrade(self);
@@ -451,10 +294,7 @@ impl DetailsController {
                     controller.anchor.take();
                     controller.parent.take();
                     controller.source.take();
-                    controller.original.take();
-                    controller.editor_scroll.take();
                     controller.retained.set(false);
-                    controller.notify_dismissed();
                 }
 
                 if closed.parent().is_some() {
@@ -477,33 +317,11 @@ impl DetailsController {
                 return glib::ControlFlow::Break;
             }
 
-            let layout = controller
-                .editor_scroll
-                .borrow()
-                .as_ref()
-                .and_then(|scroll| scroll.child())
-                .and_then(|form| {
-                    popover.root().map(|root| {
-                        (
-                            form.measure(gtk::Orientation::Vertical, super::ITEM_PANEL_WIDTH)
-                                .1,
-                            root.width(),
-                            root.height(),
-                            popover.placement_size().1,
-                        )
-                    })
-                })
-                .or_else(|| {
-                    popover.root().map(|root| {
-                        let (width, height) = popover.placement_size();
-                        (height, width, root.height(), height)
-                    })
-                });
-            let transitioning = popover
-                .child()
-                .and_downcast::<gtk::Stack>()
-                .is_some_and(|stack| stack.is_transition_running());
-            if transitioning || (previous_layout.replace(layout) != layout && layout.is_some()) {
+            let layout = popover.root().map(|root| {
+                let (width, height) = popover.placement_size();
+                (height, width, root.height(), height)
+            });
+            if previous_layout.replace(layout) != layout && layout.is_some() {
                 controller.remeasure(popover);
             }
 
@@ -521,10 +339,6 @@ impl DetailsController {
                 if let (Some(controller), Some(popup)) = (weak.upgrade(), popup.upgrade())
                     && controller.popover.borrow().as_ref() == Some(&popup)
                     && !controller.owner_hidden.get()
-                    && !popup
-                        .child()
-                        .and_downcast::<gtk::Stack>()
-                        .is_some_and(|stack| stack.is_transition_running())
                     && height < controller.minimum_height.get()
                 {
                     // GTK emits `closed` for undersized native allocations as well as actual
@@ -609,50 +423,13 @@ impl DetailsController {
         let below = visible_anchor.map_or(0, |bounds| {
             root.height() - (bounds.y() + bounds.height()).ceil() as i32
         });
-        let scroll = self.editor_scroll.borrow().clone();
-        let editor_position = scroll.as_ref().and_then(|scroll| {
-            let width = super::ITEM_PANEL_WIDTH;
-            // Place for the target size, rather than switching sides as the stack interpolates.
-            let frame = self.minimum_height.get()
-                - popover
-                    .child()?
-                    .measure(gtk::Orientation::Vertical, width)
-                    .0;
-            let minimum = scroll
-                .parent()?
-                .measure(gtk::Orientation::Vertical, width)
-                .0
-                + frame;
-            let chrome = minimum - scroll.measure(gtk::Orientation::Vertical, width).0;
-            let content = scroll
-                .child()
-                .map_or(0, |form| form.measure(gtk::Orientation::Vertical, width).1)
-                .min(500);
-            let position = editor_position(above, below, chrome + content, minimum)?;
-            let available = if position == gtk::PositionType::Bottom {
-                below
-            } else {
-                above
-            };
-            let limit = (available - chrome - PLACEMENT_MARGIN).clamp(1, 500);
-            if scroll.max_content_height() != limit {
-                scroll.set_max_content_height(limit);
-            }
-
-            Some(position)
-        });
-
         let centered = visible_anchor.is_none()
             || self.force_centered.get()
-            || if scroll.is_some() {
-                editor_position.is_none()
-            } else {
-                details_should_center(
-                    above.max(below),
-                    self.minimum_height.get(),
-                    self.centered.get(),
-                )
-            };
+            || details_should_center(
+                above.max(below),
+                self.minimum_height.get(),
+                self.centered.get(),
+            );
         self.centered.set(centered);
         if !centered {
             let Some(bounds) = visible_anchor else { return };
@@ -681,7 +458,7 @@ impl DetailsController {
             } else {
                 gtk::PositionType::Bottom
             };
-            popover.set_position(editor_position.unwrap_or(details_position));
+            popover.set_position(details_position);
         } else {
             // Side placement can slide vertically across the monitor, avoiding GTK dismissal
             // when an above/below popup cannot meet its minimum height. Center on the window.
@@ -759,39 +536,17 @@ fn details_should_center(available: i32, minimum: i32, centered: bool) -> bool {
     available < threshold
 }
 
-/// Prefers growing downward, then upward, and scrolls within the larger side if needed.
-fn editor_position(
-    above: i32,
-    below: i32,
-    desired: i32,
-    minimum: i32,
-) -> Option<gtk::PositionType> {
-    if below >= desired + PLACEMENT_MARGIN {
-        Some(gtk::PositionType::Bottom)
-    } else if above >= desired + PLACEMENT_MARGIN {
-        Some(gtk::PositionType::Top)
-    } else if above.max(below) >= minimum + PLACEMENT_MARGIN {
-        Some(if below >= above {
-            gtk::PositionType::Bottom
-        } else {
-            gtk::PositionType::Top
-        })
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{rc::Rc, time::Duration};
 
     use gtk::prelude::*;
 
-    use super::{details_should_center, editor_position};
+    use super::details_should_center;
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn escape_dismisses_restored_details_even_during_the_editor_transition() {
+    fn escape_dismisses_details_without_reopening_them() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         gtk::Settings::default()
@@ -814,21 +569,14 @@ mod tests {
         };
         window.present();
         drain();
-        for during_transition in [false, true] {
+        for animations in [false, true] {
+            gtk::Settings::default()
+                .unwrap()
+                .set_gtk_enable_animations(animations);
             let popup: crate::view::details::EventDetails = gtk::glib::Object::new();
             popup.set_child(Some(&gtk::Button::with_label("Details")));
             controller.show_details(anchor.upcast_ref(), anchor.upcast_ref(), popup.clone());
             drain();
-            let panel = gtk::Box::new(gtk::Orientation::Vertical, 0);
-            panel.add_css_class("ev_item_editor");
-            panel.set_size_request(600, 500);
-            panel.append(&gtk::Button::with_label("Editor"));
-            assert!(controller.show_editor(panel.upcast_ref()));
-            drain();
-            controller.restore_details(None);
-            if !during_transition {
-                drain();
-            }
             let keys = popup
                 .observe_controllers()
                 .iter::<gtk::glib::Object>()
@@ -857,9 +605,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn item_editor_bottom_errors_resize_the_popup_smoothly() {
-        use std::cell::RefCell;
-
+    fn item_editor_window_fits_errors_and_keeps_actions_visible() {
         use crate::model::editor::{EditorCalendar, EditorOptions};
 
         gtk::init().unwrap();
@@ -892,15 +638,8 @@ mod tests {
                 locale: eventix_locale::default(),
             },
         );
-        let controller = Rc::new(super::DetailsController::default());
-        controller.show_new_editor(parent.upcast_ref(), &editor.popup_panel());
-        let popup = controller.current().unwrap();
-        let samples = Rc::new(RefCell::new(Vec::new()));
-        let observed = samples.clone();
-        popup.add_tick_callback(move |popup, _| {
-            observed.borrow_mut().push(popup.height());
-            gtk::glib::ControlFlow::Continue
-        });
+        let editor_window = editor.create_window(&window);
+        editor_window.present();
         let settle = || {
             for _ in 0..40 {
                 while gtk::glib::MainContext::default().iteration(false) {}
@@ -908,51 +647,25 @@ mod tests {
             }
         };
         settle();
-        let clean = popup.height();
-        let assert_animated = |from: i32, to: i32| {
-            assert!(
-                samples
-                    .borrow()
-                    .iter()
-                    .any(|height| (from.min(to) + 1..from.max(to)).contains(height)),
-                "popup resize includes intermediate heights: {:?}",
-                samples.borrow()
-            );
-        };
-        samples.borrow_mut().clear();
+        let clean = editor_window.height();
         editor.show_error("Short error");
         settle();
-        let short = popup.height();
+        let short = editor_window.height();
         assert!(short > clean);
-        assert_animated(clean, short);
-        samples.borrow_mut().clear();
         editor.show_error(&"A longer error message with details. ".repeat(30));
         settle();
-        let long = popup.height();
-        assert!(long > short);
-        assert_animated(short, long);
-        samples.borrow_mut().clear();
+        assert!(editor_window.height() > short);
+        let bounds = editor.save.compute_bounds(&editor_window).unwrap();
+        assert!(bounds.y() >= 0.0);
+        assert!(bounds.y() + bounds.height() <= editor_window.height() as f32);
         editor.show_error("Short error");
         settle();
-        assert_eq!(popup.height(), short);
-        assert_animated(long, short);
-        samples.borrow_mut().clear();
+        assert_eq!(editor_window.height(), short);
         editor.clear_errors();
         settle();
-        assert_eq!(popup.height(), clean);
-        assert_animated(short, clean);
-        controller.close();
+        assert_eq!(editor_window.height(), clean);
+        editor_window.destroy();
         window.close();
-    }
-
-    #[test]
-    fn editors_grow_below_then_above_and_use_scrolling_when_neither_side_fits() {
-        use gtk::PositionType::{Bottom, Top};
-        assert_eq!(editor_position(700, 600, 500, 100), Some(Bottom));
-        assert_eq!(editor_position(700, 300, 500, 100), Some(Top));
-        assert_eq!(editor_position(250, 300, 500, 100), Some(Bottom));
-        assert_eq!(editor_position(350, 200, 500, 100), Some(Top));
-        assert_eq!(editor_position(80, 90, 500, 100), None);
     }
 
     #[test]

@@ -22,6 +22,7 @@ mod layout;
 mod recurrence;
 mod task_status;
 mod validation;
+mod window;
 use layout::{FormSection, body_label, row};
 use recurrence::RecurrenceInput;
 
@@ -40,7 +41,7 @@ pub(crate) struct ItemEditor {
     pub saving: Cell<bool>,
     pub existing: RefCell<Option<UpdateItem>>,
     initial: RefCell<Option<Box<CreateItem>>>,
-    title: gtk::Label,
+    title: String,
     form: gtk::Box,
     error: super::error::AnimatedError,
     options: EditorOptions,
@@ -518,7 +519,7 @@ impl ItemEditor {
 }
 
 struct EditorShell {
-    title: gtk::Label,
+    title: String,
     layer: gtk::Box,
     panel: gtk::Box,
     scroll: gtk::ScrolledWindow,
@@ -533,7 +534,13 @@ impl EditorShell {
         let locale = options.locale.as_ref();
         let builder = gtk::Builder::from_resource(resource_path!("view/editor/shell.ui"));
         let shell = Self {
-            title: builder.object("title").expect("editor title"),
+            title: locale
+                .translate(if options.kind == CalCompType::Todo {
+                    "New Task"
+                } else {
+                    "New Event"
+                })
+                .to_string(),
             layer: builder.object("layer").expect("editor backdrop"),
             panel: builder.object("panel").expect("editor panel"),
             scroll: builder.object("scroll").expect("editor scroller"),
@@ -546,15 +553,8 @@ impl EditorShell {
             .object::<gtk::Box>("error_slot")
             .expect("editor error slot")
             .append(&shell.error.widget);
-        // Editor and details widths share the same popup-placement contract.
+        // Keep date fields readable at the default editor width.
         shell.panel.set_size_request(super::ITEM_PANEL_WIDTH, -1);
-        shell
-            .title
-            .set_text(locale.translate(if options.kind == CalCompType::Todo {
-                "New Task"
-            } else {
-                "New Event"
-            }));
         for (id, text) in [("save_label", "Save"), ("cancel_label", "Cancel")] {
             builder
                 .object::<gtk::Label>(id)
@@ -1370,7 +1370,7 @@ mod tests {
         );
         let options = || EditorOptions::for_kind(&state, CalCompType::Todo).unwrap();
         let editor = ItemEditor::new(1, options());
-        assert_eq!(editor.title.text(), "New Task");
+        assert_eq!(editor.title, "New Task");
         assert!(editor.all_day.is_active());
         assert!(!editor.has_start.is_active() && !editor.has_due.is_active());
         assert!(!editor.alarm.relative_row.is_visible());
@@ -1391,7 +1391,7 @@ mod tests {
             options(),
             UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
         );
-        assert_eq!(editor.title.text(), "Edit Task");
+        assert_eq!(editor.title, "Edit Task");
         assert!(!editor.has_start.is_active() && !editor.has_due.is_active());
         editor.has_due.set_active(true);
         editor.end.entry.set_text("2026-10-15");
@@ -1502,10 +1502,10 @@ mod tests {
         let (state, _) = execute(Box::new(edit), state);
         let saved = crate::model::sidebar::SidebarRow::from_state(&state, &item).unwrap();
         assert_eq!(saved.summary, "Edited task");
-        parent.test_saved_editor(crate::model::SavedItem::Task(Box::new(saved)));
+        parent.test_saved_editor();
         drain();
         assert!(!parent.editor_open());
-        assert_eq!(controller.current(), Some(popup));
+        assert!(controller.current().is_none());
         controller.close();
         window.close();
         drain();

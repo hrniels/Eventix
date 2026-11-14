@@ -296,13 +296,6 @@ impl CalendarPage {
         });
 
         let weak = self.downgrade();
-        imp.details.connect_dismissed(move || {
-            if let Some(page) = weak.upgrade() {
-                page.imp().editor.discard_editor();
-            }
-        });
-
-        let weak = self.downgrade();
         imp.details.connect_task(move |item, action| {
             if let Some(page) = weak.upgrade()
                 && page.execute_command(Box::new(ChangeTask { item, action }))
@@ -387,17 +380,16 @@ impl CalendarPage {
         self.imp().editor.editor_open()
     }
 
-    pub fn popup_open(&self) -> bool {
-        self.editor_open() || self.imp().details.is_open()
+    pub fn editor_saving(&self) -> bool {
+        self.imp().editor.saving()
     }
 
-    /// Handles editor shortcuts before either the window or a native popup consumes them.
-    pub fn handle_editor_key(
-        &self,
-        key: gdk::Key,
-        modifiers: gdk::ModifierType,
-    ) -> Option<glib::Propagation> {
-        self.imp().editor.handle_editor_key(self, key, modifiers)
+    pub fn set_editor_owner_visible(&self, visible: bool) {
+        self.imp().editor.set_owner_visible(visible);
+    }
+
+    pub fn popup_open(&self) -> bool {
+        self.imp().details.is_open()
     }
 
     pub fn new_event(&self) {
@@ -415,7 +407,7 @@ impl CalendarPage {
     }
 
     pub fn focus_quick_task(&self) {
-        if self.editor_open() || self.management_open() {
+        if self.management_open() {
             return;
         }
 
@@ -424,7 +416,7 @@ impl CalendarPage {
     }
 
     pub fn focus_search(&self) {
-        if self.editor_open() || self.management_open() {
+        if self.management_open() {
             return;
         }
 
@@ -440,7 +432,7 @@ impl CalendarPage {
     }
 
     pub fn close_editor(&self) {
-        self.imp().editor.finish_editor(self, None);
+        self.imp().editor.finish_editor();
     }
 
     pub fn save_editor(&self) {
@@ -514,9 +506,6 @@ impl CalendarPage {
     pub fn dismiss_popovers(&self) {
         self.imp().session.cancel_details_load();
         self.imp().details.close();
-        if self.editor_open() {
-            self.imp().editor.discard_editor();
-        }
     }
 
     pub fn set_popup_owner_visible(&self, visible: bool) {
@@ -558,7 +547,7 @@ pub(crate) mod tests {
     use gtk::{prelude::*, subclass::prelude::*};
 
     use super::{CalendarPage, DetailsController};
-    use crate::model::{SavedItem, Snapshot, View};
+    use crate::model::{Snapshot, View};
     use crate::view::editor::ItemEditor;
     use crate::worker::event::ContentResponse;
 
@@ -598,8 +587,8 @@ pub(crate) mod tests {
             self.imp().details.clone()
         }
 
-        pub(in crate::view) fn test_saved_editor(&self, item: SavedItem) {
-            self.imp().editor.finish_editor(self, Some(&item));
+        pub(in crate::view) fn test_saved_editor(&self) {
+            self.imp().editor.finish_editor();
         }
     }
 
@@ -2048,22 +2037,30 @@ pub(crate) mod tests {
                 locale: locale.clone(),
             });
             drain();
-            let panel = editor.popup_panel();
+            let panel = editor.content();
+            let editor_window = panel.root().and_downcast::<gtk::Window>().unwrap();
+            let editor_keys = editor_window
+                .observe_controllers()
+                .snapshot()
+                .into_iter()
+                .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+                .unwrap();
             let calendar = dropdown(&panel).unwrap();
             let section = section_toggle(&panel).unwrap();
             for control in [calendar.upcast_ref::<gtk::Widget>(), section.upcast_ref()] {
                 assert!(control.grab_focus());
-                let focus = gtk::prelude::GtkWindowExt::focus(&window);
-                for (key, direction) in [
-                    (gtk::gdk::Key::Left, gtk::DirectionType::Left),
-                    (gtk::gdk::Key::Right, gtk::DirectionType::Right),
-                    (gtk::gdk::Key::Up, gtk::DirectionType::Up),
-                    (gtk::gdk::Key::Down, gtk::DirectionType::Down),
+                let date = page.imp().content.date.get();
+                for key in [
+                    gtk::gdk::Key::Left,
+                    gtk::gdk::Key::Right,
+                    gtk::gdk::Key::Up,
+                    gtk::gdk::Key::Down,
                 ] {
-                    assert!(!press(key));
-                    // Exercise GTK's default arrow binding as well as our capture handler.
-                    window.emit_by_name::<()>("move-focus", &[&direction]);
-                    assert_eq!(gtk::prelude::GtkWindowExt::focus(&window), focus);
+                    assert!(!editor_keys.emit_by_name::<bool>(
+                        "key-pressed",
+                        &[&key, &0u32, &gtk::gdk::ModifierType::empty()],
+                    ));
+                    assert_eq!(page.imp().content.date.get(), date);
                 }
             }
             page.close_editor();

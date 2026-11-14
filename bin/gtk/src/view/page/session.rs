@@ -550,14 +550,13 @@ impl PageSession {
             Event::EditLoaded(id, result) => imp.editor.edit_loaded(page, id, result),
             Event::EditorLoaded(id, result) => imp.editor.editor_loaded(page, id, result),
             Event::EditSaved(id, result) => {
-                let result = result.map(|(change, item)| (change, Some(item)));
-                if let Some(change) = imp.editor.saved(page, id, result) {
+                let result = result.map(|(change, _)| change);
+                if let Some(change) = imp.editor.saved(id, result) {
                     self.refresh_subscriptions(change);
                 }
             }
             Event::EditorSaved(id, result) => {
-                let result = result.map(|change| (change, None));
-                if let Some(change) = imp.editor.saved(page, id, result) {
+                if let Some(change) = imp.editor.saved(id, result) {
                     self.refresh_subscriptions(change);
                 }
             }
@@ -654,7 +653,7 @@ impl PageSession {
         self.settings_popup.take();
         self.preferences.set(None);
         page.imp().settings_button.set_sensitive(false);
-        page.imp().editor.stop(page);
+        page.imp().editor.stop();
         self.auth_popup.take();
         if let Some(session) = self.current.take() {
             session.cancel_sync();

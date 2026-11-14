@@ -29,7 +29,7 @@ impl CalendarPage {
             self.open_item_details(item, row.task);
             return;
         }
-        if !self.can_edit() || self.editor_open() {
+        if !self.can_edit() {
             return;
         }
 
@@ -76,7 +76,7 @@ impl CalendarPage {
             self.copy_item_filepath(target.item.clone());
             return;
         }
-        if !self.can_edit() || self.editor_open() {
+        if !self.can_edit() {
             return;
         }
         let mut item = target.item.clone();
@@ -128,9 +128,6 @@ impl CalendarPage {
     }
 
     fn open_item_details(&self, item: ItemId, task: bool) {
-        if self.editor_open() {
-            return;
-        }
         self.dismiss_popovers();
         self.imp().session.load_details(
             item,

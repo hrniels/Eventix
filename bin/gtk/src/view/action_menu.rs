@@ -94,9 +94,6 @@ pub(super) fn install_context(
         else {
             return;
         };
-        if page.editor_open() {
-            return;
-        }
         page.dismiss_popovers();
         let (model, group) = occurrence_menu(&details.actions, target.recurrent, &*locale);
         let handlers = Rc::new(Actions::default());

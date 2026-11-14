@@ -81,6 +81,9 @@ mod imp {
 
     impl WindowImpl for Window {
         fn close_request(&self) -> glib::Propagation {
+            if self.page.editor_saving() {
+                return glib::Propagation::Stop;
+            }
             self.page.stop();
             self.parent_close_request()
         }
@@ -171,85 +174,12 @@ impl Window {
         key: gtk::gdk::Key,
         modifiers: gtk::gdk::ModifierType,
     ) -> glib::Propagation {
-        // Button-only date inputs have an entry beside the calendar inside their popup.
-        if let Some(focus) = GtkWindowExt::focus(self)
-            && let Some(entry) = focus
-                .ancestor(gtk::Entry::static_type())
-                .and_downcast::<gtk::Entry>()
-            && entry.ancestor(gtk::Popover::static_type()).is_some()
-            && let Some(picker) = entry
-                .parent()
-                .and_then(|parent| parent.last_child())
-                .and_downcast::<crate::widgets::DatePicker>()
-        {
-            let propagation = picker.entry_key_pressed(&entry, key, modifiers);
-            if propagation == glib::Propagation::Stop {
-                return propagation;
-            }
-        }
-
-        if let Some(focus) = GtkWindowExt::focus(self)
-            && let Some(input) = focus
-                .ancestor(crate::widgets::DateInput::static_type())
-                .and_downcast::<crate::widgets::DateInput>()
-        {
-            let propagation = input.key_pressed(key, modifiers);
-            if propagation == glib::Propagation::Stop {
-                return propagation;
-            }
-        }
-
-        if let Some(focus) = GtkWindowExt::focus(self)
-            && let Some(input) = focus
-                .ancestor(crate::widgets::TimeInput::static_type())
-                .and_downcast::<crate::widgets::TimeInput>()
-        {
-            let propagation = input.key_pressed(key, modifiers);
-            if propagation == glib::Propagation::Stop {
-                return propagation;
-            }
-        }
-
-        if let Some(focus) = GtkWindowExt::focus(self)
-            && let Some(picker) = focus
-                .clone()
-                .downcast::<crate::widgets::MonthPicker>()
-                .ok()
-                .or_else(|| {
-                    focus
-                        .ancestor(crate::widgets::MonthPicker::static_type())
-                        .and_downcast::<crate::widgets::MonthPicker>()
-                })
-        {
-            let propagation = picker.key_pressed(key, modifiers);
-            if propagation == glib::Propagation::Stop {
-                return propagation;
-            }
-        }
-
-        if let Some(focus) = GtkWindowExt::focus(self)
-            && let Some(picker) = focus
-                .clone()
-                .downcast::<crate::widgets::DatePicker>()
-                .ok()
-                .or_else(|| {
-                    focus
-                        .ancestor(crate::widgets::DatePicker::static_type())
-                        .and_downcast::<crate::widgets::DatePicker>()
-                })
-        {
-            let propagation = picker.key_pressed(key, modifiers);
-            if propagation == glib::Propagation::Stop {
-                return propagation;
-            }
+        if handle_input_key(self.upcast_ref(), key, modifiers) == glib::Propagation::Stop {
+            return glib::Propagation::Stop;
         }
 
         if self.handle_app_shortcut(key, modifiers) {
             return glib::Propagation::Stop;
-        }
-
-        if let Some(propagation) = self.imp().page.handle_editor_key(key, modifiers) {
-            return propagation;
         }
 
         if let Some(propagation) = self.handle_details_key(key) {
@@ -452,10 +382,6 @@ impl Window {
             let page = self.imp().page.downgrade();
             action.connect_activate(move |_, _| {
                 if let Some(page) = page.upgrade() {
-                    if page.editor_open() {
-                        return;
-                    }
-
                     if let Some(days) = days {
                         page.navigate(days);
                     } else if name == "reload" {
@@ -489,6 +415,77 @@ impl Window {
     }
 }
 
+/// Routes date and time navigation to the focused input, including native picker popups.
+pub(crate) fn handle_input_key(
+    window: &gtk::Window,
+    key: gtk::gdk::Key,
+    modifiers: gtk::gdk::ModifierType,
+) -> glib::Propagation {
+    // Button-only date inputs have an entry beside the calendar inside their popup.
+    if let Some(focus) = GtkWindowExt::focus(window)
+        && let Some(entry) = focus
+            .ancestor(gtk::Entry::static_type())
+            .and_downcast::<gtk::Entry>()
+        && entry.ancestor(gtk::Popover::static_type()).is_some()
+        && let Some(picker) = entry
+            .parent()
+            .and_then(|parent| parent.last_child())
+            .and_downcast::<crate::widgets::DatePicker>()
+        && picker.entry_key_pressed(&entry, key, modifiers) == glib::Propagation::Stop
+    {
+        return glib::Propagation::Stop;
+    }
+
+    if let Some(focus) = GtkWindowExt::focus(window)
+        && let Some(input) = focus
+            .ancestor(crate::widgets::DateInput::static_type())
+            .and_downcast::<crate::widgets::DateInput>()
+        && input.key_pressed(key, modifiers) == glib::Propagation::Stop
+    {
+        return glib::Propagation::Stop;
+    }
+
+    if let Some(focus) = GtkWindowExt::focus(window)
+        && let Some(input) = focus
+            .ancestor(crate::widgets::TimeInput::static_type())
+            .and_downcast::<crate::widgets::TimeInput>()
+        && input.key_pressed(key, modifiers) == glib::Propagation::Stop
+    {
+        return glib::Propagation::Stop;
+    }
+
+    if let Some(focus) = GtkWindowExt::focus(window)
+        && let Some(picker) = focus
+            .clone()
+            .downcast::<crate::widgets::MonthPicker>()
+            .ok()
+            .or_else(|| {
+                focus
+                    .ancestor(crate::widgets::MonthPicker::static_type())
+                    .and_downcast::<crate::widgets::MonthPicker>()
+            })
+        && picker.key_pressed(key, modifiers) == glib::Propagation::Stop
+    {
+        return glib::Propagation::Stop;
+    }
+
+    if let Some(focus) = GtkWindowExt::focus(window)
+        && let Some(picker) = focus
+            .clone()
+            .downcast::<crate::widgets::DatePicker>()
+            .ok()
+            .or_else(|| {
+                focus
+                    .ancestor(crate::widgets::DatePicker::static_type())
+                    .and_downcast::<crate::widgets::DatePicker>()
+            })
+    {
+        return picker.key_pressed(key, modifiers);
+    }
+
+    glib::Propagation::Proceed
+}
+
 /// Dismisses popovers inside Eventix and keeps their visibility with the active owner.
 pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
     let click = gtk::GestureClick::new();
@@ -512,6 +509,7 @@ pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
     window.connect_hide(move |_| {
         if let Some(page) = weak_page.upgrade() {
             page.set_popup_owner_visible(false);
+            page.set_editor_owner_visible(false);
         }
     });
 
@@ -519,6 +517,7 @@ pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
     window.connect_map(move |window| {
         if let Some(page) = weak_page.upgrade() {
             sync_popup_visibility(window, &page);
+            page.set_editor_owner_visible(true);
         }
     });
 

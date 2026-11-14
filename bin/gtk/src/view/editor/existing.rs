@@ -22,7 +22,7 @@ impl ItemEditor {
                 .naive_local();
         }
 
-        let editor = Self::build(id, options);
+        let mut editor = Self::build(id, options);
         editor.populate_existing(&edit);
 
         let editor = Rc::new(editor);
@@ -36,7 +36,7 @@ impl ItemEditor {
         editor
     }
 
-    fn populate_existing(&self, edit: &UpdateItem) {
+    fn populate_existing(&mut self, edit: &UpdateItem) {
         let title = match (edit.fields.kind, edit.scope) {
             (eventix_ical::objects::CalCompType::Todo, EditScope::Occurrence) => {
                 "Edit Task Occurrence"
@@ -55,7 +55,7 @@ impl ItemEditor {
             (_, EditScope::Series) if edit.fields.recurrence.is_some() => "Edit Event Series",
             (_, EditScope::Series) => "Edit Event",
         };
-        self.title.set_text(self.options.locale.translate(title));
+        self.title = self.options.locale.translate(title).to_string();
 
         let fields = &edit.fields;
         if let (Some(input), Some(status)) = (&self.task_status, &fields.task_status) {
@@ -168,13 +168,10 @@ impl ItemEditor {
         }
     }
 
-    pub fn popup_panel(&self) -> gtk::Widget {
-        // The same editor can be hosted standalone or moved into the details popup.
+    pub fn content(&self) -> gtk::Widget {
         if self.panel.parent().as_ref() == Some(self.layer.upcast_ref()) {
             self.layer.remove(&self.panel);
         }
-        self.panel.set_vexpand(false);
-        self.scroll.set_max_content_height(500);
 
         self.panel.clone().upcast()
     }
@@ -182,11 +179,7 @@ impl ItemEditor {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cell::{Cell, RefCell},
-        rc::Rc,
-        sync::Arc,
-    };
+    use std::sync::Arc;
 
     use eventix_ical::{
         col::CalDir,
@@ -200,23 +193,6 @@ mod tests {
 
     use crate::model::editor::EditorOptions;
     use crate::view::details::EventDetails;
-
-    fn press_escape(popup: &EventDetails) -> bool {
-        let controllers = popup.observe_controllers();
-        let keys = controllers
-            .iter::<gtk::glib::Object>()
-            .filter_map(Result::ok)
-            .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
-            .unwrap();
-        keys.emit_by_name::<bool>(
-            "key-pressed",
-            &[
-                &gtk::gdk::Key::Escape,
-                &0u32,
-                &gtk::gdk::ModifierType::empty(),
-            ],
-        )
-    }
 
     #[test]
     #[ignore = "requires a GTK display"]
@@ -358,30 +334,13 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn details_expand_into_populated_editor_and_return_after_cancel_and_save() {
+    fn details_open_an_independent_populated_editor_without_restoring_the_popup() {
         gtk::init().unwrap();
-        gtk::Settings::default()
-            .unwrap()
-            .set_gtk_enable_animations(true);
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         crate::style::install(&gtk::gdk::Display::default().unwrap());
-        let app = gtk::Application::builder()
-            .application_id("io.github.hrniels.Eventix.Gtk.EditorTest")
-            .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
-            .build();
-        app.register(None::<&gtk::gio::Cancellable>).unwrap();
         let drain = || {
             for _ in 0..35 {
                 while gtk::glib::MainContext::default().iteration(false) {}
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-        };
-        let wait_until = |condition: &dyn Fn() -> bool| {
-            for _ in 0..200 {
-                while gtk::glib::MainContext::default().iteration(false) {}
-                if condition() {
-                    break;
-                }
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
         };
@@ -432,7 +391,6 @@ mod tests {
                 attendees: vec![],
             };
             let (state, item) = crate::view::editor::tests::execute(Box::new(fields), state);
-            let event = crate::model::Event::from_state(&state, &item).unwrap();
             let locale = eventix_locale::new_with_timezone(
                 &xdg,
                 if all_day {
@@ -448,314 +406,53 @@ mod tests {
                 options.locale = locale.clone();
                 options
             };
-            let (window, parent) = crate::window::Window::test_new(&app);
-            let window = window.upcast::<gtk::Window>();
-            window.set_default_size(1000, 900);
+            let parent: crate::view::page::CalendarPage = gtk::glib::Object::new();
+            let window = gtk::Window::builder()
+                .child(&parent)
+                .default_width(1000)
+                .default_height(900)
+                .build();
             let anchor = gtk::Button::with_label("Event");
-            if all_day {
-                parent.append(&anchor);
-            } else {
-                parent.prepend(&anchor);
-            }
+            parent.append(&anchor);
             window.present();
             drain();
+            let event = crate::model::Event::from_state(&state, &item).unwrap();
             let controller = parent.test_details();
-            let clicked = Rc::new(Cell::new(false));
-            let flag = clicked.clone();
-            controller.connect_edit(move |_, scope| {
-                assert_eq!(scope, EditScope::Series);
-                flag.set(true);
-            });
             let popup = EventDetails::new(&event, locale.as_ref());
-            let original = popup.child().unwrap();
             controller.show_details(anchor.upcast_ref(), anchor.upcast_ref(), popup.clone());
             drain();
-            if !all_day {
-                let surface = popup.surface();
-                let other_window = gtk::Window::builder()
-                    .default_width(200)
-                    .default_height(100)
-                    .build();
-                other_window.present();
-                wait_until(&|| !window.is_active());
-                drain();
-                assert!(
-                    !popup.is_mapped(),
-                    "inactive details must not float above other apps"
-                );
-                assert_eq!(controller.current().as_ref(), Some(&popup));
-                other_window.close();
-                window.present();
-                wait_until(&|| popup.is_mapped());
-                assert!(popup.is_mapped());
-                assert_eq!(
-                    popup.surface(),
-                    surface,
-                    "details keep the same native surface"
-                );
-                drain();
-            }
-            let stack = popup.child().and_downcast::<gtk::Stack>().unwrap();
-            let details_height = popup.height();
-            let heights = Rc::new(RefCell::new(Vec::new()));
-            let samples = heights.clone();
-            popup.add_tick_callback(move |popup, _| {
-                samples.borrow_mut().push(popup.height());
-                gtk::glib::ControlFlow::Continue
-            });
-            let width = popup.width();
-            let surface = popup.surface().unwrap();
-            let native = surface.downcast_ref::<gtk::gdk::Popup>().unwrap();
-            let original_x = native.position_x();
-            let original_y = native.position_y();
-            let original_bottom = original_y + surface.height();
-            let closed = Rc::new(Cell::new(0));
-            let counter = closed.clone();
-            popup.connect_closed(move |_| counter.set(counter.get() + 1));
-            fn click_edit(widget: &gtk::Widget, text: &str) {
-                if let Some(button) = widget.downcast_ref::<gtk::Button>()
-                    && button
-                        .child()
-                        .and_then(|child| child.last_child())
-                        .and_downcast::<gtk::Label>()
-                        .is_some_and(|label| label.text() == text)
-                {
-                    button.emit_clicked();
-                    return;
-                }
-                let mut child = widget.first_child();
-                while let Some(widget) = child {
-                    child = widget.next_sibling();
-                    click_edit(&widget, text);
-                }
-            }
-            click_edit(original.upcast_ref(), locale.translate("Edit"));
-            assert!(clicked.get());
             let editor = parent.test_existing_editor(
                 options(),
                 UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
             );
-            assert!(stack.is_transition_running());
-            assert!(parent.editor_open());
+            drain();
+            let editor_window = editor.summary.root().and_downcast::<gtk::Window>().unwrap();
+            assert!(editor_window.is_mapped());
+            assert!(!editor_window.is_modal());
+            assert_eq!(editor_window.transient_for(), Some(window.clone()));
+            assert_eq!(
+                editor_window.title().as_deref(),
+                Some(locale.translate("Edit Event"))
+            );
+            assert!(!popup.is_mapped());
+            assert!(controller.current().is_none());
             assert!(anchor.is_sensitive());
-            assert!(!popup.is_autohide());
             assert_eq!(editor.summary.text(), "Original");
             assert_eq!(editor.location.text(), "Office");
             assert_eq!(editor.all_day.is_active(), all_day);
-            let before = editor.command().unwrap();
             if all_day {
                 assert_eq!(editor.end.entry.text(), "2026-10-14");
             }
-            assert_eq!(popup.parent().as_ref(), Some(parent.upcast_ref()));
-            editor.focus();
-            drain();
-            assert!(!stack.is_transition_running());
-            let editor_height = popup.height();
-            assert!(
-                heights
-                    .borrow()
-                    .iter()
-                    .any(|height| *height > details_height.min(editor_height)
-                        && *height < details_height.max(editor_height)),
-                "entering the editor must interpolate the popup height: {details_height} -> \
-                 {editor_height}, samples: {:?}",
-                heights.borrow()
-            );
-            assert!(popup.is_mapped());
-            assert_eq!(
-                popup.surface(),
-                Some(surface.clone()),
-                "editing must retain the native popup"
-            );
-            assert_eq!(closed.get(), 0, "editing must not close and reopen details");
-            assert_eq!(popup.width(), width, "details and editing share one width");
-            assert!(
-                editor.summary.is_sensitive(),
-                "the page must not disable the editor"
-            );
-            assert!(editor.location.is_sensitive());
-            assert!(editor.save.is_sensitive());
-            assert!(editor.cancel.is_sensitive());
-            assert!(editor.summary.grab_focus());
-            assert!(
-                popup.has_arrow(),
-                "editing stays anchored when either side has room"
-            );
-            assert_eq!(
-                popup.position(),
-                if all_day {
-                    gtk::PositionType::Top
-                } else {
-                    gtk::PositionType::Bottom
-                }
-            );
-            assert_eq!(
-                native.position_x(),
-                original_x,
-                "editing must not shift horizontally"
-            );
-            if all_day {
-                assert_eq!(
-                    native.position_y() + surface.height(),
-                    original_bottom,
-                    "upward growth keeps the bottom edge anchored"
-                );
-            } else {
-                assert_eq!(
-                    native.position_y(),
-                    original_y,
-                    "downward growth keeps the top edge anchored"
-                );
-            }
-            for (index, section) in editor.sections.iter().enumerate() {
-                section.toggle.set_active(true);
-                drain();
-                assert_eq!(
-                    popup.width(),
-                    width,
-                    "expanded section {index} must not widen the popup (visible={}, mapped={}, \
-                     active={}, editor_open={})",
-                    popup.is_visible(),
-                    popup.is_mapped(),
-                    window.is_active(),
-                    parent.editor_open()
-                );
-                if index == 0 {
-                    let bounds = |widget: &gtk::Widget| widget.compute_bounds(&popup).unwrap();
-                    let grid = editor
-                        .start
-                        .widget
-                        .parent()
-                        .unwrap()
-                        .parent()
-                        .and_downcast::<gtk::Grid>()
-                        .unwrap();
-                    let start_label = grid.child_at(0, 0).unwrap();
-                    let end_label = grid.child_at(2, 0).unwrap();
-                    let all_day_label = grid.child_at(0, 1).unwrap();
-                    let timezone_label = grid.child_at(2, 1).unwrap();
-                    let start = bounds(editor.start.entry.upcast_ref());
-                    let end = bounds(editor.end.entry.upcast_ref());
-                    for widget in [
-                        &start_label,
-                        editor.start_time.upcast_ref(),
-                        &end_label,
-                        editor.end_time.upcast_ref(),
-                    ] {
-                        let field = bounds(widget);
-                        assert!(
-                            (field.y() + field.height() / 2.0 - start.y() - start.height() / 2.0)
-                                .abs()
-                                <= 1.0,
-                            "start/end labels, dates, and times must share one row"
-                        );
-                    }
-                    assert!(start.x() < end.x());
-                    let all_day = bounds(editor.all_day.upcast_ref());
-                    let timezone = bounds(editor.timezone.upcast_ref());
-                    assert!(all_day.y() > start.y() + start.height());
-                    assert!(
-                        (all_day.y() + all_day.height() / 2.0
-                            - timezone.y()
-                            - timezone.height() / 2.0)
-                            .abs()
-                            <= 1.0,
-                        "all-day and timezone must share the second row"
-                    );
-                    assert!(all_day.x() + all_day.width() < timezone.x());
-                    assert_eq!(
-                        bounds(&start_label).x(),
-                        bounds(&all_day_label).x(),
-                        "Start and All day labels share a grid column"
-                    );
-                    assert_eq!(
-                        bounds(&end_label).x(),
-                        bounds(&timezone_label).x(),
-                        "End and Timezone labels share a grid column"
-                    );
-                    assert_eq!(
-                        start.x(),
-                        all_day.x(),
-                        "left-side controls share a grid column"
-                    );
-                    assert_eq!(
-                        end.x(),
-                        timezone.x(),
-                        "right-side controls share a grid column"
-                    );
-                }
-            }
-            assert!(!crate::view::editor::has_nested_popup(&window));
+            let before = editor.command().unwrap();
             editor.summary.set_text("Discarded");
-            heights.borrow_mut().clear();
-            let expanded_height = popup.height();
-            if all_day {
-                assert!(
-                    press_escape(&popup),
-                    "Escape must be consumed before GTK closes the native popup"
-                );
-            } else {
-                editor.cancel.emit_clicked();
-            }
-            assert!(
-                !parent.editor_open(),
-                "one Escape or Cancel ends editing immediately"
-            );
-            assert!(
-                anchor.is_sensitive(),
-                "the calendar stays enabled while editing"
-            );
-            assert!(stack.is_transition_running());
-            drain();
-            assert_eq!(stack.visible_child().as_ref(), Some(&original));
-            assert_eq!(
-                stack.pages().n_items(),
-                1,
-                "old editor widgets are released after fading out"
-            );
-            assert!(
-                heights
-                    .borrow()
-                    .iter()
-                    .any(|height| *height > details_height.min(expanded_height)
-                        && *height < details_height.max(expanded_height)),
-                "returning to details must interpolate the popup height"
-            );
-            assert_eq!(closed.get(), 0, "cancelling must leave details open");
-            assert!(popup.is_mapped());
-            assert_eq!(popup.width(), width);
-            let nested_editor = parent.test_existing_editor(
-                options(),
-                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
-            );
-            nested_editor.sections[0].toggle.set_active(true);
-            drain();
-            nested_editor.start.entry.grab_focus();
-            drain();
-            let picker = nested_editor
-                .start
-                .calendar
-                .ancestor(gtk::Popover::static_type())
-                .and_downcast::<gtk::Popover>()
-                .unwrap();
-            assert!(picker.is_visible());
-            crate::window::dismiss_popups_on_surface(&window, &parent, &picker.surface().unwrap());
-            assert!(
-                parent.editor_open(),
-                "nested popup clicks must not discard the editor"
-            );
-            assert!(
-                !press_escape(&popup),
-                "a nested date picker must get first refusal"
-            );
+            parent.dismiss_popovers();
             assert!(parent.editor_open());
-            picker.popdown();
-            nested_editor.focus();
-            assert!(press_escape(&popup));
+            editor.cancel.emit_clicked();
             drain();
             assert!(!parent.editor_open());
-            assert!(anchor.is_sensitive());
-            assert!(popup.is_mapped());
+            assert!(!editor_window.is_visible());
+            assert!(controller.current().is_none());
+
             let editor = parent.test_existing_editor(
                 options(),
                 UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
@@ -768,306 +465,16 @@ mod tests {
             let mut edit = editor.existing.borrow().clone().unwrap();
             edit.fields = *fields;
             let (state, _) = crate::view::editor::tests::execute(Box::new(edit), state);
-            parent.test_saved_editor(crate::model::SavedItem::Event(Box::new(
-                crate::model::Event::from_state(&state, &item).unwrap(),
-            )));
-            assert!(stack.is_transition_running());
-            drain();
-            let mut options = EditorOptions::from_state(&state).unwrap();
-            options.locale = locale.clone();
-            parent.test_existing_editor(
-                options,
-                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
-            );
-            assert!(stack.is_transition_running());
-            assert!(
-                press_escape(&popup),
-                "Escape also cancels while the editor is expanding"
-            );
-            assert!(!parent.editor_open());
-            assert!(anchor.is_sensitive());
-            drain();
-            assert!(popup.is_mapped());
-            gtk::Settings::default()
-                .unwrap()
-                .set_gtk_enable_animations(false);
-            let mut options = EditorOptions::from_state(&state).unwrap();
-            options.locale = locale.clone();
-            parent.test_existing_editor(
-                options,
-                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
-            );
-            assert!(!stack.is_transition_running());
-            assert!(press_escape(&popup));
-            assert!(!parent.editor_open());
-            assert_eq!(stack.pages().n_items(), 1);
-            assert_eq!(closed.get(), 0);
-            parent.remove(&anchor);
-            controller.allocate(parent.upcast_ref());
-            drain();
-            assert!(popup.is_mapped());
-            assert_ne!(stack.visible_child().as_ref(), Some(&original));
-            clicked.set(false);
-            click_edit(
-                popup.child().unwrap().upcast_ref(),
-                locale.translate("Edit"),
-            );
-            assert!(clicked.get());
-            controller.close();
-            drain();
-            parent.append(&anchor);
-            // Dismissal is independent of the locale and date type checked above.
-            if !all_day {
-                for dismissal in [
-                    "escape",
-                    "escape_transition",
-                    "click",
-                    "saving",
-                    "popdown",
-                    "hide",
-                ] {
-                    gtk::Settings::default()
-                        .unwrap()
-                        .set_gtk_enable_animations(dismissal.starts_with("escape"));
-                    window.present();
-                    anchor.grab_focus();
-                    wait_until(&|| window.is_active());
-                    assert!(
-                        window.is_active(),
-                        "Eventix must be active before opening a popup"
-                    );
-                    let event = crate::model::Event::from_state(&state, &item).unwrap();
-                    let popup = EventDetails::new(&event, locale.as_ref());
-                    controller.show_details(
-                        anchor.upcast_ref(),
-                        anchor.upcast_ref(),
-                        popup.clone(),
-                    );
-                    drain();
-                    assert!(
-                        popup.is_mapped(),
-                        "details must open before {dismissal}, all_day={all_day}"
-                    );
-                    let mut options = EditorOptions::from_state(&state).unwrap();
-                    options.locale = locale.clone();
-                    let editor = parent.test_existing_editor(
-                        options,
-                        UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
-                    );
-                    editor.summary.set_text("Discarded draft");
-                    drain();
-                    assert!(
-                        popup.is_mapped(),
-                        "editor must open before {dismissal}, all_day={all_day}"
-                    );
-                    assert!(!popup.is_autohide());
-                    assert!(anchor.is_sensitive());
-                    crate::window::dismiss_popups_on_surface(
-                        &window,
-                        &parent,
-                        &popup.surface().unwrap(),
-                    );
-                    assert!(
-                        parent.editor_open(),
-                        "clicking inside the editor keeps it open"
-                    );
-                    let other_window = gtk::Window::builder()
-                        .title("Other window")
-                        .default_width(200)
-                        .default_height(100)
-                        .build();
-                    other_window.present();
-                    wait_until(&|| !window.is_active());
-                    assert!(!window.is_active());
-                    crate::window::dismiss_popups_on_surface(
-                        &window,
-                        &parent,
-                        &other_window.surface().unwrap(),
-                    );
-                    drain();
-                    assert!(
-                        !popup.is_mapped(),
-                        "the popup must not float above the newly activated window"
-                    );
-                    assert!(parent.editor_open());
-                    assert_eq!(editor.summary.text(), "Discarded draft");
-                    other_window.close();
-                    window.present();
-                    wait_until(&|| popup.is_mapped());
-                    assert_eq!(controller.current().as_ref(), Some(&popup));
-                    assert!(popup.is_mapped(), "returning to Eventix restores its popup");
-                    if dismissal == "click" {
-                        window.minimize();
-                        drain();
-                        assert!(!popup.is_mapped(), "minimizing must hide the native popup");
-                        assert!(
-                            parent.editor_open(),
-                            "minimizing must retain the edit draft"
-                        );
-                        controller.allocate(parent.upcast_ref());
-                        assert!(!popup.is_mapped(), "layout must not reshow a hidden popup");
-                        window.unminimize();
-                        // Wayland has no unminimize request; remap this test window to restore it
-                        // without requiring a real taskbar click or activation token.
-                        window.set_visible(false);
-                        window.present();
-                        wait_until(&|| popup.is_mapped());
-                        assert!(popup.is_mapped());
-                        assert_eq!(editor.summary.text(), "Discarded draft");
-                    }
-                    match dismissal {
-                        "escape" | "escape_transition" => {
-                            assert!(press_escape(&popup));
-                            assert!(!parent.editor_open());
-                            if dismissal == "escape" {
-                                drain();
-                            }
-                            assert!(
-                                press_escape(&popup),
-                                "the second Escape must close details before GTK handles it"
-                            );
-                            assert!(controller.current().is_none());
-                        }
-                        "hide" => window.set_visible(false),
-                        "popdown" => popup.popdown(),
-                        _ => {
-                            editor.set_saving(dismissal == "saving");
-                            crate::window::dismiss_popups_on_surface(
-                                &window,
-                                &parent,
-                                &window.surface().unwrap(),
-                            );
-                        }
-                    }
-                    drain();
-                    if dismissal == "hide" {
-                        assert!(!popup.is_mapped());
-                        assert!(parent.editor_open());
-                        window.present();
-                        drain();
-                        assert!(popup.is_mapped());
-                        assert_eq!(editor.summary.text(), "Discarded draft");
-                        parent.dismiss_popovers();
-                        drain();
-                    }
-                    assert!(!popup.is_mapped(), "{dismissal} must dismiss the editor");
-                    assert!(!parent.editor_open(), "{dismissal} must clear editor state");
-                    assert!(controller.current().is_none());
-                    assert_eq!(
-                        crate::model::Event::from_state(&state, &item)
-                            .unwrap()
-                            .summary,
-                        "Saved"
-                    );
-                    window.present();
-                    drain();
-                    controller.allocate(parent.upcast_ref());
-                    assert!(!popup.is_mapped(), "dismissed drafts must not reappear");
-                }
-                for dismissal in ["click", "cancel", "escape"] {
-                    let mut options = EditorOptions::from_state(&state).unwrap();
-                    options.locale = locale.clone();
-                    let editor = parent.test_new_editor(options);
-                    editor.summary.set_text("Unsaved new event");
-                    drain();
-                    let popup = controller.current().unwrap();
-                    assert!(popup.is_mapped());
-                    assert!(!popup.is_autohide());
-                    assert!(!popup.has_arrow(), "new events use a centered popup");
-                    assert!(parent.is_sensitive());
-                    assert!(anchor.is_sensitive());
-                    crate::window::dismiss_popups_on_surface(
-                        &window,
-                        &parent,
-                        &popup.surface().unwrap(),
-                    );
-                    assert!(parent.editor_open(), "editor controls must not dismiss it");
-                    if dismissal == "click" {
-                        editor.summary.set_text("");
-                        editor.summary.grab_focus();
-                        editor.location.grab_focus();
-                        drain();
-                        assert!(!editor.summary.has_css_class("ev_editor_invalid"));
-                        editor.save.emit_clicked();
-                        assert!(editor.summary.has_css_class("ev_editor_invalid"));
-                        editor.summary.set_text("Unsaved new event");
-                        editor.summary.grab_focus();
-                        drain();
-                        assert!(editor.summary.has_css_class("ev_editor_invalid"));
-                        editor.save.emit_clicked();
-                        assert!(!editor.summary.has_css_class("ev_editor_invalid"));
-
-                        editor.sections[0].toggle.set_active(true);
-                        drain();
-                        editor.start.entry.grab_focus();
-                        drain();
-                        let picker = editor
-                            .start
-                            .calendar
-                            .ancestor(gtk::Popover::static_type())
-                            .and_downcast::<gtk::Popover>()
-                            .unwrap();
-                        assert!(picker.is_mapped());
-                        assert!(!press_escape(&popup));
-                        assert!(parent.editor_open());
-                        picker.popdown();
-                        editor.focus();
-                    }
-
-                    let other_window = gtk::Window::builder()
-                        .default_width(200)
-                        .default_height(100)
-                        .build();
-                    other_window.present();
-                    wait_until(&|| !window.is_active());
-                    drain();
-                    assert!(!popup.is_mapped());
-                    assert!(parent.editor_open());
-                    assert_eq!(editor.summary.text(), "Unsaved new event");
-                    other_window.close();
-                    window.present();
-                    wait_until(&|| popup.is_mapped());
-                    assert!(popup.is_mapped());
-                    assert_eq!(controller.current().as_ref(), Some(&popup));
-
-                    match dismissal {
-                        "cancel" => editor.cancel.emit_clicked(),
-                        "escape" => assert!(press_escape(&popup)),
-                        _ => crate::window::dismiss_popups_on_surface(
-                            &window,
-                            &parent,
-                            &window.surface().unwrap(),
-                        ),
-                    }
-                    drain();
-                    assert!(!parent.editor_open());
-                    assert!(controller.current().is_none());
-                    assert!(
-                        !popup.is_mapped(),
-                        "new-event dismissal must leave no details open"
-                    );
-                    assert!(parent.is_sensitive());
-                }
-            }
-            parent.dismiss_popovers();
-            let standalone = parent.test_existing_editor(
-                EditorOptions::from_state(&state).unwrap(),
-                UpdateItem::load(&state, item.clone(), EditScope::Series).unwrap(),
-            );
-            drain();
-            assert!(
-                parent.editor_open(),
-                "list edits open without an existing details popup"
-            );
-            assert!(standalone.summary.is_mapped());
-            standalone.cancel.emit_clicked();
+            parent.test_saved_editor();
             drain();
             assert!(!parent.editor_open());
             assert!(controller.current().is_none());
-
-            gtk::Settings::default()
-                .unwrap()
-                .set_gtk_enable_animations(true);
+            assert_eq!(
+                crate::model::Event::from_state(&state, &item)
+                    .unwrap()
+                    .summary,
+                "Saved"
+            );
             window.close();
             drain();
         }
