@@ -244,7 +244,7 @@ mod tests {
             let management = &imp.management.view.get().unwrap().widget;
             assert!(contains_text(
                 management.upcast_ref(),
-                "Could not load local calendars"
+                "Could not load calendars"
             ));
             assert!(!contains_text(
                 management.upcast_ref(),

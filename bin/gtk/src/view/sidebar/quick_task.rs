@@ -125,11 +125,7 @@ impl QuickTask {
             }
         };
         let calendar = self.calendar.selected_id().ok_or_else(|| {
-            anyhow::anyhow!(
-                locale
-                    .translate("Could not load local calendars")
-                    .to_owned()
-            )
+            anyhow::anyhow!(locale.translate("Could not load calendars").to_owned())
         })?;
 
         Ok(Box::new(CreateItem {

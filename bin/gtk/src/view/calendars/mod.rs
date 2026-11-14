@@ -128,7 +128,7 @@ impl CalendarsView {
     pub fn load_failed(&self, locale: &dyn Locale) {
         if self.rows.borrow().is_empty() {
             self.empty
-                .set_text(locale.translate("Could not load local calendars"));
+                .set_text(locale.translate("Could not load calendars"));
             self.empty.set_visible(true);
         }
     }
