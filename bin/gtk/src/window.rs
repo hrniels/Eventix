@@ -216,12 +216,32 @@ impl Window {
         glib::Propagation::Stop
     }
 
-    /// Activates application navigation shortcuts only when no text input owns focus.
+    /// Activates navigation shortcuts while preserving unrelated text input bindings.
     fn handle_app_shortcut(&self, key: gtk::gdk::Key, modifiers: gtk::gdk::ModifierType) -> bool {
-        if modifiers & gtk::accelerator_get_default_mod_mask()
-            != gtk::gdk::ModifierType::CONTROL_MASK
-            || self.text_input_has_focus()
+        let modifiers = modifiers & gtk::accelerator_get_default_mod_mask();
+        let control = gtk::gdk::ModifierType::CONTROL_MASK;
+        let previous = control | gtk::gdk::ModifierType::SHIFT_MASK;
+        if matches!(key, gtk::gdk::Key::g | gtk::gdk::Key::G)
+            && (modifiers == control || modifiers == previous)
         {
+            let page = &self.imp().page;
+            let search_focused = GtkWindowExt::focus(self)
+                .is_some_and(|focus| focus.is_ancestor(&*page.imp().search));
+            if !page.calendar_navigation_available()
+                || (self.text_input_has_focus() && !search_focused)
+            {
+                return false;
+            }
+            let action = if modifiers == previous {
+                "find-previous"
+            } else {
+                "find-next"
+            };
+            gio::prelude::ActionGroupExt::activate_action(self, action, None);
+            return true;
+        }
+
+        if modifiers != control || self.text_input_has_focus() {
             return false;
         }
 
@@ -341,6 +361,17 @@ impl Window {
             }
         });
         self.add_action(&action);
+
+        for (name, forward) in [("find-next", true), ("find-previous", false)] {
+            let action = gio::SimpleAction::new(name, None);
+            let page = self.imp().page.downgrade();
+            action.connect_activate(move |_, _| {
+                if let Some(page) = page.upgrade() {
+                    page.search_occurrence(forward);
+                }
+            });
+            self.add_action(&action);
+        }
 
         let action = gio::SimpleAction::new("new-event", None);
         let page = self.imp().page.downgrade();
@@ -770,6 +801,101 @@ mod tests {
             assert_eq!(activated.borrow_mut().pop(), Some(name));
             assert!(activated.borrow().is_empty());
         }
+        window.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn search_shortcuts_work_in_search_and_cards_but_not_other_inputs_or_views() {
+        use std::rc::Rc;
+
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.SearchShortcutsTest")
+            .build();
+        app.register(gio::Cancellable::NONE).unwrap();
+        let (window, page) = Window::test_new(&app);
+        let entry = gtk::Entry::new();
+        let card = crate::view::card::EventCard::new();
+        page.append(&entry);
+        page.append(&card);
+        window.present();
+        settle();
+
+        let activated = Rc::new(RefCell::new(Vec::new()));
+        for name in ["find-next", "find-previous"] {
+            let activated = activated.clone();
+            window
+                .lookup_action(name)
+                .unwrap()
+                .downcast::<gio::SimpleAction>()
+                .unwrap()
+                .connect_activate(move |_, _| activated.borrow_mut().push(name));
+        }
+        let control = gtk::gdk::ModifierType::CONTROL_MASK;
+        let previous = control | gtk::gdk::ModifierType::SHIFT_MASK;
+        for monthly in [false, true] {
+            if monthly {
+                page.switch_to_month()
+            } else {
+                page.switch_to_week()
+            }
+            for input in [
+                page.imp().search.upcast_ref::<gtk::Widget>(),
+                card.upcast_ref(),
+            ] {
+                assert!(input.grab_focus());
+                for (key, modifiers, action) in [
+                    (gtk::gdk::Key::g, control, "find-next"),
+                    (gtk::gdk::Key::G, previous, "find-previous"),
+                ] {
+                    assert_eq!(
+                        window.handle_key_pressed(key, modifiers),
+                        glib::Propagation::Stop
+                    );
+                    assert_eq!(activated.borrow_mut().pop(), Some(action));
+                }
+            }
+            assert!(entry.grab_focus());
+            for modifiers in [control, previous] {
+                assert_eq!(
+                    window.handle_key_pressed(gtk::gdk::Key::g, modifiers),
+                    glib::Propagation::Proceed
+                );
+            }
+            assert!(activated.borrow().is_empty());
+        }
+        page.switch_to_list();
+        card.grab_focus();
+        for modifiers in [
+            control,
+            previous,
+            control | gtk::gdk::ModifierType::ALT_MASK,
+        ] {
+            assert_eq!(
+                window.handle_key_pressed(gtk::gdk::Key::g, modifiers),
+                glib::Propagation::Proceed
+            );
+        }
+        assert!(activated.borrow().is_empty());
+
+        page.switch_to_week();
+        card.grab_focus();
+        assert_eq!(
+            window
+                .handle_key_pressed(gtk::gdk::Key::g, control | gtk::gdk::ModifierType::ALT_MASK,),
+            glib::Propagation::Proceed,
+        );
+        page.imp().calendars_button.emit_clicked();
+        assert!(page.management_open());
+        for modifiers in [control, previous] {
+            assert_eq!(
+                window.handle_key_pressed(gtk::gdk::Key::g, modifiers),
+                glib::Propagation::Proceed,
+            );
+        }
+        assert!(activated.borrow().is_empty());
         window.destroy();
     }
 

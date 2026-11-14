@@ -64,6 +64,7 @@ impl PageCalendars {
                     && let Some(session) = page.imp().session.current.borrow().as_ref()
                 {
                     page.dismiss_popovers();
+                    page.imp().search_state.reset(&page);
                     session.toggle_calendar(id.clone());
                 }
             });

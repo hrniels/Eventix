@@ -15,6 +15,7 @@ use eventix_state::actions::items::ItemId;
 use eventix_state::{CalendarAlarmType, State};
 
 use super::Action;
+use super::keywords::KeywordExpression;
 
 /// Applied list selection. An empty calendar selection means all calendars.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -59,41 +60,6 @@ pub struct Snapshot {
     pub locale: Arc<dyn Locale + Send + Sync>,
 }
 
-/// Case-insensitive AND groups separated by the standalone word `OR`.
-#[derive(Debug, PartialEq, Eq)]
-struct KeywordExpression(Vec<Vec<String>>);
-
-impl KeywordExpression {
-    /// Parses whitespace-separated terms and ignores empty alternatives.
-    pub fn parse(input: &str) -> Self {
-        let mut groups = Vec::new();
-        let mut current = Vec::new();
-        for token in input.split_whitespace() {
-            if token.eq_ignore_ascii_case("OR") {
-                if !current.is_empty() {
-                    groups.push(std::mem::take(&mut current));
-                }
-            } else {
-                current.push(token.to_lowercase());
-            }
-        }
-        if !current.is_empty() {
-            groups.push(current);
-        }
-        Self(groups)
-    }
-
-    /// Matches text using case-insensitive substring comparisons.
-    pub fn matches(&self, text: &str) -> bool {
-        let text = text.to_lowercase();
-        self.0.is_empty()
-            || self
-                .0
-                .iter()
-                .any(|group| group.iter().all(|term| text.contains(term)))
-    }
-}
-
 impl Snapshot {
     /// Loads base components, including past events and completed or undated tasks.
     pub(crate) fn from_state(state: &State, filter: &Filter) -> Self {
@@ -129,18 +95,7 @@ impl Snapshot {
             .filter(|(file, comp)| {
                 (filter.calendars.is_empty()
                     || filter.calendars.iter().any(|id| id == &**file.directory()))
-                    && keywords.matches(
-                        &[
-                            comp.summary().map(String::as_str),
-                            comp.description().map(String::as_str),
-                            comp.location().map(String::as_str),
-                            Some(comp.uid().as_str()),
-                        ]
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                    )
+                    && keywords.matches_event(*comp)
             })
             .collect();
         components.sort_by(|(af, a), (bf, b)| {

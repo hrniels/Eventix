@@ -57,6 +57,8 @@ const SECTIONS: &[Section] = &[
             ("<Shift>Tab", "Focus previous event"),
             ("Tab", "Focus next event"),
             ("Return space", "Open focused event"),
+            ("<Control>g", "Find next occurrence"),
+            ("<Control><Shift>g", "Find previous occurrence"),
         ],
         mouse: &[
             (
@@ -116,6 +118,8 @@ const SECTIONS: &[Section] = &[
             ("<Shift>Tab", "Focus previous event"),
             ("Tab", "Focus next event"),
             ("Return space", "Open focused event"),
+            ("<Control>g", "Find next occurrence"),
+            ("<Control><Shift>g", "Find previous occurrence"),
         ],
         mouse: &[
             (

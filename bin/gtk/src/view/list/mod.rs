@@ -60,6 +60,7 @@ impl ListView {
         self.filtering.focus_search();
     }
 
+    #[cfg(test)]
     pub fn set_keywords(&self, keywords: &str) {
         self.filtering.set_keywords(keywords);
         self.applied.borrow_mut().keywords = keywords.into();

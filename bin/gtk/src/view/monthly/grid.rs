@@ -12,7 +12,6 @@ use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 use crate::actions::move_event::{self, DraggedEvent, MoveTarget};
 use crate::model::MonthSnapshot;
 use crate::style;
-#[cfg(test)]
 use crate::view::card::EventCard;
 use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::view::{
@@ -473,6 +472,15 @@ impl MonthGrid {
             .borrow()
             .iter()
             .flat_map(WeekContent::event_cards)
+            .collect()
+    }
+
+    pub(crate) fn focus_cards(&self) -> Vec<EventCard> {
+        self.imp()
+            .contents
+            .borrow()
+            .iter()
+            .flat_map(WeekContent::focus_cards)
             .collect()
     }
 

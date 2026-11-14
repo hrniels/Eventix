@@ -54,6 +54,8 @@ impl PageManagement {
         });
         imp.page_stack.set_visible_child(&view.widget);
         imp.search.set_visible(false);
+        imp.search_controls.set_visible(false);
+        imp.search_state.cancel(page);
         imp.week_view.set_active(false);
         imp.month_view.set_active(false);
         imp.list_view.set_active(false);

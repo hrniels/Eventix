@@ -14,12 +14,14 @@ pub(crate) mod calendars;
 pub(crate) mod details;
 pub(crate) mod editor;
 pub(crate) mod import;
+mod keywords;
 mod layout;
 pub(crate) mod list;
 pub(crate) mod list_occurrences;
 pub(crate) mod monthly;
 pub(crate) mod notifications;
 pub(crate) mod occurrence;
+pub(crate) mod search;
 pub(crate) mod sidebar;
 pub(crate) mod weekly;
 

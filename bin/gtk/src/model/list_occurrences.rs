@@ -178,7 +178,7 @@ fn occurrence_cursor(occ: &Occurrence<'_>) -> Option<Cursor> {
     })
 }
 
-fn limit(tz: Tz, maximum: bool) -> DateTime<Tz> {
+pub(super) fn limit(tz: Tz, maximum: bool) -> DateTime<Tz> {
     let mut naive = if maximum {
         NaiveDateTime::MAX
     } else {

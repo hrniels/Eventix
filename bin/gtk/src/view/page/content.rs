@@ -34,17 +34,6 @@ impl PageContent {
         let imp = page.imp();
 
         let weak = page.downgrade();
-        imp.search.connect_activate(move |entry| {
-            let Some(page) = weak.upgrade() else { return };
-            if let Some(list) = page.imp().list.get() {
-                list.set_keywords(entry.text().as_str());
-            }
-            entry.set_text("");
-            page.switch_to_list();
-            page.focus_search();
-        });
-
-        let weak = page.downgrade();
         imp.week_view.connect_toggled(move |button| {
             if button.is_active()
                 && let Some(page) = weak.upgrade()
@@ -119,6 +108,13 @@ impl PageContent {
         imp.search.set_tooltip_text(Some(locale.translate(
             "Search summary, description, location or UID. Use OR for alternatives.",
         )));
+        for (button, label) in [
+            (&*imp.search_previous, "Find previous occurrence"),
+            (&*imp.search_next, "Find next occurrence"),
+        ] {
+            button.set_tooltip_text(Some(locale.translate(label)));
+            button.update_property(&[gtk::accessible::Property::Label(locale.translate(label))]);
+        }
 
         imp.previous
             .set_tooltip_text(Some(locale.translate(if monthly {
@@ -171,6 +167,7 @@ impl PageContent {
     }
 
     pub(super) fn show_content(&self, page: &CalendarPage, date: Option<NaiveDate>) {
+        page.imp().search_state.cancel(page);
         page.cancel_event_selection();
         page.dismiss_popovers();
 
@@ -223,6 +220,7 @@ impl PageContent {
         imp.month_view.set_active(view == View::Month);
         imp.list_view.set_active(view == View::List);
         imp.search.set_visible(view != View::List);
+        imp.search_controls.set_visible(view != View::List);
         if view == View::List {
             if let Some(list) = imp.list.get() {
                 imp.content_stack.set_visible_child(&list.widget);
@@ -360,9 +358,25 @@ impl PageContent {
         imp.weekly.imp().all_day.set_week(week);
         self.update_today(page);
 
-        if reset_scroll {
+        if reset_scroll && !imp.search_state.reveal_pending() {
             let scroll = imp.weekly.imp().scroll.downgrade();
+            let weak = page.downgrade();
+            let generation = self.generation.get();
+            let displayed = self.displayed.get();
+            let allocated = Cell::new(false);
             imp.weekly.imp().timed.add_tick_callback(move |_, _| {
+                let Some(page) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                if page.imp().content.generation.get() != generation
+                    || page.imp().content.displayed.get() != displayed
+                {
+                    return glib::ControlFlow::Break;
+                }
+                // Let GTK finish revealing any previously focused card before resetting the view.
+                if !allocated.replace(true) {
+                    return glib::ControlFlow::Continue;
+                }
                 if let Some(scroll) = scroll.upgrade() {
                     scroll.vadjustment().set_value(480.0);
                 }
@@ -444,6 +458,7 @@ impl PageContent {
 
                 self.loaded_generation.set(Some(response.generation));
                 self.loading.set(false);
+                page.imp().search_state.reveal(page, response.generation);
             }
             Err(_) => {
                 self.loading.set(false);

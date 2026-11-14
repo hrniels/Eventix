@@ -503,6 +503,7 @@ impl PageSession {
             }
             Event::Activity(activity) => imp.status.record(&activity, page.locale().as_ref()),
             Event::CalendarsLoaded(calendars) => {
+                imp.search_state.reset(page);
                 imp.status.set_calendars(&calendars);
                 imp.calendar_toggles.update(page, calendars);
             }
@@ -561,6 +562,9 @@ impl PageSession {
                 }
             }
             Event::ContentLoaded(response) => imp.content.receive_content(page, response),
+            Event::SearchFinished(generation, result) => {
+                imp.search_state.receive(page, generation, result);
+            }
             Event::ListRowsLoaded(response) => {
                 if let Some(list) = imp.list.get() {
                     let _ = list.set_rows(response);
@@ -627,6 +631,7 @@ impl PageSession {
                 }
             }
             Event::Changed(change) => {
+                imp.search_state.reset(page);
                 self.pending_command.set(false);
                 if self.pending_quick_task.replace(false) {
                     imp.sidebar.quick_task().finish(true);
@@ -649,6 +654,7 @@ impl PageSession {
     }
 
     pub(super) fn stop(&self, page: &CalendarPage) {
+        page.imp().search_state.reset(page);
         page.imp().imports.stop();
         self.settings_popup.take();
         self.preferences.set(None);

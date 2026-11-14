@@ -71,6 +71,7 @@ pub(crate) enum Event {
     ContentLoaded(ContentResponse),
     ListRowsLoaded(ListRowsResponse),
     OccurrencesLoaded(OccurrencesResponse),
+    SearchFinished(u64, Result<Option<crate::model::search::Cursor>, String>),
     SidebarLoaded(Result<SidebarSnapshot, String>),
     StateLoaded,
     ReloadFailed(String),
@@ -116,6 +117,7 @@ impl Event {
                 ("Loading calendar", response.result.as_ref().err())
             }
             Self::SidebarLoaded(result) => ("Loading sidebar", result.as_ref().err()),
+            Self::SearchFinished(_, result) => ("Loading calendar", result.as_ref().err()),
             Self::ManagementLoaded(_, result) => ("Loading calendar", result.as_ref().err()),
             Self::ReloadFailed(error) => ("Loading calendar", Some(error)),
             Self::SyncFinished(result) => ("Synchronizing calendars", result.as_ref().err()),

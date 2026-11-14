@@ -77,6 +77,7 @@ impl Filtering {
         self.search.grab_focus();
     }
 
+    #[cfg(test)]
     pub fn set_keywords(&self, keywords: &str) {
         self.search.set_text(keywords);
     }

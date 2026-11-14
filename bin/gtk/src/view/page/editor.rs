@@ -385,8 +385,9 @@ mod tests {
         );
         page.imp().search.set_text("meeting");
         page.imp().search.emit_activate();
-        assert_eq!(page.imp().content.view.get(), View::List);
-        assert_eq!(page.imp().list.get().unwrap().filter().keywords, "meeting");
+        assert_eq!(page.imp().content.view.get(), View::Week);
+        assert_eq!(page.imp().search.text(), "meeting");
+        assert!(page.imp().list.get().unwrap().filter().keywords.is_empty());
         page.reload();
         assert!(page.editor_open());
 

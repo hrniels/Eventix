@@ -695,6 +695,12 @@ impl Worker {
             Message::LoadSyncCollections => self.load_sync_collections(),
             Message::LoadListRows(request) => self.load_list_rows(request),
             Message::LoadOccurrences(request) => self.load_occurrences(request),
+            Message::Search(request) => Event::SearchFinished(
+                request.generation,
+                self.state()
+                    .map(|state| crate::model::search::search(&state, &request))
+                    .map_err(|error| format!("{error:#}")),
+            ),
             Message::RefreshSidebar => self.refresh_sidebar(),
             Message::RefreshSubscriptions(ids) => return self.refresh_subscriptions(&ids),
             Message::Reload => return self.reload(),

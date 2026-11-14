@@ -84,6 +84,7 @@ pub(super) enum Message {
     LoadManagement(u64),
     LoadListRows(ListRowsRequest),
     LoadOccurrences(OccurrencesRequest),
+    Search(crate::model::search::Request),
     RefreshSidebar,
     RefreshSubscriptions(Vec<SubscriptionId>),
     Reload,

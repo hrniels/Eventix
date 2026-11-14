@@ -117,6 +117,10 @@ impl Session {
         let _ = self.requests.try_send(Message::LoadOccurrences(request));
     }
 
+    pub fn search(&self, request: crate::model::search::Request) {
+        let _ = self.requests.try_send(Message::Search(request));
+    }
+
     pub fn refresh_sidebar(&self) {
         let _ = self.requests.try_send(Message::RefreshSidebar);
     }

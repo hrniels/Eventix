@@ -33,6 +33,7 @@ mod editor;
 mod import;
 mod item_actions;
 mod management;
+mod search;
 mod session;
 
 mod imp {
@@ -54,6 +55,12 @@ mod imp {
         pub list_view: gtk::TemplateChild<gtk::ToggleButton>,
         #[template_child]
         pub search: gtk::TemplateChild<gtk::Entry>,
+        #[template_child]
+        pub search_controls: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub search_previous: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub search_next: gtk::TemplateChild<gtk::Button>,
         #[template_child]
         pub header: gtk::TemplateChild<gtk::CenterBox>,
         #[template_child]
@@ -109,6 +116,7 @@ mod imp {
 
         pub(super) editor: PageEditor,
         pub(super) content: PageContent,
+        pub(super) search_state: search::PageSearch,
         pub(super) list: OnceCell<Rc<ListView>>,
         pub(super) session: PageSession,
         pub(super) calendar_toggles: calendars::PageCalendars,
@@ -191,6 +199,7 @@ mod imp {
             let _ = self.list.set(list);
             obj.align_headers();
             self.content.connect_controls(&obj);
+            self.search_state.connect(&obj);
             obj.connect_event_creation();
             self.session.connect_quick_task(&obj);
             self.session.connect_sync_collections(&obj);
@@ -431,6 +440,12 @@ impl CalendarPage {
         }
     }
 
+    pub(crate) fn search_occurrence(&self, forward: bool) {
+        if self.calendar_navigation_available() {
+            self.imp().search_state.start(self, forward);
+        }
+    }
+
     pub fn close_editor(&self) {
         self.imp().editor.finish_editor();
     }
@@ -666,7 +681,7 @@ pub(crate) mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn quick_search_switches_to_filtered_list_and_shortcut_follows_the_view() {
+    fn calendar_search_stays_in_view_and_shortcut_follows_the_view() {
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let app = gtk::Application::builder()
@@ -700,25 +715,27 @@ pub(crate) mod tests {
             let generation = imp.content.generation.get();
             imp.search.emit_activate();
             drain();
-            assert_eq!(imp.content.view.get(), View::List);
-            assert_eq!(imp.content.generation.get(), generation + 1);
-            assert_eq!(list.filter().keywords, "meeting OR appointment");
-            assert!(!gtk::prelude::WidgetExt::is_visible(&*imp.search));
-            assert!(imp.search.text().is_empty());
+            assert_eq!(imp.content.view.get(), view);
+            assert_eq!(imp.content.generation.get(), generation);
+            assert!(list.filter().keywords.is_empty());
+            assert!(imp.search_controls.is_mapped());
+            assert!(imp.search_previous.is_mapped());
+            assert!(imp.search_next.is_mapped());
+            assert_eq!(imp.search.text(), "meeting OR appointment");
+
+            page.switch_to_list();
+            drain();
+            assert!(!imp.search_controls.is_mapped());
+            imp.list_view.grab_focus();
+            gtk::prelude::ActionGroupExt::activate_action(&window, "search", None);
             let focus = gtk::prelude::RootExt::focus(&window).unwrap();
             let search = focus.ancestor(gtk::Entry::static_type()).unwrap();
             let search = search.downcast::<gtk::Entry>().unwrap();
-            assert_eq!(search.text(), "meeting OR appointment");
             assert!(search.is_ancestor(&list.widget));
-
-            imp.list_view.grab_focus();
-            gtk::prelude::ActionGroupExt::activate_action(&window, "search", None);
-            assert!(
-                gtk::prelude::RootExt::focus(&window)
-                    .is_some_and(|focus| focus.is_ancestor(&search))
-            );
+            search.set_text("independent list query");
             search.emit_activate();
-            assert_eq!(list.filter().keywords, "meeting OR appointment");
+            assert_eq!(list.filter().keywords, "independent list query");
+            list.set_keywords("");
         }
         window.close();
     }
