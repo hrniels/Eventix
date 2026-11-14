@@ -693,7 +693,7 @@ pub(crate) mod tests {
         drain();
         let imp = page.imp();
         let list = imp.list.get().unwrap();
-        assert_eq!(app.accels_for_action("win.search"), ["<Control>f"]);
+        assert!(app.accels_for_action("win.search").is_empty());
 
         for view in [View::Week, View::Month] {
             imp.content.switch_view(&page, view);

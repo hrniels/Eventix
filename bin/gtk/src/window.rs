@@ -244,6 +244,10 @@ impl Window {
             }
         }
 
+        if self.handle_app_shortcut(key, modifiers) {
+            return glib::Propagation::Stop;
+        }
+
         if let Some(propagation) = self.imp().page.handle_editor_key(key, modifiers) {
             return propagation;
         }
@@ -280,6 +284,40 @@ impl Window {
             _ => return glib::Propagation::Proceed,
         }
         glib::Propagation::Stop
+    }
+
+    /// Activates application navigation shortcuts only when no text input owns focus.
+    fn handle_app_shortcut(&self, key: gtk::gdk::Key, modifiers: gtk::gdk::ModifierType) -> bool {
+        if modifiers & gtk::accelerator_get_default_mod_mask()
+            != gtk::gdk::ModifierType::CONTROL_MASK
+            || self.text_input_has_focus()
+        {
+            return false;
+        }
+
+        let action = match key {
+            gtk::gdk::Key::a => "quick-add-task",
+            gtk::gdk::Key::e => "new-event",
+            gtk::gdk::Key::f => "search",
+            gtk::gdk::Key::t => "new-task",
+            gtk::gdk::Key::w => "week-view",
+            gtk::gdk::Key::m => "month-view",
+            gtk::gdk::Key::l => "list-view",
+            _ => return false,
+        };
+        gio::prelude::ActionGroupExt::activate_action(self, action, None);
+        true
+    }
+
+    fn text_input_has_focus(&self) -> bool {
+        let mut focused = GtkWindowExt::focus(self);
+        while let Some(widget) = focused {
+            if widget.is::<gtk::Editable>() || widget.is::<gtk::TextView>() {
+                return true;
+            }
+            focused = widget.parent();
+        }
+        false
     }
 
     /// Returns key propagation for focused event details, or `None` when details are not focused.
@@ -373,7 +411,6 @@ impl Window {
             }
         });
         self.add_action(&action);
-        app.set_accels_for_action("win.search", &["<Primary>f"]);
 
         let action = gio::SimpleAction::new("new-event", None);
         let page = self.imp().page.downgrade();
@@ -383,7 +420,6 @@ impl Window {
             }
         });
         self.add_action(&action);
-        app.set_accels_for_action("win.new-event", &["<Control>e"]);
 
         let action = gio::SimpleAction::new("new-task", None);
         let page = self.imp().page.downgrade();
@@ -393,7 +429,6 @@ impl Window {
             }
         });
         self.add_action(&action);
-        app.set_accels_for_action("win.new-task", &["<Control>t"]);
 
         let action = gio::SimpleAction::new("quick-add-task", None);
         let page = self.imp().page.downgrade();
@@ -403,16 +438,15 @@ impl Window {
             }
         });
         self.add_action(&action);
-        app.set_accels_for_action("win.quick-add-task", &["<Control>a"]);
 
         for (name, keys, days) in [
             ("previous", vec![], Some(-1)),
             ("next", vec![], Some(1)),
             ("today", vec![], None),
             ("reload", vec!["<Primary>r", "F5"], None),
-            ("week-view", vec!["<Control>w"], None),
-            ("month-view", vec!["<Control>m"], None),
-            ("list-view", vec!["<Control>l"], None),
+            ("week-view", vec![], None),
+            ("month-view", vec![], None),
+            ("list-view", vec![], None),
         ] {
             let action = gio::SimpleAction::new(name, None);
             let page = self.imp().page.downgrade();
@@ -652,6 +686,91 @@ mod tests {
         settle();
         assert!(!window.is_maximized());
         assert_eq!(window.default_size(), size);
+        window.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn application_shortcuts_leave_text_inputs_to_their_default_bindings() {
+        use std::rc::Rc;
+
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.InputShortcutsTest")
+            .build();
+        app.register(gio::Cancellable::NONE).unwrap();
+        let (window, page) = Window::test_new(&app);
+        let entry = gtk::Entry::new();
+        let password = gtk::PasswordEntry::new();
+        let text = gtk::TextView::new();
+        page.append(&entry);
+        page.append(&password);
+        page.append(&text);
+        window.present();
+        settle();
+
+        let shortcuts = [
+            (gtk::gdk::Key::a, "quick-add-task"),
+            (gtk::gdk::Key::e, "new-event"),
+            (gtk::gdk::Key::f, "search"),
+            (gtk::gdk::Key::t, "new-task"),
+            (gtk::gdk::Key::w, "week-view"),
+            (gtk::gdk::Key::m, "month-view"),
+            (gtk::gdk::Key::l, "list-view"),
+        ];
+        let activated = Rc::new(RefCell::new(Vec::new()));
+        for (_, name) in shortcuts {
+            assert!(app.accels_for_action(&format!("win.{name}")).is_empty());
+            let activated = activated.clone();
+            window
+                .lookup_action(name)
+                .unwrap()
+                .downcast::<gio::SimpleAction>()
+                .unwrap()
+                .connect_activate(move |_, _| activated.borrow_mut().push(name));
+        }
+
+        for input in [
+            entry.upcast_ref::<gtk::Widget>(),
+            password.upcast_ref(),
+            text.upcast_ref(),
+            page.imp().search.upcast_ref(),
+        ] {
+            assert!(input.grab_focus());
+            for (key, _) in shortcuts {
+                assert_eq!(
+                    window.handle_key_pressed(key, gtk::gdk::ModifierType::CONTROL_MASK),
+                    glib::Propagation::Proceed,
+                );
+            }
+            assert!(activated.borrow().is_empty());
+        }
+
+        // Clipboard, undo, and word-editing keys are not application shortcuts either.
+        for key in [
+            gtk::gdk::Key::c,
+            gtk::gdk::Key::x,
+            gtk::gdk::Key::v,
+            gtk::gdk::Key::z,
+            gtk::gdk::Key::Left,
+            gtk::gdk::Key::BackSpace,
+        ] {
+            assert_eq!(
+                window.handle_key_pressed(key, gtk::gdk::ModifierType::CONTROL_MASK),
+                glib::Propagation::Proceed,
+            );
+        }
+
+        for (key, name) in shortcuts {
+            GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
+            assert_eq!(
+                window.handle_key_pressed(key, gtk::gdk::ModifierType::CONTROL_MASK),
+                glib::Propagation::Stop,
+            );
+            assert_eq!(activated.borrow_mut().pop(), Some(name));
+            assert!(activated.borrow().is_empty());
+        }
         window.destroy();
     }
 
