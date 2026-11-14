@@ -9,7 +9,24 @@ struct Section {
     name: &'static str,
     title: &'static str,
     shortcuts: &'static [(&'static str, &'static str)],
-    mouse: &'static [(&'static str, &'static str)],
+    mouse: &'static [(&'static str, &'static str, MouseInteraction)],
+}
+
+#[derive(Clone, Copy)]
+enum MouseInteraction {
+    Left,
+    Right,
+    Scroll,
+}
+
+impl MouseInteraction {
+    fn resource(self) -> &'static str {
+        match self {
+            Self::Left => resource_path!("icons/mouse-left-symbolic.svg"),
+            Self::Right => resource_path!("icons/mouse-right-symbolic.svg"),
+            Self::Scroll => resource_path!("icons/mouse-scroll-symbolic.svg"),
+        }
+    }
 }
 
 const SECTIONS: &[Section] = &[
@@ -42,32 +59,50 @@ const SECTIONS: &[Section] = &[
             ("Return space", "Open focused event"),
         ],
         mouse: &[
-            ("Open event details", "Click an event."),
-            ("Open event actions", "Right-click an event."),
-            ("New event", "Double-click an empty time slot."),
+            (
+                "Open event details",
+                "Click an event.",
+                MouseInteraction::Left,
+            ),
+            (
+                "Open event actions",
+                "Right-click an event.",
+                MouseInteraction::Right,
+            ),
+            (
+                "New event",
+                "Double-click an empty time slot.",
+                MouseInteraction::Left,
+            ),
             (
                 "New all-day event",
                 "Double-click a day heading or empty all-day area.",
+                MouseInteraction::Left,
             ),
             (
                 "Create event for selected times",
                 "Drag across empty time slots.",
+                MouseInteraction::Left,
             ),
             (
                 "Create event for selected days",
                 "Drag across empty all-day cells.",
+                MouseInteraction::Left,
             ),
             (
                 "Move event",
                 "Drag an editable event to another time or day.",
+                MouseInteraction::Left,
             ),
             (
                 "Copy event",
                 "Hold Ctrl while dragging a non-recurring editable event.",
+                MouseInteraction::Left,
             ),
             (
                 "Resize event",
                 "Drag the top or bottom edge of an editable timed event.",
+                MouseInteraction::Left,
             ),
         ],
     },
@@ -83,21 +118,36 @@ const SECTIONS: &[Section] = &[
             ("Return space", "Open focused event"),
         ],
         mouse: &[
-            ("Open event details", "Click an event."),
-            ("Open event actions", "Right-click an event."),
-            ("New all-day event", "Double-click an empty day cell."),
-            ("Open week", "Click a week number."),
+            (
+                "Open event details",
+                "Click an event.",
+                MouseInteraction::Left,
+            ),
+            (
+                "Open event actions",
+                "Right-click an event.",
+                MouseInteraction::Right,
+            ),
+            (
+                "New all-day event",
+                "Double-click an empty day cell.",
+                MouseInteraction::Left,
+            ),
+            ("Open week", "Click a week number.", MouseInteraction::Left),
             (
                 "Create event for selected days",
                 "Drag across empty day cells.",
+                MouseInteraction::Left,
             ),
             (
                 "Move event",
                 "Drag an editable event to another day; its time is preserved.",
+                MouseInteraction::Left,
             ),
             (
                 "Copy event",
                 "Hold Ctrl while dragging a non-recurring editable event.",
+                MouseInteraction::Left,
             ),
         ],
     },
@@ -114,7 +164,11 @@ const SECTIONS: &[Section] = &[
             ("Left", "Collapse occurrences"),
             ("Down Escape", "Focus results from search filters"),
         ],
-        mouse: &[("Toggle occurrences", "Click a recurring item row.")],
+        mouse: &[(
+            "Toggle occurrences",
+            "Click a recurring item row.",
+            MouseInteraction::Left,
+        )],
     },
     Section {
         name: "editing",
@@ -146,8 +200,16 @@ const SECTIONS: &[Section] = &[
             ("Escape", "Close picker"),
         ],
         mouse: &[
-            ("Confirm picker selection", "Click a day or week."),
-            ("Previous or next month", "Scroll over the date picker."),
+            (
+                "Confirm picker selection",
+                "Click a day or week.",
+                MouseInteraction::Left,
+            ),
+            (
+                "Previous or next month",
+                "Scroll over the date picker.",
+                MouseInteraction::Scroll,
+            ),
         ],
     },
     Section {
@@ -163,8 +225,16 @@ const SECTIONS: &[Section] = &[
             ("Escape", "Close picker"),
         ],
         mouse: &[
-            ("Confirm picker selection", "Click a month."),
-            ("Previous or next year", "Scroll over the month picker."),
+            (
+                "Confirm picker selection",
+                "Click a month.",
+                MouseInteraction::Left,
+            ),
+            (
+                "Previous or next year",
+                "Scroll over the month picker.",
+                MouseInteraction::Scroll,
+            ),
         ],
     },
     Section {
@@ -181,10 +251,12 @@ const SECTIONS: &[Section] = &[
             (
                 "Select time",
                 "Click an hour, then a minute on the clock face.",
+                MouseInteraction::Left,
             ),
             (
                 "Select precise minutes",
                 "Drag on the minute clock face; release to confirm.",
+                MouseInteraction::Left,
             ),
         ],
     },
@@ -279,12 +351,22 @@ fn build_section(section: &Section, locale: &dyn Locale) -> HelpSection {
 
     let mut groups = Vec::new();
     for mouse in [false, true] {
-        let entries = if mouse {
-            section.mouse
+        let rows: Vec<_> = if mouse {
+            section
+                .mouse
+                .iter()
+                .map(|(title, description, interaction)| {
+                    build_row(section, title, description, Some(*interaction), locale)
+                })
+                .collect()
         } else {
-            section.shortcuts
+            section
+                .shortcuts
+                .iter()
+                .map(|(keys, title)| build_row(section, keys, title, None, locale))
+                .collect()
         };
-        if entries.is_empty() {
+        if rows.is_empty() {
             continue;
         }
         let group = gtk::Box::new(gtk::Orientation::Vertical, 8);
@@ -297,14 +379,9 @@ fn build_section(section: &Section, locale: &dyn Locale) -> HelpSection {
         let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
         card.add_css_class("ev_shortcuts_card");
         card.set_overflow(gtk::Overflow::Hidden);
-        let rows = entries
-            .iter()
-            .map(|(first, second)| {
-                let row = build_row(section, first, second, mouse, locale);
-                card.append(&row.widget);
-                row
-            })
-            .collect();
+        for row in &rows {
+            card.append(&row.widget);
+        }
         group.append(&card);
         widget.append(&group);
         groups.push(HelpGroup {
@@ -319,11 +396,12 @@ fn build_row(
     section: &Section,
     first: &str,
     second: &str,
-    mouse: bool,
+    interaction: Option<MouseInteraction>,
     locale: &dyn Locale,
 ) -> HelpRow {
     let widget = gtk::Box::new(gtk::Orientation::Horizontal, 20);
     widget.add_css_class("ev_shortcuts_row");
+    let mouse = interaction.is_some();
     let title = if mouse { first } else { second };
     let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
     text.set_hexpand(true);
@@ -340,8 +418,11 @@ fn build_row(
     }
     widget.append(&text);
 
-    if mouse {
-        let icon = gtk::Image::from_icon_name("input-mouse-symbolic");
+    if let Some(interaction) = interaction {
+        let file = gtk::gio::File::for_uri(&format!("resource://{}", interaction.resource()));
+        let icon = gtk::Image::from_gicon(&gtk::gio::FileIcon::new(&file));
+        icon.set_pixel_size(28);
+        icon.set_accessible_role(gtk::AccessibleRole::Presentation);
         icon.set_valign(gtk::Align::Center);
         widget.append(&icon);
     } else {
@@ -429,7 +510,7 @@ mod tests {
                         section
                             .mouse
                             .iter()
-                            .flat_map(|(title, subtitle)| [*title, *subtitle]),
+                            .flat_map(|(title, subtitle, _)| [*title, *subtitle]),
                     )
                     .chain(std::iter::once("Mouse interactions"))
                     .chain(["Search shortcuts", "No shortcuts found"])
@@ -452,6 +533,79 @@ mod tests {
             widgets.push(current);
         }
         widgets
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn shortcuts_help_mouse_icons_preserve_shapes_and_theme_colors() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        for interaction in [
+            MouseInteraction::Left,
+            MouseInteraction::Right,
+            MouseInteraction::Scroll,
+        ] {
+            let resource = interaction.resource();
+            gtk::gio::resources_lookup_data(resource, gtk::gio::ResourceLookupFlags::NONE).unwrap();
+            let file = gtk::gio::File::for_uri(&format!("resource://{resource}"));
+            let icon = gtk::IconTheme::for_display(&gtk::gdk::Display::default().unwrap())
+                .lookup_by_gicon(
+                    &gtk::gio::FileIcon::new(&file),
+                    28,
+                    1,
+                    gtk::TextDirection::None,
+                    gtk::IconLookupFlags::empty(),
+                );
+            assert!(
+                icon.is_symbolic(),
+                "mouse icon must follow the theme: {resource}"
+            );
+            assert!(icon.intrinsic_width() > 0);
+            assert!(icon.intrinsic_height() > 0);
+            for foreground in [gtk::gdk::RGBA::BLACK, gtk::gdk::RGBA::WHITE] {
+                let snapshot = gtk::Snapshot::new();
+                icon.snapshot_symbolic(&snapshot, 20.0, 28.0, &[foreground; 4]);
+                let node = snapshot.to_node().unwrap();
+                let renderer = gtk::gsk::CairoRenderer::new();
+                renderer.realize(None::<&gtk::gdk::Surface>).unwrap();
+                let texture = renderer
+                    .render_texture(&node, Some(&gtk::graphene::Rect::new(0.0, 0.0, 20.0, 28.0)));
+                renderer.unrealize();
+                let mut pixels = vec![0; 20 * 28 * 4];
+                texture.download(&mut pixels, 20 * 4);
+                for pixel in pixels.as_chunks::<4>().0 {
+                    let expected = if foreground == gtk::gdk::RGBA::WHITE {
+                        pixel[3]
+                    } else {
+                        0
+                    };
+                    assert!(
+                        pixel[..3].iter().all(|channel| *channel == expected),
+                        "mouse icon must use the requested foreground: {resource}"
+                    );
+                }
+                let alpha = |x: usize, y: usize| pixels[(y * 20 + x) * 4 + 3];
+                assert_eq!(alpha(10, 25), 0, "mouse body must stay hollow: {resource}");
+                assert!(
+                    alpha(10, 27) > 100,
+                    "mouse outline must remain visible: {resource}"
+                );
+                let left = alpha(5, 10);
+                let right = alpha(15, 10);
+                match interaction {
+                    MouseInteraction::Left => {
+                        assert!(left > 200 && right < 30, "left button: {resource}");
+                    }
+                    MouseInteraction::Right => {
+                        assert!(right > 200 && left < 30, "right button: {resource}");
+                    }
+                    MouseInteraction::Scroll => {
+                        assert!(left < 30 && right < 30, "scroll wheel: {resource}");
+                        assert!(alpha(10, 10) > 200);
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -515,7 +669,7 @@ mod tests {
                     );
                 }
             }
-            for (title, subtitle) in expected.mouse {
+            for (title, subtitle, interaction) in expected.mouse {
                 assert!(rows.iter().any(|row| {
                     let children = descendants(row);
                     [title, subtitle].iter().all(|text| {
@@ -524,7 +678,18 @@ mod tests {
                                 .downcast_ref::<gtk::Label>()
                                 .is_some_and(|label| label.text() == **text)
                         })
-                    }) && children.iter().any(|child| child.is::<gtk::Image>())
+                    }) && children.iter().any(|child| {
+                        child.downcast_ref::<gtk::Image>().is_some_and(|image| {
+                            image
+                                .gicon()
+                                .and_then(|icon| icon.downcast::<gtk::gio::FileIcon>().ok())
+                                .is_some_and(|icon| {
+                                    icon.file().uri()
+                                        == format!("resource://{}", interaction.resource())
+                                })
+                                && image.pixel_size() == 28
+                        })
+                    })
                 }));
             }
         }

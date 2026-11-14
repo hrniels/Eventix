@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (C) 2026 Nils Asmussen
+     SPDX-License-Identifier: GPL-3.0-or-later
+     Adapted from data/static/mouse-left.svg in commit 48c96bcc.
+     gpa:version preserves fills and strokes in GTK's symbolic renderer. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:gpa="https://www.gtk.org/grappa" gpa:version="1" width="20" height="28" viewBox="64 52 76 110">
+  <path fill="url(#gpa:foreground) #000" d="M101.7 68.1C122.8 67.5 138.5 74.8 136.6 101.6Q121.4 106.5 107.4 106.5V99.7Q109 98 109 94.1V83.8Q109 76.6 101.7 76.6Z"/>
+  <g fill="none" stroke="url(#gpa:foreground) #000" stroke-linecap="round" stroke-linejoin="round">
+    <path style="fill:none" stroke-width="5.3" d="M101.7298 68.147806C80.637263 67.457683 64.910062 74.752388 66.864233 101.62225v25.20673c1.375793 20.7352 13.2873 32.52755 34.857797 32.13447 13.67032 0 32.97344-3.61698 34.86559-32.13447V101.62225c1.95394-26.866629-13.76911-34.162564-34.85782-33.474444Z"/>
+    <path style="fill:none" stroke-width="4" d="M66.9 101.6Q101.7 112 136.6 101.6M101.7 68.1V78.2M101.7 99.7V106.8"/>
+    <rect style="fill:none" stroke-width="3.2" x="96" y="78.2" width="11.4" height="21.5" rx="5.6"/>
+    <path style="fill:none" stroke-width="5.3" d="M101.7 68.1Q101.3 56.3 90.3 55.6"/>
+  </g>
+</svg>
