@@ -149,8 +149,7 @@ impl PageContent {
             .set_tooltip_text(Some(locale.translate("List View")));
 
         imp.today.set_label(locale.translate("Today"));
-        imp.calendars_button
-            .set_label(&format!("{}:", locale.translate("Calendars")));
+        imp.calendar_toggles.update_label(page);
         imp.calendars_button
             .set_tooltip_text(Some(locale.translate("Calendars")));
         imp.reload

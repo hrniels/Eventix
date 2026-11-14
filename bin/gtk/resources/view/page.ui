@@ -65,7 +65,8 @@
                   </object>
                 </child>
                 <child>
-                  <object class="GtkScrolledWindow">
+                  <object class="GtkScrolledWindow" id="calendar_selectors_scroll">
+                    <property name="visible">false</property>
                     <property name="propagate-natural-width">true</property>
                     <property name="max-content-width">400</property>
                     <property name="hscrollbar-policy">automatic</property>

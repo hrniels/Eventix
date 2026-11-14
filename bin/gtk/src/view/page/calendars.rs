@@ -17,6 +17,19 @@ pub(super) struct PageCalendars {
 }
 
 impl PageCalendars {
+    pub(super) fn update_label(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        let has_calendars = imp.calendars.first_child().is_some();
+        let locale = page.locale();
+        let label = locale.translate("Calendars");
+        imp.calendars_button.set_label(&if has_calendars {
+            format!("{label}:")
+        } else {
+            label.to_owned()
+        });
+        imp.calendar_selectors_scroll.set_visible(has_calendars);
+    }
+
     pub(super) fn update(&self, page: &CalendarPage, calendars: Vec<CalendarVisibility>) {
         let mut choices = self.choices.borrow_mut();
         if choices.len() == calendars.len()
@@ -28,6 +41,7 @@ impl PageCalendars {
                 button.update(&new.name, new.enabled, new.sync_error.as_deref());
                 *old = new;
             }
+            self.update_label(page);
             return;
         }
 
@@ -56,6 +70,7 @@ impl PageCalendars {
             container.append(&button.widget);
             choices.push((calendar, button));
         }
+        self.update_label(page);
     }
 }
 
@@ -73,6 +88,10 @@ mod tests {
         crate::style::install(&gtk::gdk::Display::default().unwrap());
         let page: CalendarPage = gtk::glib::Object::new();
         let imp = page.imp();
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
+        assert!(!imp.calendar_selectors_scroll.is_visible());
+        imp.calendar_toggles.update(&page, vec![]);
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
         let mut calendars = vec![
             CalendarVisibility {
                 id: "red".into(),
@@ -115,6 +134,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars:"));
+        assert!(imp.calendar_selectors_scroll.is_visible());
         let label_bounds = imp.calendars_button.compute_bounds(&page).unwrap();
         let circle_bounds = first.compute_bounds(&page).unwrap();
         let view_bounds = imp.list_view.compute_bounds(&page).unwrap();
@@ -156,8 +176,13 @@ mod tests {
         let only = imp.calendars.first_child().unwrap();
         assert_eq!(only.tooltip_text().as_deref(), Some("Renamed"));
         assert!(only.next_sibling().is_none());
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars:"));
         imp.calendar_toggles.update(&page, vec![]);
         assert!(imp.calendars.first_child().is_none());
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
+        assert!(!imp.calendar_selectors_scroll.is_visible());
+        page.switch_to_month();
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
         window.close();
     }
 }

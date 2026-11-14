@@ -99,6 +99,8 @@ mod imp {
         #[template_child]
         pub calendars: gtk::TemplateChild<gtk::Box>,
         #[template_child]
+        pub calendar_selectors_scroll: gtk::TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
         pub picker: gtk::TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub calendar: gtk::TemplateChild<crate::widgets::DatePicker>,
