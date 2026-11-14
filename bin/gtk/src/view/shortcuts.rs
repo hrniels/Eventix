@@ -112,7 +112,7 @@ const SECTIONS: &[Section] = &[
             ("space", "Toggle occurrences"),
             ("Right", "Expand occurrences"),
             ("Left", "Collapse occurrences"),
-            ("Down", "Focus results from search filters"),
+            ("Down Escape", "Focus results from search filters"),
         ],
         mouse: &[("Toggle occurrences", "Click a recurring item row.")],
     },

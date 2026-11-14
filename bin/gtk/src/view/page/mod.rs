@@ -466,6 +466,29 @@ impl CalendarPage {
         !self.management_open() && !self.popup_open() && self.imp().content.view.get() != View::List
     }
 
+    /// Releases focus from the calendar search or quick task summary without clearing its text.
+    pub(crate) fn defocus_navigation_input(&self) -> bool {
+        if self.management_open() || self.popup_open() {
+            return false;
+        }
+        let Some(root) = self.root() else {
+            return false;
+        };
+        let Some(focus) = root.focus() else {
+            return false;
+        };
+        let imp = self.imp();
+        let quick = imp.sidebar.quick_task();
+        if [&*imp.search, &quick.summary]
+            .iter()
+            .any(|entry| &focus == entry.upcast_ref::<gtk::Widget>() || focus.is_ancestor(*entry))
+        {
+            root.set_focus(None::<&gtk::Widget>);
+            return true;
+        }
+        false
+    }
+
     pub fn switch_to_week(&self) {
         self.imp().content.switch_view(self, View::Week);
     }

@@ -667,6 +667,21 @@ mod tests {
         assert_eq!(selection.selected(), 0);
         assert_eq!(view.results.scroll.vadjustment().value(), 0.0);
         assert!(RootExt::focus(&window).is_some_and(|focus| focus.is_ancestor(&list)));
+        navigate(gdk::Key::End);
+        view.focus_search();
+        search.set_text("Unfinished search");
+        let applied = view.filter();
+        press(
+            search.upcast_ref(),
+            gdk::Key::Escape,
+            gdk::ModifierType::empty(),
+        );
+        drain();
+        assert_eq!(selection.selected(), 0);
+        assert_eq!(view.results.scroll.vadjustment().value(), 0.0);
+        assert!(RootExt::focus(&window).is_some_and(|focus| focus.is_ancestor(&list)));
+        assert_eq!(search.text(), "Unfinished search");
+        assert_eq!(view.filter(), applied);
         navigate(gdk::Key::Down);
         assert_eq!(selection.selected(), 1);
         let mut empty = snapshot(Filter::default());
@@ -676,6 +691,13 @@ mod tests {
         view.filtering.focus_search();
         assert!(!view.results.focus_first());
         assert!(RootExt::focus(&window).is_some_and(|focus| focus.is_ancestor(&search)));
+        press(
+            search.upcast_ref(),
+            gdk::Key::Escape,
+            gdk::ModifierType::empty(),
+        );
+        drain();
+        assert!(RootExt::focus(&window).is_none());
         window.close();
         window.set_child(None::<&gtk::Widget>);
     }

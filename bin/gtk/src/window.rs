@@ -253,6 +253,9 @@ impl Window {
         }
 
         if key == gtk::gdk::Key::Escape {
+            if self.imp().page.defocus_navigation_input() {
+                return glib::Propagation::Stop;
+            }
             self.imp().page.dismiss_popovers();
             return glib::Propagation::Proceed;
         }
@@ -649,6 +652,91 @@ mod tests {
         settle();
         assert!(!window.is_maximized());
         assert_eq!(window.default_size(), size);
+        window.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn escape_defocuses_navigation_inputs_without_clearing_their_text() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.InputEscapeTest")
+            .build();
+        app.register(gio::Cancellable::NONE).unwrap();
+        let (window, page) = Window::test_new(&app);
+        let quick = page.imp().sidebar.quick_task();
+        quick.widget.set_visible(true);
+        window.present();
+        settle();
+
+        for monthly in [false, true] {
+            if monthly {
+                page.switch_to_month();
+            } else {
+                page.switch_to_week();
+            }
+            for entry in [&*page.imp().search, &quick.summary] {
+                entry.set_text("Unfinished draft");
+                assert!(entry.grab_focus());
+                settle();
+                for key in [gtk::gdk::Key::Left, gtk::gdk::Key::Right] {
+                    assert_eq!(
+                        window.handle_key_pressed(key, gtk::gdk::ModifierType::empty()),
+                        glib::Propagation::Proceed,
+                    );
+                }
+                assert_eq!(
+                    window.handle_key_pressed(
+                        gtk::gdk::Key::Escape,
+                        gtk::gdk::ModifierType::empty(),
+                    ),
+                    glib::Propagation::Stop,
+                );
+                settle();
+                assert!(GtkWindowExt::focus(&window).is_none());
+                assert_eq!(entry.text(), "Unfinished draft");
+                for key in [gtk::gdk::Key::Left, gtk::gdk::Key::Right] {
+                    assert_eq!(
+                        window.handle_key_pressed(key, gtk::gdk::ModifierType::empty()),
+                        glib::Propagation::Stop,
+                    );
+                }
+            }
+        }
+
+        page.switch_to_list();
+        page.focus_search();
+        settle();
+        let entry = GtkWindowExt::focus(&window)
+            .unwrap()
+            .ancestor(gtk::Entry::static_type())
+            .and_downcast::<gtk::Entry>()
+            .unwrap();
+        entry.set_text("Unfinished search");
+        assert_eq!(
+            window.handle_key_pressed(gtk::gdk::Key::Escape, gtk::gdk::ModifierType::empty()),
+            glib::Propagation::Proceed,
+        );
+        let keys = entry
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+            .unwrap();
+        assert!(keys.emit_by_name::<bool>(
+            "key-pressed",
+            &[
+                &gtk::gdk::Key::Escape,
+                &0u32,
+                &gtk::gdk::ModifierType::empty(),
+            ]
+        ));
+        settle();
+        assert!(GtkWindowExt::focus(&window).is_none());
+        assert_eq!(entry.text(), "Unfinished search");
+        page.focus_search();
+        assert!(GtkWindowExt::focus(&window).is_some_and(|focus| focus.is_ancestor(&entry)));
         window.destroy();
     }
 

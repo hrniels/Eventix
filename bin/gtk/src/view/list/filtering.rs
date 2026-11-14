@@ -84,8 +84,19 @@ impl Filtering {
     pub fn connect_focus_results(&self, focus: impl Fn() -> bool + 'static) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let search = self.search.downgrade();
         keys.connect_key_pressed(move |_, key, _, modifiers| {
-            if key == gdk::Key::Down && modifiers.is_empty() && focus() {
+            if !modifiers.is_empty() {
+                return gtk::glib::Propagation::Proceed;
+            }
+            if key == gdk::Key::Escape {
+                if !focus()
+                    && let Some(root) = search.upgrade().and_then(|search| search.root())
+                {
+                    root.set_focus(None::<&gtk::Widget>);
+                }
+                gtk::glib::Propagation::Stop
+            } else if key == gdk::Key::Down && focus() {
                 gtk::glib::Propagation::Stop
             } else {
                 gtk::glib::Propagation::Proceed
