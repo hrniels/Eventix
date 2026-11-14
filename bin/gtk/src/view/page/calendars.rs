@@ -172,8 +172,17 @@ mod tests {
 
         calendars.remove(0);
         calendars[0].name = "Renamed".into();
-        imp.calendar_toggles.update(&page, calendars);
+        imp.calendar_toggles.update(&page, calendars.clone());
         let only = imp.calendars.first_child().unwrap();
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(
+            imp.calendar_selectors_scroll.width(),
+            only.width() + imp.calendars.margin_end(),
+            "the selector should fit one calendar without extra reserved width"
+        );
         assert_eq!(only.tooltip_text().as_deref(), Some("Renamed"));
         assert!(only.next_sibling().is_none());
         assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars:"));
@@ -183,6 +192,23 @@ mod tests {
         assert!(!imp.calendar_selectors_scroll.is_visible());
         page.switch_to_month();
         assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
+        let many = (0..30)
+            .map(|index| CalendarVisibility {
+                id: format!("calendar-{index}"),
+                ..calendars[0].clone()
+            })
+            .collect();
+        imp.calendar_toggles.update(&page, many);
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let scroll = &imp.calendar_selectors_scroll;
+        assert!(scroll.width() <= scroll.max_content_width());
+        let adjustment = scroll.hadjustment();
+        assert!(adjustment.upper() > adjustment.page_size());
+        adjustment.set_value(adjustment.upper() - adjustment.page_size());
+        assert!(adjustment.value() > 0.0);
         window.close();
     }
 }
