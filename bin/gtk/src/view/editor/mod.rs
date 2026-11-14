@@ -748,19 +748,41 @@ impl DateSection {
             Self::timezone_child::<gtk::SearchEntry>(timezone.upcast_ref()),
             Self::timezone_child::<gtk::ListView>(timezone.upcast_ref()),
         ) {
+            if let Some(model) = list.model() {
+                let weak_list = list.downgrade();
+                model.connect_items_changed(move |_, _, _, _| {
+                    // Let GTK finish updating its selection before selecting the first match.
+                    let weak_list = weak_list.clone();
+                    gtk::glib::idle_add_local_once(move || {
+                        if let Some(list) = weak_list.upgrade()
+                            && let Some(model) = list.model().filter(|model| model.n_items() > 0)
+                        {
+                            model.select_item(0, true);
+                            let _ = list
+                                .activate_action("list.scroll-to-item", Some(&0u32.to_variant()));
+                        }
+                    });
+                });
+            }
+
             // Listen inside the native popup, rather than on its dropdown outside the surface.
             let keys = gtk::EventControllerKey::new();
             keys.set_propagation_phase(gtk::PropagationPhase::Capture);
             let weak_list = list.downgrade();
             keys.connect_key_pressed(move |_, key, _, modifiers| {
-                if !matches!(key, gtk::gdk::Key::Down | gtk::gdk::Key::KP_Down)
-                    || modifiers.intersects(
-                        gtk::gdk::ModifierType::SHIFT_MASK
-                            | gtk::gdk::ModifierType::CONTROL_MASK
-                            | gtk::gdk::ModifierType::ALT_MASK
-                            | gtk::gdk::ModifierType::SUPER_MASK,
-                    )
-                {
+                if !matches!(
+                    key,
+                    gtk::gdk::Key::Down
+                        | gtk::gdk::Key::KP_Down
+                        | gtk::gdk::Key::Return
+                        | gtk::gdk::Key::KP_Enter
+                        | gtk::gdk::Key::ISO_Enter
+                ) || modifiers.intersects(
+                    gtk::gdk::ModifierType::SHIFT_MASK
+                        | gtk::gdk::ModifierType::CONTROL_MASK
+                        | gtk::gdk::ModifierType::ALT_MASK
+                        | gtk::gdk::ModifierType::SUPER_MASK,
+                ) {
                     return gtk::glib::Propagation::Proceed;
                 }
                 let Some(list) = weak_list.upgrade() else {
@@ -769,6 +791,16 @@ impl DateSection {
                 let Some(model) = list.model().filter(|model| model.n_items() > 0) else {
                     return gtk::glib::Propagation::Stop;
                 };
+                if matches!(
+                    key,
+                    gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter | gtk::gdk::Key::ISO_Enter
+                ) {
+                    let selected = model.selection().minimum();
+                    if selected < model.n_items() {
+                        list.emit_by_name::<()>("activate", &[&selected]);
+                    }
+                    return gtk::glib::Propagation::Stop;
+                }
                 model.select_item(0, true);
                 let _ = list.activate_action("list.scroll-to-item", Some(&0u32.to_variant()));
                 // Scrolling must allocate the first row before it can receive focus. Grabbing
@@ -1384,6 +1416,83 @@ mod tests {
     use gtk::prelude::*;
 
     use super::{CalDate, DateInput, DateSection, ItemEditor};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn timezone_search_selects_first_match_and_enter_accepts_selection() {
+        gtk::init().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        let locale = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::English,
+            chrono_tz::Europe::Berlin,
+        )
+        .unwrap();
+        let timezone = DateSection::create_timezone(locale.as_ref());
+        let window = gtk::Window::builder().child(&timezone).build();
+        window.present();
+        let drain = || {
+            for _ in 0..30 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let search =
+            DateSection::timezone_child::<gtk::SearchEntry>(timezone.upcast_ref()).unwrap();
+        let list = DateSection::timezone_child::<gtk::ListView>(timezone.upcast_ref()).unwrap();
+        let popup = DateSection::timezone_child::<gtk::Popover>(timezone.upcast_ref()).unwrap();
+        let keys = search.observe_controllers();
+        let keys = (0..keys.n_items())
+            .filter_map(|index| keys.item(index).and_downcast::<gtk::EventControllerKey>())
+            .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+            .unwrap();
+
+        for (query, position) in [("Europe/", 0), ("America/", 1), ("no matching timezone", 0)] {
+            timezone.activate();
+            drain();
+            search.set_text(query);
+            drain();
+            let model = list.model().unwrap();
+            let expected = if model.n_items() > 0 {
+                assert!(model.n_items() > 1);
+                assert_eq!(model.selection().minimum(), 0);
+                model.select_item(position, true);
+                Some(
+                    model
+                        .item(position)
+                        .and_downcast::<gtk::StringObject>()
+                        .unwrap()
+                        .string(),
+                )
+            } else {
+                None
+            };
+            let previous = timezone.selected();
+            assert!(keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[
+                    &gtk::gdk::Key::Return,
+                    &0u32,
+                    &gtk::gdk::ModifierType::empty()
+                ],
+            ));
+            drain();
+            if let Some(expected) = expected {
+                assert_eq!(
+                    chrono_tz::TZ_VARIANTS[timezone.selected() as usize].name(),
+                    expected
+                );
+                assert!(!popup.is_visible());
+            } else {
+                assert_eq!(timezone.selected(), previous);
+                assert!(popup.is_visible());
+                popup.popdown();
+            }
+        }
+        window.close();
+    }
 
     pub(super) fn execute(
         action: Box<dyn eventix_state::actions::Action>,
