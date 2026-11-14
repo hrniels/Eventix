@@ -386,13 +386,6 @@ checkbutton.ev_management_check > radio {
 }
 
 .ev_editor_field_label,
-.ev_editor_preview,
-.ev_editor_body_label,
-.ev_editor_expanded checkbutton > label {
-    font-family: serif;
-}
-
-.ev_editor_field_label,
 .ev_editor_subheading {
     font-weight: bold;
 }
