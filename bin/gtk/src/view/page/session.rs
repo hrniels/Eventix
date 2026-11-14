@@ -219,6 +219,14 @@ impl PageSession {
         while let Some(child) = imp.sync_collection_list.first_child() {
             imp.sync_collection_list.remove(&child);
         }
+        if collections.is_empty() {
+            let empty = gtk::Button::with_label(page.locale().translate("No collections"));
+            empty.set_sensitive(false);
+            empty.add_css_class("ev_details_button");
+            imp.sync_collection_list.append(&empty);
+            return;
+        }
+
         for (collection, backend) in collections {
             let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
             let icon = crate::view::calendars::collection_icon(backend);
@@ -818,6 +826,30 @@ mod tests {
         assert!(!loading.is_sensitive());
         assert!(loading.is_mapped());
         assert!(loading.height() > 0);
+        imp.session
+            .handle_event(&page, Event::SyncCollectionsLoaded(vec![]));
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        let empty = imp
+            .sync_collection_list
+            .first_child()
+            .and_downcast::<gtk::Button>()
+            .unwrap();
+        assert_eq!(empty.label().as_deref(), Some("No collections"));
+        assert!(!empty.is_sensitive());
+        assert!(empty.has_css_class("ev_details_button"));
+        assert!(empty.next_sibling().is_none());
+        assert!(empty.is_mapped());
+        assert!(empty.height() > 0);
+        assert!(imp.sync_popover.is_mapped());
+        imp.sync_collections.popdown();
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(200)));
+        toggle.emit_clicked();
+        glib::MainContext::default()
+            .block_on(glib::timeout_future(std::time::Duration::from_millis(100)));
+        assert!(imp.sync_popover.is_mapped());
+        assert!(empty.is_mapped());
         imp.session.update_sync_collections(
             &page,
             vec![

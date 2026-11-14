@@ -497,6 +497,7 @@
 "No calendar configuration found at {}. Check XDG_CONFIG_HOME and --data-prefix." = "No calendar configuration found at {}. Check XDG_CONFIG_HOME and --data-prefix."
 "No end date" = "No end date"
 "No calendars found" = "No calendars found"
+"No collections" = "No collections"
 "No importable events or tasks found." = "No importable events or tasks found."
 "No items found" = "No items found"
 "No matches" = "No matches"
