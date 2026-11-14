@@ -249,6 +249,21 @@ glib::wrapper! {
 }
 
 impl TimedGrid {
+    pub(crate) fn focus_cards(&self) -> Vec<(usize, u32, EventCard)> {
+        let imp = self.imp();
+        let week = imp.week.borrow();
+        let Some(week) = week.as_ref() else {
+            return Vec::new();
+        };
+        week.days
+            .iter()
+            .enumerate()
+            .flat_map(|(day, data)| data.timed.iter().map(move |segment| (day, segment)))
+            .zip(imp.surface.cards.borrow().iter())
+            .map(|((day, segment), card)| (day, segment.minute_start, card.button.clone()))
+            .collect()
+    }
+
     fn snapshot_creation_hint(&self, snapshot: &gtk::Snapshot) {
         let Some((x, y)) = self.imp().creation_hint.position() else {
             return;
@@ -447,6 +462,7 @@ impl TimedGrid {
         self.imp().surface.details.replace(details);
     }
 
+    #[cfg(test)]
     pub(crate) fn event_cards(&self) -> Vec<(i64, EventCard)> {
         self.imp().surface.event_cards()
     }

@@ -226,6 +226,7 @@ impl WeekContent {
         self.queue_resize();
     }
 
+    #[cfg(test)]
     pub(crate) fn event_cards(&self) -> Vec<(i64, EventCard)> {
         let mut cards = self.imp().surface.event_cards();
         cards.extend(
@@ -237,5 +238,26 @@ impl WeekContent {
         );
 
         cards
+    }
+
+    /// Visits each span once on its first visible day, before that day's timed entries.
+    pub(crate) fn focus_cards(&self) -> Vec<EventCard> {
+        let imp = self.imp();
+        let spans = imp.spans.borrow();
+        let cards = imp.surface.cards.borrow();
+        let mut order = Vec::new();
+        for (day, list) in imp.lists.borrow().iter().enumerate() {
+            order.extend(
+                spans
+                    .iter()
+                    .zip(cards.iter())
+                    .filter(|(span, _)| span.start_day == day)
+                    .map(|(_, card)| card.button.clone()),
+            );
+            let mut timed = list.event_cards();
+            timed.sort_by_key(|(start, _)| *start);
+            order.extend(timed.into_iter().map(|(_, card)| card));
+        }
+        order
     }
 }

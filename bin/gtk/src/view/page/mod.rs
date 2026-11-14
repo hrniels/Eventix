@@ -19,7 +19,7 @@ use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 use self::{content::PageContent, editor::PageEditor, session::PageSession};
 use super::{
-    card::EventCard, monthly::grid::MonthGrid, popover::DetailsController, sidebar::Sidebar,
+    monthly::grid::MonthGrid, popover::DetailsController, sidebar::Sidebar,
     weekly::content::WeekContent,
 };
 use crate::model::View;
@@ -462,8 +462,8 @@ impl CalendarPage {
         self.imp().content.navigate(self, direction);
     }
 
-    pub fn focus_event(&self, current: Option<&EventCard>, forward: bool) {
-        self.imp().content.focus_event(self, current, forward);
+    pub(crate) fn calendar_navigation_available(&self) -> bool {
+        !self.management_open() && !self.popup_open() && self.imp().content.view.get() != View::List
     }
 
     pub fn switch_to_week(&self) {
@@ -532,7 +532,6 @@ pub(crate) mod tests {
     use eventix_state::actions::items::UpdateItem;
     use gtk::{prelude::*, subclass::prelude::*};
 
-    use super::content::event_focus_index;
     use super::{CalendarPage, DetailsController};
     use crate::model::{SavedItem, Snapshot, View};
     use crate::view::editor::ItemEditor;
@@ -999,6 +998,16 @@ pub(crate) mod tests {
         let imp = page.imp().weekly.imp();
         let cards = imp.all_day.event_cards();
         assert_eq!(cards.len(), 3, "one card is created per span");
+        assert_tab_order(
+            &window,
+            page.imp().weekly.upcast_ref(),
+            &[
+                cards[0].1.clone().upcast(),
+                imp.timed.event_cards()[0].1.clone().upcast(),
+                cards[2].1.clone().upcast(),
+                cards[1].1.clone().upcast(),
+            ],
+        );
         let card = &cards[0].1;
         let allocation = card.allocation();
         let right = crate::view::geometry::day_x(imp.all_day.width(), 3.0).round() as i32;
@@ -1499,7 +1508,16 @@ pub(crate) mod tests {
         assert!(busy_cell.height() <= crate::view::monthly::grid::MAX_ROW);
         assert!(busy_cell.vadjustment().upper() > busy_cell.vadjustment().page_size());
         drop(cells);
-        page.focus_event(Some(&cards[16].1), true);
+        let mut order = Vec::new();
+        for (row, button) in imp.monthly.imp().weeks.borrow().iter().enumerate() {
+            order.push(button.clone().upcast());
+            if row == index / 7 {
+                order.extend(cards.iter().map(|(_, card)| card.clone().upcast()));
+            }
+        }
+        assert_tab_order(&window, imp.monthly.upcast_ref(), &order);
+        assert!(cards[16].1.grab_focus());
+        assert!(imp.monthly.child_focus(gtk::DirectionType::TabForward));
         drain();
         assert!(cards[17].1.has_focus());
         assert!(
@@ -1527,7 +1545,8 @@ pub(crate) mod tests {
             "refresh reuses the focused occurrence-day card"
         );
         let find_popup = || page.imp().details.current();
-        page.focus_event(None, true);
+        gtk::prelude::GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
+        assert!(imp.monthly.child_focus(gtk::DirectionType::TabForward));
         drain();
         cards[17].1.emit_clicked();
         drain();
@@ -1903,35 +1922,95 @@ pub(crate) mod tests {
                 gtk::gdk::Key::Right,
                 gtk::gdk::Key::Up,
                 gtk::gdk::Key::Down,
+                gtk::gdk::Key::Home,
+                gtk::gdk::Key::period,
             ] {
                 assert!(!press(key));
                 assert_eq!(gtk::prelude::GtkWindowExt::focus(&window), focus);
             }
         }
 
-        page.focus_event(None, true);
+        assert!(
+            page.imp()
+                .weekly
+                .child_focus(gtk::DirectionType::TabForward)
+        );
         let first = gtk::prelude::GtkWindowExt::focus(&window).unwrap();
         assert!(first.is::<crate::view::card::EventCard>());
-        assert!(press(gtk::gdk::Key::Down));
-        assert_ne!(
-            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
-            Some(&first)
-        );
-        assert!(press(gtk::gdk::Key::Up));
+        assert!(!press(gtk::gdk::Key::Down));
+        assert!(!press(gtk::gdk::Key::Up));
         assert_eq!(
             gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
             Some(&first)
         );
-        assert!(press(gtk::gdk::Key::Right));
+        assert!(
+            page.imp()
+                .weekly
+                .child_focus(gtk::DirectionType::TabForward)
+        );
         assert_ne!(
             gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
             Some(&first)
+        );
+        assert!(
+            page.imp()
+                .weekly
+                .child_focus(gtk::DirectionType::TabBackward)
+        );
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+        let date = week.start;
+        page.show_content(Some(date));
+        assert!(press(gtk::gdk::Key::Right));
+        assert_eq!(
+            page.imp().content.date.get(),
+            Some(date + Duration::days(7))
         );
         assert!(press(gtk::gdk::Key::Left));
+        assert_eq!(page.imp().content.date.get(), Some(date));
+        for key in [gtk::gdk::Key::Home, gtk::gdk::Key::period] {
+            page.show_content(Some(date));
+            assert!(press(key));
+            assert_eq!(page.imp().content.date.get(), None);
+        }
+
+        page.switch_to_month();
+        page.show_content(Some(date));
+        assert!(press(gtk::gdk::Key::Right));
         assert_eq!(
-            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
-            Some(&first)
+            page.imp().content.date.get(),
+            crate::dates::shift_month(date, 1)
         );
+        assert!(press(gtk::gdk::Key::Left));
+        assert_eq!(page.imp().content.date.get(), Some(date));
+        for key in [gtk::gdk::Key::Home, gtk::gdk::Key::period] {
+            page.show_content(Some(date));
+            assert!(press(key));
+            assert_eq!(page.imp().content.date.get(), None);
+        }
+        for key in [
+            gtk::gdk::Key::Left,
+            gtk::gdk::Key::Right,
+            gtk::gdk::Key::Home,
+            gtk::gdk::Key::period,
+        ] {
+            assert!(!keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[&key, &0u32, &gtk::gdk::ModifierType::CONTROL_MASK],
+            ));
+        }
+        page.switch_to_list();
+        for key in [
+            gtk::gdk::Key::Left,
+            gtk::gdk::Key::Right,
+            gtk::gdk::Key::Home,
+            gtk::gdk::Key::period,
+        ] {
+            assert!(!press(key));
+        }
+        page.switch_to_week();
 
         for kind in [CalCompType::Event, CalCompType::Todo] {
             let editor = page.test_new_editor(EditorOptions {
@@ -1969,15 +2048,37 @@ pub(crate) mod tests {
         drain();
     }
 
-    #[test]
-    fn event_focus_order_stops_at_boundaries() {
-        assert_eq!(event_focus_index(3, None, true), Some(0));
-        assert_eq!(event_focus_index(3, None, false), Some(2));
-        assert_eq!(event_focus_index(3, Some(0), true), Some(1));
-        assert_eq!(event_focus_index(3, Some(2), false), Some(1));
-        assert_eq!(event_focus_index(3, Some(2), true), None);
-        assert_eq!(event_focus_index(3, Some(0), false), None);
-        assert_eq!(event_focus_index(0, None, true), None);
-        assert_eq!(event_focus_index(0, None, false), None);
+    fn assert_tab_order(window: &gtk::Window, container: &gtk::Widget, order: &[gtk::Widget]) {
+        gtk::prelude::GtkWindowExt::set_focus(window, None::<&gtk::Widget>);
+        for widget in order {
+            assert!(container.child_focus(gtk::DirectionType::TabForward));
+            assert_eq!(
+                gtk::prelude::GtkWindowExt::focus(window).as_ref(),
+                Some(widget)
+            );
+        }
+        assert!(!container.child_focus(gtk::DirectionType::TabForward));
+        window.emit_by_name::<()>("move-focus", &[&gtk::DirectionType::TabForward]);
+        assert!(
+            gtk::prelude::GtkWindowExt::focus(window)
+                .is_some_and(|focus| !focus.is_ancestor(container))
+        );
+        gtk::prelude::GtkWindowExt::set_focus(window, None::<&gtk::Widget>);
+        for widget in order.iter().rev() {
+            assert!(container.child_focus(gtk::DirectionType::TabBackward));
+            assert_eq!(
+                gtk::prelude::GtkWindowExt::focus(window).as_ref(),
+                Some(widget)
+            );
+        }
+        assert!(!container.child_focus(gtk::DirectionType::TabBackward));
+        window.emit_by_name::<()>("move-focus", &[&gtk::DirectionType::TabBackward]);
+        assert!(
+            gtk::prelude::GtkWindowExt::focus(window)
+                .is_some_and(|focus| !focus.is_ancestor(container))
+        );
+        for direction in [gtk::DirectionType::Up, gtk::DirectionType::Down] {
+            assert!(!container.child_focus(direction));
+        }
     }
 }

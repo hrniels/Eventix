@@ -10,6 +10,7 @@ mod creation_hint;
 pub mod details;
 pub(crate) mod editor;
 mod error;
+pub(crate) mod focus;
 mod geometry;
 mod import;
 mod indicators;

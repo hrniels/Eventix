@@ -158,6 +158,19 @@ glib::wrapper! {
 }
 
 impl AllDayStrip {
+    pub(crate) fn focus_cards(&self) -> Vec<(usize, u32, EventCard)> {
+        let imp = self.imp();
+        let week = imp.week.borrow();
+        let Some(week) = week.as_ref() else {
+            return Vec::new();
+        };
+        week.all_day
+            .iter()
+            .zip(imp.surface.cards.borrow().iter())
+            .map(|(span, card)| (span.start_day, 0, card.button.clone()))
+            .collect()
+    }
+
     fn snapshot_creation_hint(&self, snapshot: &gtk::Snapshot) {
         let Some((x, y)) = self.imp().creation_hint.position() else {
             return;
@@ -269,6 +282,7 @@ impl AllDayStrip {
         self.imp().surface.details.replace(details);
     }
 
+    #[cfg(test)]
     pub(crate) fn event_cards(&self) -> Vec<(i64, EventCard)> {
         self.imp().surface.event_cards()
     }

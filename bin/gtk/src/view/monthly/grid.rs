@@ -12,9 +12,10 @@ use gtk::{glib, graphene, prelude::*, subclass::prelude::*};
 use crate::actions::move_event::{self, DraggedEvent, MoveTarget};
 use crate::model::MonthSnapshot;
 use crate::style;
+#[cfg(test)]
+use crate::view::card::EventCard;
 use crate::view::selection::{self, SelectionPoint, SelectionRange};
 use crate::view::{
-    card::EventCard,
     creation_hint::{CreationHint, snapshot_hint},
     geometry::{GUTTER, MIN_WIDTH, day_x, rect},
     popover::DetailsController,
@@ -94,6 +95,29 @@ mod imp {
     }
 
     impl WidgetImpl for MonthGrid {
+        fn focus(&self, direction: gtk::DirectionType) -> bool {
+            match direction {
+                gtk::DirectionType::TabForward | gtk::DirectionType::TabBackward => {
+                    let mut order = Vec::new();
+                    for (week, content) in self
+                        .weeks
+                        .borrow()
+                        .iter()
+                        .zip(self.contents.borrow().iter())
+                    {
+                        order.push(week.clone().upcast());
+                        order.extend(content.focus_cards().into_iter().map(|card| card.upcast()));
+                    }
+                    crate::view::focus::traverse(
+                        self.obj().upcast_ref(),
+                        &order,
+                        direction == gtk::DirectionType::TabForward,
+                    )
+                }
+                _ => false,
+            }
+        }
+
         fn unmap(&self) {
             self.obj().clear_drop_preview();
             self.parent_unmap();
@@ -442,6 +466,7 @@ impl MonthGrid {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn event_cards(&self) -> Vec<(i64, EventCard)> {
         self.imp()
             .contents

@@ -7,7 +7,7 @@ use std::cell::{Cell, RefCell};
 use chrono::NaiveDate;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
-use crate::view::{card::EventCard, details::EventDetails, page::CalendarPage};
+use crate::view::{details::EventDetails, page::CalendarPage};
 
 #[derive(Clone, Copy)]
 struct WindowState {
@@ -257,47 +257,25 @@ impl Window {
             return glib::Propagation::Proceed;
         }
 
-        if modifiers.contains(gtk::gdk::ModifierType::CONTROL_MASK)
-            && !modifiers
-                .intersects(gtk::gdk::ModifierType::ALT_MASK | gtk::gdk::ModifierType::SUPER_MASK)
-        {
-            match key {
-                gtk::gdk::Key::Left => {
-                    self.imp().page.navigate(-1);
-                    return glib::Propagation::Stop;
-                }
-                gtk::gdk::Key::Right => {
-                    self.imp().page.navigate(1);
-                    return glib::Propagation::Stop;
-                }
-                _ => {}
-            }
-        }
-
         if modifiers.intersects(
             gtk::gdk::ModifierType::ALT_MASK
                 | gtk::gdk::ModifierType::CONTROL_MASK
-                | gtk::gdk::ModifierType::SUPER_MASK,
+                | gtk::gdk::ModifierType::SUPER_MASK
+                | gtk::gdk::ModifierType::SHIFT_MASK,
         ) {
             return glib::Propagation::Proceed;
         }
 
-        let forward = match key {
-            gtk::gdk::Key::Right | gtk::gdk::Key::Down => true,
-            gtk::gdk::Key::Left | gtk::gdk::Key::Up => false,
-            _ => return glib::Propagation::Proceed,
-        };
-
-        if self.imp().page.popup_open() {
+        if !self.imp().page.calendar_navigation_available() || self.focus_owns_navigation() {
             return glib::Propagation::Proceed;
         }
 
-        let Some(card) = self.focused_event_card() else {
-            return glib::Propagation::Proceed;
-        };
-
-        self.imp().page.focus_event(Some(&card), forward);
-
+        match key {
+            gtk::gdk::Key::Left => self.imp().page.navigate(-1),
+            gtk::gdk::Key::Right => self.imp().page.navigate(1),
+            gtk::gdk::Key::Home | gtk::gdk::Key::period => self.imp().page.show_today(),
+            _ => return glib::Propagation::Proceed,
+        }
         glib::Propagation::Stop
     }
 
@@ -331,17 +309,24 @@ impl Window {
         None
     }
 
-    fn focused_event_card(&self) -> Option<EventCard> {
+    /// Leaves editing, selection, and popup navigation to the focused control.
+    fn focus_owns_navigation(&self) -> bool {
         let mut focused = gtk::prelude::GtkWindowExt::focus(self);
         while let Some(widget) = focused {
-            if let Some(card) = widget.downcast_ref::<EventCard>() {
-                return Some(card.clone());
+            if widget.is::<gtk::Editable>()
+                || widget.is::<gtk::TextView>()
+                || widget.is::<gtk::DropDown>()
+                || widget.is::<gtk::Popover>()
+                || widget.is::<gtk::Range>()
+                || widget.is::<gtk::Calendar>()
+            {
+                return true;
             }
 
             focused = widget.parent();
         }
 
-        None
+        false
     }
 
     fn connect_popover_dismissal(&self) {
@@ -418,9 +403,9 @@ impl Window {
         app.set_accels_for_action("win.quick-add-task", &["<Control>a"]);
 
         for (name, keys, days) in [
-            ("previous", vec!["<Control>Left"], Some(-1)),
-            ("next", vec!["<Control>Right"], Some(1)),
-            ("today", vec!["<Control>Home", "<Control>period"], None),
+            ("previous", vec![], Some(-1)),
+            ("next", vec![], Some(1)),
+            ("today", vec![], None),
             ("reload", vec!["<Primary>r", "F5"], None),
             ("week-view", vec!["<Control>w"], None),
             ("month-view", vec!["<Control>m"], None),

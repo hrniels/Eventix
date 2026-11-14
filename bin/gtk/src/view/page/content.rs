@@ -13,7 +13,6 @@ use crate::dates::shift_month;
 use crate::model::{MonthSnapshot, WeekSnapshot};
 use crate::model::{Snapshot, View};
 use crate::style;
-use crate::view::card::EventCard;
 use crate::worker::event::ContentResponse;
 use crate::worker::message::ContentRequest;
 
@@ -213,63 +212,6 @@ impl PageContent {
         };
         if let Some(date) = next {
             self.show_content(page, Some(date));
-        }
-    }
-
-    pub(super) fn focus_event(
-        &self,
-        page: &CalendarPage,
-        current: Option<&EventCard>,
-        forward: bool,
-    ) {
-        if self.view.get() == View::List {
-            return;
-        }
-        let imp = page.imp();
-        let cards = if self.view.get() == View::Month {
-            imp.monthly.event_cards()
-        } else {
-            let mut cards = imp.weekly.imp().timed.event_cards();
-            cards.extend(imp.weekly.imp().all_day.event_cards());
-            cards.sort_by_key(|(start, _)| *start);
-            cards
-        };
-
-        let index = current.and_then(|current| cards.iter().position(|(_, card)| card == current));
-        let next = event_focus_index(cards.len(), index, forward);
-        if let Some(next) = next {
-            let card = &cards[next].1;
-            if card.grab_focus() {
-                if let Some(window) = page.root().and_downcast::<gtk::Window>() {
-                    window.set_focus_visible(true);
-                }
-
-                // Custom event-surface children can lie outside either scroll viewport.
-                // Reveal the focused card in each enclosing scroller, inside out.
-                let mut ancestor = card.parent();
-                while let Some(widget) = ancestor {
-                    if let Some(scroll) = widget.downcast_ref::<gtk::ScrolledWindow>()
-                        && let Some(child) = scroll.child()
-                    {
-                        let content = child
-                            .downcast_ref::<gtk::Viewport>()
-                            .and_then(|viewport| viewport.child())
-                            .unwrap_or(child);
-                        if let Some(bounds) = card.compute_bounds(&content) {
-                            scroll.vadjustment().clamp_page(
-                                f64::from(bounds.y()),
-                                f64::from(bounds.y() + bounds.height()),
-                            );
-                            scroll.hadjustment().clamp_page(
-                                f64::from(bounds.x()),
-                                f64::from(bounds.x() + bounds.width()),
-                            );
-                        }
-                    }
-
-                    ancestor = widget.parent();
-                }
-            }
         }
     }
 
@@ -516,19 +458,5 @@ impl PageContent {
                 self.loading.set(false);
             }
         }
-    }
-}
-
-/// Selects an event when entering the calendar, keeping navigation inside its bounds.
-pub(super) fn event_focus_index(
-    count: usize,
-    current: Option<usize>,
-    forward: bool,
-) -> Option<usize> {
-    match current {
-        None if forward => (count > 0).then_some(0),
-        None => count.checked_sub(1),
-        Some(index) if forward => index.checked_add(1).filter(|next| *next < count),
-        Some(index) => index.checked_sub(1),
     }
 }

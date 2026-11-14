@@ -125,7 +125,26 @@ pub(crate) mod imp {
         }
     }
 
-    impl WidgetImpl for WeekContent {}
+    impl WidgetImpl for WeekContent {
+        fn focus(&self, direction: gtk::DirectionType) -> bool {
+            match direction {
+                gtk::DirectionType::TabForward | gtk::DirectionType::TabBackward => {
+                    let order = self
+                        .obj()
+                        .focus_cards()
+                        .into_iter()
+                        .map(|card| card.upcast())
+                        .collect::<Vec<_>>();
+                    crate::view::focus::traverse(
+                        self.obj().upcast_ref(),
+                        &order,
+                        direction == gtk::DirectionType::TabForward,
+                    )
+                }
+                _ => false,
+            }
+        }
+    }
 
     impl BoxImpl for WeekContent {}
 }
@@ -134,4 +153,15 @@ glib::wrapper! {
     pub struct WeekContent(ObjectSubclass<imp::WeekContent>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
+}
+
+impl WeekContent {
+    /// Orders cards by their first visible day, with strip events before timed events.
+    pub(crate) fn focus_cards(&self) -> Vec<crate::view::card::EventCard> {
+        let imp = self.imp();
+        let mut cards = imp.all_day.focus_cards();
+        cards.extend(imp.timed.focus_cards());
+        cards.sort_by_key(|(day, minute, _)| (*day, *minute));
+        cards.into_iter().map(|(_, _, card)| card).collect()
+    }
 }
