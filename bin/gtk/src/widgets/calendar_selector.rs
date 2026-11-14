@@ -30,7 +30,7 @@ impl CalendarSelector {
             .object("calendar_selector")
             .expect("calendar selector");
         widget.connect_selected_notify(update_tooltip);
-        connect_arrow_keys(&widget);
+        super::dropdown::enable_arrow_keys(&widget);
         let selector = Self {
             widget,
             choices: RefCell::default(),
@@ -78,61 +78,6 @@ impl CalendarSelector {
             .get(self.widget.selected() as usize)
             .map(|choice| choice.id.clone())
     }
-}
-
-/// Keeps collapsed selection local while leaving the popup's list navigation to GTK.
-fn connect_arrow_keys(widget: &gtk::DropDown) {
-    let keys = gtk::EventControllerKey::new();
-    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
-    let weak = widget.downgrade();
-    keys.connect_key_pressed(move |_, key, _, modifiers| {
-        if modifiers.intersects(
-            gdk::ModifierType::ALT_MASK
-                | gdk::ModifierType::CONTROL_MASK
-                | gdk::ModifierType::SUPER_MASK
-                | gdk::ModifierType::SHIFT_MASK,
-        ) {
-            return gtk::glib::Propagation::Proceed;
-        }
-        let Some(widget) = weak.upgrade() else {
-            return gtk::glib::Propagation::Proceed;
-        };
-        let mut focused = widget
-            .root()
-            .and_downcast::<gtk::Window>()
-            .and_then(|window| gtk::prelude::GtkWindowExt::focus(&window));
-        while let Some(child) = focused {
-            if child.is::<gtk::Popover>() {
-                return gtk::glib::Propagation::Proceed;
-            }
-            if child == widget {
-                break;
-            }
-            focused = child.parent();
-        }
-
-        let forward = match key {
-            gdk::Key::Down | gdk::Key::KP_Down => true,
-            gdk::Key::Up | gdk::Key::KP_Up => false,
-            gdk::Key::Left | gdk::Key::Right | gdk::Key::KP_Left | gdk::Key::KP_Right => {
-                return gtk::glib::Propagation::Stop;
-            }
-            _ => return gtk::glib::Propagation::Proceed,
-        };
-        if let Some(model) = widget.model() {
-            let selected = widget.selected();
-            let next = if forward {
-                selected.checked_add(1)
-            } else {
-                selected.checked_sub(1)
-            };
-            if let Some(next) = next.filter(|&next| next < model.n_items()) {
-                widget.set_selected(next);
-            }
-        }
-        gtk::glib::Propagation::Stop
-    });
-    widget.add_controller(keys);
 }
 
 fn update_tooltip(widget: &gtk::DropDown) {

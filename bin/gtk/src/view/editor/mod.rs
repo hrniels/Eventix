@@ -717,7 +717,7 @@ impl DateSection {
 
     fn create_timezone(locale: &dyn Locale) -> gtk::DropDown {
         let zones: Vec<_> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.name()).collect();
-        let timezone = gtk::DropDown::from_strings(&zones);
+        let timezone = crate::widgets::dropdown::from_strings(&zones);
         timezone.set_hexpand(true);
         timezone.set_factory(Some(&Self::timezone_factory(true)));
         timezone.set_list_factory(Some(&Self::timezone_factory(false)));
@@ -1074,7 +1074,7 @@ fn watch_fields(widget: &gtk::Widget, editor: &Rc<ItemEditor>) {
 
 fn dropdown(locale: &dyn Locale, values: &[&str]) -> gtk::DropDown {
     let names: Vec<_> = values.iter().map(|value| locale.translate(value)).collect();
-    gtk::DropDown::from_strings(&names)
+    crate::widgets::dropdown::from_strings(&names)
 }
 
 fn spin(min: f64, max: f64, value: f64) -> gtk::SpinButton {

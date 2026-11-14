@@ -46,7 +46,7 @@ impl AlarmInput {
             .iter()
             .map(|name| locale.translate(name))
             .collect();
-        let trigger = gtk::DropDown::from_strings(&names);
+        let trigger = super::dropdown::from_strings(&names);
         for (index, (id, label)) in [
             ("none", "None"),
             ("relative_choice", "Relative"),
@@ -74,12 +74,14 @@ impl AlarmInput {
         }
         let duration = builder.object("duration").expect("alarm duration");
         let unit: gtk::DropDown = builder.object("unit").expect("alarm unit");
+        super::dropdown::enable_arrow_keys(&unit);
         let names: Vec<_> = ["Minutes", "Hours", "Days"]
             .iter()
             .map(|name| locale.translate(name))
             .collect();
         unit.set_model(Some(&gtk::StringList::new(&names)));
         let relation: gtk::DropDown = builder.object("relation").expect("alarm relation");
+        super::dropdown::enable_arrow_keys(&relation);
         let names: Vec<_> = ["BeforeStart", "AfterStart", "BeforeEnd", "AfterEnd"]
             .iter()
             .map(|name| locale.translate(name))

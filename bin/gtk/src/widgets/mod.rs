@@ -8,6 +8,7 @@ mod calendar_toggle;
 mod color_dot;
 mod date_input;
 mod date_picker;
+pub(crate) mod dropdown;
 mod entry_completion;
 mod month_picker;
 mod personal_reminder_input;

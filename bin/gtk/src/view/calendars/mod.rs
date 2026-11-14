@@ -271,7 +271,7 @@ impl CalendarsView {
         row.append(&entry);
 
         let names: Vec<_> = choices.iter().map(String::as_str).collect();
-        let select = gtk::DropDown::from_strings(&names);
+        let select = crate::widgets::dropdown::from_strings(&names);
         heights.add_widget(&select);
         select.set_tooltip_text(Some(locale.translate("Collections")));
         select.update_property(&[gtk::accessible::Property::Label(

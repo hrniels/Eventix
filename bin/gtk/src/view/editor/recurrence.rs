@@ -136,7 +136,7 @@ impl RecurrenceInput {
                 .iter()
                 .map(|name| gtk::CheckButton::with_label(locale.translate(name)))
                 .collect(),
-            pattern: gtk::DropDown::from_strings(&["", "", ""]),
+            pattern: crate::widgets::dropdown::from_strings(&["", "", ""]),
             day: spin(1.0, 31.0, date.day().into()),
             nth: dropdown(locale, &["First", "Second", "Third", "Last"]),
             weekday,
@@ -248,7 +248,7 @@ impl RecurrenceInput {
         nth_row.append(&self.nth);
         nth_row.append(&self.weekday);
         let in_month = body_label(locale, "in");
-        let weekday_month = gtk::DropDown::new(self.month.model(), None::<gtk::Expression>);
+        let weekday_month = crate::widgets::dropdown::from_model(self.month.model().as_ref());
         self.month
             .bind_property("selected", &weekday_month, "selected")
             .bidirectional()
