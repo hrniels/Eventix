@@ -1216,23 +1216,9 @@ fn toggle_calendar_visibility(state: &mut State, id: &String) -> anyhow::Result<
     Ok(())
 }
 
-/// Loads an existing local profile, reporting missing settings instead of an empty calendar.
+/// Loads a profile, using default settings on first launch.
 fn load_local_state(xdg: Arc<xdg::BaseDirectories>) -> anyhow::Result<eventix_state::State> {
-    let state = eventix_state::State::new(xdg.clone())?;
-    if xdg.find_config_file("settings.toml").is_none() {
-        let expected = xdg
-            .get_config_file("settings.toml")
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "settings.toml".into());
-        anyhow::bail!(
-            formatx::formatx!(state.locale().translate(
-            "No calendar configuration found at {}. Check XDG_CONFIG_HOME and --data-prefix."
-        ), expected)
-            .unwrap()
-        );
-    }
-
-    Ok(state)
+    eventix_state::State::new(xdg)
 }
 
 #[cfg(test)]
@@ -3246,24 +3232,11 @@ mod tests {
     }
 
     #[test]
-    fn missing_profile_reports_expected_path_but_explicit_empty_profile_loads() {
+    fn fresh_profile_loads_default_settings_without_calendar_failure() {
         let tmp = tempfile::tempdir().unwrap();
         let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
-        let error = load_local_state(xdg.clone())
-            .err()
-            .expect("missing profile must fail");
-        assert!(
-            error
-                .to_string()
-                .contains(&tmp.path().join("settings.toml").display().to_string())
-        );
-        let settings = eventix_state::Settings::new(tmp.path().join("settings.toml"));
-        settings.write_to_file().unwrap();
-        let before = fs::read(tmp.path().join("settings.toml")).unwrap();
+        assert!(xdg.find_config_file("settings.toml").is_none());
         let mut worker = Worker::new(xdg.clone());
-        // A worker that failed before installing subscriptions must also recover on reload.
-        let settings_path = tmp.path().join("settings.toml");
-        fs::remove_file(&settings_path).unwrap();
         let events = worker.handle(
             Message::ShowContent(ContentRequest {
                 generation: 1,
@@ -3273,18 +3246,27 @@ mod tests {
             }),
             &test_runtime(),
         );
-        assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
-            if response.generation == 1 && response.result.is_err()));
-        assert!(worker.state.is_none());
-        assert!(worker.subscriptions.ids().is_empty());
-        fs::write(&settings_path, &before).unwrap();
+        assert!(matches!(events.as_slice(), [
+            Event::StateLoaded,
+            Event::PreferencesLoaded(_),
+            Event::CalendarsLoaded(calendars),
+            Event::ContentLoaded(response),
+        ] if calendars.is_empty() && response.generation == 1 && response.result.is_ok()));
+        assert!(worker.state().unwrap().settings().collections().is_empty());
+        assert!(!worker.subscriptions.ids().is_empty());
+
+        let settings = eventix_state::Settings::new(tmp.path().join("settings.toml"));
+        settings.write_to_file().unwrap();
+        let before = fs::read(tmp.path().join("settings.toml")).unwrap();
         assert!(matches!(
             worker.handle(Message::Reload, &test_runtime()).as_slice(),
             [
                 Event::StateLoaded,
                 Event::PreferencesLoaded(_),
-                Event::CalendarsLoaded(_)
+                Event::CalendarsLoaded(_),
+                Event::ContentLoaded(response)
             ]
+            if response.result.is_ok()
         ));
         let events = worker.handle(
             Message::ShowContent(ContentRequest {
@@ -3306,5 +3288,26 @@ mod tests {
         let state = load_local_state(xdg).unwrap();
         assert!(state.store().directories().is_empty());
         assert_eq!(fs::read(tmp.path().join("settings.toml")).unwrap(), before);
+    }
+
+    #[test]
+    fn invalid_profile_still_reports_calendar_loading_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = Arc::new(eventix_state::with_test_xdg(tmp.path(), tmp.path()));
+        fs::write(tmp.path().join("settings.toml"), "invalid TOML [").unwrap();
+        let mut worker = Worker::new(xdg);
+        let events = worker.handle(
+            Message::ShowContent(ContentRequest {
+                generation: 1,
+                date: Some("2026-10-12".parse().unwrap()),
+                view: View::Week,
+                filter: Default::default(),
+            }),
+            &test_runtime(),
+        );
+        assert!(matches!(events.as_slice(), [Event::ContentLoaded(response)]
+            if response.generation == 1 && response.result.is_err()));
+        assert!(worker.state.is_none());
+        assert!(worker.subscriptions.ids().is_empty());
     }
 }
