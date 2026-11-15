@@ -877,11 +877,11 @@ mod tests {
         assert_eq!(imp.cursor.get(), date);
 
         // Native hover changes on every pointer move must not alter the weekly highlight.
-        for day in row..row + 7 {
-            imp.days[day].set_state_flags(gtk::StateFlags::PRELIGHT, false);
+        for day in imp.days.iter().skip(row).take(7) {
+            day.set_state_flags(gtk::StateFlags::PRELIGHT, false);
             motion(index).emit_by_name::<()>("motion", &[&1.0f64, &1.0f64]);
             assert_eq!(hovered(), (row..row + 7).collect::<Vec<_>>());
-            imp.days[day].unset_state_flags(gtk::StateFlags::PRELIGHT);
+            day.unset_state_flags(gtk::StateFlags::PRELIGHT);
             assert_eq!(hovered(), (row..row + 7).collect::<Vec<_>>());
         }
 
