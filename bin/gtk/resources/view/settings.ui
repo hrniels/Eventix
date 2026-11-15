@@ -59,7 +59,7 @@
                     </child>
                     <child>
                       <object class="GtkImage" id="interval_help">
-                        <property name="icon-name">dialog-question-symbolic</property>
+                        <property name="resource">@RESOURCE_PREFIX@/icons/question-circle-symbolic.svg</property>
                         <property name="pixel-size">16</property>
                       </object>
                     </child>
@@ -106,7 +106,7 @@
                     </child>
                     <child>
                       <object class="GtkImage" id="delay_help">
-                        <property name="icon-name">dialog-question-symbolic</property>
+                        <property name="resource">@RESOURCE_PREFIX@/icons/question-circle-symbolic.svg</property>
                         <property name="pixel-size">16</property>
                       </object>
                     </child>
@@ -152,7 +152,7 @@
                     </child>
                     <child>
                       <object class="GtkImage" id="autostart_help">
-                        <property name="icon-name">dialog-question-symbolic</property>
+                        <property name="resource">@RESOURCE_PREFIX@/icons/question-circle-symbolic.svg</property>
                         <property name="pixel-size">16</property>
                       </object>
                     </child>

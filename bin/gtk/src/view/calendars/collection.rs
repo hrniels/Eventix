@@ -952,7 +952,8 @@ impl CollectionForm {
         label.add_css_class("ev_management_form_label");
         heading.append(&label);
         if let Some(help) = help {
-            let image = gtk::Image::from_icon_name("dialog-question-symbolic");
+            let image =
+                gtk::Image::from_resource(resource_path!("icons/question-circle-symbolic.svg"));
             image.set_tooltip_text(Some(locale.translate(help)));
             heading.append(&image);
             input
@@ -1435,8 +1436,13 @@ mod tests {
                 for required in ["Your Name *", "Email Address *"] {
                     assert!(labels.iter().any(|label| label == required));
                 }
-                assert!(widgets.iter().any(|widget| widget.is::<gtk::Image>()
-                    && widget.tooltip_text().as_deref() == Some(locale.translate(help))));
+                let help_icon = widgets
+                    .iter()
+                    .filter_map(|widget| widget.downcast_ref::<gtk::Image>())
+                    .find(|image| image.tooltip_text().as_deref() == Some(locale.translate(help)))
+                    .unwrap();
+                assert_eq!(help_icon.storage_type(), gtk::ImageType::Paintable);
+                assert!(help_icon.paintable().is_some());
                 for choice in ["Unlimited", "Last N years"] {
                     assert!(
                         widgets

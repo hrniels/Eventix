@@ -431,10 +431,8 @@ mod tests {
             assert!(label.has_css_class("ev_details_label"));
             if field != "Language" {
                 let help = label.next_sibling().and_downcast::<gtk::Image>().unwrap();
-                assert_eq!(
-                    help.icon_name().as_deref(),
-                    Some("dialog-question-symbolic")
-                );
+                assert_eq!(help.storage_type(), gtk::ImageType::Paintable);
+                assert!(help.paintable().is_some());
                 assert_eq!(
                     help.tooltip_text().as_deref(),
                     Some(match field {
