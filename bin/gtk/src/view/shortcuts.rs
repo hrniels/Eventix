@@ -34,7 +34,7 @@ const SECTIONS: &[Section] = &[
         name: "general",
         title: "General",
         shortcuts: &[
-            ("<Primary>question", "Keyboard Shortcuts"),
+            ("<Primary>question", "Shortcuts"),
             ("<Primary>f", "Search"),
             ("<Control>e", "New event"),
             ("<Control>t", "New task"),
@@ -284,7 +284,7 @@ struct HelpSection {
 /// Builds a searchable dialog with all keyboard and mouse sections in one scrolling page.
 pub(crate) fn build(locale: &dyn Locale) -> gtk::Window {
     let window = gtk::Window::builder()
-        .title(locale.translate("Keyboard Shortcuts"))
+        .title(locale.translate("Shortcuts"))
         .modal(true)
         .hide_on_close(true)
         .destroy_with_parent(true)

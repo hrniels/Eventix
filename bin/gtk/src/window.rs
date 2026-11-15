@@ -330,7 +330,7 @@ impl Window {
         action.connect_activate(move |_, _| {
             if let Some(window) = weak.upgrade() {
                 let locale = window.imp().page.locale();
-                let title = locale.translate("Keyboard Shortcuts");
+                let title = locale.translate("Shortcuts");
                 if window
                     .imp()
                     .shortcuts
@@ -631,7 +631,7 @@ mod tests {
             .downcast::<gtk::Button>()
             .unwrap();
         assert_eq!(help.action_name().as_deref(), Some("win.show-help-overlay"));
-        assert_eq!(help.tooltip_text().as_deref(), Some("Keyboard Shortcuts"));
+        assert_eq!(help.tooltip_text().as_deref(), Some("Shortcuts"));
         assert!(help.prev_sibling().is_some());
         assert_eq!(
             app.accels_for_action("win.show-help-overlay"),
@@ -644,7 +644,7 @@ mod tests {
         assert!(overlay.is_visible());
         assert!(overlay.is_modal());
         assert_eq!(overlay.transient_for().as_ref(), Some(window.upcast_ref()));
-        assert_eq!(overlay.title().as_deref(), Some("Keyboard Shortcuts"));
+        assert_eq!(overlay.title().as_deref(), Some("Shortcuts"));
         overlay.close();
         settle();
         assert!(!overlay.is_visible());
