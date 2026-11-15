@@ -77,14 +77,14 @@ impl AlarmInput {
         super::radio_group::enable_arrow_keys(&buttons);
         let duration = builder.object("duration").expect("alarm duration");
         let unit: gtk::DropDown = builder.object("unit").expect("alarm unit");
-        super::dropdown::enable_arrow_keys(&unit);
+        super::dropdown::enable_navigation(&unit);
         let names: Vec<_> = ["Minutes", "Hours", "Days"]
             .iter()
             .map(|name| locale.translate(name))
             .collect();
         unit.set_model(Some(&gtk::StringList::new(&names)));
         let relation: gtk::DropDown = builder.object("relation").expect("alarm relation");
-        super::dropdown::enable_arrow_keys(&relation);
+        super::dropdown::enable_navigation(&relation);
         let names: Vec<_> = ["BeforeStart", "AfterStart", "BeforeEnd", "AfterEnd"]
             .iter()
             .map(|name| locale.translate(name))

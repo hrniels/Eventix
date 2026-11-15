@@ -30,7 +30,7 @@ impl CalendarSelector {
             .object("calendar_selector")
             .expect("calendar selector");
         widget.connect_selected_notify(update_tooltip);
-        super::dropdown::enable_arrow_keys(&widget);
+        super::dropdown::enable_navigation(&widget);
         let selector = Self {
             widget,
             choices: RefCell::default(),

@@ -4,25 +4,26 @@
 
 use gtk::{gdk, prelude::*};
 
-/// Creates a native dropdown with collapsed arrow-key selection.
+/// Creates a native dropdown with collapsed arrow-key and mouse-wheel selection.
 pub(crate) fn from_strings(strings: &[&str]) -> gtk::DropDown {
     let widget = gtk::DropDown::from_strings(strings);
-    enable_arrow_keys(&widget);
+    enable_navigation(&widget);
     widget
 }
 
-/// Creates a native dropdown sharing an existing model, with collapsed arrow-key selection.
+/// Creates a native dropdown sharing a model, with collapsed arrow-key and wheel selection.
 pub(crate) fn from_model(model: Option<&gtk::gio::ListModel>) -> gtk::DropDown {
     let widget = gtk::DropDown::new(model.cloned(), None::<gtk::Expression>);
-    enable_arrow_keys(&widget);
+    enable_navigation(&widget);
     widget
 }
 
 /// Enables collapsed selection while leaving the popup's navigation to GTK.
 ///
 /// Call once for dropdowns loaded from a UI resource. Unmodified vertical arrows select
-/// adjacent items without wrapping; horizontal arrows keep focus and selection unchanged.
-pub(crate) fn enable_arrow_keys(widget: &gtk::DropDown) {
+/// adjacent items without wrapping, as does the mouse wheel without requiring focus.
+/// Horizontal arrows keep focus and selection unchanged.
+pub(crate) fn enable_navigation(widget: &gtk::DropDown) {
     let keys = gtk::EventControllerKey::new();
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
     let weak = widget.downgrade();
@@ -62,26 +63,61 @@ pub(crate) fn enable_arrow_keys(widget: &gtk::DropDown) {
             }
             _ => return gtk::glib::Propagation::Proceed,
         };
-        if let Some(model) = widget.model() {
-            let selected = widget.selected();
-            let next = if selected == gtk::INVALID_LIST_POSITION {
-                Some(if forward {
-                    0
-                } else {
-                    model.n_items().saturating_sub(1)
-                })
-            } else if forward {
-                selected.checked_add(1)
-            } else {
-                selected.checked_sub(1)
-            };
-            if let Some(next) = next.filter(|&next| next < model.n_items()) {
-                widget.set_selected(next);
-            }
-        }
+        select_adjacent(&widget, forward);
         gtk::glib::Propagation::Stop
     });
     widget.add_controller(keys);
+
+    let scroll = gtk::EventControllerScroll::new(
+        gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
+    );
+    scroll.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let weak = widget.downgrade();
+    scroll.connect_scroll(move |_, _, dy| {
+        let Some(widget) = weak.upgrade() else {
+            return gtk::glib::Propagation::Proceed;
+        };
+        if dy == 0.0 || has_open_popup(widget.upcast_ref()) {
+            return gtk::glib::Propagation::Proceed;
+        }
+        select_adjacent(&widget, dy > 0.0);
+        gtk::glib::Propagation::Stop
+    });
+    widget.add_controller(scroll);
+}
+
+fn select_adjacent(widget: &gtk::DropDown, forward: bool) {
+    if let Some(model) = widget.model() {
+        let selected = widget.selected();
+        let next = if selected == gtk::INVALID_LIST_POSITION {
+            Some(if forward {
+                0
+            } else {
+                model.n_items().saturating_sub(1)
+            })
+        } else if forward {
+            selected.checked_add(1)
+        } else {
+            selected.checked_sub(1)
+        };
+        if let Some(next) = next.filter(|&next| next < model.n_items()) {
+            widget.set_selected(next);
+        }
+    }
+}
+
+fn has_open_popup(widget: &gtk::Widget) -> bool {
+    if widget.is::<gtk::Popover>() {
+        return widget.is_visible();
+    }
+    let mut child = widget.first_child();
+    while let Some(widget) = child {
+        if has_open_popup(&widget) {
+            return true;
+        }
+        child = widget.next_sibling();
+    }
+    false
 }
 
 #[cfg(test)]
@@ -112,6 +148,18 @@ mod tests {
 
     fn press(keys: &gtk::EventControllerKey, key: gdk::Key) -> bool {
         keys.emit_by_name("key-pressed", &[&key, &0u32, &gdk::ModifierType::empty()])
+    }
+
+    fn scroll_controller(widget: &gtk::DropDown) -> gtk::EventControllerScroll {
+        let controllers = widget.observe_controllers();
+        (0..controllers.n_items())
+            .filter_map(|index| {
+                controllers
+                    .item(index)
+                    .and_downcast::<gtk::EventControllerScroll>()
+            })
+            .find(|scroll| scroll.propagation_phase() == gtk::PropagationPhase::Capture)
+            .unwrap()
     }
 
     fn child<T: IsA<gtk::Widget> + StaticType>(widget: &gtk::Widget) -> Option<T> {
@@ -189,6 +237,43 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn collapsed_wheel_selects_without_wrapping_opening_or_taking_focus() {
+        gtk::init().unwrap();
+        let widget = from_strings(&["First", "Second", "Third"]);
+        let entry = gtk::Entry::new();
+        let layout = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        layout.append(&entry);
+        layout.append(&widget);
+        let window = gtk::Window::builder().child(&layout).build();
+        window.present();
+        drain_events();
+        assert!(entry.grab_focus());
+        let focus = GtkWindowExt::focus(&window);
+        let scroll = scroll_controller(&widget);
+        assert_eq!(
+            scroll.flags(),
+            gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE
+        );
+        for (dy, selected) in [
+            (-1.0, 0),
+            (1.0, 1),
+            (1.0, 2),
+            (1.0, 2),
+            (-1.0, 1),
+            (-1.0, 0),
+        ] {
+            assert!(scroll.emit_by_name::<bool>("scroll", &[&0.0f64, &dy]));
+            assert_eq!(widget.selected(), selected);
+            assert_eq!(GtkWindowExt::focus(&window), focus);
+            assert!(!super::has_open_popup(widget.upcast_ref()));
+        }
+        assert!(!scroll.emit_by_name::<bool>("scroll", &[&1.0f64, &0.0f64]));
+        assert_eq!(widget.selected(), 0);
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn model_changes_empty_models_and_missing_selections_are_safe() {
         gtk::init().unwrap();
         let model = gtk::StringList::new(&["First", "Second"]).upcast::<gtk::gio::ListModel>();
@@ -198,6 +283,7 @@ mod tests {
         drain_events();
         assert!(widget.grab_focus());
         let keys = controller(&widget);
+        let scroll = scroll_controller(&widget);
         for (key, expected) in [(gdk::Key::Down, 1), (gdk::Key::Up, 0)] {
             // GTK autoselects the first item rather than keeping an invalid selection.
             widget.set_selected(gtk::INVALID_LIST_POSITION);
@@ -209,11 +295,15 @@ mod tests {
             let selected = widget.selected();
             assert!(press(&keys, gdk::Key::Down));
             assert!(press(&keys, gdk::Key::Up));
+            assert!(scroll.emit_by_name::<bool>("scroll", &[&0.0f64, &1.0f64]));
+            assert!(scroll.emit_by_name::<bool>("scroll", &[&0.0f64, &-1.0f64]));
             assert_eq!(widget.selected(), selected);
         }
         widget.set_model(None::<&gtk::gio::ListModel>);
         assert!(press(&keys, gdk::Key::Down));
         assert!(press(&keys, gdk::Key::Up));
+        assert!(scroll.emit_by_name::<bool>("scroll", &[&0.0f64, &1.0f64]));
+        assert!(scroll.emit_by_name::<bool>("scroll", &[&0.0f64, &-1.0f64]));
         assert_eq!(widget.selected(), gtk::INVALID_LIST_POSITION);
         window.close();
     }
@@ -249,6 +339,11 @@ mod tests {
         drain_events();
         let popup = child::<gtk::Popover>(widget.upcast_ref()).unwrap();
         assert!(popup.is_visible());
+        let scroll = scroll_controller(&widget);
+        for dy in [-1.0f64, 1.0f64] {
+            assert!(!scroll.emit_by_name::<bool>("scroll", &[&0.0f64, &dy]));
+            assert_eq!(widget.selected(), 1);
+        }
         let search = child::<gtk::SearchEntry>(popup.upcast_ref()).unwrap();
         assert!(search.grab_focus());
         for key in [

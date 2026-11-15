@@ -34,7 +34,7 @@ impl SettingsPopup {
         window.set_transient_for(Some(parent));
         window.set_title(Some(locale.translate("Settings")));
         let language: gtk::DropDown = builder.object("language").unwrap();
-        crate::widgets::dropdown::enable_arrow_keys(&language);
+        crate::widgets::dropdown::enable_navigation(&language);
         language.set_model(Some(&gtk::StringList::new(&[
             locale.translate("English"),
             locale.translate("German"),
