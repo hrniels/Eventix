@@ -125,8 +125,8 @@ impl Window {
         self.present();
     }
 
-    pub fn setup_tray(&self) {
-        self.imp().page.install_tray(self);
+    pub fn setup_tray(&self) -> bool {
+        self.imp().page.install_tray(self)
     }
 
     pub fn new(app: &gtk::Application, prefix: String, date: Option<NaiveDate>) -> Self {

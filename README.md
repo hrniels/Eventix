@@ -53,6 +53,17 @@ background synchronization continue while it is hidden. Closing the window or us
 Quit action exits the application. Use `--no-tray` to disable tray integration. There is no separate
 background daemon; alarms and synchronization stop when Eventix exits.
 
+Enable **Autostart** in Settings to request login autostart through the desktop
+portal. Autostart launches Eventix with only its tray icon visible. The desktop may ask for permission
+to allow this background activity. To start hidden manually, use:
+
+```bash
+flatpak run io.github.hrniels.Eventix --background
+```
+
+Launching Eventix normally afterward shows the existing window. `--background` cannot be combined
+with `--no-tray`.
+
 ### Importing calendar files
 
 Open an iCalendar file from the file manager with Eventix to preview and import its events/tasks.

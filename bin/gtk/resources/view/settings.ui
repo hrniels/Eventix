@@ -13,6 +13,7 @@
       <widget name="language"/>
       <widget name="interval_controls"/>
       <widget name="delay_controls"/>
+      <widget name="autostart_controls"/>
     </widgets>
   </object>
   <object class="GtkWindow" id="window">
@@ -129,6 +130,40 @@
                     <child>
                       <object class="GtkLabel" id="delay_unit">
                         <property name="xalign">0</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox" id="autostart_row">
+                <property name="spacing">24</property>
+                <style><class name="ev_details_row"/><class name="ev_settings_row"/></style>
+                <child>
+                  <object class="GtkBox" id="autostart_heading">
+                    <property name="spacing">6</property>
+                    <property name="hexpand">true</property>
+                    <child>
+                      <object class="GtkLabel" id="autostart_label">
+                        <property name="xalign">0</property>
+                        <style><class name="ev_details_label"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkImage" id="autostart_help">
+                        <property name="icon-name">dialog-question-symbolic</property>
+                        <property name="pixel-size">16</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="autostart_controls">
+                    <child>
+                      <object class="GtkSwitch" id="autostart">
+                        <property name="halign">start</property>
+                        <property name="valign">center</property>
                       </object>
                     </child>
                   </object>

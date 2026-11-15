@@ -4,6 +4,7 @@ version = "2.0.0"
 edition = "2024"
 
 [dependencies]
+ashpd = { version = "0.14", default-features = false, features = ["background", "gtk4", "tokio"] }
 anyhow.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true

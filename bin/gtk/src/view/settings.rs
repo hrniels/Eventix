@@ -11,6 +11,10 @@ use gtk::{glib, prelude::*};
 /// Owns a modal preferences editor until it is saved or cancelled.
 pub(crate) struct SettingsPopup {
     window: gtk::Window,
+    autostart: gtk::Switch,
+    applied_autostart: Cell<bool>,
+    autostart_reason: String,
+    autostart_failure: String,
     language: gtk::DropDown,
     interval: gtk::SpinButton,
     delay: gtk::SpinButton,
@@ -33,6 +37,8 @@ impl SettingsPopup {
         let content: gtk::Box = builder.object("content").unwrap();
         window.set_transient_for(Some(parent));
         window.set_title(Some(locale.translate("Settings")));
+        let autostart: gtk::Switch = builder.object("autostart").unwrap();
+        autostart.set_active(preferences.autostart);
         let language: gtk::DropDown = builder.object("language").unwrap();
         crate::widgets::dropdown::enable_navigation(&language);
         language.set_model(Some(&gtk::StringList::new(&[
@@ -47,6 +53,11 @@ impl SettingsPopup {
         let delay: gtk::SpinButton = builder.object("delay").unwrap();
         delay.set_value(f64::from(preferences.post_delay_seconds));
         for (id, text, widget) in [
+            (
+                "autostart_label",
+                "Autostart",
+                autostart.upcast_ref::<gtk::Widget>(),
+            ),
             (
                 "language_label",
                 "Language",
@@ -72,14 +83,19 @@ impl SettingsPopup {
         }
         for (id, text, widget) in [
             (
+                "autostart_help",
+                "Start Eventix in the tray when you log in.",
+                autostart.upcast_ref::<gtk::Widget>(),
+            ),
+            (
                 "interval_help",
                 "Time between automatic calendar synchronizations. Local changes are uploaded separately after the upload delay.",
-                &interval,
+                interval.upcast_ref(),
             ),
             (
                 "delay_help",
                 "Wait after the latest edit before uploading. Zero uploads immediately.",
-                &delay,
+                delay.upcast_ref(),
             ),
         ] {
             let help = locale.translate(text);
@@ -113,6 +129,14 @@ impl SettingsPopup {
         content.append(&buttons);
         let popup = Rc::new(Self {
             window,
+            autostart,
+            applied_autostart: Cell::new(preferences.autostart),
+            autostart_reason: locale
+                .translate("Start Eventix in the tray when you log in.")
+                .into(),
+            autostart_failure: locale
+                .translate("Could not change autostart settings")
+                .into(),
             language,
             interval,
             delay,
@@ -129,16 +153,28 @@ impl SettingsPopup {
 
     fn connect_actions(self: &Rc<Self>, submit: impl Fn(Preferences) -> bool + 'static) {
         let popup = self;
+        let submit = Rc::new(submit);
         let weak = Rc::downgrade(popup);
         popup.save.connect_clicked(move |_| {
             if let Some(popup) = weak.upgrade() {
                 popup.interval.update();
                 popup.delay.update();
                 popup.set_saving(true);
-                if !submit(popup.preferences()) {
-                    popup.set_saving(false);
-                    popup.error.set_text(&popup.failure_title);
-                    popup.error.set_visible(true);
+                let preferences = popup.preferences();
+                if preferences.autostart == popup.applied_autostart.get() {
+                    popup.submit_preferences(preferences, submit.as_ref());
+                } else {
+                    let popup = popup.clone();
+                    let submit = submit.clone();
+                    glib::spawn_future_local(async move {
+                        let result = crate::autostart::request(
+                            &popup.window,
+                            preferences.autostart,
+                            &popup.autostart_reason,
+                        )
+                        .await;
+                        popup.autostart_finished(preferences, result, submit.as_ref());
+                    });
                 }
             }
         });
@@ -172,6 +208,7 @@ impl SettingsPopup {
 
     fn preferences(&self) -> Preferences {
         Preferences {
+            autostart: self.autostart.is_active(),
             locale_type: if self.language.selected() == 0 {
                 LocaleType::English
             } else {
@@ -185,6 +222,7 @@ impl SettingsPopup {
     fn set_saving(&self, saving: bool) {
         self.saving.set(saving);
         for widget in [
+            self.autostart.upcast_ref::<gtk::Widget>(),
             self.language.upcast_ref::<gtk::Widget>(),
             self.interval.upcast_ref(),
             self.delay.upcast_ref(),
@@ -197,6 +235,34 @@ impl SettingsPopup {
 
     pub fn present(&self) {
         self.window.present();
+    }
+
+    fn submit_preferences(&self, preferences: Preferences, submit: &dyn Fn(Preferences) -> bool) {
+        if !submit(preferences) {
+            self.set_saving(false);
+            self.error.set_text(&self.failure_title);
+            self.error.set_visible(true);
+        }
+    }
+
+    fn autostart_finished(
+        &self,
+        preferences: Preferences,
+        result: anyhow::Result<()>,
+        submit: &dyn Fn(Preferences) -> bool,
+    ) {
+        match result {
+            Ok(()) => {
+                self.applied_autostart.set(preferences.autostart);
+                self.submit_preferences(preferences, submit);
+            }
+            Err(error) => {
+                tracing::warn!(%error, "Changing autostart failed");
+                self.set_saving(false);
+                self.error.set_text(&self.autostart_failure);
+                self.error.set_visible(true);
+            }
+        }
     }
 
     pub fn is_open(&self) -> bool {
@@ -329,12 +395,27 @@ mod tests {
         assert_eq!(content.margin_end(), 0);
         assert!(popup.language.factory().is_some());
         assert!(popup.language.list_factory().is_some());
+        assert!(popup.autostart.tooltip_text().is_none());
+        assert_eq!(popup.autostart.halign(), gtk::Align::Start);
+        assert_eq!(
+            popup
+                .autostart
+                .parent()
+                .unwrap()
+                .measure(gtk::Orientation::Horizontal, -1),
+            popup
+                .delay
+                .parent()
+                .unwrap()
+                .measure(gtk::Orientation::Horizontal, -1)
+        );
         let fields = content.first_child().and_downcast::<gtk::Box>().unwrap();
         let mut row = fields.first_child().unwrap();
         for (field, unit) in [
             ("Language", None),
             ("Sync interval", Some("minutes")),
             ("Upload delay", Some("seconds")),
+            ("Autostart", None),
         ] {
             assert!(row.has_css_class("ev_details_row"));
             assert!(row.has_css_class("ev_settings_row"));
@@ -356,10 +437,12 @@ mod tests {
                 );
                 assert_eq!(
                     help.tooltip_text().as_deref(),
-                    Some(if field == "Sync interval" {
-                        "Time between automatic calendar synchronizations. Local changes are uploaded separately after the upload delay."
-                    } else {
-                        "Wait after the latest edit before uploading. Zero uploads immediately."
+                    Some(match field {
+                        "Autostart" => "Start Eventix in the tray when you log in.",
+                        "Sync interval" =>
+                            "Time between automatic calendar synchronizations. Local changes are uploaded separately after the upload delay.",
+                        _ =>
+                            "Wait after the latest edit before uploading. Zero uploads immediately.",
                     })
                 );
                 assert!(help.next_sibling().is_none());
@@ -385,6 +468,7 @@ mod tests {
         assert_eq!(
             saved.get(),
             Some(Preferences {
+                autostart: false,
                 locale_type: LocaleType::German,
                 sync_interval_minutes: 30,
                 post_delay_seconds: 0,
@@ -415,6 +499,43 @@ mod tests {
         );
         popup.interval.set_value(60.0);
         popup.cancel.emit_clicked();
+        assert!(!popup.is_open());
+        parent.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn settings_popup_autostart_only_saves_after_portal_approval() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let parent = gtk::Window::new();
+        let popup = SettingsPopup::new(
+            &parent,
+            eventix_locale::default().as_ref(),
+            Preferences::default(),
+            |_| panic!("the portal has not approved autostart"),
+        );
+        popup.autostart.set_active(true);
+        let preferences = popup.preferences();
+        popup.set_saving(true);
+        assert!(!popup.autostart.is_sensitive());
+        popup.autostart_finished(preferences, Err(anyhow::anyhow!("denied")), &|_| {
+            panic!("denied requests must not save")
+        });
+        assert!(popup.is_open());
+        assert!(popup.error.is_visible());
+        assert!(popup.autostart.is_sensitive());
+        assert!(!popup.applied_autostart.get());
+
+        let saved = Cell::new(None);
+        popup.set_saving(true);
+        popup.autostart_finished(preferences, Ok(()), &|preferences| {
+            saved.set(Some(preferences));
+            true
+        });
+        assert_eq!(saved.get(), Some(preferences));
+        assert!(popup.applied_autostart.get());
+        popup.finished(&Ok(preferences));
         assert!(!popup.is_open());
         parent.close();
     }

@@ -1497,6 +1497,7 @@ mod tests {
             eventix_locale::LocaleType::English,
         ] {
             let preferences = eventix_state::Preferences {
+                autostart: false,
                 locale_type: language,
                 sync_interval_minutes: 30,
                 post_delay_seconds: 12,
@@ -1530,6 +1531,7 @@ mod tests {
         // A directory at the destination prevents the atomic file replacement.
         fs::create_dir(tmp.path().join("settings.toml")).unwrap();
         let preferences = eventix_state::Preferences {
+            autostart: false,
             locale_type: eventix_locale::LocaleType::German,
             sync_interval_minutes: 60,
             post_delay_seconds: 0,

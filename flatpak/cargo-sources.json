@@ -1107,6 +1107,58 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/gdk4-wayland/gdk4-wayland-0.11.5.crate",
+        "sha256": "99cc5266dc4e8745a4c4683b26a0c54977a452809d572c940e39c6844663c0ec",
+        "dest": "cargo/vendor/gdk4-wayland-0.11.5"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"99cc5266dc4e8745a4c4683b26a0c54977a452809d572c940e39c6844663c0ec\", \"files\": {}}",
+        "dest": "cargo/vendor/gdk4-wayland-0.11.5",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/gdk4-wayland-sys/gdk4-wayland-sys-0.11.5.crate",
+        "sha256": "bb55bc5225519d34fdf1412db3755af88d1388a1c2a053d92e6751db13d96e68",
+        "dest": "cargo/vendor/gdk4-wayland-sys-0.11.5"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"bb55bc5225519d34fdf1412db3755af88d1388a1c2a053d92e6751db13d96e68\", \"files\": {}}",
+        "dest": "cargo/vendor/gdk4-wayland-sys-0.11.5",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/gdk4-x11/gdk4-x11-0.11.5.crate",
+        "sha256": "519725adee2c62e6ae4cc39e2ec9137b04f0c894f1c673ce17ab8753850534a3",
+        "dest": "cargo/vendor/gdk4-x11-0.11.5"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"519725adee2c62e6ae4cc39e2ec9137b04f0c894f1c673ce17ab8753850534a3\", \"files\": {}}",
+        "dest": "cargo/vendor/gdk4-x11-0.11.5",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/gdk4-x11-sys/gdk4-x11-sys-0.11.5.crate",
+        "sha256": "cbf4849da10d077290e2bb8805278a0afd980af7928fbbb5a915821eb4b2b099",
+        "dest": "cargo/vendor/gdk4-x11-sys-0.11.5"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"cbf4849da10d077290e2bb8805278a0afd980af7928fbbb5a915821eb4b2b099\", \"files\": {}}",
+        "dest": "cargo/vendor/gdk4-x11-sys-0.11.5",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/getrandom/getrandom-0.2.17.crate",
         "sha256": "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0",
         "dest": "cargo/vendor/getrandom-0.2.17"
@@ -3377,6 +3429,19 @@
         "type": "inline",
         "contents": "{\"package\": \"8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef\", \"files\": {}}",
         "dest": "cargo/vendor/winnow-1.0.5",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/x11-dl/x11-dl-2.21.0.crate",
+        "sha256": "38735924fedd5314a6e548792904ed8c6de6636285cb9fec04d5b1db85c1516f",
+        "dest": "cargo/vendor/x11-dl-2.21.0"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"38735924fedd5314a6e548792904ed8c6de6636285cb9fec04d5b1db85c1516f\", \"files\": {}}",
+        "dest": "cargo/vendor/x11-dl-2.21.0",
         "dest-filename": ".cargo-checksum.json"
     },
     {

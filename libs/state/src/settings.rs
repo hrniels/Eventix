@@ -14,6 +14,8 @@ const FILENAME: &str = "settings.toml";
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
+    /// Whether login autostart was enabled through the desktop portal.
+    pub autostart: bool,
     /// Language used for translations and formatting.
     pub locale_type: LocaleType,
     /// Minutes between automatic full synchronizations (1–1,440).
@@ -34,6 +36,7 @@ pub enum PreferencesError {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            autostart: false,
             locale_type: LocaleType::default(),
             sync_interval_minutes: 15,
             post_delay_seconds: 5,
@@ -616,6 +619,7 @@ mod tests {
         settings.set_preferences(preferences).unwrap();
         assert_eq!(settings.preferences(), preferences);
         preferences.post_delay_seconds = 0;
+        preferences.autostart = true;
         preferences.locale_type = eventix_locale::LocaleType::German;
         settings.set_preferences(preferences).unwrap();
         let serialized = toml::to_string(&settings).unwrap();
@@ -639,6 +643,7 @@ mod tests {
         assert_eq!(
             settings.preferences(),
             super::Preferences {
+                autostart: false,
                 locale_type: eventix_locale::LocaleType::German,
                 sync_interval_minutes: 30,
                 post_delay_seconds: 12,

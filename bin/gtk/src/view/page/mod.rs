@@ -245,7 +245,7 @@ glib::wrapper! {
 }
 
 impl CalendarPage {
-    pub fn install_tray(&self, window: &crate::window::Window) {
+    pub fn install_tray(&self, window: &crate::window::Window) -> bool {
         if let Some(app) = window.application() {
             let weak = self.downgrade();
             app.connect_shutdown(move |_| {
@@ -255,12 +255,15 @@ impl CalendarPage {
             });
         }
         match crate::tray::Tray::new(window, self.locale()) {
-            Ok(tray) => self.imp().tray.replace(Some(tray)),
+            Ok(tray) => {
+                self.imp().tray.replace(Some(tray));
+                true
+            }
             Err(error) => {
                 tracing::warn!(%error, "Starting system tray failed");
-                None
+                false
             }
-        };
+        }
     }
 
     fn setup_details(&self) {

@@ -5,6 +5,7 @@
 include!(concat!(env!("OUT_DIR"), "/resources.rs"));
 
 mod actions;
+mod autostart;
 mod dates;
 mod model;
 mod style;
@@ -35,6 +36,13 @@ struct Args {
     /// Disable the system tray icon.
     #[arg(long)]
     no_tray: bool,
+    /// Start with only the tray icon visible.
+    #[arg(
+        long,
+        conflicts_with = "no_tray",
+        help = eventix_locale::default().translate("Start with only the tray icon visible").to_owned()
+    )]
+    background: bool,
     /// iCalendar files to preview and import.
     #[arg(value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
     files: Vec<OsString>,
@@ -63,8 +71,11 @@ fn main() -> glib::ExitCode {
     let app = application(&args, APP_ID);
 
     // Let GApplication resolve paths/URIs and forward file opens to the primary instance.
-    // Clap-only options have already been consumed and must not reach GApplication's parser.
+    // Only forward options understood by GApplication; --background must reach the primary instance.
     let mut application_args = vec![String::from("eventix-gtk")];
+    if args.background {
+        application_args.push("--background".into());
+    }
     if !args.files.is_empty() {
         application_args.push("--".into());
         application_args.extend(
@@ -79,8 +90,16 @@ fn main() -> glib::ExitCode {
 fn application(args: &Args, id: &str) -> gtk::Application {
     let app = gtk::Application::builder()
         .application_id(id)
-        .flags(gio::ApplicationFlags::HANDLES_OPEN)
+        .flags(gio::ApplicationFlags::HANDLES_OPEN | gio::ApplicationFlags::HANDLES_COMMAND_LINE)
         .build();
+    app.add_main_option(
+        "background",
+        glib::Char::from(0),
+        glib::OptionFlags::NONE,
+        glib::OptionArg::None,
+        eventix_locale::default().translate("Start with only the tray icon visible"),
+        None,
+    );
     app.connect_startup(|_| {
         if let Some(display) = gtk::gdk::Display::default() {
             style::install(&display);
@@ -90,6 +109,30 @@ fn application(args: &Args, id: &str) -> gtk::Application {
     let activation_args = args.clone();
     app.connect_activate(move |app| {
         main_window(app, &activation_args).present_from_tray();
+    });
+
+    let command_args = args.clone();
+    app.connect_command_line(move |app, command| {
+        let background = command
+            .options_dict()
+            .lookup::<bool>("background")
+            .ok()
+            .flatten()
+            .unwrap_or(false);
+        let files: Vec<_> = command
+            .arguments()
+            .iter()
+            .skip(1)
+            .filter(|arg| *arg != "--background" && *arg != "--")
+            .map(|arg| command.create_file_for_arg(arg))
+            .collect();
+        let window = main_window(app, &command_args);
+        if !files.is_empty() {
+            window.open_imports(&files);
+        } else if !background {
+            window.present_from_tray();
+        }
+        glib::ExitCode::SUCCESS
     });
 
     let open_args = args.clone();
@@ -109,8 +152,56 @@ fn main_window(app: &gtk::Application, args: &Args) -> window::Window {
     }
 
     let window = window::Window::new(app, args.data_prefix.clone(), args.date);
-    if !args.no_tray {
-        window.setup_tray();
+    if !args.no_tray && !window.setup_tray() {
+        // Never leave the user with an inaccessible application if tray startup fails.
+        window.present_from_tray();
     }
     window
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+    use gtk::{gio, glib, prelude::*};
+
+    use super::Args;
+
+    #[test]
+    fn background_start_requires_the_tray_and_defaults_to_disabled() {
+        assert!(!Args::try_parse_from(["eventix-gtk"]).unwrap().background);
+        assert!(
+            Args::try_parse_from(["eventix-gtk", "--background"])
+                .unwrap()
+                .background
+        );
+        assert!(Args::try_parse_from(["eventix-gtk", "--background", "--no-tray"]).is_err());
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn background_start_stays_hidden_until_normal_activation() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let args = Args::try_parse_from(["eventix-gtk", "--background"]).unwrap();
+        let app = super::application(&args, "io.github.hrniels.Eventix.StartupTest");
+        app.connect_startup(|app| {
+            let (window, _) = crate::window::Window::test_new(app);
+            assert!(!window.is_visible());
+        });
+        let weak = app.downgrade();
+        glib::idle_add_local_once(move || {
+            let app = weak.upgrade().unwrap();
+            let windows = app.windows();
+            assert_eq!(windows.len(), 1);
+            assert!(!windows[0].is_visible());
+            app.activate();
+            assert!(windows[0].is_visible());
+            assert_eq!(app.windows().len(), 1);
+            app.quit();
+        });
+        assert_eq!(
+            app.run_with_args(&["eventix-gtk", "--background"]),
+            glib::ExitCode::SUCCESS
+        );
+    }
 }
