@@ -16,6 +16,7 @@ use gtk::{gdk, glib, prelude::*};
 
 use crate::model::editor::EditorOptions;
 
+mod description;
 mod existing;
 mod feedback;
 mod layout;
@@ -129,7 +130,7 @@ impl ItemEditor {
 
         let dates = DateSection::new(&form, &options);
         let reminders = ReminderSection::new(&form, &options, &calendar.widget);
-        let (description, description_section) = Self::create_description(&form, locale);
+        let (description, description_section) = description::create(&form, locale);
 
         let recurrence = RecurrenceInput::new(locale, options.start.date());
         let repeat_section = FormSection::new(
@@ -288,19 +289,6 @@ impl ItemEditor {
                 }
             });
         }
-    }
-
-    fn create_description(form: &gtk::Box, locale: &dyn Locale) -> (gtk::TextView, FormSection) {
-        let builder = gtk::Builder::from_resource(resource_path!("view/editor/description.ui"));
-        let description = builder
-            .object("description")
-            .expect("description input is defined in GTK resources");
-        let scroll: gtk::ScrolledWindow = builder
-            .object("scroll")
-            .expect("description scroller is defined in GTK resources");
-        let section = FormSection::new(form, locale, "Description", &scroll, None);
-
-        (description, section)
     }
 
     pub fn focus(&self) {

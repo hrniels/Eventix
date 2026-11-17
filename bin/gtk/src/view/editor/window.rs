@@ -22,6 +22,7 @@ impl ItemEditor {
             .transient_for(parent)
             .destroy_with_parent(true)
             .modal(false)
+            .resizable(false)
             .default_width(super::super::ITEM_PANEL_WIDTH)
             .css_classes(["ev_editor_window"])
             .child(&panel)
@@ -134,6 +135,7 @@ mod tests {
         let parent = gtk::Window::new();
         parent.present();
         let window = editor.create_window(&parent);
+        assert!(!window.is_resizable());
         window.present();
         assert_eq!(
             editor.panel.first_child(),
@@ -169,6 +171,45 @@ mod tests {
             assert!(press(key, gdk::ModifierType::CONTROL_MASK));
         }
         assert_eq!(saves.get(), 2);
+
+        editor.sections[2].toggle.set_active(true);
+        drain();
+        let description_scroll = editor
+            .description
+            .ancestor(gtk::ScrolledWindow::static_type())
+            .and_downcast::<gtk::ScrolledWindow>()
+            .unwrap();
+        let handle = description_scroll.next_sibling().unwrap();
+        let content = description_scroll.parent().unwrap();
+        let drag = content
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .find_map(|controller| controller.downcast::<gtk::GestureDrag>().ok())
+            .unwrap();
+        let initial_height = description_scroll.height();
+        let initial_window_height = window.height();
+        let bounds = handle.compute_bounds(&content).unwrap();
+        let handle_y = f64::from(bounds.y()) + 1.0;
+        drag.emit_by_name::<()>("drag-begin", &[&1.0f64, &handle_y]);
+        drag.emit_by_name::<()>("drag-update", &[&0.0f64, &80.0f64]);
+        drag.emit_by_name::<()>("drag-end", &[&0.0f64, &80.0f64]);
+        drain();
+        assert_eq!(description_scroll.height(), initial_height + 80);
+        assert!(window.height() > initial_window_height);
+        editor.sections[2].toggle.set_active(false);
+        drain();
+        editor.sections[2].toggle.set_active(true);
+        drain();
+        assert_eq!(description_scroll.height(), initial_height + 80);
+        let handle_y = f64::from(handle.compute_bounds(&content).unwrap().y()) + 1.0;
+        drag.emit_by_name::<()>("drag-begin", &[&1.0f64, &handle_y]);
+        drag.emit_by_name::<()>("drag-update", &[&0.0f64, &-10000.0f64]);
+        drag.emit_by_name::<()>("drag-end", &[&0.0f64, &-10000.0f64]);
+        drain();
+        assert_eq!(description_scroll.height(), initial_height);
+        editor.sections[2].toggle.set_active(false);
+        drain();
 
         editor.sections[0].toggle.set_active(true);
         drain();
