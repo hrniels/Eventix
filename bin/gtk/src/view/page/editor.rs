@@ -35,15 +35,16 @@ impl PageEditor {
         }
 
         if let Some(session) = page.imp().session.current.borrow().as_ref() {
-            let id = self.begin_request();
+            let id = self.begin_request(page);
             session.load_edit(id, item, scope);
         }
     }
 
-    fn begin_request(&self) -> u64 {
+    fn begin_request(&self, page: &CalendarPage) -> u64 {
         let id = self.request.get().wrapping_add(1);
         self.request.set(id);
         self.loading.set(true);
+        page.notify("editor-open");
 
         id
     }
@@ -92,6 +93,7 @@ impl PageEditor {
         page.dismiss_popovers();
         self.current.replace(Some(editor.clone()));
         self.window.replace(Some(window.clone()));
+        page.notify("editor-open");
         // A load may complete after the owner has been hidden to the tray.
         if parent.is_visible() {
             window.present();
@@ -138,13 +140,13 @@ impl PageEditor {
 
         if let Some(session) = page.imp().session.current.borrow().as_ref() {
             page.dismiss_popovers();
-            let id = self.begin_request();
+            let id = self.begin_request(page);
             self.slot.set(slot);
             session.prepare_editor(id, kind);
         }
     }
 
-    pub(super) fn finish_editor(&self) {
+    pub(super) fn finish_editor(&self, page: &CalendarPage) {
         let editor = self.current.borrow().clone();
         if editor.as_ref().is_some_and(|editor| editor.saving.get()) {
             return;
@@ -158,6 +160,7 @@ impl PageEditor {
         self.loading.set(false);
         self.slot.set(None);
         self.request.set(self.request.get().wrapping_add(1));
+        page.notify("editor-open");
     }
 
     pub(super) fn save_editor(&self, page: &CalendarPage) {
@@ -202,6 +205,7 @@ impl PageEditor {
         if let Ok((options, edit)) = result {
             self.present_existing_editor(page, id, options, *edit);
         }
+        page.notify("editor-open");
     }
 
     pub(super) fn editor_loaded(
@@ -228,9 +232,15 @@ impl PageEditor {
             };
             self.present_editor(page, editor);
         }
+        page.notify("editor-open");
     }
 
-    pub(super) fn saved(&self, id: u64, result: Result<ChangeSet, String>) -> Option<ChangeSet> {
+    pub(super) fn saved(
+        &self,
+        page: &CalendarPage,
+        id: u64,
+        result: Result<ChangeSet, String>,
+    ) -> Option<ChangeSet> {
         let editor = self
             .current
             .borrow()
@@ -241,7 +251,7 @@ impl PageEditor {
             Ok(change) => {
                 if let Some(editor) = editor {
                     editor.set_saving(false);
-                    self.finish_editor();
+                    self.finish_editor(page);
                 }
 
                 Some(change)
@@ -257,12 +267,12 @@ impl PageEditor {
         }
     }
 
-    pub(super) fn stop(&self) {
+    pub(super) fn stop(&self, page: &CalendarPage) {
         if let Some(editor) = self.current.borrow().as_ref() {
             editor.set_saving(false);
         }
 
-        self.finish_editor();
+        self.finish_editor(page);
     }
 }
 
@@ -325,6 +335,79 @@ mod tests {
             },
             affected: vec![],
         }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn editor_availability_disables_creation_during_loading_and_restores_it_after_closing() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("org.eventix.EditorAvailabilityTest")
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        let target = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        page.append(&target);
+        let hint = Rc::new(crate::view::creation_hint::CreationHint::default());
+        hint.install(&target, |_, _, _| true);
+        window.present();
+        drain();
+        let motion = target
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .find_map(|controller| controller.downcast::<gtk::EventControllerMotion>().ok())
+            .unwrap();
+        let move_pointer = || motion.emit_by_name::<()>("motion", &[&10.0_f64, &10.0_f64]);
+        let assert_available = |available| {
+            for name in ["new-event", "new-task"] {
+                assert_eq!(window.lookup_action(name).unwrap().is_enabled(), available);
+            }
+            for kind in [CalCompType::Event, CalCompType::Todo] {
+                assert_eq!(
+                    page.imp().sidebar.new_item_button(kind).is_sensitive(),
+                    available
+                );
+            }
+            assert!(window.lookup_action("quick-add-task").unwrap().is_enabled());
+            assert!(page.imp().sidebar.quick_task().add.is_sensitive());
+        };
+
+        assert_available(true);
+        move_pointer();
+        assert!(target.cursor().is_some());
+        let id = page.imp().editor.begin_request(&page);
+        assert_available(false);
+        assert!(
+            target.cursor().is_none(),
+            "loading clears existing hover feedback"
+        );
+        move_pointer();
+        assert!(hint.position().is_none());
+
+        page.imp()
+            .editor
+            .editor_loaded(&page, id, Err("Load failed".into()));
+        assert_available(true);
+        move_pointer();
+        assert!(hint.position().is_some());
+
+        let editor = page.test_new_editor(options());
+        assert_available(false);
+        assert!(target.cursor().is_none());
+        move_pointer();
+        assert!(hint.position().is_none());
+        editor.set_saving(true);
+        page.close_editor();
+        assert_available(false);
+        editor.set_saving(false);
+        page.close_editor();
+        assert_available(true);
+        move_pointer();
+        assert!(hint.position().is_some());
+        window.close();
+        drain();
     }
 
     #[test]
@@ -448,7 +531,7 @@ mod tests {
         let window = gtk::Window::builder().child(&page).build();
         window.present();
         let lifecycle = &page.imp().editor;
-        let id = lifecycle.begin_request();
+        let id = lifecycle.begin_request(&page);
         page.show_content(Some("2026-10-22".parse().unwrap()));
         page.dismiss_popovers();
         assert!(lifecycle.loading.get());
@@ -461,14 +544,18 @@ mod tests {
         editor.set_saving(true);
         editor.cancel.emit_clicked();
         assert!(page.editor_open());
-        assert!(lifecycle.saved(id, Err("Save conflict".into())).is_none());
+        assert!(
+            lifecycle
+                .saved(&page, id, Err("Save conflict".into()))
+                .is_none()
+        );
         assert!(!editor.saving.get());
         assert!(editor_window.is_visible());
         assert!(Rc::ptr_eq(
             lifecycle.current.borrow().as_ref().unwrap(),
             &editor
         ));
-        lifecycle.saved(id + 1, Ok(change()));
+        lifecycle.saved(&page, id + 1, Ok(change()));
         assert!(page.editor_open());
 
         let details: EventDetails = glib::Object::new();
@@ -476,7 +563,7 @@ mod tests {
         page.imp()
             .details
             .show_details(page.upcast_ref(), page.upcast_ref(), details.clone());
-        lifecycle.saved(id, Ok(change()));
+        lifecycle.saved(&page, id, Ok(change()));
         assert!(!page.editor_open());
         assert_eq!(page.imp().details.current(), Some(details));
         assert_eq!(
@@ -484,14 +571,14 @@ mod tests {
             Some("2026-10-22".parse().unwrap())
         );
 
-        let id = lifecycle.begin_request();
-        lifecycle.stop();
+        let id = lifecycle.begin_request(&page);
+        lifecycle.stop(&page);
         lifecycle.editor_loaded(&page, id, Ok(options()));
         assert!(!page.editor_open());
         window.set_visible(false);
         lifecycle.present_editor(&page, ItemEditor::new(id + 2, options()));
         assert!(!lifecycle.window.borrow().as_ref().unwrap().is_visible());
-        lifecycle.stop();
+        lifecycle.stop(&page);
         assert!(lifecycle.window.borrow().is_none());
         window.close();
         drain();

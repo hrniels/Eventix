@@ -374,6 +374,7 @@ impl Window {
         }
 
         let action = gio::SimpleAction::new("new-event", None);
+        self.imp().page.bind_editor_availability(&action, "enabled");
         let page = self.imp().page.downgrade();
         action.connect_activate(move |_, _| {
             if let Some(page) = page.upgrade() {
@@ -383,6 +384,7 @@ impl Window {
         self.add_action(&action);
 
         let action = gio::SimpleAction::new("new-task", None);
+        self.imp().page.bind_editor_availability(&action, "enabled");
         let page = self.imp().page.downgrade();
         action.connect_activate(move |_, _| {
             if let Some(page) = page.upgrade() {

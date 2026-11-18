@@ -154,6 +154,25 @@ mod imp {
     }
 
     impl ObjectImpl for CalendarPage {
+        fn properties() -> &'static [glib::ParamSpec] {
+            static PROPERTIES: std::sync::OnceLock<Vec<glib::ParamSpec>> =
+                std::sync::OnceLock::new();
+            PROPERTIES.get_or_init(|| {
+                vec![
+                    glib::ParamSpecBoolean::builder("editor-open")
+                        .read_only()
+                        .build(),
+                ]
+            })
+        }
+
+        fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+            match pspec.name() {
+                "editor-open" => self.editor.editor_open().to_value(),
+                _ => unimplemented!(),
+            }
+        }
+
         fn constructed(&self) {
             self.parent_constructed();
 
@@ -201,6 +220,9 @@ mod imp {
             self.content.connect_controls(&obj);
             self.search_state.connect(&obj);
             obj.connect_event_creation();
+            for kind in [CalCompType::Event, CalCompType::Todo] {
+                obj.bind_editor_availability(&self.sidebar.new_item_button(kind), "sensitive");
+            }
             self.session.connect_quick_task(&obj);
             self.session.connect_sync_collections(&obj);
             let weak = obj.downgrade();
@@ -392,6 +414,13 @@ impl CalendarPage {
         self.imp().editor.editor_open()
     }
 
+    pub(crate) fn bind_editor_availability(&self, target: &impl IsA<glib::Object>, property: &str) {
+        self.bind_property("editor-open", target, property)
+            .invert_boolean()
+            .sync_create()
+            .build();
+    }
+
     pub fn editor_saving(&self) -> bool {
         self.imp().editor.saving()
     }
@@ -450,7 +479,7 @@ impl CalendarPage {
     }
 
     pub fn close_editor(&self) {
-        self.imp().editor.finish_editor();
+        self.imp().editor.finish_editor(self);
     }
 
     pub fn save_editor(&self) {
@@ -606,7 +635,7 @@ pub(crate) mod tests {
         }
 
         pub(in crate::view) fn test_saved_editor(&self) {
-            self.imp().editor.finish_editor();
+            self.imp().editor.finish_editor(self);
         }
     }
 

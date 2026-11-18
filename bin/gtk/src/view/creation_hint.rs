@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -70,6 +70,10 @@ impl CreationHint {
                 | gdk::ModifierType::BUTTON2_MASK
                 | gdk::ModifierType::BUTTON3_MASK;
             if controller.current_event_state().intersects(buttons)
+                || widget
+                    .ancestor(super::page::CalendarPage::static_type())
+                    .and_downcast::<super::page::CalendarPage>()
+                    .is_some_and(|page| page.editor_open())
                 || !is_creation_target(widget.as_ref(), x, y)
                 || !contains_slot(&widget, x, y)
             {
@@ -87,6 +91,34 @@ impl CreationHint {
             }
         });
         widget.add_controller(motion);
+
+        let subscription = Rc::new(RefCell::new(None));
+        let mapped_subscription = subscription.clone();
+        let hint = self.clone();
+        widget.connect_map(move |widget| {
+            if let Some(page) = widget
+                .ancestor(super::page::CalendarPage::static_type())
+                .and_downcast::<super::page::CalendarPage>()
+            {
+                let hint = hint.clone();
+                let weak = widget.downgrade();
+                let handler = page.connect_notify_local(Some("editor-open"), move |page, _| {
+                    if page.editor_open()
+                        && let Some(widget) = weak.upgrade()
+                    {
+                        hint.clear(&widget);
+                    }
+                });
+                mapped_subscription.replace(Some((page.downgrade(), handler)));
+            }
+        });
+        widget.connect_unmap(move |_| {
+            if let Some((page, handler)) = subscription.take()
+                && let Some(page) = page.upgrade()
+            {
+                page.disconnect(handler);
+            }
+        });
 
         // Clear stale hover feedback on touch or scrolling, but preserve it on mouse clicks.
         let events = gtk::EventControllerLegacy::new();

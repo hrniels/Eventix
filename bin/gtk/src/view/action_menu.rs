@@ -96,6 +96,7 @@ pub(super) fn install_context(
         };
         page.dismiss_popovers();
         let (model, group) = occurrence_menu(&details.actions, target.recurrent, &*locale);
+        bind_editor_actions(&page, &group);
         let handlers = Rc::new(Actions::default());
         let page = page.downgrade();
         handlers.connect(move |target, action| {
@@ -104,7 +105,7 @@ pub(super) fn install_context(
             }
         });
         bind(&group, &target, &handlers);
-        let popup = popover(model.upcast_ref(), None);
+        let popup = popover(model.upcast_ref(), None, &group);
         popup.insert_action_group("item", Some(&group));
         popup.set_has_arrow(false);
         popup.set_parent(&anchor);
@@ -283,10 +284,25 @@ fn update_menu_button<T: Clone + 'static>(
     button.insert_action_group("item", Some(&actions));
     // Virtualized rows only need the popover's widgets once their menu is opened.
     button.set_create_popup_func(move |button| {
-        let popover = popover(model.upcast_ref(), None);
+        if let Some(page) = button
+            .ancestor(super::page::CalendarPage::static_type())
+            .and_downcast::<super::page::CalendarPage>()
+        {
+            bind_editor_actions(&page, &actions);
+        }
+        let popover = popover(model.upcast_ref(), None, &actions);
         popover.set_halign(gtk::Align::End);
         button.set_popover(Some(&popover));
     });
+}
+
+fn bind_editor_actions(page: &super::page::CalendarPage, actions: &gio::SimpleActionGroup) {
+    if let Some(action) = ["edit-menu", "edit", "edit-occurrence"]
+        .into_iter()
+        .find_map(|name| actions.lookup_action(name))
+    {
+        page.bind_editor_availability(&action, "enabled");
+    }
 }
 
 fn bind<T: Clone + 'static>(actions: &gio::SimpleActionGroup, row: &T, handlers: &Rc<Actions<T>>) {
@@ -419,7 +435,11 @@ fn scoped_menu_for(
                 ] {
                     append(&variants, &actions, locale, key, name, true);
                 }
-                append_submenu(&editing, locale, "Edit", &variants);
+                let item = menu_item(locale.translate("Edit"), "Edit");
+                item.set_submenu(Some(&variants));
+                item.set_detailed_action("item.edit-menu");
+                actions.add_action(&gio::SimpleAction::new("edit-menu", None));
+                editing.append_item(&item);
             }
             Action::Edit => append(&editing, &actions, locale, "Edit", "edit", true),
             Action::Alarms => {}
@@ -601,11 +621,21 @@ fn menu_item(label: &str, key: &str) -> gio::MenuItem {
 }
 
 /// Builds menu rows with both icons and labels, including nested variant menus.
-fn popover(model: &gio::MenuModel, root: Option<&gtk::Popover>) -> gtk::Popover {
+fn popover(
+    model: &gio::MenuModel,
+    root: Option<&gtk::Popover>,
+    actions: &gio::SimpleActionGroup,
+) -> gtk::Popover {
     let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/popover.ui"));
     let contents: gtk::Box = builder.object("contents").unwrap();
     let popover: gtk::Popover = builder.object("popover").unwrap();
-    append_rows(&contents, model, &popover, root.unwrap_or(&popover));
+    append_rows(
+        &contents,
+        model,
+        &popover,
+        root.unwrap_or(&popover),
+        actions,
+    );
     track_pointer_motion(&popover, &contents);
     popover
 }
@@ -646,13 +676,14 @@ fn append_rows(
     model: &gio::MenuModel,
     parent: &gtk::Popover,
     root: &gtk::Popover,
+    actions: &gio::SimpleActionGroup,
 ) {
     for index in 0..model.n_items() {
         if let Some(section) = model.item_link(index, "section") {
             if contents.first_child().is_some() {
                 contents.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
             }
-            append_rows(contents, &section, parent, root);
+            append_rows(contents, &section, parent, root, actions);
             continue;
         }
         let item = gio::MenuItem::from_model(model, index);
@@ -662,7 +693,17 @@ fn append_rows(
                 gtk::Builder::from_resource(resource_path!("view/action_menu/submenu.ui"));
             let button: gtk::MenuButton = builder.object("button").unwrap();
             button.set_child(Some(&row));
-            button.set_popover(Some(&popover(&submenu, Some(root))));
+            button.set_popover(Some(&popover(&submenu, Some(root), actions)));
+            if let Some(name) = string_attribute(&item, "action")
+                && let Some(action) = name
+                    .strip_prefix("item.")
+                    .and_then(|name| actions.lookup_action(name))
+            {
+                action
+                    .bind_property("enabled", &button, "sensitive")
+                    .sync_create()
+                    .build();
+            }
             button.upcast()
         } else {
             let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/item.ui"));
@@ -742,6 +783,53 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    fn editor_availability_disables_the_parent_edit_menu_without_changing_its_children() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let page: crate::view::page::CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder().child(&page).build();
+        let (model, actions) = super::scoped_menu(
+            &[Action::Edit, Action::CopyUid],
+            &*eventix_locale::default(),
+            true,
+            None,
+        );
+        super::bind_editor_actions(&page, &actions);
+        let popup = super::popover(model.upcast_ref(), None, &actions);
+        let edit_menu = popup.child().unwrap().last_child().unwrap();
+        assert!(edit_menu.is::<gtk::MenuButton>());
+        let assert_editable = |enabled| {
+            assert_eq!(edit_menu.is_sensitive(), enabled);
+            assert_eq!(actions.is_action_enabled("edit-menu"), enabled);
+            for name in ["edit", "edit-occurrence", "edit-following"] {
+                assert!(actions.is_action_enabled(name));
+            }
+            for name in ["details", "copy-uid", "copy-filepath"] {
+                assert!(actions.is_action_enabled(name));
+            }
+        };
+        assert_editable(true);
+        page.test_new_editor(crate::model::editor::EditorOptions {
+            kind: eventix_ical::objects::CalCompType::Event,
+            calendars: vec![],
+            last_calendar: None,
+            locations: vec![],
+            contacts: vec![],
+            start: "2026-10-15T10:00:00".parse().unwrap(),
+            locale: eventix_locale::default(),
+        });
+        assert_editable(false);
+        let (_, opened_later) = menu(&[Action::Edit], &*eventix_locale::default());
+        super::bind_editor_actions(&page, &opened_later);
+        assert!(!opened_later.is_action_enabled("edit"));
+        page.close_editor();
+        assert_editable(true);
+        assert!(opened_later.is_action_enabled("edit"));
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
     fn opening_menus_and_submenus_ignore_stationary_hover_until_pointer_moves() {
         gtk::init().unwrap();
         gio::resources_register_include!("eventix.gresource").unwrap();
@@ -759,7 +847,7 @@ mod tests {
             }
         };
         drain();
-        let popup = super::popover(model.upcast_ref(), None);
+        let popup = super::popover(model.upcast_ref(), None, &group);
         popup.insert_action_group("item", Some(&group));
         popup.set_parent(&anchor);
         let submenu = popup
@@ -910,7 +998,7 @@ mod tests {
             }
         };
         drain();
-        let popup = super::popover(model.upcast_ref(), None);
+        let popup = super::popover(model.upcast_ref(), None, &group);
         popup.insert_action_group("item", Some(&group));
         popup.set_parent(&anchor);
         popup.connect_closed(|popup| popup.unparent());

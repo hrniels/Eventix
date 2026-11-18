@@ -251,6 +251,18 @@ impl DetailsController {
         let page = parent.ancestor(super::page::CalendarPage::static_type());
         let parent = page.as_ref().unwrap_or(parent);
         popover.set_parent(parent);
+        if let Some(page) = parent
+            .clone()
+            .downcast::<super::page::CalendarPage>()
+            .ok()
+            .or_else(|| {
+                parent
+                    .ancestor(super::page::CalendarPage::static_type())
+                    .and_downcast::<super::page::CalendarPage>()
+            })
+        {
+            popover.bind_editor_availability(&page);
+        }
 
         // Measure once before changing arrow and width requests for centered placement.
         let (width, minimum_height) = popover.placement_size();

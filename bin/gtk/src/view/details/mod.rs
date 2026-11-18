@@ -44,6 +44,7 @@ mod imp {
     resource_template! { "view/details/details.ui",
     pub struct EventDetails {
         pub edits: std::cell::RefCell<Vec<(gtk::Button, EditScope)>>,
+        pub edit_control: std::cell::RefCell<Option<gtk::Widget>>,
         pub responses: std::cell::RefCell<Vec<(gtk::Button, CalPartStat, bool)>>,
         pub delete: std::cell::RefCell<Option<gtk::Button>>,
         pub occurrence: std::cell::RefCell<Option<(gtk::Button, OccurrenceAction)>>,
@@ -198,6 +199,12 @@ impl EventDetails {
                     callback(item.clone(), scope);
                 }
             });
+        }
+    }
+
+    pub(crate) fn bind_editor_availability(&self, page: &super::page::CalendarPage) {
+        if let Some(control) = self.imp().edit_control.borrow().as_ref() {
+            page.bind_editor_availability(control, "sensitive");
         }
     }
 
@@ -551,6 +558,9 @@ impl EventDetails {
                     self.imp().edits.borrow_mut().push((button, scope));
                 }
 
+                self.imp()
+                    .edit_control
+                    .replace(Some(edit_menu.clone().upcast()));
                 right.append(&edit_menu);
             } else {
                 let edit = button("pencil", locale.translate("Edit"), "");
@@ -558,6 +568,7 @@ impl EventDetails {
                     .edits
                     .borrow_mut()
                     .push((edit.clone(), EditScope::Series));
+                self.imp().edit_control.replace(Some(edit.clone().upcast()));
                 right.append(&edit);
             }
         }
