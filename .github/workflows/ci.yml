@@ -106,7 +106,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             radicale \
             ant \
-            maven
+            maven \
+            xvfb \
+            xauth \
+            dbus-daemon \
+            openbox \
+            x11-utils
 
       - name: Build bundled test tools
         run: |
@@ -115,6 +120,10 @@ jobs:
 
       - name: Run tests
         run: ./b test --all-features
+
+      - name: Run GTK UI tests
+        timeout-minutes: 15
+        run: ./b test-ui
 
   # --------------------------------------------------------------------------
   # Code coverage (runs only after tests pass)
