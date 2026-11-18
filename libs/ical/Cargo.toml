@@ -10,7 +10,6 @@ formatx.workspace = true
 itertools.workspace = true
 once_cell.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tempfile.workspace = true
@@ -18,6 +17,7 @@ uuid = { version = "1.23.1", features = ["v4"] }
 
 [dev-dependencies]
 criterion = "0.8.2"
+serde_json.workspace = true
 
 [[bench]]
 name = "parse"
