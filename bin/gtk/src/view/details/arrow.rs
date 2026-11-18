@@ -11,6 +11,10 @@ pub(super) fn snapshot(popover: &EventDetails, contents: &gtk::Widget, snapshot:
     let Some(body) = contents.compute_bounds(popover) else {
         return;
     };
+    // GTK can snapshot a rejected native allocation before centered placement recovers it.
+    if body.width() < 48.0 || body.height() <= 0.0 {
+        return;
+    }
     let Some(surface) = popover.surface().and_downcast::<gdk::Popup>() else {
         return;
     };

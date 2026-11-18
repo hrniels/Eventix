@@ -40,7 +40,8 @@ jobs:
           fi
 
       - name: Export parse benchmark JSON
-        run: python3 tools/export_bench.py --input-dir "${{ steps.parse.outputs.criterion-dir }}/ics_parse_directory" --output benchmark-parse.json
+        run: python3 tools/export_bench.py --input-dir "${{ steps.parse.outputs.criterion-dir }}/ics_parse_directory"
+          --output benchmark-parse.json
 
       - name: Store parse benchmark result
         uses: benchmark-action/github-action-benchmark@v1

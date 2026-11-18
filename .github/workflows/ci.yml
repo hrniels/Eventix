@@ -106,7 +106,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             radicale \
             ant \
-            maven
+            maven \
+            xvfb \
+            xauth \
+            dbus-daemon \
+            openbox \
+            x11-utils
 
       - name: Build bundled test tools
         run: |
@@ -115,6 +120,10 @@ jobs:
 
       - name: Run tests
         run: ./b test --all-features
+
+      - name: Run GTK UI tests
+        timeout-minutes: 15
+        run: ./b test-ui
 
   # --------------------------------------------------------------------------
   # Code coverage (runs only after tests pass)
@@ -136,14 +145,37 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Install test system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            radicale \
+            ant \
+            maven \
+            xvfb \
+            xauth \
+            dbus-daemon \
+            openbox \
+            x11-utils
+
       - name: Build bundled test tools
         run: |
           ./b vdirsyncer
           ./b davmail
 
-      # Display-dependent GTK tests remain ignored; model tests run headlessly.
       - name: Collect coverage
-        run: ./b coverage --lcov --output-path lcov.info
+        run: ./b coverage --no-report
+
+      - name: Collect GTK UI coverage
+        timeout-minutes: 15
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
+        run: |
+          eval "$(cargo llvm-cov show-env --sh)"
+          ./b test-ui
+
+      - name: Generate combined coverage report
+        run: cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

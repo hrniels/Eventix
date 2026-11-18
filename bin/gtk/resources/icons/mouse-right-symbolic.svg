@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="28" viewBox="64 52 76 110">
 <!-- Copyright (C) 2026 Nils Asmussen
      SPDX-License-Identifier: GPL-3.0-or-later
      Adapted from data/static/mouse-left.svg in commit 48c96bcc.
      Filled outlines also work with GTK's legacy symbolic SVG renderer. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="28" viewBox="64 52 76 110">
   <g fill="#2e3436">
     <path d="M101.7 68.1C122.8 67.5 138.5 74.8 136.6 101.6Q121.4 106.5 107.4 106.5V99.7Q109 98 109 94.1V83.8Q109 76.6 101.7 76.6Z"/>
     <path fill-rule="evenodd" d="M101.7 65.5C78.8 64.8 62.1 73.4 64.2 101.7V126.9C65.7 149.2 78.8 162 101.7 161.6C116.6 161.6 135.6 157.4 139.2 127V101.7C141.3 73.4 124.6 64.8 101.7 65.5ZM101.7 70.8C82.5 70.1 67.7 76.1 69.5 101.5V126.7C70.8 145.8 81.5 156.7 101.7 156.3C114.1 156.3 132.2 153.3 133.9 126.7V101.5C135.7 76.1 120.9 70.1 101.7 70.8Z"/>

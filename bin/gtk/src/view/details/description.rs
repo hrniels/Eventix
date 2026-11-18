@@ -541,10 +541,11 @@ mod tests {
         assert_eq!(link_color, crate::style::color(view, "ev_link"));
         assert_ne!(link_color, view.color());
 
-        // Every pixel of each glyph must hit the same link, including its trailing half.
+        // Test both halves of each glyph, excluding rounded Pango cell boundaries: the
+        // integer rectangle edge can fall just outside the actual glyph hit area.
         for offset in first..end {
             let rect = view.iter_location(&buffer.iter_at_offset(offset));
-            for dx in 0..rect.width() {
+            for dx in 1..rect.width() - 1 {
                 let (x, y) = view.buffer_to_window_coords(
                     gtk::TextWindowType::Widget,
                     rect.x() + dx,
