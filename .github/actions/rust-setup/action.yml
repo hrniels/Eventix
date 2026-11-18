@@ -22,7 +22,7 @@ runs:
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends \
           libgtk-4-dev \
-          libgdk-pixbuf2.0-dev \
+          libgdk-pixbuf-2.0-dev \
           elfutils \
           librsvg2-common \
           libdbus-1-dev \
