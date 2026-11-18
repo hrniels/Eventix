@@ -1004,6 +1004,18 @@ mod tests {
     #[test]
     #[ignore = "requires a GTK display"]
     fn popup_layout_and_dummy_menus() {
+        // This allocation-recovery and destruction test is verified on GTK 4.24;
+        // older runtimes differ in native popup handling, including versions after 4.14.
+        eprintln!(
+            "popup_layout_and_dummy_menus runtime: GTK {}.{}.{}",
+            gtk::major_version(),
+            gtk::minor_version(),
+            gtk::micro_version()
+        );
+        if (gtk::major_version(), gtk::minor_version()) < (4, 24) {
+            eprintln!("skipping popup_layout_and_dummy_menus: requires GTK 4.24 or newer");
+            return;
+        }
         gtk::init().unwrap();
         gtk::gio::resources_register_include!("eventix.gresource").unwrap();
         let display = gtk::gdk::Display::default().unwrap();

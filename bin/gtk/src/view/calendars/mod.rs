@@ -1396,9 +1396,12 @@ mod tests {
             .find_map(|widget| widget.downcast_ref::<gtk::SpinButton>())
             .unwrap();
         for radio in &checks[1..] {
-            assert_eq!(
-                radio.compute_bounds(&editor).unwrap().center().y(),
-                spinner.compute_bounds(&editor).unwrap().center().y()
+            // Odd and even widget heights can place their centers half a pixel apart.
+            assert!(
+                (radio.compute_bounds(&editor).unwrap().center().y()
+                    - spinner.compute_bounds(&editor).unwrap().center().y())
+                .abs()
+                    <= 0.5
             );
         }
         let name = fields

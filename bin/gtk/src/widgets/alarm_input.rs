@@ -304,7 +304,16 @@ mod tests {
         let window = gtk::Window::new();
         window.set_child(Some(&alarm.widget));
         window.present();
-        while gtk::glib::MainContext::default().iteration(false) {}
+        // An empty GLib queue does not mean the window manager has granted focus yet.
+        let started = std::time::Instant::now();
+        while !window.is_active() || !absolute.is_mapped() {
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(10),
+                "alarm window did not become active and map its choices"
+            );
+            gtk::glib::MainContext::default().iteration(false);
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
         let next = |button: &gtk::CheckButton| {
             assert!(button.grab_focus());
             let controllers = button.observe_controllers();

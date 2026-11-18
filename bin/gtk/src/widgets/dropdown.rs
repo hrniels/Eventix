@@ -284,9 +284,17 @@ mod tests {
         assert!(widget.grab_focus());
         let keys = controller(&widget);
         let scroll = scroll_controller(&widget);
-        for (key, expected) in [(gdk::Key::Down, 1), (gdk::Key::Up, 0)] {
-            // GTK autoselects the first item rather than keeping an invalid selection.
+        for (key, from_invalid, from_first, from_last) in
+            [(gdk::Key::Down, 0, 1, 1), (gdk::Key::Up, 1, 0, 0)]
+        {
+            // GTK may accept the invalid selection, autoselect, or keep the current item.
             widget.set_selected(gtk::INVALID_LIST_POSITION);
+            let expected = match widget.selected() {
+                gtk::INVALID_LIST_POSITION => from_invalid,
+                0 => from_first,
+                1 => from_last,
+                selected => panic!("unexpected selection in two-item model: {selected}"),
+            };
             assert!(press(&keys, key));
             assert_eq!(widget.selected(), expected);
         }

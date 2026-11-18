@@ -595,7 +595,8 @@ mod tests {
                     "mouse outline must remain visible: {resource}"
                 );
                 let left = alpha(5, 10);
-                let right = alpha(15, 10);
+                // Sample inside both buttons, away from the rasterized outer outline.
+                let right = alpha(14, 10);
                 match interaction {
                     MouseInteraction::Left => {
                         assert!(left > 200 && right < 30, "left button: {resource}");
