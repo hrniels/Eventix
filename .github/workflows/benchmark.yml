@@ -24,13 +24,23 @@ jobs:
       - uses: ./.github/actions/rust-setup
 
       - name: Run parse benchmark
+        id: parse
         run: |
           set -o pipefail
+          # Cached Criterion baselines may be incomplete; history is tracked by the benchmark action.
+          criterion_dir=$(mktemp -d "$RUNNER_TEMP/criterion.XXXXXX")
+          echo "criterion-dir=$criterion_dir" >> "$GITHUB_OUTPUT"
+          export CRITERION_HOME="$criterion_dir"
           cargo bench -p eventix-ical --bench parse -- --sample-size 30 --warm-up-time 1 \
-            --measurement-time 3 | tee benchmark-parse.txt
+            --measurement-time 3 2>&1 | tee benchmark-parse.txt
+          # Criterion can log errors while still exiting successfully.
+          if rg -n 'Criterion\.rs ERROR:' benchmark-parse.txt; then
+            echo "::error::Criterion reported an error; see benchmark-parse.txt"
+            exit 1
+          fi
 
       - name: Export parse benchmark JSON
-        run: python3 tools/export_bench.py --input-dir target/criterion/ics_parse_directory --output benchmark-parse.json
+        run: python3 tools/export_bench.py --input-dir "${{ steps.parse.outputs.criterion-dir }}/ics_parse_directory" --output benchmark-parse.json
 
       - name: Store parse benchmark result
         uses: benchmark-action/github-action-benchmark@v1
@@ -47,6 +57,7 @@ jobs:
           max-items-in-chart: 200
 
       - name: Upload raw benchmark output
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-output
