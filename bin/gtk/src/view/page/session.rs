@@ -486,10 +486,7 @@ impl PageSession {
                     .and_downcast::<gtk::Window>()
                     .and_then(|window| window.application())
                 {
-                    let notification = gtk::gio::Notification::new(&alarm.summary);
-                    notification.set_body(Some(&alarm.body));
-                    notification.set_priority(gtk::gio::NotificationPriority::Urgent);
-                    application.send_notification(None, &notification);
+                    crate::view::notifications::send(&application, alarm);
                 }
             }
             Event::PreferencesLoaded(preferences) => self.update_preferences(page, preferences),

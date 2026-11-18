@@ -16,6 +16,7 @@ mod import;
 mod indicators;
 mod list;
 pub(crate) mod monthly;
+mod notifications;
 pub(crate) mod page;
 pub(crate) mod popover;
 mod response_marker;
