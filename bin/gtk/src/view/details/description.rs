@@ -690,8 +690,9 @@ mod tests {
         window.present();
         wait_until(|| short.is_mapped() && short.height() > 0);
         assert!(
-            scroll.height() < 80,
-            "short descriptions must not reserve a 150px area"
+            scroll.height() <= short.measure(gtk::Orientation::Vertical, short.width()).1,
+            "short descriptions must not reserve space beyond their text height (got {}px)",
+            scroll.height()
         );
         assert!(!scroll.vscrollbar().is_mapped());
         window.destroy();

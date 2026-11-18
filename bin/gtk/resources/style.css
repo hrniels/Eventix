@@ -630,6 +630,12 @@ button.ev_event.ev_cancelled > box > label {
     padding: 0;
 }
 
+/* Hidden scrollbars must not impose a minimum height on short descriptions. */
+.ev_details_description_scroll scrollbar.vertical,
+.ev_details_description_scroll scrollbar.vertical slider {
+    min-height: 0;
+}
+
 .ev_details_actions {
     padding: 10px 12px;
     border-top: 2px solid alpha(@theme_fg_color, 0.16);

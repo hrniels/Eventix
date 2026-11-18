@@ -8,6 +8,9 @@
     <property name="valign">start</property>
   </object>
   <object class="GtkScrolledWindow" id="description_scroll">
+    <style>
+      <class name="ev_details_description_scroll"/>
+    </style>
     <property name="hscrollbar-policy">never</property>
     <property name="vscrollbar-policy">automatic</property>
     <property name="overlay-scrolling">true</property>
