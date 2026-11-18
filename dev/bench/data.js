@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795005174235,
+  "lastUpdate": 1795005466966,
   "repoUrl": "https://github.com/hrniels/Eventix",
   "entries": {
     "Eventix List Benchmark": [
@@ -12548,6 +12548,31 @@ window.BENCHMARK_DATA = {
           {
             "name": "ics/parse_directory/generated_calendar_dir",
             "value": 18777843.777777772,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "committer": {
+            "name": "hrniels",
+            "username": "hrniels"
+          },
+          "id": "c0d8fd188440cb9347f3613867c0c5b3b8771002",
+          "message": "Added UI tests to CI",
+          "timestamp": "2026-10-22T12:34:42Z",
+          "url": "https://github.com/hrniels/Eventix/pull/69/commits/c0d8fd188440cb9347f3613867c0c5b3b8771002"
+        },
+        "date": 1795005466593,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "ics/parse_directory/generated_calendar_dir",
+            "value": 20074557.788888887,
             "unit": "ns"
           }
         ]
