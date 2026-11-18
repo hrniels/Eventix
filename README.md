@@ -8,17 +8,22 @@ Microsoft 365 (Exchange).
 ## Features
 
 - Monthly, weekly, and list calendar views
-- Event and task creation, editing, deletion, and recurring items
+- Event and task management with full create / edit / delete support
+- Recurrent events and tasks
 - Mostly complete implementation of the iCalendar standard (RFC 5545)
+- Drag-and-drop event creation, moving, copying, and resizing
+- Quick search for next/prev events
+- Continuously scrolling, filterable list with expandable recurring occurrences
 - Organized events with attendees and accept/decline
-- Calendar alarms and per-calendar personal reminder overrides
+- Desktop reminders with per-calendar personal alarm overrides
 - CalDAV synchronization via [vdirsyncer](https://github.com/pimutils/vdirsyncer) (bundled)
 - Microsoft 365 synchronization via [DavMail](http://davmail.sourceforge.net/) (bundled)
-- Local filesystem calendars (no synchronization required)
-- iCalendar (`.ics`) import with a preview and overwrite warnings
+- Local filesystem calendar support (no sync required)
+- iCalendar (.ics) file import with a preview and overwrite warnings
 - System tray icon showing due-today and overdue task counts
-- English and German translations
 - XDG-compliant configuration and data storage
+- Optional startup at login
+- English and German translations
 - Flatpak packaging (`io.github.hrniels.Eventix`)
 
 ## Screenshots
