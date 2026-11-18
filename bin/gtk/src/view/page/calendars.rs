@@ -1,0 +1,215 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use std::cell::RefCell;
+
+use gtk::{prelude::*, subclass::prelude::*};
+
+use super::CalendarPage;
+use crate::model::calendars::CalendarVisibility;
+use crate::widgets::CalendarToggle;
+
+/// Keeps header visibility controls synchronized without replacing focused buttons on a toggle.
+#[derive(Default)]
+pub(super) struct PageCalendars {
+    choices: RefCell<Vec<(CalendarVisibility, CalendarToggle)>>,
+}
+
+impl PageCalendars {
+    pub(super) fn update_label(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        let has_calendars = imp.calendars.first_child().is_some();
+        let locale = page.locale();
+        let label = locale.translate("Calendars");
+        imp.calendars_button.set_label(&if has_calendars {
+            format!("{label}:")
+        } else {
+            label.to_owned()
+        });
+        imp.calendar_selectors_scroll.set_visible(has_calendars);
+    }
+
+    pub(super) fn update(&self, page: &CalendarPage, calendars: Vec<CalendarVisibility>) {
+        let mut choices = self.choices.borrow_mut();
+        if choices.len() == calendars.len()
+            && choices.iter().zip(&calendars).all(|((old, _), new)| {
+                old.id == new.id && old.name == new.name && old.background == new.background
+            })
+        {
+            for ((old, button), new) in choices.iter_mut().zip(calendars) {
+                button.update(&new.name, new.enabled, new.sync_error.as_deref());
+                *old = new;
+            }
+            self.update_label(page);
+            return;
+        }
+
+        let container = &page.imp().calendars;
+        while let Some(child) = container.first_child() {
+            container.remove(&child);
+        }
+        choices.clear();
+        for calendar in calendars {
+            let button = CalendarToggle::new(&calendar.name, &calendar.background, 22);
+            button.update(
+                &calendar.name,
+                calendar.enabled,
+                calendar.sync_error.as_deref(),
+            );
+            let weak = page.downgrade();
+            let id = calendar.id.clone();
+            button.widget.connect_clicked(move |_| {
+                if let Some(page) = weak.upgrade()
+                    && let Some(session) = page.imp().session.current.borrow().as_ref()
+                {
+                    page.dismiss_popovers();
+                    page.imp().search_state.reset(&page);
+                    session.toggle_calendar(id.clone());
+                }
+            });
+            container.append(&button.widget);
+            choices.push((calendar, button));
+        }
+        self.update_label(page);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gtk::{prelude::*, subclass::prelude::*};
+
+    use super::{CalendarPage, CalendarVisibility};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn header_calendar_toggles_load_visibility_and_preserve_buttons_on_refresh() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let page: CalendarPage = gtk::glib::Object::new();
+        let imp = page.imp();
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
+        assert!(!imp.calendar_selectors_scroll.is_visible());
+        imp.calendar_toggles.update(&page, vec![]);
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
+        let mut calendars = vec![
+            CalendarVisibility {
+                id: "red".into(),
+                name: "Same name".into(),
+                background: "#ff0000".into(),
+                enabled: false,
+                sync_error: None,
+            },
+            CalendarVisibility {
+                id: "blue".into(),
+                name: "Same name".into(),
+                background: "#0000ff".into(),
+                enabled: true,
+                sync_error: None,
+            },
+        ];
+        imp.calendar_toggles.update(&page, calendars.clone());
+        let first = imp
+            .calendars
+            .first_child()
+            .and_downcast::<gtk::ToggleButton>()
+            .unwrap();
+        let second = first
+            .next_sibling()
+            .and_downcast::<gtk::ToggleButton>()
+            .unwrap();
+        assert!(!first.is_active());
+        assert!(second.is_active());
+        assert_eq!(first.tooltip_text().as_deref(), Some("Same name"));
+        assert!(second.next_sibling().is_none());
+
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars:"));
+        assert!(imp.calendar_selectors_scroll.is_visible());
+        let label_bounds = imp.calendars_button.compute_bounds(&page).unwrap();
+        let circle_bounds = first.compute_bounds(&page).unwrap();
+        let view_bounds = imp.list_view.compute_bounds(&page).unwrap();
+        let search_bounds = imp.search.compute_bounds(&page).unwrap();
+        let last_circle_bounds = second.compute_bounds(&page).unwrap();
+        let reload_bounds = imp.reload.compute_bounds(&page).unwrap();
+        assert!(view_bounds.x() + view_bounds.width() < search_bounds.x());
+        assert!(search_bounds.x() + search_bounds.width() < label_bounds.x());
+        assert!(label_bounds.x() + label_bounds.width() <= circle_bounds.x());
+        assert!(circle_bounds.width() >= 22.0);
+        assert!(last_circle_bounds.x() + last_circle_bounds.width() < reload_bounds.x());
+
+        calendars[0].enabled = true;
+        calendars[1].enabled = false;
+        imp.calendar_toggles.update(&page, calendars.clone());
+        assert_eq!(imp.calendars.first_child(), Some(first.clone().upcast()));
+        assert!(first.is_active());
+        assert!(!second.is_active());
+
+        let warning = first.child().unwrap().last_child().unwrap();
+        assert!(!warning.is_visible());
+        calendars[0].sync_error = Some("Connection refused\nServer unavailable".into());
+        imp.calendar_toggles.update(&page, calendars.clone());
+        assert_eq!(imp.calendars.first_child(), Some(first.clone().upcast()));
+        assert!(warning.is_visible());
+        assert_eq!(
+            first.tooltip_text().as_deref(),
+            Some("Same name\nConnection refused\nServer unavailable")
+        );
+        assert_eq!(second.tooltip_text().as_deref(), Some("Same name"));
+        calendars[0].sync_error = None;
+        imp.calendar_toggles.update(&page, calendars.clone());
+        assert!(!warning.is_visible());
+        assert_eq!(first.tooltip_text().as_deref(), Some("Same name"));
+
+        calendars.remove(0);
+        calendars[0].name = "Renamed".into();
+        imp.calendar_toggles.update(&page, calendars.clone());
+        let only = imp.calendars.first_child().unwrap();
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(
+            imp.calendar_selectors_scroll.width(),
+            only.width() + imp.calendars.margin_end(),
+            "the selector should fit one calendar without extra reserved width"
+        );
+        assert_eq!(only.tooltip_text().as_deref(), Some("Renamed"));
+        assert!(only.next_sibling().is_none());
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars:"));
+        imp.calendar_toggles.update(&page, vec![]);
+        assert!(imp.calendars.first_child().is_none());
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
+        assert!(!imp.calendar_selectors_scroll.is_visible());
+        page.switch_to_month();
+        assert_eq!(imp.calendars_button.label().as_deref(), Some("Calendars"));
+        let many = (0..30)
+            .map(|index| CalendarVisibility {
+                id: format!("calendar-{index}"),
+                ..calendars[0].clone()
+            })
+            .collect();
+        imp.calendar_toggles.update(&page, many);
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let scroll = &imp.calendar_selectors_scroll;
+        assert!(scroll.width() <= scroll.max_content_width());
+        let adjustment = scroll.hadjustment();
+        assert!(adjustment.upper() > adjustment.page_size());
+        adjustment.set_value(adjustment.upper() - adjustment.page_size());
+        assert!(adjustment.value() > 0.0);
+        window.close();
+    }
+}

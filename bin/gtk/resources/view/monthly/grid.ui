@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <!-- Repeated grid children are instantiated as needed for the displayed month. -->
+  <object class="GtkLabel" id="weekday">
+    <property name="ellipsize">end</property>
+    <style><class name="ev_month_weekday"/></style>
+  </object>
+  <object class="GtkLabel" id="day">
+    <property name="xalign">0</property>
+    <property name="ellipsize">end</property>
+  </object>
+  <object class="GtkButton" id="week">
+    <property name="action-name">win.show-week</property>
+    <property name="cursor">
+      <object class="GdkCursor">
+        <property name="name">pointer</property>
+      </object>
+    </property>
+    <style><class name="ev_month_week_number"/></style>
+  </object>
+  <object class="GtkOverlay" id="row">
+    <property name="hexpand">true</property>
+    <property name="vexpand">true</property>
+    <child>
+      <object class="GtkScrolledWindow" id="scroll">
+        <property name="hscrollbar-policy">never</property>
+        <property name="vscrollbar-policy">automatic</property>
+        <property name="overlay-scrolling">true</property>
+        <property name="child">
+          <object class="EventixMonthWeekContent" id="content"/>
+        </property>
+      </object>
+    </child>
+    <child type="overlay">
+      <object class="GtkBox" id="scroll_top_fade">
+        <property name="height-request">16</property>
+        <property name="valign">start</property>
+        <property name="hexpand">true</property>
+        <property name="can-target">false</property>
+        <property name="visible">false</property>
+        <style><class name="ev_scroll_fade_top"/></style>
+      </object>
+    </child>
+    <child type="overlay">
+      <object class="GtkBox" id="scroll_bottom_fade">
+        <property name="height-request">16</property>
+        <property name="valign">end</property>
+        <property name="hexpand">true</property>
+        <property name="can-target">false</property>
+        <property name="visible">false</property>
+        <style><class name="ev_scroll_fade_bottom"/></style>
+      </object>
+    </child>
+  </object>
+</interface>

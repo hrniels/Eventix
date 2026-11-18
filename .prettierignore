@@ -1,5 +1,0 @@
-# Third-party vendored assets — never reformat these
-data/static/contrib/
-
-# Cargo build artifacts
-target/

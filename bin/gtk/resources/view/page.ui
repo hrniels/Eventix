@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <!-- User-facing labels are populated through Eventix's TOML locale system in Rust. -->
+  <template class="EventixCalendarPage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkBox">
+        <property name="spacing">8</property>
+        <style><class name="ev_calendar_toolbar"/></style>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">0</property>
+            <style><class name="ev_view_switch"/></style>
+            <child>
+              <object class="GtkToggleButton" id="week_view">
+                <property name="active">true</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="month_view">
+                <property name="group">week_view</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="list_view">
+                <property name="group">week_view</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="search_controls">
+            <property name="spacing">0</property>
+            <child>
+              <object class="GtkEntry" id="search">
+                <property name="primary-icon-name">system-search-symbolic</property>
+                <property name="width-chars">20</property>
+                <property name="valign">center</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="search_previous">
+                <property name="icon-name">go-previous-symbolic</property>
+                <property name="valign">center</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="search_next">
+                <property name="icon-name">go-next-symbolic</property>
+                <property name="valign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="hexpand">true</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="spacing">0</property>
+            <child>
+              <object class="GtkButton" id="settings_button">
+                <property name="sensitive">false</property>
+                <property name="child">
+                  <object class="GtkImage">
+                    <property name="resource">@RESOURCE_PREFIX@/icons/gear-symbolic.svg</property>
+                  </object>
+                </property>
+                <style><class name="ev_settings_button"/></style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">4</property>
+                <style><class name="ev_calendars_box"/></style>
+                <child>
+                  <object class="GtkButton" id="calendars_button">
+                    <style><class name="ev_calendars_label"/></style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow" id="calendar_selectors_scroll">
+                    <property name="visible">false</property>
+                    <style><class name="ev_calendar_selectors_scroll"/></style>
+                    <property name="propagate-natural-width">true</property>
+                    <property name="max-content-width">400</property>
+                    <property name="hscrollbar-policy">automatic</property>
+                    <property name="vscrollbar-policy">never</property>
+                    <property name="child">
+                      <object class="GtkBox" id="calendars">
+                        <property name="spacing">4</property>
+                        <property name="valign">center</property>
+                        <property name="margin-end">8</property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="shortcuts_button">
+            <property name="action-name">win.show-help-overlay</property>
+            <property name="child">
+              <object class="GtkImage">
+                <property name="resource">@RESOURCE_PREFIX@/icons/question-lg-symbolic.svg</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <style><class name="linked"/></style>
+            <child>
+              <object class="GtkButton" id="reload">
+                <property name="action-name">win.reload</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="spacing">4</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">view-refresh-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="last_sync">
+                        <property name="valign">center</property>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuButton" id="sync_collections">
+                <property name="icon-name">pan-down-symbolic</property>
+                <property name="popover">
+                  <object class="GtkPopover" id="sync_popover">
+                    <property name="has-arrow">false</property>
+                    <property name="position">bottom</property>
+                    <property name="halign">end</property>
+                    <style>
+                      <class name="ev_details_menu"/>
+                    </style>
+                    <property name="child">
+                      <object class="GtkBox" id="sync_collection_list">
+                        <property name="orientation">vertical</property>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="GtkStack" id="page_stack">
+        <property name="vexpand">true</property>
+        <property name="hhomogeneous">false</property>
+        <property name="vhomogeneous">false</property>
+        <child>
+      <object class="GtkGrid" id="views">
+        <property name="column-homogeneous">true</property>
+        <property name="column-spacing">8</property>
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkFrame">
+            <property name="overflow">hidden</property>
+            <layout>
+              <property name="column">0</property>
+              <property name="column-span">4</property>
+            </layout>
+            <property name="hexpand">true</property>
+            <property name="vexpand">true</property>
+            <style>
+              <class name="ev_panel_frame"/>
+              <class name="ev_calendar_panel"/>
+            </style>
+            <child>
+              <object class="GtkStack" id="content_stack">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <property name="vhomogeneous">false</property>
+                <property name="hhomogeneous">false</property>
+                <child>
+                  <object class="GtkBox" id="calendar_content">
+                    <property name="orientation">vertical</property>
+                    <child>
+                      <object class="GtkCenterBox" id="header">
+                        <style><class name="ev_panel_header"/></style>
+                        <child type="start">
+                          <object class="GtkBox">
+                            <property name="spacing">4</property>
+                            <property name="valign">center</property>
+                            <child>
+                              <object class="GtkButton" id="previous">
+                                <property name="icon-name">go-previous-symbolic</property>
+                                <property name="action-name">win.previous</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="today">
+                                <property name="action-name">win.today</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkButton" id="next">
+                                <property name="icon-name">go-next-symbolic</property>
+                                <property name="action-name">win.next</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkMenuButton" id="picker">
+                                <property name="icon-name">x-office-calendar-symbolic</property>
+                                <property name="popover">
+                                  <object class="GtkPopover">
+                                    <property name="child">
+                                      <object class="GtkBox">
+                                        <child>
+                                          <object class="EventixDatePicker" id="calendar"/>
+                                        </child>
+                                        <child>
+                                          <object class="EventixMonthPicker" id="month_picker">
+                                            <property name="visible">false</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </property>
+                                  </object>
+                                </property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child type="center">
+                          <object class="GtkLabel" id="title">
+                            <property name="xalign">0.5</property>
+                            <property name="valign">center</property>
+                            <property name="ellipsize">end</property>
+                            <style><class name="ev_panel_title"/></style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkSeparator"/>
+                    </child>
+                    <child>
+                      <object class="GtkStack" id="stack">
+                        <property name="hexpand">true</property>
+                        <property name="vexpand">true</property>
+                        <property name="vhomogeneous">false</property>
+                        <property name="hhomogeneous">false</property>
+                        <child>
+                          <object class="GtkScrolledWindow" id="weekly_content">
+                            <property name="vexpand">true</property>
+                            <property name="vscrollbar-policy">never</property>
+                            <property name="child">
+                              <object class="EventixWeekContent" id="weekly"/>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkScrolledWindow" id="monthly_content">
+                            <property name="vexpand">true</property>
+                            <property name="overlay-scrolling">false</property>
+                            <property name="child">
+                              <object class="EventixMonthGrid" id="monthly">
+                                <property name="hexpand">true</property>
+                                <property name="vexpand">true</property>
+                                <property name="overflow">hidden</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="EventixSidebar" id="sidebar">
+            <layout><property name="column">4</property></layout>
+            <property name="vexpand">true</property>
+          </object>
+        </child>
+      </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="EventixStatusBar" id="status"/>
+    </child>
+  </template>
+</interface>

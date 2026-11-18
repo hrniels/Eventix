@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkBox" id="content">
+    <property name="spacing">12</property>
+    <style><class name="ev_list_row"/></style>
+    <child>
+      <object class="GtkImage" id="kind">
+        <property name="pixel-size">20</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="summary">
+        <property name="xalign">0</property>
+        <property name="hexpand">true</property>
+        <property name="ellipsize">end</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkImage" id="completed">
+        <property name="icon-name">emblem-ok-symbolic</property>
+        <property name="pixel-size">20</property>
+      </object>
+    </child>
+    <child>
+      <object class="EventixEventIndicators" id="indicators">
+        <property name="valign">center</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="valign">center</property>
+        <style><class name="ev_list_dates"/></style>
+        <child>
+          <object class="GtkLabel" id="date_range">
+            <property name="ellipsize">end</property>
+            <property name="max-width-chars">1</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="recurrence">
+            <property name="ellipsize">end</property>
+            <property name="max-width-chars">1</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

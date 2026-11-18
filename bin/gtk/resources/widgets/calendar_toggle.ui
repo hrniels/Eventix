@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkToggleButton" id="calendar_toggle">
+    <style><class name="ev_calendar_toggle"/></style>
+    <property name="child">
+      <object class="GtkOverlay">
+        <property name="child">
+          <object class="GtkDrawingArea" id="dot">
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+          </object>
+        </property>
+        <child type="overlay">
+          <object class="GtkDrawingArea" id="warning">
+            <property name="can-target">false</property>
+            <property name="visible">false</property>
+          </object>
+        </child>
+      </object>
+    </property>
+  </object>
+</interface>

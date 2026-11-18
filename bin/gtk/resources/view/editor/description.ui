@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkBox" id="content">
+    <property name="orientation">vertical</property>
+    <child>
+      <object class="GtkScrolledWindow" id="scroll">
+        <property name="min-content-height">100</property>
+        <property name="hscrollbar-policy">never</property>
+        <style>
+          <class name="ev_description_textbox"/>
+        </style>
+        <property name="child">
+          <object class="GtkTextView" id="description">
+            <property name="wrap-mode">word-char</property>
+            <property name="top-margin">6</property>
+            <property name="bottom-margin">6</property>
+            <property name="left-margin">6</property>
+            <property name="right-margin">6</property>
+          </object>
+        </property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox" id="resize_handle">
+        <property name="height-request">4</property>
+        <style>
+          <class name="ev_description_resize_handle"/>
+        </style>
+        <child>
+          <object class="GtkSeparator">
+            <property name="width-request">32</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <property name="hexpand">true</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

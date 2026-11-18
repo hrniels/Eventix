@@ -13,8 +13,9 @@ use std::{sync::Arc, time::Duration};
 use tempfile::TempDir;
 
 use eventix_state::{
-    CollectionSettings, Settings, State, SyncColResult, SyncerType, load_from_file, log_file,
-    write_to_file,
+    CalendarSettings, CollectionSettings, EmailAccount, Settings, State, SyncCancellation,
+    SyncColResult, SyncProgress, SyncTimeSpan, SyncerType, encrypt_password, load_from_file,
+    log_file, write_to_file,
 };
 
 mod common;
@@ -187,6 +188,315 @@ async fn refresh_store_removes_calendar_absent_from_settings() {
     );
 }
 
+// --- State creation operations ---
+
+#[tokio::test]
+async fn create_collection_validates_ids_persists_settings_and_rolls_back_failed_writes() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let state = Arc::new(Mutex::new(
+        State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap(),
+    ));
+    let syncer = SyncerType::FileSystem {
+        path: dir.path().to_string_lossy().into_owned(),
+    };
+
+    for id in ["", "../invalid", "with spaces"] {
+        assert!(
+            State::create_collection(&state, id, syncer.clone(), None)
+                .await
+                .is_err()
+        );
+    }
+
+    State::create_collection(&state, "new-collection_1", syncer.clone(), None)
+        .await
+        .unwrap();
+    assert!(
+        State::create_collection(&state, "new-collection_1", syncer.clone(), None)
+            .await
+            .is_err()
+    );
+    let loaded = State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap();
+    let collection = &loaded.settings().collections()["new-collection_1"];
+    assert_eq!(collection.syncer(), &syncer);
+    assert!(collection.all_calendars().is_empty());
+
+    let config = xdg.place_config_file("settings.toml").unwrap();
+    std::fs::remove_file(&config).unwrap();
+    std::fs::create_dir(&config).unwrap();
+    assert!(
+        State::create_collection(&state, "failed", syncer, None)
+            .await
+            .is_err()
+    );
+    assert!(
+        !state
+            .lock()
+            .await
+            .settings()
+            .collections()
+            .contains_key("failed")
+    );
+}
+
+#[tokio::test]
+async fn create_collection_requires_a_password_for_authenticated_caldav() {
+    let dir = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(State::new(make_xdg_with_locale(&dir)).unwrap()));
+    let syncer = SyncerType::VDirSyncer {
+        email: EmailAccount::new("User".into(), "user@example.com".into()),
+        url: "https://example.invalid".into(),
+        read_only: false,
+        username: Some("user".into()),
+        password: None,
+        time_span: Default::default(),
+    };
+
+    for password in [None, Some("")] {
+        let error = State::create_collection(&state, "remote", syncer.clone(), password)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            state
+                .lock()
+                .await
+                .locale()
+                .translate("error.collection_password")
+        );
+    }
+
+    assert!(state.lock().await.settings().collections().is_empty());
+}
+
+#[tokio::test]
+async fn create_calendar_normalizes_names_avoids_existing_folders_and_refreshes_the_store() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let state = Arc::new(Mutex::new(
+        State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap(),
+    ));
+
+    let path = dir.path().join("calendars");
+    State::create_collection(
+        &state,
+        "local",
+        SyncerType::FileSystem {
+            path: path.to_string_lossy().into_owned(),
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    std::fs::create_dir_all(path.join("team-calendar-qa")).unwrap();
+    let id = "local".to_owned();
+    for _ in 0..2 {
+        State::create_calendar(&state, &id, " Team Calendar / QA ")
+            .await
+            .unwrap();
+    }
+    State::create_calendar(&state, &id, " !!! ").await.unwrap();
+    assert!(State::create_calendar(&state, &id, "  ").await.is_err());
+
+    let loaded = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+    let calendars = loaded.settings().collections()[&id].all_calendars();
+    for folder in ["team-calendar-qa-2", "team-calendar-qa-3"] {
+        let (id, calendar) = calendars
+            .iter()
+            .find(|(_, cal)| cal.folder() == folder)
+            .unwrap();
+        assert_eq!(calendar.name(), "Team Calendar / QA");
+        assert!(calendar.enabled());
+        assert_eq!(calendar.bgcolor(), "#555555");
+        assert!(path.join(folder).is_dir());
+        assert!(state.lock().await.store().directory(&make_id(id)).is_some());
+    }
+    let fallback = calendars.values().find(|cal| cal.name() == "!!!").unwrap();
+    assert_eq!(fallback.folder().len(), 32);
+    assert!(fallback.folder().chars().all(|ch| ch.is_ascii_hexdigit()));
+
+    let config = loaded.xdg().place_config_file("settings.toml").unwrap();
+    std::fs::remove_file(&config).unwrap();
+    std::fs::create_dir(&config).unwrap();
+    assert!(State::create_calendar(&state, &id, "Failed").await.is_err());
+    assert_eq!(
+        state.lock().await.settings().collections()[&id]
+            .all_calendars()
+            .len(),
+        3
+    );
+}
+
+#[tokio::test]
+async fn create_calendar_rejects_missing_read_only_and_unsupported_collections() {
+    let dir = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(State::new(make_xdg_with_locale(&dir)).unwrap()));
+
+    let id = "remote".to_owned();
+    assert!(State::create_calendar(&state, &id, "New").await.is_err());
+
+    let email = EmailAccount::new("User".into(), "user@example.com".into());
+    for syncer in [
+        SyncerType::VDirSyncer {
+            email: email.clone(),
+            url: "https://example.invalid".into(),
+            read_only: true,
+            username: None,
+            password: None,
+            time_span: Default::default(),
+        },
+        SyncerType::O365 {
+            email,
+            read_only: false,
+            password: Default::default(),
+            time_span: Default::default(),
+        },
+    ] {
+        state
+            .lock()
+            .await
+            .settings_mut()
+            .collections_mut()
+            .insert(id.clone(), CollectionSettings::new(syncer));
+        assert!(State::create_calendar(&state, &id, "New").await.is_err());
+        assert!(
+            state.lock().await.settings().collections()[&id]
+                .all_calendars()
+                .is_empty()
+        );
+    }
+}
+
+// --- State::save_collection ---
+
+#[tokio::test]
+async fn save_collection_persists_settings_preserves_calendars_and_rolls_back_failed_writes() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let mut state = State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap();
+    let id = "local".to_owned();
+    let original = SyncerType::FileSystem {
+        path: dir.path().join("original").to_string_lossy().into_owned(),
+    };
+
+    // build simple collection
+    let mut collection = CollectionSettings::new(original.clone());
+    collection
+        .all_calendars_mut()
+        .insert("calendar".into(), CalendarSettings::default());
+    state
+        .settings_mut()
+        .collections_mut()
+        .insert(id.clone(), collection.clone());
+    let state = Arc::new(Mutex::new(state));
+
+    // change path and save collection
+    let updated = SyncerType::FileSystem {
+        path: dir.path().join("updated").to_string_lossy().into_owned(),
+    };
+    State::save_collection(&state, &id, updated.clone(), None)
+        .await
+        .unwrap();
+
+    // check if it was changed
+    let loaded = State::new_with_timezone(xdg.clone(), Some(chrono_tz::UTC)).unwrap();
+    assert_eq!(loaded.settings().collections()[&id].syncer(), &updated);
+    assert_eq!(
+        loaded.settings().collections()[&id].all_calendars(),
+        collection.all_calendars()
+    );
+
+    // force write failure by replacing settings.toml with directory
+    let config = xdg.place_config_file("settings.toml").unwrap();
+    std::fs::remove_file(&config).unwrap();
+    std::fs::create_dir(&config).unwrap();
+    assert!(
+        State::save_collection(&state, &id, original, None)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        state.lock().await.settings().collections()[&id].syncer(),
+        &updated
+    );
+
+    // force save error by saving non-existing collection
+    assert!(
+        State::save_collection(&state, &"missing".into(), updated, None)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn save_collection_preserves_current_credentials_and_rejects_backend_changes() {
+    let dir = TempDir::new().unwrap();
+    let xdg = make_xdg_with_locale(&dir);
+    let mut state = State::new_with_timezone(xdg, Some(chrono_tz::UTC)).unwrap();
+
+    // build new collection
+    let id = "remote".to_owned();
+    let password = encrypt_password(b"test secret", "current password").unwrap();
+    let syncer = SyncerType::VDirSyncer {
+        email: EmailAccount::new("User".into(), "user@example.com".into()),
+        url: "https://example.invalid".into(),
+        read_only: true,
+        username: Some("user".into()),
+        password: Some(password.clone()),
+        time_span: SyncTimeSpan::default(),
+    };
+    state
+        .settings_mut()
+        .collections_mut()
+        .insert(id.clone(), CollectionSettings::new(syncer.clone()));
+    let state = Arc::new(Mutex::new(state));
+
+    // save collection, but leave password unchanged
+    let mut draft = syncer;
+    if let SyncerType::VDirSyncer { password, .. } = &mut draft {
+        *password = None;
+    }
+    State::save_collection(&state, &id, draft.clone(), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        state.lock().await.settings().collections()[&id]
+            .syncer()
+            .password(),
+        Some(&password)
+    );
+
+    // changing syncer type is disallowed
+    assert!(
+        State::save_collection(
+            &state,
+            &id,
+            SyncerType::FileSystem {
+                path: "/unused".into()
+            },
+            None
+        )
+        .await
+        .is_err()
+    );
+
+    // removing username clears password as well
+    if let SyncerType::VDirSyncer { username, .. } = &mut draft {
+        *username = None;
+    }
+    State::save_collection(&state, &id, draft, None)
+        .await
+        .unwrap();
+    assert!(
+        state.lock().await.settings().collections()[&id]
+            .syncer()
+            .password()
+            .is_none()
+    );
+}
+
 // --- State sync wrappers ---
 
 /// Builds a minimal `State` that has one FS-backed collection with one calendar.
@@ -218,6 +528,49 @@ fn make_fs_state_with_xdg(tmp: &TempDir, col_id: &str, cal_id: &str, folder: &st
     state
 }
 
+#[derive(Clone, Copy, Debug)]
+enum SyncOperation {
+    SyncAll,
+    SyncCollection,
+    DiscoverCollection,
+    ReloadCollection,
+    ReloadCalendar,
+}
+
+impl SyncOperation {
+    const ALL: [Self; 5] = [
+        Self::SyncAll,
+        Self::SyncCollection,
+        Self::DiscoverCollection,
+        Self::ReloadCollection,
+        Self::ReloadCalendar,
+    ];
+
+    async fn run(
+        self,
+        state: &eventix_state::EventixState,
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<eventix_state::SyncResult> {
+        let col_id = "col1".to_string();
+        match self {
+            Self::SyncAll => State::sync_all_cancellable(state, None, None, cancellation).await,
+            Self::SyncCollection => {
+                State::sync_collection(state, &col_id, None, cancellation).await
+            }
+            Self::DiscoverCollection => {
+                State::discover_collection(state, &col_id, None, cancellation).await
+            }
+            Self::ReloadCollection => {
+                State::reload_collection(state, &col_id, None, cancellation).await
+            }
+            Self::ReloadCalendar => {
+                State::reload_calendar(state, &col_id, &"cal1".to_string(), None, cancellation)
+                    .await
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn state_discover_collection_with_fs_syncer() {
     let tmp = TempDir::new().unwrap();
@@ -225,9 +578,14 @@ async fn state_discover_collection_with_fs_syncer() {
         &tmp, "col1", "cal1", "mycal",
     )));
 
-    let result = State::discover_collection(&state, &"col1".to_string(), None)
-        .await
-        .expect("discover_collection must succeed");
+    let result = State::discover_collection(
+        &state,
+        &"col1".to_string(),
+        None,
+        &SyncCancellation::default(),
+    )
+    .await
+    .expect("discover_collection must succeed");
 
     assert_eq!(
         result.collections.get("col1"),
@@ -251,15 +609,108 @@ async fn state_sync_collection_with_fs_syncer() {
             .expect("refresh_store must succeed");
     }
 
-    let result = State::sync_collection(&state, &"col1".to_string(), None)
-        .await
-        .expect("sync_collection must succeed");
+    let result = State::sync_collection(
+        &state,
+        &"col1".to_string(),
+        None,
+        &SyncCancellation::default(),
+    )
+    .await
+    .expect("sync_collection must succeed");
 
     assert_eq!(
         result.collections.get("col1"),
         Some(&SyncColResult::Success(false))
     );
     assert!(!result.changed);
+}
+
+#[tokio::test]
+async fn collection_sync_reload_and_delete_preserve_local_source_files() {
+    let tmp = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
+    let file = tmp.path().join("data/col1/mycal/event.ics");
+    std::fs::write(&file, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:test\r\nDTSTART:20261031T100000Z\r\nSUMMARY:Test\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n").unwrap();
+    State::refresh_store(&mut *state.lock().await)
+        .await
+        .unwrap();
+
+    for operation in [
+        SyncOperation::SyncCollection,
+        SyncOperation::ReloadCollection,
+    ] {
+        let result = operation
+            .run(&state, &SyncCancellation::default())
+            .await
+            .unwrap();
+        assert!(matches!(
+            result.collections.get("col1"),
+            Some(SyncColResult::Success(_))
+        ));
+        assert!(file.exists());
+    }
+
+    let mut state = state.lock().await;
+    State::delete_collection(&mut state, &"col1".into())
+        .await
+        .unwrap();
+    assert!(file.exists());
+    assert!(!state.settings().collections().contains_key("col1"));
+
+    state.settings().write_to_file().unwrap();
+    State::refresh_store(&mut state).await.unwrap();
+    assert!(state.store().directories().is_empty());
+    let loaded = State::new(Arc::new(state.xdg().clone())).unwrap();
+    assert!(!loaded.settings().collections().contains_key("col1"));
+}
+
+#[tokio::test]
+async fn calendar_reload_and_delete_preserve_local_source_files() {
+    let tmp = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
+    let file = tmp.path().join("data/col1/mycal/event.ics");
+    std::fs::write(
+        &file,
+        concat!(
+            "BEGIN:VCALENDAR\r\n",
+            "VERSION:2.0\r\n",
+            "BEGIN:VEVENT\r\n",
+            "UID:test\r\n",
+            "DTSTART:20261031T100000Z\r\n",
+            "SUMMARY:Test\r\n",
+            "END:VEVENT\r\n",
+            "END:VCALENDAR\r\n",
+        ),
+    )
+    .unwrap();
+
+    State::refresh_store(&mut *state.lock().await)
+        .await
+        .unwrap();
+    let result = SyncOperation::ReloadCalendar
+        .run(&state, &SyncCancellation::default())
+        .await
+        .unwrap();
+    assert!(matches!(
+        result.collections.get("col1"),
+        Some(SyncColResult::Success(_))
+    ));
+    assert!(file.exists());
+
+    let mut state = state.lock().await;
+    State::delete_calendar(&mut state, &"col1".into(), &"cal1".into())
+        .await
+        .unwrap();
+    assert!(file.exists());
+    assert!(
+        state.settings().collections()["col1"]
+            .all_calendars()
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -274,7 +725,7 @@ async fn state_sync_all_updates_last_reload() {
     // Sleep briefly so the timestamp has a chance to advance.
     sleep(Duration::from_millis(5)).await;
 
-    State::sync_all(&state, None)
+    State::sync_all(&state, None, None)
         .await
         .expect("sync_all must succeed");
 
@@ -284,6 +735,187 @@ async fn state_sync_all_updates_last_reload() {
         after >= before,
         "last_reload must be updated after sync_all"
     );
+}
+
+#[tokio::test]
+async fn cancellation_before_start_does_not_wait_for_state_or_change_last_reload() {
+    let tmp = TempDir::new().unwrap();
+    let state = Arc::new(Mutex::new(make_fs_state_with_xdg(
+        &tmp, "col1", "cal1", "mycal",
+    )));
+    let guard = state.lock().await;
+    let before = guard.last_reload();
+
+    let cancellation = SyncCancellation::default();
+    cancellation.cancel();
+    cancellation.cancel();
+
+    for operation in SyncOperation::ALL {
+        let result =
+            tokio::time::timeout(Duration::from_secs(1), operation.run(&state, &cancellation))
+                .await
+                .unwrap()
+                .unwrap();
+        assert!(result.cancelled, "{operation:?}");
+        assert!(!result.changed, "{operation:?}");
+        assert!(result.collections.is_empty(), "{operation:?}");
+        assert_eq!(guard.last_reload(), before, "{operation:?}");
+    }
+}
+
+#[tokio::test]
+async fn cancellation_keeps_completed_results_and_skips_remaining_collections() {
+    // Request cancellation only after the first collection's result has been applied. This
+    // deterministically tests cancellation between collections, independent of their order.
+    struct CancelAfterCollection(SyncCancellation);
+
+    impl SyncProgress for CancelAfterCollection {
+        fn started(&self, total: usize) {
+            assert_eq!(total, 2);
+        }
+
+        fn collection_ready(&self, _: &str, completed: usize, total: usize) {
+            assert_eq!((completed, total), (1, 2));
+            self.0.cancel();
+        }
+    }
+
+    let tmp = TempDir::new().unwrap();
+    let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+    let collection = state.settings().collections()["col1"].clone();
+    state
+        .settings_mut()
+        .collections_mut()
+        .insert("col2".into(), collection);
+
+    State::refresh_store(&mut state).await.unwrap();
+
+    // An incomplete sync must retain its partial results without advancing last_reload.
+    let before = state.last_reload();
+    let state = Arc::new(Mutex::new(state));
+    let cancellation = SyncCancellation::default();
+
+    let result = State::sync_all_cancellable(
+        &state,
+        None,
+        Some(&CancelAfterCollection(cancellation.clone())),
+        &cancellation,
+    )
+    .await
+    .unwrap();
+
+    assert!(result.cancelled);
+    assert_eq!(result.collections.len(), 1);
+    assert!(matches!(
+        result.collections.values().next(),
+        Some(SyncColResult::Success(_))
+    ));
+    assert_eq!(state.lock().await.last_reload(), before);
+
+    // Cancellation belongs to one operation: a fresh sync must still process both collections.
+    let result = State::sync_all(&state, None, None).await.unwrap();
+
+    assert!(!result.cancelled);
+    assert_eq!(result.collections.len(), 2);
+}
+
+#[tokio::test]
+async fn cancelling_sync_operations_reconciles_partial_files_and_releases_write_protection() {
+    for operation in SyncOperation::ALL {
+        let tmp = TempDir::new().unwrap();
+        let mut state = make_fs_state_with_xdg(&tmp, "col1", "cal1", "mycal");
+
+        // Accept a real vdirsyncer connection but never answer its HTTP request, keeping the
+        // backend active until we explicitly cancel it.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        state
+            .settings_mut()
+            .collections_mut()
+            .get_mut("col1")
+            .unwrap()
+            .set_syncer(SyncerType::VDirSyncer {
+                email: eventix_state::EmailAccount::new("Test".into(), "test@example.com".into()),
+                url: format!("http://{address}/"),
+                username: None,
+                password: None,
+                read_only: false,
+                time_span: Default::default(),
+            });
+
+        State::refresh_store(&mut state).await.unwrap();
+
+        // Seed an existing error to verify cancellation preserves it rather than clearing it
+        // as a successful sync would.
+        state
+            .misc_mut()
+            .set_collection_error("col1", Some("Previous sync failed"));
+        let path = state
+            .store()
+            .directory(&make_id("cal1"))
+            .unwrap()
+            .path()
+            .clone();
+        let before = state.last_reload();
+
+        let state = Arc::new(Mutex::new(state));
+        let cancellation = SyncCancellation::default();
+        let request = cancellation.clone();
+        let shared = state.clone();
+        let sync = tokio::spawn(async move { operation.run(&shared, &request).await });
+
+        // Waiting for the connection ensures initialization has finished. Keep the socket open
+        // so a connection failure cannot complete the operation before cancellation does.
+        let (_connection, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept())
+            .await
+            .unwrap()
+            .unwrap();
+
+        {
+            let mut state = state.lock().await;
+            assert!(state.store_mut().directory_mut(&make_id("cal1")).is_err());
+        }
+
+        // Simulate a file downloaded before cancellation. Reload operations may already have
+        // deleted the cache directory, so recreate it before writing the partial result.
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(
+            path.join("partial.ics"),
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:partial\r\n\
+         DTSTART:20261012T090000Z\r\nDTEND:20261012T100000Z\r\n\
+         SUMMARY:Partial sync\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+        )
+        .unwrap();
+
+        // Completion must include backend cleanup and reconciliation, not just acknowledge
+        // the request. The timeout also catches a backend that ignores cancellation.
+        cancellation.cancel();
+        let result = tokio::time::timeout(Duration::from_secs(5), sync)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+
+        // Partial files count as changed data, but the interrupted collection must not be
+        // reported as successfully completed or assigned new collection errors.
+        assert!(result.cancelled, "{operation:?}");
+        assert!(result.changed, "{operation:?}");
+        assert!(result.collections.is_empty());
+        assert!(result.calendars.is_empty());
+
+        let mut state = state.lock().await;
+        assert_eq!(state.last_reload(), before);
+        assert_eq!(
+            state.misc().collection_error("col1"),
+            Some("Previous sync failed")
+        );
+
+        // Mutable access proves write protection was released; the loaded file proves the
+        // in-memory store was reconciled with the partially updated cache before returning.
+        let directory = state.store_mut().directory_mut(&make_id("cal1")).unwrap();
+        assert!(!directory.files().is_empty());
+    }
 }
 
 #[tokio::test]
@@ -306,9 +938,14 @@ async fn state_reload_collection_reloads_store() {
         "store must have one calendar"
     );
 
-    let result = State::reload_collection(&state, &"col1".to_string(), None)
-        .await
-        .expect("reload_collection must succeed");
+    let result = State::reload_collection(
+        &state,
+        &"col1".to_string(),
+        None,
+        &SyncCancellation::default(),
+    )
+    .await
+    .expect("reload_collection must succeed");
 
     assert_eq!(
         result.collections.get("col1"),
@@ -403,9 +1040,15 @@ async fn state_reload_calendar_reloads_store() {
     .expect("refresh_store must succeed");
     assert_eq!(state.lock().await.store().directories().len(), 1);
 
-    let result = State::reload_calendar(&state, &"col1".to_string(), &"cal1".to_string(), None)
-        .await
-        .expect("reload_calendar must succeed");
+    let result = State::reload_calendar(
+        &state,
+        &"col1".to_string(),
+        &"cal1".to_string(),
+        None,
+        &SyncCancellation::default(),
+    )
+    .await
+    .expect("reload_calendar must succeed");
 
     assert_eq!(
         result.collections.get("col1"),

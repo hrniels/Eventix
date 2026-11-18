@@ -18,19 +18,6 @@ env:
 
 jobs:
   # --------------------------------------------------------------------------
-  # Prettier formatting check (JS, CSS, HTML templates)
-  # --------------------------------------------------------------------------
-  prettier:
-    name: Prettier
-    if: github.event_name != 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check formatting
-        run: ./b format-check
-
-  # --------------------------------------------------------------------------
   # Flatpak source consistency check
   # --------------------------------------------------------------------------
   flatpak-sources:
@@ -154,8 +141,7 @@ jobs:
           ./b vdirsyncer
           ./b davmail
 
-      # Exclude the GTK-dependent binaries — they cannot run headlessly and
-      # their coverage is not meaningful in a CI environment.
+      # Display-dependent GTK tests remain ignored; model tests run headlessly.
       - name: Collect coverage
         run: ./b coverage --lcov --output-path lcov.info
 

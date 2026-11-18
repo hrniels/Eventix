@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkBox" id="content">
+    <property name="spacing">5</property>
+    <child>
+      <object class="GtkLabel" id="time">
+        <style><class name="ev_sidebar_time"/></style>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="summary">
+        <property name="xalign">0</property>
+        <property name="ellipsize">end</property>
+        <property name="hexpand">true</property>
+      </object>
+    </child>
+    <child>
+      <object class="EventixEventIndicators" id="indicators">
+        <property name="spacing">5</property>
+      </object>
+    </child>
+  </object>
+</interface>

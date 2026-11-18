@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkPopover" id="popover">
+    <property name="accessible-role">menu</property>
+    <style><class name="ev_action_menu"/></style>
+    <property name="child">
+      <object class="GtkBox" id="contents">
+        <property name="orientation">vertical</property>
+        <style><class name="ev_action_menu_contents"/></style>
+      </object>
+    </property>
+  </object>
+</interface>

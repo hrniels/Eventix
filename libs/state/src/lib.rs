@@ -9,17 +9,23 @@ mod persalarms;
 mod settings;
 mod sync;
 
+/// Toolkit-independent calendar mutations.
+pub mod actions;
+
+/// Microsoft device authentication and background monitoring.
+pub mod auth;
+
 /// Utility helpers exposed to other crates and tests.
 pub mod util;
 
 /// The current version of the persisted state files.
-pub const CURRENT_VERSION: u32 = 3;
+pub const CURRENT_VERSION: u32 = 4;
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use chrono::NaiveDateTime;
 use chrono_tz::Tz;
 use eventix_ical::{
-    col::{CalDir, CalStore, DirectoryWriteGuard},
+    col::{CalDir, CalStore},
     objects::{EventLike, UpdatableEventLike},
 };
 use eventix_locale::Locale;
@@ -31,9 +37,21 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::Mutex;
 use tracing::debug;
 use xdg::BaseDirectories;
+
+use actions::{
+    Action, LockedAction,
+    calendar::{
+        CreateCalendar, CreateCollection, DeleteCalendar, DeleteCalendarByFolder, DeleteCollection,
+        DiscoverCollection, ReloadCalendar, ReloadCollection, SaveCollection,
+        StoreO365RefreshToken, SyncAll, SyncCollection,
+    },
+    items::PushItems,
+};
+
+pub use actions::items::{PushProgress, PushResult};
 
 pub use crypto::{
     decrypt_password, encrypt_password, generate_local_password, retrieve_portal_secret,
@@ -42,9 +60,12 @@ pub use misc::Misc;
 pub use persalarms::{PersonalAlarms, PersonalCalendarAlarms};
 pub use settings::{
     CalendarAlarmType, CalendarSettings, CollectionSettings, EmailAccount, EncryptedPassword,
-    Settings, SyncTimeBound, SyncTimeSpan, SyncerType,
+    Preferences, PreferencesError, Settings, SyncTimeBound, SyncTimeSpan, SyncerType,
 };
-pub use sync::{SyncColResult, SyncResult, Syncer, create_calendar_by_folder, log_file};
+pub use sync::{
+    SyncCancellation, SyncColResult, SyncProgress, SyncResult, Syncer, create_calendar_by_folder,
+    log_file,
+};
 
 /// Shared, async-safe handle to the global application state.
 ///
@@ -65,118 +86,9 @@ pub struct State {
     misc: misc::Misc,
     locale: Arc<dyn Locale + Send + Sync>,
     last_reload: NaiveDateTime,
-    external_changes: broadcast::Sender<()>,
-}
-
-struct CollectionSyncPlan {
-    col_id: String,
-    index: usize,
-    snapshot: CollectionSettings,
-    token: Option<String>,
-    protection: Option<DirectoryWriteGuard>,
 }
 
 impl State {
-    async fn run_collection_sync_op<F, Fut>(
-        state: &EventixState,
-        col_id: &String,
-        auth_url: Option<&String>,
-        run: F,
-    ) -> anyhow::Result<sync::SyncResult>
-    where
-        F: FnOnce(
-            Arc<BaseDirectories>,
-            usize,
-            String,
-            CollectionSettings,
-            Option<String>,
-            Option<String>,
-        ) -> Fut,
-        Fut: std::future::Future<Output = anyhow::Result<sync::SyncExecution>>,
-    {
-        let (mut plan, xdg) = {
-            let mut state = state.lock().await;
-            // in case the o365 is empty (e.g., due to an earlier migration where it didn't matter
-            // that it was empty), repair it here by generating a new one and storing it.
-            Self::repair_o365_password(&mut state, col_id).await?;
-            let plan = Self::prepare_collection_sync(&mut state, col_id)?;
-            (plan, state.xdg.clone())
-        };
-
-        let (snapshot, mut syncer, res) = run(
-            xdg,
-            plan.index,
-            plan.col_id.clone(),
-            plan.snapshot.clone(),
-            plan.token.clone(),
-            auth_url.cloned(),
-        )
-        .await?;
-
-        let mut state = state.lock().await;
-        drop(plan.protection.take());
-        let mut sync_res = sync::SyncResult::default();
-        sync::handle_sync_result(
-            &mut state,
-            &plan.col_id,
-            &snapshot,
-            &mut syncer,
-            res,
-            &mut sync_res,
-        )
-        .await;
-        Ok(sync_res)
-    }
-
-    async fn encrypt_o365_token(
-        password: &EncryptedPassword,
-        token: &str,
-    ) -> anyhow::Result<String> {
-        let secret = retrieve_portal_secret().await?;
-        let password = decrypt_password(&secret, password)?;
-        Ok(crypto::encrypt_davmail_token(&password, token).await?)
-    }
-
-    /// Encrypts and persists a Microsoft refresh token for an O365 collection.
-    pub async fn store_o365_refresh_token(
-        state: &EventixState,
-        col_id: &String,
-        token: &str,
-    ) -> anyhow::Result<()> {
-        let password = {
-            let state = state.lock().await;
-            let collection = state
-                .settings()
-                .collections()
-                .get(col_id)
-                .ok_or_else(|| anyhow!("No collection with id {}", col_id))?;
-            match collection.syncer() {
-                SyncerType::O365 { password, .. } => password.clone(),
-                _ => return Err(anyhow!("Collection '{}' is not an O365 collection", col_id)),
-            }
-        };
-
-        let encrypted = Self::encrypt_o365_token(&password, token).await?;
-        let mut state = state.lock().await;
-        let password_matches = matches!(
-            state
-                .settings()
-                .collections()
-                .get(col_id)
-                .map(|collection| collection.syncer()),
-            Some(SyncerType::O365 { password: current, .. }) if current == &password
-        );
-        if !password_matches {
-            return Err(anyhow!(
-                "Collection '{}' changed while encrypting its refresh token",
-                col_id
-            ));
-        }
-        state.misc_mut().set_collection_token(col_id, encrypted);
-        state.misc().write_to_file()?;
-        Ok(())
-    }
-
     /// Creates a new in-memory application `State` by loading persisted data from the provided XDG
     /// base directories.
     ///
@@ -197,8 +109,10 @@ impl State {
 
         let misc = misc::Misc::load_from_file(&xdg).context("load misc state")?;
         let locale = match tz_override {
-            Some(tz) => eventix_locale::new_with_timezone(&xdg, misc.locale_type(), tz)?,
-            None => eventix_locale::new(&xdg, misc.locale_type())?,
+            Some(tz) => {
+                eventix_locale::new_with_timezone(&xdg, settings.preferences().locale_type, tz)?
+            }
+            None => eventix_locale::new(&xdg, settings.preferences().locale_type)?,
         };
 
         let mut store = CalStore::default();
@@ -210,7 +124,6 @@ impl State {
             }
         }
 
-        let (external_changes, _) = broadcast::channel(16);
         Ok(Self {
             xdg,
             locale,
@@ -219,7 +132,6 @@ impl State {
             store,
             misc,
             last_reload: chrono::Utc::now().naive_utc(),
-            external_changes,
         })
     }
 
@@ -230,7 +142,6 @@ impl State {
     /// snapshot (from the current environment at call time).
     #[cfg(test)]
     pub(crate) fn new_for_test(store: CalStore, misc: misc::Misc) -> Self {
-        let (external_changes, _) = broadcast::channel(16);
         Self {
             xdg: Arc::new(xdg::BaseDirectories::with_prefix("")),
             store,
@@ -239,11 +150,10 @@ impl State {
             misc,
             locale: eventix_locale::default(),
             last_reload: chrono::Utc::now().naive_utc(),
-            external_changes,
         }
     }
 
-    /// Reloads the `Locale` implementation from persisted misc state.
+    /// Reloads the `Locale` implementation from the current settings.
     ///
     /// Call this after the user changes language/locale preferences so that formatting and
     /// translations are updated without restarting the application. Returns an error if creating
@@ -255,10 +165,32 @@ impl State {
     /// Reloads the locale, optionally overriding the timezone used for formatting.
     pub fn reload_locale_with_timezone(&mut self, tz_override: Option<Tz>) -> anyhow::Result<()> {
         self.locale = match tz_override {
-            Some(tz) => eventix_locale::new_with_timezone(&self.xdg, self.misc.locale_type(), tz)?,
-            None => eventix_locale::new(&self.xdg, self.misc.locale_type())?,
+            Some(tz) => eventix_locale::new_with_timezone(
+                &self.xdg,
+                self.settings.preferences().locale_type,
+                tz,
+            )?,
+            None => eventix_locale::new(&self.xdg, self.settings.preferences().locale_type)?,
         };
         Ok(())
+    }
+
+    /// Persists user preferences and updates translations without changing the timezone.
+    ///
+    /// Returns an error for invalid values, unavailable translations, or persistence failures.
+    /// On failure, the previous preferences and loaded locale remain active.
+    pub fn save_preferences(&mut self, preferences: Preferences) -> anyhow::Result<()> {
+        let previous = self.settings.preferences();
+        let locale = self.locale.clone();
+        self.settings.set_preferences(preferences)?;
+        let result = self
+            .reload_locale_with_timezone(Some(*locale.timezone()))
+            .and_then(|()| self.settings.write_to_file());
+        if result.is_err() {
+            self.settings.set_preferences(previous)?;
+            self.locale = locale;
+        }
+        result
     }
 
     /// Refreshes the in-memory calendar store from the current settings.
@@ -353,88 +285,88 @@ impl State {
         Ok(dir)
     }
 
-    fn prepare_collection_sync(
-        state: &mut State,
-        col_id: &String,
-    ) -> anyhow::Result<CollectionSyncPlan> {
-        let snapshot = state
-            .settings()
-            .collections()
-            .get(col_id)
-            .cloned()
-            .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
-        let index = state
-            .settings()
-            .collections()
-            .keys()
-            .enumerate()
-            .find_map(|(idx, id)| (id == col_id).then_some(idx))
-            .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
-        let token = state.misc().collection_token(col_id).cloned();
-        let protected_dirs = snapshot
-            .all_calendars()
-            .keys()
-            .cloned()
-            .map(Arc::new)
-            .collect::<Vec<_>>();
-        let protection = state
-            .store_mut()
-            .protect_directories(protected_dirs.clone())
-            .map_err(anyhow::Error::from)?;
-        Ok(CollectionSyncPlan {
-            col_id: col_id.clone(),
-            index,
-            snapshot,
-            token,
-            protection: Some(protection),
+    /// Creates a collection, persists its settings and refreshes the local store.
+    ///
+    /// CalDAV collections with a username require a nonempty password, which is encrypted.
+    /// O365 collections receive a generated encrypted password. Returns an error for invalid or
+    /// duplicate IDs, credential failures, persistence failures or store refresh failures.
+    /// Failed persistence removes the new collection from in-memory settings.
+    pub async fn create_collection(
+        state: &EventixState,
+        id: &str,
+        syncer: SyncerType,
+        password: Option<&str>,
+    ) -> anyhow::Result<()> {
+        Box::new(CreateCollection {
+            id: id.to_owned(),
+            syncer,
+            password: password.map(str::to_owned),
         })
+        .execute(state)
+        .await
     }
 
-    async fn repair_o365_password(state: &mut State, col_id: &String) -> anyhow::Result<()> {
-        let replacement =
-            state
-                .settings()
-                .collections()
-                .get(col_id)
-                .and_then(|col| match col.syncer() {
-                    SyncerType::O365 {
-                        email,
-                        read_only,
-                        password,
-                        time_span,
-                    } if password.nonce.is_empty() && password.ciphertext.is_empty() => {
-                        Some((email.clone(), *read_only, time_span.clone()))
-                    }
-                    _ => None,
-                });
+    /// Saves a collection's synchronizer settings and refreshes the local store.
+    ///
+    /// A missing password preserves current credentials; a supplied CalDAV password is encrypted.
+    /// Returns an error if the collection is missing, its backend changes, encryption fails,
+    /// persistence fails, or the store cannot be refreshed. Failed persistence restores the previous
+    /// in-memory settings.
+    pub async fn save_collection(
+        state: &EventixState,
+        col_id: &String,
+        syncer: SyncerType,
+        password: Option<&str>,
+    ) -> anyhow::Result<()> {
+        Box::new(SaveCollection {
+            col_id: col_id.to_owned(),
+            syncer,
+            password: password.map(str::to_owned),
+        })
+        .execute(state)
+        .await
+    }
 
-        if let Some((email, read_only, time_span)) = replacement {
-            let secret = retrieve_portal_secret().await?;
-            let generated = crypto::generate_local_password();
-            let password = encrypt_password(&secret, &generated)?;
-            let col = state
-                .settings_mut()
-                .collections_mut()
-                .get_mut(col_id)
-                .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
-            col.set_syncer(SyncerType::O365 {
-                email,
-                read_only,
-                password,
-                time_span,
-            });
-            state.settings().write_to_file()?;
-        }
+    /// Encrypts and persists a Microsoft refresh token for an O365 collection.
+    pub async fn store_o365_refresh_token(
+        state: &EventixState,
+        col_id: &String,
+        token: &str,
+    ) -> anyhow::Result<()> {
+        Box::new(StoreO365RefreshToken {
+            col_id: col_id.to_owned(),
+            token: token.to_owned(),
+        })
+        .execute(state)
+        .await
+    }
 
-        Ok(())
+    /// Creates an enabled calendar in a writable collection and refreshes the local store.
+    ///
+    /// Trims the display name and selects a sanitized folder unused by configured calendars or
+    /// existing files. Returns an error for empty names, missing or unsupported collections,
+    /// read-only backends, filesystem or backend failures, persistence failures or refresh failures.
+    /// Failures before persistence remove the new in-memory settings but may leave backend data.
+    pub async fn create_calendar(
+        state: &EventixState,
+        id: &String,
+        name: &str,
+    ) -> anyhow::Result<()> {
+        Box::new(CreateCalendar {
+            id: id.to_owned(),
+            name: name.to_owned(),
+        })
+        .execute(state)
+        .await
     }
 
     /// Deletes a collection remotely and remove it from local settings.
     pub async fn delete_collection(state: &mut State, col_id: &String) -> anyhow::Result<()> {
-        sync::delete_collection(state, col_id).await?;
-
-        state.settings_mut().collections_mut().remove(col_id);
-        Ok(())
+        Box::new(DeleteCollection {
+            col_id: col_id.to_owned(),
+        })
+        .execute_locked(state)
+        .await
     }
 
     /// Deletes a calendar from a collection both remotely and locally.
@@ -443,15 +375,12 @@ impl State {
         col_id: &String,
         cal_id: &String,
     ) -> anyhow::Result<()> {
-        sync::delete_calendar(state, col_id, cal_id).await?;
-
-        let col = state
-            .settings_mut()
-            .collections_mut()
-            .get_mut(col_id)
-            .ok_or_else(|| anyhow!("No collection '{}'", col_id))?;
-        col.all_calendars_mut().remove(cal_id);
-        Ok(())
+        Box::new(DeleteCalendar {
+            col_id: col_id.to_owned(),
+            cal_id: cal_id.to_owned(),
+        })
+        .execute_locked(state)
+        .await
     }
 
     /// Deletes the remote calendar identified by `folder` and removes its local synced files.
@@ -460,82 +389,147 @@ impl State {
         col_id: &String,
         folder: &String,
     ) -> anyhow::Result<()> {
-        sync::delete_calendar_by_folder(state, col_id, folder).await
+        Box::new(DeleteCalendarByFolder {
+            col_id: col_id.to_owned(),
+            folder: folder.to_owned(),
+        })
+        .execute_locked(state)
+        .await
     }
 
-    /// Synchronizes a single collection.
+    /// Synchronizes one collection, retaining local changes if cancellation interrupts it.
+    ///
+    /// Returns only after backend processes have stopped and the local store has been reconciled.
+    /// Cancellation preserves collection errors and is reported in the returned result.
     pub async fn sync_collection(
         state: &EventixState,
         col_id: &String,
         auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        Self::run_collection_sync_op(state, col_id, auth_url, sync::run_sync_from_snapshot).await
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<SyncResult> {
+        Box::new(SyncCollection {
+            col_id: col_id.to_owned(),
+            auth_url: auth_url.cloned(),
+            cancellation: cancellation.clone(),
+        })
+        .execute(state)
+        .await
     }
 
     /// Discovers a remote collection and returns information about it.
+    ///
+    /// Cancellation stops backend work and reconciles local files before returning a cancelled
+    /// result, preserving existing collection errors.
     pub async fn discover_collection(
         state: &EventixState,
         col_id: &String,
         auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        Self::run_collection_sync_op(state, col_id, auth_url, sync::run_discover_from_snapshot)
-            .await
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<SyncResult> {
+        Box::new(DiscoverCollection {
+            col_id: col_id.to_owned(),
+            auth_url: auth_url.cloned(),
+            cancellation: cancellation.clone(),
+        })
+        .execute(state)
+        .await
     }
 
     /// Reloads a collection from its remote source and refreshes local files.
+    ///
+    /// Cancellation stops remaining reload stages and reconciles local files before returning a
+    /// cancelled result. Files already deleted or downloaded are not restored to their old state.
     pub async fn reload_collection(
         state: &EventixState,
         col_id: &String,
         auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        Self::run_collection_sync_op(
-            state,
-            col_id,
-            auth_url,
-            sync::run_reload_collection_from_snapshot,
-        )
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<SyncResult> {
+        Box::new(ReloadCollection {
+            col_id: col_id.to_owned(),
+            auth_url: auth_url.cloned(),
+            cancellation: cancellation.clone(),
+        })
+        .execute(state)
         .await
     }
 
     /// Reloads a single calendar from its remote source and refreshes the local file.
+    ///
+    /// Cancellation stops remaining reload stages and reconciles local files before returning a
+    /// cancelled result. Files already deleted or downloaded are not restored to their old state.
     pub async fn reload_calendar(
         state: &EventixState,
         col_id: &String,
         cal_id: &String,
         auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        Self::run_collection_sync_op(state, col_id, auth_url, |xdg, idx, id, col, token, auth| {
-            sync::run_reload_calendar_from_snapshot(xdg, idx, id, col, token, auth, cal_id)
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<SyncResult> {
+        Box::new(ReloadCalendar {
+            col_id: col_id.to_owned(),
+            cal_id: cal_id.to_owned(),
+            auth_url: auth_url.cloned(),
+            cancellation: cancellation.clone(),
         })
+        .execute(state)
+        .await
+    }
+
+    /// Pushes selected resources, retaining individual outcomes on failure or cancellation.
+    ///
+    /// Recurrence identities are ignored. Network work runs without holding the state lock.
+    /// Unattempted items are absent from the result; cancellation never rolls back remote writes.
+    /// Only selected files are uploaded; deletions and unrelated remote changes require normal
+    /// synchronization. Invalid identities and calendars without remote write support are rejected
+    /// before uploading. Interrupted writes can have uncertain outcomes and should be reconciled
+    /// with normal synchronization before retrying.
+    pub async fn push_items(
+        state: &EventixState,
+        items: &[actions::items::ItemId],
+        progress: Option<&dyn PushProgress>,
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<PushResult> {
+        Box::new(PushItems {
+            items: items.to_vec(),
+            progress,
+            cancellation: cancellation.clone(),
+        })
+        .execute(state)
+        .await
+    }
+
+    /// Synchronizes all collections until completion or cancellation.
+    ///
+    /// Keeps completed results and skips remaining collections after cancellation. Interrupted
+    /// collections are reconciled before returning, without counting them as completed progress.
+    /// Only a fully completed operation advances the last-reload timestamp.
+    pub async fn sync_all_cancellable(
+        state: &EventixState,
+        auth_url: Option<&String>,
+        progress: Option<&dyn SyncProgress>,
+        cancellation: &SyncCancellation,
+    ) -> anyhow::Result<SyncResult> {
+        Box::new(SyncAll {
+            auth_url: auth_url.cloned(),
+            progress,
+            cancellation: cancellation.clone(),
+        })
+        .execute(state)
         .await
     }
 
     /// Synchronizes all collections.
+    ///
+    /// The optional observer receives the initial collection count and an update after each
+    /// collection's result has been applied. Collection-level errors count as completed work
+    /// and are included in the returned result. An operation-level error stops synchronization
+    /// immediately without reporting the failed collection as ready.
     pub async fn sync_all(
         state: &EventixState,
         auth_url: Option<&String>,
-    ) -> anyhow::Result<sync::SyncResult> {
-        let col_ids = {
-            let state = state.lock().await;
-            state
-                .settings()
-                .collections()
-                .keys()
-                .cloned()
-                .collect::<Vec<_>>()
-        };
-
-        let mut sync_res = sync::SyncResult::default();
-        for col_id in col_ids {
-            let mut col_res = Self::sync_collection(state, &col_id, auth_url).await?;
-            sync_res.changed |= col_res.changed;
-            sync_res.collections.extend(col_res.collections.drain());
-            sync_res.calendars.extend(col_res.calendars.drain());
-        }
-
-        let mut state = state.lock().await;
-        state.last_reload = chrono::Utc::now().naive_utc();
-        Ok(sync_res)
+        progress: Option<&dyn SyncProgress>,
+    ) -> anyhow::Result<SyncResult> {
+        Self::sync_all_cancellable(state, auth_url, progress, &SyncCancellation::default()).await
     }
 
     /// Returns a reference to the XDG base directories used for file storage.
@@ -561,18 +555,6 @@ impl State {
     /// Returns a mutable reference to the in-memory calendar store.
     pub fn store_mut(&mut self) -> &mut CalStore {
         &mut self.store
-    }
-
-    /// Subscribes to notifications that contents have changed externally.
-    ///
-    /// These are changes not triggered by the client (web UI), but by imports, for example.
-    pub fn subscribe_external_changes(&self) -> broadcast::Receiver<()> {
-        self.external_changes.subscribe()
-    }
-
-    /// Notifies subscribers that contents have changed externally.
-    pub fn notify_external_change(&self) {
-        let _ = self.external_changes.send(());
     }
 
     /// Borrows the calendar store and personal alarms mutably at the same time.
@@ -693,7 +675,7 @@ mod tests {
     use eventix_ical::col::{CalDir, CalStore};
 
     use crate::{
-        CalendarSettings, EmailAccount, PersonalAlarms, SyncTimeSpan, encrypt_password,
+        EmailAccount, PersonalAlarms, SyncTimeSpan, encrypt_password,
         misc::Misc,
         settings::{CollectionSettings, SyncerType},
     };
@@ -834,28 +816,5 @@ mod tests {
             ts >= before && ts <= after,
             "last_reload must be set at construction time"
         );
-    }
-
-    #[test]
-    fn prepare_collection_sync_releases_protection_on_drop() {
-        let mut state = make_state("cal1", "Cal");
-        let mut col = CollectionSettings::new(SyncerType::FileSystem {
-            path: "/tmp".to_string(),
-        });
-        col.all_calendars_mut()
-            .insert("cal1".to_string(), CalendarSettings::default());
-        state
-            .settings_mut()
-            .collections_mut()
-            .insert("col1".to_string(), col);
-
-        let cal_id = Arc::new("cal1".to_string());
-        let plan = State::prepare_collection_sync(&mut state, &"col1".to_string()).unwrap();
-
-        assert!(state.store().directory_write_protected(&cal_id));
-
-        drop(plan);
-
-        assert!(!state.store().directory_write_protected(&cal_id));
     }
 }

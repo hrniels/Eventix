@@ -1,0 +1,2155 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use std::{
+    cell::{OnceCell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
+
+use chrono::NaiveDate;
+use eventix_ical::objects::CalCompType;
+use eventix_locale::Locale;
+use eventix_state::actions::{
+    Action,
+    items::{ChangeOccurrence, ChangeTask, RespondItem},
+};
+use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
+
+use self::{content::PageContent, editor::PageEditor, session::PageSession};
+use super::{
+    monthly::grid::MonthGrid, popover::DetailsController, sidebar::Sidebar,
+    weekly::content::WeekContent,
+};
+use crate::model::View;
+use crate::view::list::ListView;
+use crate::view::status_bar::StatusBar;
+
+mod calendars;
+mod content;
+mod create;
+mod editor;
+mod import;
+mod item_actions;
+mod management;
+mod search;
+mod session;
+
+mod imp {
+    use super::*;
+
+    resource_template! { "view/page.ui",
+    pub struct CalendarPage {
+        #[template_child]
+        pub page_stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub views: gtk::TemplateChild<gtk::Grid>,
+        #[template_child]
+        pub stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub content_stack: gtk::TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub calendar_content: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub list_view: gtk::TemplateChild<gtk::ToggleButton>,
+        #[template_child]
+        pub search: gtk::TemplateChild<gtk::Entry>,
+        #[template_child]
+        pub search_controls: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub search_previous: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub search_next: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub header: gtk::TemplateChild<gtk::CenterBox>,
+        #[template_child]
+        pub sidebar: gtk::TemplateChild<Sidebar>,
+        #[template_child]
+        pub weekly_content: gtk::TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub monthly_content: gtk::TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub monthly: gtk::TemplateChild<MonthGrid>,
+        #[template_child]
+        pub week_view: gtk::TemplateChild<gtk::ToggleButton>,
+        #[template_child]
+        pub month_view: gtk::TemplateChild<gtk::ToggleButton>,
+        #[template_child]
+        pub title: gtk::TemplateChild<gtk::Label>,
+        #[template_child]
+        pub status: gtk::TemplateChild<StatusBar>,
+        #[template_child]
+        pub weekly: gtk::TemplateChild<WeekContent>,
+        #[template_child]
+        pub previous: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub next: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub today: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub reload: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub sync_collections: gtk::TemplateChild<gtk::MenuButton>,
+        #[template_child]
+        pub sync_popover: gtk::TemplateChild<gtk::Popover>,
+        #[template_child]
+        pub sync_collection_list: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub last_sync: gtk::TemplateChild<gtk::Label>,
+        #[template_child]
+        pub calendars_button: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub settings_button: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub shortcuts_button: gtk::TemplateChild<gtk::Button>,
+        #[template_child]
+        pub calendars: gtk::TemplateChild<gtk::Box>,
+        #[template_child]
+        pub calendar_selectors_scroll: gtk::TemplateChild<gtk::ScrolledWindow>,
+        #[template_child]
+        pub picker: gtk::TemplateChild<gtk::MenuButton>,
+        #[template_child]
+        pub calendar: gtk::TemplateChild<crate::widgets::DatePicker>,
+        #[template_child]
+        pub month_picker: gtk::TemplateChild<crate::widgets::MonthPicker>,
+
+        pub(super) editor: PageEditor,
+        pub(super) content: PageContent,
+        pub(super) search_state: search::PageSearch,
+        pub(super) list: OnceCell<Rc<ListView>>,
+        pub(super) session: PageSession,
+        pub(super) calendar_toggles: calendars::PageCalendars,
+        pub(super) management: management::PageManagement,
+        pub(super) imports: import::PageImports,
+        pub calendar_css: RefCell<String>,
+        pub header_group: RefCell<Option<gtk::SizeGroup>>,
+        pub styles: RefCell<Option<(gdk::Display, gtk::CssProvider)>>,
+        pub locale: RefCell<Option<Arc<dyn Locale + Send + Sync>>>,
+        pub tray: RefCell<Option<crate::tray::Tray>>,
+        pub(super) details: Rc<DetailsController>,
+    }
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for CalendarPage {
+        const NAME: &'static str = "EventixCalendarPage";
+        type Type = super::CalendarPage;
+        type ParentType = gtk::Box;
+
+        fn class_init(klass: &mut Self::Class) {
+            crate::widgets::DatePicker::ensure_type();
+            crate::widgets::MonthPicker::ensure_type();
+            WeekContent::ensure_type();
+            MonthGrid::ensure_type();
+            Sidebar::ensure_type();
+            StatusBar::ensure_type();
+
+            klass.bind_template();
+        }
+
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
+    }
+
+    impl ObjectImpl for CalendarPage {
+        fn properties() -> &'static [glib::ParamSpec] {
+            static PROPERTIES: std::sync::OnceLock<Vec<glib::ParamSpec>> =
+                std::sync::OnceLock::new();
+            PROPERTIES.get_or_init(|| {
+                vec![
+                    glib::ParamSpecBoolean::builder("editor-open")
+                        .read_only()
+                        .build(),
+                ]
+            })
+        }
+
+        fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+            match pspec.name() {
+                "editor-open" => self.editor.editor_open().to_value(),
+                _ => unimplemented!(),
+            }
+        }
+
+        fn constructed(&self) {
+            self.parent_constructed();
+
+            let obj = self.obj();
+            obj.setup_details();
+            self.management.connect(&obj);
+            let list = ListView::new();
+            let weak = obj.downgrade();
+            list.connect_changed(move || {
+                if let Some(page) = weak.upgrade() {
+                    page.show_content(page.imp().content.date.get());
+                }
+            });
+            let weak = obj.downgrade();
+            list.connect_load_rows(move |request| {
+                if let Some(page) = weak.upgrade()
+                    && let Some(session) = page.imp().session.current.borrow().as_ref()
+                {
+                    session.load_list_rows(request);
+                }
+            });
+            let weak = obj.downgrade();
+            list.connect_action(move |row, action| {
+                if let Some(page) = weak.upgrade() {
+                    page.list_action(row, action);
+                }
+            });
+            self.content_stack.add_child(&list.widget);
+            let weak = obj.downgrade();
+            list.connect_load_occurrences(move |request| {
+                if let Some(page) = weak.upgrade()
+                    && let Some(session) = page.imp().session.current.borrow().as_ref()
+                {
+                    session.load_occurrences(request);
+                }
+            });
+            let weak = obj.downgrade();
+            list.connect_occurrence_action(move |target, action| {
+                if let Some(page) = weak.upgrade() {
+                    page.occurrence_menu_action(target, action);
+                }
+            });
+            let _ = self.list.set(list);
+            obj.align_headers();
+            self.content.connect_controls(&obj);
+            self.search_state.connect(&obj);
+            obj.connect_event_creation();
+            for kind in [CalCompType::Event, CalCompType::Todo] {
+                obj.bind_editor_availability(&self.sidebar.new_item_button(kind), "sensitive");
+            }
+            self.session.connect_quick_task(&obj);
+            self.session.connect_sync_collections(&obj);
+            let weak = obj.downgrade();
+            self.status.connect_cancel(move || {
+                if let Some(page) = weak.upgrade() {
+                    page.imp().session.cancel_sync(&page);
+                }
+            });
+            let weak = obj.downgrade();
+            self.settings_button.connect_clicked(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    page.imp().session.open_settings(&page);
+                }
+            });
+        }
+
+        fn dispose(&self) {
+            self.obj().stop();
+
+            if let Some((display, provider)) = self.styles.take() {
+                gtk::style_context_remove_provider_for_display(&display, &provider);
+            }
+
+            self.dispose_template();
+        }
+    }
+
+    impl WidgetImpl for CalendarPage {
+        fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+            self.parent_size_allocate(width, height, baseline);
+            self.details.allocate(self.obj().upcast_ref());
+        }
+    }
+
+    impl BoxImpl for CalendarPage {}
+}
+
+glib::wrapper! {
+    pub struct CalendarPage(ObjectSubclass<imp::CalendarPage>)
+        @extends gtk::Box, gtk::Widget,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Orientable;
+}
+
+impl CalendarPage {
+    pub fn install_tray(&self, window: &crate::window::Window) -> bool {
+        if let Some(app) = window.application() {
+            let weak = self.downgrade();
+            app.connect_shutdown(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    page.stop();
+                }
+            });
+        }
+        match crate::tray::Tray::new(window, self.locale()) {
+            Ok(tray) => {
+                self.imp().tray.replace(Some(tray));
+                true
+            }
+            Err(error) => {
+                tracing::warn!(%error, "Starting system tray failed");
+                false
+            }
+        }
+    }
+
+    fn setup_details(&self) {
+        let imp = self.imp();
+        imp.weekly.imp().timed.set_details(imp.details.clone());
+        imp.weekly.imp().all_day.set_details(imp.details.clone());
+        imp.monthly.set_details(imp.details.clone());
+        imp.sidebar.set_details(imp.details.clone());
+
+        let weak = self.downgrade();
+        imp.details.connect_edit(move |item, scope| {
+            if let Some(page) = weak.upgrade() {
+                page.imp().editor.edit_item(&page, item, scope);
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_delete(move |item, recurrent, summary| {
+            if let Some(page) = weak.upgrade() {
+                page.imp()
+                    .session
+                    .confirm_delete(&page, item, recurrent, &summary);
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_respond(move |item, response| {
+            if let Some(page) = weak.upgrade()
+                && page.execute_command(Box::new(RespondItem { item, response }))
+            {
+                page.dismiss_popovers();
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_occurrence(move |item, action| {
+            if let Some(page) = weak.upgrade()
+                && page.execute_command(Box::new(ChangeOccurrence { item, action }))
+            {
+                page.dismiss_popovers();
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_task(move |item, action| {
+            if let Some(page) = weak.upgrade()
+                && page.execute_command(Box::new(ChangeTask { item, action }))
+            {
+                page.dismiss_popovers();
+            }
+        });
+
+        let weak = self.downgrade();
+        imp.details.connect_reminders(move |command| {
+            if let Some(page) = weak.upgrade() {
+                page.imp().session.save_reminders(&page, command);
+            }
+        });
+    }
+
+    /// Aligns the calendar header with the sidebar panel titles.
+    fn align_headers(&self) {
+        let imp = self.imp();
+        let group = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
+        group.add_widget(&*imp.header);
+        if let Some(list) = imp.list.get() {
+            group.add_widget(list.header());
+        }
+        for title in imp.sidebar.panel_titles() {
+            group.add_widget(&title);
+        }
+
+        let buttons = gtk::SizeGroup::new(gtk::SizeGroupMode::Vertical);
+        buttons.add_widget(&*imp.previous);
+        buttons.add_widget(&*imp.today);
+        buttons.add_widget(&*imp.next);
+        for kind in [
+            eventix_ical::objects::CalCompType::Event,
+            eventix_ical::objects::CalCompType::Todo,
+        ] {
+            buttons.add_widget(&imp.sidebar.new_item_button(kind));
+        }
+
+        imp.header_group.replace(Some(group));
+    }
+
+    pub(crate) fn locale(&self) -> Arc<dyn Locale + Send + Sync> {
+        self.imp()
+            .locale
+            .borrow()
+            .clone()
+            .unwrap_or_else(eventix_locale::default)
+    }
+
+    fn show_error(&self, message: &str, error: &str) {
+        let activity = crate::model::activity::Activity::new(0, "Applying changes").finish(
+            crate::model::activity::Phase::Failed,
+            Some(format!("{}: {error}", self.locale().translate(message))),
+        );
+        self.imp().status.record(&activity, self.locale().as_ref());
+    }
+
+    fn update_styles(&self) {
+        let imp = self.imp();
+        if let Some((_, styles)) = imp.styles.borrow().as_ref() {
+            styles.load_from_data(&format!(
+                "{}{}",
+                imp.calendar_css.borrow(),
+                imp.sidebar.colors_css()
+            ));
+        }
+    }
+
+    fn install_styles(&self) {
+        let provider = gtk::CssProvider::new();
+        let display = self.display();
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+        self.imp().styles.replace(Some((display, provider)));
+    }
+
+    pub fn editor_open(&self) -> bool {
+        self.imp().editor.editor_open()
+    }
+
+    pub(crate) fn bind_editor_availability(&self, target: &impl IsA<glib::Object>, property: &str) {
+        self.bind_property("editor-open", target, property)
+            .invert_boolean()
+            .sync_create()
+            .build();
+    }
+
+    pub fn editor_saving(&self) -> bool {
+        self.imp().editor.saving()
+    }
+
+    pub fn set_editor_owner_visible(&self, visible: bool) {
+        self.imp().editor.set_owner_visible(visible);
+    }
+
+    pub fn popup_open(&self) -> bool {
+        self.imp().details.is_open()
+    }
+
+    pub fn new_event(&self) {
+        if self.management_open() {
+            return;
+        }
+        self.imp().editor.new_item(self, CalCompType::Event);
+    }
+
+    pub fn new_task(&self) {
+        if self.management_open() {
+            return;
+        }
+        self.imp().editor.new_item(self, CalCompType::Todo);
+    }
+
+    pub fn focus_quick_task(&self) {
+        if self.management_open() {
+            return;
+        }
+
+        self.dismiss_popovers();
+        self.imp().sidebar.quick_task().summary.grab_focus();
+    }
+
+    pub fn focus_search(&self) {
+        if self.management_open() {
+            return;
+        }
+
+        self.dismiss_popovers();
+        let imp = self.imp();
+        if imp.content.view.get() == View::List {
+            if let Some(list) = imp.list.get() {
+                list.focus_search();
+            }
+        } else {
+            imp.search.grab_focus();
+        }
+    }
+
+    pub(crate) fn search_occurrence(&self, forward: bool) {
+        if self.calendar_navigation_available() {
+            self.imp().search_state.start(self, forward);
+        }
+    }
+
+    pub fn close_editor(&self) {
+        self.imp().editor.finish_editor(self);
+    }
+
+    pub fn save_editor(&self) {
+        self.imp().editor.save_editor(self);
+    }
+
+    pub fn show_content(&self, date: Option<NaiveDate>) {
+        self.imp().content.show_content(self, date);
+    }
+
+    pub fn show_today(&self) {
+        if !self.management_open() && self.imp().content.view.get() != View::List {
+            self.show_content(None);
+        }
+    }
+
+    pub fn navigate(&self, direction: i32) {
+        if self.management_open() {
+            return;
+        }
+        self.imp().content.navigate(self, direction);
+    }
+
+    pub(crate) fn calendar_navigation_available(&self) -> bool {
+        !self.management_open() && !self.popup_open() && self.imp().content.view.get() != View::List
+    }
+
+    /// Releases focus from the calendar search or quick task summary without clearing its text.
+    pub(crate) fn defocus_navigation_input(&self) -> bool {
+        if self.management_open() || self.popup_open() {
+            return false;
+        }
+        let Some(root) = self.root() else {
+            return false;
+        };
+        let Some(focus) = root.focus() else {
+            return false;
+        };
+        let imp = self.imp();
+        let quick = imp.sidebar.quick_task();
+        if [&*imp.search, &quick.summary]
+            .iter()
+            .any(|entry| &focus == entry.upcast_ref::<gtk::Widget>() || focus.is_ancestor(*entry))
+        {
+            root.set_focus(None::<&gtk::Widget>);
+            return true;
+        }
+        false
+    }
+
+    pub fn switch_to_week(&self) {
+        self.imp().content.switch_view(self, View::Week);
+    }
+
+    pub fn switch_to_month(&self) {
+        self.imp().content.switch_view(self, View::Month);
+    }
+
+    pub fn switch_to_list(&self) {
+        self.imp().content.switch_view(self, View::List);
+    }
+
+    pub fn management_open(&self) -> bool {
+        self.imp().management.visible.get()
+    }
+
+    pub fn show_week_at(&self, date: NaiveDate) {
+        self.imp().content.show_week_at(self, date);
+    }
+
+    pub fn dismiss_popovers(&self) {
+        self.imp().session.cancel_details_load();
+        self.imp().details.close();
+    }
+
+    pub fn set_popup_owner_visible(&self, visible: bool) {
+        self.imp().details.set_owner_visible(visible);
+    }
+
+    pub(crate) fn can_edit(&self) -> bool {
+        self.imp().session.can_edit(self)
+    }
+
+    pub(crate) fn execute_command(&self, command: Box<dyn Action>) -> bool {
+        self.imp().session.execute_command(self, command)
+    }
+
+    pub fn reload(&self) {
+        self.imp().session.reload(self);
+    }
+
+    pub fn start(&self, prefix: String, date: Option<NaiveDate>) {
+        self.imp().session.start(self, prefix, date);
+    }
+
+    pub fn stop(&self) {
+        self.imp().tray.take();
+        self.imp().session.stop(self);
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use std::rc::Rc;
+
+    use crate::model::editor::EditorOptions;
+    use crate::model::{
+        Day, MonthDay, MonthEvent, MonthSnapshot, TimedEvent, WeekSnapshot, weekly::Columns,
+    };
+    use chrono::{Datelike, Duration, TimeZone};
+    use eventix_state::actions::items::UpdateItem;
+    use gtk::{prelude::*, subclass::prelude::*};
+
+    use super::{CalendarPage, DetailsController};
+    use crate::model::{Snapshot, View};
+    use crate::view::editor::ItemEditor;
+    use crate::worker::event::ContentResponse;
+
+    impl CalendarPage {
+        fn show_week(&self, week: WeekSnapshot) {
+            self.imp().content.show_week(self, week);
+        }
+
+        fn show_month(&self, month: MonthSnapshot) {
+            self.imp().content.show_month(self, month);
+        }
+
+        fn receive_content(&self, response: ContentResponse) {
+            self.imp().content.receive_content(self, response);
+        }
+
+        pub(in crate::view) fn test_existing_editor(
+            &self,
+            options: EditorOptions,
+            edit: UpdateItem,
+        ) -> Rc<ItemEditor> {
+            self.imp().locale.replace(Some(options.locale.clone()));
+            self.imp()
+                .editor
+                .present_existing_editor(self, 1, options, edit);
+            self.imp().editor.current.borrow().clone().unwrap()
+        }
+
+        pub(in crate::view) fn test_new_editor(&self, options: EditorOptions) -> Rc<ItemEditor> {
+            self.imp()
+                .editor
+                .present_editor(self, ItemEditor::new(1, options));
+            self.imp().editor.current.borrow().clone().unwrap()
+        }
+
+        pub(in crate::view) fn test_details(&self) -> Rc<DetailsController> {
+            self.imp().details.clone()
+        }
+
+        pub(in crate::view) fn test_saved_editor(&self) {
+            self.imp().editor.finish_editor(self);
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn panel_headers_and_add_buttons_match_calendar_controls() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        let imp = page.imp();
+        let mut header_height = None;
+        for view in [View::Week, View::Month, View::List] {
+            imp.content.switch_view(&page, view);
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            let header: gtk::Widget = if view == View::List {
+                imp.list.get().unwrap().header().clone().upcast()
+            } else {
+                imp.header.get().upcast()
+            };
+            let bounds = header.compute_bounds(&page).unwrap();
+            assert_eq!(
+                *header_height.get_or_insert(bounds.height()),
+                bounds.height(),
+                "{view:?}: header height stays consistent across views"
+            );
+            assert_eq!(bounds.y().fract(), 0.0, "{view:?}: header pixel alignment");
+            assert_eq!(
+                bounds.height().fract(),
+                0.0,
+                "{view:?}: header pixel height"
+            );
+            if view == View::List {
+                let mut child = header.first_child();
+                while let Some(control) = child {
+                    if control.is::<gtk::Entry>() || control.is::<gtk::Button>() {
+                        assert_eq!(
+                            control.height(),
+                            imp.previous.height(),
+                            "list filters and navigation controls have the same height"
+                        );
+                    }
+                    child = control.next_sibling();
+                }
+            }
+            for sidebar_header in imp.sidebar.panel_titles() {
+                let sidebar_bounds = sidebar_header.compute_bounds(&page).unwrap();
+                assert_eq!(bounds.height(), sidebar_bounds.height(), "{view:?}");
+                let button = sidebar_header.last_child().unwrap();
+                let button_bounds = button.compute_bounds(&page).unwrap();
+                let previous_bounds = imp.previous.compute_bounds(&page).unwrap();
+                assert_eq!(
+                    button_bounds.height(),
+                    previous_bounds.height(),
+                    "{view:?}: add and navigation button heights"
+                );
+                assert_eq!(
+                    button_bounds.width(),
+                    previous_bounds.width(),
+                    "{view:?}: add and navigation button widths"
+                );
+            }
+        }
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn calendar_search_stays_in_view_and_shortcut_follows_the_view() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("org.eventix.SearchTest")
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        window.present();
+        let drain = || {
+            for _ in 0..10 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let imp = page.imp();
+        let list = imp.list.get().unwrap();
+        assert!(app.accels_for_action("win.search").is_empty());
+
+        for view in [View::Week, View::Month] {
+            imp.content.switch_view(&page, view);
+            drain();
+            assert!(imp.search.is_mapped());
+            gtk::prelude::ActionGroupExt::activate_action(&window, "search", None);
+            assert!(
+                gtk::prelude::RootExt::focus(&window)
+                    .is_some_and(|focus| focus.is_ancestor(&*imp.search))
+            );
+
+            imp.search.set_text("meeting OR appointment");
+            let generation = imp.content.generation.get();
+            imp.search.emit_activate();
+            drain();
+            assert_eq!(imp.content.view.get(), view);
+            assert_eq!(imp.content.generation.get(), generation);
+            assert!(list.filter().keywords.is_empty());
+            assert!(imp.search_controls.is_mapped());
+            assert!(imp.search_previous.is_mapped());
+            assert!(imp.search_next.is_mapped());
+            assert_eq!(imp.search.text(), "meeting OR appointment");
+
+            page.switch_to_list();
+            drain();
+            assert!(!imp.search_controls.is_mapped());
+            imp.list_view.grab_focus();
+            gtk::prelude::ActionGroupExt::activate_action(&window, "search", None);
+            let focus = gtk::prelude::RootExt::focus(&window).unwrap();
+            let search = focus.ancestor(gtk::Entry::static_type()).unwrap();
+            let search = search.downcast::<gtk::Entry>().unwrap();
+            assert!(search.is_ancestor(&list.widget));
+            search.set_text("independent list query");
+            search.emit_activate();
+            assert_eq!(list.filter().keywords, "independent list query");
+            list.set_keywords("");
+        }
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn list_switching_preserves_filters_dates_and_rejects_stale_responses() {
+        use crate::model::list::{Filter, Snapshot as ListSnapshot};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let page: CalendarPage = gtk::glib::Object::new();
+        let date = "2026-10-25".parse().unwrap();
+        page.show_content(Some(date));
+        page.switch_to_list();
+        let imp = page.imp();
+        let generation = imp.content.generation.get();
+        let snapshot = |keywords: &str| {
+            Snapshot::List(ListSnapshot {
+                filter: Filter {
+                    keywords: keywords.into(),
+                    ..Default::default()
+                },
+                calendars: vec![],
+                items: vec![],
+                locale: eventix_locale::default(),
+            })
+        };
+        page.receive_content(ContentResponse {
+            generation,
+            result: Ok(snapshot("current")),
+        });
+        page.receive_content(ContentResponse {
+            generation: generation - 1,
+            result: Ok(snapshot("stale")),
+        });
+        let list = imp.list.get().unwrap();
+        assert_eq!(list.filter().keywords, "current");
+        assert_eq!(
+            imp.content_stack.visible_child(),
+            Some(list.widget.clone().upcast())
+        );
+        assert!(!imp.calendar_content.is_child_visible());
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        for _ in 0..10 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            imp.sidebar.is_mapped(),
+            "the sidebar remains visible in list view"
+        );
+        let panel = imp
+            .content_stack
+            .parent()
+            .unwrap()
+            .downcast::<gtk::Frame>()
+            .unwrap();
+        assert!(panel.has_css_class("ev_panel_frame"));
+        assert!(panel.has_css_class("ev_calendar_panel"));
+        let bounds = panel.compute_bounds(&page).unwrap();
+        let sidebar = imp.sidebar.compute_bounds(&page).unwrap();
+        assert!(sidebar.x() >= bounds.x() + bounds.width());
+        assert!((bounds.width() / sidebar.width() - 4.0).abs() < 0.5);
+        assert_eq!(
+            list.header().height(),
+            imp.sidebar.panel_titles()[0].height()
+        );
+        page.navigate(1);
+        page.show_today();
+        assert_eq!(imp.content.date.get(), Some(date));
+        assert_eq!(imp.content.generation.get(), generation);
+        page.switch_to_month();
+        assert_eq!(
+            imp.content_stack.visible_child(),
+            Some(imp.calendar_content.clone().upcast())
+        );
+        page.switch_to_list();
+        assert_eq!(list.filter().keywords, "current");
+        assert_eq!(imp.content.date.get(), Some(date));
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn quick_task_row_fits_beneath_the_task_list() {
+        use crate::model::{editor::EditorCalendar, sidebar::SidebarSnapshot};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let locale = eventix_locale::default();
+        let start = "2026-10-19".parse().unwrap();
+        let page: CalendarPage = gtk::glib::Object::new();
+        page.show_week(WeekSnapshot {
+            start,
+            days: (0..7)
+                .map(|offset| Day {
+                    date: start + Duration::days(offset),
+                    timed: vec![],
+                    dst: vec![],
+                })
+                .collect(),
+            all_day: vec![],
+            locale: locale.clone(),
+        });
+        page.imp().sidebar.set_snapshot(SidebarSnapshot {
+            events: vec![],
+            tasks: vec![],
+            task_calendars: vec![EditorCalendar {
+                id: "tasks".into(),
+                name: "Tasks".into(),
+                background: "#ffffff".into(),
+                personal: false,
+            }],
+            last_task_calendar: None,
+            locale,
+        });
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let quick = page.imp().sidebar.quick_task();
+        assert!(quick.widget.is_mapped());
+        assert!(quick.summary.width() >= 40);
+        let input = quick.summary.compute_bounds(&page).unwrap();
+        let mut control = quick.widget.first_child();
+        while let Some(widget) = control {
+            let bounds = widget.compute_bounds(&page).unwrap();
+            assert_eq!(bounds.height(), input.height(), "{}", widget.type_());
+            control = widget.next_sibling();
+        }
+        let sidebar = page.imp().sidebar.compute_bounds(&page).unwrap();
+        let add = quick.add.compute_bounds(&page).unwrap();
+        assert!(add.x() + add.width() <= sidebar.x() + sidebar.width());
+        quick.due.entry.set_text("2026-10-24");
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(quick.summary.width() >= 40);
+        quick.due.picker().popup();
+        while gtk::glib::MainContext::default().iteration(false) {}
+        let calendar = quick
+            .due
+            .widget
+            .last_child()
+            .and_downcast::<crate::widgets::DatePicker>()
+            .unwrap();
+        assert!(
+            calendar.is_mapped(),
+            "the due button opens the calendar directly"
+        );
+        assert!(
+            calendar.has_focus(),
+            "opening the picker focuses the selected day"
+        );
+        assert_eq!(quick.due.entry.text(), "2026-10-24");
+        calendar.select_day("2026-10-25".parse().unwrap());
+        calendar.confirm();
+        assert_eq!(quick.due.entry.text(), "2026-10-25");
+        assert!(!quick.due.picker().is_active());
+        assert_eq!(
+            quick.due.widget.first_child(),
+            Some(quick.due.entry.clone().upcast())
+        );
+        quick.due.picker().popup();
+        quick.due.entry.set_text("2026-10-26");
+        quick.due.entry.emit_activate();
+        assert!(!quick.due.picker().is_active());
+        assert_eq!(quick.due.entry.text(), "2026-10-26");
+
+        quick.due.picker().popup();
+        while gtk::glib::MainContext::default().iteration(false) {}
+        assert!(calendar.has_focus());
+        let controllers = calendar.observe_controllers();
+        let keys = (0..controllers.n_items())
+            .filter_map(|index| {
+                controllers
+                    .item(index)
+                    .and_downcast::<gtk::EventControllerKey>()
+            })
+            .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+            .unwrap();
+        let press = |key: gtk::gdk::Key| {
+            keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[&key, &0u32, &gtk::gdk::ModifierType::empty()],
+            )
+        };
+        assert!(press(gtk::gdk::Key::Right));
+        assert!(press(gtk::gdk::Key::Down));
+        assert_eq!(quick.due.entry.text(), "2026-10-26");
+        assert!(
+            quick.due.picker().is_active(),
+            "arrow keys do not commit the date"
+        );
+        assert!(press(gtk::gdk::Key::KP_Enter));
+        assert_eq!(quick.due.entry.text(), "2026-11-03");
+        assert!(!quick.due.picker().is_active());
+
+        for key in [gtk::gdk::Key::Return, gtk::gdk::Key::space] {
+            quick.due.picker().popup();
+            while gtk::glib::MainContext::default().iteration(false) {}
+            assert!(press(key));
+            assert!(!quick.due.picker().is_active());
+            assert_eq!(quick.due.entry.text(), "2026-11-03");
+        }
+        quick.due.picker().popup();
+        quick
+            .due
+            .entry
+            .emit_by_name::<()>("icon-press", &[&gtk::EntryIconPosition::Secondary]);
+        assert_eq!(quick.due.entry.text(), "");
+        assert_eq!(
+            quick.due.picker().icon_name().as_deref(),
+            Some("appointment-soon-symbolic")
+        );
+        window.close();
+    }
+
+    /// Checks real widget allocation, focus retention and cross-surface popup coordination.
+    /// Called by the display-backed details test so GTK stays on one test thread.
+    pub(crate) fn assert_span_layout_and_refresh(mut week: WeekSnapshot) {
+        assert_arrow_key_routing(&week);
+        let mut span = week.all_day[0].clone();
+        span.end_day = 3;
+        let mut adjacent = span.clone();
+        adjacent.event.id.uid = "adjacent".into();
+        adjacent.start_day = 3;
+        adjacent.end_day = 5;
+        let mut overlapping = span.clone();
+        overlapping.event.id.uid = "overlapping".into();
+        overlapping.start_day = 1;
+        overlapping.row = 1;
+        week.all_day = vec![span, adjacent, overlapping];
+        week.days = (0..7)
+            .map(|day| Day {
+                date: week.start + chrono::Duration::days(day),
+                timed: vec![],
+                dst: vec![],
+            })
+            .collect();
+        week.days[0].timed.push(TimedEvent {
+            event: week.all_day[0].event.clone(),
+            date: week.start,
+            minute_start: 540,
+            minute_end: 600,
+            columns: Columns {
+                count: 1,
+                offset: 0,
+                span: 1,
+            },
+        });
+        // Change placement and order while keeping the occurrence identity unchanged.
+        let mut refreshed = WeekSnapshot {
+            start: week.start,
+            days: week.days.clone(),
+            locale: week.locale.clone(),
+            all_day: week.all_day.clone(),
+        };
+        refreshed.all_day[0].end_day = 2;
+        refreshed.all_day.swap(0, 1);
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1000)
+            .default_height(800)
+            .child(&page)
+            .build();
+        page.show_week(week);
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let imp = page.imp().weekly.imp();
+        let cards = imp.all_day.event_cards();
+        assert_eq!(cards.len(), 3, "one card is created per span");
+        assert_tab_order(
+            &window,
+            page.imp().weekly.upcast_ref(),
+            &[
+                cards[0].1.clone().upcast(),
+                imp.timed.event_cards()[0].1.clone().upcast(),
+                cards[2].1.clone().upcast(),
+                cards[1].1.clone().upcast(),
+            ],
+        );
+        let card = &cards[0].1;
+        let allocation = card.allocation();
+        let right = crate::view::geometry::day_x(imp.all_day.width(), 3.0).round() as i32;
+        assert_eq!(allocation.x() + allocation.width(), right - 2);
+        assert_eq!(allocation.y(), cards[1].1.allocation().y());
+        assert!(cards[1].1.allocation().x() >= allocation.x() + allocation.width());
+        assert!(cards[2].1.allocation().y() > allocation.y());
+        assert!(card.grab_focus());
+        page.show_week(refreshed);
+        drain();
+        assert_eq!(
+            &imp.all_day.event_cards()[1].1,
+            card,
+            "the live spanning card is reused"
+        );
+        assert!(card.has_focus(), "repacking retains keyboard focus");
+        assert!(
+            card.width() < allocation.width(),
+            "updated spans change their pixel width"
+        );
+
+        let find_popup = |_: &gtk::Widget| page.imp().details.current();
+        assert_context_menu(card, &card.event().unwrap().id.uid);
+        let timed = &imp.timed.event_cards()[0].1;
+        assert_context_menu(timed, &timed.event().unwrap().id.uid);
+        card.emit_clicked();
+        drain();
+        let strip_popup = find_popup(imp.all_day.upcast_ref()).unwrap();
+        assert!(strip_popup.is_mapped());
+        imp.timed.event_cards()[0].1.emit_clicked();
+        drain();
+        assert!(
+            !strip_popup.is_visible(),
+            "opening timed details closes strip details"
+        );
+        assert!(strip_popup.parent().is_none());
+        let timed_popup = find_popup(imp.timed.upcast_ref()).unwrap();
+        assert!(timed_popup.is_mapped());
+        card.emit_clicked();
+        drain();
+        assert!(
+            !timed_popup.is_visible(),
+            "opening strip details closes timed details"
+        );
+        assert!(timed_popup.parent().is_none());
+        page.dismiss_popovers();
+        drain();
+        assert!(find_popup(imp.all_day.upcast_ref()).is_none());
+        window.close();
+        drain();
+    }
+
+    fn assert_context_menu(anchor: &impl IsA<gtk::Widget>, expected_uid: &str) {
+        let click = anchor
+            .observe_controllers()
+            .snapshot()
+            .into_iter()
+            .filter_map(|controller| controller.downcast::<gtk::GestureClick>().ok())
+            .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
+            .expect("event widgets have a secondary-click menu");
+        click.emit_by_name::<()>("pressed", &[&1i32, &5.0f64, &5.0f64]);
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let popup = anchor.last_child().and_downcast::<gtk::Popover>().unwrap();
+        assert!(popup.is_mapped());
+        assert!(popup.has_css_class("ev_action_menu"));
+        assert!(!popup.has_arrow());
+        anchor.clipboard().set_text("before context action");
+        popup
+            .child()
+            .unwrap()
+            .observe_children()
+            .snapshot()
+            .into_iter()
+            .filter_map(|child| child.downcast::<gtk::Button>().ok())
+            .find(|button| button.action_name().as_deref() == Some("item.copy-uid"))
+            .unwrap()
+            .emit_clicked();
+        let copied = gtk::glib::MainContext::default()
+            .block_on(anchor.clipboard().read_text_future())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            copied, expected_uid,
+            "context-menu buttons dispatch their actions"
+        );
+        for _ in 0..20 {
+            while gtk::glib::MainContext::default().iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            popup.parent().is_none(),
+            "closed context menus are released"
+        );
+    }
+
+    /// Checks sidebar geometry, independent scrolling, retained rows and task popups.
+    pub(crate) fn assert_sidebar_layout_and_details(mut week: WeekSnapshot) {
+        use crate::model::sidebar::{SidebarGroup, SidebarRow, SidebarSnapshot};
+
+        while week.days.len() < 7 {
+            week.days.push(Day {
+                date: week.start + Duration::days(week.days.len() as i64),
+                timed: vec![],
+                dst: vec![],
+            });
+        }
+
+        let event = week.all_day[0].event.clone();
+        let row = SidebarRow {
+            id: event.id.clone(),
+            summary: "Sidebar entry with a long summary".into(),
+            calendar: event.calendar.clone(),
+            background: "#803366".into(),
+            foreground: "#ffffff".into(),
+            details: event.details.clone(),
+            start: Some(event.start),
+            due: Some(event.end),
+            full_day: false,
+            time: "09:00".into(),
+            task: false,
+            overdue: false,
+            due_today: false,
+            cancelled: false,
+            recurrent: true,
+            exception: true,
+            alarm: true,
+            response: None,
+        };
+        let make_snapshot = || {
+            let events = (0..40)
+                .map(|index| {
+                    let mut row = row.clone();
+                    row.id.uid = format!("sidebar-event-{index}");
+                    row.full_day = index == 0;
+                    row
+                })
+                .collect();
+            let tasks = (0..40)
+                .map(|index| {
+                    let mut row = row.clone();
+                    row.id.uid = format!("sidebar-task-{index}");
+                    row.task = true;
+                    row.overdue = true;
+                    row.due = None;
+                    row.start = None;
+                    row.time.clear();
+                    row
+                })
+                .collect();
+            SidebarSnapshot {
+                task_calendars: vec![crate::model::editor::EditorCalendar {
+                    id: event.calendar.clone(),
+                    name: "Task calendar".into(),
+                    background: "#803366".into(),
+                    personal: false,
+                }],
+                last_task_calendar: None,
+                events: vec![SidebarGroup {
+                    date: Some(week.start),
+                    rows: events,
+                }],
+                tasks: vec![SidebarGroup {
+                    date: None,
+                    rows: tasks,
+                }],
+                locale: week.locale.clone(),
+            }
+        };
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        page.show_week(WeekSnapshot {
+            start: week.start,
+            days: week.days.clone(),
+            all_day: week.all_day.clone(),
+            locale: week.locale.clone(),
+        });
+        let imp = page.imp();
+        imp.sidebar.set_snapshot(make_snapshot());
+        let provider = gtk::CssProvider::new();
+        gtk::style_context_add_provider_for_display(
+            &WidgetExt::display(&window),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+        imp.styles
+            .replace(Some((WidgetExt::display(&window), provider.clone())));
+        page.update_styles();
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let events = imp.sidebar.first_child().unwrap();
+        let tasks = imp.sidebar.last_child().unwrap();
+        assert!((events.height() - tasks.height()).abs() <= 1);
+        let stack_bounds = imp.stack.compute_bounds(&page).unwrap();
+        let sidebar_bounds = imp.sidebar.compute_bounds(&page).unwrap();
+        assert!(sidebar_bounds.x() >= stack_bounds.x() + stack_bounds.width());
+        assert!((stack_bounds.width() / sidebar_bounds.width() - 4.0).abs() < 0.5);
+        let header_bounds = imp.header.compute_bounds(&page).unwrap();
+        let title_bounds = imp.sidebar.panel_titles()[0].compute_bounds(&page).unwrap();
+        assert!(
+            (header_bounds.y() - title_bounds.y()).abs() < 0.5
+                && (header_bounds.height() - title_bounds.height()).abs() <= 1.0,
+            "the calendar header line aligns with the events panel title"
+        );
+        let event_scroll = events
+            .downcast_ref::<gtk::Frame>()
+            .unwrap()
+            .child()
+            .unwrap()
+            .last_child()
+            .unwrap()
+            .downcast::<gtk::ScrolledWindow>()
+            .unwrap();
+        let task_scroll = tasks
+            .downcast_ref::<gtk::Frame>()
+            .unwrap()
+            .child()
+            .unwrap()
+            .last_child()
+            .unwrap()
+            .prev_sibling()
+            .unwrap()
+            .downcast::<gtk::ScrolledWindow>()
+            .unwrap();
+        let quick = imp.sidebar.quick_task();
+        assert!(quick.widget.is_mapped());
+        let quick_bounds = quick.widget.compute_bounds(&page).unwrap();
+        let task_bounds = task_scroll.compute_bounds(&page).unwrap();
+        assert!(quick_bounds.y() >= task_bounds.y() + task_bounds.height());
+        assert!(quick.summary.width() > 0);
+        assert!(event_scroll.vadjustment().upper() > event_scroll.vadjustment().page_size());
+        assert!(task_scroll.vadjustment().upper() > task_scroll.vadjustment().page_size());
+        event_scroll.vadjustment().set_value(60.0);
+        assert_eq!(task_scroll.vadjustment().value(), 0.0);
+        let list = task_scroll
+            .child()
+            .unwrap()
+            .downcast::<gtk::Viewport>()
+            .unwrap()
+            .child()
+            .unwrap();
+        let button = list
+            .first_child()
+            .unwrap()
+            .next_sibling()
+            .unwrap()
+            .downcast::<gtk::Button>()
+            .unwrap();
+        assert!(button.grab_focus());
+        imp.sidebar.set_snapshot(make_snapshot());
+        drain();
+        assert!(button.has_focus(), "refresh retains the live focused row");
+        assert_eq!(event_scroll.vadjustment().value(), 60.0);
+        assert_context_menu(&button, "sidebar-task-0");
+        button.emit_clicked();
+        drain();
+        let popup = page.imp().details.current().unwrap();
+        assert!(popup.is_mapped(), "undated tasks open shared details");
+        page.dismiss_popovers();
+        drain();
+        assert!(popup.parent().is_none());
+        assert!(
+            provider
+                .to_string()
+                .contains(&crate::style::calendar_class("#803366", "#ffffff")),
+            "sidebar-only calendar colors are installed"
+        );
+        window.set_default_size(1000, 450);
+        imp.month_view.set_active(true);
+        let (start, end) = crate::dates::month_range(week.start).unwrap();
+        page.show_month(MonthSnapshot {
+            month: week.start.with_day(1).unwrap(),
+            start,
+            days: (0..(end - start).num_days())
+                .map(|offset| MonthDay {
+                    date: start + Duration::days(offset),
+                    current_month: true,
+                    show_month: false,
+                    events: vec![],
+                })
+                .collect(),
+            spans: vec![vec![]; ((end - start).num_days() / 7) as usize],
+            locale: week.locale.clone(),
+        });
+        drain();
+        assert!(
+            (events.height() - tasks.height()).abs() <= 1,
+            "equal split survives resizing and switching"
+        );
+        assert!(button.parent().is_some(), "switching keeps sidebar rows");
+        if let Some(directory) = std::env::var_os("EVENTIX_DETAILS_SCREENSHOTS") {
+            let paintable = gtk::WidgetPaintable::new(Some(&page));
+            let snapshot = gtk::Snapshot::new();
+            paintable.snapshot(&snapshot, page.width().into(), page.height().into());
+            window
+                .renderer()
+                .unwrap()
+                .render_texture(snapshot.to_node().unwrap(), None)
+                .save_to_png(std::path::PathBuf::from(directory).join("sidebar.png"))
+                .unwrap();
+        }
+        imp.sidebar.set_snapshot(SidebarSnapshot {
+            task_calendars: vec![],
+            last_task_calendar: None,
+            events: vec![],
+            tasks: vec![],
+            locale: week.locale,
+        });
+        drain();
+        assert!(
+            list.first_child().is_none(),
+            "empty panels have no placeholder rows"
+        );
+        window.close();
+        drain();
+    }
+
+    /// Checks monthly scrolling, refresh identity, popups, switching and view-aware navigation.
+    /// Runs on the existing display-backed test's GTK thread.
+    pub(crate) fn assert_month_layout_and_navigation(mut week: WeekSnapshot) {
+        while week.days.len() < 7 {
+            week.days.push(Day {
+                date: week.start + Duration::days(week.days.len() as i64),
+                timed: vec![],
+                dst: vec![],
+            });
+        }
+        let selected = week.start + Duration::days(2);
+        let make_month = || {
+            let (start, end) = crate::dates::month_range(selected).unwrap();
+            let mut days: Vec<_> = (0..(end - start).num_days())
+                .map(|offset| {
+                    let date = start + Duration::days(offset);
+                    MonthDay {
+                        date,
+                        current_month: date.month() == selected.month(),
+                        show_month: date.day() == 1
+                            || date.succ_opt().unwrap().month() != date.month(),
+                        events: vec![],
+                    }
+                })
+                .collect();
+            let index = (week.start - start).num_days() as usize;
+            for number in 0..18 {
+                let mut event = week.all_day[0].event.clone();
+                event.id.uid = format!("monthly-{number}");
+                event.summary = format!("Monthly entry {number}");
+                if number == 0 {
+                    event.all_day = false;
+                    event.start = week
+                        .locale
+                        .timezone()
+                        .with_ymd_and_hms(
+                            week.start.year(),
+                            week.start.month(),
+                            week.start.day(),
+                            12,
+                            0,
+                            0,
+                        )
+                        .unwrap()
+                        - Duration::days(1);
+                    event.end = event.start + Duration::days(2);
+                }
+                days[index].events.push(MonthEvent {
+                    event,
+                    date: week.start,
+                    full_day: true,
+                });
+            }
+            // The same occurrence on a different day must have a distinct live widget.
+            let mut repeated = days[index].events[0].clone();
+            repeated.date = days[index + 1].date;
+            repeated.full_day = false;
+            days[index + 1].events.push(repeated);
+            MonthSnapshot {
+                month: selected.with_day(1).unwrap(),
+                start,
+                spans: vec![vec![]; days.len() / 7],
+                days,
+                locale: week.locale.clone(),
+            }
+        };
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1000)
+            .default_height(450)
+            .child(&page)
+            .build();
+        let group = gtk::gio::SimpleActionGroup::new();
+        let action = gtk::gio::SimpleAction::new("show-week", Some(gtk::glib::VariantTy::STRING));
+        let weak = page.downgrade();
+        action.connect_activate(move |_, date| {
+            let page = weak.upgrade().unwrap();
+            page.show_week_at(
+                chrono::NaiveDate::parse_from_str(date.unwrap().str().unwrap(), "%Y-%m-%d")
+                    .unwrap(),
+            );
+        });
+        group.add_action(&action);
+        window.insert_action_group("win", Some(&group));
+        page.show_content(Some(selected));
+        page.show_week(WeekSnapshot {
+            start: week.start,
+            days: week.days.clone(),
+            all_day: week.all_day.clone(),
+            locale: week.locale.clone(),
+        });
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let imp = page.imp();
+        let old_generation = imp.content.generation.get();
+        imp.month_view.set_active(true);
+        assert!(imp.content.view.get() == View::Month);
+        assert_eq!(
+            imp.content.date.get(),
+            Some(selected),
+            "switching retains the selected day"
+        );
+        page.show_month(make_month());
+        drain();
+        assert_eq!(
+            imp.stack.visible_child(),
+            Some(imp.monthly_content.clone().upcast())
+        );
+        assert_eq!(
+            imp.previous.tooltip_text().as_deref(),
+            Some(week.locale.translate("Previous month"))
+        );
+        assert_eq!(
+            imp.monthly.imp().weekdays.borrow()[0].text(),
+            week.locale.translate("Monday")
+        );
+        let title = imp.title.text();
+        page.receive_content(ContentResponse {
+            generation: old_generation,
+            result: Ok(Snapshot::Week(WeekSnapshot {
+                start: week.start,
+                days: week.days.clone(),
+                all_day: week.all_day.clone(),
+                locale: week.locale.clone(),
+            })),
+        });
+        assert_eq!(
+            imp.title.text(),
+            title,
+            "stale weekly response cannot replace the month"
+        );
+        let cards = imp.monthly.event_cards();
+        assert_eq!(cards.len(), 19);
+        assert_context_menu(&cards[0].1, &cards[0].1.event().unwrap().id.uid);
+        assert_ne!(cards[0].1, cards[18].1);
+        assert_eq!(
+            cards[0].1.tooltip_text().as_deref(),
+            Some("Monthly entry 0")
+        );
+        assert_eq!(
+            cards[18].1.tooltip_text().as_deref(),
+            Some("← 12:00 Monthly entry 0")
+        );
+        for pair in cards[..18].windows(2) {
+            let a = pair[0].1.allocation();
+            let b = pair[1].1.allocation();
+            assert!(
+                b.y() >= a.y() + a.height(),
+                "busy-day entries never overlap"
+            );
+        }
+        let first = cards[0].1.allocation();
+        let adjacent = cards[18].1.allocation();
+        assert_eq!(adjacent.y(), first.y());
+        let cells = imp.monthly.imp().scrollers.borrow();
+        let index = (week.start - make_month().start).num_days() as usize;
+        let busy_cell = cells[index / 7].clone();
+        let neighbor = cells[index / 7 + 1].clone();
+        let date_header = imp.monthly.imp().days.borrow()[index].allocation();
+        let busy_bounds = busy_cell.compute_bounds(&*imp.monthly).unwrap();
+        let neighbor_bounds = neighbor.compute_bounds(&*imp.monthly).unwrap();
+        assert!(neighbor_bounds.y() >= busy_bounds.y() + busy_bounds.height());
+        assert!(busy_cell.height() <= crate::view::monthly::grid::MAX_ROW);
+        assert!(busy_cell.vadjustment().upper() > busy_cell.vadjustment().page_size());
+        drop(cells);
+        let mut order = Vec::new();
+        for (row, button) in imp.monthly.imp().weeks.borrow().iter().enumerate() {
+            order.push(button.clone().upcast());
+            if row == index / 7 {
+                order.extend(cards.iter().map(|(_, card)| card.clone().upcast()));
+            }
+        }
+        assert_tab_order(&window, imp.monthly.upcast_ref(), &order);
+        assert!(cards[16].1.grab_focus());
+        assert!(imp.monthly.child_focus(gtk::DirectionType::TabForward));
+        drain();
+        assert!(cards[17].1.has_focus());
+        assert!(
+            busy_cell.vadjustment().value() > 0.0,
+            "keyboard navigation scrolls within the busy week"
+        );
+        assert_eq!(
+            neighbor.vadjustment().value(),
+            0.0,
+            "neighboring weeks scroll independently"
+        );
+        assert_eq!(
+            imp.monthly.imp().days.borrow()[index].allocation(),
+            date_header,
+            "the date header remains outside the week scroller"
+        );
+        let mut refreshed = make_month();
+        let index = (week.start - refreshed.start).num_days() as usize;
+        refreshed.days[index].events.reverse();
+        page.show_month(refreshed);
+        drain();
+        assert_eq!(imp.monthly.event_cards()[0].1, cards[17].1);
+        assert!(
+            cards[17].1.has_focus(),
+            "refresh reuses the focused occurrence-day card"
+        );
+        let find_popup = || page.imp().details.current();
+        gtk::prelude::GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
+        assert!(imp.monthly.child_focus(gtk::DirectionType::TabForward));
+        drain();
+        cards[17].1.emit_clicked();
+        drain();
+        assert!(
+            find_popup().unwrap().is_mapped(),
+            "monthly cards open shared details"
+        );
+        let mut spanning = make_month();
+        let row = (week.start - spanning.start).num_days() as usize / 7;
+        let mut span = week.all_day[0].clone();
+        span.event.id.uid = "monthly-span".into();
+        span.start_day = 0;
+        span.end_day = 3;
+        span.row = 0;
+        span.continues_after = true;
+        let mut overlap = span.clone();
+        overlap.event.id.uid = "monthly-overlap".into();
+        overlap.start_day = 1;
+        overlap.end_day = 4;
+        overlap.row = 1;
+        let mut continuation = span.clone();
+        continuation.end_day = 2;
+        continuation.continues_before = true;
+        continuation.continues_after = false;
+        spanning.spans[row] = vec![span, overlap];
+        spanning.spans[row + 1] = vec![continuation];
+        page.show_month(spanning);
+        drain();
+        let span_cards: Vec<_> = imp
+            .monthly
+            .event_cards()
+            .into_iter()
+            .filter(|(_, card)| card.event().unwrap().id.uid.starts_with("monthly-s"))
+            .map(|(_, card)| card)
+            .collect();
+        assert_eq!(span_cards.len(), 2, "one card per week-local span");
+        assert_ne!(
+            span_cards[0], span_cards[1],
+            "continuations have separate widgets"
+        );
+        let first_span = &span_cards[0];
+        let allocation = first_span.allocation();
+        let parent = first_span.parent().unwrap();
+        let right =
+            crate::view::geometry::day_x(parent.width() + crate::view::geometry::GUTTER, 3.0)
+                .round() as i32
+                - crate::view::geometry::GUTTER;
+        assert_eq!(allocation.x() + allocation.width(), right - 4);
+        let overlap_card = imp
+            .monthly
+            .event_cards()
+            .into_iter()
+            .find(|(_, card)| card.event().unwrap().id.uid == "monthly-overlap")
+            .unwrap()
+            .1;
+        assert!(overlap_card.allocation().y() >= allocation.y() + allocation.height());
+        assert!(
+            cards[0].1.parent().unwrap().allocation().y()
+                >= overlap_card.allocation().y() + overlap_card.height(),
+            "timed lists start below the shared span lanes"
+        );
+        assert_eq!(
+            parent.width(),
+            imp.monthly.width() - crate::view::geometry::GUTTER,
+            "the scrollbar does not consume day-column width"
+        );
+        assert!(first_span.grab_focus());
+        let mut refreshed = make_month();
+        let mut spans = imp
+            .monthly
+            .imp()
+            .month
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .spans
+            .clone();
+        spans[row][0].end_day = 2;
+        spans[row].swap(0, 1);
+        refreshed.spans = spans;
+        page.show_month(refreshed);
+        drain();
+        assert!(
+            first_span.has_focus(),
+            "refresh retains the focused span card"
+        );
+        assert!(first_span.width() < allocation.width());
+        first_span.emit_clicked();
+        drain();
+        let span_popup = page.imp().details.current().unwrap();
+        assert!(span_popup.is_mapped(), "spanning cards open shared details");
+        imp.week_view.set_active(true);
+        drain();
+        assert!(find_popup().is_none(), "switching closes the monthly popup");
+        assert!(
+            span_popup.parent().is_none(),
+            "switching closes span details"
+        );
+        assert!(imp.content.view.get() == View::Week);
+        assert_eq!(imp.content.date.get(), Some(selected));
+        page.navigate(1);
+        assert_eq!(imp.content.date.get(), Some(selected + Duration::days(7)));
+        imp.month_view.set_active(true);
+        page.navigate(1);
+        assert_eq!(
+            imp.content.date.get(),
+            crate::dates::shift_month(selected + Duration::days(7), 1)
+        );
+        let monday = make_month().start;
+        imp.monthly.imp().weeks.borrow()[0].emit_clicked();
+        assert!(imp.content.view.get() == View::Week);
+        assert_eq!(
+            imp.content.date.get(),
+            Some(monday),
+            "week number opens its Monday"
+        );
+        page.show_content(None);
+        assert_eq!(
+            imp.content.date.get(),
+            None,
+            "Today delegates to the profile's timezone"
+        );
+        let mut all_day_only = make_month();
+        for day in &mut all_day_only.days {
+            day.events.clear();
+        }
+        let mut span = week.all_day[0].clone();
+        span.start_day = 0;
+        span.end_day = 3;
+        all_day_only.spans[row] = vec![span.clone()];
+        let styles = gtk::CssProvider::new();
+        imp.styles
+            .replace(Some((WidgetExt::display(&window), styles.clone())));
+        let latest_activity = imp.status.text();
+        page.show_month(all_day_only);
+        drain();
+        assert_eq!(
+            imp.status.text(),
+            latest_activity,
+            "rendering content preserves the latest activity"
+        );
+        assert!(
+            styles.to_string().contains(&crate::style::calendar_class(
+                &span.event.background,
+                &span.event.foreground
+            )),
+            "calendar colors include events present only in span lanes"
+        );
+        window.close();
+        drain();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn week_switch_resets_scroll_despite_focused_card() {
+        use std::sync::Arc;
+
+        use crate::model::{Event, OccurrenceId, details::Details};
+
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let locale = eventix_locale::default();
+        let start = "2026-10-19".parse().unwrap();
+        let page: CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .default_width(1200)
+            .default_height(700)
+            .child(&page)
+            .build();
+        window.present();
+        let drain = || {
+            for _ in 0..30 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        let make_week = |start: chrono::NaiveDate| {
+            let event_start = locale
+                .timezone()
+                .with_ymd_and_hms(start.year(), start.month(), start.day(), 22, 0, 0)
+                .unwrap();
+            let event = Event {
+                id: OccurrenceId {
+                    calendar: "cal".into(),
+                    uid: "event".into(),
+                    recurrence: String::new(),
+                },
+                summary: "Event".into(),
+                calendar: "Cal".into(),
+                foreground: "#ffffff".into(),
+                background: "#000000".into(),
+                start: event_start,
+                end: event_start + Duration::hours(1),
+                all_day: false,
+                cancelled: false,
+                recurrent: false,
+                exception: false,
+                alarm: false,
+                details: Arc::new(Details {
+                    date_label: "Date",
+                    date: String::new(),
+                    source_date: None,
+                    location: String::new(),
+                    description: String::new(),
+                    status: None,
+                    recurrence: None,
+                    reminders: None,
+                    personal_reminders: Default::default(),
+                    organizer: None,
+                    sent_by: None,
+                    attendees: vec![],
+                    actions: Default::default(),
+                }),
+            };
+            WeekSnapshot {
+                start,
+                days: (0..7)
+                    .map(|offset| Day {
+                        date: start + Duration::days(offset),
+                        timed: if offset == 0 {
+                            vec![TimedEvent {
+                                event: event.clone(),
+                                date: start,
+                                minute_start: 1320,
+                                minute_end: 1380,
+                                columns: Columns {
+                                    count: 1,
+                                    offset: 0,
+                                    span: 1,
+                                },
+                            }]
+                        } else {
+                            vec![]
+                        },
+                        dst: vec![],
+                    })
+                    .collect(),
+                all_day: vec![],
+                locale: locale.clone(),
+            }
+        };
+        page.show_week(make_week(start));
+        drain();
+        let card = page.imp().weekly.imp().timed.event_cards()[0].1.clone();
+        assert!(card.grab_focus());
+
+        // Simulate a previous week scrolled down to the selected card.
+        let scroll = &page.imp().weekly.imp().scroll;
+        scroll.vadjustment().set_value(900.0);
+        drain();
+
+        page.show_week(make_week(start + Duration::days(7)));
+        drain();
+        assert_eq!(
+            scroll.vadjustment().value(),
+            480.0,
+            "a week change always shows 08:00 at the top"
+        );
+        window.close();
+    }
+
+    /// Exercises the window capture handler with real focus, cards, and editor popups.
+    fn assert_arrow_key_routing(week: &WeekSnapshot) {
+        use crate::model::{editor::EditorCalendar, sidebar::SidebarSnapshot};
+        use eventix_ical::objects::CalCompType;
+
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.ArrowKeysTest")
+            .flags(gtk::gio::ApplicationFlags::NON_UNIQUE)
+            .build();
+        app.register(None::<&gtk::gio::Cancellable>).unwrap();
+        let (window, page) = crate::window::Window::test_new(&app);
+        let locale = week.locale.clone();
+        let start = week.start.and_hms_opt(10, 0, 0).unwrap();
+        let mut all_day = week.all_day.clone();
+        let mut second = all_day[0].clone();
+        second.event.id.uid = "arrow-routing-second".into();
+        second.row += 1;
+        all_day.push(second);
+        page.show_week(WeekSnapshot {
+            start: week.start,
+            days: (0..7)
+                .map(|offset| Day {
+                    date: week.start + Duration::days(offset),
+                    timed: vec![],
+                    dst: vec![],
+                })
+                .collect(),
+            all_day,
+            locale: week.locale.clone(),
+        });
+        let calendars = || {
+            ["first", "second"]
+                .into_iter()
+                .map(|id| EditorCalendar {
+                    id: id.into(),
+                    name: id.into(),
+                    background: "#ffffff".into(),
+                    personal: false,
+                })
+                .collect()
+        };
+        page.imp().sidebar.set_snapshot(SidebarSnapshot {
+            events: vec![],
+            tasks: vec![],
+            task_calendars: calendars(),
+            last_task_calendar: None,
+            locale: locale.clone(),
+        });
+        window.set_default_size(1200, 800);
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let controllers = window.observe_controllers();
+        let keys = (0..controllers.n_items())
+            .filter_map(|index| {
+                controllers
+                    .item(index)
+                    .and_downcast::<gtk::EventControllerKey>()
+            })
+            .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+            .unwrap();
+        let press = |key: gtk::gdk::Key| {
+            keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[&key, &0u32, &gtk::gdk::ModifierType::empty()],
+            )
+        };
+        let quick = page.imp().sidebar.quick_task();
+        fn dropdown(widget: &gtk::Widget) -> Option<gtk::DropDown> {
+            if let Some(dropdown) = widget.downcast_ref::<gtk::DropDown>() {
+                return Some(dropdown.clone());
+            }
+            let mut child = widget.first_child();
+            while let Some(widget) = child {
+                if let Some(found) = dropdown(&widget) {
+                    return Some(found);
+                }
+                child = widget.next_sibling();
+            }
+            None
+        }
+        fn section_toggle(widget: &gtk::Widget) -> Option<gtk::ToggleButton> {
+            if let Some(toggle) = widget.downcast_ref::<gtk::ToggleButton>()
+                && widget.has_css_class("ev_editor_section_toggle")
+            {
+                return Some(toggle.clone());
+            }
+            let mut child = widget.first_child();
+            while let Some(widget) = child {
+                if let Some(found) = section_toggle(&widget) {
+                    return Some(found);
+                }
+                child = widget.next_sibling();
+            }
+            None
+        }
+        let calendar = dropdown(quick.widget.upcast_ref()).unwrap();
+        for control in [
+            quick.summary.upcast_ref::<gtk::Widget>(),
+            calendar.upcast_ref(),
+        ] {
+            assert!(control.grab_focus());
+            let focus = gtk::prelude::GtkWindowExt::focus(&window);
+            for key in [
+                gtk::gdk::Key::Left,
+                gtk::gdk::Key::Right,
+                gtk::gdk::Key::Up,
+                gtk::gdk::Key::Down,
+                gtk::gdk::Key::Home,
+                gtk::gdk::Key::period,
+            ] {
+                assert!(!press(key));
+                assert_eq!(gtk::prelude::GtkWindowExt::focus(&window), focus);
+            }
+        }
+
+        assert!(
+            page.imp()
+                .weekly
+                .child_focus(gtk::DirectionType::TabForward)
+        );
+        let first = gtk::prelude::GtkWindowExt::focus(&window).unwrap();
+        assert!(first.is::<crate::view::card::EventCard>());
+        assert!(!press(gtk::gdk::Key::Down));
+        assert!(!press(gtk::gdk::Key::Up));
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+        assert!(
+            page.imp()
+                .weekly
+                .child_focus(gtk::DirectionType::TabForward)
+        );
+        assert_ne!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+        assert!(
+            page.imp()
+                .weekly
+                .child_focus(gtk::DirectionType::TabBackward)
+        );
+        assert_eq!(
+            gtk::prelude::GtkWindowExt::focus(&window).as_ref(),
+            Some(&first)
+        );
+        let date = week.start;
+        page.show_content(Some(date));
+        assert!(press(gtk::gdk::Key::Right));
+        assert_eq!(
+            page.imp().content.date.get(),
+            Some(date + Duration::days(7))
+        );
+        assert!(press(gtk::gdk::Key::Left));
+        assert_eq!(page.imp().content.date.get(), Some(date));
+        for key in [gtk::gdk::Key::Home, gtk::gdk::Key::period] {
+            page.show_content(Some(date));
+            assert!(press(key));
+            assert_eq!(page.imp().content.date.get(), None);
+        }
+
+        page.switch_to_month();
+        page.show_content(Some(date));
+        assert!(press(gtk::gdk::Key::Right));
+        assert_eq!(
+            page.imp().content.date.get(),
+            crate::dates::shift_month(date, 1)
+        );
+        assert!(press(gtk::gdk::Key::Left));
+        assert_eq!(page.imp().content.date.get(), Some(date));
+        for key in [gtk::gdk::Key::Home, gtk::gdk::Key::period] {
+            page.show_content(Some(date));
+            assert!(press(key));
+            assert_eq!(page.imp().content.date.get(), None);
+        }
+        for key in [
+            gtk::gdk::Key::Left,
+            gtk::gdk::Key::Right,
+            gtk::gdk::Key::Home,
+            gtk::gdk::Key::period,
+        ] {
+            assert!(!keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[&key, &0u32, &gtk::gdk::ModifierType::CONTROL_MASK],
+            ));
+        }
+        page.switch_to_list();
+        for key in [
+            gtk::gdk::Key::Left,
+            gtk::gdk::Key::Right,
+            gtk::gdk::Key::Home,
+            gtk::gdk::Key::period,
+        ] {
+            assert!(!press(key));
+        }
+        page.switch_to_week();
+
+        for kind in [CalCompType::Event, CalCompType::Todo] {
+            let editor = page.test_new_editor(EditorOptions {
+                kind,
+                calendars: calendars(),
+                last_calendar: None,
+                locations: vec![],
+                contacts: vec![],
+                start,
+                locale: locale.clone(),
+            });
+            drain();
+            let panel = editor.content();
+            let editor_window = panel.root().and_downcast::<gtk::Window>().unwrap();
+            let editor_keys = editor_window
+                .observe_controllers()
+                .snapshot()
+                .into_iter()
+                .find_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+                .unwrap();
+            let calendar = dropdown(&panel).unwrap();
+            let section = section_toggle(&panel).unwrap();
+            for control in [calendar.upcast_ref::<gtk::Widget>(), section.upcast_ref()] {
+                assert!(control.grab_focus());
+                let date = page.imp().content.date.get();
+                for key in [
+                    gtk::gdk::Key::Left,
+                    gtk::gdk::Key::Right,
+                    gtk::gdk::Key::Up,
+                    gtk::gdk::Key::Down,
+                ] {
+                    assert!(!editor_keys.emit_by_name::<bool>(
+                        "key-pressed",
+                        &[&key, &0u32, &gtk::gdk::ModifierType::empty()],
+                    ));
+                    assert_eq!(page.imp().content.date.get(), date);
+                }
+            }
+            page.close_editor();
+            drain();
+        }
+        window.close();
+        drain();
+    }
+
+    fn assert_tab_order(window: &gtk::Window, container: &gtk::Widget, order: &[gtk::Widget]) {
+        gtk::prelude::GtkWindowExt::set_focus(window, None::<&gtk::Widget>);
+        for widget in order {
+            assert!(container.child_focus(gtk::DirectionType::TabForward));
+            assert_eq!(
+                gtk::prelude::GtkWindowExt::focus(window).as_ref(),
+                Some(widget)
+            );
+        }
+        assert!(!container.child_focus(gtk::DirectionType::TabForward));
+        window.emit_by_name::<()>("move-focus", &[&gtk::DirectionType::TabForward]);
+        assert!(
+            gtk::prelude::GtkWindowExt::focus(window)
+                .is_some_and(|focus| !focus.is_ancestor(container))
+        );
+        gtk::prelude::GtkWindowExt::set_focus(window, None::<&gtk::Widget>);
+        for widget in order.iter().rev() {
+            assert!(container.child_focus(gtk::DirectionType::TabBackward));
+            assert_eq!(
+                gtk::prelude::GtkWindowExt::focus(window).as_ref(),
+                Some(widget)
+            );
+        }
+        assert!(!container.child_focus(gtk::DirectionType::TabBackward));
+        window.emit_by_name::<()>("move-focus", &[&gtk::DirectionType::TabBackward]);
+        assert!(
+            gtk::prelude::GtkWindowExt::focus(window)
+                .is_some_and(|focus| !focus.is_ancestor(container))
+        );
+        for direction in [gtk::DirectionType::Up, gtk::DirectionType::Down] {
+            assert!(!container.child_focus(direction));
+        }
+    }
+}

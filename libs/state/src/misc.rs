@@ -5,27 +5,22 @@
 //! Helpers for persisted miscellaneous application state.
 //!
 //! This module provides the `Misc` type which encapsulates small pieces of persisted state
-//! (locale choice, alarm/check timestamps, UI selections, disabled calendars and per-collection
+//! (alarm/check timestamps, UI selections, disabled calendars and per-collection
 //! tokens). It also provides helpers to load and persist that state using the project's XDG data
 //! directory.
 
 use chrono::NaiveDateTime;
 use eventix_ical::objects::CalCompType;
-use eventix_locale::LocaleType;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 use xdg::BaseDirectories;
 
 const FILENAME: &str = "misc.toml";
 
 /// Holds small pieces of persisted application state.
 ///
-/// Stores the configured locale type, timestamps used by alarm checks, the last selected calendar
-/// per component type, lists of disabled calendars and calendar error markers, and stored
-/// collection tokens.
+/// Stores timestamps used by alarm checks, the last selected calendar
+/// per component type, disabled calendars, collection synchronization errors and stored tokens.
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Misc {
     #[serde(default)]
@@ -33,15 +28,13 @@ pub struct Misc {
     #[serde(skip)]
     path: PathBuf,
     #[serde(default)]
-    locale_type: LocaleType,
-    #[serde(default)]
     last_alarm_check: NaiveDateTime,
     #[serde(default)]
     last_calendar: HashMap<CalCompType, String>,
     #[serde(default)]
     disabled_calendars: Vec<String>,
     #[serde(default)]
-    calendar_errors: HashSet<String>,
+    collection_errors: HashMap<String, String>,
     #[serde(default)]
     collection_tokens: HashMap<String, String>,
 }
@@ -56,23 +49,12 @@ impl Misc {
         Self {
             version: crate::CURRENT_VERSION,
             path,
-            locale_type: LocaleType::default(),
             last_alarm_check: chrono::Local::now().naive_utc(),
             last_calendar: HashMap::default(),
             disabled_calendars: Vec::default(),
-            calendar_errors: HashSet::default(),
+            collection_errors: HashMap::default(),
             collection_tokens: HashMap::default(),
         }
-    }
-
-    /// Returns the configured locale type used for formatting and translations.
-    pub fn locale_type(&self) -> LocaleType {
-        self.locale_type
-    }
-
-    /// Sets the configured locale type used for formatting and translations.
-    pub fn set_locale_type(&mut self, ty: LocaleType) {
-        self.locale_type = ty;
     }
 
     /// Returns the timestamp of the last performed alarm check.
@@ -115,19 +97,20 @@ impl Misc {
         }
     }
 
-    /// Returns whether the calendar identified by `id` is currently marked as having an error.
-    pub fn has_calendar_error(&self, id: &String) -> bool {
-        self.calendar_errors.contains(id)
+    /// Returns the last synchronization error message for the collection, if present.
+    ///
+    /// An empty message indicates a migrated failure whose original message was not stored.
+    pub fn collection_error(&self, id: &str) -> Option<&str> {
+        self.collection_errors.get(id).map(String::as_str)
     }
 
-    /// Marks or clears an error flag for the calendar identified by `id`.
-    ///
-    /// When `error` is true the calendar is marked as errored; when false the marker is removed.
-    pub fn set_calendar_error(&mut self, id: &String, error: bool) {
-        if self.has_calendar_error(id) && !error {
-            self.calendar_errors.remove(id);
-        } else if error {
-            self.calendar_errors.insert(id.clone());
+    /// Stores the last synchronization error for the collection, or clears it on success.
+    pub fn set_collection_error(&mut self, id: &str, error: Option<&str>) {
+        if let Some(error) = error {
+            self.collection_errors
+                .insert(id.to_owned(), error.to_owned());
+        } else {
+            self.collection_errors.remove(id);
         }
     }
 
@@ -149,6 +132,7 @@ impl Misc {
     pub fn load_from_file(xdg: &BaseDirectories) -> anyhow::Result<Self> {
         match xdg.find_data_file(FILENAME) {
             Some(path) => {
+                crate::migration::migrate_misc_if_needed(xdg)?;
                 let mut misc: Self = super::load_from_file(&path)?;
                 misc.path = path;
                 Ok(misc)
@@ -172,21 +156,12 @@ impl Misc {
 mod tests {
     use chrono::NaiveDate;
     use eventix_ical::objects::CalCompType;
-    use eventix_locale::LocaleType;
     use std::os::unix::fs::PermissionsExt;
 
     use super::Misc;
 
     fn make_misc() -> Misc {
         Misc::new(std::path::PathBuf::default())
-    }
-
-    #[test]
-    fn locale_type_get_and_set() {
-        let mut m = make_misc();
-        assert_eq!(m.locale_type(), LocaleType::English);
-        m.set_locale_type(LocaleType::German);
-        assert_eq!(m.locale_type(), LocaleType::German);
     }
 
     #[test]
@@ -229,23 +204,6 @@ mod tests {
     }
 
     #[test]
-    fn calendar_error_set_and_clear() {
-        let mut m = make_misc();
-        let id = "cal".to_string();
-        assert!(!m.has_calendar_error(&id));
-        m.set_calendar_error(&id, true);
-        assert!(m.has_calendar_error(&id));
-        // setting true again is a no-op
-        m.set_calendar_error(&id, true);
-        assert!(m.has_calendar_error(&id));
-        m.set_calendar_error(&id, false);
-        assert!(!m.has_calendar_error(&id));
-        // clearing an absent entry is a no-op
-        m.set_calendar_error(&id, false);
-        assert!(!m.has_calendar_error(&id));
-    }
-
-    #[test]
     fn collection_token_get_and_set() {
         let mut m = make_misc();
         let id = "col".to_string();
@@ -258,18 +216,29 @@ mod tests {
     }
 
     #[test]
+    fn collection_error_set_replace_and_clear() {
+        let mut misc = make_misc();
+        assert_eq!(misc.collection_error("work"), None);
+        misc.set_collection_error("work", Some("Connection refused"));
+        assert_eq!(misc.collection_error("work"), Some("Connection refused"));
+        misc.set_collection_error("work", Some("Server unavailable"));
+        assert_eq!(misc.collection_error("work"), Some("Server unavailable"));
+        misc.set_collection_error("work", None);
+        misc.set_collection_error("work", None);
+        assert_eq!(misc.collection_error("work"), None);
+    }
+
+    #[test]
     fn write_and_load_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("misc.toml");
         std::fs::write(&path, "old content").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         let mut m = Misc::new(path.clone());
-        m.set_locale_type(LocaleType::German);
         m.set_collection_token(&"col".to_string(), "tok".to_string());
         m.write_to_file().unwrap();
 
         let loaded: Misc = crate::load_from_file(&path).unwrap();
-        assert_eq!(loaded.locale_type(), LocaleType::German);
         assert_eq!(
             loaded.collection_token(&"col".to_string()),
             Some(&"tok".to_string())

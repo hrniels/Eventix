@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
+from contextlib import contextmanager
 import fnmatch
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import shlex
 import subprocess
 import sys
 import tempfile
+import time
 
 # Define application identifiers for normal and debug mode
 APP_ID = "io.github.hrniels.Eventix"
@@ -28,9 +29,8 @@ def dev_env():
     run_dir = Path("run")
     os.makedirs(run_dir / APP_ID_DEBUG, 0o700, exist_ok=True)
 
-    # (re-)create symlinks to data/static and data/icons
-    # we use symlinks here so that `./b watch` sees changes to these files
-    dirs = ["static", "icons", "locale"]
+    # Locale overrides remain editable without reinstalling development data.
+    dirs = ["locale"]
     for dirname in dirs:
         dir_in_run = run_dir / APP_ID_DEBUG / dirname
         if dir_in_run.exists():
@@ -63,52 +63,27 @@ def dev_env():
 
 def run_cmd(args):
     """Executes a command with the prepared development environment."""
-    try:
-        subprocess.run(args, env=dev_env())
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        print(e)
+    subprocess.run(args, env=dev_env(), check=True)
 
 
 def cmd_run(args):
-    """Runs the Eventix application in development mode."""
-    cmd_args = [
-        "cargo", "run", "--bin", "eventix", "--",
-        "--address", args.address,
-        "--port", str(args.port)
-    ]
-    run_cmd(cmd_args)
+    """Runs the native application with the development synchronization helpers."""
+    subprocess.run(["cargo", "build", "--bin", "eventix-getpw"], check=True)
+    run_cmd(["cargo", "run", "--bin", "eventix-gtk", "--", *args.app_args])
 
 
 def cmd_watch(args):
     """Watches for changes in the source code and reruns Eventix on changes."""
-    cmd = shlex.join([
-        "run", "--",
-        "--address", args.address,
-        "--port", str(args.port)
-    ])
+    cmd = shlex.join(["run", "--bin", "eventix-gtk", "--", *args.app_args])
     cmd_args = [
-        "cargo", "watch", "-C", "bin/eventix",
-        "-w", "../../bin/eventix",
-        "-w", "../../bin/build.rs",
-        "-w", "../../libs",
-        "-w", "../../data",
-        "-w", "../../Cargo.toml",
+        "cargo", "watch",
+        "-w", "bin/gtk",
+        "-w", "bin/getpw",
+        "-w", "libs",
+        "-w", "data",
+        "-w", "Cargo.toml",
+        "-x", "build --bin eventix-getpw",
         "-x", cmd
-    ]
-    run_cmd(cmd_args)
-
-
-def cmd_app(args):
-    """Runs the Eventix app."""
-    # ensure that the server and getpw are up-to-date as well
-    subprocess.run(["cargo", "build", "--bin", "eventix", "--bin", "eventix-getpw"], check=True)
-
-    cmd_args = [
-        "cargo", "run", "--bin", "eventix-app", "--",
-        "--address", args.address,
-        "--port", str(args.port)
     ]
     run_cmd(cmd_args)
 
@@ -116,8 +91,8 @@ def cmd_app(args):
 def cmd_import(args):
     """Imports an ICS file into Eventix."""
     path = Path(args.file).resolve().as_uri()
-    cmd_args = ["cargo", "run", "--bin", "eventix-import", "--", path]
-    run_cmd(cmd_args)
+    args.app_args = [path]
+    cmd_run(args)
 
 
 def cmd_davmail(args):
@@ -146,14 +121,138 @@ def cmd_test(args):
     subprocess.run(cmd, env=dev_env(), check=True)
 
 
+@contextmanager
+def ui_window_manager(env):
+    """Runs Openbox until the UI tests finish, including on failure."""
+    with tempfile.TemporaryFile(mode="w+") as log:
+        manager = subprocess.Popen(
+            ["openbox", "--sm-disable"], env=env, stdout=log, stderr=log)
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if manager.poll() is not None:
+                    break
+                result = subprocess.run(
+                    ["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"], env=env,
+                    capture_output=True, text=True, check=True)
+                if "window id #" in result.stdout:
+                    yield
+                    return
+                time.sleep(0.05)
+            log.seek(0)
+            sys.exit("Openbox did not become ready:\n" + log.read())
+        finally:
+            if manager.poll() is None:
+                manager.terminate()
+                try:
+                    manager.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    manager.kill()
+                    manager.wait()
+
+
+def build_ui_test_binary(env):
+    """Builds the GTK test binary and returns its executable and working directory."""
+    result = subprocess.run(
+        ["cargo", "test", "-p", "eventix-gtk", "--bin", "eventix-gtk",
+         "--no-run", "--message-format=json"],
+        env=env, stdout=subprocess.PIPE, text=True)
+    artifact = None
+    for line in result.stdout.splitlines():
+        message = json.loads(line)
+        if message.get("reason") == "compiler-message":
+            rendered = message["message"].get("rendered")
+            if rendered:
+                print(rendered, file=sys.stderr, end="")
+        elif (message.get("reason") == "compiler-artifact"
+              and message.get("executable") and message["profile"]["test"]):
+            artifact = message
+    result.check_returncode()
+    if artifact is None:
+        sys.exit("Cargo did not produce a GTK test executable.")
+    return artifact["executable"], Path(artifact["manifest_path"]).parent
+
+
+def run_ui_tests(args, env):
+    """Runs isolated GTK tests and prints a combined summary with failure output."""
+    subprocess.run(["cargo", "build", "--bin", "eventix-getpw"], check=True)
+    executable, workdir = build_ui_test_binary(env)
+    result = subprocess.run(
+        [executable, args.filter, "--list", "--ignored"], env=env, cwd=workdir,
+        capture_output=True, text=True, check=True)
+    tests = [line.removesuffix(": test") for line in result.stdout.splitlines()
+             if line.endswith(": test")]
+    if not tests:
+        sys.exit("No GTK UI tests matched the filter.")
+
+    print(f"\nrunning {len(tests)} GTK UI tests", flush=True)
+    failures = []
+    started = time.monotonic()
+    for test in tests:
+        test_cmd = [executable, test, "--ignored", "--exact", "--test-threads=1"]
+        if args.nocapture:
+            test_cmd.append("--nocapture")
+        result = subprocess.run(
+            test_cmd, env=env, cwd=workdir, text=True,
+            stdout=None if args.nocapture else subprocess.PIPE,
+            stderr=None if args.nocapture else subprocess.STDOUT)
+        status = "ok" if result.returncode == 0 else "FAILED"
+        print(f"test {test} ... {status}", flush=True)
+        if result.returncode:
+            failures.append((test, result.stdout, result.returncode))
+
+    elapsed = time.monotonic() - started
+    if failures:
+        print("\nfailures:")
+        for test, output, returncode in failures:
+            print(f"\n---- {test} (exit status {returncode}) ----")
+            if output:
+                print(output, end="" if output.endswith("\n") else "\n")
+        print("\nfailed tests:")
+        for test, _, _ in failures:
+            print(f"    {test}")
+    status = "FAILED" if failures else "ok"
+    print(f"\ntest result: {status}. {len(tests) - len(failures)} passed; "
+          f"{len(failures)} failed; finished in {elapsed:.2f}s", flush=True)
+    if failures:
+        raise SystemExit(1)
+
+
+def cmd_test_ui(args):
+    """Runs GTK UI tests on an isolated display unless visible mode is selected."""
+    if not args.visible and not args.virtual_session:
+        tools = ["xvfb-run", "Xvfb", "xauth", "dbus-run-session", "openbox", "xprop"]
+        missing = [tool for tool in tools if not shutil.which(tool)]
+        if missing:
+            sys.exit("Missing UI test tools: " + ", ".join(missing) +
+                     "\nOn Arch Linux: sudo pacman -S xorg-server-xvfb xorg-xauth "
+                     "dbus openbox xorg-xprop")
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env["GSK_RENDERER"] = "cairo"
+        env.pop("WAYLAND_DISPLAY", None)
+        cmd = ["xvfb-run", "-a", "-s", "-screen 0 1920x1080x24 -nolisten tcp",
+               "dbus-run-session", "--", sys.executable, str(Path(__file__).resolve()),
+               "test-ui", "--virtual-session", args.filter]
+        if args.nocapture:
+            cmd.append("--nocapture")
+        subprocess.run(cmd, env=env, check=True)
+        return
+
+    env = dev_env()
+    if args.virtual_session:
+        with ui_window_manager(env):
+            run_ui_tests(args, env)
+    else:
+        run_ui_tests(args, env)
+
+
 def cmd_coverage(args):
     """Generates code coverage information for the workspace."""
     cmd = [
         "cargo", "llvm-cov",
         "--all-features",
         "--workspace",
-        "--exclude", "eventix-import",
-        "--exclude", "eventix-app",
     ]
     cmd.extend(args.cargo_args)
 
@@ -230,44 +329,16 @@ def print_file_coverage(file_data):
         print(f"{marker} {idx:>5} | {line}")
 
 
-NPM_PREFIX = Path("target")
-PRETTIER = ["npx", "--prefix", str(NPM_PREFIX), "prettier"]
-
-
-def _ensure_npm_deps():
-    """Installs npm dependencies into target/node_modules if not already present.
-
-    Uses ``npm install --prefix target`` so that node_modules stays out of the
-    repository root. A symlink from target/package.json to the root package.json
-    is created first so that npm can locate the dependency list.
-    """
-    NPM_PREFIX.mkdir(exist_ok=True)
-    pkg_link = NPM_PREFIX / "package.json"
-    if not pkg_link.exists():
-        pkg_link.symlink_to("../package.json")
-    if not (NPM_PREFIX / "node_modules").exists():
-        subprocess.run(["npm", "install", "--prefix", str(NPM_PREFIX)], check=True)
-
-
 def cmd_format(args):
-    """Formats Rust, JS, CSS, and HTML template files."""
-    _ensure_npm_deps()
-    subprocess.run(["cargo", "fmt"])
-    subprocess.run(["yamlfmt", "-conf", ".yamlfmt.yaml", ".github"])
-    subprocess.run(PRETTIER + ["--write",
-                               "data/static/**/*.js",
-                               "data/static/style.css",
-                               "bin/eventix/templates/**/*.htm"], check=True)
+    """Formats Rust and GitHub workflow YAML."""
+    subprocess.run(["cargo", "fmt"], check=True)
+    subprocess.run(["yamlfmt", "-conf", ".yamlfmt.yaml", ".github"], check=True)
 
 
 def cmd_format_check(args):
-    """Checks Rust, JS, CSS, and HTML template files (exits non-zero on diff)."""
-    _ensure_npm_deps()
-    subprocess.run(["cargo", "fmt", "--", "--check"])
-    subprocess.run(PRETTIER + ["--check",
-                               "data/static/**/*.js",
-                               "data/static/style.css",
-                               "bin/eventix/templates/**/*.htm"], check=True)
+    """Checks Rust and GitHub workflow YAML formatting."""
+    subprocess.run(["cargo", "fmt", "--", "--check"], check=True)
+    subprocess.run(["yamlfmt", "-lint", "-conf", ".yamlfmt.yaml", ".github"], check=True)
 
 
 def cmd_flatpak_sources(args):
@@ -391,11 +462,9 @@ def _create_archives(app_id):
     # 1. Eventix (core)
     subprocess.run([
         "tar", "czf", "flatpak/eventix.tar.gz",
-        "--exclude=./contrib",
-        # put everything into a subdirectory
-        "--transform=s#^#eventix/#",
-        ".git", "bin", "data", "libs", "Cargo.toml", "Cargo.lock", "package.json", "LICENSE", "b",
-        "flatpak/" + app_id + "-Import.desktop",
+        # Put entries into a subdirectory without changing relative symlink targets.
+        "--transform=flags=rh;s#^#eventix/#",
+        "bin", "data", "libs", "Cargo.toml", "Cargo.lock", "LICENSE", "b",
         "flatpak/" + app_id + ".desktop",
         "flatpak/" + app_id + ".metainfo.xml",
     ], check=True)
@@ -420,8 +489,9 @@ def _create_archives(app_id):
 
 def _run_flatpak_builder(manifest_path, extra_args):
     """Run the flatpak builder command with given extra arguments."""
+    # Ctrl-C stops the launcher; also tear down its sandboxed build processes.
     subprocess.run([
-        "flatpak", "run", "--command=flathub-build",
+        "flatpak", "run", "--die-with-parent", "--command=flathub-build",
         "--filesystem=" + str(Path.cwd()), "org.flatpak.Builder",
         "--state-dir=" + str(STATE_DIR),
         "--repo=" + str(REPO_DIR),
@@ -494,14 +564,13 @@ def cmd_dist(args):
 
     # install binaries
     bins = Path("target") / "release"
-    for bin_name in ["eventix", "eventix-app", "eventix-import", "eventix-getpw"]:
+    for bin_name in ["eventix-gtk", "eventix-getpw"]:
         subprocess.run(["install", "-Dm755", bins / bin_name, "-t", prefix / "bin"], check=True)
 
     # install desktop files
     apps = prefix / "share" / "applications"
-    for suffix in ["", "-Import"]:
-        src = Path("flatpak") / f"{APP_ID}{suffix}.desktop"
-        subprocess.run(["install", "-Dm644", src, "-t", apps], check=True)
+    src = Path("flatpak") / f"{APP_ID}.desktop"
+    subprocess.run(["install", "-Dm644", src, "-t", apps], check=True)
 
     # install icons
     data = Path("data")
@@ -524,37 +593,26 @@ def cmd_dist(args):
     # install data folders
     dst = prefix / "share" / APP_ID
     os.makedirs(dst, 0o755, exist_ok=True)
-    for dir_name in ["locale", "static", "icons"]:
+    for dir_name in ["locale"]:
         if (dst / dir_name).exists():
             shutil.rmtree(dst / dir_name)
         shutil.copytree(data / dir_name, dst / dir_name)
 
 
 def main():
-    parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument(
-        "--address", default="127.0.0.1", help="Server address")
-    parent_parser.add_argument(
-        "--port", type=int, default=8083, help="Server port")
-
     parser = argparse.ArgumentParser(description="Eventix builder and runner")
     subparsers = parser.add_subparsers(
         dest="command", help="Available commands")
     subparsers.required = True
 
     run_parser = subparsers.add_parser(
-        "run", parents=[parent_parser], help="Run eventix in development mode")
-    run_parser.set_defaults(func=cmd_run)
+        "run", help="Run the GTK app with bundled development sync tools")
+    run_parser.set_defaults(app_args=[], func=cmd_run)
 
     watch_parser = subparsers.add_parser(
-        "watch", parents=[parent_parser],
+        "watch",
         help="Watch and rerun eventix on changes")
-    watch_parser.set_defaults(func=cmd_watch)
-
-    app_parser = subparsers.add_parser(
-        "app", parents=[parent_parser],
-        help="Run the eventix app with tray icon")
-    app_parser.set_defaults(func=cmd_app)
+    watch_parser.set_defaults(app_args=[], func=cmd_watch)
 
     import_parser = subparsers.add_parser("import", help="Import an ICS file")
     import_parser.add_argument("file", help="Path to the ICS file to import")
@@ -572,6 +630,16 @@ def main():
         help="Show output from passing tests")
     test_parser.set_defaults(cargo_args=[])
     test_parser.set_defaults(func=cmd_test)
+
+    ui_parser = subparsers.add_parser(
+        "test-ui", help="Run GTK UI tests on an invisible virtual display")
+    ui_parser.add_argument("filter", nargs="?", default="", help="Test name substring")
+    ui_parser.add_argument(
+        "--visible", action="store_true", help="Show test windows on the current desktop")
+    ui_parser.add_argument(
+        "--nocapture", action="store_true", help="Show output from passing tests")
+    ui_parser.add_argument("--virtual-session", action="store_true", help=argparse.SUPPRESS)
+    ui_parser.set_defaults(func=cmd_test_ui)
 
     coverage_parser = subparsers.add_parser("coverage", help="Generate code coverage information")
     coverage_parser.add_argument("--file", help="Show line-by-line coverage for a single file")
@@ -596,11 +664,11 @@ def main():
     flatpak_parser.set_defaults(func=cmd_flatpak)
 
     format_parser = subparsers.add_parser(
-        "format", help="Format JS, CSS, and HTML templates with Prettier")
+        "format", help="Format Rust and GitHub workflow YAML")
     format_parser.set_defaults(func=cmd_format)
 
     format_check_parser = subparsers.add_parser(
-        "format-check", help="Check JS, CSS, and HTML template formatting with Prettier")
+        "format-check", help="Check Rust and GitHub workflow YAML formatting")
     format_check_parser.set_defaults(func=cmd_format_check)
 
     dist_parser = subparsers.add_parser(
@@ -609,7 +677,9 @@ def main():
     dist_parser.set_defaults(func=cmd_dist)
 
     args, unknown = parser.parse_known_args()
-    if args.command == "test" or args.command == "coverage":
+    if args.command in ("run", "watch"):
+        args.app_args = unknown[1:] if unknown[:1] == ["--"] else unknown
+    elif args.command == "test" or args.command == "coverage":
         args.cargo_args = unknown
     elif unknown:
         parser.error("unrecognized arguments: {}".format(" ".join(unknown)))

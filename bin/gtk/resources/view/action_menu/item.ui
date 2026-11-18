@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkButton" id="button">
+    <property name="accessible-role">menu-item</property>
+    <style><class name="ev_action_menu_item"/></style>
+  </object>
+</interface>

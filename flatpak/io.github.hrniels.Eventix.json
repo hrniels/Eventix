@@ -7,7 +7,7 @@
         "org.freedesktop.Sdk.Extension.rust-stable",
         "org.freedesktop.Sdk.Extension.openjdk"
     ],
-    "command": "eventix-app",
+    "command": "eventix-gtk",
     "finish-args": [
         "--share=network",
         "--share=ipc",
@@ -37,7 +37,7 @@
                 {
                     "type": "git",
                     "url": "https://github.com/hrniels/vdirsyncer.git",
-                    "commit": "a83fc9641fb1914e0a9af2f3339961cc7a126f26",
+                    "commit": "7a33a25b9c93d2fac52dc9c07ca6b49db347d618",
                     "disable-submodules": true
                 }
             ]

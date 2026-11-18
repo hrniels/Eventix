@@ -9,9 +9,10 @@ use std::fs::read_dir;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::col::{AlarmOccurrence, CalFile, ColError, Occurrence};
-use crate::objects::{AlarmOverlay, CalComponent, CalDate};
+use crate::objects::{AlarmOverlay, CalComponent, CalDate, Calendar, EventLike};
 
 /// A directory with calendar files.
 ///
@@ -236,6 +237,34 @@ impl CalDir {
         Ok(())
     }
 
+    /// Imports a parsed external calendar, saving one resource per UID.
+    ///
+    /// Replaces existing UIDs at their current paths and assigns generated filenames to new ones.
+    /// Recurrence overrides and calendar metadata are retained when splitting resources.
+    /// Returns an error if the directory is read-only or a resource cannot be saved. Resources are
+    /// processed in UID order; earlier successful writes remain on disk and in memory on failure.
+    pub fn import(&mut self, calendar: Calendar) -> Result<(), ColError> {
+        if self.read_only {
+            return Err(ColError::DirWriteProtected((*self.id).clone()));
+        }
+        let mut calendars = calendar.split_by_uid();
+        calendars.sort_by(|a, b| a.components()[0].uid().cmp(b.components()[0].uid()));
+        for calendar in calendars {
+            let uid = calendar.components()[0].uid();
+            let index = self.files.iter().position(|file| file.contains_uid(uid));
+            let path = index
+                .map(|index| self.files[index].path().clone())
+                .unwrap_or_else(|| self.path.join(format!("{}.ics", Uuid::new_v4())));
+            let file = CalFile::new(self.id.clone(), path, calendar);
+            file.save()?;
+            match index {
+                Some(index) => self.files[index] = file,
+                None => self.files.push(file),
+            }
+        }
+        Ok(())
+    }
+
     /// Returns a vector of occurrences whose alarm is due in the given time period.
     ///
     /// Note that excluded occurrences are not returned.
@@ -348,7 +377,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::col::CalFile;
-    use crate::objects::{CalComponent, CalEvent, Calendar};
+    use crate::objects::{CalComponent, CalEvent, Calendar, EventLike, UpdatableEventLike};
 
     use super::CalDir;
 
@@ -357,6 +386,150 @@ mod tests {
         let mut cal = Calendar::default();
         cal.add_component(CalComponent::Event(CalEvent::new(uid)));
         CalFile::new(Arc::default(), PathBuf::default(), cal)
+    }
+
+    fn import_calendar(uid: &str, summary: &str) -> Calendar {
+        let mut event = CalEvent::new(uid);
+        event.set_summary(Some(summary.into()));
+        let mut calendar = Calendar::default();
+        calendar.add_component(CalComponent::Event(event));
+        calendar
+    }
+
+    #[test]
+    fn import_generates_safe_filenames_and_replaces_existing_resources_at_the_same_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let id = Arc::new(String::from("test"));
+        let mut dir = CalDir::new_empty(id, tmp.path().into(), "Test".into(), false);
+        // Long UIDs and path syntax must not become part of the filesystem path.
+        let uid = format!("../../{}", "ü".repeat(300));
+        dir.import(import_calendar(&uid, "Original")).unwrap();
+        let path = dir.file_by_id(&uid).unwrap().path().clone();
+        assert_eq!(path.parent(), Some(tmp.path()));
+        assert_eq!(path.extension().unwrap(), "ics");
+        assert!(path.file_name().unwrap().len() < 100);
+        dir.import(import_calendar(&uid, "Replacement")).unwrap();
+        assert_eq!(dir.files().len(), 1);
+        assert_eq!(dir.file_by_id(&uid).unwrap().path(), &path);
+        assert_eq!(
+            dir.file_by_id(&uid).unwrap().components()[0]
+                .summary()
+                .map(String::as_str),
+            Some("Replacement")
+        );
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("Replacement")
+        );
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn import_reuses_arbitrary_existing_filenames_without_deleting_them_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let id = Arc::new(String::from("test"));
+        let path = tmp.path().join("remote-resource.ics");
+        let original = CalFile::new(id.clone(), path.clone(), import_calendar("uid", "Original"));
+        original.save().unwrap();
+        let mut dir = CalDir::new_from_dir(id, tmp.path().into(), "Test".into(), false).unwrap();
+        dir.import(import_calendar("uid", "Updated")).unwrap();
+        assert_eq!(dir.files().len(), 1);
+        assert_eq!(dir.file_by_id("uid").unwrap().path(), &path);
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn import_read_only_directory_rejects_changes_before_saving() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut dir = CalDir::new_empty(
+            Arc::new("test".into()),
+            tmp.path().into(),
+            "Test".into(),
+            true,
+        );
+        assert!(matches!(
+            dir.import(import_calendar("new", "New")),
+            Err(super::ColError::DirWriteProtected(_))
+        ));
+        assert!(dir.files().is_empty());
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn import_failure_keeps_completed_resources_and_does_not_publish_the_failed_replacement() {
+        let tmp = tempfile::tempdir().unwrap();
+        let id = Arc::new(String::from("test"));
+        let mut dir = CalDir::new_empty(id.clone(), tmp.path().into(), "Test".into(), false);
+        dir.import(import_calendar("a", "Original A")).unwrap();
+        let blocked = tmp.path().join("blocked.ics");
+        std::fs::create_dir(&blocked).unwrap();
+        std::fs::write(blocked.join("keep"), "untouched").unwrap();
+        dir.add_file(CalFile::new(
+            id,
+            blocked.clone(),
+            import_calendar("b", "Original B"),
+        ))
+        .unwrap();
+        let mut input = import_calendar("a", "Updated A");
+        input.add_component(import_calendar("b", "Updated B").components()[0].clone());
+        input.add_component(import_calendar("c", "New C").components()[0].clone());
+        assert!(dir.import(input).is_err());
+        let a = dir.file_by_id("a").unwrap();
+        assert_eq!(
+            a.components()[0].summary().map(String::as_str),
+            Some("Updated A")
+        );
+        assert!(
+            std::fs::read_to_string(a.path())
+                .unwrap()
+                .contains("Updated A")
+        );
+        assert_eq!(
+            dir.file_by_id("b").unwrap().components()[0]
+                .summary()
+                .map(String::as_str),
+            Some("Original B")
+        );
+        assert_eq!(
+            std::fs::read_to_string(blocked.join("keep")).unwrap(),
+            "untouched"
+        );
+        assert!(dir.file_by_id("c").is_none());
+        // No temporary files are left after the failed save.
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn import_splits_uids_and_preserves_recurrence_overrides_and_timezones() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut dir = CalDir::new_empty(
+            Arc::new("test".into()),
+            tmp.path().into(),
+            "Test".into(),
+            false,
+        );
+        let input: Calendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n\
+            BEGIN:VTIMEZONE\r\nTZID:Custom\r\nBEGIN:STANDARD\r\n\
+            DTSTART:19700101T000000\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0200\r\n\
+            END:STANDARD\r\nEND:VTIMEZONE\r\n\
+            BEGIN:VEVENT\r\nUID:series\r\nDTSTART;TZID=Custom:20261109T090000\r\n\
+            RRULE:FREQ=DAILY;COUNT=3\r\nSUMMARY:Series\r\nEND:VEVENT\r\n\
+            BEGIN:VEVENT\r\nUID:series\r\nRECURRENCE-ID;TZID=Custom:20261110T090000\r\n\
+            DTSTART;TZID=Custom:20261110T100000\r\nSUMMARY:Exception\r\nEND:VEVENT\r\n\
+            BEGIN:VTODO\r\nUID:task\r\nSUMMARY:Task\r\nEND:VTODO\r\n\
+            END:VCALENDAR\r\n"
+            .parse()
+            .unwrap();
+        dir.import(input).unwrap();
+        assert_eq!(dir.files().len(), 2);
+        let series = dir.file_by_id("series").unwrap();
+        assert_eq!(series.components().len(), 2);
+        let serialized = std::fs::read_to_string(series.path()).unwrap();
+        assert!(serialized.contains("TZID:Custom"));
+        assert!(serialized.contains("RECURRENCE-ID;TZID=Custom:"));
+        assert!(!serialized.contains("UID:task"));
+        assert!(dir.file_by_id("task").is_some());
     }
 
     #[test]

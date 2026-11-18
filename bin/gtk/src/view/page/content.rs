@@ -1,0 +1,468 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use std::{cell::Cell, rc::Rc};
+
+use chrono::{Datelike, NaiveDate, Utc};
+use eventix_locale::DateFlags;
+use gtk::{glib, prelude::*, subclass::prelude::*};
+
+use super::CalendarPage;
+use crate::dates::shift_month;
+use crate::model::{MonthSnapshot, WeekSnapshot};
+use crate::model::{Snapshot, View};
+use crate::style;
+use crate::worker::event::ContentResponse;
+use crate::worker::message::ContentRequest;
+
+/// Owns the selected period and the state of calendar content requests.
+#[derive(Default)]
+pub(super) struct PageContent {
+    pub(super) view: Cell<View>,
+    pub(super) loading: Cell<bool>,
+    /// Identifies the latest requested content selection, even while its result is pending.
+    pub(super) generation: Cell<u64>,
+    /// Records the last successfully displayed generation for subscription recovery on reload.
+    pub(super) loaded_generation: Cell<Option<u64>>,
+    pub(super) date: Cell<Option<NaiveDate>>,
+    displayed: Cell<Option<NaiveDate>>,
+}
+
+impl PageContent {
+    pub(super) fn connect_controls(&self, page: &CalendarPage) {
+        let imp = page.imp();
+
+        let weak = page.downgrade();
+        imp.week_view.connect_toggled(move |button| {
+            if button.is_active()
+                && let Some(page) = weak.upgrade()
+            {
+                page.switch_to_week();
+            }
+        });
+
+        let weak = page.downgrade();
+        imp.month_view.connect_toggled(move |button| {
+            if button.is_active()
+                && let Some(page) = weak.upgrade()
+            {
+                page.switch_to_month();
+            }
+        });
+
+        let weak = page.downgrade();
+        imp.list_view.connect_toggled(move |button| {
+            if button.is_active()
+                && let Some(page) = weak.upgrade()
+            {
+                page.switch_to_list();
+            }
+        });
+
+        self.translate_labels(page);
+
+        let size = gtk::SizeGroup::new(gtk::SizeGroupMode::Both);
+        size.add_widget(&*imp.calendar);
+        size.add_widget(&*imp.month_picker);
+
+        let weak = page.downgrade();
+        imp.month_picker.connect_month_selected(move |picker| {
+            let Some(page) = weak.upgrade() else { return };
+            if !page.imp().picker.is_active() {
+                return;
+            }
+            page.imp().picker.popdown();
+            page.show_content(Some(picker.date()));
+        });
+
+        let weak = page.downgrade();
+        imp.calendar.connect_day_selected(move |calendar| {
+            let Some(page) = weak.upgrade() else { return };
+
+            if !page.imp().picker.is_active() {
+                return;
+            }
+
+            let date = calendar.date();
+            page.imp().picker.popdown();
+            page.show_content(Some(date));
+        });
+    }
+
+    fn translate_labels(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        let locale = page.locale();
+        imp.calendar
+            .set_locale(locale.as_ref(), chrono::Weekday::Mon);
+        imp.calendar.set_weekly(self.view.get() == View::Week);
+        let monthly = self.view.get() == View::Month;
+        imp.month_picker.set_locale(locale.as_ref());
+        imp.calendar.set_visible(!monthly);
+        imp.month_picker.set_visible(monthly);
+
+        imp.search
+            .set_placeholder_text(Some(locale.translate("Search")));
+        imp.search
+            .update_property(&[gtk::accessible::Property::Label(locale.translate("Search"))]);
+        imp.search.set_tooltip_text(Some(locale.translate(
+            "Search summary, description, location or UID. Use OR for alternatives.",
+        )));
+        for (button, label) in [
+            (&*imp.search_previous, "Find previous occurrence"),
+            (&*imp.search_next, "Find next occurrence"),
+        ] {
+            button.set_tooltip_text(Some(locale.translate(label)));
+            button.update_property(&[gtk::accessible::Property::Label(locale.translate(label))]);
+        }
+
+        imp.previous
+            .set_tooltip_text(Some(locale.translate(if monthly {
+                "Previous month"
+            } else {
+                "Previous week"
+            })));
+        imp.next.set_tooltip_text(Some(locale.translate(if monthly {
+            "Next month"
+        } else {
+            "Next week"
+        })));
+
+        imp.week_view.set_label(locale.translate("Week"));
+        imp.week_view
+            .set_tooltip_text(Some(locale.translate("Weekly View")));
+
+        imp.month_view.set_label(locale.translate("Month"));
+        imp.month_view
+            .set_tooltip_text(Some(locale.translate("Monthly View")));
+
+        imp.list_view.set_label(locale.translate("List"));
+        imp.list_view
+            .set_tooltip_text(Some(locale.translate("List View")));
+
+        imp.today.set_label(locale.translate("Today"));
+        imp.calendar_toggles.update_label(page);
+        imp.calendars_button
+            .set_tooltip_text(Some(locale.translate("Calendars")));
+        imp.reload
+            .set_tooltip_text(Some(locale.translate("Synchronize all calendars")));
+        imp.shortcuts_button
+            .set_tooltip_text(Some(locale.translate("Shortcuts")));
+        imp.shortcuts_button
+            .update_property(&[gtk::accessible::Property::Label(
+                locale.translate("Shortcuts"),
+            )]);
+        imp.session.update_sync_time(page);
+        imp.sync_collections
+            .set_tooltip_text(Some(locale.translate("Synchronize a collection")));
+        imp.status.set_locale(locale.as_ref());
+        imp.settings_button
+            .set_tooltip_text(Some(locale.translate("Settings")));
+        imp.settings_button
+            .update_property(&[gtk::accessible::Property::Label(
+                locale.translate("Settings"),
+            )]);
+        imp.picker
+            .set_tooltip_text(Some(locale.translate("Choose date")));
+    }
+
+    pub(super) fn show_content(&self, page: &CalendarPage, date: Option<NaiveDate>) {
+        page.imp().search_state.cancel(page);
+        page.cancel_event_selection();
+        page.dismiss_popovers();
+
+        let imp = page.imp();
+        self.date.set(date);
+        let generation = self.generation.get() + 1;
+        self.generation.set(generation);
+        self.loading.set(true);
+
+        if let Some(session) = imp.session.current.borrow().as_ref() {
+            session.show_content(ContentRequest {
+                generation,
+                date,
+                view: self.view.get(),
+                filter: imp.list.get().map(|list| list.filter()).unwrap_or_default(),
+            });
+        }
+    }
+
+    pub(super) fn navigate(&self, page: &CalendarPage, direction: i32) {
+        if self.view.get() == View::List {
+            return;
+        }
+
+        let date = self.date.get().unwrap_or_else(|| {
+            Utc::now()
+                .with_timezone(page.locale().timezone())
+                .date_naive()
+        });
+        let next = match self.view.get() {
+            View::Week => date.checked_add_signed(chrono::Duration::days(i64::from(direction) * 7)),
+            View::Month => shift_month(date, direction),
+            View::List => None,
+        };
+        if let Some(date) = next {
+            self.show_content(page, Some(date));
+        }
+    }
+
+    pub(super) fn switch_view(&self, page: &CalendarPage, view: View) {
+        let imp = page.imp();
+        let was_management = imp.management.leave(page);
+        if self.view.replace(view) == view && !was_management {
+            return;
+        }
+
+        page.dismiss_popovers();
+        imp.picker.popdown();
+        imp.week_view.set_active(view == View::Week);
+        imp.month_view.set_active(view == View::Month);
+        imp.list_view.set_active(view == View::List);
+        imp.search.set_visible(view != View::List);
+        imp.search_controls.set_visible(view != View::List);
+        if view == View::List {
+            if let Some(list) = imp.list.get() {
+                imp.content_stack.set_visible_child(&list.widget);
+            }
+        } else {
+            imp.content_stack.set_visible_child(&*imp.calendar_content);
+        }
+
+        if view == View::Month {
+            imp.stack.set_visible_child(&*imp.monthly_content);
+        } else {
+            imp.stack.set_visible_child(&*imp.weekly_content);
+        }
+
+        // Clear the old period's title until the new snapshot arrives.
+        imp.title.set_text("");
+        imp.title.set_tooltip_text(None);
+        self.displayed.set(None);
+
+        self.translate_labels(page);
+        self.show_content(page, self.date.get());
+    }
+
+    pub(super) fn show_week_at(&self, page: &CalendarPage, date: NaiveDate) {
+        self.date.set(Some(date));
+        if self.view.get() == View::Week {
+            self.show_content(page, Some(date));
+        } else {
+            self.switch_view(page, View::Week);
+        }
+    }
+
+    fn update_picker(&self, page: &CalendarPage) {
+        let imp = page.imp();
+        let date = self.date.get().unwrap_or_else(|| {
+            Utc::now()
+                .with_timezone(page.locale().timezone())
+                .date_naive()
+        });
+        self.date.set(Some(date));
+
+        imp.calendar.select_day(date);
+        imp.month_picker.select_month(date);
+    }
+
+    pub(super) fn show_month(&self, page: &CalendarPage, month: MonthSnapshot) {
+        let imp = page.imp();
+
+        imp.calendar_css.replace(style::events_css(
+            month
+                .days
+                .iter()
+                .flat_map(|d| d.events.iter().map(|e| &e.event))
+                .chain(month.spans.iter().flatten().map(|span| &span.event)),
+        ));
+        page.update_styles();
+
+        imp.locale.replace(Some(month.locale.clone()));
+        self.translate_labels(page);
+
+        if let Some(window) = page.root().and_downcast::<gtk::Window>()
+            && !page.management_open()
+        {
+            window.set_title(Some(&format!(
+                "Eventix — {}",
+                month.locale.translate("Monthly View")
+            )));
+        }
+
+        let title = format!(
+            "{} {}",
+            month
+                .locale
+                .translate(&month.month.format("%B").to_string()),
+            month.month.year(),
+        );
+        imp.title.set_text(&title);
+        imp.title.set_tooltip_text(Some(&title));
+
+        self.update_picker(page);
+        if self.displayed.replace(Some(month.month)) != Some(month.month) {
+            imp.monthly_content.vadjustment().set_value(0.0);
+        }
+
+        imp.monthly.set_month(Rc::new(month));
+    }
+
+    pub(super) fn show_week(&self, page: &CalendarPage, week: WeekSnapshot) {
+        let imp = page.imp();
+
+        imp.calendar_css.replace(style::calendar_css(&week));
+        page.update_styles();
+
+        imp.locale.replace(Some(week.locale.clone()));
+        self.translate_labels(page);
+
+        let locale = &week.locale;
+        if let Some(window) = page.root().and_downcast::<gtk::Window>()
+            && !page.management_open()
+        {
+            window.set_title(Some(&format!(
+                "Eventix — {}",
+                locale.translate("Weekly View")
+            )));
+        }
+
+        let title = formatx::formatx!(
+            locale.translate("Week {}: {} — {}"),
+            week.start.iso_week().week(),
+            locale.fmt_weekdate(&week.start, DateFlags::NoToday),
+            locale.fmt_weekdate(&week.days[6].date, DateFlags::NoToday)
+        )
+        .unwrap();
+        imp.title.set_text(&title);
+        imp.title.set_tooltip_text(Some(&title));
+
+        for ((label, icon), day) in Self::day_labels(page)
+            .into_iter()
+            .zip(imp.weekly.imp().time_change_icons())
+            .zip(&week.days)
+        {
+            let text = locale.fmt_weekdate(&day.date, DateFlags::Short | DateFlags::NoToday);
+            let time_change = !day.dst.is_empty();
+            label.set_text(&text);
+            icon.set_visible(time_change);
+            icon.set_tooltip_text(time_change.then(|| locale.translate("Time change")));
+            label.set_tooltip_text(time_change.then(|| locale.translate("Time change")));
+        }
+
+        self.update_picker(page);
+
+        let reset_scroll = self.displayed.replace(Some(week.start)) != Some(week.start);
+        let week = Rc::new(week);
+        imp.weekly.imp().timed.set_week(week.clone());
+        imp.weekly.imp().all_day.set_week(week);
+        self.update_today(page);
+
+        if reset_scroll && !imp.search_state.reveal_pending() {
+            let scroll = imp.weekly.imp().scroll.downgrade();
+            let weak = page.downgrade();
+            let generation = self.generation.get();
+            let displayed = self.displayed.get();
+            let allocated = Cell::new(false);
+            imp.weekly.imp().timed.add_tick_callback(move |_, _| {
+                let Some(page) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                if page.imp().content.generation.get() != generation
+                    || page.imp().content.displayed.get() != displayed
+                {
+                    return glib::ControlFlow::Break;
+                }
+                // Let GTK finish revealing any previously focused card before resetting the view.
+                if !allocated.replace(true) {
+                    return glib::ControlFlow::Continue;
+                }
+                if let Some(scroll) = scroll.upgrade() {
+                    scroll.vadjustment().set_value(480.0);
+                }
+
+                glib::ControlFlow::Break
+            });
+        }
+    }
+
+    fn day_labels(page: &CalendarPage) -> [&gtk::Label; 7] {
+        let imp = page.imp().weekly.imp();
+        [
+            &imp.monday,
+            &imp.tuesday,
+            &imp.wednesday,
+            &imp.thursday,
+            &imp.friday,
+            &imp.saturday,
+            &imp.sunday,
+        ]
+    }
+
+    pub(super) fn update_today(&self, page: &CalendarPage) {
+        if self.view.get() == View::List {
+            return;
+        }
+        let imp = page.imp();
+        if self.view.get() == View::Month {
+            imp.monthly.update_today();
+            return;
+        }
+
+        let Some(start) = self.displayed.get() else {
+            return;
+        };
+
+        let today = Utc::now()
+            .with_timezone(page.locale().timezone())
+            .date_naive();
+        for (i, label) in Self::day_labels(page).into_iter().enumerate() {
+            if (today - start).num_days() == i as i64 {
+                label.add_css_class("ev_today");
+            } else {
+                label.remove_css_class("ev_today");
+            }
+        }
+
+        imp.weekly.imp().timed.queue_draw();
+        imp.weekly.imp().all_day.queue_draw();
+    }
+
+    pub(super) fn receive_content(&self, page: &CalendarPage, response: ContentResponse) {
+        if response.generation != self.generation.get() {
+            return;
+        }
+
+        match response.result {
+            Ok(snapshot) => {
+                match snapshot {
+                    Snapshot::Week(week) => self.show_week(page, week),
+                    Snapshot::Month(month) => self.show_month(page, month),
+                    Snapshot::List(list) => {
+                        let imp = page.imp();
+                        imp.locale.replace(Some(list.locale.clone()));
+                        self.translate_labels(page);
+                        if let Some(window) = page.root().and_downcast::<gtk::Window>()
+                            && !page.management_open()
+                        {
+                            window.set_title(Some(&format!(
+                                "Eventix — {}",
+                                list.locale.translate("List View")
+                            )));
+                        }
+                        if let Some(view) = imp.list.get() {
+                            view.set_snapshot(list);
+                        }
+                    }
+                }
+
+                self.loaded_generation.set(Some(response.generation));
+                self.loading.set(false);
+                page.imp().search_state.reveal(page, response.generation);
+            }
+            Err(_) => {
+                self.loading.set(false);
+            }
+        }
+    }
+}

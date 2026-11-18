@@ -1,0 +1,965 @@
+/* Copyright (C) 2026 Nils Asmussen
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/* These named colors are also used by custom snapshot drawing. */
+@define-color ev_grid_line alpha(@theme_fg_color, 0.16);
+@define-color ev_today_background alpha(@theme_selected_bg_color, 0.16);
+@define-color ev_dst_fold rgba(128, 77, 204, 0.14);
+@define-color ev_dst_gap rgba(230, 128, 26, 0.14);
+@define-color ev_now rgb(230, 38, 38);
+@define-color ev_drop_background alpha(@theme_selected_bg_color, 0.85);
+@define-color ev_drop_border @theme_selected_bg_color;
+@define-color ev_drop_text @theme_selected_fg_color;
+@define-color ev_create_background alpha(@theme_fg_color, 0.08);
+@define-color ev_details_background @theme_base_color;
+@define-color ev_details_border alpha(@theme_fg_color, 0.2);
+/* TODO: apparently, there is no exposed theme color for links; so we hardcode them for now */
+@define-color ev_link #4487d8;
+@define-color ev_link_hover #2a77d5;
+
+label link {
+    color: @ev_link;
+}
+
+label link:hover {
+    color: @ev_link_hover;
+}
+
+.ev_calendar_toolbar {
+    padding: 8px 6px;
+}
+
+.ev_shortcuts_dialog {
+    background-color: @theme_bg_color;
+}
+
+.ev_shortcuts_dialog headerbar {
+    padding: 8px 12px;
+}
+
+.ev_shortcuts_dialog headerbar searchentry {
+    min-width: 300px;
+}
+
+.ev_shortcuts_content {
+    padding: 24px 32px 32px;
+}
+
+.ev_shortcuts_heading {
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.ev_shortcuts_subheading {
+    margin-top: 8px;
+    opacity: 0.7;
+}
+
+.ev_shortcuts_card {
+    background-color: @theme_base_color;
+    color: @theme_text_color;
+    border: 1px solid alpha(@theme_fg_color, 0.1);
+    border-radius: 14px;
+    box-shadow: 0 2px 6px alpha(black, 0.12);
+}
+
+.ev_shortcuts_row {
+    padding: 14px 18px;
+    min-height: 30px;
+}
+
+.ev_shortcuts_row + .ev_shortcuts_row {
+    border-top: 1px solid alpha(@theme_fg_color, 0.1);
+}
+
+.ev_shortcuts_description {
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+
+.ev_shortcuts_row shortcut .keycap {
+    background-color: alpha(@theme_fg_color, 0.08);
+    color: @theme_text_color;
+    border: none;
+    border-radius: 7px;
+    box-shadow: 0 2px 0 alpha(@theme_fg_color, 0.18);
+    padding: 5px 9px;
+    min-width: 16px;
+}
+
+.ev_management {
+    padding: 12px 0;
+}
+
+.ev_management_panel {
+    margin: 0 6px;
+}
+
+.ev_management_collection {
+    padding: 4px 0;
+}
+
+.ev_management_collection_name {
+    font-size: 1.25em;
+    font-weight: bold;
+}
+
+.ev_management_calendar {
+    background-color: alpha(@theme_fg_color, 0.05);
+    border: 1px solid alpha(@theme_fg_color, 0.2);
+    border-radius: 5px;
+}
+
+.ev_management_card {
+    padding: 5px 8px;
+}
+
+.ev_management_form {
+    padding: 8px 8px 12px;
+    border-top: 1px solid alpha(@theme_fg_color, 0.12);
+}
+
+.ev_management_name {
+    min-height: 20px;
+    padding: 2px 5px;
+}
+
+.ev_management_form_label,
+.ev_management_preview_label {
+    font-weight: bold;
+}
+
+.ev_management_form_separator {
+    min-height: 1px;
+    background-color: alpha(@theme_fg_color, 0.12);
+}
+
+.ev_management_hover_area {
+    padding: 6px 14px;
+}
+
+.ev_management_form_inset {
+    margin: 0 8px;
+}
+
+.ev_management_error {
+    color: @error_color;
+    border: 1px solid @error_color;
+    border-radius: 4px;
+}
+
+.ev_management_error_prefix {
+    background-color: @error_color;
+    color: white;
+    border-radius: 3px 0 0 3px;
+    padding: 8px 12px;
+}
+
+.ev_management_error_message {
+    padding: 8px 12px;
+}
+
+.ev_management_field_error {
+    border-color: @error_color;
+    box-shadow: inset 0 0 0 1px @error_color;
+}
+
+checkbutton.ev_management_check {
+    margin: 0;
+    padding: 0;
+}
+
+checkbutton.ev_management_check > check,
+checkbutton.ev_management_check > radio {
+    margin: 0 6px 0 0;
+}
+
+.ev_management_sync_types > button {
+    min-height: 20px;
+    min-width: 0;
+    padding: 2px 6px;
+}
+
+.ev_management_button {
+    min-width: 20px;
+    min-height: 20px;
+    padding: 2px 5px;
+    font-size: 0.9em;
+}
+
+.ev_management_icon_button {
+    min-width: 14px;
+}
+
+.ev_management_button.ev_button_critical {
+    color: #ff0000;
+}
+
+.ev_management_button.ev_button_critical:hover {
+    background-image: linear-gradient(#ff0000, #e00000);
+    color: white;
+}
+
+.ev_management_button.ev_button_warn {
+    color: #f57c00;
+}
+
+.ev_management_button.ev_button_warn:hover {
+    background-image: linear-gradient(#f57c00, #c66400);
+    color: white;
+}
+
+.ev_cancel_sync {
+    color: @ev_now;
+    min-width: 16px;
+    min-height: 16px;
+    padding: 2px;
+}
+
+.ev_cancel_sync:disabled {
+    color: alpha(@ev_now, 0.5);
+}
+
+.ev_settings_button {
+    border-radius: 5px 0 0 5px;
+    border-right: none;
+}
+
+.ev_calendars_box {
+    border: 1px solid alpha(@theme_fg_color, 0.25);
+    border-radius: 0 5px 5px 0;
+    background: @theme_bg_color;
+}
+
+.ev_calendars_label {
+    border: none;
+    border-radius: 0;
+    padding: 4px 8px;
+}
+
+.ev_calendars_label {
+    background: transparent;
+    box-shadow: none;
+}
+
+.ev_calendars_label:hover {
+    background: alpha(@theme_fg_color, 0.08);
+}
+
+.ev_calendars_label:active {
+    background: alpha(@theme_fg_color, 0.16);
+}
+
+/* Do not reserve a full scrollbar's width for a single calendar toggle. */
+.ev_calendar_selectors_scroll scrollbar.horizontal slider {
+    min-width: 0;
+}
+
+.ev_calendar_toggle,
+.ev_panel_header button.ev_calendar_toggle {
+    padding: 0;
+    min-width: 0;
+    min-height: 0;
+    border: none;
+    border-radius: 50%;
+}
+
+.ev_calendar_toggle,
+.ev_calendar_toggle:hover,
+.ev_calendar_toggle:active,
+.ev_calendar_toggle:checked {
+    background: transparent;
+    box-shadow: none;
+}
+
+.ev_list_dates {
+    min-width: 260px;
+}
+
+.ev_list_view row {
+    padding: 0;
+    min-height: 0;
+    background: transparent;
+    color: inherit;
+}
+
+.ev_list_row {
+    padding: 0 12px;
+    border-bottom: 1px solid @ev_grid_line;
+}
+
+.ev_list_row:hover,
+.ev_list_view row:selected .ev_list_row {
+    background: @ev_create_background;
+}
+
+.ev_list_view button.ev_list_pagination,
+.ev_list_view button.ev_list_pagination > label {
+    color: inherit;
+}
+
+.ev_list_completed {
+    text-decoration: line-through;
+    opacity: 0.65;
+}
+
+.ev_action_menu_contents {
+    min-width: 180px;
+}
+
+.ev_action_menu button.ev_action_menu_item,
+.ev_action_menu .ev_action_menu_item > button {
+    padding: 6px 8px;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+}
+
+.ev_action_menu_pointer_moved > button.ev_action_menu_item:hover,
+.ev_action_menu_pointer_moved > .ev_action_menu_item > button:hover {
+    background: alpha(@theme_fg_color, 0.1);
+}
+
+.ev_action_menu separator {
+    margin: 4px 0;
+}
+
+.ev_auth_content {
+    padding: 12px;
+}
+
+.ev_editor_backdrop {
+    background: alpha(black, 0.12);
+    padding: 16px;
+}
+
+.ev_item_editor {
+    background: @theme_base_color;
+    color: @theme_text_color;
+    border-radius: 12px;
+    border: 1px solid #8996a8;
+    box-shadow: 0 4px 16px alpha(black, 0.3);
+}
+
+.ev_editor_window .ev_item_editor {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.ev_editor_form {
+    padding: 2px 0;
+}
+
+.ev_details_header {
+    border-radius: 11px 11px 0 0;
+}
+
+.ev_editor_row + .ev_editor_row {
+    border-top: 1px solid alpha(@theme_text_color, 0.18);
+}
+
+.ev_editor_row:hover,
+.ev_management_hover_area:hover {
+    background: alpha(@theme_text_color, 0.055);
+}
+
+.ev_editor_field_row,
+.ev_editor_row_header {
+    padding: 11px 12px;
+}
+
+.ev_editor_row_header {
+    min-height: 24px;
+}
+
+.ev_editor_caption {
+    min-width: 128px;
+}
+
+.ev_editor_field_label,
+.ev_editor_subheading {
+    font-weight: bold;
+}
+
+.ev_editor_preview {
+    color: alpha(@theme_text_color, 0.7);
+}
+
+.ev_editor_expand_hint {
+    color: alpha(@theme_text_color, 0.55);
+}
+
+button.ev_editor_section_toggle,
+button.ev_editor_section_toggle:hover,
+button.ev_editor_section_toggle:checked {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    min-height: 0;
+    border-radius: 0;
+    color: inherit;
+}
+
+.ev_editor_expanded {
+    padding: 0 12px 12px;
+}
+
+.ev_editor_dates entry {
+    min-width: 0;
+    font-size: 0.9em;
+    padding: 0 5px;
+}
+
+.ev_editor_segments > button {
+    font-size: 0.9em;
+    padding: 2px 6px;
+    min-height: 20px;
+    border-radius: 0;
+    border-right-width: 0;
+}
+
+.ev_editor_segments > button:first-child {
+    border-radius: 5px 0 0 5px;
+}
+
+.ev_editor_segments > button:last-child {
+    border-radius: 0 5px 5px 0;
+    border-right-width: 1px;
+}
+
+.ev_editor_segments > button:checked {
+    background: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+}
+
+/* Keep labeled and unlabeled recurrence radios on the same horizontal axis. */
+checkbutton.ev_editor_recurrence_choice {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.ev_editor_actions {
+    padding: 10px 12px;
+    border-top: 2px solid alpha(@theme_fg_color, 0.16);
+}
+
+.ev_editor_error {
+    margin-bottom: 8px;
+}
+
+.ev_editor_invalid {
+    border-color: @error_color;
+    box-shadow: inset 0 0 0 1px @error_color;
+}
+
+.ev_completion_result {
+    margin: 5px 8px;
+}
+
+.ev_day_headers label,
+.ev_month_weekday {
+    padding: 8px 0;
+    font-weight: bold;
+}
+
+.ev_today {
+    font-weight: bold;
+    color: @theme_selected_bg_color;
+}
+
+.ev_week_separator {
+    margin: 4px 0;
+    opacity: 0.6;
+}
+
+.ev_hour_label {
+    padding: 2px 5px 0 7px;
+}
+
+.ev_calendar_status {
+    padding: 4px 6px;
+}
+
+.ev_status_button > button {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px;
+}
+
+.ev_activity_button > button {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.ev_cur_month {
+    font-weight: bold;
+}
+
+.ev_view_switch > button:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.ev_view_switch > button:not(:first-child):not(:last-child) {
+    border-radius: 0;
+}
+
+.ev_view_switch > button:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+.ev_other_month {
+    opacity: 0.5;
+}
+
+button.ev_month_week_number {
+    min-width: 0;
+    min-height: 0;
+    padding: 2px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.ev_scroll_fade_top {
+    background: linear-gradient(to top, alpha(@theme_bg_color, 0), alpha(@theme_bg_color, 0.55));
+}
+
+.ev_scroll_fade_bottom {
+    background: linear-gradient(to bottom, alpha(@theme_bg_color, 0), alpha(@theme_bg_color, 0.55));
+}
+
+button.ev_event {
+    padding: 0 3px;
+    min-height: 0;
+    min-width: 0;
+    border-radius: 4px;
+}
+
+button.ev_event:hover {
+    outline: 2px solid black;
+    outline-offset: -2px;
+}
+
+button.ev_event:focus-visible {
+    outline: 2px solid @theme_fg_color;
+    outline-offset: -2px;
+}
+
+button.ev_event.ev_cancelled > box > label {
+    text-decoration-line: line-through;
+}
+
+.ev_response_bar {
+    min-width: 3px;
+    margin: 2px 0;
+    border: 1px solid white;
+}
+
+.ev_response_pending {
+    background: white;
+}
+
+.ev_response_accepted {
+    background: #198754;
+}
+
+.ev_response_tentative {
+    background: #d56c05;
+}
+
+.ev_response_declined {
+    background: red;
+}
+
+.ev_event_details > contents {
+    padding: 0;
+    margin-top: 0;
+    background: @ev_details_background;
+    border: 1px solid @ev_details_border;
+}
+
+.ev_details_header {
+    padding: 8px 12px;
+    border-bottom: 2px solid alpha(@theme_fg_color, 0.16);
+}
+
+.ev_details_summary {
+    font-weight: bold;
+    font-size: 1.15em;
+}
+
+.ev_details_calendar {
+    min-width: 18px;
+    min-height: 18px;
+    border-radius: 4px;
+    border: 1px solid alpha(@theme_fg_color, 0.25);
+}
+
+.ev_details_rows {
+    padding: 2px 0;
+}
+
+.ev_details_row {
+    padding: 9px 12px;
+}
+
+.ev_details_row + .ev_details_row {
+    border-top: 1px solid alpha(@theme_text_color, 0.18);
+}
+
+.ev_details_row:hover {
+    background: alpha(@theme_text_color, 0.055);
+}
+
+.ev_settings_row {
+    padding: 6px 10px;
+}
+
+.ev_details_label {
+    font-weight: bold;
+}
+
+.ev_details_description,
+.ev_details_description text {
+    background: transparent;
+    padding: 0;
+}
+
+/* Hidden scrollbars must not impose a minimum height on short descriptions. */
+.ev_details_description_scroll scrollbar.vertical,
+.ev_details_description_scroll scrollbar.vertical slider {
+    min-height: 0;
+}
+
+.ev_details_actions {
+    padding: 10px 12px;
+    border-top: 2px solid alpha(@theme_fg_color, 0.16);
+}
+
+button.ev_editor_action,
+.ev_list_menu > button,
+button.ev_details_button,
+.ev_details_button > button {
+    min-height: 22px;
+    padding: 2px 8px;
+}
+
+.ev_details_menu,
+.ev_details_menu > contents {
+    background: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.ev_details_menu button.ev_details_button {
+    margin: 0;
+    border: 1px solid alpha(@theme_fg_color, 0.3);
+    background-color: @theme_bg_color;
+    background-clip: border-box;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.ev_details_menu button.ev_details_button + button.ev_details_button {
+    border-top-width: 0;
+}
+
+.ev_details_menu button.ev_details_button:first-child {
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+.ev_details_menu button.ev_details_button:last-child {
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+button.ev_details_uid {
+    min-width: 0;
+    min-height: 0;
+    padding: 2px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    box-shadow: none;
+    color: @theme_fg_color;
+}
+
+button.ev_details_uid:hover {
+    background: transparent;
+}
+
+.ev_details_critical,
+.ev_details_critical > button {
+    color: @error_color;
+}
+
+.ev_details_good,
+.ev_details_good > button {
+    color: shade(@success_color, 0.8);
+}
+
+.ev_details_warn,
+.ev_details_warn > button {
+    color: @warning_color;
+}
+
+.ev_details_good > button,
+.ev_details_menu button.ev_details_good:hover,
+.ev_action_menu .ev_action_menu_item.ev_details_good > button,
+.ev_action_menu_pointer_moved > button.ev_action_menu_item.ev_details_good:hover,
+.ev_action_menu button.ev_action_response_status.ev_details_good {
+    background-image: linear-gradient(#198754, #13653f);
+    color: white;
+}
+
+.ev_details_warn > button,
+.ev_details_menu button.ev_details_warn:hover,
+.ev_action_menu .ev_action_menu_item.ev_details_warn > button,
+.ev_action_menu_pointer_moved > button.ev_action_menu_item.ev_details_warn:hover,
+.ev_action_menu button.ev_action_response_status.ev_details_warn {
+    background-image: linear-gradient(#f57c00, #c66400);
+    color: white;
+}
+
+.ev_details_critical > button,
+.ev_details_menu button.ev_details_critical:hover,
+.ev_action_menu .ev_action_menu_item.ev_details_critical > button,
+.ev_action_menu_pointer_moved > button.ev_action_menu_item.ev_details_critical:hover,
+.ev_action_menu button.ev_action_response_status.ev_details_critical {
+    background-image: linear-gradient(#ff0000, #e00000);
+    color: white;
+}
+
+.ev_sidebar {
+    margin-right: 6px;
+}
+
+.ev_panel_frame {
+    background: @theme_base_color;
+}
+
+/* The calendar panel is the page's content block and keeps a margin on its left,
+ * matching the outer spacing on the other sides. */
+.ev_calendar_panel {
+    margin-left: 6px;
+    border-radius: 6px;
+}
+
+/* Shared colors for panel and details headers. */
+.ev_panel_header,
+.ev_details_header {
+    background: shade(@theme_bg_color, 0.9);
+    color: @theme_fg_color;
+}
+
+.ev_panel_header {
+    /* Whole-pixel vertical padding keeps aligned headers on the same pixel boundaries. */
+    padding: 4px 0.5em;
+}
+
+.ev_panel_title {
+    font-weight: bold;
+}
+
+/* Keep navigation, sidebar actions, and list filters at the same compact height. */
+.ev_panel_header button,
+.ev_panel_header entry {
+    min-height: 22px;
+    min-width: 0;
+    padding: 2px 6px;
+}
+
+.ev_calendar_selector popover contents {
+    min-width: 240px;
+}
+
+.ev_quick_task {
+    padding: 5px 4px;
+    border-top: 1px solid alpha(@theme_fg_color, 0.16);
+}
+
+.ev_quick_task entry {
+    font-size: 1em;
+}
+
+.ev_quick_task > entry,
+.ev_quick_task > button,
+.ev_quick_task > menubutton > button,
+.ev_quick_task > dropdown > button {
+    font-size: 1em;
+    min-height: 22px;
+    min-width: 0;
+    padding: 4px;
+}
+
+.ev_sidebar_day {
+    background: @theme_bg_color;
+    font-weight: bold;
+    padding: 0.3em;
+    border-top: 1px solid alpha(@theme_fg_color, 0.16);
+    border-bottom: 1px solid alpha(@theme_fg_color, 0.16);
+}
+
+button.ev_sidebar_row {
+    min-width: 0;
+    min-height: 30px;
+    padding: 0 5px;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    color: @theme_text_color;
+}
+
+button.ev_sidebar_row:hover,
+button.ev_sidebar_row.ev_sidebar_full_day:hover {
+    outline: 2px solid black;
+    outline-offset: -2px;
+}
+
+button.ev_sidebar_row:focus-visible {
+    outline: 2px solid @theme_fg_color;
+    outline-offset: -2px;
+}
+
+button.ev_sidebar_full_day {
+    padding-left: 12px;
+}
+
+.ev_response_marker_inner {
+    background: white;
+    border-radius: 50%;
+}
+
+.ev_sidebar_time,
+.ev_sidebar_due_today,
+.ev_sidebar_overdue {
+    font-weight: bold;
+}
+
+button.ev_sidebar_overdue {
+    color: red;
+}
+
+button.ev_sidebar_row.ev_cancelled > box > label {
+    text-decoration-line: line-through;
+}
+.ev_time_picker button {
+    transition: none;
+}
+
+.ev_time_picker_face,
+.ev_time_picker_tick.flat {
+    color: #303030;
+}
+
+.ev_description_textbox {
+    border: 1px solid alpha(@theme_fg_color, 0.25);
+    border-radius: 5px;
+    background-color: @theme_base_color;
+    /* Match GTK entries' animated inset focus ring rather than changing the hover border. */
+    outline: 0 solid transparent;
+    outline-offset: 4px;
+    transition: outline-color 300ms, outline-width 300ms, outline-offset 300ms;
+}
+
+.ev_description_textbox:focus-within {
+    outline-color: alpha(@theme_selected_bg_color, 0.5);
+    outline-width: 2px;
+    outline-offset: -2px;
+}
+
+.ev_description_textbox textview,
+.ev_description_textbox textview text {
+    background-color: transparent;
+}
+
+.ev_description_resize_handle {
+    background-color: #e4e4e4;
+}
+
+.ev_description_resize_handle:hover {
+    background-color: #d4d4d4;
+}
+
+.ev_time_picker_tick {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.ev_date_picker {
+    padding: 6px;
+}
+
+.ev_date_picker button {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 3px;
+    transition: none;
+}
+
+.ev_date_picker_heading {
+    font-weight: bold;
+}
+
+.ev_date_picker_weekday {
+    padding: 3px;
+    border-bottom: 1px solid @ev_grid_line;
+}
+
+.ev_date_picker_week_number {
+    padding: 3px;
+    border-right: 1px solid @ev_grid_line;
+}
+
+.ev_date_picker button.ev_date_picker_day {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 3px;
+}
+
+.ev_date_picker_other_month {
+    opacity: 0.5;
+}
+
+.ev_date_picker_today {
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.ev_date_picker_selected {
+    background-color: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+}
+
+.ev_date_picker button.ev_date_picker_hover,
+.ev_date_picker button.ev_date_picker_hover:hover {
+    background-image: none;
+    background-color: alpha(@theme_fg_color, 0.1);
+    box-shadow: none;
+}
+
+.ev_date_picker button.ev_date_picker_hover.ev_date_picker_selected,
+.ev_date_picker button.ev_date_picker_hover.ev_date_picker_selected:hover {
+    background-color: shade(@theme_selected_bg_color, 1.1);
+}
+
+.ev_date_picker:focus .ev_date_picker_cursor {
+    outline: 2px solid @theme_selected_bg_color;
+    outline-offset: -2px;
+}
+
+.ev_month_picker button.ev_month_picker_month {
+    min-height: 42px;
+    padding: 6px;
+}

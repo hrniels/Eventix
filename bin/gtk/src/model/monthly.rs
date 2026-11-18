@@ -1,0 +1,292 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! Toolkit-independent monthly calendar projection.
+
+use std::sync::Arc;
+
+use anyhow::{Context, Result};
+use chrono::{Datelike, Duration, NaiveDate};
+use eventix_locale::Locale;
+use eventix_state::State;
+
+use super::{AllDaySpan, Event, TimedSegmentId};
+use super::{
+    occurrence::{day_minutes, event_order, events_between},
+    weekly::strip_spans,
+};
+use crate::dates::month_range;
+
+/// One occurrence displayed in a monthly day cell.
+#[derive(Clone, Debug)]
+pub struct MonthEvent {
+    pub event: Event,
+    pub date: NaiveDate,
+    /// True for all-day occurrences and interior full days of timed occurrences.
+    pub full_day: bool,
+}
+
+impl MonthEvent {
+    /// Returns the identity of this occurrence's displayed day.
+    pub fn id(&self) -> TimedSegmentId {
+        TimedSegmentId {
+            occurrence: self.event.id.clone(),
+            date: self.date,
+        }
+    }
+}
+
+/// A monthly day cell with chronological timed entries.
+#[derive(Clone, Debug)]
+pub struct MonthDay {
+    pub date: NaiveDate,
+    pub current_month: bool,
+    pub show_month: bool,
+    pub events: Vec<MonthEvent>,
+}
+
+/// An immutable monthly snapshot including neighboring-month padding days.
+pub struct MonthSnapshot {
+    /// First day of the selected month.
+    pub month: NaiveDate,
+    /// Monday of the first visible week.
+    pub start: NaiveDate,
+    pub days: Vec<MonthDay>,
+    /// Horizontal spans for each visible week, indexed like `days.chunks(7)`.
+    pub spans: Vec<Vec<AllDaySpan>>,
+    pub locale: Arc<dyn Locale + Send + Sync>,
+}
+
+impl MonthSnapshot {
+    /// Projects visible, non-excluded events into the month containing `date`.
+    ///
+    /// Uses the configured timezone and preserves original occurrence details. All-day events and
+    /// interior days of timed events form week-local spans; midnight endings remain exclusive.
+    /// Returns an error if the padded month exceeds the supported date range.
+    pub(crate) fn from_state(state: &State, date: NaiveDate) -> Result<Self> {
+        let month = date.with_day(1).context("month start out of range")?;
+        let (start, end) = month_range(date).context("month range out of range")?;
+        let occurrences = events_between(state, start, end);
+        let mut days = Vec::new();
+        let mut strip_days = Vec::new();
+        for offset in 0..(end - start).num_days() {
+            let date = start + Duration::days(offset);
+            let mut events: Vec<_> = occurrences
+                .iter()
+                .filter_map(|(occ, event)| {
+                    day_minutes(event.start, event.end, date)?;
+                    Some(MonthEvent {
+                        event: event.clone(),
+                        date,
+                        full_day: event.all_day || occ.is_all_day_on(date),
+                    })
+                })
+                .collect();
+            events.sort_by(|a, b| event_order(&a.event, &b.event));
+            strip_days.push(
+                events
+                    .iter()
+                    .filter(|e| e.full_day)
+                    .map(|e| e.event.clone())
+                    .collect(),
+            );
+            events.retain(|e| !e.full_day);
+            days.push(MonthDay {
+                date,
+                current_month: date.year() == month.year() && date.month() == month.month(),
+                show_month: date.day() == 1
+                    || date.succ_opt().is_some_and(|d| d.month() != date.month()),
+                events,
+            });
+        }
+        Ok(MonthSnapshot {
+            month,
+            start,
+            days,
+            spans: strip_days
+                .chunks(7)
+                .enumerate()
+                .map(|(week, days)| strip_spans(start + Duration::days(week as i64 * 7), days))
+                .collect(),
+            locale: state.locale(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use chrono::{Datelike, NaiveDate};
+    use chrono_tz::Europe::Berlin;
+    use eventix_ical::col::{CalDir, CalFile};
+    use eventix_state::{CalendarSettings, CollectionSettings, State, SyncerType};
+
+    #[test]
+    fn projects_day_cells_with_padding_order_exclusions_and_timezone_boundaries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = eventix_state::with_test_xdg(tmp.path(), tmp.path());
+        let mut state = State::new_with_timezone(Arc::new(xdg), Some(Berlin)).unwrap();
+        let mut collection = CollectionSettings::new(SyncerType::FileSystem {
+            path: tmp.path().to_string_lossy().into_owned(),
+        });
+        let mut settings = CalendarSettings::default();
+        settings.set_enabled(true);
+        settings.set_name("Work".into());
+        settings.set_bgcolor("#123456".into());
+        collection
+            .all_calendars_mut()
+            .insert("cal".into(), settings);
+        state
+            .settings_mut()
+            .collections_mut()
+            .insert("local".into(), collection);
+        let id = Arc::new("cal".to_string());
+        let mut dir = CalDir::new_empty(id.clone(), tmp.path().into(), "Work".into(), false);
+        let events = [
+            concat!(
+                "BEGIN:VEVENT\nUID:padding\nDTSTART;VALUE=DATE:20260929\n",
+                "DTEND;VALUE=DATE:20261002\nSUMMARY:Across months\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:long\nDTSTART;TZID=Europe/Berlin:20261004T120000\n",
+                "DTEND;TZID=Europe/Berlin:20261007T000000\nSUMMARY:Three days\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:allday\nDTSTART;VALUE=DATE:20261005\n",
+                "DTEND;VALUE=DATE:20261006\nSUMMARY:All day\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:utc\nDTSTART:20261004T233000Z\n",
+                "DTEND:20261005T003000Z\nSUMMARY:Local Monday\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:midnight\nDTSTART;TZID=Europe/Berlin:20261005T230000\n",
+                "DTEND;TZID=Europe/Berlin:20261006T000000\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:series\nDTSTART;TZID=Europe/Berlin:20261005T090000\n",
+                "DTEND;TZID=Europe/Berlin:20261005T100000\nRRULE:FREQ=DAILY;COUNT=3\n",
+                "EXDATE;TZID=Europe/Berlin:20261006T090000\nSUMMARY:Series\nEND:VEVENT\n",
+                "BEGIN:VEVENT\nUID:series\nRECURRENCE-ID;TZID=Europe/Berlin:20261007T090000\n",
+                "DTSTART;TZID=Europe/Berlin:20261007T110000\n",
+                "DTEND;TZID=Europe/Berlin:20261007T120000\nSUMMARY:Moved\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:fold\nDTSTART:20261025T003000Z\n",
+                "DTEND:20261025T013000Z\nSUMMARY:Repeated hour\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VTODO\nUID:todo\nDTSTART;VALUE=DATE:20261005\n",
+                "DUE;VALUE=DATE:20261006\nEND:VTODO"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:week-crossing\nDTSTART;VALUE=DATE:20261016\n",
+                "DTEND;VALUE=DATE:20261021\nRRULE:FREQ=WEEKLY;COUNT=3\nEND:VEVENT"
+            ),
+            concat!(
+                "BEGIN:VEVENT\nUID:overlap\nDTSTART;VALUE=DATE:20261017\n",
+                "DTEND;VALUE=DATE:20261019\nEND:VEVENT"
+            ),
+        ];
+        for (index, event) in events.iter().enumerate() {
+            let calendar = format!("BEGIN:VCALENDAR\nVERSION:2.0\n{event}\nEND:VCALENDAR\n")
+                .parse()
+                .unwrap();
+            dir.add_file(CalFile::new(
+                id.clone(),
+                tmp.path().join(format!("{index}.ics")),
+                calendar,
+            ))
+            .unwrap();
+        }
+        state.store_mut().add(dir);
+        let date = NaiveDate::from_ymd_opt(2026, 10, 5).unwrap();
+        let month = super::MonthSnapshot::from_state(&state, date).unwrap();
+        assert_eq!(month.month, date.with_day(1).unwrap());
+        assert_eq!(month.start, NaiveDate::from_ymd_opt(2026, 9, 28).unwrap());
+        assert_eq!(month.days.len(), 35);
+        assert!(!month.days[1].current_month);
+        assert_eq!(month.spans[0][0].event.id.uid, "padding");
+        assert_eq!(
+            (month.spans[0][0].start_day, month.spans[0][0].end_day),
+            (1, 4)
+        );
+        assert!(month.days[3].current_month && month.days[3].show_month);
+        assert!(month.days[3].events.is_empty());
+        assert!(month.days[4].events.is_empty(), "DATE end is exclusive");
+        let monday = &month.days[7];
+        assert_eq!(monday.date, date);
+        assert_eq!(
+            monday
+                .events
+                .iter()
+                .map(|e| e.event.id.uid.as_str())
+                .collect::<Vec<_>>(),
+            ["utc", "series", "midnight"]
+        );
+        assert!(monday.events.iter().all(|e| !e.full_day));
+        assert_eq!(month.spans[1].len(), 2);
+        let interior = &month.spans[1][0];
+        assert_eq!(interior.event.id.uid, "long");
+        assert_eq!((interior.start_day, interior.end_day), (0, 1));
+        assert!(interior.continues_before && interior.continues_after);
+        assert_eq!(
+            month.days[8].events.len(),
+            1,
+            "midnight ends and EXDATE do not leak"
+        );
+        assert!(
+            !month.days[8].events[0].full_day,
+            "last logical day retains end time"
+        );
+        let moved = &month.days[9].events[0].event;
+        assert!(moved.exception && moved.recurrent);
+        assert_eq!(moved.summary, "Moved");
+        assert_eq!(moved.background, "#123456");
+        assert_eq!(moved.calendar, "Work");
+        assert!(moved.details.date.contains("11:00"));
+        let fold = month
+            .days
+            .iter()
+            .flat_map(|d| &d.events)
+            .find(|e| e.event.id.uid == "fold")
+            .unwrap();
+        assert_eq!(fold.date, NaiveDate::from_ymd_opt(2026, 10, 25).unwrap());
+        assert_eq!((fold.event.end - fold.event.start).num_hours(), 1);
+        let friday = &month.spans[2][0];
+        assert_eq!(friday.event.id.uid, "week-crossing");
+        assert_eq!((friday.start_day, friday.end_day), (4, 7));
+        assert!(!friday.continues_before && friday.continues_after);
+        let overlap = &month.spans[2][1];
+        assert_ne!(friday.row, overlap.row);
+        let monday_span = &month.spans[3][0];
+        assert_eq!(monday_span.event.id, friday.event.id);
+        assert_eq!((monday_span.start_day, monday_span.end_day), (0, 2));
+        assert!(monday_span.continues_before && !monday_span.continues_after);
+        let next_friday = &month.spans[3][1];
+        assert_ne!(next_friday.event.id, friday.event.id);
+        assert_eq!(
+            monday_span.row, next_friday.row,
+            "disjoint spans share a lane"
+        );
+        let last = month.spans[4].last().unwrap();
+        assert_eq!((last.start_day, last.end_day), (4, 7));
+        assert!(
+            last.continues_after,
+            "last occurrence continues outside the visible month"
+        );
+        assert!(
+            month.days[18].events.is_empty(),
+            "strip segments are not duplicated"
+        );
+        let refreshed = super::MonthSnapshot::from_state(&state, date).unwrap();
+        assert_eq!(monday.events[1].id(), refreshed.days[7].events[1].id());
+        assert_ne!(month.days[6].events[0].id(), month.days[8].events[0].id());
+        state.misc_mut().toggle_calendar(&"cal".into());
+        let hidden = super::MonthSnapshot::from_state(&state, date).unwrap();
+        assert!(hidden.days.iter().all(|day| day.events.is_empty()));
+        assert!(hidden.spans.iter().all(Vec::is_empty));
+    }
+}

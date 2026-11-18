@@ -1,0 +1,28 @@
+[package]
+name = "eventix-gtk"
+version = "2.0.0"
+edition = "2024"
+
+[dependencies]
+ashpd = { version = "0.14", default-features = false, features = ["background", "gtk4", "tokio"] }
+anyhow.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+clap.workspace = true
+email_address = "0.2.9"
+eventix-locale.workspace = true
+eventix-ical.workspace = true
+eventix-state.workspace = true
+formatx.workspace = true
+regex.workspace = true
+xdg.workspace = true
+async-channel = "2.5.0"
+gtk = { version = "=0.11.5", package = "gtk4", features = ["v4_10"] }
+ksni = { version = "0.3.4", features = ["blocking"] }
+tracing.workspace = true
+tokio.workspace = true
+uuid = { version = "1.23.1", features = ["v4"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile.workspace = true

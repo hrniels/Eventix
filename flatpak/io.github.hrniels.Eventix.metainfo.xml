@@ -34,23 +34,26 @@
 
   <description>
     <p>
-      Eventix is an iCalendar event and task manager for Linux desktops supporting CalDAV and
-      Microsoft 365 (Exchange). It runs a local web server that provides a calendar UI, and ships a
-      GTK desktop wrapper that embeds that UI in a native application window with system tray
-      integration.
+      Eventix is a native GTK4 calendar and task manager for Linux desktops, supporting CalDAV and
+      Microsoft 365 (Exchange).
     </p>
     <p>Most important features:</p>
     <ul>
       <li>Monthly, weekly, and list calendar views</li>
       <li>Event and task management with full create / edit / delete support</li>
       <li>Recurrent events and tasks</li>
+      <li>Drag-and-drop event creation, moving, copying, and resizing</li>
+      <li>Quick search for next/prev events</li>
+      <li>Continuously scrolling, filterable list with expandable recurring occurrences</li>
       <li>Organized events with attendees and accept/decline</li>
-      <li>Alarm / notification system with per-calendar personal alarm overrides</li>
+      <li>Desktop reminders with per-calendar personal alarm overrides</li>
       <li>CalDAV synchronization via vdirsyncer (bundled)</li>
       <li>Microsoft 365 synchronization via DavMail (bundled)</li>
       <li>Local filesystem calendar support (no sync required)</li>
-      <li>iCalendar (.ics) file import via a GTK dialog</li>
+      <li>iCalendar (.ics) file import with a preview and overwrite warnings</li>
       <li>System tray icon showing due-today and overdue task counts</li>
+      <li>Optional startup at login</li>
+      <li>English and German translations</li>
     </ul>
   </description>
 
@@ -59,35 +62,55 @@
   <screenshots>
     <screenshot type="default">
       <caption>Edit event</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/edit-event.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v2.0.0/data/screenshots/edit-event.png</image>
     </screenshot>
     <screenshot>
       <caption>Weekly calendar view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/weekly.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v2.0.0/data/screenshots/weekly.png</image>
     </screenshot>
     <screenshot>
       <caption>Monthly calendar view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/monthly.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v2.0.0/data/screenshots/monthly.png</image>
     </screenshot>
     <screenshot>
       <caption>Postpone a task</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/postpone-todo.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v2.0.0/data/screenshots/postpone-todo.png</image>
     </screenshot>
     <screenshot>
       <caption>List view</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/list.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v2.0.0/data/screenshots/list.png</image>
     </screenshot>
     <screenshot>
       <caption>Calendar management</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/calendars.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v2.0.0/data/screenshots/calendars.png</image>
     </screenshot>
     <screenshot>
       <caption>New collection</caption>
-      <image>https://raw.githubusercontent.com/hrniels/Eventix/v1.1.1/data/screenshots/new-collection.png</image>
+      <image>https://raw.githubusercontent.com/hrniels/Eventix/v2.0.0/data/screenshots/new-collection.png</image>
     </screenshot>
   </screenshots>
 
   <releases>
+    <release version="2.0.0" date="2026-11-18">
+      <description>
+        <ul>
+          <li>Replaced the web-based interface with a native GTK4 interface.</li>
+          <li>Added quick search for next/prev occurrence.</li>
+          <li>Added ability to drag to create events.</li>
+          <li>Display multi-day events over multiple days.</li>
+          <li>Improved preview for resize/copy/create operations.</li>
+          <li>Added context menu to events.</li>
+          <li>Replaced list pagination with continuous scrolling.</li>
+          <li>Moved event and task editing into a separate window.</li>
+          <li>Added ability to copy an item's calendar file path.</li>
+          <li>Added an activity history and clearer synchronization error indicators.</li>
+          <li>Added progress reporting and cancellation for long-running operations.</li>
+          <li>Changes are now uploaded shortly after editing, without waiting for a full sync.</li>
+          <li>Added settings for automatic synchronization and upload timing.</li>
+          <li>Added optional startup at login, hidden in the system tray.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.1" date="2026-10-22">
       <description>
         <ul>

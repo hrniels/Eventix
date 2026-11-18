@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkMenuButton" id="button">
+    <property name="direction">right</property>
+    <property name="always-show-arrow">true</property>
+    <property name="accessible-role">menu-item</property>
+    <style><class name="ev_action_menu_item"/></style>
+  </object>
+</interface>

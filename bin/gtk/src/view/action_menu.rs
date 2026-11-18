@@ -1,0 +1,1384 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    sync::Arc,
+};
+
+use eventix_ical::objects::CalPartStat;
+use eventix_locale::Locale;
+use eventix_state::actions::items::{ItemId, OccurrenceAction, TaskAction};
+use gtk::{gio, glib, prelude::*};
+
+use crate::model::Action;
+use crate::model::{
+    OccurrenceId,
+    details::{DetailActions, Details, Response},
+};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MenuAction {
+    Task(TaskAction),
+    Respond(CalPartStat),
+    Delete,
+    Edit,
+    Details,
+    CopyUid,
+    CopyFilepath,
+    EditOccurrence,
+    EditFollowing,
+    RespondSeries(CalPartStat),
+    Occurrence(OccurrenceAction),
+}
+
+/// An occurrence target, retaining its recurrence identity independently of displayed segments.
+#[derive(Clone)]
+pub(crate) struct OccurrenceTarget {
+    pub item: ItemId,
+    pub summary: String,
+    pub recurrent: bool,
+    pub task: bool,
+}
+
+impl OccurrenceTarget {
+    pub fn new(id: &OccurrenceId, summary: &str, recurrent: bool, task: bool) -> Option<Self> {
+        Some(Self {
+            item: ItemId {
+                calendar: id.calendar.clone(),
+                uid: id.uid.clone(),
+                recurrence: if id.recurrence.is_empty() {
+                    None
+                } else {
+                    Some(id.recurrence.parse().ok()?)
+                },
+            },
+            summary: summary.into(),
+            recurrent,
+            task,
+        })
+    }
+}
+
+type ContextSnapshot = (
+    OccurrenceTarget,
+    Arc<Details>,
+    Arc<dyn Locale + Send + Sync>,
+);
+
+/// Installs a lazy context menu; the snapshot is read again for each right click.
+pub(super) fn install_context(
+    anchor: &impl IsA<gtk::Widget>,
+    snapshot: impl Fn() -> Option<ContextSnapshot> + 'static,
+) {
+    for controller in anchor.observe_controllers().snapshot() {
+        if let Ok(click) = controller.downcast::<gtk::GestureClick>()
+            && click.button() == gtk::gdk::BUTTON_SECONDARY
+        {
+            anchor.remove_controller(&click);
+        }
+    }
+    let click = gtk::GestureClick::new();
+    click.set_button(gtk::gdk::BUTTON_SECONDARY);
+    let weak = anchor.as_ref().downgrade();
+    click.connect_pressed(move |gesture, _, x, y| {
+        let Some(anchor) = weak.upgrade() else { return };
+        let Some((target, details, locale)) = snapshot() else {
+            return;
+        };
+        let Some(page) = anchor
+            .ancestor(super::page::CalendarPage::static_type())
+            .and_downcast::<super::page::CalendarPage>()
+        else {
+            return;
+        };
+        page.dismiss_popovers();
+        let (model, group) = occurrence_menu(&details.actions, target.recurrent, &*locale);
+        bind_editor_actions(&page, &group);
+        let handlers = Rc::new(Actions::default());
+        let page = page.downgrade();
+        handlers.connect(move |target, action| {
+            if let Some(page) = page.upgrade() {
+                page.occurrence_menu_action(target, action);
+            }
+        });
+        bind(&group, &target, &handlers);
+        let popup = popover(model.upcast_ref(), None, &group);
+        popup.insert_action_group("item", Some(&group));
+        popup.set_has_arrow(false);
+        popup.set_parent(&anchor);
+        popup.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        popup.connect_closed(|popup| popup.unparent());
+        // Removing or recycling the source must also release its native popup.
+        let weak = popup.downgrade();
+        let unmap = anchor.connect_unmap(move |_| {
+            if let Some(popup) = weak.upgrade() {
+                popup.popdown();
+            }
+        });
+        let weak = anchor.downgrade();
+        let unmap = RefCell::new(Some(unmap));
+        popup.connect_destroy(move |_| {
+            if let Some(anchor) = weak.upgrade()
+                && let Some(unmap) = unmap.take()
+            {
+                anchor.disconnect(unmap);
+            }
+        });
+        popup.popup();
+        gesture.set_state(gtk::EventSequenceState::Claimed);
+    });
+    anchor.add_controller(click);
+}
+
+fn occurrence_menu(
+    available: &DetailActions,
+    recurrent: bool,
+    locale: &dyn Locale,
+) -> (gio::Menu, gio::SimpleActionGroup) {
+    occurrence_menu_for(available, recurrent, locale, false, false)
+}
+
+fn occurrence_menu_for(
+    available: &DetailActions,
+    recurrent: bool,
+    locale: &dyn Locale,
+    excluded: bool,
+    single_occurrence: bool,
+) -> (gio::Menu, gio::SimpleActionGroup) {
+    let mut items = Vec::new();
+    if available.complete {
+        items.push(Action::Complete);
+    }
+    if available.postpone {
+        items.push(Action::Postpone);
+    }
+    if available.delete && !single_occurrence {
+        items.push(Action::Delete);
+    }
+    if available.edit {
+        items.push(Action::Edit);
+    }
+    if let Some(response) = available.occurrence_response.or(available.series_response)
+        && (!available.read_only || response != Response::Pending)
+    {
+        let status = match response {
+            Response::Accepted => CalPartStat::Accepted,
+            Response::Tentative => CalPartStat::Tentative,
+            Response::Declined => CalPartStat::Declined,
+            Response::Pending => CalPartStat::NeedsAction,
+        };
+        items.push(Action::Respond {
+            status,
+            read_only: available.read_only,
+        });
+    }
+    if !single_occurrence {
+        items.push(Action::CopyUid);
+    }
+    scoped_menu_for(
+        &items,
+        locale,
+        recurrent,
+        Some(available),
+        excluded,
+        single_occurrence,
+    )
+}
+
+type Handler<T> = Box<dyn Fn(&T, MenuAction)>;
+
+pub(super) struct Actions<T>(RefCell<Option<Handler<T>>>);
+
+impl<T> Default for Actions<T> {
+    fn default() -> Self {
+        Self(RefCell::new(None))
+    }
+}
+
+impl<T> Actions<T> {
+    pub(super) fn connect(&self, handler: impl Fn(&T, MenuAction) + 'static) {
+        self.0.replace(Some(Box::new(handler)));
+    }
+}
+
+pub(super) fn update_button<T: Clone + 'static>(
+    button: &gtk::MenuButton,
+    row: &T,
+    available: &[Action],
+    locale: &dyn Locale,
+    handlers: &Rc<Actions<T>>,
+) {
+    let (model, actions) = menu(available, locale);
+    update_menu_button(button, row, model, actions, locale, handlers);
+}
+
+pub(super) fn update_occurrence_button(
+    button: &gtk::MenuButton,
+    row: &crate::model::list_occurrences::Row,
+    locale: &dyn Locale,
+    handlers: &Rc<Actions<OccurrenceTarget>>,
+) {
+    let target = OccurrenceTarget {
+        item: row.item.clone(),
+        summary: row.summary.clone(),
+        recurrent: true,
+        task: row.task,
+    };
+    let (model, actions) =
+        occurrence_menu_for(&row.details.actions, true, locale, row.excluded, true);
+    update_menu_button(button, &target, model, actions, locale, handlers);
+}
+
+/// Creates the persistent button and context-click controller without binding an item.
+pub(super) fn empty_button(anchor: &impl IsA<gtk::Widget>) -> gtk::MenuButton {
+    let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/button.ui"));
+    let button: gtk::MenuButton = builder.object("button").unwrap();
+    let click = gtk::GestureClick::new();
+    click.set_button(gtk::gdk::BUTTON_SECONDARY);
+    let weak = button.downgrade();
+    click.connect_pressed(move |gesture, _, _, _| {
+        if let Some(button) = weak.upgrade() {
+            button.popup();
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+        }
+    });
+    anchor.add_controller(click);
+    button
+}
+
+/// Releases the previous item's targets and lazy popup before a button is rebound.
+pub(super) fn clear_button(button: &gtk::MenuButton) {
+    close_popup(button);
+    button.unset_create_popup_func();
+    button.insert_action_group("item", None::<&gio::SimpleActionGroup>);
+}
+
+fn close_popup(button: &gtk::MenuButton) {
+    if let Some(popover) = button.popover()
+        && let Some(focus) = button.root().and_then(|root| root.focus())
+        && (focus == popover || focus.is_ancestor(&popover))
+    {
+        button.grab_focus();
+    }
+    button.popdown();
+    button.set_popover(None::<&gtk::Popover>);
+}
+
+fn update_menu_button<T: Clone + 'static>(
+    button: &gtk::MenuButton,
+    row: &T,
+    model: gio::Menu,
+    actions: gio::SimpleActionGroup,
+    locale: &dyn Locale,
+    handlers: &Rc<Actions<T>>,
+) {
+    close_popup(button);
+    bind(&actions, row, handlers);
+    button.set_tooltip_text(Some(locale.translate("Actions")));
+    button.update_property(&[gtk::accessible::Property::Label(
+        locale.translate("Actions"),
+    )]);
+    button.insert_action_group("item", Some(&actions));
+    // Virtualized rows only need the popover's widgets once their menu is opened.
+    button.set_create_popup_func(move |button| {
+        if let Some(page) = button
+            .ancestor(super::page::CalendarPage::static_type())
+            .and_downcast::<super::page::CalendarPage>()
+        {
+            bind_editor_actions(&page, &actions);
+        }
+        let popover = popover(model.upcast_ref(), None, &actions);
+        popover.set_halign(gtk::Align::End);
+        button.set_popover(Some(&popover));
+    });
+}
+
+fn bind_editor_actions(page: &super::page::CalendarPage, actions: &gio::SimpleActionGroup) {
+    if let Some(action) = ["edit-menu", "edit", "edit-occurrence"]
+        .into_iter()
+        .find_map(|name| actions.lookup_action(name))
+    {
+        page.bind_editor_availability(&action, "enabled");
+    }
+}
+
+fn bind<T: Clone + 'static>(actions: &gio::SimpleActionGroup, row: &T, handlers: &Rc<Actions<T>>) {
+    let row = Rc::new(row.clone());
+    for (name, command) in [
+        ("complete", MenuAction::Task(TaskAction::Complete)),
+        (
+            "postpone-1",
+            MenuAction::Task(TaskAction::Postpone { days: 1 }),
+        ),
+        (
+            "postpone-2",
+            MenuAction::Task(TaskAction::Postpone { days: 2 }),
+        ),
+        (
+            "postpone-3",
+            MenuAction::Task(TaskAction::Postpone { days: 3 }),
+        ),
+        (
+            "postpone-5",
+            MenuAction::Task(TaskAction::Postpone { days: 5 }),
+        ),
+        (
+            "postpone-7",
+            MenuAction::Task(TaskAction::Postpone { days: 7 }),
+        ),
+        ("accept", MenuAction::Respond(CalPartStat::Accepted)),
+        ("tentative", MenuAction::Respond(CalPartStat::Tentative)),
+        ("decline", MenuAction::Respond(CalPartStat::Declined)),
+        ("delete", MenuAction::Delete),
+        ("edit", MenuAction::Edit),
+        ("details", MenuAction::Details),
+        ("copy-uid", MenuAction::CopyUid),
+        ("copy-filepath", MenuAction::CopyFilepath),
+        ("edit-occurrence", MenuAction::EditOccurrence),
+        ("edit-following", MenuAction::EditFollowing),
+        (
+            "accept-series",
+            MenuAction::RespondSeries(CalPartStat::Accepted),
+        ),
+        (
+            "tentative-series",
+            MenuAction::RespondSeries(CalPartStat::Tentative),
+        ),
+        (
+            "decline-series",
+            MenuAction::RespondSeries(CalPartStat::Declined),
+        ),
+        ("cancel", MenuAction::Occurrence(OccurrenceAction::Cancel)),
+        ("exclude", MenuAction::Occurrence(OccurrenceAction::Exclude)),
+    ] {
+        let Some(action) = actions
+            .lookup_action(name)
+            .and_downcast::<gio::SimpleAction>()
+        else {
+            continue;
+        };
+        let handlers = handlers.clone();
+        let row = row.clone();
+        action.connect_activate(move |_, _| {
+            if let Some(handler) = handlers.0.borrow().as_ref() {
+                handler(&row, command);
+            }
+        });
+    }
+}
+
+fn menu(available: &[Action], locale: &dyn Locale) -> (gio::Menu, gio::SimpleActionGroup) {
+    scoped_menu(available, locale, false, None)
+}
+
+fn scoped_menu(
+    available: &[Action],
+    locale: &dyn Locale,
+    recurrent: bool,
+    occurrence: Option<&DetailActions>,
+) -> (gio::Menu, gio::SimpleActionGroup) {
+    scoped_menu_for(available, locale, recurrent, occurrence, false, false)
+}
+
+fn scoped_menu_for(
+    available: &[Action],
+    locale: &dyn Locale,
+    recurrent: bool,
+    occurrence: Option<&DetailActions>,
+    excluded: bool,
+    single_occurrence: bool,
+) -> (gio::Menu, gio::SimpleActionGroup) {
+    let model = gio::Menu::new();
+    let actions = gio::SimpleActionGroup::new();
+    let details = gio::Menu::new();
+    let task = gio::Menu::new();
+    let deletion = gio::Menu::new();
+    let editing = gio::Menu::new();
+    let invitation = gio::Menu::new();
+    append(&details, &actions, locale, "Details", "details", true);
+    for action in available {
+        match action {
+            Action::Complete => append(&task, &actions, locale, "Complete", "complete", true),
+            Action::Postpone => {
+                let variants = gio::Menu::new();
+                for (key, days) in [
+                    ("1day", 1),
+                    ("2days", 2),
+                    ("3days", 3),
+                    ("5days", 5),
+                    ("1week", 7),
+                ] {
+                    append(
+                        &variants,
+                        &actions,
+                        locale,
+                        key,
+                        &format!("postpone-{days}"),
+                        true,
+                    );
+                }
+                append_submenu(&task, locale, "Postpone", &variants);
+            }
+            Action::Delete => {}
+            Action::Edit if single_occurrence => {
+                append(&editing, &actions, locale, "Edit", "edit-occurrence", true);
+            }
+            Action::Edit if recurrent => {
+                let variants = gio::Menu::new();
+                for (key, name) in [
+                    ("This occurrence", "edit-occurrence"),
+                    ("This and following occ.", "edit-following"),
+                    ("Complete series", "edit"),
+                ] {
+                    append(&variants, &actions, locale, key, name, true);
+                }
+                let item = menu_item(locale.translate("Edit"), "Edit");
+                item.set_submenu(Some(&variants));
+                item.set_detailed_action("item.edit-menu");
+                actions.add_action(&gio::SimpleAction::new("edit-menu", None));
+                editing.append_item(&item);
+            }
+            Action::Edit => append(&editing, &actions, locale, "Edit", "edit", true),
+            Action::Alarms => {}
+            Action::Respond { status, read_only } => append_response(
+                &invitation,
+                &actions,
+                locale,
+                *status,
+                *read_only,
+                (recurrent && !single_occurrence).then_some("Occurrence"),
+            ),
+            Action::CopyUid => {
+                append(&details, &actions, locale, "Copy UID", "copy-uid", true);
+                append(
+                    &details,
+                    &actions,
+                    locale,
+                    "Copy Filepath",
+                    "copy-filepath",
+                    true,
+                );
+            }
+        }
+    }
+    if let Some(occurrence) = occurrence {
+        if occurrence.cancel {
+            append(&deletion, &actions, locale, "Cancel occ.", "cancel", true);
+        }
+        if occurrence.exclude {
+            append(
+                &deletion,
+                &actions,
+                locale,
+                if excluded { "Include" } else { "Exclude occ." },
+                "exclude",
+                true,
+            );
+        }
+        if recurrent
+            && !single_occurrence
+            && let Some(response) = occurrence.series_response
+            && (!occurrence.read_only || response != Response::Pending)
+        {
+            let status = match response {
+                Response::Accepted => CalPartStat::Accepted,
+                Response::Tentative => CalPartStat::Tentative,
+                Response::Declined => CalPartStat::Declined,
+                Response::Pending => CalPartStat::NeedsAction,
+            };
+            append_response(
+                &invitation,
+                &actions,
+                locale,
+                status,
+                occurrence.read_only,
+                Some("Series"),
+            );
+        }
+    }
+    if available.contains(&Action::Delete) {
+        append(
+            &deletion,
+            &actions,
+            locale,
+            if recurrent { "Delete series" } else { "Delete" },
+            "delete",
+            true,
+        );
+    }
+    for index in 0..editing.n_items() {
+        task.append_item(&gio::MenuItem::from_model(&editing, index));
+    }
+    for section in [details, invitation, task, deletion] {
+        if section.n_items() > 0 {
+            model.append_section(None, &section);
+        }
+    }
+    (model, actions)
+}
+
+fn append_response(
+    menu: &gio::Menu,
+    actions: &gio::SimpleActionGroup,
+    locale: &dyn Locale,
+    status: CalPartStat,
+    read_only: bool,
+    scope: Option<&str>,
+) {
+    let key = match status {
+        CalPartStat::Accepted => "Accepted",
+        CalPartStat::Tentative => "Tentative",
+        CalPartStat::Declined => "Declined",
+        _ => "Respond",
+    };
+    let label = match (key, scope) {
+        ("Respond", Some("Occurrence")) => locale.translate("Respond (Occurrence)").into(),
+        ("Respond", Some("Series")) => locale.translate("Respond (Series)").into(),
+        (_, Some(scope)) => format!("{} ({})", locale.translate(key), locale.translate(scope)),
+        (_, None) => locale.translate(key).into(),
+    };
+    let item = menu_item(&label, key);
+    let series = scope == Some("Series");
+    if read_only {
+        let name = if series {
+            "response-series"
+        } else {
+            "response"
+        };
+        let action = gio::SimpleAction::new(name, None);
+        action.set_enabled(false);
+        actions.add_action(&action);
+        item.set_detailed_action(&format!("item.{name}"));
+    } else {
+        let variants = gio::Menu::new();
+        for (key, name) in [
+            ("Accept", "accept"),
+            ("Tentative", "tentative"),
+            ("Decline", "decline"),
+        ] {
+            let name = if series {
+                format!("{name}-series")
+            } else {
+                name.into()
+            };
+            append(&variants, actions, locale, key, &name, true);
+        }
+        item.set_submenu(Some(&variants));
+    }
+    menu.append_item(&item);
+}
+
+fn append(
+    menu: &gio::Menu,
+    actions: &gio::SimpleActionGroup,
+    locale: &dyn Locale,
+    key: &str,
+    name: &str,
+    enabled: bool,
+) {
+    let action = gio::SimpleAction::new(name, None);
+    action.set_enabled(enabled);
+    actions.add_action(&action);
+    let item = menu_item(locale.translate(key), key);
+    item.set_detailed_action(&format!("item.{name}"));
+    menu.append_item(&item);
+}
+
+fn append_submenu(menu: &gio::Menu, locale: &dyn Locale, key: &str, submenu: &gio::Menu) {
+    let item = menu_item(locale.translate(key), key);
+    item.set_submenu(Some(submenu));
+    menu.append_item(&item);
+}
+
+fn menu_item(label: &str, key: &str) -> gio::MenuItem {
+    let (icon, color) = match key {
+        "Complete" | "Accept" | "Accepted" => ("check-lg", Some("success_color")),
+        "Delete" | "Delete series" | "Cancel occ." => ("trash", Some("error_color")),
+        "Decline" | "Declined" => ("x-lg", Some("error_color")),
+        "Tentative" => ("question-lg", Some("warning_color")),
+        "Postpone" | "1day" | "2days" | "3days" | "5days" | "1week" => ("skip-forward-fill", None),
+        "Edit" | "This occurrence" | "This and following occ." | "Complete series" => {
+            ("pencil", None)
+        }
+        "Copy UID" => ("tag", None),
+        "Copy Filepath" => ("journal-text", None),
+        "Details" => ("card-heading", None),
+        _ => ("reply", None),
+    };
+    let item = gio::MenuItem::new(Some(label), None);
+    let file = gio::File::for_uri(&format!(
+        "resource://{}/icons/{icon}-symbolic.svg",
+        crate::RESOURCE_PREFIX
+    ));
+    item.set_icon(&gio::FileIcon::new(&file));
+    if let Some(color) = color {
+        item.set_attribute_value("ev-color", Some(&color.to_variant()));
+    }
+    item
+}
+
+/// Builds menu rows with both icons and labels, including nested variant menus.
+fn popover(
+    model: &gio::MenuModel,
+    root: Option<&gtk::Popover>,
+    actions: &gio::SimpleActionGroup,
+) -> gtk::Popover {
+    let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/popover.ui"));
+    let contents: gtk::Box = builder.object("contents").unwrap();
+    let popover: gtk::Popover = builder.object("popover").unwrap();
+    append_rows(
+        &contents,
+        model,
+        &popover,
+        root.unwrap_or(&popover),
+        actions,
+    );
+    track_pointer_motion(&popover, &contents);
+    popover
+}
+
+/// Enables hover highlights only after the pointer moves inside an opened menu.
+fn track_pointer_motion(popover: &gtk::Popover, contents: &gtk::Box) {
+    // Mapping a native popup can temporarily hover a row before its final allocation.
+    // Pointer entry alone must not highlight that row, especially destructive actions.
+    // Readiness applies to direct rows of these contents, independently of nested menus.
+    let position = Rc::new(Cell::new(None));
+    let motion = gtk::EventControllerMotion::new();
+    let last = position.clone();
+    motion.connect_enter(move |_, x, y| last.set(Some((x, y))));
+    let last = position.clone();
+    motion.connect_leave(move |_| last.set(None));
+    let last = position.clone();
+    let weak = contents.downgrade();
+    motion.connect_motion(move |_, x, y| {
+        if let Some(previous) = last.replace(Some((x, y)))
+            && previous != (x, y)
+            && let Some(contents) = weak.upgrade()
+        {
+            contents.add_css_class("ev_action_menu_pointer_moved");
+        }
+    });
+    popover.add_controller(motion);
+    let weak = contents.downgrade();
+    popover.connect_map(move |_| {
+        position.set(None);
+        if let Some(contents) = weak.upgrade() {
+            contents.remove_css_class("ev_action_menu_pointer_moved");
+        }
+    });
+}
+
+fn append_rows(
+    contents: &gtk::Box,
+    model: &gio::MenuModel,
+    parent: &gtk::Popover,
+    root: &gtk::Popover,
+    actions: &gio::SimpleActionGroup,
+) {
+    for index in 0..model.n_items() {
+        if let Some(section) = model.item_link(index, "section") {
+            if contents.first_child().is_some() {
+                contents.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+            }
+            append_rows(contents, &section, parent, root, actions);
+            continue;
+        }
+        let item = gio::MenuItem::from_model(model, index);
+        let row = item_content(&item);
+        let widget: gtk::Widget = if let Some(submenu) = model.item_link(index, "submenu") {
+            let builder =
+                gtk::Builder::from_resource(resource_path!("view/action_menu/submenu.ui"));
+            let button: gtk::MenuButton = builder.object("button").unwrap();
+            button.set_child(Some(&row));
+            button.set_popover(Some(&popover(&submenu, Some(root), actions)));
+            if let Some(name) = string_attribute(&item, "action")
+                && let Some(action) = name
+                    .strip_prefix("item.")
+                    .and_then(|name| actions.lookup_action(name))
+            {
+                action
+                    .bind_property("enabled", &button, "sensitive")
+                    .sync_create()
+                    .build();
+            }
+            button.upcast()
+        } else {
+            let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/item.ui"));
+            let button: gtk::Button = builder.object("button").unwrap();
+            button.set_child(Some(&row));
+            if let Some(action) = string_attribute(&item, "action") {
+                button.set_action_name(Some(&action));
+                if action == "item.response" || action == "item.response-series" {
+                    button.add_css_class("ev_action_response_status");
+                }
+            }
+            let root = root.downgrade();
+            let parent = parent.downgrade();
+            // GTK's default clicked handler activates the action. Keep the popup and its
+            // action group alive until that handler has run, including for native context menus.
+            button.connect_closure(
+                "clicked",
+                true,
+                gtk::glib::closure_local!(move |_button: gtk::Button| {
+                    if let Some(parent) = parent.upgrade() {
+                        parent.popdown();
+                    }
+                    if let Some(root) = root.upgrade() {
+                        root.popdown();
+                    }
+                }),
+            );
+            button.upcast()
+        };
+        if let Some(color) = string_attribute(&item, "ev-color") {
+            widget.add_css_class(match color.as_str() {
+                "error_color" => "ev_details_critical",
+                "success_color" => "ev_details_good",
+                _ => "ev_details_warn",
+            });
+        }
+        contents.append(&widget);
+    }
+}
+
+fn item_content(item: &gio::MenuItem) -> gtk::Box {
+    let builder = gtk::Builder::from_resource(resource_path!("view/action_menu/content.ui"));
+    let row = builder.object("content").unwrap();
+    let image: gtk::Image = builder.object("icon").unwrap();
+    let icon = item
+        .attribute_value("icon", None)
+        .and_then(|value| gio::Icon::deserialize(&value));
+    if let Some(icon) = &icon {
+        image.set_from_gicon(icon);
+    }
+    image.set_visible(icon.is_some());
+    let label: gtk::Label = builder.object("label").unwrap();
+    label.set_text(
+        string_attribute(item, "label")
+            .as_deref()
+            .unwrap_or_default(),
+    );
+    row
+}
+
+fn string_attribute(item: &gio::MenuItem, name: &str) -> Option<String> {
+    item.attribute_value(name, None)
+        .and_then(|value| value.get())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
+    use crate::model::Action;
+    use crate::model::list::Row;
+    use eventix_ical::objects::CalPartStat;
+    use eventix_state::actions::items::TaskAction;
+    use gtk::{gio, prelude::*};
+
+    use super::{Actions, MenuAction, OccurrenceTarget, bind, menu, occurrence_menu};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn editor_availability_disables_the_parent_edit_menu_without_changing_its_children() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let page: crate::view::page::CalendarPage = gtk::glib::Object::new();
+        let window = gtk::Window::builder().child(&page).build();
+        let (model, actions) = super::scoped_menu(
+            &[Action::Edit, Action::CopyUid],
+            &*eventix_locale::default(),
+            true,
+            None,
+        );
+        super::bind_editor_actions(&page, &actions);
+        let popup = super::popover(model.upcast_ref(), None, &actions);
+        let edit_menu = popup.child().unwrap().last_child().unwrap();
+        assert!(edit_menu.is::<gtk::MenuButton>());
+        let assert_editable = |enabled| {
+            assert_eq!(edit_menu.is_sensitive(), enabled);
+            assert_eq!(actions.is_action_enabled("edit-menu"), enabled);
+            for name in ["edit", "edit-occurrence", "edit-following"] {
+                assert!(actions.is_action_enabled(name));
+            }
+            for name in ["details", "copy-uid", "copy-filepath"] {
+                assert!(actions.is_action_enabled(name));
+            }
+        };
+        assert_editable(true);
+        page.test_new_editor(crate::model::editor::EditorOptions {
+            kind: eventix_ical::objects::CalCompType::Event,
+            calendars: vec![],
+            last_calendar: None,
+            locations: vec![],
+            contacts: vec![],
+            start: "2026-10-15T10:00:00".parse().unwrap(),
+            locale: eventix_locale::default(),
+        });
+        assert_editable(false);
+        let (_, opened_later) = menu(&[Action::Edit], &*eventix_locale::default());
+        super::bind_editor_actions(&page, &opened_later);
+        assert!(!opened_later.is_action_enabled("edit"));
+        page.close_editor();
+        assert_editable(true);
+        assert!(opened_later.is_action_enabled("edit"));
+        window.close();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn opening_menus_and_submenus_ignore_stationary_hover_until_pointer_moves() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+        let (model, group) = menu(&[Action::Delete], &*eventix_locale::default());
+        let (variants, _) = menu(&[Action::Delete], &*eventix_locale::default());
+        model.prepend_submenu(Some("Variants"), &variants);
+        let anchor = gtk::Button::new();
+        let window = gtk::Window::builder().child(&anchor).build();
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let popup = super::popover(model.upcast_ref(), None, &group);
+        popup.insert_action_group("item", Some(&group));
+        popup.set_parent(&anchor);
+        let submenu = popup
+            .child()
+            .unwrap()
+            .first_child()
+            .unwrap()
+            .downcast::<gtk::MenuButton>()
+            .unwrap();
+        let check_hover = |popup: &gtk::Popover| {
+            let delete = popup.child().unwrap().last_child().unwrap();
+            let motion = popup
+                .observe_controllers()
+                .snapshot()
+                .into_iter()
+                .find_map(|controller| controller.downcast::<gtk::EventControllerMotion>().ok())
+                .unwrap();
+            #[allow(deprecated)]
+            let background = || {
+                let snapshot = gtk::Snapshot::new();
+                snapshot.render_background(&delete.style_context(), 0.0, 0.0, 100.0, 30.0);
+                snapshot.to_node()
+            };
+            // Reproduce a transient native-popup hover without moving the pointer.
+            delete.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+            motion.emit_by_name::<()>("enter", &[&10.0_f64, &10.0_f64]);
+            motion.emit_by_name::<()>("motion", &[&10.0_f64, &10.0_f64]);
+            drain();
+            assert!(
+                background().is_none(),
+                "opening must not paint a hover background"
+            );
+
+            motion.emit_by_name::<()>("motion", &[&11.0_f64, &10.0_f64]);
+            drain();
+            assert!(
+                background().is_some(),
+                "pointer movement enables the Delete highlight"
+            );
+            delete.unset_state_flags(gtk::StateFlags::PRELIGHT);
+            drain();
+            assert!(
+                background().is_none(),
+                "leaving Delete clears its highlight"
+            );
+        };
+        for _ in 0..2 {
+            popup.popup();
+            drain();
+            check_hover(&popup);
+            // The parent is already hover-ready when each submenu opens and reopens.
+            for _ in 0..2 {
+                submenu.popup();
+                drain();
+                let variants = submenu.popover().unwrap();
+                check_hover(&variants);
+                variants.popdown();
+                drain();
+            }
+            popup.popdown();
+            drain();
+        }
+        popup.unparent();
+        window.close();
+    }
+
+    #[test]
+    fn german_occurrence_menu_uses_full_response_labels_and_groups_destructive_actions() {
+        use crate::model::details::{DetailActions, Response};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let xdg = xdg::BaseDirectories::with_prefix(tmp.path().file_name().unwrap());
+        let locale = eventix_locale::new_with_timezone(
+            &xdg,
+            eventix_locale::LocaleType::German,
+            chrono_tz::UTC,
+        )
+        .unwrap();
+        let (model, _) = occurrence_menu(
+            &DetailActions {
+                delete: true,
+                cancel: true,
+                edit: true,
+                occurrence_response: Some(Response::Tentative),
+                series_response: Some(Response::Accepted),
+                ..Default::default()
+            },
+            true,
+            &*locale,
+        );
+        assert_eq!(model.n_items(), 4);
+        let deletion = model.item_link(3, "section").unwrap();
+        assert_eq!(deletion.n_items(), 2);
+        assert_eq!(label(&deletion, 0), locale.translate("Cancel occ."));
+        assert_eq!(label(&deletion, 1), locale.translate("Delete series"));
+        let responses = model.item_link(1, "section").unwrap();
+        assert_eq!(responses.n_items(), 2);
+        let editing = model.item_link(2, "section").unwrap();
+        assert_eq!(label(&editing, 0), locale.translate("Edit"));
+        assert!(editing.item_link(0, "submenu").is_some());
+        assert_eq!(label(&responses, 0), "Unverbindlich (Termin)");
+        assert_eq!(label(&responses, 1), "Angenommen (Serie)");
+        for index in 0..2 {
+            let choices = responses.item_link(index, "submenu").unwrap();
+            assert_eq!(label(&choices, 1), "Unverbindlich");
+        }
+        let (pending, _) = occurrence_menu(
+            &DetailActions {
+                occurrence_response: Some(Response::Pending),
+                series_response: Some(Response::Pending),
+                ..Default::default()
+            },
+            true,
+            &*locale,
+        );
+        let responses = pending.item_link(1, "section").unwrap();
+        assert_eq!(label(&responses, 0), "Antworten (Termin)");
+        assert_eq!(label(&responses, 1), "Antworten (Serie)");
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn context_submenu_dispatches_selected_variant_before_closing() {
+        use eventix_state::actions::items::ItemId;
+
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let item = ItemId {
+            calendar: "work".into(),
+            uid: "task".into(),
+            recurrence: Some("TU2026-10-25T09:00:00".parse().unwrap()),
+        };
+        let (model, group) = menu(&[Action::Postpone], &*eventix_locale::default());
+        let recorded = Rc::new(RefCell::new(Vec::new()));
+        let results = recorded.clone();
+        let handlers = Rc::new(Actions::default());
+        handlers.connect(move |item: &ItemId, command| {
+            results.borrow_mut().push((item.clone(), command));
+        });
+        bind(&group, &item, &handlers);
+        let anchor = gtk::Button::new();
+        let window = gtk::Window::builder().child(&anchor).build();
+        window.present();
+        let drain = || {
+            for _ in 0..20 {
+                while gtk::glib::MainContext::default().iteration(false) {}
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        drain();
+        let popup = super::popover(model.upcast_ref(), None, &group);
+        popup.insert_action_group("item", Some(&group));
+        popup.set_parent(&anchor);
+        popup.connect_closed(|popup| popup.unparent());
+        popup.popup();
+        drain();
+        let submenu = popup
+            .child()
+            .unwrap()
+            .first_child()
+            .unwrap()
+            .next_sibling()
+            .unwrap()
+            .next_sibling()
+            .unwrap()
+            .downcast::<gtk::MenuButton>()
+            .unwrap();
+        submenu.popup();
+        drain();
+        let variants = submenu.popover().unwrap();
+        let one_day = variants
+            .child()
+            .unwrap()
+            .first_child()
+            .unwrap()
+            .downcast::<gtk::Button>()
+            .unwrap();
+        assert!(one_day.is_sensitive());
+        one_day.emit_clicked();
+        assert_eq!(
+            recorded.borrow().as_slice(),
+            &[(item, MenuAction::Task(TaskAction::Postpone { days: 1 }))]
+        );
+        drain();
+        assert!(popup.parent().is_none());
+        assert!(!variants.is_visible());
+        window.close();
+    }
+
+    #[test]
+    fn occurrence_commands_preserve_recurrence_and_offer_explicit_edit_scopes() {
+        use crate::model::{OccurrenceId, details::DetailActions};
+
+        let id = OccurrenceId {
+            calendar: "work".into(),
+            uid: "shared-uid".into(),
+            recurrence: "TU2026-10-25T09:00:00".into(),
+        };
+        let target = OccurrenceTarget::new(&id, "Recurring task", true, true).unwrap();
+        let (model, group) = occurrence_menu(
+            &DetailActions {
+                edit: true,
+                delete: true,
+                complete: true,
+                postpone: true,
+                exclude: true,
+                occurrence_response: Some(crate::model::details::Response::Tentative),
+                series_response: Some(crate::model::details::Response::Accepted),
+                ..Default::default()
+            },
+            true,
+            &*eventix_locale::default(),
+        );
+        assert_eq!(model.n_items(), 4);
+        let deletion = model.item_link(3, "section").unwrap();
+        assert_eq!(deletion.n_items(), 2);
+        assert_eq!(label(&deletion, 0), "Exclude occ.");
+        assert_eq!(label(&deletion, 1), "Delete series");
+        let editing = model.item_link(2, "section").unwrap();
+        assert_eq!(editing.n_items(), 3);
+        let scopes = editing.item_link(2, "submenu").unwrap();
+        assert_eq!(label(&editing, 0), "Complete");
+        assert_eq!(label(&editing, 1), "Postpone");
+        assert_eq!(label(&editing, 2), "Edit");
+        assert_eq!(label(&scopes, 0), "This occurrence");
+        assert_eq!(label(&scopes, 1), "This and following occ.");
+        assert_eq!(label(&scopes, 2), "Complete series");
+        let invitation = model.item_link(1, "section").unwrap();
+        assert_eq!(invitation.n_items(), 2);
+        assert_eq!(label(&invitation, 0), "Tentative (Occurrence)");
+        assert_eq!(label(&invitation, 1), "Accepted (Series)");
+
+        let recorded = Rc::new(RefCell::new(Vec::new()));
+        let results = recorded.clone();
+        let handlers = Rc::new(Actions::default());
+        handlers.connect(move |target: &OccurrenceTarget, command| {
+            results.borrow_mut().push((target.item.clone(), command));
+        });
+        bind(&group, &target, &handlers);
+        for name in [
+            "edit-occurrence",
+            "edit-following",
+            "edit",
+            "complete",
+            "postpone-3",
+            "exclude",
+            "accept",
+            "decline-series",
+        ] {
+            group.activate_action(name, None);
+        }
+        let commands = recorded.borrow();
+        assert_eq!(commands.len(), 8);
+        assert!(commands.iter().all(|(item, _)| item == &target.item));
+        assert_eq!(commands[0].1, MenuAction::EditOccurrence);
+        assert_eq!(commands[1].1, MenuAction::EditFollowing);
+        assert_eq!(commands[2].1, MenuAction::Edit);
+        assert_eq!(commands[6].1, MenuAction::Respond(CalPartStat::Accepted));
+        assert_eq!(
+            commands[7].1,
+            MenuAction::RespondSeries(CalPartStat::Declined)
+        );
+
+        let (_, read_only) = occurrence_menu(
+            &DetailActions {
+                read_only: true,
+                occurrence_response: Some(crate::model::details::Response::Accepted),
+                series_response: Some(crate::model::details::Response::Tentative),
+                personal_reminders: true,
+                ..Default::default()
+            },
+            true,
+            &*eventix_locale::default(),
+        );
+        assert!(!read_only.is_action_enabled("response"));
+        for name in [
+            "accept",
+            "accept-series",
+            "edit",
+            "edit-occurrence",
+            "delete",
+            "complete",
+        ] {
+            assert!(read_only.lookup_action(name).is_none(), "{name}");
+        }
+        assert!(read_only.lookup_action("alarms").is_none());
+        assert!(read_only.is_action_enabled("details"));
+        assert!(read_only.is_action_enabled("copy-uid"));
+        assert!(read_only.is_action_enabled("copy-filepath"));
+        let mut invalid = id;
+        invalid.recurrence = "invalid".into();
+        assert!(OccurrenceTarget::new(&invalid, "", true, false).is_none());
+    }
+
+    #[test]
+    fn menu_dispatch_preserves_calendar_identity_and_each_selected_variant() {
+        let row = Row {
+            calendar: "work".into(),
+            calendar_name: "Work".into(),
+            uid: "shared-uid".into(),
+            summary: "Task".into(),
+            background: String::new(),
+            task: true,
+            completed: false,
+            recurrent: false,
+            alarm: false,
+            response: None,
+            date_range: String::new(),
+            recurrence: String::new(),
+            actions: vec![
+                Action::Complete,
+                Action::Postpone,
+                Action::Edit,
+                Action::Delete,
+                Action::Respond {
+                    status: CalPartStat::NeedsAction,
+                    read_only: false,
+                },
+                Action::Alarms,
+                Action::CopyUid,
+            ],
+        };
+        let recorded = Rc::new(RefCell::new(Vec::new()));
+        let results = recorded.clone();
+        let handlers = Rc::new(Actions::default());
+        handlers.connect(move |row: &Row, action| {
+            results
+                .borrow_mut()
+                .push((row.calendar.clone(), row.uid.clone(), action));
+        });
+        let (_, group) = menu(&row.actions, &*eventix_locale::default());
+        bind(&group, &row, &handlers);
+        let expected = [
+            ("complete", MenuAction::Task(TaskAction::Complete)),
+            (
+                "postpone-1",
+                MenuAction::Task(TaskAction::Postpone { days: 1 }),
+            ),
+            (
+                "postpone-2",
+                MenuAction::Task(TaskAction::Postpone { days: 2 }),
+            ),
+            (
+                "postpone-3",
+                MenuAction::Task(TaskAction::Postpone { days: 3 }),
+            ),
+            (
+                "postpone-5",
+                MenuAction::Task(TaskAction::Postpone { days: 5 }),
+            ),
+            (
+                "postpone-7",
+                MenuAction::Task(TaskAction::Postpone { days: 7 }),
+            ),
+            ("accept", MenuAction::Respond(CalPartStat::Accepted)),
+            ("tentative", MenuAction::Respond(CalPartStat::Tentative)),
+            ("decline", MenuAction::Respond(CalPartStat::Declined)),
+            ("edit", MenuAction::Edit),
+            ("delete", MenuAction::Delete),
+            ("details", MenuAction::Details),
+            ("copy-uid", MenuAction::CopyUid),
+            ("copy-filepath", MenuAction::CopyFilepath),
+        ];
+        for (name, _) in expected {
+            group.activate_action(name, None);
+        }
+        assert_eq!(
+            *recorded.borrow(),
+            expected.map(|(_, action)| ("work".into(), "shared-uid".into(), action))
+        );
+    }
+
+    fn label(model: &gio::MenuModel, index: i32) -> String {
+        model
+            .item_attribute_value(index, "label", None)
+            .unwrap()
+            .get()
+            .unwrap()
+    }
+
+    #[test]
+    fn task_menu_groups_actions_and_offers_each_postponement_interval() {
+        let (model, actions) = menu(
+            &[
+                Action::Complete,
+                Action::Postpone,
+                Action::Delete,
+                Action::Edit,
+                Action::CopyUid,
+            ],
+            &*eventix_locale::default(),
+        );
+        assert_eq!(model.n_items(), 3);
+        let details = model.item_link(0, "section").unwrap();
+        assert_eq!(details.n_items(), 3);
+        assert_eq!(label(&details, 0), "Details");
+        assert_eq!(label(&details, 1), "Copy UID");
+        assert_eq!(label(&details, 2), "Copy Filepath");
+        let task = model.item_link(1, "section").unwrap();
+        assert_eq!(task.n_items(), 3);
+        assert_eq!(label(&task, 0), "Complete");
+        assert_eq!(label(&task, 1), "Postpone");
+        assert_eq!(label(&task, 2), "Edit");
+        let postpone = task.item_link(1, "submenu").unwrap();
+        assert_eq!(postpone.n_items(), 5);
+        for (index, (title, days)) in [
+            ("1day", 1),
+            ("2days", 2),
+            ("3days", 3),
+            ("5days", 5),
+            ("1week", 7),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert_eq!(label(&postpone, index as i32), title);
+            assert!(actions.is_action_enabled(&format!("postpone-{days}")));
+        }
+        let deletion = model.item_link(2, "section").unwrap();
+        assert_eq!(deletion.n_items(), 1);
+        assert_eq!(label(&deletion, 0), "Delete");
+    }
+
+    #[test]
+    fn invitation_menu_offers_response_variants_unless_read_only() {
+        for read_only in [false, true] {
+            let (model, actions) = menu(
+                &[
+                    Action::Respond {
+                        status: CalPartStat::Accepted,
+                        read_only,
+                    },
+                    Action::Alarms,
+                    Action::CopyUid,
+                ],
+                &*eventix_locale::default(),
+            );
+            assert_eq!(model.n_items(), 2);
+            let invitation = model.item_link(1, "section").unwrap();
+            assert_eq!(label(&invitation, 0), "Accepted");
+            assert_eq!(invitation.n_items(), 1);
+            assert!(actions.lookup_action("alarms").is_none());
+            if read_only {
+                assert!(invitation.item_link(0, "submenu").is_none());
+                assert!(!actions.is_action_enabled("response"));
+            } else {
+                let responses = invitation.item_link(0, "submenu").unwrap();
+                assert_eq!(responses.n_items(), 3);
+                for (index, title) in ["Accept", "Tentative", "Decline"].into_iter().enumerate() {
+                    assert_eq!(label(&responses, index as i32), title);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn excluded_occurrence_menu_offers_include_without_reminder_entry() {
+        let (menu, actions) = super::occurrence_menu_for(
+            &crate::model::details::DetailActions {
+                exclude: true,
+                personal_reminders: true,
+                ..Default::default()
+            },
+            true,
+            &*eventix_locale::default(),
+            true,
+            true,
+        );
+        let details = menu.item_link(0, "section").unwrap();
+        assert_eq!(details.n_items(), 1);
+        assert_eq!(label(&details, 0), "Details");
+        let deletion = menu.item_link(1, "section").unwrap();
+        assert_eq!(deletion.n_items(), 1);
+        assert_eq!(label(&deletion, 0), "Include");
+        assert!(actions.is_action_enabled("exclude"));
+        assert!(actions.lookup_action("complete").is_none());
+        assert!(actions.lookup_action("postpone-1").is_none());
+        assert!(actions.lookup_action("edit-occurrence").is_none());
+    }
+
+    #[test]
+    fn list_occurrence_menu_only_offers_actions_for_the_selected_occurrence() {
+        let (menu, actions) = super::occurrence_menu_for(
+            &crate::model::details::DetailActions {
+                edit: true,
+                delete: true,
+                complete: true,
+                postpone: true,
+                exclude: true,
+                occurrence_response: Some(crate::model::details::Response::Tentative),
+                series_response: Some(crate::model::details::Response::Accepted),
+                ..Default::default()
+            },
+            true,
+            &*eventix_locale::default(),
+            false,
+            true,
+        );
+        for action in [
+            "edit-occurrence",
+            "complete",
+            "postpone-1",
+            "accept",
+            "exclude",
+            "details",
+        ] {
+            assert!(actions.lookup_action(action).is_some(), "missing {action}");
+        }
+        for action in [
+            "edit",
+            "edit-following",
+            "delete",
+            "accept-series",
+            "tentative-series",
+            "decline-series",
+            "copy-uid",
+            "copy-filepath",
+        ] {
+            assert!(
+                actions.lookup_action(action).is_none(),
+                "unexpected {action}"
+            );
+        }
+        let task = menu.item_link(2, "section").unwrap();
+        assert_eq!(label(&task, 2), "Edit");
+        assert!(task.item_link(2, "submenu").is_none());
+        let response = menu.item_link(1, "section").unwrap();
+        assert_eq!(response.n_items(), 1);
+        assert_eq!(label(&response, 0), "Tentative");
+        let deletion = menu.item_link(3, "section").unwrap();
+        assert_eq!(deletion.n_items(), 1);
+        assert_eq!(label(&deletion, 0), "Exclude occ.");
+    }
+}

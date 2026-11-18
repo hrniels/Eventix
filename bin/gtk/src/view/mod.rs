@@ -1,0 +1,31 @@
+// Copyright (C) 2026 Nils Asmussen
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+mod action_menu;
+pub(crate) mod auth;
+mod calendars;
+pub(crate) mod card;
+mod creation_hint;
+pub mod details;
+pub(crate) mod editor;
+mod error;
+pub(crate) mod focus;
+mod geometry;
+mod import;
+mod indicators;
+mod list;
+pub(crate) mod monthly;
+mod notifications;
+pub(crate) mod page;
+pub(crate) mod popover;
+mod response_marker;
+mod selection;
+mod settings;
+pub(crate) mod shortcuts;
+mod sidebar;
+mod status_bar;
+mod surface;
+pub mod weekly;
+
+pub(crate) const ITEM_PANEL_WIDTH: i32 = 600;

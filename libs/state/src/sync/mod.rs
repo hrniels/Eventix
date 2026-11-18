@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 use xdg::BaseDirectories;
 
 use crate::settings::SyncerType;
@@ -33,9 +33,19 @@ fn ensure_collection_writable(col_id: &str, col: &CollectionSettings) -> anyhow:
 /// Defines the interface for a calendar synchronisation backend.
 ///
 /// Each backend (filesystem, vdirsyncer, Microsoft 365) implements this trait to provide
-/// discover, sync, and delete operations for its collections and individual calendars.
+/// discover, sync, and delete operations for its collections and individual calendars. Remote
+/// backends also support pushing selected local resources.
 #[async_trait]
 pub trait Syncer: Send {
+    /// Pushes one local resource without downloading unrelated changes.
+    async fn push_item(
+        &mut self,
+        _calendar: &str,
+        _filename: &str,
+    ) -> anyhow::Result<SyncColResult> {
+        Err(anyhow!("Item pushing is not supported by this backend"))
+    }
+
     /// Discovers available calendars from the backend and updates state accordingly.
     async fn discover(&mut self) -> anyhow::Result<SyncColResult>;
 
@@ -81,9 +91,67 @@ pub enum SyncColResult {
     AuthFailed(String),
 }
 
+/// Receives collection-level progress during synchronization.
+///
+/// Callbacks run outside the state lock and should return promptly. Completed collections
+/// include those with reported sync or authentication errors; progress measures work finished.
+pub trait SyncProgress: Send + Sync {
+    /// Reports the number of collections selected for synchronization, including zero.
+    fn started(&self, total: usize);
+
+    /// Reports a collection whose result has been applied to state.
+    fn collection_ready(&self, collection: &str, completed: usize, total: usize);
+}
+
+/// Requests cancellation of one synchronization operation and all its backend work.
+///
+/// Clones share the request. Cancellation is permanent and does not undo completed changes;
+/// use a fresh handle for each new operation.
+#[derive(Clone, Debug)]
+pub struct SyncCancellation(watch::Sender<bool>);
+
+impl Default for SyncCancellation {
+    fn default() -> Self {
+        Self(watch::channel(false).0)
+    }
+}
+
+impl SyncCancellation {
+    /// Requests cancellation; repeated requests are harmless.
+    pub fn cancel(&self) {
+        self.0.send_replace(true);
+    }
+
+    /// Reports whether cancellation has been requested.
+    pub fn is_cancelled(&self) -> bool {
+        *self.0.borrow()
+    }
+
+    /// Waits until cancellation is requested.
+    pub async fn cancelled(&self) {
+        let mut receiver = self.0.subscribe();
+        let _ = receiver.wait_for(|cancelled| *cancelled).await;
+    }
+
+    /// Returns an error if cancellation has been requested.
+    fn check(&self) -> Result<(), SyncCancelled> {
+        if self.is_cancelled() {
+            Err(SyncCancelled)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Synchronization cancelled")]
+pub(crate) struct SyncCancelled;
+
 /// The aggregated result of a sync operation across one or more collections.
 #[derive(Debug, Default)]
 pub struct SyncResult {
+    /// Whether cancellation stopped the operation before it completed.
+    pub cancelled: bool,
     /// Whether any calendar data changed during the operation.
     pub changed: bool,
     /// Per-collection outcome, keyed by collection ID.
@@ -98,9 +166,9 @@ pub(crate) type SyncExecution = (
     anyhow::Result<SyncColResult>,
 );
 
-struct CollectionSync {
+pub(crate) struct CollectionSync {
     snapshot: CollectionSettings,
-    syncer: Box<dyn Syncer + 'static>,
+    pub(crate) syncer: Box<dyn Syncer + 'static>,
 }
 
 /// Appends a timestamped line to the sync log, also emitting it at `DEBUG` level via tracing.
@@ -179,7 +247,7 @@ fn collection_index(state: &State, col_id: &String) -> anyhow::Result<usize> {
         .ok_or_else(|| anyhow!("No collection with id {}", col_id))
 }
 
-fn sync_snapshot(
+pub(crate) fn sync_snapshot(
     state: &State,
     col_id: &String,
 ) -> anyhow::Result<(
@@ -217,7 +285,7 @@ pub(crate) async fn handle_sync_result(
 ) {
     let mut res = match res {
         Ok(res) => res,
-        Err(e) => SyncColResult::Error(e.to_string()),
+        Err(e) => SyncColResult::Error(format!("{e:#}")),
     };
 
     if let Err(e) = syncer.finish(state, &mut res) {
@@ -242,10 +310,13 @@ pub(crate) async fn handle_sync_result(
         SyncColResult::Error(msg) => Some(msg.clone()),
         _ => None,
     };
+    state
+        .misc_mut()
+        .set_collection_error(col_id, sync_error.as_deref());
 
     sync_res.collections.insert(col_id.clone(), res.clone());
 
-    // set the error for all calendars within this collection
+    // Keep per-calendar flags in the response for existing API clients, not in persisted state.
     let ids = state
         .settings()
         .collections()
@@ -255,9 +326,6 @@ pub(crate) async fn handle_sync_result(
         .map(|(cal_id, _)| cal_id.clone())
         .collect::<Vec<_>>();
     for cal_id in ids {
-        state
-            .misc_mut()
-            .set_calendar_error(&cal_id, sync_error.is_some());
         sync_res.calendars.insert(cal_id, sync_error.is_some());
     }
 }
@@ -270,7 +338,34 @@ async fn get_sync_from_snapshot(
     token: Option<String>,
     auth_url: Option<String>,
 ) -> anyhow::Result<CollectionSync> {
-    get_sync(xdg, idx, id, col, token, auth_url).await
+    get_sync_cancellable(
+        xdg,
+        idx,
+        id,
+        col,
+        token,
+        auth_url,
+        SyncCancellation::default(),
+    )
+    .await
+}
+
+pub(crate) async fn get_sync_cancellable(
+    xdg: Arc<BaseDirectories>,
+    idx: usize,
+    id: String,
+    col: CollectionSettings,
+    token: Option<String>,
+    auth_url: Option<String>,
+    cancellation: SyncCancellation,
+) -> anyhow::Result<CollectionSync> {
+    let cal_sync = tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => return Err(SyncCancelled.into()),
+        result = get_sync(xdg, idx, id, col, token, auth_url, cancellation.clone()) => result?,
+    };
+    cancellation.check()?;
+    Ok(cal_sync)
 }
 
 async fn get_sync(
@@ -280,6 +375,7 @@ async fn get_sync(
     col: CollectionSettings,
     token: Option<String>,
     auth_url: Option<String>,
+    cancellation: SyncCancellation,
 ) -> anyhow::Result<CollectionSync> {
     // Phase 1: extract credentials from the syncer configuration, if any.
     let username = match col.syncer() {
@@ -323,7 +419,7 @@ async fn get_sync(
             time_span,
             ..
         } => Box::new(
-            VDirSyncer::new(
+            VDirSyncer::new_cancellable(
                 &xdg,
                 id.clone(),
                 folder_id,
@@ -332,6 +428,7 @@ async fn get_sync(
                 username,
                 time_span,
                 log,
+                cancellation,
             )
             .await?,
         ),
@@ -340,7 +437,7 @@ async fn get_sync(
             time_span,
             ..
         } => Box::new(
-            O365::new(
+            O365::new_cancellable(
                 &xdg,
                 idx,
                 id.clone(),
@@ -351,6 +448,7 @@ async fn get_sync(
                 token,
                 time_span,
                 log,
+                cancellation,
             )
             .await?,
         ),
@@ -397,6 +495,7 @@ pub(crate) fn reload_collection_from_disk(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_sync_from_snapshot(
     xdg: Arc<BaseDirectories>,
     idx: usize,
@@ -404,13 +503,16 @@ pub(crate) async fn run_sync_from_snapshot(
     col: CollectionSettings,
     token: Option<String>,
     auth_url: Option<String>,
+    cancellation: SyncCancellation,
 ) -> anyhow::Result<SyncExecution> {
-    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let mut cal_sync =
+        get_sync_cancellable(xdg, idx, id, col, token, auth_url, cancellation).await?;
     let snapshot = cal_sync.snapshot.clone();
     let res = cal_sync.syncer.sync().await;
     Ok((snapshot, cal_sync.syncer, res))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_discover_from_snapshot(
     xdg: Arc<BaseDirectories>,
     idx: usize,
@@ -418,13 +520,16 @@ pub(crate) async fn run_discover_from_snapshot(
     col: CollectionSettings,
     token: Option<String>,
     auth_url: Option<String>,
+    cancellation: SyncCancellation,
 ) -> anyhow::Result<SyncExecution> {
-    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let mut cal_sync =
+        get_sync_cancellable(xdg, idx, id, col, token, auth_url, cancellation).await?;
     let snapshot = cal_sync.snapshot.clone();
     let res = cal_sync.syncer.discover().await;
     Ok((snapshot, cal_sync.syncer, res))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_reload_collection_from_snapshot(
     xdg: Arc<BaseDirectories>,
     idx: usize,
@@ -432,15 +537,20 @@ pub(crate) async fn run_reload_collection_from_snapshot(
     col: CollectionSettings,
     token: Option<String>,
     auth_url: Option<String>,
+    cancellation: SyncCancellation,
 ) -> anyhow::Result<SyncExecution> {
-    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let mut cal_sync =
+        get_sync_cancellable(xdg, idx, id, col, token, auth_url, cancellation.clone()).await?;
     let snapshot = cal_sync.snapshot.clone();
     cal_sync.syncer.delete(false).await?;
+    cancellation.check()?;
     cal_sync.syncer.discover().await?;
+    cancellation.check()?;
     let res = cal_sync.syncer.sync().await;
     Ok((snapshot, cal_sync.syncer, res))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_reload_calendar_from_snapshot(
     xdg: Arc<BaseDirectories>,
     idx: usize,
@@ -448,12 +558,16 @@ pub(crate) async fn run_reload_calendar_from_snapshot(
     col: CollectionSettings,
     token: Option<String>,
     auth_url: Option<String>,
+    cancellation: SyncCancellation,
     cal_id: &String,
 ) -> anyhow::Result<SyncExecution> {
-    let mut cal_sync = get_sync(xdg, idx, id, col, token, auth_url).await?;
+    let mut cal_sync =
+        get_sync_cancellable(xdg, idx, id, col, token, auth_url, cancellation.clone()).await?;
     let snapshot = cal_sync.snapshot.clone();
     cal_sync.syncer.delete_cal(cal_id).await?;
+    cancellation.check()?;
     cal_sync.syncer.discover().await?;
+    cancellation.check()?;
     let res = cal_sync.syncer.sync_cal(cal_id).await;
     Ok((snapshot, cal_sync.syncer, res))
 }
@@ -478,6 +592,7 @@ mod tests {
         let mut calendars = std::collections::HashMap::new();
         calendars.insert("cal".to_string(), false);
         let res = SyncResult {
+            cancelled: false,
             changed: true,
             collections,
             calendars,

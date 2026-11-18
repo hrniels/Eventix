@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkBox" id="caption">
+    <property name="spacing">7</property>
+    <style><class name="ev_editor_caption"/></style>
+    <child>
+      <object class="GtkImage" id="icon">
+        <property name="pixel-size">19</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkLabel" id="label">
+        <property name="xalign">0</property>
+        <style><class name="ev_editor_field_label"/></style>
+      </object>
+    </child>
+  </object>
+</interface>

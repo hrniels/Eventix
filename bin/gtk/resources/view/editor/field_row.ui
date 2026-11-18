@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.10"/>
+  <object class="GtkBox" id="row">
+    <property name="spacing">8</property>
+    <style>
+      <class name="ev_editor_row"/>
+      <class name="ev_editor_field_row"/>
+    </style>
+  </object>
+</interface>
