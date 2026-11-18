@@ -249,6 +249,10 @@ def cmd_test_ui(args):
 
 def cmd_coverage(args):
     """Generates code coverage information for the workspace."""
+    # Coverage builds into a separate target directory, but vdirsyncer resolves
+    # the password helper through the development PATH in target/debug.
+    subprocess.run(["cargo", "build", "--bin", "eventix-getpw"], check=True)
+
     cmd = [
         "cargo", "llvm-cov",
         "--all-features",
