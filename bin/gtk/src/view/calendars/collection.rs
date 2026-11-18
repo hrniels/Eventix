@@ -538,6 +538,7 @@ impl CollectionActions {
                 "Edit Collection"
             }))
             .default_width(640)
+            .resizable(false)
             .modal(true)
             .destroy_with_parent(true)
             .child(&scroll)
@@ -1289,6 +1290,7 @@ mod tests {
         parent.present();
         controls.open();
         let editor = controls.editor.borrow().as_ref().unwrap().clone();
+        assert!(!editor.is_resizable());
         let settings = editor.settings();
         let animations = settings.property::<bool>("gtk-enable-animations");
         settings.set_property("gtk-enable-animations", true);
