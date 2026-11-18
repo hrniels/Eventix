@@ -199,6 +199,9 @@ impl RecurrenceInput {
     fn create_patterns(&self, locale: &dyn Locale) -> PatternWidgets {
         let pattern_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
         let pattern_buttons = choices(locale, &self.pattern, &["Same day", "Day", ""]);
+        for button in &pattern_buttons {
+            button.add_css_class("ev_editor_recurrence_choice");
+        }
         pattern_box.append(&pattern_buttons[0]);
         let (day_row, month_suffix) = self.create_day_pattern(locale, &pattern_buttons[1]);
         pattern_box.append(&day_row);
