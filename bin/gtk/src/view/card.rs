@@ -90,6 +90,23 @@ glib::wrapper! {
         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Actionable;
 }
 
+pub(crate) fn is_event_button(widget: &gtk::Widget) -> bool {
+    widget.is::<EventCard>() || widget.has_css_class("ev_sidebar_row")
+}
+
+pub(crate) fn is_event_target(widget: &gtk::Widget) -> bool {
+    std::iter::successors(Some(widget.clone()), gtk::Widget::parent)
+        .any(|widget| is_event_button(&widget))
+}
+
+pub(crate) fn clear_event_focus(root: &gtk::Root) -> bool {
+    if root.focus().is_some_and(|focus| is_event_target(&focus)) {
+        root.set_focus(None::<&gtk::Widget>);
+        return true;
+    }
+    false
+}
+
 impl EventCard {
     pub fn new() -> Self {
         glib::Object::new()
@@ -302,6 +319,80 @@ mod tests {
     use gtk::{glib, prelude::*, subclass::prelude::*};
 
     use super::{Event, EventCard, Response};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn hover_tints_calendar_color_and_focus_matches_selection() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        let display = gtk::gdk::Display::default().unwrap();
+        gtk::Settings::for_display(&display).set_gtk_enable_animations(false);
+        crate::style::install(&display);
+        let colors = [("#223344", "#ffffff"), ("#ddeeff", "#000000")];
+        let provider = gtk::CssProvider::new();
+        provider.load_from_data(&crate::style::colors_css(colors));
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+        let renderer = gtk::gsk::CairoRenderer::new();
+        let sample_background = |button: &gtk::Button| {
+            let snapshot = gtk::Snapshot::new();
+            #[allow(deprecated)] // GTK 4.10 supports sampling the CSS background and outline.
+            {
+                let context = button.style_context();
+                snapshot.render_background(&context, 0.0, 0.0, 40.0, 20.0);
+                snapshot.render_focus(&context, 0.0, 0.0, 40.0, 20.0);
+            }
+            let node = snapshot.to_node().unwrap();
+            renderer.realize(None::<&gtk::gdk::Surface>).unwrap();
+            let texture = renderer
+                .render_texture(node, Some(&gtk::graphene::Rect::new(0.0, 0.0, 40.0, 20.0)));
+            renderer.unrealize();
+            let mut pixels = [0; 40 * 20 * 4];
+            texture.download(&mut pixels, 40 * 4);
+            let pixel = |y: usize| -> [u8; 4] {
+                let offset = (y * 40 + 20) * 4;
+                pixels[offset..offset + 4].try_into().unwrap()
+            };
+            [pixel(0), pixel(1), pixel(2), pixel(10)]
+        };
+
+        let row = gtk::Button::new();
+        row.add_css_class("ev_sidebar_row");
+        row.add_css_class("ev_sidebar_full_day");
+        for button in [EventCard::new().upcast::<gtk::Button>(), row] {
+            for (background, foreground) in colors {
+                let class = crate::style::calendar_class(background, foreground);
+                button.add_css_class(&class);
+                let normal = sample_background(&button);
+                button.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+                let hovered = sample_background(&button);
+                assert_ne!(hovered[3], normal[3], "hover tints the calendar background");
+                assert_eq!(hovered[1..], [hovered[3]; 3], "hover has no ring");
+
+                button.add_css_class("ev_event_selected");
+                let selected = sample_background(&button);
+                assert_eq!(selected[3], normal[3], "selection keeps the calendar color");
+                assert_eq!(selected[..2], [[0, 0, 0, 255]; 2], "black outer ring");
+                assert_eq!(selected[2], [255; 4], "thin white inner ring");
+                button.unset_state_flags(gtk::StateFlags::PRELIGHT);
+                assert_eq!(sample_background(&button), selected, "the ring persists");
+                button.remove_css_class("ev_event_selected");
+
+                let states = gtk::StateFlags::FOCUSED | gtk::StateFlags::PRELIGHT;
+                button.set_state_flags(states, false);
+                assert_eq!(
+                    sample_background(&button),
+                    selected,
+                    "focus matches selection"
+                );
+                button.unset_state_flags(states);
+                button.remove_css_class(&class);
+            }
+        }
+    }
 
     #[test]
     #[ignore = "requires a GTK display"]

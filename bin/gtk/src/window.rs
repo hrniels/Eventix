@@ -7,7 +7,11 @@ use std::cell::{Cell, RefCell};
 use chrono::NaiveDate;
 use gtk::{gio, glib, prelude::*, subclass::prelude::*};
 
-use crate::view::{details::EventDetails, page::CalendarPage};
+use crate::view::{
+    card::{clear_event_focus, is_event_target},
+    details::EventDetails,
+    page::CalendarPage,
+};
 
 #[derive(Clone, Copy)]
 struct WindowState {
@@ -187,10 +191,14 @@ impl Window {
         }
 
         if key == gtk::gdk::Key::Escape {
-            if self.imp().page.defocus_navigation_input() {
+            let page = &self.imp().page;
+            if page.dismiss_details_with_escape() || page.defocus_navigation_input() {
                 return glib::Propagation::Stop;
             }
-            self.imp().page.dismiss_popovers();
+            page.dismiss_popovers();
+            if clear_event_focus(self.upcast_ref()) {
+                return glib::Propagation::Stop;
+            }
             return glib::Propagation::Proceed;
         }
 
@@ -287,7 +295,7 @@ impl Window {
                         child = widget.parent();
                     }
 
-                    self.imp().page.dismiss_popovers();
+                    self.imp().page.dismiss_details_with_escape();
                     return Some(glib::Propagation::Stop);
                 }
 
@@ -527,16 +535,27 @@ pub(crate) fn track_popup_dismissal(window: &gtk::Window, page: &CalendarPage) {
 
     let weak_window = window.downgrade();
     let weak_page = page.downgrade();
-    click.connect_pressed(move |click, _, _, _| {
+    click.connect_pressed(move |click, _, x, y| {
         if let (Some(window), Some(page), Some(surface)) = (
             weak_window.upgrade(),
             weak_page.upgrade(),
             click.current_event().and_then(|event| event.surface()),
         ) {
-            dismiss_popups_on_surface(&window, &page, &surface);
+            dismiss_popups_on_surface(&window, &page, &surface, x, y);
         }
     });
     window.add_controller(click);
+
+    let weak_page = page.downgrade();
+    window.connect_focus_widget_notify(move |window| {
+        if let Some(page) = weak_page.upgrade()
+            && let Some(focus) = GtkWindowExt::focus(window)
+            && focus.native().and_then(|native| native.surface()) == window.surface()
+            && !is_event_target(&focus)
+        {
+            page.dismiss_event_selection();
+        }
+    });
 
     let weak_page = page.downgrade();
     window.connect_hide(move |_| {
@@ -594,11 +613,20 @@ pub(crate) fn dismiss_popups_on_surface(
     window: &gtk::Window,
     page: &CalendarPage,
     surface: &gtk::gdk::Surface,
+    x: f64,
+    y: f64,
 ) {
     // Popovers and nested menus have native surfaces of their own. Their controls must
     // remain usable, while every click on the main surface dismisses the current popup.
     if window.surface().as_ref() == Some(surface) {
         page.dismiss_popovers();
+        // Clicking a non-focusable control or empty space doesn't move GTK focus.
+        if !window
+            .pick(x, y, gtk::PickFlags::DEFAULT)
+            .is_some_and(|target| is_event_target(&target))
+        {
+            clear_event_focus(window.upcast_ref());
+        }
     }
 }
 
@@ -898,6 +926,35 @@ mod tests {
             );
         }
         assert!(activated.borrow().is_empty());
+        window.destroy();
+    }
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn escape_clears_focus_from_event_cards_and_sidebar_rows() {
+        gtk::init().unwrap();
+        gio::resources_register_include!("eventix.gresource").unwrap();
+        let app = gtk::Application::builder()
+            .application_id("io.github.hrniels.Eventix.EventEscapeTest")
+            .build();
+        app.register(gio::Cancellable::NONE).unwrap();
+        let (window, page) = Window::test_new(&app);
+        let card = crate::view::card::EventCard::new();
+        let row = gtk::Button::with_label("Sidebar row");
+        row.add_css_class("ev_sidebar_row");
+        page.append(&card);
+        page.append(&row);
+        window.present();
+        settle();
+
+        for button in [card.upcast::<gtk::Button>(), row] {
+            assert!(button.grab_focus());
+            assert_eq!(
+                window.handle_key_pressed(gtk::gdk::Key::Escape, gtk::gdk::ModifierType::empty()),
+                glib::Propagation::Stop,
+            );
+            assert!(GtkWindowExt::focus(&window).is_none());
+        }
         window.destroy();
     }
 

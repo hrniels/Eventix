@@ -14,7 +14,7 @@ use eventix_state::actions::items::{
 };
 use gtk::{glib, graphene, prelude::*};
 
-use super::card::EventCard;
+use super::card::{EventCard, is_event_button};
 use crate::view::details::EventDetails;
 
 const PLACEMENT_MARGIN: i32 = 16;
@@ -120,14 +120,14 @@ impl DetailsController {
         let weak = Rc::downgrade(self);
         keys.connect_key_pressed(move |keys, key, _, _| {
             if key == gtk::gdk::Key::Escape
-                && keys
+                && let Some(window) = keys
                     .widget()
                     .and_then(|widget| widget.root())
                     .and_downcast::<gtk::Window>()
-                    .is_some_and(|window| !super::editor::has_nested_popup(&window))
+                && !super::editor::has_nested_popup(&window)
                 && let Some(controller) = weak.upgrade()
+                && controller.close_with_escape()
             {
-                controller.close();
                 return glib::Propagation::Stop;
             }
 
@@ -150,7 +150,7 @@ impl DetailsController {
 
     pub fn close(&self) {
         self.presentation.take();
-        self.anchor.take();
+        self.clear_anchor();
         self.parent.take();
         self.source.take();
         self.retained.set(false);
@@ -159,6 +159,38 @@ impl DetailsController {
             popover.popdown();
             Self::defer_unparent(&popover);
         }
+    }
+
+    /// Closes open details and returns focus to the event that opened them.
+    pub fn close_with_escape(&self) -> bool {
+        if !self.is_open() {
+            return false;
+        }
+        let anchor = self
+            .anchor
+            .borrow()
+            .as_ref()
+            .and_then(|anchor| anchor.upgrade())
+            .filter(is_event_button);
+        self.close();
+        if let Some(anchor) = anchor.filter(|anchor| anchor.is_mapped()) {
+            anchor.grab_focus();
+        }
+        true
+    }
+
+    fn clear_anchor(&self) {
+        if let Some(anchor) = self.anchor.take().and_then(|anchor| anchor.upgrade()) {
+            anchor.remove_css_class("ev_event_selected");
+        }
+    }
+
+    pub fn has_selected_anchor(&self) -> bool {
+        self.anchor
+            .borrow()
+            .as_ref()
+            .and_then(|anchor| anchor.upgrade())
+            .is_some_and(|anchor| anchor.has_css_class("ev_event_selected"))
     }
 
     /// Hides or restores the popup with its owner.
@@ -273,6 +305,9 @@ impl DetailsController {
         self.rejected.set(false);
         self.parent.replace(Some(parent.downgrade()));
         self.anchor.replace(Some(anchor.downgrade()));
+        if is_event_button(anchor) {
+            anchor.add_css_class("ev_event_selected");
+        }
         self.place(&popover);
 
         let weak = Rc::downgrade(self);
@@ -303,7 +338,7 @@ impl DetailsController {
 
                     controller.popover.take();
                     controller.presentation.take();
-                    controller.anchor.take();
+                    controller.clear_anchor();
                     controller.parent.take();
                     controller.source.take();
                     controller.retained.set(false);
@@ -571,6 +606,7 @@ mod tests {
             .default_height(900)
             .build();
         let anchor = gtk::Button::with_label("Event");
+        anchor.add_css_class("ev_sidebar_row");
         parent.append(&anchor);
         let controller = Rc::new(super::DetailsController::default());
         let drain = || {
@@ -586,9 +622,14 @@ mod tests {
                 .unwrap()
                 .set_gtk_enable_animations(animations);
             let popup: crate::view::details::EventDetails = gtk::glib::Object::new();
-            popup.set_child(Some(&gtk::Button::with_label("Details")));
+            let details_button = gtk::Button::with_label("Details");
+            popup.set_child(Some(&details_button));
+            assert!(anchor.grab_focus());
             controller.show_details(anchor.upcast_ref(), anchor.upcast_ref(), popup.clone());
             drain();
+            assert!(details_button.grab_focus());
+            assert!(!anchor.has_focus());
+            assert!(anchor.has_css_class("ev_event_selected"));
             let keys = popup
                 .observe_controllers()
                 .iter::<gtk::glib::Object>()
@@ -610,6 +651,8 @@ mod tests {
             assert!(!popup.is_mapped(), "closed details must not reopen");
             assert!(popup.parent().is_none());
             assert!(controller.current().is_none());
+            assert!(!anchor.has_css_class("ev_event_selected"));
+            assert!(anchor.has_focus(), "closing details preserves event focus");
         }
         window.close();
         drain();
