@@ -227,6 +227,20 @@ impl AllDayStrip {
         }
     }
 
+    fn preview_label_y(&self) -> f32 {
+        let height = f64::from(self.height());
+        let visible_bottom = self
+            .parent()
+            .and_downcast::<gtk::Viewport>()
+            .and_then(|viewport| viewport.vadjustment())
+            .filter(|adjustment| adjustment.page_size() > 0.0)
+            .map_or(height, |adjustment| {
+                adjustment.value() + adjustment.page_size()
+            });
+
+        (visible_bottom.min(height) - f64::from(ROW)).max(0.0) as f32
+    }
+
     fn snapshot_drop_preview(&self, snapshot: &gtk::Snapshot) {
         let preview = self.imp().drop_preview.borrow();
         let week = self.imp().week.borrow();
@@ -235,6 +249,7 @@ impl AllDayStrip {
         };
 
         let border = style::color(self, "ev_drop_border");
+        let label_y = self.preview_label_y();
         for (col, day) in week.days.iter().enumerate() {
             if day.date < *start || day.date > *end {
                 continue;
@@ -258,7 +273,6 @@ impl AllDayStrip {
             rect(snapshot, &border, x + w - 2.0, 2.0, 2.0, h);
 
             // Keep the label legible over existing all-day cards.
-            let label_y = self.height() as f32 - ROW as f32;
             rect(
                 snapshot,
                 &border,
@@ -365,7 +379,49 @@ fn drop_day(width: i32, height: i32, x: f64, y: f64) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{GUTTER, drop_day};
+    use gtk::{graphene, prelude::*, subclass::prelude::ObjectSubclassIsExt};
+
+    use super::super::content::WeekContent;
+    use super::{GUTTER, ROW, drop_day};
+
+    #[test]
+    #[ignore = "requires a GTK display"]
+    fn preview_label_stays_at_the_bottom_of_the_visible_all_day_area() {
+        gtk::init().unwrap();
+        gtk::gio::resources_register_include!("eventix.gresource").unwrap();
+        crate::style::install(&gtk::gdk::Display::default().unwrap());
+
+        let content: WeekContent = gtk::glib::Object::new();
+        let window = gtk::Window::builder()
+            .child(&content)
+            .default_width(900)
+            .default_height(600)
+            .build();
+        let strip = &*content.imp().all_day;
+        let scroll = &*content.imp().all_day_scroll;
+        let adjustment = scroll.vadjustment();
+        let viewport = scroll.child().unwrap();
+
+        window.present();
+        gtk::test_widget_wait_for_draw(&window);
+        assert_eq!(adjustment.page_size(), f64::from(strip.height()));
+        assert_eq!(strip.preview_label_y(), (strip.height() - ROW) as f32);
+
+        strip.set_size_request(-1, ROW * 5);
+        gtk::test_widget_wait_for_draw(&window);
+        let last_offset = adjustment.upper() - adjustment.page_size();
+        assert!(last_offset > 0.0);
+
+        for offset in [0.0, (last_offset / 2.0).floor(), last_offset] {
+            adjustment.set_value(offset);
+            gtk::test_widget_wait_for_draw(&window);
+            let point = graphene::Point::new(0.0, strip.preview_label_y());
+            let visible_y = strip.compute_point(&viewport, &point).unwrap().y();
+            assert_eq!(visible_y, adjustment.page_size() as f32 - ROW as f32);
+        }
+
+        window.close();
+    }
 
     #[test]
     fn drop_days_cover_all_rows_and_exclude_the_gutter_and_outside_coordinates() {

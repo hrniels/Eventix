@@ -105,7 +105,8 @@ pub(crate) mod imp {
 
             let top_fade = self.all_day_top_fade.downgrade();
             let bottom_fade = self.all_day_bottom_fade.downgrade();
-            let update_fades = move |adjustment: &gtk::Adjustment| {
+            let all_day = self.all_day.downgrade();
+            let update_viewport = move |adjustment: &gtk::Adjustment| {
                 let at_top = adjustment.value() <= adjustment.lower();
                 let at_bottom = adjustment.value() + adjustment.page_size() >= adjustment.upper();
                 if let Some(fade) = top_fade.upgrade() {
@@ -114,10 +115,14 @@ pub(crate) mod imp {
                 if let Some(fade) = bottom_fade.upgrade() {
                     fade.set_visible(!at_bottom);
                 }
+                if let Some(strip) = all_day.upgrade() {
+                    // The preview label is pinned to the viewport, not the content.
+                    strip.queue_draw();
+                }
             };
             let adjustment = self.all_day_scroll.vadjustment();
-            adjustment.connect_changed(update_fades.clone());
-            adjustment.connect_value_changed(update_fades);
+            adjustment.connect_changed(update_viewport.clone());
+            adjustment.connect_value_changed(update_viewport);
         }
 
         fn dispose(&self) {
