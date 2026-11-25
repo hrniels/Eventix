@@ -79,6 +79,20 @@ Multiple files are presented one at a time. Files and file URIs can also be pass
 flatpak run --file-forwarding io.github.hrniels.Eventix @@ /path/to/invitation.ics @@
 ```
 
+### Reminder notifications on KDE Plasma
+
+On affected versions of KDE Plasma, a [notification portal bug][kde-notification-bug] causes urgent
+Flatpak reminders to disappear after a few seconds. As a workaround, quit Eventix completely, then run:
+
+```bash
+flatpak run --talk-name=org.freedesktop.Notifications io.github.hrniels.Eventix
+```
+
+This grants direct access to the desktop notification service for that run only, so Eventix can
+bypass the portal and request critical reminders that stay visible until dismissed.
+
+[kde-notification-bug]: https://bugs.kde.org/show_bug.cgi?id=529398
+
 ## Configuration and data
 
 Collections, calendars, and preferences can be managed in the GTK UI. Configuration and data use
