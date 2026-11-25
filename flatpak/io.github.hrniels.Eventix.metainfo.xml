@@ -91,6 +91,15 @@
   </screenshots>
 
   <releases>
+    <release version="2.0.1" date="2026-11-25">
+      <description>
+        <ul>
+            <li>Improved minute selection in time widget.</li>
+            <li>Fixed visibility issue in preview of all-day events.</li>
+            <li>Distinguish hover and selection optically.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-11-18">
       <description>
         <ul>
