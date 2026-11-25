@@ -65,8 +65,12 @@ pub fn colors_css<'a>(colors: impl IntoIterator<Item = (&'a str, &'a str)>) -> S
             .parse::<gdk::RGBA>()
             .unwrap_or(gdk::RGBA::new(0.8, 0.88, 0.98, 1.0));
         let fg = foreground.parse::<gdk::RGBA>().unwrap_or(gdk::RGBA::BLACK);
+        // Leave the card and sidebar row background images available for the hover tint.
         css.push_str(&format!(
-            ".{class}, button.ev_sidebar_full_day.{class} {{ background: {bg}; color: {fg}; }}\n",
+            ".{class}:not(.ev_event):not(.ev_sidebar_full_day) \
+             {{ background: {bg}; color: {fg}; }}\n\
+             button.ev_event.{class}, button.ev_sidebar_full_day.{class} \
+             {{ background-color: {bg}; color: {fg}; }}\n",
             class = calendar_class(background, foreground)
         ));
     }

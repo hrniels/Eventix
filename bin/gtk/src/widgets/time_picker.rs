@@ -64,7 +64,11 @@ mod imp {
             let weak = obj.downgrade();
             click.connect_released(move |_, _, x, y| {
                 let Some(obj) = weak.upgrade() else { return };
-                let face = &obj.imp().face;
+                let imp = obj.imp();
+                if imp.minutes.get() {
+                    return;
+                }
+                let face = &imp.face;
                 if face.pick(x, y, gtk::PickFlags::DEFAULT).as_ref() != Some(face.upcast_ref()) {
                     return;
                 }
@@ -75,17 +79,13 @@ mod imp {
                     return;
                 }
                 let turn = dx.atan2(-dy).rem_euclid(std::f64::consts::TAU) / std::f64::consts::TAU;
-                let value = if obj.imp().minutes.get() {
-                    (turn * 60.0).round() as u32 % 60
+                let hour = (turn * 12.0).round() as u32 % 12;
+                let value = if radius < RING_BOUNDARY {
+                    if hour == 0 { 12 } else { hour }
+                } else if hour == 0 {
+                    0
                 } else {
-                    let hour = (turn * 12.0).round() as u32 % 12;
-                    if radius < RING_BOUNDARY {
-                        if hour == 0 { 12 } else { hour }
-                    } else if hour == 0 {
-                        0
-                    } else {
-                        hour + 12
-                    }
+                    hour + 12
                 };
                 obj.choose(value);
             });
@@ -166,7 +166,7 @@ impl TimePicker {
     }
 
     fn connect_drag(&self) {
-        // Capture minute presses before the five-minute tick buttons can snap or confirm them.
+        // Observe presses on tick buttons too, but only claim the sequence once it becomes a drag.
         let drag = gtk::GestureDrag::new();
         drag.set_button(1);
         drag.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -175,18 +175,14 @@ impl TimePicker {
             let Some(obj) = weak.upgrade() else { return };
             if !obj.imp().minutes.get() || (x - CENTER).hypot(y - CENTER) > CENTER {
                 drag.set_state(gtk::EventSequenceState::Denied);
-                return;
             }
-            obj.imp().dragging.set(true);
-            drag.set_state(gtk::EventSequenceState::Claimed);
-            obj.drag_minute(x, y);
         });
         let weak = self.downgrade();
         drag.connect_drag_update(move |drag, dx, dy| {
             if let Some(obj) = weak.upgrade()
                 && let Some((x, y)) = drag.start_point()
             {
-                obj.drag_minute(x + dx, y + dy);
+                obj.update_minute_drag(drag, (x, y), (x + dx, y + dy));
             }
         });
         let weak = self.downgrade();
@@ -208,6 +204,25 @@ impl TimePicker {
             }
         });
         self.imp().face.add_controller(drag);
+    }
+
+    fn update_minute_drag(&self, drag: &gtk::GestureDrag, start: (f64, f64), end: (f64, f64)) {
+        let imp = self.imp();
+        if !imp.dragging.get() {
+            if !imp.minutes.get()
+                || !imp.face.drag_check_threshold(
+                    start.0 as i32,
+                    start.1 as i32,
+                    end.0 as i32,
+                    end.1 as i32,
+                )
+            {
+                return;
+            }
+            imp.dragging.set(true);
+            drag.set_state(gtk::EventSequenceState::Claimed);
+        }
+        self.drag_minute(end.0, end.1);
     }
 
     fn drag_minute(&self, x: f64, y: f64) {
@@ -376,7 +391,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
-    fn time_picker_precise_minute_drag_confirms_only_on_release() {
+    fn time_picker_minute_ticks_and_drags_confirm_but_background_clicks_do_not() {
         use std::rc::Rc;
 
         gtk::init().unwrap();
@@ -387,28 +402,68 @@ mod tests {
         picker.connect_time_selected(move |_| selected.set(selected.get() + 1));
         picker.select_time("23:58".parse().unwrap());
         picker.show_minutes(true);
+        let window = gtk::Window::builder().child(&picker).build();
+        window.present();
+        gtk::test_widget_wait_for_draw(&picker);
         let face = &picker.imp().face;
         let controllers = face.observe_controllers();
+        let click = (0..controllers.n_items())
+            .find_map(|index| {
+                controllers
+                    .item(index)?
+                    .downcast::<gtk::GestureClick>()
+                    .ok()
+            })
+            .unwrap();
         let drag = (0..controllers.n_items())
             .find_map(|index| controllers.item(index)?.downcast::<gtk::GestureDrag>().ok())
             .unwrap();
-        drag.emit_by_name::<()>("drag-begin", &[&CENTER, &0.0_f64]);
-        assert!(picker.imp().dragging.get());
-        let target = face.last_child().unwrap();
-        for minute in [1, 17, 29, 43, 59, 0] {
+
+        let (x, y) = (CENTER + INNER_RADIUS, CENTER);
+        assert_eq!(
+            face.pick(x, y, gtk::PickFlags::DEFAULT).as_ref(),
+            Some(face.upcast_ref())
+        );
+        drag.emit_by_name::<()>("drag-begin", &[&x, &y]);
+        picker.update_minute_drag(&drag, (x, y), (x + 1.0, y));
+        drag.emit_by_name::<()>("drag-end", &[&1.0_f64, &0.0_f64]);
+        click.emit_by_name::<()>("released", &[&1_i32, &x, &y]);
+        assert_eq!(picker.time().minute(), 58);
+        assert_eq!(count.get(), 0);
+
+        let tick = face
+            .last_child()
+            .unwrap()
+            .downcast::<gtk::Button>()
+            .unwrap();
+        tick.emit_clicked();
+        assert_eq!(picker.time().minute(), 55);
+        assert_eq!(count.get(), 1);
+
+        let start = (CENTER, CENTER - OUTER_RADIUS);
+        drag.emit_by_name::<()>("drag-begin", &[&start.0, &start.1]);
+        assert!(!picker.imp().dragging.get());
+        assert_eq!(picker.time().minute(), 55);
+        for minute in [17, 1, 29, 43, 59, 0] {
             let angle = f64::from(minute) * std::f64::consts::TAU / 60.0;
-            picker.drag_minute(
+            let end = (
                 CENTER + OUTER_RADIUS * angle.sin(),
                 CENTER - OUTER_RADIUS * angle.cos(),
             );
+            picker.update_minute_drag(&drag, start, end);
+            assert!(picker.imp().dragging.get());
             assert_eq!(picker.time().minute(), minute);
             assert_eq!(picker.time().hour(), 23);
-            assert_eq!(count.get(), 0);
-            assert_eq!(face.last_child().unwrap(), target);
+            assert_eq!(count.get(), 1);
+            assert_eq!(
+                face.last_child().unwrap(),
+                *tick.upcast_ref::<gtk::Widget>()
+            );
         }
         drag.emit_by_name::<()>("drag-end", &[&0.0_f64, &0.0_f64]);
         assert!(!picker.imp().dragging.get());
-        assert_eq!(count.get(), 1);
+        assert_eq!(count.get(), 2);
+        window.close();
     }
 
     #[test]

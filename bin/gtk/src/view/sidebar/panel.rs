@@ -146,7 +146,7 @@ fn group_heading(group: &SidebarGroup, locale: &dyn Locale) -> gtk::Label {
 
 fn update_row(button: &gtk::Button, row: &SidebarRow, locale: &dyn Locale) {
     for class in button.css_classes() {
-        if class != "ev_sidebar_row" {
+        if class != "ev_sidebar_row" && class != "ev_event_selected" {
             button.remove_css_class(&class);
         }
     }

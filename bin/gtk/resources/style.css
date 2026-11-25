@@ -538,16 +538,28 @@ button.ev_event {
     min-height: 0;
     min-width: 0;
     border-radius: 4px;
+    background-image: none;
 }
 
-button.ev_event:hover {
+button.ev_event:hover:not(:focus):not(.ev_event_selected),
+button.ev_sidebar_row:hover:not(:focus):not(.ev_event_selected) {
+    background-image: linear-gradient(alpha(currentColor, 0.1), alpha(currentColor, 0.1));
+}
+
+button.ev_event:focus,
+button.ev_event.ev_event_selected,
+button.ev_sidebar_row:focus,
+button.ev_sidebar_row.ev_event_selected {
+    /* Reuse the old hover outline and let GTK animate it with the active theme. */
     outline: 2px solid black;
     outline-offset: -2px;
+    box-shadow: inset 0 0 0 2px white;
 }
 
-button.ev_event:focus-visible {
-    outline: 2px solid @theme_fg_color;
-    outline-offset: -2px;
+button.ev_sidebar_row:focus,
+button.ev_sidebar_row.ev_event_selected {
+    /* Unlike cards, sidebar rows have no native button border. */
+    box-shadow: inset 0 0 0 3px white;
 }
 
 button.ev_event.ev_cancelled > box > label {
@@ -817,17 +829,6 @@ button.ev_sidebar_row {
     box-shadow: none;
     background: transparent;
     color: @theme_text_color;
-}
-
-button.ev_sidebar_row:hover,
-button.ev_sidebar_row.ev_sidebar_full_day:hover {
-    outline: 2px solid black;
-    outline-offset: -2px;
-}
-
-button.ev_sidebar_row:focus-visible {
-    outline: 2px solid @theme_fg_color;
-    outline-offset: -2px;
 }
 
 button.ev_sidebar_full_day {

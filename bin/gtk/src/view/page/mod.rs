@@ -555,6 +555,20 @@ impl CalendarPage {
         self.imp().details.close();
     }
 
+    pub(crate) fn dismiss_event_selection(&self) {
+        if self.imp().details.has_selected_anchor() {
+            self.dismiss_popovers();
+        }
+    }
+
+    pub(crate) fn dismiss_details_with_escape(&self) -> bool {
+        if self.imp().details.close_with_escape() {
+            self.imp().session.cancel_details_load();
+            return true;
+        }
+        false
+    }
+
     pub fn set_popup_owner_visible(&self, visible: bool) {
         self.imp().details.set_owner_visible(visible);
     }
@@ -1100,7 +1114,9 @@ pub(crate) mod tests {
         drain();
         let strip_popup = find_popup(imp.all_day.upcast_ref()).unwrap();
         assert!(strip_popup.is_mapped());
-        imp.timed.event_cards()[0].1.emit_clicked();
+        assert!(card.has_css_class("ev_event_selected"));
+        assert!(!timed.has_css_class("ev_event_selected"));
+        timed.emit_clicked();
         drain();
         assert!(
             !strip_popup.is_visible(),
@@ -1109,6 +1125,8 @@ pub(crate) mod tests {
         assert!(strip_popup.parent().is_none());
         let timed_popup = find_popup(imp.timed.upcast_ref()).unwrap();
         assert!(timed_popup.is_mapped());
+        assert!(!card.has_css_class("ev_event_selected"));
+        assert!(timed.has_css_class("ev_event_selected"));
         card.emit_clicked();
         drain();
         assert!(
@@ -1119,6 +1137,45 @@ pub(crate) mod tests {
         page.dismiss_popovers();
         drain();
         assert!(find_popup(imp.all_day.upcast_ref()).is_none());
+        assert!(!card.has_css_class("ev_event_selected"));
+
+        crate::window::track_popup_dismissal(&window, &page);
+        assert!(card.grab_focus());
+        card.emit_clicked();
+        drain();
+        let popup = page.imp().details.current().unwrap();
+        crate::window::dismiss_popups_on_surface(
+            &window,
+            &page,
+            &popup.surface().unwrap(),
+            0.0,
+            0.0,
+        );
+        assert!(
+            card.has_css_class("ev_event_selected"),
+            "details remain interactive"
+        );
+        assert!(page.imp().search.grab_focus());
+        assert!(
+            !card.has_css_class("ev_event_selected"),
+            "moving focus deselects the card"
+        );
+        assert!(!page.imp().details.is_open());
+        drain();
+
+        assert!(card.grab_focus());
+        let header = page.imp().header.compute_bounds(&window).unwrap();
+        crate::window::dismiss_popups_on_surface(
+            &window,
+            &page,
+            &window.surface().unwrap(),
+            header.x().into(),
+            header.y().into(),
+        );
+        assert!(
+            !card.has_focus(),
+            "an outside click clears leftover card focus"
+        );
         window.close();
         drain();
     }
@@ -1341,9 +1398,16 @@ pub(crate) mod tests {
         drain();
         let popup = page.imp().details.current().unwrap();
         assert!(popup.is_mapped(), "undated tasks open shared details");
+        assert!(button.has_css_class("ev_event_selected"));
+        imp.sidebar.set_snapshot(make_snapshot());
+        assert!(
+            button.has_css_class("ev_event_selected"),
+            "refresh retains selection"
+        );
         page.dismiss_popovers();
         drain();
         assert!(popup.parent().is_none());
+        assert!(!button.has_css_class("ev_event_selected"));
         assert!(
             provider
                 .to_string()
